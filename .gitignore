@@ -1,0 +1,72 @@
+.DS_Store
+Thumbs.db
+
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.Python
+.env
+.env.*
+.venv/
+venv/
+ENV/
+env/
+backend/venv/
+
+# Local databases
+db.sqlite3
+db.sqlite3-journal
+*.sqlite3
+
+# Python tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+pip-wheel-metadata/
+*.egg-info/
+
+# Node
+node_modules/
+*.tsbuildinfo
+
+# Expo / React Native
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+.metro-health-check*
+/ios
+/android
+
+# Web build output
+.next/
+out/
+build/
+.turbo/
+.vercel/
+coverage/
+
+# Logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+pnpm-debug.log*
+
+# App local files
+media/
+staticfiles/
