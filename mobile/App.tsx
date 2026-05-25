@@ -217,6 +217,8 @@ function AppScreen() {
   const { height, width } = useWindowDimensions();
   const mapRef = useRef<MapView | null>(null);
   const onboardingTransitionFrameRef = useRef<number | null>(null);
+  const splashExitOpacity = useRef(new Animated.Value(1)).current;
+  const authIntroOpacity = useRef(new Animated.Value(1)).current;
   const screenTransition = useRef(new Animated.Value(1)).current;
   const mapResultsOpacity = useRef(new Animated.Value(0)).current;
   const [apiBaseUrl, setApiBaseUrl] = useState(initialApiBaseUrl);
@@ -256,6 +258,8 @@ function AppScreen() {
   const [businessSearchQuery, setBusinessSearchQuery] = useState('');
   const [selectedClaimPlace, setSelectedClaimPlace] = useState<PlaceListItem | null>(null);
   const [incomingOnboardingScreen, setIncomingOnboardingScreen] = useState<AppScreenMode | null>(null);
+  const [authIntroPending, setAuthIntroPending] = useState(false);
+  const [splashExiting, setSplashExiting] = useState(false);
   const shouldUseNativeMapBoundaries = Constants.executionEnvironment !== ExecutionEnvironment.StoreClient;
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const normalizedSearchQuery = normalizeSearchText(deferredSearchQuery);
@@ -343,6 +347,19 @@ function AppScreen() {
       },
     ],
   };
+  const authIntroStyle = authIntroPending && !incomingOnboardingScreen && currentOnboardingScreen === 'auth'
+    ? {
+        opacity: authIntroOpacity,
+        transform: [
+          {
+            translateY: authIntroOpacity.interpolate({
+              inputRange: [0, 1],
+              outputRange: [10, 0],
+            }),
+          },
+        ],
+      }
+    : null;
 
   const showMapBrowse = screenMode === 'browse' && !selectedPlaceSlug && browseMode === 'map';
   const shouldShowMapResults = showMapBrowse && !selectedMapPlace && normalizedSearchQuery.length > 0;
@@ -389,6 +406,24 @@ function AppScreen() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!authIntroPending || screenMode !== 'auth') {
+      return;
+    }
+
+    authIntroOpacity.stopAnimation();
+    authIntroOpacity.setValue(0);
+    Animated.timing(authIntroOpacity, {
+      duration: 280,
+      toValue: 1,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) {
+        setAuthIntroPending(false);
+      }
+    });
+  }, [authIntroOpacity, authIntroPending, screenMode]);
 
   function navigateScreen(nextScreen: AppScreenMode, direction: OnboardingTransitionDirection) {
     const currentScreen = screenMode;
@@ -437,13 +472,37 @@ function AppScreen() {
     }
 
     const timeoutId = setTimeout(() => {
-      navigateScreen(authenticatedSession ? 'browse' : 'auth', 'forward');
+      const nextScreen = authenticatedSession ? 'browse' : 'auth';
+
+      if (splashExiting) {
+        return;
+      }
+
+      setSplashExiting(true);
+      splashExitOpacity.stopAnimation();
+      splashExitOpacity.setValue(1);
+      Animated.timing(splashExitOpacity, {
+        duration: 260,
+        toValue: 0,
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (!finished) {
+          return;
+        }
+
+        setAuthIntroPending(nextScreen === 'auth');
+        setScreenMode(nextScreen);
+        setSplashExiting(false);
+        requestAnimationFrame(() => {
+          splashExitOpacity.setValue(1);
+        });
+      });
     }, 1200);
 
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [authenticatedSession, screenMode]);
+  }, [authenticatedSession, screenMode, splashExitOpacity, splashExiting]);
 
   useEffect(() => {
     if (shouldShowMapResults) {
@@ -1077,11 +1136,15 @@ function AppScreen() {
   return (
     <>
       <StatusBar backgroundColor="transparent" style="dark" translucent={showMapBrowse} />
-      {usesOnboardingSlideTransition && currentOnboardingScreen ? (
+      {screenMode === 'splash' ? (
+        <Animated.View style={[styles.onboardingTransitionRoot, { opacity: splashExitOpacity }]}>
+          {renderOnboardingScreen('splash')}
+        </Animated.View>
+      ) : usesOnboardingSlideTransition && currentOnboardingScreen ? (
         <View style={styles.onboardingTransitionRoot}>
-          <View pointerEvents={incomingOnboardingScreen ? 'none' : 'auto'} style={styles.screenTransitionLayer}>
+          <Animated.View pointerEvents={incomingOnboardingScreen ? 'none' : 'auto'} style={[styles.screenTransitionLayer, authIntroStyle]}>
             {renderOnboardingScreen(currentOnboardingScreen)}
-          </View>
+          </Animated.View>
           {incomingOnboardingScreen ? (
             <Animated.View style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, incomingScreenTransitionStyle]}>
               {renderOnboardingScreen(incomingOnboardingScreen)}
@@ -1939,7 +2002,6 @@ function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces, onBack
         <View style={styles.profileCard}>
           <Text style={styles.detailCity}>Claim a Business</Text>
           <Text style={styles.detailTitle}>Search your business</Text>
-          <Text style={styles.profileIntroText}>If you find your business, you&apos;ll fill out verification information next and it will be reviewed in Django admin.</Text>
 
           {errorMessage ? (
             <View style={styles.errorBanner}>
@@ -1949,10 +2011,10 @@ function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces, onBack
 
           <TextInput placeholder="Search by business name" placeholderTextColor="#9a7f6c" onChangeText={onChangeSearchQuery} style={styles.profileInput} value={searchQuery} />
 
-          {loadingPlaces ? (
-            <Text style={styles.centerStateText}>Loading businesses...</Text>
-          ) : normalizeSearchText(searchQuery).length === 0 ? (
+          {normalizeSearchText(searchQuery).length === 0 ? (
             <Text style={styles.centerStateText}>Start typing to search for your business.</Text>
+          ) : loadingPlaces ? (
+            <Text style={styles.centerStateText}>Loading businesses...</Text>
           ) : (
             <View style={styles.claimResultsList}>
               {results.length ? (
