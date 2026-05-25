@@ -22,8 +22,28 @@ import {
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker, type Region } from 'react-native-maps';
 
-import { fetchPlaceDetail, fetchPlaces, getDefaultApiBaseUrl } from './src/api';
-import type { HappyHourWindow, OperatingHourWindow, PlaceDetail, PlaceListItem, PlaceLocation, PlaceLocationDetail } from './src/types';
+import {
+  createBusinessProfile,
+  createCustomerProfile,
+  createManualBusinessProfile,
+  fetchPlaceDetail,
+  fetchPlaces,
+  getDefaultApiBaseUrl,
+  loginProfile,
+} from './src/api';
+import type {
+  BusinessSignupRequest,
+  CustomerSignupRequest,
+  HappyHourWindow,
+  LoginRequest,
+  ManualBusinessSignupRequest,
+  OperatingHourWindow,
+  PlaceDetail,
+  PlaceListItem,
+  PlaceLocation,
+  PlaceLocationDetail,
+  SignupResponse,
+} from './src/types';
 
 const cityFilters = [
   { label: 'All 805', value: 'all' },
@@ -94,9 +114,14 @@ const venueFilters = [
   { label: 'Attraction', value: 'attraction' },
   { label: 'Other', value: 'other' },
 ] as const;
+const manualBusinessCityOptions = cityFilters.filter((filter) => filter.value !== 'all');
+const manualBusinessVenueOptions = venueFilters;
 
 type BrowseMode = 'list' | 'map';
 type VenueFilterValue = (typeof venueFilters)[number]['value'];
+type AppScreenMode = 'splash' | 'auth' | 'browse' | 'profiles' | 'business-search' | 'business-claim' | 'manual-business-claim';
+type AuthPortal = 'customer' | 'business';
+type OnboardingTransitionDirection = 'forward' | 'backward';
 
 type MappedPlace = PlaceListItem & {
   latitude: number;
@@ -112,6 +137,7 @@ type BrowseControlsProps = {
   overlay?: boolean;
   browseMode: BrowseMode;
   filtersExpanded: boolean;
+  onOpenProfiles: () => void;
   onBrowseModeChange: (mode: BrowseMode) => void;
   onChangeSearchQuery: (value: string) => void;
   onClearSearchQuery: () => void;
@@ -126,6 +152,58 @@ type BrowseControlsProps = {
   selectedVenueTypes: VenueFilterValue[];
 };
 
+type ProfileFormState = {
+  username: string;
+  email: string;
+  password: string;
+  first_name: string;
+  last_name: string;
+  business_slug: string;
+  business_name: string;
+  business_city: string;
+  business_venue_type: string;
+  business_website_url: string;
+  contact_name: string;
+  job_title: string;
+  work_email: string;
+  work_phone: string;
+  employer_address: string;
+  address_not_applicable: boolean;
+  verification_summary: string;
+  supporting_details: string;
+};
+
+type LoginFormState = {
+  identifier: string;
+  password: string;
+};
+
+const initialProfileFormState: ProfileFormState = {
+  username: '',
+  email: '',
+  password: '',
+  first_name: '',
+  last_name: '',
+  business_slug: '',
+  business_name: '',
+  business_city: '',
+  business_venue_type: '',
+  business_website_url: '',
+  contact_name: '',
+  job_title: '',
+  work_email: '',
+  work_phone: '',
+  employer_address: '',
+  address_not_applicable: false,
+  verification_summary: '',
+  supporting_details: '',
+};
+
+const initialLoginFormState: LoginFormState = {
+  identifier: '',
+  password: '',
+};
+
 export default function App() {
   return (
     <SafeAreaProvider>
@@ -138,9 +216,17 @@ function AppScreen() {
   const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
   const mapRef = useRef<MapView | null>(null);
+  const onboardingTransitionFrameRef = useRef<number | null>(null);
   const screenTransition = useRef(new Animated.Value(1)).current;
   const mapResultsOpacity = useRef(new Animated.Value(0)).current;
   const [apiBaseUrl, setApiBaseUrl] = useState(initialApiBaseUrl);
+  const [screenMode, setScreenMode] = useState<AppScreenMode>('splash');
+  const [onboardingTransitionDirection, setOnboardingTransitionDirection] = useState<OnboardingTransitionDirection>('forward');
+  const [authPortal, setAuthPortal] = useState<AuthPortal>('customer');
+  const [loginForm, setLoginForm] = useState<LoginFormState>(initialLoginFormState);
+  const [loginSubmitting, setLoginSubmitting] = useState(false);
+  const [authMessage, setAuthMessage] = useState<string | null>(null);
+  const [authenticatedSession, setAuthenticatedSession] = useState<SignupResponse | null>(null);
   const [browseMode, setBrowseMode] = useState<BrowseMode>('list');
   const [browseFiltersExpanded, setBrowseFiltersExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -161,9 +247,19 @@ function AppScreen() {
   const [renderedMapSearchResults, setRenderedMapSearchResults] = useState<MappedPlace[]>([]);
   const [renderedMapResultsKey, setRenderedMapResultsKey] = useState('');
   const [renderedMapResultCount, setRenderedMapResultCount] = useState(0);
+  const [profileForm, setProfileForm] = useState<ProfileFormState>(initialProfileFormState);
+  const [profileSubmitting, setProfileSubmitting] = useState(false);
+  const [profileMessage, setProfileMessage] = useState<string | null>(null);
+  const [profileErrorMessage, setProfileErrorMessage] = useState<string | null>(null);
+  const [profilePlaces, setProfilePlaces] = useState<PlaceListItem[]>([]);
+  const [profilePlacesLoading, setProfilePlacesLoading] = useState(false);
+  const [businessSearchQuery, setBusinessSearchQuery] = useState('');
+  const [selectedClaimPlace, setSelectedClaimPlace] = useState<PlaceListItem | null>(null);
+  const [incomingOnboardingScreen, setIncomingOnboardingScreen] = useState<AppScreenMode | null>(null);
   const shouldUseNativeMapBoundaries = Constants.executionEnvironment !== ExecutionEnvironment.StoreClient;
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const normalizedSearchQuery = normalizeSearchText(deferredSearchQuery);
+  const onboardingTransitionDuration = 480;
 
   const filteredPlaces = getFilteredPlaces(places, selectedVenueTypes, normalizedSearchQuery);
   const filteredPlaceKey = filteredPlaces.map((place) => place.id).join('|');
@@ -214,7 +310,28 @@ function AppScreen() {
   const mapOverlayBottomPadding = keyboardHeight > 0
     ? Math.max(keyboardHeight - insets.bottom, 0) + 12
     : Math.max(insets.bottom + 12, 20);
-  const activeScreenKey = selectedPlaceSlug ? 'detail' : browseMode === 'map' ? 'map' : 'list';
+  const availableProfilePlaces = profilePlaces.length ? profilePlaces : places;
+  const activeScreenKey = screenMode !== 'browse'
+    ? screenMode
+    : selectedPlaceSlug ? 'detail' : browseMode === 'map' ? 'map' : 'list';
+  const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'business-search', 'business-claim', 'manual-business-claim']);
+  const currentOnboardingScreen = onboardingScreenKeys.has(screenMode) ? screenMode : null;
+  const usesOnboardingSlideTransition = currentOnboardingScreen !== null || incomingOnboardingScreen !== null;
+  const onboardingSlideOffset = onboardingTransitionDirection === 'forward' ? width : -width;
+  const incomingScreenTransitionStyle = {
+    opacity: screenTransition.interpolate({
+      inputRange: [0, 0.18, 1],
+      outputRange: [0.94, 0.98, 1],
+    }),
+    transform: [
+      {
+        translateX: screenTransition.interpolate({
+          inputRange: [0, 1],
+          outputRange: [onboardingSlideOffset, 0],
+        }),
+      },
+    ],
+  };
   const screenTransitionStyle = {
     opacity: screenTransition,
     transform: [
@@ -227,11 +344,20 @@ function AppScreen() {
     ],
   };
 
-  const showMapBrowse = !selectedPlaceSlug && browseMode === 'map';
+  const showMapBrowse = screenMode === 'browse' && !selectedPlaceSlug && browseMode === 'map';
   const shouldShowMapResults = showMapBrowse && !selectedMapPlace && normalizedSearchQuery.length > 0;
   const isLandscape = width > height;
   const useWideLandscapeLayout = isLandscape && width >= 760;
   const browseListColumns = useWideLandscapeLayout ? 2 : 1;
+  const normalizedBusinessSearchQuery = normalizeSearchText(businessSearchQuery);
+  const businessSearchResults = normalizedBusinessSearchQuery.length
+    ? availableProfilePlaces
+      .map((place) => ({ place, score: getPlaceSearchScore(place, normalizedBusinessSearchQuery) }))
+      .filter(({ score }) => score > 0)
+      .sort((first, second) => second.score - first.score)
+      .map(({ place }) => place)
+      .slice(0, 12)
+    : [];
 
   function animateNextLayout() {
     LayoutAnimation.configureNext({
@@ -257,13 +383,67 @@ function AppScreen() {
   }, []);
 
   useEffect(() => {
-    screenTransition.setValue(0);
-    Animated.timing(screenTransition, {
-      duration: 240,
-      toValue: 1,
-      useNativeDriver: true,
-    }).start();
-  }, [activeScreenKey, screenTransition]);
+    return () => {
+      if (onboardingTransitionFrameRef.current !== null) {
+        cancelAnimationFrame(onboardingTransitionFrameRef.current);
+      }
+    };
+  }, []);
+
+  function navigateScreen(nextScreen: AppScreenMode, direction: OnboardingTransitionDirection) {
+    const currentScreen = screenMode;
+    const shouldAnimateOnboarding = onboardingScreenKeys.has(currentScreen)
+      && onboardingScreenKeys.has(nextScreen)
+      && currentScreen !== nextScreen;
+
+    setOnboardingTransitionDirection(direction);
+    screenTransition.stopAnimation();
+
+    if (onboardingTransitionFrameRef.current !== null) {
+      cancelAnimationFrame(onboardingTransitionFrameRef.current);
+      onboardingTransitionFrameRef.current = null;
+    }
+
+    if (!shouldAnimateOnboarding) {
+      setIncomingOnboardingScreen(null);
+      screenTransition.setValue(1);
+      setScreenMode(nextScreen);
+      return;
+    }
+
+    setIncomingOnboardingScreen(nextScreen);
+    onboardingTransitionFrameRef.current = requestAnimationFrame(() => {
+      onboardingTransitionFrameRef.current = null;
+      screenTransition.setValue(0);
+      Animated.timing(screenTransition, {
+        duration: onboardingTransitionDuration,
+        toValue: 1,
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (!finished) {
+          return;
+        }
+
+        setScreenMode(nextScreen);
+        setIncomingOnboardingScreen(null);
+        screenTransition.setValue(1);
+      });
+    });
+  }
+
+  useEffect(() => {
+    if (screenMode !== 'splash') {
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      navigateScreen(authenticatedSession ? 'browse' : 'auth', 'forward');
+    }, 1200);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [authenticatedSession, screenMode]);
 
   useEffect(() => {
     if (shouldShowMapResults) {
@@ -451,6 +631,37 @@ function AppScreen() {
   }, [filteredPlaceKey, listLoading, selectedCity, showMapBrowse]);
 
   useEffect(() => {
+    if (!['profiles', 'business-search', 'business-claim', 'manual-business-claim'].includes(screenMode)) {
+      return;
+    }
+
+    let isMounted = true;
+    setProfilePlacesLoading(true);
+
+    void fetchPlaces(apiBaseUrl, 'all').then((nextPlaces) => {
+      if (!isMounted) {
+        return;
+      }
+
+      setProfilePlaces(nextPlaces);
+    }).catch((error) => {
+      if (!isMounted) {
+        return;
+      }
+
+      setProfileErrorMessage(getErrorMessage(error));
+    }).finally(() => {
+      if (isMounted) {
+        setProfilePlacesLoading(false);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [apiBaseUrl, screenMode]);
+
+  useEffect(() => {
     if (!showMapBrowse || !shouldUseNativeMapBoundaries || !mapRef.current) {
       return;
     }
@@ -552,13 +763,210 @@ function AppScreen() {
     setSelectedPlaceSlug(null);
   }
 
+  function handleOpenProfiles() {
+    Keyboard.dismiss();
+    setProfileErrorMessage(null);
+    setProfileMessage(null);
+    navigateScreen('profiles', 'forward');
+  }
+
+  function handleBackFromProfiles() {
+    Keyboard.dismiss();
+    navigateScreen(authenticatedSession ? 'browse' : 'auth', 'backward');
+  }
+
+  function handleChangeLoginField(field: keyof LoginFormState, value: string) {
+    setLoginForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function handleChangeProfileField(field: keyof ProfileFormState, value: string) {
+    setProfileForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function handleChangeProfileToggle(field: 'address_not_applicable', value: boolean) {
+    setProfileForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function handleSelectBusinessSlug(slug: string) {
+    const selectedPlace = availableProfilePlaces.find((place) => place.slug === slug) ?? null;
+    setSelectedClaimPlace(selectedPlace);
+    setProfileForm((current) => ({
+      ...current,
+      business_slug: slug,
+      business_name: selectedPlace?.name ?? current.business_name,
+      business_city: selectedPlace?.city ?? current.business_city,
+      business_venue_type: selectedPlace?.venue_type ?? current.business_venue_type,
+      business_website_url: selectedPlace?.website_url ?? current.business_website_url,
+      address_not_applicable: false,
+    }));
+  }
+
+  async function handleLogin() {
+    setLoginSubmitting(true);
+    setProfileErrorMessage(null);
+
+    try {
+      const payload: LoginRequest = {
+        portal: authPortal,
+        identifier: loginForm.identifier,
+        password: loginForm.password,
+      };
+      const response = await loginProfile(apiBaseUrl, payload);
+      setAuthenticatedSession(response);
+      setAuthMessage(null);
+      setLoginForm(initialLoginFormState);
+      navigateScreen('browse', 'forward');
+    } catch (error) {
+      setProfileErrorMessage(getErrorMessage(error));
+    } finally {
+      setLoginSubmitting(false);
+    }
+  }
+
+  async function handleSubmitCustomerProfile() {
+    setProfileSubmitting(true);
+    setProfileErrorMessage(null);
+    setProfileMessage(null);
+
+    try {
+      const payload: CustomerSignupRequest = {
+        username: profileForm.username,
+        email: profileForm.email,
+        password: profileForm.password,
+        first_name: profileForm.first_name,
+        last_name: profileForm.last_name,
+      };
+      const response = await createCustomerProfile(apiBaseUrl, payload);
+      setProfileForm(initialProfileFormState);
+      setAuthMessage(`Account created for ${response.username}. You can log in now.`);
+      navigateScreen('auth', 'backward');
+      setAuthPortal('customer');
+    } catch (error) {
+      setProfileErrorMessage(getErrorMessage(error));
+    } finally {
+      setProfileSubmitting(false);
+    }
+  }
+
+  async function handleSubmitClaimedBusinessProfile() {
+    setProfileSubmitting(true);
+    setProfileErrorMessage(null);
+    setProfileMessage(null);
+
+    try {
+      const payload: BusinessSignupRequest = {
+        username: profileForm.username,
+        email: profileForm.email,
+        password: profileForm.password,
+        first_name: profileForm.first_name,
+        last_name: profileForm.last_name,
+        business_slug: profileForm.business_slug,
+        contact_name: profileForm.contact_name,
+        job_title: profileForm.job_title,
+        work_email: profileForm.work_email,
+        work_phone: profileForm.work_phone,
+        employer_address: profileForm.employer_address,
+        address_not_applicable: false,
+        verification_summary: profileForm.verification_summary,
+        supporting_details: profileForm.supporting_details,
+      };
+      const response = await createBusinessProfile(apiBaseUrl, payload);
+      setProfileForm(initialProfileFormState);
+      setSelectedClaimPlace(null);
+      setAuthMessage(`Business claim submitted for ${response.business_name ?? 'your business'}. Admin review will happen in Django admin.`);
+      setAuthPortal('business');
+      navigateScreen('auth', 'backward');
+    } catch (error) {
+      setProfileErrorMessage(getErrorMessage(error));
+    } finally {
+      setProfileSubmitting(false);
+    }
+  }
+
+  async function handleSubmitManualBusinessProfile() {
+    setProfileSubmitting(true);
+    setProfileErrorMessage(null);
+    setProfileMessage(null);
+
+    try {
+      const payload: ManualBusinessSignupRequest = {
+        username: profileForm.username,
+        email: profileForm.email,
+        password: profileForm.password,
+        first_name: profileForm.first_name,
+        last_name: profileForm.last_name,
+        business_name: profileForm.business_name,
+        business_city: profileForm.business_city,
+        business_venue_type: profileForm.business_venue_type,
+        business_website_url: profileForm.business_website_url,
+        contact_name: profileForm.contact_name,
+        job_title: profileForm.job_title,
+        work_email: profileForm.work_email,
+        work_phone: profileForm.work_phone,
+        employer_address: profileForm.employer_address,
+        address_not_applicable: profileForm.address_not_applicable,
+        verification_summary: profileForm.verification_summary,
+        supporting_details: profileForm.supporting_details,
+      };
+      const response = await createManualBusinessProfile(apiBaseUrl, payload);
+      setProfileForm(initialProfileFormState);
+      setSelectedClaimPlace(null);
+      setAuthMessage(`Business profile submitted for ${response.business_name ?? 'your business'}. Admin review will happen in Django admin.`);
+      setAuthPortal('business');
+      navigateScreen('auth', 'backward');
+    } catch (error) {
+      setProfileErrorMessage(getErrorMessage(error));
+    } finally {
+      setProfileSubmitting(false);
+    }
+  }
+
+  function handleOpenBusinessSearch() {
+    setProfileErrorMessage(null);
+    setBusinessSearchQuery('');
+    navigateScreen('business-search', 'forward');
+  }
+
+  function handleBackToBusinessSearch() {
+    setProfileErrorMessage(null);
+    navigateScreen('business-search', 'backward');
+  }
+
+  function handleOpenManualBusinessClaim() {
+    setProfileErrorMessage(null);
+    setSelectedClaimPlace(null);
+    setProfileForm((current) => ({
+      ...current,
+      business_slug: '',
+      business_name: '',
+      business_city: '',
+      business_venue_type: '',
+      business_website_url: '',
+      employer_address: '',
+      address_not_applicable: false,
+    }));
+    navigateScreen('manual-business-claim', 'forward');
+  }
+
+  function handleSelectClaimBusiness(place: PlaceListItem) {
+    setSelectedClaimPlace(place);
+    setProfileForm((current) => ({
+      ...current,
+      business_slug: place.slug,
+      business_name: place.name,
+      business_city: place.city,
+      business_venue_type: place.venue_type,
+      business_website_url: place.website_url,
+      address_not_applicable: false,
+    }));
+    navigateScreen('business-claim', 'forward');
+  }
+
   function handleClearMapSelection() {
-    animateNextLayout();
     setSelectedMapPlaceKey(null);
   }
 
   function handleFocusMapResult(place: MappedPlace) {
-    animateNextLayout();
     setSelectedMapPlaceKey(place.markerKey);
     const nextRegion = clampRegionToBounds({
       latitude: place.latitude,
@@ -571,10 +979,116 @@ function AppScreen() {
     mapRef.current?.animateToRegion(nextRegion, 250);
   }
 
+  function renderOnboardingScreen(targetScreen: AppScreenMode) {
+    switch (targetScreen) {
+      case 'splash':
+        return (
+          <SafeAreaView style={styles.safeArea}>
+            <SplashScreen />
+          </SafeAreaView>
+        );
+      case 'auth':
+        return (
+          <SafeAreaView style={styles.safeArea}>
+            <AuthPortalScreen
+              authMessage={authMessage}
+              errorMessage={profileErrorMessage}
+              loginForm={loginForm}
+              loginPortal={authPortal}
+              onChangeField={handleChangeLoginField}
+              onOpenProfiles={handleOpenProfiles}
+              onSelectPortal={setAuthPortal}
+              onSubmit={handleLogin}
+              submitting={loginSubmitting}
+            />
+          </SafeAreaView>
+        );
+      case 'profiles':
+        return (
+          <SafeAreaView style={styles.safeArea}>
+            <CreateProfileScreen
+              errorMessage={profileErrorMessage}
+              form={profileForm}
+              isLandscape={isLandscape}
+              message={profileMessage}
+              onBack={handleBackFromProfiles}
+              onChangeField={handleChangeProfileField}
+              onOpenBusinessClaim={handleOpenBusinessSearch}
+              onSubmit={handleSubmitCustomerProfile}
+              submitting={profileSubmitting}
+            />
+          </SafeAreaView>
+        );
+      case 'business-search':
+        return (
+          <SafeAreaView style={styles.safeArea}>
+            <BusinessSearchScreen
+              errorMessage={profileErrorMessage}
+              isLandscape={isLandscape}
+              loadingPlaces={profilePlacesLoading}
+              onBack={handleBackFromProfiles}
+              onChangeSearchQuery={setBusinessSearchQuery}
+              onChooseManualBusiness={handleOpenManualBusinessClaim}
+              onSelectBusiness={handleSelectClaimBusiness}
+              results={businessSearchResults}
+              searchQuery={businessSearchQuery}
+            />
+          </SafeAreaView>
+        );
+      case 'business-claim':
+        return (
+          <SafeAreaView style={styles.safeArea}>
+            <BusinessVerificationScreen
+              errorMessage={profileErrorMessage}
+              form={profileForm}
+              isLandscape={isLandscape}
+              mode="claimed"
+              onBack={handleBackToBusinessSearch}
+              onChangeField={handleChangeProfileField}
+              onToggleAddressNotApplicable={(value) => handleChangeProfileToggle('address_not_applicable', value)}
+              onSubmit={handleSubmitClaimedBusinessProfile}
+              selectedPlace={selectedClaimPlace}
+              submitting={profileSubmitting}
+            />
+          </SafeAreaView>
+        );
+      case 'manual-business-claim':
+        return (
+          <SafeAreaView style={styles.safeArea}>
+            <BusinessVerificationScreen
+              errorMessage={profileErrorMessage}
+              form={profileForm}
+              isLandscape={isLandscape}
+              mode="manual"
+              onBack={handleBackToBusinessSearch}
+              onChangeField={handleChangeProfileField}
+              onToggleAddressNotApplicable={(value) => handleChangeProfileToggle('address_not_applicable', value)}
+              onSubmit={handleSubmitManualBusinessProfile}
+              selectedPlace={null}
+              submitting={profileSubmitting}
+            />
+          </SafeAreaView>
+        );
+      default:
+        return null;
+    }
+  }
+
   return (
     <>
       <StatusBar backgroundColor="transparent" style="dark" translucent={showMapBrowse} />
-      {selectedPlaceSlug ? (
+      {usesOnboardingSlideTransition && currentOnboardingScreen ? (
+        <View style={styles.onboardingTransitionRoot}>
+          <View pointerEvents={incomingOnboardingScreen ? 'none' : 'auto'} style={styles.screenTransitionLayer}>
+            {renderOnboardingScreen(currentOnboardingScreen)}
+          </View>
+          {incomingOnboardingScreen ? (
+            <Animated.View style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, incomingScreenTransitionStyle]}>
+              {renderOnboardingScreen(incomingOnboardingScreen)}
+            </Animated.View>
+          ) : null}
+        </View>
+      ) : selectedPlaceSlug ? (
         <Animated.View style={[styles.screenTransitionLayer, screenTransitionStyle]}>
         <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
         <View style={[styles.detailScreen, isLandscape ? styles.detailScreenLandscape : null]}>
@@ -771,11 +1285,7 @@ function AppScreen() {
                 anchor={{ x: 0.5, y: 0.5 }}
                 coordinate={{ latitude: place.markerLatitude, longitude: place.markerLongitude }}
                 key={place.markerKey}
-                onPress={() => {
-                  animateNextLayout();
-                  setSelectedMapPlaceKey(place.markerKey);
-                }}
-                tracksViewChanges={false}
+                onPress={() => setSelectedMapPlaceKey(place.markerKey)}
                 zIndex={mappedPlaces.length - index}
               >
                 <View style={[
@@ -804,6 +1314,7 @@ function AppScreen() {
               overlay
               browseMode={browseMode}
               filtersExpanded={browseFiltersExpanded}
+              onOpenProfiles={handleOpenProfiles}
               onBrowseModeChange={handleBrowseModeChange}
               onChangeSearchQuery={setSearchQuery}
               onClearSearchQuery={handleClearSearchQuery}
@@ -826,32 +1337,32 @@ function AppScreen() {
             ) : null}
 
             {selectedMapPlace ? (
-              <View style={styles.mapPreviewCard}>
+              <View style={[styles.mapPreviewCard, isLandscape ? styles.mapPreviewCardLandscape : null]}>
                 <View style={styles.mapPreviewHeader}>
                   <View style={styles.mapPreviewCopy}>
-                    <Text style={styles.mapPreviewTitle}>{selectedMapPlace.name}</Text>
-                    <Text style={styles.mapPreviewMeta}>{selectedMapPlace.venue_type_label}</Text>
+                    <Text style={[styles.mapPreviewTitle, isLandscape ? styles.mapPreviewTitleLandscape : null]}>{selectedMapPlace.name}</Text>
+                    <Text style={[styles.mapPreviewMeta, isLandscape ? styles.mapPreviewMetaLandscape : null]}>{selectedMapPlace.venue_type_label}</Text>
                   </View>
                   <View style={styles.mapPreviewActions}>
-                    <Pressable onPress={handleClearMapSelection} style={styles.mapPreviewIconButton}>
-                      <Text style={styles.mapPreviewIconText}>×</Text>
+                    <Pressable onPress={handleClearMapSelection} style={[styles.mapPreviewIconButton, isLandscape ? styles.mapPreviewIconButtonLandscape : null]}>
+                      <Text style={[styles.mapPreviewIconText, isLandscape ? styles.mapPreviewIconTextLandscape : null]}>×</Text>
                     </Pressable>
-                    <Pressable onPress={() => handleSelectPlace(selectedMapPlace)} style={styles.mapPreviewIconButton}>
-                      <Text style={styles.mapPreviewIconText}>↗</Text>
+                    <Pressable onPress={() => handleSelectPlace(selectedMapPlace)} style={[styles.mapPreviewIconButton, isLandscape ? styles.mapPreviewIconButtonLandscape : null]}>
+                      <Text style={[styles.mapPreviewIconText, isLandscape ? styles.mapPreviewIconTextLandscape : null]}>↗</Text>
                     </Pressable>
                   </View>
                 </View>
 
                 <View style={styles.mapPreviewDetails}>
-                  <Text style={styles.mapPreviewDetailText}>{selectedMapPlace.fullAddress}</Text>
+                  <Text style={[styles.mapPreviewDetailText, isLandscape ? styles.mapPreviewDetailTextLandscape : null]}>{selectedMapPlace.fullAddress}</Text>
                   {selectedMapPlace.phone_number ? (
-                    <Text style={styles.mapPreviewDetailText}>{selectedMapPlace.phone_number}</Text>
+                    <Text style={[styles.mapPreviewDetailText, isLandscape ? styles.mapPreviewDetailTextLandscape : null]}>{selectedMapPlace.phone_number}</Text>
                   ) : null}
                 </View>
 
                 {selectedMapImageUrls.length ? (
                   <ScrollView
-                    contentContainerStyle={styles.mapPreviewGallery}
+                    contentContainerStyle={[styles.mapPreviewGallery, isLandscape ? styles.mapPreviewGalleryLandscape : null]}
                     horizontal
                     pagingEnabled
                     showsHorizontalScrollIndicator={false}
@@ -860,13 +1371,13 @@ function AppScreen() {
                       <Image
                         key={imageUrl}
                         source={{ uri: imageUrl }}
-                        style={styles.mapPreviewImage}
+                        style={[styles.mapPreviewImage, isLandscape ? styles.mapPreviewImageLandscape : null]}
                       />
                     ))}
                   </ScrollView>
                 ) : (
-                  <View style={styles.mapPreviewEmptyState}>
-                    <Text style={styles.mapPreviewEmptyText}>Photos from this business page have not been found yet.</Text>
+                  <View style={[styles.mapPreviewEmptyState, isLandscape ? styles.mapPreviewEmptyStateLandscape : null]}>
+                    <Text style={[styles.mapPreviewEmptyText, isLandscape ? styles.mapPreviewEmptyTextLandscape : null]}>Photos from this business page have not been found yet.</Text>
                   </View>
                 )}
               </View>
@@ -917,6 +1428,7 @@ function AppScreen() {
             <BrowseControls
               browseMode={browseMode}
               filtersExpanded={browseFiltersExpanded}
+              onOpenProfiles={handleOpenProfiles}
               onBrowseModeChange={handleBrowseModeChange}
               onChangeSearchQuery={setSearchQuery}
               onClearSearchQuery={handleClearSearchQuery}
@@ -978,6 +1490,7 @@ function BrowseControls({
   overlay = false,
   browseMode,
   filtersExpanded,
+  onOpenProfiles,
   onBrowseModeChange,
   onChangeSearchQuery,
   onClearSearchQuery,
@@ -991,22 +1504,51 @@ function BrowseControls({
   selectedCity,
   selectedVenueTypes,
 }: BrowseControlsProps) {
+  const { height, width } = useWindowDimensions();
+  const compactLandscapeControls = width > height && width >= 760;
+  const landscapeControlsWidth = compactLandscapeControls
+    ? Math.min(width - 32, overlay ? 560 : 620)
+    : null;
   const chipStyle = overlay ? styles.overlayChip : styles.filterChip;
   const chipActiveStyle = overlay ? styles.overlayChipActive : styles.filterChipActive;
   const chipTextStyle = overlay ? styles.overlayChipText : styles.filterChipText;
   const chipTextActiveStyle = overlay ? styles.overlayChipTextActive : styles.filterChipTextActive;
 
   return (
-    <View style={overlay ? styles.mapTopPanel : styles.browseHeaderCard}>
-      <View style={styles.toolbarRow}>
-        <Text style={overlay ? styles.mapAppTitle : styles.appTitle}>HappyHourApp</Text>
-        <Pressable onPress={onReload} style={styles.reloadButton}>
-          <Text style={styles.reloadButtonText}>Reload</Text>
-        </Pressable>
+    <View
+      style={[
+        overlay ? styles.mapTopPanel : styles.browseHeaderCard,
+        compactLandscapeControls ? (overlay ? styles.mapTopPanelLandscape : styles.browseHeaderCardLandscape) : null,
+        landscapeControlsWidth ? { width: landscapeControlsWidth } : null,
+      ]}
+    >
+      <View style={[styles.toolbarRow, compactLandscapeControls ? styles.toolbarRowLandscape : null]}>
+        <Text
+          style={[
+            overlay ? styles.mapAppTitle : styles.appTitle,
+            compactLandscapeControls ? styles.controlsTitleLandscape : null,
+          ]}
+        >
+          HappyHourApp
+        </Text>
+        <View style={styles.toolbarActionsRow}>
+          <Pressable onPress={onOpenProfiles} style={styles.secondaryToolbarButton}>
+            <Text style={styles.secondaryToolbarButtonText}>Profiles</Text>
+          </Pressable>
+          <Pressable onPress={onReload} style={styles.reloadButton}>
+            <Text style={styles.reloadButtonText}>Reload</Text>
+          </Pressable>
+        </View>
       </View>
 
-      <View style={styles.searchRow}>
-        <View style={[styles.searchInputShell, overlay ? styles.searchInputShellOverlay : null]}>
+      <View style={[styles.searchRow, compactLandscapeControls ? styles.searchRowLandscape : null]}>
+        <View
+          style={[
+            styles.searchInputShell,
+            overlay ? styles.searchInputShellOverlay : null,
+            compactLandscapeControls ? styles.searchInputShellLandscape : null,
+          ]}
+        >
           <Text style={styles.searchInputIcon}>Find</Text>
           <TextInput
             onChangeText={onChangeSearchQuery}
@@ -1024,7 +1566,11 @@ function BrowseControls({
 
         <Pressable
           onPress={onToggleFilters}
-          style={[styles.filtersToggleButton, filtersExpanded ? styles.filtersToggleButtonActive : null]}
+          style={[
+            styles.filtersToggleButton,
+            compactLandscapeControls ? styles.filtersToggleButtonLandscape : null,
+            filtersExpanded ? styles.filtersToggleButtonActive : null,
+          ]}
         >
           <Text style={[styles.filtersToggleText, filtersExpanded ? styles.filtersToggleTextActive : null]}>
             {filtersExpanded ? 'Hide filters' : 'Filters'}
@@ -1032,7 +1578,7 @@ function BrowseControls({
         </Pressable>
       </View>
 
-      <View style={styles.browseStatsRow}>
+      <View style={[styles.browseStatsRow, compactLandscapeControls ? styles.browseStatsRowLandscape : null]}>
         <Text style={styles.browseStatsText}>{resultCount} {resultCount === 1 ? 'place' : 'places'}</Text>
         <Text numberOfLines={1} style={styles.browseStatsSubtleText}>
           {getBrowseSummaryLabel(selectedCity, selectedVenueTypes, normalizeSearchText(searchQuery))}
@@ -1040,7 +1586,7 @@ function BrowseControls({
       </View>
 
       {filtersExpanded ? (
-        <View style={styles.filtersPanel}>
+        <View style={[styles.filtersPanel, compactLandscapeControls ? styles.filtersPanelLandscape : null]}>
           <View style={styles.browseSectionHeaderRow}>
             <Text style={styles.browseSectionTitle}>City</Text>
             <Text style={styles.browseSectionMeta}>Quick scope</Text>
@@ -1144,6 +1690,412 @@ function isCloseLabel(endTime: string, weekdays: number[], operatingHours: Opera
   );
 
   return weekdays.every((weekday) => closeTimesByWeekday.get(weekday) === endTime);
+}
+
+
+type AuthPortalScreenProps = {
+  authMessage: string | null;
+  errorMessage: string | null;
+  loginForm: LoginFormState;
+  loginPortal: AuthPortal;
+  onChangeField: (field: keyof LoginFormState, value: string) => void;
+  onOpenProfiles: () => void;
+  onSelectPortal: (portal: AuthPortal) => void;
+  onSubmit: () => void;
+  submitting: boolean;
+};
+
+type CreateProfileScreenProps = {
+  errorMessage: string | null;
+  form: ProfileFormState;
+  isLandscape: boolean;
+  message: string | null;
+  onBack: () => void;
+  onChangeField: (field: keyof ProfileFormState, value: string) => void;
+  onOpenBusinessClaim: () => void;
+  onSubmit: () => void;
+  submitting: boolean;
+};
+
+type BusinessSearchScreenProps = {
+  errorMessage: string | null;
+  isLandscape: boolean;
+  loadingPlaces: boolean;
+  onBack: () => void;
+  onChangeSearchQuery: (value: string) => void;
+  onChooseManualBusiness: () => void;
+  onSelectBusiness: (place: PlaceListItem) => void;
+  results: PlaceListItem[];
+  searchQuery: string;
+};
+
+type BusinessVerificationScreenProps = {
+  errorMessage: string | null;
+  form: ProfileFormState;
+  isLandscape: boolean;
+  mode: 'claimed' | 'manual';
+  onBack: () => void;
+  onChangeField: (field: keyof ProfileFormState, value: string) => void;
+  onToggleAddressNotApplicable: (value: boolean) => void;
+  onSubmit: () => void;
+  selectedPlace: PlaceListItem | null;
+  submitting: boolean;
+};
+
+type CompactDropdownProps = {
+  onSelect: (value: string) => void;
+  open: boolean;
+  options: ReadonlyArray<{ label: string; value: string }>;
+  placeholder: string;
+  selectedValue: string;
+  onToggle: () => void;
+};
+
+function SplashScreen() {
+  return (
+    <View style={styles.splashScreen}>
+      <View style={styles.splashLogoShell}>
+        <Text style={styles.splashLogoText}>HH</Text>
+      </View>
+      <Text style={styles.splashTitle}>HappyHourApp</Text>
+      <Text style={styles.splashSubtitle}>Find your next deal or claim your business profile.</Text>
+    </View>
+  );
+}
+
+function CompactDropdown({ onSelect, open, options, placeholder, selectedValue, onToggle }: CompactDropdownProps) {
+  const selectedLabel = options.find((option) => option.value === selectedValue)?.label ?? placeholder;
+
+  function animateDropdownLayout() {
+    LayoutAnimation.configureNext({
+      duration: 180,
+      create: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+        property: LayoutAnimation.Properties.opacity,
+      },
+      update: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+      },
+      delete: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+        property: LayoutAnimation.Properties.opacity,
+      },
+    });
+  }
+
+  function handleToggle() {
+    animateDropdownLayout();
+    onToggle();
+  }
+
+  function handleSelect(value: string) {
+    animateDropdownLayout();
+    onSelect(value);
+  }
+
+  return (
+    <View style={styles.compactDropdownWrap}>
+      <Pressable onPress={handleToggle} style={[styles.compactDropdownButton, open ? styles.compactDropdownButtonOpen : null]}>
+        <Text style={[styles.compactDropdownText, selectedValue.length === 0 ? styles.compactDropdownPlaceholder : null]}>{selectedLabel}</Text>
+        <Text style={styles.compactDropdownCaret}>{open ? '^' : 'v'}</Text>
+      </Pressable>
+      {open ? (
+        <View style={styles.compactDropdownMenu}>
+          {options.map((option) => {
+            const isSelected = option.value === selectedValue;
+
+            return (
+              <Pressable
+                key={option.value}
+                onPress={() => handleSelect(option.value)}
+                style={[styles.compactDropdownOption, isSelected ? styles.compactDropdownOptionSelected : null]}
+              >
+                <Text style={[styles.compactDropdownOptionText, isSelected ? styles.compactDropdownOptionTextSelected : null]}>{option.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function AuthPortalScreen({ authMessage, errorMessage, loginForm, loginPortal, onChangeField, onOpenProfiles, onSelectPortal, onSubmit, submitting }: AuthPortalScreenProps) {
+  return (
+    <View style={styles.authScreen}>
+      <ScrollView contentContainerStyle={styles.authScrollContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.authHero}>
+          <View style={styles.authLogoShell}>
+            <Text style={styles.authLogoText}>HH</Text>
+          </View>
+          <Text style={styles.authTitle}>Welcome back</Text>
+          <Text style={styles.authSubtitle}>Choose a customer or business portal to continue.</Text>
+        </View>
+
+        <View style={styles.profileCard}>
+          <View style={styles.modeRow}>
+            <Pressable onPress={() => onSelectPortal('customer')} style={[styles.modeButton, loginPortal === 'customer' ? styles.modeButtonActive : null]}>
+              <Text style={[styles.modeButtonText, loginPortal === 'customer' ? styles.modeButtonTextActive : null]}>Customer</Text>
+            </Pressable>
+            <Pressable onPress={() => onSelectPortal('business')} style={[styles.modeButton, loginPortal === 'business' ? styles.modeButtonActive : null]}>
+              <Text style={[styles.modeButtonText, loginPortal === 'business' ? styles.modeButtonTextActive : null]}>Business</Text>
+            </Pressable>
+          </View>
+
+          {authMessage ? (
+            <View style={styles.profileSuccessBanner}>
+              <Text style={styles.profileSuccessText}>{authMessage}</Text>
+            </View>
+          ) : null}
+
+          {errorMessage ? (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            </View>
+          ) : null}
+
+          <Text style={styles.profileFieldLabel}>Username or email</Text>
+          <TextInput autoCapitalize="none" onChangeText={(value) => onChangeField('identifier', value)} style={styles.profileInput} value={loginForm.identifier} />
+
+          <Text style={styles.profileFieldLabel}>Password</Text>
+          <TextInput onChangeText={(value) => onChangeField('password', value)} secureTextEntry style={styles.profileInput} value={loginForm.password} />
+
+          <Pressable onPress={() => void onSubmit()} style={[styles.linkButton, submitting ? styles.linkButtonDisabled : null]}>
+            <Text style={styles.linkButtonText}>{submitting ? 'Logging in...' : loginPortal === 'customer' ? 'Log in as customer' : 'Log in as business'}</Text>
+          </Pressable>
+
+          <Pressable onPress={onOpenProfiles} style={styles.authLinkButton}>
+            <Text style={styles.authLinkText}>Don&apos;t have an account? Create a free account here.</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+function CreateProfileScreen({ errorMessage, form, isLandscape, message, onBack, onChangeField, onOpenBusinessClaim, onSubmit, submitting }: CreateProfileScreenProps) {
+  return (
+    <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
+      <ScrollView contentContainerStyle={styles.profileScrollContent} showsVerticalScrollIndicator={false}>
+        <Pressable onPress={onBack} style={styles.backButton}>
+          <Text style={styles.backButtonText}>Back to login</Text>
+        </Pressable>
+
+        <View style={styles.profileCard}>
+          <Text style={styles.detailCity}>Create Profile</Text>
+          <Text style={styles.detailTitle}>Create a customer account</Text>
+          <Text style={styles.profileIntroText}>Customer accounts will eventually support email verification, but for now you can create one directly here.</Text>
+
+          {message ? (
+            <View style={styles.profileSuccessBanner}>
+              <Text style={styles.profileSuccessText}>{message}</Text>
+            </View>
+          ) : null}
+
+          {errorMessage ? (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.profileFormSection}>
+            <Text style={styles.profileFieldLabel}>Username</Text>
+            <TextInput autoCapitalize="none" onChangeText={(value) => onChangeField('username', value)} style={styles.profileInput} value={form.username} />
+
+            <Text style={styles.profileFieldLabel}>Email</Text>
+            <TextInput autoCapitalize="none" keyboardType="email-address" onChangeText={(value) => onChangeField('email', value)} style={styles.profileInput} value={form.email} />
+
+            <Text style={styles.profileFieldLabel}>Password</Text>
+            <TextInput onChangeText={(value) => onChangeField('password', value)} secureTextEntry style={styles.profileInput} value={form.password} />
+
+            <Text style={styles.profileFieldLabel}>First name</Text>
+            <TextInput onChangeText={(value) => onChangeField('first_name', value)} style={styles.profileInput} value={form.first_name} />
+
+            <Text style={styles.profileFieldLabel}>Last name</Text>
+            <TextInput onChangeText={(value) => onChangeField('last_name', value)} style={styles.profileInput} value={form.last_name} />
+          </View>
+
+          <Pressable onPress={() => void onSubmit()} style={[styles.linkButton, submitting ? styles.linkButtonDisabled : null]}>
+            <Text style={styles.linkButtonText}>{submitting ? 'Submitting...' : 'Create customer profile'}</Text>
+          </Pressable>
+
+          <Pressable onPress={onOpenBusinessClaim} style={styles.linkButtonSecondaryWide}>
+            <Text style={styles.linkButtonSecondaryText}>Claim a Business</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces, onBack, onChangeSearchQuery, onChooseManualBusiness, onSelectBusiness, results, searchQuery }: BusinessSearchScreenProps) {
+  return (
+    <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
+      <ScrollView contentContainerStyle={styles.profileScrollContent} showsVerticalScrollIndicator={false}>
+        <Pressable onPress={onBack} style={styles.backButton}>
+          <Text style={styles.backButtonText}>Back to create profile</Text>
+        </Pressable>
+
+        <View style={styles.profileCard}>
+          <Text style={styles.detailCity}>Claim a Business</Text>
+          <Text style={styles.detailTitle}>Search your business</Text>
+          <Text style={styles.profileIntroText}>If you find your business, you&apos;ll fill out verification information next and it will be reviewed in Django admin.</Text>
+
+          {errorMessage ? (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            </View>
+          ) : null}
+
+          <TextInput placeholder="Search by business name" placeholderTextColor="#9a7f6c" onChangeText={onChangeSearchQuery} style={styles.profileInput} value={searchQuery} />
+
+          {loadingPlaces ? (
+            <Text style={styles.centerStateText}>Loading businesses...</Text>
+          ) : normalizeSearchText(searchQuery).length === 0 ? (
+            <Text style={styles.centerStateText}>Start typing to search for your business.</Text>
+          ) : (
+            <View style={styles.claimResultsList}>
+              {results.length ? (
+                results.map((place) => (
+                  <Pressable key={place.slug} onPress={() => onSelectBusiness(place)} style={styles.claimResultCard}>
+                    <Text style={styles.placeTitle}>{place.name}</Text>
+                    <Text style={styles.placeMeta}>{place.venue_type_label}</Text>
+                  </Pressable>
+                ))
+              ) : (
+                <Text style={styles.centerStateText}>No matching businesses found yet.</Text>
+              )}
+            </View>
+          )}
+
+          <Pressable onPress={onChooseManualBusiness} style={styles.authLinkButton}>
+            <Text style={styles.authLinkText}>Can&apos;t find your business? Create a business profile for it here.</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+function BusinessVerificationScreen({ errorMessage, form, isLandscape, mode, onBack, onChangeField, onToggleAddressNotApplicable, onSubmit, selectedPlace, submitting }: BusinessVerificationScreenProps) {
+  const isManual = mode === 'manual';
+  const [openDropdown, setOpenDropdown] = useState<'city' | 'venue' | null>(null);
+
+  function handleSelectDropdownValue(field: 'business_city' | 'business_venue_type', value: string) {
+    onChangeField(field, value);
+    setOpenDropdown(null);
+  }
+
+  return (
+    <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
+      <ScrollView contentContainerStyle={styles.profileScrollContent} showsVerticalScrollIndicator={false}>
+        <Pressable onPress={onBack} style={styles.backButton}>
+          <Text style={styles.backButtonText}>Back</Text>
+        </Pressable>
+
+        <View style={styles.profileCard}>
+          <Text style={styles.detailCity}>Verification</Text>
+          <Text style={styles.detailTitle}>{isManual ? 'Create a business profile' : 'Verify this business claim'}</Text>
+          <Text style={styles.profileIntroText}>
+            {isManual
+              ? 'For upcoming or smaller businesses, some fields stay optional but recommended. Admin will review the submission in Django admin.'
+              : 'Claimed businesses require full verification details before they move into admin review.'}
+          </Text>
+
+          {!isManual && selectedPlace ? (
+            <View style={styles.claimResultCard}>
+              <Text style={styles.placeTitle}>{selectedPlace.name}</Text>
+              <Text style={styles.placeMeta}>{selectedPlace.venue_type_label}</Text>
+            </View>
+          ) : null}
+
+          {errorMessage ? (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.profileFormSection}>
+            {isManual ? (
+              <>
+                <Text style={styles.profileFieldLabel}>Business name</Text>
+                <TextInput onChangeText={(value) => onChangeField('business_name', value)} style={styles.profileInput} value={form.business_name} />
+
+                <Text style={styles.profileFieldLabel}>City</Text>
+                <CompactDropdown
+                  onSelect={(value) => handleSelectDropdownValue('business_city', value)}
+                  onToggle={() => setOpenDropdown((current) => current === 'city' ? null : 'city')}
+                  open={openDropdown === 'city'}
+                  options={[{ label: 'Select a city', value: '' }, ...manualBusinessCityOptions]}
+                  placeholder="Select a city"
+                  selectedValue={form.business_city}
+                />
+
+                <Text style={styles.profileFieldLabel}>Business type</Text>
+                <CompactDropdown
+                  onSelect={(value) => handleSelectDropdownValue('business_venue_type', value)}
+                  onToggle={() => setOpenDropdown((current) => current === 'venue' ? null : 'venue')}
+                  open={openDropdown === 'venue'}
+                  options={[{ label: 'Select a business type', value: '' }, ...manualBusinessVenueOptions]}
+                  placeholder="Select a business type"
+                  selectedValue={form.business_venue_type}
+                />
+
+                <Text style={styles.profileFieldLabel}>Website URL (optional)</Text>
+                <TextInput autoCapitalize="none" onChangeText={(value) => onChangeField('business_website_url', value)} style={styles.profileInput} value={form.business_website_url} />
+              </>
+            ) : null}
+
+            <Text style={styles.profileFieldLabel}>Username</Text>
+            <TextInput autoCapitalize="none" onChangeText={(value) => onChangeField('username', value)} style={styles.profileInput} value={form.username} />
+
+            <Text style={styles.profileFieldLabel}>Email</Text>
+            <TextInput autoCapitalize="none" keyboardType="email-address" onChangeText={(value) => onChangeField('email', value)} style={styles.profileInput} value={form.email} />
+
+            <Text style={styles.profileFieldLabel}>Password</Text>
+            <TextInput onChangeText={(value) => onChangeField('password', value)} secureTextEntry style={styles.profileInput} value={form.password} />
+
+            <Text style={styles.profileFieldLabel}>First name</Text>
+            <TextInput onChangeText={(value) => onChangeField('first_name', value)} style={styles.profileInput} value={form.first_name} />
+
+            <Text style={styles.profileFieldLabel}>Last name</Text>
+            <TextInput onChangeText={(value) => onChangeField('last_name', value)} style={styles.profileInput} value={form.last_name} />
+
+            <Text style={styles.profileFieldLabel}>Contact name</Text>
+            <TextInput onChangeText={(value) => onChangeField('contact_name', value)} style={styles.profileInput} value={form.contact_name} />
+
+            <Text style={styles.profileFieldLabel}>{isManual ? 'Job title (recommended)' : 'Job title'}</Text>
+            <TextInput onChangeText={(value) => onChangeField('job_title', value)} style={styles.profileInput} value={form.job_title} />
+
+            <Text style={styles.profileFieldLabel}>Work email</Text>
+            <TextInput autoCapitalize="none" keyboardType="email-address" onChangeText={(value) => onChangeField('work_email', value)} style={styles.profileInput} value={form.work_email} />
+
+            <Text style={styles.profileFieldLabel}>{isManual ? 'Work phone (recommended)' : 'Work phone'}</Text>
+            <TextInput onChangeText={(value) => onChangeField('work_phone', value)} style={styles.profileInput} value={form.work_phone} />
+
+            <Text style={styles.profileFieldLabel}>{isManual ? 'Employer address or “Address Not Applicable”' : 'Employer address'}</Text>
+            <TextInput onChangeText={(value) => onChangeField('employer_address', value)} style={styles.profileInput} value={form.employer_address} />
+
+            {isManual ? (
+              <Pressable onPress={() => onToggleAddressNotApplicable(!form.address_not_applicable)} style={[styles.toggleChip, form.address_not_applicable ? styles.toggleChipActive : null]}>
+                <Text style={[styles.toggleChipText, form.address_not_applicable ? styles.toggleChipTextActive : null]}>Address Not Applicable</Text>
+              </Pressable>
+            ) : null}
+
+            <Text style={styles.profileFieldLabel}>Verification summary</Text>
+            <TextInput multiline onChangeText={(value) => onChangeField('verification_summary', value)} style={[styles.profileInput, styles.profileTextarea]} value={form.verification_summary} />
+
+            <Text style={styles.profileFieldLabel}>{isManual ? 'Supporting details (recommended)' : 'Supporting details'}</Text>
+            <TextInput multiline onChangeText={(value) => onChangeField('supporting_details', value)} style={[styles.profileInput, styles.profileTextarea]} value={form.supporting_details} />
+          </View>
+
+          <Pressable onPress={() => void onSubmit()} style={[styles.linkButton, submitting ? styles.linkButtonDisabled : null]}>
+            <Text style={styles.linkButtonText}>{submitting ? 'Submitting...' : isManual ? 'Create business profile' : 'Submit business claim'}</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    </View>
+  );
 }
 
 function formatHappyHourGroups(happyHours: HappyHourWindow[], operatingHours: OperatingHourWindow[] = []) {
@@ -1635,8 +2587,24 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f7efe2',
   },
+  onboardingTransitionRoot: {
+    flex: 1,
+    backgroundColor: '#f7efe2',
+    overflow: 'hidden',
+  },
   screenTransitionLayer: {
     flex: 1,
+  },
+  screenTransitionLayerAbsolute: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#f7efe2',
+  },
+  incomingOnboardingOverlay: {
+    shadowColor: '#2d221a',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.16,
+    shadowRadius: 22,
+    elevation: 12,
   },
   safeArea: {
     flex: 1,
@@ -1670,15 +2638,31 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 16,
   },
+  browseHeaderCardLandscape: {
+    alignSelf: 'center',
+    gap: 8,
+    maxWidth: 620,
+    padding: 12,
+  },
   toolbarRow: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
+  toolbarActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  toolbarRowLandscape: {
+    minHeight: 36,
+  },
   appTitle: {
     color: '#2d221a',
     fontSize: 24,
     fontWeight: '800',
+  },
+  controlsTitleLandscape: {
+    fontSize: 20,
   },
   mapScreen: {
     flex: 1,
@@ -1701,6 +2685,12 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 16,
   },
+  mapTopPanelLandscape: {
+    alignSelf: 'center',
+    gap: 8,
+    maxWidth: 560,
+    padding: 12,
+  },
   mapLoadingOverlay: {
     alignItems: 'center',
     alignSelf: 'center',
@@ -1717,6 +2707,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 14,
     padding: 16,
+  },
+  mapPreviewCardLandscape: {
+    alignSelf: 'center',
+    gap: 10,
+    maxWidth: 320,
+    padding: 12,
+    width: '100%',
   },
   mapResultsCard: {
     backgroundColor: 'rgba(255, 250, 244, 0.97)',
@@ -1795,10 +2792,16 @@ const styles = StyleSheet.create({
     fontSize: 19,
     fontWeight: '800',
   },
+  mapPreviewTitleLandscape: {
+    fontSize: 16,
+  },
   mapPreviewMeta: {
     color: '#6c5443',
     fontSize: 14,
     fontWeight: '600',
+  },
+  mapPreviewMetaLandscape: {
+    fontSize: 12,
   },
   mapPreviewActions: {
     flexDirection: 'row',
@@ -1813,6 +2816,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
+  mapPreviewDetailTextLandscape: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
   mapPreviewIconButton: {
     alignItems: 'center',
     backgroundColor: '#fff7ef',
@@ -1823,19 +2830,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 36,
   },
+  mapPreviewIconButtonLandscape: {
+    height: 30,
+    width: 30,
+  },
   mapPreviewIconText: {
     color: '#402214',
     fontSize: 18,
     fontWeight: '800',
   },
+  mapPreviewIconTextLandscape: {
+    fontSize: 15,
+  },
   mapPreviewGallery: {
     gap: 12,
+  },
+  mapPreviewGalleryLandscape: {
+    gap: 8,
   },
   mapPreviewImage: {
     backgroundColor: '#ecdac7',
     borderRadius: 18,
     height: 180,
     width: 250,
+  },
+  mapPreviewImageLandscape: {
+    borderRadius: 14,
+    height: 110,
+    width: 180,
   },
   mapPreviewEmptyState: {
     alignItems: 'center',
@@ -1846,11 +2868,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 20,
   },
+  mapPreviewEmptyStateLandscape: {
+    minHeight: 92,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+  },
   mapPreviewEmptyText: {
     color: '#7d614f',
     fontSize: 13,
     lineHeight: 18,
     textAlign: 'center',
+  },
+  mapPreviewEmptyTextLandscape: {
+    fontSize: 12,
+    lineHeight: 16,
   },
   mapAppTitle: {
     color: '#2d221a',
@@ -1867,6 +2898,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
   },
+  searchRowLandscape: {
+    alignItems: 'stretch',
+    gap: 6,
+  },
   searchInputShell: {
     alignItems: 'center',
     backgroundColor: '#f8efe3',
@@ -1878,6 +2913,10 @@ const styles = StyleSheet.create({
     gap: 10,
     minHeight: 52,
     paddingHorizontal: 14,
+  },
+  searchInputShellLandscape: {
+    minHeight: 42,
+    paddingHorizontal: 10,
   },
   searchInputShellOverlay: {
     backgroundColor: 'rgba(248, 239, 227, 0.94)',
@@ -1914,6 +2953,10 @@ const styles = StyleSheet.create({
     minHeight: 52,
     paddingHorizontal: 14,
   },
+  filtersToggleButtonLandscape: {
+    minHeight: 42,
+    paddingHorizontal: 10,
+  },
   filtersToggleButtonActive: {
     backgroundColor: '#402214',
     borderColor: '#402214',
@@ -1932,6 +2975,9 @@ const styles = StyleSheet.create({
     gap: 10,
     justifyContent: 'space-between',
   },
+  browseStatsRowLandscape: {
+    gap: 6,
+  },
   browseStatsText: {
     color: '#2d221a',
     fontSize: 14,
@@ -1949,6 +2995,10 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     gap: 12,
     paddingTop: 12,
+  },
+  filtersPanelLandscape: {
+    gap: 8,
+    paddingTop: 8,
   },
   browseSectionHeaderRow: {
     alignItems: 'center',
@@ -1975,6 +3025,19 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 12,
+  },
+  secondaryToolbarButton: {
+    backgroundColor: '#fff7ef',
+    borderColor: '#ddc4a7',
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  secondaryToolbarButtonText: {
+    color: '#5d4637',
+    fontSize: 14,
+    fontWeight: '700',
   },
   reloadButtonText: {
     color: '#f4fffe',
@@ -2108,7 +3171,12 @@ const styles = StyleSheet.create({
     width: 26,
   },
   mapMarkerActive: {
-    transform: [{ scale: 1.18 }],
+    borderWidth: 3,
+    elevation: 4,
+    shadowColor: '#1f160f',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
   },
   mapMarkerText: {
     color: '#fffaf4',
@@ -2185,6 +3253,9 @@ const styles = StyleSheet.create({
   backButtonText: {
     color: '#402214',
     fontWeight: '700',
+  },
+  linkButtonDisabled: {
+    opacity: 0.7,
   },
   detailCard: {
     backgroundColor: '#fffaf4',
@@ -2407,5 +3478,265 @@ const styles = StyleSheet.create({
   },
   mapErrorBanner: {
     alignSelf: 'stretch',
+  },
+  splashScreen: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+    backgroundColor: '#f6ead8',
+  },
+  splashLogoShell: {
+    alignItems: 'center',
+    backgroundColor: '#1f5f5b',
+    borderRadius: 36,
+    height: 112,
+    justifyContent: 'center',
+    shadowColor: '#1b443f',
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    width: 112,
+  },
+  splashLogoText: {
+    color: '#effffd',
+    fontSize: 38,
+    fontWeight: '800',
+    letterSpacing: 2,
+  },
+  splashTitle: {
+    color: '#2d221a',
+    fontSize: 30,
+    fontWeight: '800',
+    marginTop: 22,
+  },
+  splashSubtitle: {
+    color: '#6c5443',
+    fontSize: 16,
+    lineHeight: 24,
+    marginTop: 10,
+    maxWidth: 320,
+    textAlign: 'center',
+  },
+  authScreen: {
+    flex: 1,
+    paddingHorizontal: 18,
+  },
+  authScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingVertical: 32,
+  },
+  authHero: {
+    alignItems: 'center',
+    marginBottom: 18,
+    paddingHorizontal: 12,
+  },
+  authLogoShell: {
+    alignItems: 'center',
+    backgroundColor: '#1f5f5b',
+    borderRadius: 28,
+    height: 84,
+    justifyContent: 'center',
+    width: 84,
+  },
+  authLogoText: {
+    color: '#effffd',
+    fontSize: 30,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+  },
+  authTitle: {
+    color: '#2d221a',
+    fontSize: 28,
+    fontWeight: '800',
+    marginTop: 18,
+    textAlign: 'center',
+  },
+  authSubtitle: {
+    color: '#6c5443',
+    fontSize: 15,
+    lineHeight: 22,
+    marginTop: 8,
+    maxWidth: 320,
+    textAlign: 'center',
+  },
+  authLinkButton: {
+    alignSelf: 'center',
+    marginTop: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  authLinkText: {
+    color: '#1f5f5b',
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  profileScreen: {
+    flex: 1,
+    paddingHorizontal: 18,
+  },
+  profileScreenLandscape: {
+    alignSelf: 'center',
+    maxWidth: 980,
+    width: '100%',
+  },
+  profileScrollContent: {
+    paddingTop: 24,
+    paddingBottom: 32,
+  },
+  profileCard: {
+    backgroundColor: '#fffaf4',
+    borderColor: '#efd8bd',
+    borderRadius: 24,
+    borderWidth: 1,
+    gap: 14,
+    marginTop: 12,
+    padding: 18,
+  },
+  profileIntroText: {
+    color: '#6c5443',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  profileSuccessBanner: {
+    backgroundColor: '#e7f6f4',
+    borderColor: '#9dcfc9',
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  profileSuccessText: {
+    color: '#17413e',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  profileFormSection: {
+    gap: 10,
+  },
+  profileFieldLabel: {
+    color: '#402214',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  profileInput: {
+    backgroundColor: '#f8efe3',
+    borderColor: '#ead6bf',
+    borderRadius: 14,
+    borderWidth: 1,
+    color: '#2d221a',
+    fontSize: 15,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  compactDropdownWrap: {
+    gap: 6,
+  },
+  compactDropdownButton: {
+    backgroundColor: '#f8efe3',
+    borderColor: '#ead6bf',
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  compactDropdownButtonOpen: {
+    borderColor: '#1f5f5b',
+  },
+  compactDropdownText: {
+    color: '#2d221a',
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  compactDropdownPlaceholder: {
+    color: '#8a705d',
+  },
+  compactDropdownCaret: {
+    color: '#6c5443',
+    fontSize: 14,
+    fontWeight: '700',
+    marginLeft: 12,
+  },
+  compactDropdownMenu: {
+    backgroundColor: '#fffaf4',
+    borderColor: '#ead6bf',
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  compactDropdownOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  compactDropdownOptionSelected: {
+    backgroundColor: '#e7f6f4',
+  },
+  compactDropdownOptionText: {
+    color: '#2d221a',
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  compactDropdownOptionTextSelected: {
+    color: '#17413e',
+    fontWeight: '700',
+  },
+  profileSupportText: {
+    color: '#7d614f',
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: -2,
+  },
+  claimResultsList: {
+    gap: 12,
+    marginTop: 8,
+  },
+  claimResultCard: {
+    backgroundColor: '#fff3e5',
+    borderColor: '#efd8bd',
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 14,
+  },
+  linkButtonSecondaryWide: {
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    backgroundColor: '#fff7ef',
+    borderColor: '#1f5f5b',
+    borderRadius: 14,
+    borderWidth: 1,
+    marginTop: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  toggleChip: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#fff7ef',
+    borderColor: '#caa98d',
+    borderRadius: 999,
+    borderWidth: 1,
+    marginTop: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  toggleChipActive: {
+    backgroundColor: '#1f5f5b',
+    borderColor: '#1f5f5b',
+  },
+  toggleChipText: {
+    color: '#7a4d2f',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  toggleChipTextActive: {
+    color: '#effffd',
+  },
+  profileTextarea: {
+    minHeight: 96,
+    textAlignVertical: 'top',
   },
 });

@@ -70,3 +70,58 @@ export type PaginatedResponse<T> = {
   previous: string | null;
   results: T[];
 };
+
+export type SignupResponse = {
+  id: number;
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  portal: 'customer' | 'business';
+  profile_type: 'customer' | 'business';
+  business_status?: string;
+  claim_id?: number | null;
+  claim_status?: string | null;
+  business_name?: string;
+};
+
+export type LoginRequest = {
+  portal: 'customer' | 'business';
+  identifier: string;
+  password: string;
+};
+
+export type CustomerSignupRequest = {
+  username: string;
+  email: string;
+  password: string;
+  first_name: string;
+  last_name: string;
+};
+
+export type BusinessSignupRequest = CustomerSignupRequest & {
+  business_slug: string;
+  contact_name: string;
+  job_title: string;
+  work_email: string;
+  work_phone: string;
+  employer_address: string;
+  address_not_applicable: boolean;
+  verification_summary: string;
+  supporting_details: string;
+};
+
+export type ManualBusinessSignupRequest = CustomerSignupRequest & {
+  business_name: string;
+  business_city: string;
+  business_venue_type: string;
+  business_website_url: string;
+  contact_name: string;
+  job_title: string;
+  work_email: string;
+  work_phone: string;
+  employer_address: string;
+  address_not_applicable: boolean;
+  verification_summary: string;
+  supporting_details: string;
+};

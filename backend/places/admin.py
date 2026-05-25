@@ -245,7 +245,7 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 			'fields': ('status', 'listing_snapshot', 'claimant'),
 		}),
 		('Business contact', {
-			'fields': ('contact_name', 'job_title', 'work_email', 'work_phone'),
+			'fields': ('contact_name', 'job_title', 'work_email', 'work_phone', 'employer_address', 'address_not_applicable'),
 		}),
 		('Verification details', {
 			'fields': ('verification_summary', 'supporting_details'),

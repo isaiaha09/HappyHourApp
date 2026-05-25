@@ -1037,6 +1037,155 @@ class BusinessClaimTests(APITestCase):
 			claim.approve(reviewed_by=self.reviewer)
 
 
+class ProfileSignupApiTests(APITestCase):
+	def test_customer_signup_creates_customer_account(self):
+		response = self.client.post(
+			reverse('customer-signup'),
+			{
+				'username': 'ventura_fan',
+				'email': 'fan@example.com',
+				'password': 'test-pass-123',
+				'first_name': 'Ventura',
+				'last_name': 'Fan',
+			},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, 201)
+		self.assertEqual(response.data['profile_type'], 'customer')
+		user = User.objects.get(username='ventura_fan')
+		self.assertEqual(user.email, 'fan@example.com')
+		self.assertTrue(user.check_password('test-pass-123'))
+
+	@patch('places.views.get_source_place_payload')
+	def test_business_signup_creates_submitted_claim(self, mock_get_source_place_payload):
+		mock_get_source_place_payload.return_value = {
+			'id': 402,
+			'name': 'Finney\'s Crafthouse',
+			'slug': 'finneys-crafthouse',
+			'city': City.VENTURA,
+			'venue_type': VenueType.RESTAURANT,
+			'address_line_1': '494 E Main St',
+			'address_line_2': '',
+			'neighborhood': 'Downtown',
+			'state': 'CA',
+			'postal_code': '93001',
+			'phone_number': '805-555-0199',
+			'website_url': 'https://example.com/finneys',
+			'locations': [
+				{
+					'id': 1,
+					'slug': 'finneys-crafthouse-ventura',
+					'name': 'Finney\'s Crafthouse',
+					'city': City.VENTURA,
+					'venue_type': VenueType.RESTAURANT,
+					'address_line_1': '494 E Main St',
+					'address_line_2': '',
+					'neighborhood': 'Downtown',
+					'state': 'CA',
+					'postal_code': '93001',
+					'phone_number': '805-555-0199',
+					'website_url': 'https://example.com/finneys',
+				}
+			],
+		}
+
+		response = self.client.post(
+			reverse('business-signup'),
+			{
+				'username': 'finneys_owner',
+				'email': 'owner@example.com',
+				'password': 'test-pass-123',
+				'first_name': 'Pat',
+				'last_name': 'Owner',
+				'business_slug': 'finneys-crafthouse',
+				'contact_name': 'Pat Owner',
+				'job_title': 'General Manager',
+				'work_email': 'pat@finneys.com',
+				'work_phone': '805-555-0100',
+				'employer_address': '494 E Main St, Ventura, CA 93001',
+				'address_not_applicable': False,
+				'verification_summary': 'I manage this location and can verify promotions.',
+				'supporting_details': 'Available to provide payroll and licensing records upon request.',
+			},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, 201)
+		self.assertEqual(response.data['profile_type'], 'business')
+		self.assertEqual(response.data['claim_status'], BusinessClaim.Status.SUBMITTED)
+		claim = BusinessClaim.objects.select_related('claimant', 'listing_snapshot').get(claimant__username='finneys_owner')
+		self.assertEqual(claim.work_email, 'pat@finneys.com')
+		self.assertEqual(claim.listing_snapshot.listing_slug, 'finneys-crafthouse')
+		self.assertEqual(claim.listing_snapshot.name, "Finney's Crafthouse")
+		self.assertEqual(claim.employer_address, '494 E Main St, Ventura, CA 93001')
+
+	def test_manual_business_signup_supports_address_not_applicable(self):
+		response = self.client.post(
+			reverse('manual-business-signup'),
+			{
+				'username': 'new_bistro_owner',
+				'email': 'newbistro@example.com',
+				'password': 'test-pass-123',
+				'first_name': 'Casey',
+				'last_name': 'Founder',
+				'business_name': 'Corner Bistro',
+				'business_city': City.VENTURA,
+				'business_venue_type': VenueType.CAFE,
+				'business_website_url': 'https://example.com/corner-bistro',
+				'contact_name': 'Casey Founder',
+				'job_title': '',
+				'work_email': 'owner@cornerbistro.com',
+				'work_phone': '',
+				'employer_address': '',
+				'address_not_applicable': True,
+				'verification_summary': 'We are a new business preparing to open and need a profile.',
+				'supporting_details': 'Happy to provide incorporation documents during review.',
+			},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, 201)
+		claim = BusinessClaim.objects.select_related('listing_snapshot').get(claimant__username='new_bistro_owner')
+		self.assertEqual(claim.status, BusinessClaim.Status.SUBMITTED)
+		self.assertTrue(claim.address_not_applicable)
+		self.assertEqual(claim.listing_snapshot.source_name, BusinessClaim.MANUAL_SOURCE_NAME)
+		self.assertEqual(claim.listing_snapshot.address_line_1, 'Address Not Applicable')
+
+	def test_business_portal_login_returns_claim_status(self):
+		user = User.objects.create_user(username='pending_owner', email='pending@example.com', password='test-pass-123')
+		snapshot = ListingSnapshot.objects.create(
+			name='Pending Place',
+			city=City.OXNARD,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='101 Harbor Blvd',
+		)
+		BusinessClaim.objects.create(
+			claimant=user,
+			listing_snapshot=snapshot,
+			contact_name='Pending Owner',
+			job_title='Owner',
+			work_email='pending@place.com',
+			employer_address='101 Harbor Blvd',
+			verification_summary='Please review my claim.',
+			status=BusinessClaim.Status.SUBMITTED,
+		)
+
+		response = self.client.post(
+			reverse('profile-login'),
+			{
+				'portal': 'business',
+				'identifier': 'pending_owner',
+				'password': 'test-pass-123',
+			},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data['portal'], 'business')
+		self.assertEqual(response.data['claim_status'], BusinessClaim.Status.SUBMITTED)
+
+
 class AccountProxyTests(APITestCase):
 	def test_customer_and_business_account_proxies_split_non_staff_users(self):
 		customer = User.objects.create_user(username='regular_customer', email='customer@example.com', password='test-pass-123')

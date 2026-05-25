@@ -1,9 +1,18 @@
-from rest_framework import generics
+from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.http import Http404
 
-from .serializers import DealSerializer, PlaceDetailSerializer, PlaceListSerializer
+from .serializers import (
+	ClaimedBusinessSignupSerializer,
+	CustomerSignupSerializer,
+	DealSerializer,
+	LoginSerializer,
+	ManualBusinessSignupSerializer,
+	PlaceDetailSerializer,
+	PlaceListSerializer,
+	sync_listing_snapshot_from_place_payload,
+)
 from .services.source_listings import get_source_deal_payloads, get_source_place_payload, get_source_place_payloads
 
 
@@ -56,3 +65,49 @@ class DealListView(generics.GenericAPIView):
 
 		serializer = self.get_serializer(payloads, many=True)
 		return Response(serializer.data)
+
+
+class CustomerSignupView(generics.GenericAPIView):
+	serializer_class = CustomerSignupSerializer
+
+	def post(self, request):
+		serializer = self.get_serializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		user = serializer.save()
+		return Response(serializer.to_representation(user), status=status.HTTP_201_CREATED)
+
+
+class LoginView(generics.GenericAPIView):
+	serializer_class = LoginSerializer
+
+	def post(self, request):
+		serializer = self.get_serializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		return Response(serializer.to_representation(serializer.validated_data['user']))
+
+
+class BusinessSignupView(generics.GenericAPIView):
+	serializer_class = ClaimedBusinessSignupSerializer
+
+	def post(self, request):
+		payload = dict(request.data)
+		business_slug = payload.get('business_slug')
+		place_payload = get_source_place_payload(business_slug)
+		if place_payload is None:
+			return Response({'business_slug': ['Business listing not found.']}, status=status.HTTP_400_BAD_REQUEST)
+
+		serializer = self.get_serializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		serializer.validated_data['listing_snapshot'] = sync_listing_snapshot_from_place_payload(place_payload)
+		user = serializer.save()
+		return Response(serializer.to_representation(user), status=status.HTTP_201_CREATED)
+
+
+class ManualBusinessSignupView(generics.GenericAPIView):
+	serializer_class = ManualBusinessSignupSerializer
+
+	def post(self, request):
+		serializer = self.get_serializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		user = serializer.save()
+		return Response(serializer.to_representation(user), status=status.HTTP_201_CREATED)

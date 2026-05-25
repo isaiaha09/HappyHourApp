@@ -74,6 +74,8 @@ class ListingSnapshot(models.Model):
 
 
 class BusinessClaim(models.Model):
+	MANUAL_SOURCE_NAME = 'manual_submission'
+
 	class Status(models.TextChoices):
 		DRAFT = 'draft', 'Draft'
 		SUBMITTED = 'submitted', 'Submitted'
@@ -86,9 +88,11 @@ class BusinessClaim(models.Model):
 	listing_snapshot = models.ForeignKey(ListingSnapshot, related_name='business_claims', on_delete=models.CASCADE)
 	status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
 	contact_name = models.CharField(max_length=120)
-	job_title = models.CharField(max_length=120)
+	job_title = models.CharField(max_length=120, blank=True)
 	work_email = models.EmailField()
 	work_phone = models.CharField(max_length=20, blank=True)
+	employer_address = models.CharField(max_length=255, blank=True)
+	address_not_applicable = models.BooleanField(default=False)
 	verification_summary = models.TextField(blank=True)
 	supporting_details = models.TextField(blank=True)
 	reviewer_notes = models.TextField(blank=True)
@@ -118,9 +122,17 @@ class BusinessClaim(models.Model):
 	def clean(self):
 		if self.status in {self.Status.SUBMITTED, self.Status.UNDER_REVIEW, self.Status.APPROVED}:
 			missing_fields = []
-			for field_name in ['contact_name', 'job_title', 'work_email', 'verification_summary']:
+			for field_name in ['contact_name', 'work_email', 'verification_summary']:
 				if not getattr(self, field_name):
 					missing_fields.append(field_name)
+
+			is_manual_submission = self.listing_snapshot.source_name == self.MANUAL_SOURCE_NAME
+			if not is_manual_submission and not self.job_title:
+				missing_fields.append('job_title')
+			if not self.address_not_applicable and not self.employer_address:
+				missing_fields.append('employer_address')
+			if not is_manual_submission and self.address_not_applicable:
+				raise ValidationError('Address not applicable is only available for manually submitted businesses.')
 			if missing_fields:
 				raise ValidationError(
 					f'Claim is missing required verification fields: {", ".join(missing_fields)}.'
