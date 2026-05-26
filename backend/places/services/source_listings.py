@@ -166,12 +166,16 @@ def _dedupe_profile_locations(place_records):
 def _find_matching_profile_location_index(existing_records, candidate_record):
 	candidate_city = str(candidate_record.city or '').strip().lower()
 	candidate_address = _normalize_location_text(candidate_record.address_line_1)
+	candidate_address_core = _normalize_address_core(candidate_record.address_line_1)
+	candidate_has_street_number = _address_has_street_number(candidate_record.address_line_1)
 	candidate_profile_name = _normalize_location_text(_profile_name_for_record(candidate_record))
 	for index, existing_record in enumerate(existing_records):
 		existing_city = str(existing_record.city or '').strip().lower()
 		if existing_city != candidate_city:
 			continue
 		existing_address = _normalize_location_text(existing_record.address_line_1)
+		existing_address_core = _normalize_address_core(existing_record.address_line_1)
+		existing_has_street_number = _address_has_street_number(existing_record.address_line_1)
 		existing_profile_name = _normalize_location_text(_profile_name_for_record(existing_record))
 		if candidate_address and existing_address:
 			if candidate_address == existing_address:
@@ -180,6 +184,9 @@ def _find_matching_profile_location_index(existing_records, candidate_record):
 				candidate_address in existing_address or existing_address in candidate_address
 			):
 				return index
+			if candidate_profile_name == existing_profile_name and candidate_address_core and candidate_address_core == existing_address_core:
+				if candidate_has_street_number != existing_has_street_number:
+					return index
 		elif candidate_profile_name and candidate_profile_name == existing_profile_name:
 			return index
 	return None
@@ -187,6 +194,36 @@ def _find_matching_profile_location_index(existing_records, candidate_record):
 
 def _normalize_location_text(value):
 	return ''.join(character.lower() for character in str(value or '') if character.isalnum())
+
+
+def _normalize_address_core(value):
+	tokens = _tokenize_address(value)
+	while tokens and (tokens[0].isdigit() or len(tokens[0]) == 1):
+		tokens = tokens[1:]
+	return ' '.join(tokens)
+
+
+def _address_has_street_number(value):
+	tokens = _tokenize_address(value)
+	return bool(tokens and tokens[0].isdigit())
+
+
+def _tokenize_address(value):
+	replacements = {
+		'street': 'st',
+		'avenue': 'ave',
+		'boulevard': 'blvd',
+		'drive': 'dr',
+		'road': 'rd',
+		'lane': 'ln',
+		'court': 'ct',
+		'place': 'pl',
+		'terrace': 'ter',
+		'highway': 'hwy',
+	}
+	cleaned = ''.join(character.lower() if character.isalnum() or character.isspace() else ' ' for character in str(value or ''))
+	tokens = [token for token in cleaned.split() if token]
+	return [replacements.get(token, token) for token in tokens]
 
 
 def _place_record_quality_score(place_record):

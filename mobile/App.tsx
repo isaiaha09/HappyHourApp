@@ -269,6 +269,7 @@ function AppScreen() {
   const [profilePlacesLoading, setProfilePlacesLoading] = useState(false);
   const [businessSearchQuery, setBusinessSearchQuery] = useState('');
   const [selectedClaimPlace, setSelectedClaimPlace] = useState<PlaceListItem | null>(null);
+  const [selectedClaimLocationId, setSelectedClaimLocationId] = useState<number | null>(null);
   const [logoutTransitionSession, setLogoutTransitionSession] = useState<SignupResponse | null>(null);
   const [incomingOnboardingScreen, setIncomingOnboardingScreen] = useState<AppScreenMode | null>(null);
   const [showLoginSuccessTransition, setShowLoginSuccessTransition] = useState(false);
@@ -339,6 +340,7 @@ function AppScreen() {
     ? Math.max(keyboardHeight - insets.bottom, 0) + 12
     : Math.max(insets.bottom + 12, 20);
   const availableProfilePlaces = profilePlaces.length ? profilePlaces : places;
+  const availableClaimPlaces = consolidatePlacesBySlug(availableProfilePlaces);
   const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'business-search', 'business-claim', 'manual-business-claim']);
   const currentOnboardingScreen = onboardingScreenKeys.has(screenMode) ? screenMode : null;
   const usesOnboardingSlideTransition = currentOnboardingScreen !== null || incomingOnboardingScreen !== null;
@@ -475,13 +477,14 @@ function AppScreen() {
   const browseListColumns = useWideLandscapeLayout ? 2 : 1;
   const normalizedBusinessSearchQuery = normalizeSearchText(businessSearchQuery);
   const businessSearchResults = normalizedBusinessSearchQuery.length
-    ? availableProfilePlaces
+    ? availableClaimPlaces
       .map((place) => ({ place, score: getPlaceSearchScore(place, normalizedBusinessSearchQuery) }))
       .filter(({ score }) => score > 0)
       .sort((first, second) => second.score - first.score)
       .map(({ place }) => place)
       .slice(0, 12)
     : [];
+  const selectedClaimLocation = getSelectedClaimLocation(selectedClaimPlace, selectedClaimLocationId);
 
   function animateNextLayout() {
     LayoutAnimation.configureNext({
@@ -1391,6 +1394,7 @@ function AppScreen() {
     dismissKeyboardForScreenTransition();
     setProfileErrorMessage(null);
     setBusinessSearchQuery('');
+    setSelectedClaimLocationId(null);
     navigateScreen('business-search', 'forward');
   }
 
@@ -1410,6 +1414,7 @@ function AppScreen() {
     dismissKeyboardForScreenTransition();
     setProfileErrorMessage(null);
     setSelectedClaimPlace(null);
+    setSelectedClaimLocationId(null);
     setProfileForm((current) => ({
       ...current,
       business_slug: '',
@@ -1423,16 +1428,18 @@ function AppScreen() {
     navigateScreen('manual-business-claim', 'forward');
   }
 
-  function handleSelectClaimBusiness(place: PlaceListItem) {
+  function handleSelectClaimBusiness(place: PlaceListItem, locationId: number) {
     dismissKeyboardForScreenTransition();
+    const selectedLocation = getPlaceLocations(place).find((location) => location.id === locationId) ?? getPlaceLocations(place)[0] ?? place;
     setSelectedClaimPlace(place);
+    setSelectedClaimLocationId(selectedLocation.id);
     setProfileForm((current) => ({
       ...current,
       business_slug: place.slug,
       business_name: place.name,
-      business_city: place.city,
+      business_city: selectedLocation.city,
       business_venue_type: place.venue_type,
-      business_website_url: place.website_url,
+      business_website_url: selectedLocation.website_url,
       address_not_applicable: false,
     }));
     navigateScreen('business-claim', 'forward');
@@ -1546,6 +1553,7 @@ function AppScreen() {
               onChangeField={handleChangeProfileField}
               onToggleAddressNotApplicable={(value) => handleChangeProfileToggle('address_not_applicable', value)}
               onSubmit={handleSubmitClaimedBusinessProfile}
+              selectedLocation={selectedClaimLocation}
               selectedPlace={selectedClaimPlace}
               submitting={profileSubmitting}
             />
@@ -1563,6 +1571,7 @@ function AppScreen() {
               onChangeField={handleChangeProfileField}
               onToggleAddressNotApplicable={(value) => handleChangeProfileToggle('address_not_applicable', value)}
               onSubmit={handleSubmitManualBusinessProfile}
+              selectedLocation={null}
               selectedPlace={null}
               submitting={profileSubmitting}
             />
@@ -2318,7 +2327,7 @@ type BusinessSearchScreenProps = {
   onBack: () => void;
   onChangeSearchQuery: (value: string) => void;
   onChooseManualBusiness: () => void;
-  onSelectBusiness: (place: PlaceListItem) => void;
+  onSelectBusiness: (place: PlaceListItem, locationId: number) => void;
   results: PlaceListItem[];
   searchQuery: string;
 };
@@ -2332,6 +2341,7 @@ type BusinessVerificationScreenProps = {
   onChangeField: (field: keyof ProfileFormState, value: string) => void;
   onToggleAddressNotApplicable: (value: boolean) => void;
   onSubmit: () => void;
+  selectedLocation: PlaceLocation | null;
   selectedPlace: PlaceListItem | null;
   submitting: boolean;
 };
@@ -2737,10 +2747,25 @@ function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces, onBack
             <View style={styles.claimResultsList}>
               {results.length ? (
                 results.map((place) => (
-                  <Pressable key={place.slug} onPress={() => onSelectBusiness(place)} style={styles.claimResultCard}>
+                  <View key={place.slug} style={styles.claimResultCard}>
                     <Text style={styles.placeTitle}>{place.name}</Text>
                     <Text style={styles.placeMeta}>{place.venue_type_label}</Text>
-                  </Pressable>
+                    <Text style={styles.claimBusinessHint}>
+                      {getPlaceLocations(place).length > 1 ? 'Choose the specific address to verify this claim.' : 'Choose this address to continue to verification.'}
+                    </Text>
+                    <View style={styles.claimLocationList}>
+                      {getPlaceLocations(place).map((location) => (
+                        <Pressable
+                          key={location.id}
+                          onPress={() => onSelectBusiness(place, location.id)}
+                          style={styles.claimLocationButton}
+                        >
+                          <Text style={styles.claimLocationButtonTitle}>{location.city_label}</Text>
+                          <Text style={styles.claimLocationButtonText}>{formatPlaceAddress(location)}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
                 ))
               ) : (
                 <Text style={styles.centerStateText}>No matching businesses found yet.</Text>
@@ -2758,7 +2783,7 @@ function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces, onBack
   );
 }
 
-function BusinessVerificationScreen({ errorMessage, form, isLandscape, mode, onBack, onChangeField, onToggleAddressNotApplicable, onSubmit, selectedPlace, submitting }: BusinessVerificationScreenProps) {
+function BusinessVerificationScreen({ errorMessage, form, isLandscape, mode, onBack, onChangeField, onToggleAddressNotApplicable, onSubmit, selectedLocation, selectedPlace, submitting }: BusinessVerificationScreenProps) {
   const isManual = mode === 'manual';
   const [openDropdown, setOpenDropdown] = useState<'city' | 'venue' | null>(null);
 
@@ -2793,6 +2818,12 @@ function BusinessVerificationScreen({ errorMessage, form, isLandscape, mode, onB
             <View style={styles.claimResultCard}>
               <Text style={styles.placeTitle}>{selectedPlace.name}</Text>
               <Text style={styles.placeMeta}>{selectedPlace.venue_type_label}</Text>
+              {selectedLocation ? (
+                <>
+                  <Text style={styles.claimBusinessHint}>Selected address</Text>
+                  <Text style={styles.claimLocationButtonText}>{formatPlaceAddress(selectedLocation)}</Text>
+                </>
+              ) : null}
             </View>
           ) : null}
 
@@ -3035,6 +3066,67 @@ function buildGoogleReviewsUrl(place: PlaceListItem | PlaceDetail | PlaceLocatio
 
 function getPlaceLocations(place: PlaceListItem | PlaceDetail) {
   return place.locations.length ? place.locations : [place];
+}
+
+function getSelectedClaimLocation(place: PlaceListItem | null, locationId: number | null) {
+  if (!place) {
+    return null;
+  }
+
+  const locations = getPlaceLocations(place);
+  if (!locations.length) {
+    return null;
+  }
+
+  if (locationId !== null) {
+    const selectedLocation = locations.find((location) => location.id === locationId);
+    if (selectedLocation) {
+      return selectedLocation;
+    }
+  }
+
+  return locations[0] ?? null;
+}
+
+function consolidatePlacesBySlug(places: PlaceListItem[]) {
+  const consolidatedPlaces = new Map<string, PlaceListItem>();
+
+  places.forEach((place) => {
+    const existingPlace = consolidatedPlaces.get(place.slug);
+    const nextLocations = dedupePlaceLocations([
+      ...getPlaceLocations(existingPlace ?? place),
+      ...getPlaceLocations(place),
+    ]);
+
+    if (!existingPlace) {
+      consolidatedPlaces.set(place.slug, {
+        ...place,
+        ...nextLocations[0],
+        locations: nextLocations,
+      });
+      return;
+    }
+
+    consolidatedPlaces.set(place.slug, {
+      ...existingPlace,
+      ...nextLocations[0],
+      locations: nextLocations,
+    });
+  });
+
+  return Array.from(consolidatedPlaces.values());
+}
+
+function dedupePlaceLocations(locations: PlaceLocation[]) {
+  const uniqueLocations = new Map<number, PlaceLocation>();
+
+  locations.forEach((location) => {
+    if (!uniqueLocations.has(location.id)) {
+      uniqueLocations.set(location.id, location);
+    }
+  });
+
+  return Array.from(uniqueLocations.values());
 }
 
 function getSelectedPlaceLocation(
@@ -4467,6 +4559,34 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 10,
     padding: 14,
+  },
+  claimBusinessHint: {
+    color: '#6c5443',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  claimLocationList: {
+    gap: 8,
+    marginTop: 6,
+  },
+  claimLocationButton: {
+    backgroundColor: '#fffaf4',
+    borderColor: '#ddc4a7',
+    borderRadius: 14,
+    borderWidth: 1,
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  claimLocationButtonTitle: {
+    color: '#402214',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  claimLocationButtonText: {
+    color: '#5f4b3d',
+    fontSize: 13,
+    lineHeight: 18,
   },
   dashboardVerifiedCard: {
     backgroundColor: '#e7f6f4',

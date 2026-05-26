@@ -1549,6 +1549,47 @@ class SourceListingIdentityTests(TestCase):
 
 	@patch('places.services.source_listings._get_place_coordinates')
 	@patch('places.services.source_listings.load_source_records')
+	def test_place_payload_prefers_full_address_over_partial_same_business_location(self, mock_load_source_records, mock_get_place_coordinates):
+		mock_load_source_records.return_value = [
+			ImportedPlace(
+				name='Lure Fish House',
+				profile_name='Lure Fish House',
+				profile_slug='lure-fish-house',
+				city=City.VENTURA,
+				venue_type=VenueType.RESTAURANT,
+				address_line_1='60 California Street',
+				state='CA',
+				postal_code='93001',
+				phone_number='(805) 567-4400',
+				website_url='https://lurefishhouse.com/ventura',
+				source_name='business_websites',
+				source_url='https://lurefishhouse.com/ventura',
+			),
+			ImportedPlace(
+				name='Lure Fish House',
+				profile_name='Lure Fish House',
+				profile_slug='lure-fish-house',
+				city=City.VENTURA,
+				venue_type=VenueType.RESTAURANT,
+				address_line_1='S California St',
+				state='CA',
+				postal_code='93001-2595',
+				phone_number='(805) 567-4400',
+				website_url='http://www.lurefishhouse.com',
+				source_name='here_places',
+				source_url='https://discover.search.hereapi.com/v1/discover',
+			),
+		]
+		mock_get_place_coordinates.side_effect = [(34.2801, -119.2929), (34.28011, -119.2928)]
+
+		payloads = get_source_place_payloads()
+
+		self.assertEqual(len(payloads), 1)
+		self.assertEqual(len(payloads[0]['locations']), 1)
+		self.assertEqual(payloads[0]['locations'][0]['address_line_1'], '60 California Street')
+
+	@patch('places.services.source_listings._get_place_coordinates')
+	@patch('places.services.source_listings.load_source_records')
 	def test_place_payloads_include_profiles_with_and_without_verified_deals(self, mock_load_source_records, mock_get_place_coordinates):
 		coordinates_by_address = {
 			'123 Main St': (34.2783, -119.2931),
