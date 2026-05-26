@@ -28,6 +28,7 @@ htmlcov/
 
 media/
 staticfiles/
+.django_cache/
 
 pip-wheel-metadata/
 *.egg-info/

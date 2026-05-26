@@ -70,3 +70,4 @@ pnpm-debug.log*
 # App local files
 media/
 staticfiles/
+backend/.django_cache/
