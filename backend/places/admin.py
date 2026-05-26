@@ -1,13 +1,185 @@
-from django.contrib import admin
+from urllib.parse import urlparse
+
+from django.contrib import admin, messages
 from django.contrib.auth.admin import GroupAdmin, UserAdmin
 from django.contrib.auth.models import Group, User
-from django.db.models import Prefetch
 from django.core.exceptions import ValidationError
+from django.db.models import Prefetch
 from django.http import HttpResponseRedirect
-from django.urls import reverse
+from django.urls import path, reverse
+from django.utils.html import format_html
+from django.utils.text import slugify
 
 from .admin_site import happyhour_admin_site
-from .models import BusinessAccount, BusinessClaim, BusinessMembership, CustomerAccount, ListingSnapshot
+from .models import BusinessAccount, BusinessClaim, BusinessMembership, CustomerAccount, DeletedBusiness, ListingSnapshot, ProviderUsageWindow
+from .services.importers.discovered_json_places import load_discovery_json_records, merge_discovery_json_records, write_discovery_json_records
+from .services.deleted_businesses import filter_deleted_business_records, imported_place_from_deleted_business, store_deleted_business
+from .services.importers.here_places import HerePlacesImporter
+from .services.provider_quota import get_provider_policy, get_provider_usage_statuses, select_discovery_provider
+
+
+LIVE_DISCOVERY_SOURCE_NAMES = {HerePlacesImporter.source_name}
+
+
+def _normalize_lookup_text(value):
+	return ''.join(character.lower() for character in str(value or '') if character.isalnum())
+
+
+def _normalized_domain(value):
+	parsed = urlparse(str(value or '').strip())
+	return str(parsed.netloc or '').strip().lower().removeprefix('www.')
+
+
+def _build_listing_slug(place_record):
+	return str(place_record.profile_slug or '').strip() or slugify(f'{place_record.profile_name or place_record.name}-{place_record.city or "unknown"}')
+
+
+def _sync_listing_snapshot_from_imported_place(place_record, snapshot=None):
+	defaults = {
+		'name': place_record.profile_name or place_record.name,
+		'city': place_record.city,
+		'venue_type': place_record.venue_type,
+		'address_line_1': place_record.address_line_1,
+		'address_line_2': place_record.address_line_2,
+		'neighborhood': place_record.neighborhood,
+		'state': place_record.state,
+		'postal_code': place_record.postal_code,
+		'phone_number': place_record.phone_number,
+		'website_url': place_record.website_url,
+		'source_name': place_record.source_name,
+		'source_url': place_record.source_url or place_record.website_url,
+		'external_id': place_record.external_id,
+		'listing_slug': _build_listing_slug(place_record),
+	}
+
+	if snapshot is not None:
+		for field_name, value in defaults.items():
+			setattr(snapshot, field_name, value)
+		snapshot.save()
+		return snapshot
+
+	lookup = {}
+	if defaults['source_name'] and defaults['external_id']:
+		lookup = {'source_name': defaults['source_name'], 'external_id': defaults['external_id']}
+	elif defaults['listing_slug']:
+		lookup = {'listing_slug': defaults['listing_slug']}
+	else:
+		lookup = {
+			'name': defaults['name'],
+			'city': defaults['city'],
+			'address_line_1': defaults['address_line_1'],
+		}
+
+	snapshot, _ = ListingSnapshot.objects.update_or_create(**lookup, defaults=defaults)
+	return snapshot
+
+
+def _sync_listing_snapshots_from_imported_places(place_records, source_name):
+	touched_snapshot_ids = set()
+	for place_record in place_records:
+		snapshot = _sync_listing_snapshot_from_imported_place(place_record)
+		touched_snapshot_ids.add(snapshot.pk)
+
+	ListingSnapshot.objects.filter(source_name=source_name, business_claims__isnull=True).exclude(pk__in=touched_snapshot_ids).delete()
+	return touched_snapshot_ids
+
+
+def _snapshot_matches_discovery_record(snapshot, place_record):
+	if str(snapshot.source_name or '').strip().lower() != str(place_record.source_name or '').strip().lower():
+		return False
+
+	snapshot_external_id = str(snapshot.external_id or '').strip().lower()
+	place_external_id = str(place_record.external_id or '').strip().lower()
+	if snapshot_external_id and place_external_id:
+		return snapshot_external_id == place_external_id
+
+	if str(snapshot.city or '').strip().lower() != str(place_record.city or '').strip().lower():
+		return False
+
+	snapshot_address = _normalize_lookup_text(snapshot.address_line_1)
+	place_address = _normalize_lookup_text(place_record.address_line_1)
+	if snapshot_address and place_address and snapshot_address == place_address:
+		return True
+
+	snapshot_domain = _normalized_domain(snapshot.website_url)
+	place_domain = _normalized_domain(place_record.website_url)
+	if snapshot_domain and place_domain and snapshot_domain == place_domain:
+		return True
+
+	return _normalize_lookup_text(snapshot.name) == _normalize_lookup_text(place_record.name)
+
+
+def _remove_discovery_records_for_snapshot(snapshot):
+	if str(snapshot.source_name or '').strip().lower() not in LIVE_DISCOVERY_SOURCE_NAMES:
+		return []
+
+	existing_records = load_discovery_json_records()
+	kept_records = []
+	removed_records = []
+	for place_record in existing_records:
+		if _snapshot_matches_discovery_record(snapshot, place_record):
+			removed_records.append(place_record)
+			continue
+		kept_records.append(place_record)
+
+	if removed_records:
+		write_discovery_json_records(kept_records)
+	return removed_records
+
+
+def _delete_snapshot_to_deleted_business(snapshot):
+	removed_records = _remove_discovery_records_for_snapshot(snapshot)
+	deleted_business = store_deleted_business(snapshot, removed_records=removed_records)
+	return deleted_business, removed_records
+
+
+def _snapshot_match_score(snapshot, place_record):
+	score = 0
+	if str(snapshot.external_id or '').strip() and str(snapshot.external_id or '').strip().lower() == str(place_record.external_id or '').strip().lower():
+		score += 200
+	if str(snapshot.city or '').strip().lower() == str(place_record.city or '').strip().lower():
+		score += 25
+
+	snapshot_name = _normalize_lookup_text(snapshot.name)
+	place_name = _normalize_lookup_text(place_record.name)
+	if snapshot_name and place_name:
+		if snapshot_name == place_name:
+			score += 120
+		elif snapshot_name in place_name or place_name in snapshot_name:
+			score += 70
+
+	snapshot_address = _normalize_lookup_text(snapshot.address_line_1)
+	place_address = _normalize_lookup_text(place_record.address_line_1)
+	if snapshot_address and place_address:
+		if snapshot_address == place_address:
+			score += 90
+		elif snapshot_address in place_address or place_address in snapshot_address:
+			score += 45
+
+	snapshot_domain = _normalized_domain(snapshot.website_url)
+	place_domain = _normalized_domain(place_record.website_url)
+	if snapshot_domain and place_domain and snapshot_domain == place_domain:
+		score += 60
+
+	return score
+
+
+def _select_best_matching_record(snapshot, place_records):
+	if not place_records:
+		return None
+
+	ranked_records = sorted(
+		place_records,
+		key=lambda place_record: (
+			_snapshot_match_score(snapshot, place_record),
+			len(str(place_record.address_line_1 or '')),
+		),
+		reverse=True,
+	)
+	best_record = ranked_records[0]
+	if _snapshot_match_score(snapshot, best_record) < 70:
+		return None
+	return best_record
 
 
 class StaffUserAdmin(UserAdmin):
@@ -209,7 +381,9 @@ class BusinessAccountAdmin(UserAdmin):
 
 @admin.register(ListingSnapshot, site=happyhour_admin_site)
 class ListingSnapshotAdmin(admin.ModelAdmin):
-	list_display = ('name', 'city', 'venue_type', 'source_name', 'captured_at')
+	actions = ['pull_all_business_data']
+	change_list_template = 'admin/places/listingsnapshot/change_list.html'
+	list_display = ('name', 'city', 'venue_type', 'source_name', 'pull_business_data_link', 'captured_at', 'updated_at')
 	list_filter = ('city', 'venue_type', 'source_name')
 	search_fields = ('name', 'address_line_1', 'external_id', 'website_url')
 	readonly_fields = ('captured_at', 'updated_at')
@@ -228,6 +402,159 @@ class ListingSnapshotAdmin(admin.ModelAdmin):
 			'classes': ('collapse',),
 		}),
 	)
+
+	def get_urls(self):
+		custom_urls = [
+			path('pull-all-business-data/', self.admin_site.admin_view(self.pull_all_business_data_view), name='places_listingsnapshot_pull_all'),
+			path('<path:object_id>/pull-business-data/', self.admin_site.admin_view(self.pull_business_data_view), name='places_listingsnapshot_pull_one'),
+		]
+		return custom_urls + super().get_urls()
+
+	def changelist_view(self, request, extra_context=None):
+		extra_context = extra_context or {}
+		extra_context['pull_all_business_data_url'] = reverse('happyhour_admin:places_listingsnapshot_pull_all')
+		return super().changelist_view(request, extra_context=extra_context)
+
+	@admin.display(description='Pull business data')
+	def pull_business_data_link(self, obj):
+		url = reverse('happyhour_admin:places_listingsnapshot_pull_one', args=[obj.pk])
+		return format_html('<a class="button" href="{}">Pull business data</a>', url)
+
+	@admin.action(description='Pull all business data')
+	def pull_all_business_data(self, request, queryset):
+		return self._run_pull_all_business_data(request)
+
+	def pull_all_business_data_view(self, request):
+		if not self.has_change_permission(request):
+			return HttpResponseRedirect(reverse('happyhour_admin:index'))
+		return self._run_pull_all_business_data(request)
+
+	def _run_pull_all_business_data(self, request):
+		place_records = filter_deleted_business_records(list(HerePlacesImporter().load_records()))
+		write_discovery_json_records(place_records)
+		touched_snapshot_ids = _sync_listing_snapshots_from_imported_places(place_records, HerePlacesImporter.source_name)
+		self.message_user(
+			request,
+			f'Pulled all business data. Stored {len(place_records)} live businesses and synced {len(touched_snapshot_ids)} admin rows.',
+			level=messages.SUCCESS,
+		)
+		return HttpResponseRedirect(reverse('happyhour_admin:places_listingsnapshot_changelist'))
+
+	def pull_business_data_view(self, request, object_id):
+		if not self.has_change_permission(request):
+			return HttpResponseRedirect(reverse('happyhour_admin:index'))
+
+		snapshot = self.get_object(request, object_id)
+		if snapshot is None:
+			self.message_user(request, 'Business row not found.', level=messages.ERROR)
+			return HttpResponseRedirect(reverse('happyhour_admin:places_listingsnapshot_changelist'))
+
+		candidate_records = HerePlacesImporter().load_records_for_search(snapshot.name, city=snapshot.city, limit=25)
+		best_record = _select_best_matching_record(snapshot, candidate_records)
+		if best_record is None:
+			self.message_user(request, f'No matching live business data found for {snapshot.name}.', level=messages.WARNING)
+			return HttpResponseRedirect(reverse('happyhour_admin:places_listingsnapshot_changelist'))
+
+		merge_discovery_json_records([best_record])
+		_sync_listing_snapshot_from_imported_place(best_record, snapshot=snapshot)
+		self.message_user(request, f'Pulled business data for {snapshot.name}.', level=messages.SUCCESS)
+		return HttpResponseRedirect(reverse('happyhour_admin:places_listingsnapshot_changelist'))
+
+	def delete_model(self, request, obj):
+		deleted_business, removed_records = _delete_snapshot_to_deleted_business(obj)
+		super().delete_model(request, obj)
+		message = f'Moved {obj.name} to Deleted Businesses.'
+		if removed_records:
+			message += f' Removed {len(removed_records)} live app record(s).'
+		self.message_user(request, message, level=messages.SUCCESS)
+
+	def delete_queryset(self, request, queryset):
+		removed_count = 0
+		moved_count = 0
+		for snapshot in queryset:
+			_, removed_records = _delete_snapshot_to_deleted_business(snapshot)
+			removed_count += len(removed_records)
+			moved_count += 1
+		super().delete_queryset(request, queryset)
+		message = f'Moved {moved_count} business(es) to Deleted Businesses.'
+		if removed_count:
+			message += f' Removed {removed_count} live app record(s) from the app source.'
+		self.message_user(request, message, level=messages.SUCCESS)
+
+
+@admin.register(DeletedBusiness, site=happyhour_admin_site)
+class DeletedBusinessAdmin(admin.ModelAdmin):
+	actions = ['restore_selected_businesses']
+	list_display = ('name', 'city', 'venue_type', 'source_name', 'restore_business_link', 'deleted_at')
+	list_filter = ('city', 'venue_type', 'source_name', 'deleted_at')
+	search_fields = ('name', 'address_line_1', 'external_id', 'website_url')
+	readonly_fields = ('deleted_at', 'updated_at', 'payload')
+	fieldsets = (
+		('Business identity', {
+			'fields': ('name', 'listing_slug', 'source_name', 'source_url', 'external_id'),
+		}),
+		('Business details', {
+			'fields': ('city', 'venue_type', 'address_line_1', 'address_line_2', 'neighborhood', 'state', 'postal_code'),
+		}),
+		('Contact', {
+			'fields': ('phone_number', 'website_url'),
+		}),
+		('Stored payload', {
+			'fields': ('payload',),
+			'classes': ('collapse',),
+		}),
+		('Timestamps', {
+			'fields': ('deleted_at', 'updated_at'),
+			'classes': ('collapse',),
+		}),
+	)
+
+	def get_urls(self):
+		custom_urls = [
+			path('<path:object_id>/restore-business/', self.admin_site.admin_view(self.restore_business_view), name='places_deletedbusiness_restore_one'),
+		]
+		return custom_urls + super().get_urls()
+
+	def get_actions(self, request):
+		actions = super().get_actions(request)
+		actions.pop('delete_selected', None)
+		return actions
+
+	def has_delete_permission(self, request, obj=None):
+		return False
+
+	@admin.display(description='Restore business')
+	def restore_business_link(self, obj):
+		url = reverse('happyhour_admin:places_deletedbusiness_restore_one', args=[obj.pk])
+		return format_html('<a class="button" href="{}">Restore business</a>', url)
+
+	@admin.action(description='Restore selected businesses')
+	def restore_selected_businesses(self, request, queryset):
+		restored_count = 0
+		for deleted_business in list(queryset):
+			self._restore_deleted_business(deleted_business)
+			restored_count += 1
+		self.message_user(request, f'Restored {restored_count} business(es).', level=messages.SUCCESS)
+
+	def restore_business_view(self, request, object_id):
+		if not self.has_change_permission(request):
+			return HttpResponseRedirect(reverse('happyhour_admin:index'))
+
+		deleted_business = self.get_object(request, object_id)
+		if deleted_business is None:
+			self.message_user(request, 'Deleted business not found.', level=messages.ERROR)
+			return HttpResponseRedirect(reverse('happyhour_admin:places_deletedbusiness_changelist'))
+
+		self._restore_deleted_business(deleted_business)
+		self.message_user(request, f'Restored {deleted_business.name}.', level=messages.SUCCESS)
+		return HttpResponseRedirect(reverse('happyhour_admin:places_deletedbusiness_changelist'))
+
+	def _restore_deleted_business(self, deleted_business):
+		place_record = imported_place_from_deleted_business(deleted_business)
+		if str(place_record.source_name or '').strip().lower() in LIVE_DISCOVERY_SOURCE_NAMES:
+			merge_discovery_json_records([place_record])
+		_sync_listing_snapshot_from_imported_place(place_record)
+		deleted_business.delete()
 
 
 @admin.register(BusinessClaim, site=happyhour_admin_site)
@@ -313,3 +640,60 @@ class BusinessMembershipAdmin(admin.ModelAdmin):
 	@admin.display(description='Business')
 	def business_name(self, obj):
 		return obj.claim.listing_snapshot.name
+
+
+@admin.register(ProviderUsageWindow, site=happyhour_admin_site)
+class ProviderUsageWindowAdmin(admin.ModelAdmin):
+	list_display = (
+		'provider_name',
+		'window_kind',
+		'window_start',
+		'consumed_transactions',
+		'transaction_limit',
+		'reserve_threshold',
+		'remaining_transactions',
+		'remaining_before_reserve',
+		'is_available',
+		'is_current_provider',
+		'updated_at',
+	)
+	list_filter = ('provider_name', 'window_kind', 'window_start')
+	search_fields = ('provider_name',)
+	readonly_fields = (
+		'provider_name',
+		'window_kind',
+		'window_start',
+		'consumed_transactions',
+		'transaction_limit',
+		'reserve_threshold',
+		'created_at',
+		'updated_at',
+		'remaining_transactions',
+		'remaining_before_reserve',
+		'is_available',
+		'is_current_provider',
+	)
+	ordering = ('provider_name', '-window_start')
+
+	def get_queryset(self, request):
+		get_provider_usage_statuses()
+		return super().get_queryset(request)
+
+	@admin.display(description='Remaining Transactions')
+	def remaining_transactions(self, obj):
+		return max(0, obj.transaction_limit - obj.consumed_transactions)
+
+	@admin.display(description='Remaining Before Reserve')
+	def remaining_before_reserve(self, obj):
+		return max(0, (obj.transaction_limit - obj.reserve_threshold) - obj.consumed_transactions)
+
+	@admin.display(boolean=True, description='Available')
+	def is_available(self, obj):
+		policy = get_provider_policy(obj.provider_name)
+		if policy is None or not policy.api_key:
+			return False
+		return obj.consumed_transactions < max(0, obj.transaction_limit - obj.reserve_threshold)
+
+	@admin.display(boolean=True, description='Current Provider')
+	def is_current_provider(self, obj):
+		return obj.provider_name == select_discovery_provider()

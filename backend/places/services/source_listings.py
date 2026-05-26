@@ -9,11 +9,23 @@ from django.utils.text import slugify
 
 from places.models import City, DealType, VenueType, Weekday
 from places.services.importers.business_websites import BusinessWebsiteImporter
+from places.services.importers.discovered_json_places import CuratedJsonPlacesImporter, DiscoveryJsonPlacesImporter
 from places.services.importers.example_html import ExampleHtmlImporter
+from places.services.importers.here_places import HerePlacesImporter
+from places.services.importers.openstreetmap_places import HybridPlacesImporter, OpenStreetMapPlacesImporter
+from places.services.importers.tomtom_places import TomTomPlacesImporter
+from places.services.importers.yelp_places import YelpFusionPlacesImporter
 
 
 RUNTIME_IMPORTER_REGISTRY = {
 	'business_websites': BusinessWebsiteImporter,
+	'curated_json_places': CuratedJsonPlacesImporter,
+	'discovery_json_places': DiscoveryJsonPlacesImporter,
+	'here_places': HerePlacesImporter,
+	'hybrid_places': HybridPlacesImporter,
+	'openstreetmap_places': OpenStreetMapPlacesImporter,
+	'tomtom_places': TomTomPlacesImporter,
+	'yelp_fusion_places': YelpFusionPlacesImporter,
 	'example_html': ExampleHtmlImporter,
 }
 
@@ -34,11 +46,19 @@ def load_source_records(source_name=None):
 	return get_listing_importer(source_name=source_name).load_records()
 
 
-def get_source_place_payloads(city=None, venue_type=None, source_name=None):
+def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_deals=None, resolve_missing_coordinates=True):
 	payloads = []
 	for place_records in _group_source_records(load_source_records(source_name=source_name)).values():
-		payload = _build_grouped_place_payload(place_records, preferred_city=city)
+		payload = _build_grouped_place_payload(
+			place_records,
+			preferred_city=city,
+			resolve_missing_coordinates=resolve_missing_coordinates,
+		)
 		if payload is None:
+			continue
+		if has_deals is True and not payload['has_deals']:
+			continue
+		if has_deals is False and payload['has_deals']:
 			continue
 		if city and city not in {location['city'] for location in payload['locations']}:
 			continue
@@ -50,7 +70,7 @@ def get_source_place_payloads(city=None, venue_type=None, source_name=None):
 
 
 def get_source_place_payload(slug, source_name=None):
-	for payload in get_source_place_payloads(source_name=source_name):
+	for payload in get_source_place_payloads(source_name=source_name, resolve_missing_coordinates=True):
 		if payload['slug'] == slug:
 			return payload
 	return None
@@ -75,8 +95,8 @@ def get_source_deal_payloads(city=None, deal_type=None, source_name=None):
 	return sorted(payloads, key=lambda payload: (payload['place_name'], payload['title']))
 
 
-def _build_place_payload(place_record):
-	return _build_grouped_place_payload([place_record])
+def _build_place_payload(place_record, resolve_missing_coordinates=True):
+	return _build_grouped_place_payload([place_record], resolve_missing_coordinates=resolve_missing_coordinates)
 
 
 def _group_source_records(place_records):
@@ -88,24 +108,29 @@ def _group_source_records(place_records):
 	return grouped_records
 
 
-def _build_grouped_place_payload(place_records, preferred_city=None):
+def _build_grouped_place_payload(place_records, preferred_city=None, resolve_missing_coordinates=True):
 	if not place_records:
 		return None
 
-	location_payloads = [_build_location_payload(place_record) for place_record in place_records]
+	canonical_place_records = _dedupe_profile_locations(place_records)
+	grouped_deals = _build_grouped_deal_payloads(canonical_place_records)
+	location_payloads = [
+		_build_location_payload(place_record, resolve_missing_coordinates=resolve_missing_coordinates)
+		for place_record in canonical_place_records
+	]
 	location_payloads.sort(key=lambda location: (location['city_label'], location['address_line_1'], location['id']))
 	primary_location = _select_primary_location(location_payloads, preferred_city)
-	profile_name = _profile_name_for_record(place_records[0])
-	profile_slug = _build_profile_slug(place_records[0])
+	profile_name = _profile_name_for_record(canonical_place_records[0])
+	profile_slug = _build_profile_slug(canonical_place_records[0])
 
 	return {
-		'id': _stable_numeric_id(place_records[0].source_name, profile_slug, profile_name),
+		'id': _stable_numeric_id(canonical_place_records[0].source_name, profile_slug, profile_name),
 		'name': profile_name,
 		'slug': profile_slug,
 		'city': primary_location['city'],
 		'city_label': primary_location['city_label'],
-		'venue_type': place_records[0].venue_type,
-		'venue_type_label': _label_for_choice(VenueType, place_records[0].venue_type),
+		'venue_type': canonical_place_records[0].venue_type,
+		'venue_type_label': _label_for_choice(VenueType, canonical_place_records[0].venue_type),
 		'address_line_1': primary_location['address_line_1'],
 		'address_line_2': primary_location['address_line_2'],
 		'neighborhood': primary_location['neighborhood'],
@@ -117,15 +142,74 @@ def _build_grouped_place_payload(place_records, preferred_city=None):
 		'website_url': primary_location['website_url'],
 		'image_urls': primary_location['image_urls'],
 		'operating_hours': primary_location['operating_hours'],
-		'is_active': any(place_record.is_active for place_record in place_records),
-		'deals': primary_location['deals'],
+		'is_active': any(place_record.is_active for place_record in canonical_place_records),
+		'has_deals': bool(grouped_deals),
+		'deal_count': len(grouped_deals),
+		'deals': grouped_deals,
 		'locations': location_payloads,
 	}
 
 
-def _build_location_payload(place_record):
+def _dedupe_profile_locations(place_records):
+	ordered_records = []
+	for place_record in place_records:
+		existing_index = _find_matching_profile_location_index(ordered_records, place_record)
+		existing_record = ordered_records[existing_index] if existing_index is not None else None
+		if existing_record is None:
+			ordered_records.append(place_record)
+			continue
+		if _place_record_quality_score(place_record) > _place_record_quality_score(existing_record):
+			ordered_records[existing_index] = place_record
+	return ordered_records
+
+
+def _find_matching_profile_location_index(existing_records, candidate_record):
+	candidate_city = str(candidate_record.city or '').strip().lower()
+	candidate_address = _normalize_location_text(candidate_record.address_line_1)
+	candidate_profile_name = _normalize_location_text(_profile_name_for_record(candidate_record))
+	for index, existing_record in enumerate(existing_records):
+		existing_city = str(existing_record.city or '').strip().lower()
+		if existing_city != candidate_city:
+			continue
+		existing_address = _normalize_location_text(existing_record.address_line_1)
+		existing_profile_name = _normalize_location_text(_profile_name_for_record(existing_record))
+		if candidate_address and existing_address:
+			if candidate_address == existing_address:
+				return index
+			if candidate_profile_name == existing_profile_name and (
+				candidate_address in existing_address or existing_address in candidate_address
+			):
+				return index
+		elif candidate_profile_name and candidate_profile_name == existing_profile_name:
+			return index
+	return None
+
+
+def _normalize_location_text(value):
+	return ''.join(character.lower() for character in str(value or '') if character.isalnum())
+
+
+def _place_record_quality_score(place_record):
+	source_preference = {
+		'business_websites': 40,
+		'here_places': 20,
+		'tomtom_places': 15,
+		'openstreetmap_places': 10,
+	}
+	return (
+		source_preference.get(str(place_record.source_name or ''), 0)
+		+ len(getattr(place_record, 'deals', [])) * 10
+		+ len(getattr(place_record, 'operating_hours', [])) * 4
+		+ len(getattr(place_record, 'image_urls', [])) * 2
+		+ (1 if getattr(place_record, 'phone_number', '') else 0)
+		+ (1 if getattr(place_record, 'website_url', '') else 0)
+	)
+
+
+
+def _build_location_payload(place_record, resolve_missing_coordinates=True):
 	place_slug = _build_place_slug(place_record)
-	latitude, longitude = _get_place_coordinates(place_record)
+	latitude, longitude = _get_place_coordinates(place_record, resolve_missing=resolve_missing_coordinates)
 	return {
 		'id': _stable_numeric_id(place_record.source_name, place_record.external_id, place_record.name, place_record.city),
 		'slug': place_slug,
@@ -155,12 +239,31 @@ def _build_location_payload(place_record):
 			for operating_hour in getattr(place_record, 'operating_hours', [])
 		],
 		'is_active': place_record.is_active,
+		'has_deals': any(deal_record.is_active for deal_record in place_record.deals),
+		'deal_count': sum(1 for deal_record in place_record.deals if deal_record.is_active),
 		'deals': [
 			_build_deal_payload(place_record, deal_record, place_slug)
 			for deal_record in place_record.deals
 			if deal_record.is_active
 		],
 	}
+
+
+def _build_grouped_deal_payloads(place_records):
+	deal_payloads = []
+	seen_keys = set()
+	for place_record in place_records:
+		place_slug = _build_place_slug(place_record)
+		for deal_record in place_record.deals:
+			if not deal_record.is_active:
+				continue
+			deal_identity_key = _build_deal_identity_key(deal_record)
+			composite_key = (place_slug, deal_identity_key, deal_record.deal_type)
+			if composite_key in seen_keys:
+				continue
+			seen_keys.add(composite_key)
+			deal_payloads.append(_build_deal_payload(place_record, deal_record, place_slug))
+	return sorted(deal_payloads, key=lambda payload: (payload['place_name'], payload['title']))
 
 
 def _select_primary_location(location_payloads, preferred_city=None):
@@ -171,7 +274,18 @@ def _select_primary_location(location_payloads, preferred_city=None):
 	return location_payloads[0]
 
 
-def _get_place_coordinates(place_record):
+def _get_place_coordinates(place_record, resolve_missing=True):
+	try:
+		imported_latitude = getattr(place_record, 'latitude', None)
+		imported_longitude = getattr(place_record, 'longitude', None)
+		if imported_latitude is not None and imported_longitude is not None:
+			return (float(imported_latitude), float(imported_longitude))
+	except (TypeError, ValueError):
+		pass
+
+	if not resolve_missing:
+		return (None, None)
+
 	queries = _build_geocode_queries(place_record)
 	if not queries:
 		return (None, None)
@@ -315,7 +429,6 @@ def _build_place_slug(place_record):
 
 def _build_profile_key(place_record):
 	return '|'.join([
-		place_record.source_name,
 		_build_profile_slug(place_record),
 		_profile_name_for_record(place_record),
 	])

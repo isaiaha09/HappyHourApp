@@ -42,6 +42,8 @@ class ImportedPlace:
 	neighborhood: str = ''
 	state: str = 'CA'
 	postal_code: str = ''
+	latitude: float | None = None
+	longitude: float | None = None
 	geocode_query: str = ''
 	phone_number: str = ''
 	website_url: str = ''

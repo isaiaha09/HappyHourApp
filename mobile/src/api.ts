@@ -38,10 +38,20 @@ export function normalizeApiBaseUrl(value: string) {
   return withProtocol.endsWith('/api') ? withProtocol : `${withProtocol}/api`;
 }
 
-export async function fetchPlaces(baseUrl: string, city: string) {
-  const query = city === 'all' ? '' : `?city=${encodeURIComponent(city)}`;
-  const payload = await fetchJson<PaginatedResponse<PlaceListItem>>(baseUrl, `/places/${query}`);
-  return payload.results;
+export async function fetchPlaces(baseUrl: string, city: string, hasDeals?: boolean) {
+  const queryParams = new URLSearchParams();
+  queryParams.set('page_size', '500');
+
+  if (city !== 'all') {
+    queryParams.set('city', city);
+  }
+
+  if (typeof hasDeals === 'boolean') {
+    queryParams.set('has_deals', hasDeals ? 'true' : 'false');
+  }
+
+  const query = queryParams.size ? `?${queryParams.toString()}` : '';
+  return fetchAllPaginatedJson<PlaceListItem>(baseUrl, `/places/${query}`);
 }
 
 export async function fetchPlaceDetail(baseUrl: string, slug: string) {
@@ -56,6 +66,22 @@ export async function loginProfile(baseUrl: string, payload: LoginRequest) {
   return postJson<SignupResponse>(baseUrl, '/profiles/login/', payload);
 }
 
+export async function fetchProfileDashboard(baseUrl: string, authToken: string, portal?: 'customer' | 'business') {
+  const query = portal ? `?portal=${encodeURIComponent(portal)}` : '';
+  return fetchAuthedJson<SignupResponse>(baseUrl, `/profiles/me/${query}`, authToken);
+}
+
+export async function resendVerificationEmail(baseUrl: string, authToken: string) {
+  return postAuthedJson<{ detail: string }>(baseUrl, '/profiles/resend-verification/', authToken, {});
+}
+
+export async function updateTwoFactorPreference(baseUrl: string, authToken: string, enabled: boolean, portal?: 'customer' | 'business') {
+  return postAuthedJson<SignupResponse>(baseUrl, '/profiles/two-factor/', authToken, {
+    enabled,
+    portal,
+  });
+}
+
 export async function createBusinessProfile(baseUrl: string, payload: BusinessSignupRequest) {
   return postJson<SignupResponse>(baseUrl, '/profiles/business-signup/', payload);
 }
@@ -65,7 +91,7 @@ export async function createManualBusinessProfile(baseUrl: string, payload: Manu
 }
 
 async function fetchJson<T>(baseUrl: string, path: string): Promise<T> {
-  const response = await fetch(`${normalizeApiBaseUrl(baseUrl)}${path}`, {
+  const response = await fetch(buildApiUrl(baseUrl, path), {
     headers: {
       Accept: 'application/json',
     },
@@ -79,7 +105,7 @@ async function fetchJson<T>(baseUrl: string, path: string): Promise<T> {
 }
 
 async function postJson<T>(baseUrl: string, path: string, payload: object): Promise<T> {
-  const response = await fetch(`${normalizeApiBaseUrl(baseUrl)}${path}`, {
+  const response = await fetch(buildApiUrl(baseUrl, path), {
     method: 'POST',
     headers: {
       Accept: 'application/json',
@@ -97,6 +123,33 @@ async function postJson<T>(baseUrl: string, path: string, payload: object): Prom
   }
 
   return response.json() as Promise<T>;
+}
+
+async function fetchAllPaginatedJson<T>(baseUrl: string, path: string): Promise<T[]> {
+  const items: T[] = [];
+  let nextUrl: string | null = buildApiUrl(baseUrl, path);
+
+  while (nextUrl) {
+    const response = await fetch(nextUrl, {
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Backend request failed with status ${response.status}.`);
+    }
+
+    const payload = await response.json() as PaginatedResponse<T>;
+    items.push(...payload.results);
+    nextUrl = payload.next;
+  }
+
+  return items;
+}
+
+function buildApiUrl(baseUrl: string, path: string) {
+  return `${normalizeApiBaseUrl(baseUrl)}${path}`;
 }
 
 function flattenApiError(value: unknown): string {
@@ -121,4 +174,45 @@ function getMetroHost() {
 
   const match = scriptUrl.match(/^https?:\/\/([^/:]+)/i);
   return match ? match[1] : null;
+}
+
+async function fetchAuthedJson<T>(baseUrl: string, path: string, authToken: string): Promise<T> {
+  const response = await fetch(buildApiUrl(baseUrl, path), {
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Token ${authToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    const errorPayload = await response.json().catch(() => null);
+    const message = errorPayload && typeof errorPayload === 'object'
+      ? flattenApiError(errorPayload)
+      : `Backend request failed with status ${response.status}.`;
+    throw new Error(message);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+async function postAuthedJson<T>(baseUrl: string, path: string, authToken: string, payload: object): Promise<T> {
+  const response = await fetch(buildApiUrl(baseUrl, path), {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      Authorization: `Token ${authToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorPayload = await response.json().catch(() => null);
+    const message = errorPayload && typeof errorPayload === 'object'
+      ? flattenApiError(errorPayload)
+      : `Backend request failed with status ${response.status}.`;
+    throw new Error(message);
+  }
+
+  return response.json() as Promise<T>;
 }

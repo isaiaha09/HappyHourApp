@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+from dataclasses import replace
 from html import escape
 from io import BytesIO
 from hashlib import sha256
@@ -8,6 +9,7 @@ from urllib.parse import unquote, urljoin, urlparse, urlunparse
 
 from bs4 import BeautifulSoup
 from django.conf import settings
+from django.core.cache import caches
 
 from places.models import City, DealType, VenueType, Weekday
 from places.services.importers.base import BaseHtmlImporter
@@ -104,6 +106,11 @@ class BusinessWebsiteImporter(BaseHtmlImporter):
 		re.compile(r'\bcombo\b', re.IGNORECASE),
 	]
 
+	DISCOVERY_PROMOTION_LINK_PATTERN = re.compile(
+		r'happy\s*hour|specials?|deals?|discounts?|offers?|promotions?|late\s*night|menu|food|drinks?',
+		re.IGNORECASE,
+	)
+
 	def __init__(self, session=None, business_sources=None):
 		super().__init__(session=session)
 		self.business_sources = list(business_sources if business_sources is not None else getattr(settings, 'BUSINESS_SOURCE_PAGES', []))
@@ -135,6 +142,257 @@ class BusinessWebsiteImporter(BaseHtmlImporter):
 
 	def parse_html(self, html):
 		raise NotImplementedError('BusinessWebsiteImporter parses multiple live business pages, not a single HTML document.')
+
+	def enrich_place_records(self, place_records):
+		return [self.enrich_place_record(place_record) for place_record in place_records]
+
+	def enrich_place_record(self, place_record):
+		source = self._build_discovery_source(place_record)
+		if source is None:
+			return self._with_discovery_enrichment_status(place_record, 'blocked_url')
+
+		cache = caches[getattr(settings, 'SOURCE_FETCH_CACHE_ALIAS', 'default')]
+		cache_key = self._discovery_enrichment_cache_key(place_record)
+		payload = cache.get(cache_key)
+		if payload is None:
+			payload = self._build_discovery_enrichment_payload(source)
+			cache_timeout = getattr(settings, 'DISCOVERY_WEBSITE_ENRICHMENT_CACHE_TIMEOUT', 21600)
+			if cache_timeout and cache_timeout > 0:
+				cache.set(cache_key, payload, cache_timeout)
+
+		status = payload.get('_enrichment_status', 'needs_review') if isinstance(payload, dict) else 'needs_review'
+		if not payload or not payload.get('deals'):
+			return self._with_discovery_enrichment_status(place_record, status)
+
+		enriched_record = replace(
+			place_record,
+			phone_number=place_record.phone_number or payload.get('phone_number', ''),
+			website_url=place_record.website_url or payload.get('website_url', ''),
+			image_urls=self._merge_unique_values(place_record.image_urls, payload.get('image_urls', []), limit=6),
+			deals=self._merge_deal_lists(place_record.deals, payload.get('deals', [])),
+			operating_hours=place_record.operating_hours or payload.get('operating_hours', []),
+		)
+		return self._with_discovery_enrichment_status(enriched_record, status)
+
+	def _build_discovery_enrichment_payload(self, source):
+		try:
+			source_documents = self._build_discovery_source_documents(source)
+		except Exception as exc:
+			if getattr(settings, 'DISCOVERY_WEBSITE_LOG_SKIPS', False):
+				logger.warning('Skipping discovery enrichment for %s (%s): %s', source.get('name') or source.get('source_url', ''), source.get('source_url', ''), exc)
+			return {'_enrichment_status': 'fetch_failed'}
+
+		if not source_documents:
+			return {'_enrichment_status': 'auto_no_evidence'}
+
+		identity_document = self._first_document_for_role(source_documents, 'identity') or source_documents[0]
+		deal_documents = self._documents_for_role(source_documents, 'deals') or [identity_document]
+		image_documents = self._documents_for_role(source_documents, 'images') or source_documents
+		identity = self._extract_identity(source, identity_document['soup'])
+		operating_hours = self._extract_operating_hours(source, source_documents)
+		operating_hours_lookup = self._operating_hours_lookup(operating_hours)
+		deals = self._extract_deals(
+			source,
+			[document['soup'] for document in deal_documents],
+			[document['url'] for document in deal_documents],
+			operating_hours=operating_hours_lookup,
+		)
+		image_urls = self._extract_image_urls(
+			source,
+			[document['soup'] for document in image_documents],
+			[document['url'] for document in image_documents],
+		)
+		if not deals:
+			return {
+				'_enrichment_status': 'auto_no_evidence',
+				'phone_number': identity.get('phone_number', ''),
+				'website_url': identity.get('website_url', ''),
+				'image_urls': image_urls,
+				'deals': [],
+				'operating_hours': operating_hours,
+			}
+		return {
+			'_enrichment_status': 'auto_confirmed',
+			'phone_number': identity.get('phone_number', ''),
+			'website_url': identity.get('website_url', ''),
+			'image_urls': image_urls,
+			'deals': deals,
+			'operating_hours': operating_hours,
+		}
+
+	def _build_discovery_source(self, place_record):
+		website_url = self._normalized_http_url(getattr(place_record, 'website_url', ''))
+		if not website_url or not self._is_supported_discovery_website_url(website_url):
+			return None
+		return {
+			'name': place_record.name,
+			'profile_name': place_record.profile_name,
+			'profile_slug': place_record.profile_slug,
+			'prefer_configured_city': True,
+			'city': place_record.city,
+			'venue_type': place_record.venue_type,
+			'address_line_1': place_record.address_line_1,
+			'address_line_2': place_record.address_line_2,
+			'neighborhood': place_record.neighborhood,
+			'state': place_record.state,
+			'postal_code': place_record.postal_code,
+			'phone_number': place_record.phone_number,
+			'website_url': website_url,
+			'source_url': website_url,
+			'external_id': place_record.external_id or self._default_external_id(website_url),
+		}
+
+	def _build_discovery_source_documents(self, source):
+		home_url = source['source_url']
+		home_html = self.fetch_html(url=home_url)
+		home_soup = BeautifulSoup(home_html, 'html.parser')
+		documents = [{
+			'key': 'homepage',
+			'url': home_url,
+			'roles': {'identity', 'deals', 'hours', 'images'},
+			'soup': home_soup,
+		}]
+
+		for index, candidate_url in enumerate(self._discover_promotion_document_urls(home_soup, home_url), start=1):
+			document_format = self._normalize_document_format('', candidate_url)
+			try:
+				if document_format == 'pdf':
+					html = self._document_text_to_html(self._extract_pdf_text(self.fetch_binary(url=candidate_url)))
+				else:
+					html = self.fetch_html(url=candidate_url)
+			except Exception:
+				continue
+			documents.append({
+				'key': f'discovered-{index}',
+				'url': candidate_url,
+				'roles': {'deals', 'hours', 'images'},
+				'soup': BeautifulSoup(html, 'html.parser'),
+			})
+
+		return documents
+
+	def _discover_promotion_document_urls(self, soup, home_url):
+		candidates = {}
+		max_links = max(0, getattr(settings, 'DISCOVERY_WEBSITE_MAX_PROMO_LINKS', 4))
+		for node in soup.select('a[href]'):
+			candidate_url = self._normalized_http_url(urljoin(home_url, node.get('href', '')))
+			if not candidate_url or candidate_url == home_url:
+				continue
+			if not self._is_same_site_url(home_url, candidate_url):
+				continue
+			context = self._normalize_whitespace(' '.join([
+				node.get_text(' ', strip=True),
+				node.get('href', ''),
+				node.get('title', ''),
+				node.get('aria-label', ''),
+				' '.join(node.get('class', [])),
+				node.get('id', ''),
+			]))
+			if not self.DISCOVERY_PROMOTION_LINK_PATTERN.search(context):
+				continue
+			score = self._promotion_link_score(context, candidate_url)
+			existing = candidates.get(candidate_url)
+			if existing is None or score > existing['score']:
+				candidates[candidate_url] = {'url': candidate_url, 'score': score}
+
+		for candidate_url in self._fallback_promotion_document_urls(home_url):
+			if candidate_url not in candidates:
+				candidates[candidate_url] = {'url': candidate_url, 'score': self._promotion_link_score('', candidate_url)}
+
+		ranked_candidates = sorted(candidates.values(), key=lambda candidate: (-candidate['score'], candidate['url']))
+		return [candidate['url'] for candidate in ranked_candidates[:max_links]]
+
+	def _fallback_promotion_document_urls(self, home_url):
+		urls = []
+		for path in tuple(getattr(settings, 'DISCOVERY_WEBSITE_FALLBACK_PATHS', ())):
+			candidate_url = self._normalized_http_url(urljoin(home_url, path))
+			if not candidate_url or candidate_url == home_url:
+				continue
+			if not self._is_same_site_url(home_url, candidate_url):
+				continue
+			urls.append(candidate_url)
+		return urls
+
+	def _promotion_link_score(self, context, candidate_url):
+		combined = f'{context} {candidate_url}'.lower()
+		score = 0
+		for token, weight in {
+			'happy': 8,
+			'special': 6,
+			'deal': 6,
+			'discount': 6,
+			'offer': 5,
+			'promo': 5,
+			'late': 4,
+			'menu': 2,
+			'drink': 3,
+			'food': 2,
+		}.items():
+			if token in combined:
+				score += weight
+		return score
+
+	def _is_same_site_url(self, home_url, candidate_url):
+		home_host = urlparse(home_url).netloc.lower().removeprefix('www.')
+		candidate_host = urlparse(candidate_url).netloc.lower().removeprefix('www.')
+		if not home_host or not candidate_host:
+			return False
+		return candidate_host == home_host or candidate_host.endswith(f'.{home_host}') or home_host.endswith(f'.{candidate_host}')
+
+	def _normalized_http_url(self, value):
+		candidate = self._normalize_whitespace(str(value or ''))
+		parsed = urlparse(candidate)
+		if parsed.scheme not in {'http', 'https'} or not parsed.netloc:
+			return ''
+		return candidate
+
+	def _is_supported_discovery_website_url(self, candidate_url):
+		parsed = urlparse(candidate_url)
+		host = parsed.netloc.lower().removeprefix('www.')
+		path = (parsed.path or '').lower()
+		blocked_suffixes = tuple(getattr(settings, 'DISCOVERY_WEBSITE_BLOCKED_HOST_SUFFIXES', ()))
+		blocked_prefixes = tuple(getattr(settings, 'DISCOVERY_WEBSITE_BLOCKED_HOST_PREFIXES', ()))
+		if not host:
+			return False
+		if any(host == suffix or host.endswith(f'.{suffix}') for suffix in blocked_suffixes):
+			return False
+		if any(host.startswith(prefix) for prefix in blocked_prefixes):
+			return False
+		if '/api/' in path or path.startswith('/api/'):
+			return False
+		return True
+
+	def _with_discovery_enrichment_status(self, place_record, status):
+		setattr(place_record, 'discovery_enrichment_status', status)
+		return place_record
+
+	def _discovery_enrichment_cache_key(self, place_record):
+		cache_input = '|'.join([
+			str(place_record.external_id or ''),
+			str(place_record.website_url or ''),
+			str(place_record.city or ''),
+			str(place_record.name or ''),
+		])
+		return f'discovery-website-enrichment:{sha256(cache_input.encode("utf-8")).hexdigest()}'
+
+	def _merge_unique_values(self, existing_values, candidate_values, limit=None):
+		merged_values = []
+		seen = set()
+		for value in list(existing_values or []) + list(candidate_values or []):
+			normalized = self._normalize_whitespace(str(value or ''))
+			if not normalized or normalized in seen:
+				continue
+			seen.add(normalized)
+			merged_values.append(normalized)
+			if limit is not None and len(merged_values) >= limit:
+				break
+		return merged_values
+
+	def _merge_deal_lists(self, existing_deals, candidate_deals):
+		merged_deals = list(existing_deals or [])
+		for candidate_deal in candidate_deals or []:
+			self._merge_deal_candidate(merged_deals, candidate_deal)
+		return merged_deals
 
 	def _load_business_record(self, source):
 		source_documents = self._build_source_documents(source)
@@ -225,6 +483,9 @@ class BusinessWebsiteImporter(BaseHtmlImporter):
 		except ImportError as exc:
 			raise RuntimeError('pypdf is required to parse PDF source documents.') from exc
 
+		if not self._looks_like_pdf(pdf_bytes):
+			raise RuntimeError('Source document is not a valid PDF.')
+
 		try:
 			reader = PdfReader(BytesIO(pdf_bytes))
 		except Exception as exc:
@@ -237,6 +498,12 @@ class BusinessWebsiteImporter(BaseHtmlImporter):
 				pages.append(text)
 
 		return '\n'.join(pages)
+
+	def _looks_like_pdf(self, pdf_bytes):
+		if not isinstance(pdf_bytes, (bytes, bytearray)):
+			return False
+		prefix = bytes(pdf_bytes[:1024]).lstrip()
+		return prefix.startswith(b'%PDF-')
 
 	def _configured_source_documents(self, source):
 		documents = source.get('source_documents')
@@ -430,7 +697,12 @@ class BusinessWebsiteImporter(BaseHtmlImporter):
 
 	def _extract_identity(self, source, soup):
 		structured = self._find_structured_business_data(soup)
-		city = self._resolve_city(source.get('city'), structured.get('addressLocality'), source.get('source_url', ''))
+		city = self._resolve_city(
+			source.get('city'),
+			structured.get('addressLocality'),
+			source.get('source_url', ''),
+			prefer_configured=bool(source.get('prefer_configured_city')),
+		)
 		page_contact = self._extract_page_contact_details(soup, city)
 		address_line_1 = self._coalesce(source.get('address_line_1'), structured.get('streetAddress'), page_contact.get('address_line_1'), '')
 		postal_code = self._coalesce(source.get('postal_code'), structured.get('postalCode'), page_contact.get('postal_code'))
@@ -891,12 +1163,14 @@ class BusinessWebsiteImporter(BaseHtmlImporter):
 				return self._normalize_whitespace(match.group(1).replace('\\/', '/'))
 		return ''
 
-	def _resolve_city(self, configured_value, structured_value, source_url=''):
+	def _resolve_city(self, configured_value, structured_value, source_url='', prefer_configured=False):
 		configured_city = self._normalize_city_value(configured_value)
 		structured_city = self._normalize_city_value(structured_value)
 
 		if configured_city and configured_city not in self.allowed_cities:
 			raise ValueError(f'Unsupported city for business source: {configured_city}')
+		if prefer_configured and configured_city:
+			return configured_city
 		if structured_city and structured_city not in self.allowed_cities:
 			raise ValueError(f'Business source resolved outside supported cities: {structured_city}')
 		if configured_city and structured_city and configured_city != structured_city:

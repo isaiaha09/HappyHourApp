@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
+import secrets
 
 
 class City(models.TextChoices):
@@ -60,8 +61,8 @@ class ListingSnapshot(models.Model):
 
 	class Meta:
 		ordering = ['name', '-captured_at']
-		verbose_name = 'Listing Snapshot'
-		verbose_name_plural = 'Listing Snapshots'
+		verbose_name = 'Business'
+		verbose_name_plural = 'List of Businesses'
 
 	def __str__(self):
 		return self.name
@@ -71,6 +72,66 @@ class ListingSnapshot(models.Model):
 			city_part = self.city or 'unknown'
 			self.listing_slug = slugify(f'{self.name}-{city_part}')
 		super().save(*args, **kwargs)
+
+
+class DeletedBusiness(models.Model):
+	source_name = models.CharField(max_length=80, blank=True)
+	source_url = models.URLField(blank=True)
+	external_id = models.CharField(max_length=150, blank=True)
+	listing_slug = models.SlugField(max_length=170, blank=True)
+	name = models.CharField(max_length=150)
+	city = models.CharField(max_length=20, choices=City.choices, blank=True)
+	venue_type = models.CharField(max_length=20, choices=VenueType.choices, blank=True)
+	address_line_1 = models.CharField(max_length=255)
+	address_line_2 = models.CharField(max_length=255, blank=True)
+	neighborhood = models.CharField(max_length=120, blank=True)
+	state = models.CharField(max_length=2, default='CA')
+	postal_code = models.CharField(max_length=10, blank=True)
+	phone_number = models.CharField(max_length=20, blank=True)
+	website_url = models.URLField(blank=True)
+	payload = models.JSONField(default=dict, blank=True)
+	deleted_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ['name', '-deleted_at']
+		verbose_name = 'Deleted Business'
+		verbose_name_plural = 'Deleted Businesses'
+
+	def __str__(self):
+		return self.name
+
+	def save(self, *args, **kwargs):
+		if not self.listing_slug:
+			city_part = self.city or 'unknown'
+			self.listing_slug = slugify(f'{self.name}-{city_part}')
+		super().save(*args, **kwargs)
+
+
+class ProviderUsageWindow(models.Model):
+	class WindowKind(models.TextChoices):
+		DAY = 'day', 'Day'
+		MONTH = 'month', 'Month'
+
+	provider_name = models.CharField(max_length=80)
+	window_kind = models.CharField(max_length=10, choices=WindowKind.choices)
+	window_start = models.DateField()
+	consumed_transactions = models.PositiveIntegerField(default=0)
+	transaction_limit = models.PositiveIntegerField(default=0)
+	reserve_threshold = models.PositiveIntegerField(default=0)
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ['provider_name', '-window_start']
+		verbose_name = 'Provider Usage Window'
+		verbose_name_plural = 'Provider Usage Windows'
+		constraints = [
+			models.UniqueConstraint(fields=['provider_name', 'window_kind', 'window_start'], name='unique_provider_usage_window'),
+		]
+
+	def __str__(self):
+		return f'{self.provider_name} {self.window_kind} {self.window_start}: {self.consumed_transactions}/{self.transaction_limit}'
 
 
 class BusinessClaim(models.Model):
@@ -241,3 +302,56 @@ class BusinessAccount(User):
 		proxy = True
 		verbose_name = 'Business Account'
 		verbose_name_plural = 'Business Accounts'
+
+
+class AccountProfile(models.Model):
+	user = models.OneToOneField(settings.AUTH_USER_MODEL, related_name='account_profile', on_delete=models.CASCADE)
+	email_verification_token = models.CharField(max_length=64, blank=True)
+	email_verification_sent_at = models.DateTimeField(null=True, blank=True)
+	email_verified_at = models.DateTimeField(null=True, blank=True)
+	two_factor_enabled = models.BooleanField(default=False)
+	billing_portal_url = models.URLField(blank=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ['user__username']
+		verbose_name = 'Account Profile'
+		verbose_name_plural = 'Account Profiles'
+
+	def __str__(self):
+		return f'Profile for {self.user.username}'
+
+	def ensure_verification_token(self, force=False):
+		if force or not self.email_verification_token:
+			self.email_verification_token = secrets.token_urlsafe(32)
+		return self.email_verification_token
+
+	@property
+	def email_is_verified(self):
+		return self.email_verified_at is not None
+
+	def mark_email_verified(self):
+		self.email_verified_at = timezone.now()
+		self.email_verification_token = ''
+		self.save(update_fields=['email_verified_at', 'email_verification_token', 'updated_at'])
+
+
+class ProfileAuthToken(models.Model):
+	user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='profile_auth_tokens', on_delete=models.CASCADE)
+	key = models.CharField(max_length=64, unique=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+	last_used_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ['-last_used_at']
+		verbose_name = 'Profile Auth Token'
+		verbose_name_plural = 'Profile Auth Tokens'
+
+	def __str__(self):
+		return f'{self.user.username} token'
+
+	def save(self, *args, **kwargs):
+		if not self.key:
+			self.key = secrets.token_hex(32)
+		super().save(*args, **kwargs)

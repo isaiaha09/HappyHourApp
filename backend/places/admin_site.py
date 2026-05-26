@@ -21,9 +21,17 @@ class HappyHourAdminSite(AdminSite):
             'models': [
                 'Customer Accounts',
                 'Business Accounts',
-                'Listing Snapshots',
+                'List of Businesses',
+                'Deleted Businesses',
                 'Business Claims',
                 'Business Memberships',
+            ],
+        },
+        {
+            'name': 'Operations',
+            'app_label': 'operations',
+            'models': [
+                'Provider Usage Windows',
             ],
         },
     ]

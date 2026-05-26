@@ -10,12 +10,53 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 from .business_sources import BUSINESS_SOURCE_PAGES
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def _load_env_file():
+    env_path = BASE_DIR / '.env'
+    if not env_path.exists():
+        return {}
+
+    values = {}
+    for line in env_path.read_text(encoding='utf-8').splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith('#') or '=' not in stripped:
+            continue
+
+        key, raw_value = stripped.split('=', 1)
+        key = key.strip()
+        if not key:
+            continue
+
+        value = raw_value.strip().strip('"').strip("'")
+        values[key] = value
+
+    return values
+
+
+ENV_VALUES = _load_env_file()
+
+
+def _get_env(name, default=''):
+    return os.environ.get(name, ENV_VALUES.get(name, default))
+
+
+def _get_int_env(name, default=0):
+    value = _get_env(name, '')
+    if value == '':
+        return default
+
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 # Quick-start development settings - unsuitable for production
@@ -63,7 +104,7 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -93,18 +134,96 @@ CACHES = {
 	'default': {
 		'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
 		'LOCATION': 'happyhourapp-default-cache',
-	}
+    },
+    'source_fetch': {
+        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+        'LOCATION': str(BASE_DIR / '.django_cache' / 'source_fetch'),
+    },
 }
 
-SOURCE_FETCH_CACHE_ALIAS = 'default'
-SOURCE_FETCH_CACHE_TIMEOUT = 300
+SOURCE_FETCH_CACHE_ALIAS = 'source_fetch'
+SOURCE_FETCH_CACHE_TIMEOUT = 43200
+DISCOVERY_WEBSITE_ENRICHMENT_CACHE_TIMEOUT = 21600
+DISCOVERY_WEBSITE_MAX_PROMO_LINKS = 4
+DISCOVERY_WEBSITE_LOG_SKIPS = False
+DISCOVERY_WEBSITE_FALLBACK_PATHS = (
+    '/happy-hour',
+    '/happyhour',
+    '/specials',
+    '/deals',
+    '/offers',
+    '/promotions',
+    '/menu',
+    '/menus',
+    '/drink-menu',
+    '/food-menu',
+    '/happy-hour.pdf',
+    '/menu.pdf',
+)
+DISCOVERY_WEBSITE_BLOCKED_HOST_SUFFIXES = (
+    'facebook.com',
+    'fb.com',
+    'instagram.com',
+    'x.com',
+    'twitter.com',
+    'yelp.com',
+    'business.site',
+    'tripadvisor.com',
+    'doordash.com',
+    'ubereats.com',
+    'grubhub.com',
+)
+DISCOVERY_WEBSITE_BLOCKED_HOST_PREFIXES = (
+    'api.',
+    'm.',
+)
 PLACE_GEOCODE_CACHE_TIMEOUT = 86400
 PLACE_GEOCODE_TIMEOUT = 5
 PLACE_GEOCODE_URL = 'https://nominatim.openstreetmap.org/search'
 PLACE_GEOCODE_USER_AGENT = 'HappyHourApp/1.0'
-LISTING_SOURCE_NAME = 'business_websites'
+LISTING_SOURCE_NAME = 'curated_json_places'
+DISCOVERY_JSON_PATH = BASE_DIR / 'config' / 'discovered_places.json'
 BUSINESS_SOURCE_STRICT_ERRORS = False
 BUSINESS_SOURCE_ALLOWED_CITIES = ('ventura', 'oxnard', 'camarillo')
+OSM_PLACE_DISCOVERY_URL = 'https://overpass-api.de/api/interpreter'
+OSM_PLACE_DISCOVERY_TIMEOUT = 45
+OSM_PLACE_DISCOVERY_CACHE_TIMEOUT = 3600
+OSM_PLACE_DISCOVERY_USER_AGENT = 'HappyHourApp/1.0'
+OSM_PLACE_MIN_METADATA_SCORE = 2
+OSM_PLACE_EXCLUDED_BUSINESSES = (
+    ('ventura', 'Barrelhouse 101'),
+)
+OSM_PLACE_EXCLUDED_EXTERNAL_IDS = (
+    'osm:way:410595933',
+)
+HERE_DISCOVERY_URL = 'https://discover.search.hereapi.com/v1/discover'
+HERE_API_KEY = _get_env('HERE_API_KEY', '')
+HERE_TIMEOUT = 20
+HERE_CACHE_TIMEOUT = 3600
+HERE_PAGE_SIZE = 100
+HERE_MAX_RESULTS = 600
+HERE_USER_AGENT = 'HappyHourApp/1.0'
+HERE_PLACE_EXCLUDED_BUSINESSES = (
+    ('camarillo', 'Institution Ale Company'),
+)
+HERE_PLACE_EXCLUDED_EXTERNAL_IDS = ()
+HERE_MONTHLY_LIMIT = _get_int_env('HERE_MONTHLY_LIMIT', 250000)
+HERE_MONTHLY_RESERVE = _get_int_env('HERE_MONTHLY_RESERVE', 1000)
+TOMTOM_CATEGORY_SEARCH_URL = 'https://api.tomtom.com/search/2/categorySearch/{query}.json'
+TOMTOM_API_KEY = _get_env('TOMTOM_API_KEY', '')
+TOMTOM_TIMEOUT = 20
+TOMTOM_CACHE_TIMEOUT = 3600
+TOMTOM_PAGE_SIZE = 100
+TOMTOM_MAX_RESULTS = 200
+TOMTOM_USER_AGENT = 'HappyHourApp/1.0'
+TOMTOM_DAILY_LIMIT = _get_int_env('TOMTOM_DAILY_LIMIT', 50000)
+TOMTOM_DAILY_RESERVE = _get_int_env('TOMTOM_DAILY_RESERVE', 250)
+YELP_FUSION_API_URL = 'https://api.yelp.com/v3/businesses/search'
+YELP_FUSION_API_KEY = _get_env('YELP_FUSION_API_KEY', '')
+YELP_FUSION_TIMEOUT = 20
+YELP_FUSION_CACHE_TIMEOUT = 3600
+YELP_FUSION_PAGE_SIZE = 50
+YELP_FUSION_MAX_RESULTS = 150
 
 
 # Password validation
@@ -160,5 +279,10 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
 }
+
+EMAIL_BACKEND = _get_env('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+DEFAULT_FROM_EMAIL = _get_env('DEFAULT_FROM_EMAIL', 'noreply@happyhourapp.local')
+PROFILE_EMAIL_VERIFICATION_URL_BASE = _get_env('PROFILE_EMAIL_VERIFICATION_URL_BASE', 'http://127.0.0.1:8000/api/profiles/verify-email')
+PROFILE_BILLING_PORTAL_URL = _get_env('PROFILE_BILLING_PORTAL_URL', 'https://example.com/billing')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

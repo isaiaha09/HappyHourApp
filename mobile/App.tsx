@@ -7,6 +7,7 @@ import {
   FlatList,
   Image,
   Keyboard,
+  KeyboardAvoidingView,
   LayoutAnimation,
   Linking,
   Platform,
@@ -26,10 +27,13 @@ import {
   createBusinessProfile,
   createCustomerProfile,
   createManualBusinessProfile,
+  fetchProfileDashboard,
   fetchPlaceDetail,
   fetchPlaces,
   getDefaultApiBaseUrl,
   loginProfile,
+  resendVerificationEmail,
+  updateTwoFactorPreference,
 } from './src/api';
 import type {
   BusinessSignupRequest,
@@ -66,10 +70,6 @@ const minLongitudeDelta = 0.01;
 const maxLatitudeDelta = 0.24;
 const maxLongitudeDelta = 0.32;
 const mapFitPaddingFactor = 1.15;
-const markerClusterThreshold = 0.003;
-const markerClusterRadius = 0.0021;
-const markerMinimumVisibleRadius = 0.00045;
-const markerClusterRingSpacing = 0.0011;
 const defaultMapRegion = {
   latitude: (mapAreaBounds.minLatitude + mapAreaBounds.maxLatitude) / 2,
   longitude: (mapAreaBounds.minLongitude + mapAreaBounds.maxLongitude) / 2,
@@ -137,7 +137,6 @@ type BrowseControlsProps = {
   overlay?: boolean;
   browseMode: BrowseMode;
   filtersExpanded: boolean;
-  onOpenProfiles: () => void;
   onBrowseModeChange: (mode: BrowseMode) => void;
   onChangeSearchQuery: (value: string) => void;
   onClearSearchQuery: () => void;
@@ -253,6 +252,8 @@ function AppScreen() {
   const [profileSubmitting, setProfileSubmitting] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [profileErrorMessage, setProfileErrorMessage] = useState<string | null>(null);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [dashboardSubmitting, setDashboardSubmitting] = useState(false);
   const [profilePlaces, setProfilePlaces] = useState<PlaceListItem[]>([]);
   const [profilePlacesLoading, setProfilePlacesLoading] = useState(false);
   const [businessSearchQuery, setBusinessSearchQuery] = useState('');
@@ -264,40 +265,43 @@ function AppScreen() {
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const normalizedSearchQuery = normalizeSearchText(deferredSearchQuery);
   const onboardingTransitionDuration = 480;
+  const showMapBrowse = screenMode === 'browse' && !selectedPlaceSlug && browseMode === 'map';
 
   const filteredPlaces = getFilteredPlaces(places, selectedVenueTypes, normalizedSearchQuery);
   const filteredPlaceKey = filteredPlaces.map((place) => place.id).join('|');
 
-  const mappedPlaces = getDisplayMarkerCoordinates(filteredPlaces.flatMap((place) => (
-    getPlaceLocations(place).flatMap((location) => {
-      if (location.latitude === null || location.longitude === null) {
-        return [];
-      }
+  const mappedPlaces = showMapBrowse
+    ? filteredPlaces.flatMap((place) => (
+        getPlaceLocations(place).flatMap((location) => {
+          if (location.latitude === null || location.longitude === null) {
+            return [];
+          }
 
-      return [
-        {
-          ...place,
-          city: location.city,
-          city_label: location.city_label,
-          address_line_1: location.address_line_1,
-          address_line_2: location.address_line_2,
-          neighborhood: location.neighborhood,
-          state: location.state,
-          postal_code: location.postal_code,
-          latitude: location.latitude,
-          longitude: location.longitude,
-          phone_number: location.phone_number,
-          website_url: location.website_url,
-          image_urls: location.image_urls,
-          fullAddress: formatPlaceAddress(location),
-          locationId: location.id,
-          markerLatitude: location.latitude,
-          markerLongitude: location.longitude,
-          markerKey: `${place.slug}:${location.id}`,
-        },
-      ];
-    })
-  )), mapRegion);
+          return [
+            {
+              ...place,
+              city: location.city,
+              city_label: location.city_label,
+              address_line_1: location.address_line_1,
+              address_line_2: location.address_line_2,
+              neighborhood: location.neighborhood,
+              state: location.state,
+              postal_code: location.postal_code,
+              latitude: location.latitude,
+              longitude: location.longitude,
+              phone_number: location.phone_number,
+              website_url: location.website_url,
+              image_urls: location.image_urls,
+              fullAddress: formatPlaceAddress(location),
+              locationId: location.id,
+              markerLatitude: location.latitude,
+              markerLongitude: location.longitude,
+              markerKey: `${place.slug}:${location.id}`,
+            },
+          ];
+        })
+      ))
+    : [];
   const unplacedPlaceCount = filteredPlaces.filter((place) => (
     !getPlaceLocations(place).some((location) => location.latitude !== null && location.longitude !== null)
   )).length;
@@ -315,9 +319,6 @@ function AppScreen() {
     ? Math.max(keyboardHeight - insets.bottom, 0) + 12
     : Math.max(insets.bottom + 12, 20);
   const availableProfilePlaces = profilePlaces.length ? profilePlaces : places;
-  const activeScreenKey = screenMode !== 'browse'
-    ? screenMode
-    : selectedPlaceSlug ? 'detail' : browseMode === 'map' ? 'map' : 'list';
   const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'business-search', 'business-claim', 'manual-business-claim']);
   const currentOnboardingScreen = onboardingScreenKeys.has(screenMode) ? screenMode : null;
   const usesOnboardingSlideTransition = currentOnboardingScreen !== null || incomingOnboardingScreen !== null;
@@ -361,7 +362,6 @@ function AppScreen() {
       }
     : null;
 
-  const showMapBrowse = screenMode === 'browse' && !selectedPlaceSlug && browseMode === 'map';
   const shouldShowMapResults = showMapBrowse && !selectedMapPlace && normalizedSearchQuery.length > 0;
   const isLandscape = width > height;
   const useWideLandscapeLayout = isLandscape && width >= 760;
@@ -694,6 +694,12 @@ function AppScreen() {
       return;
     }
 
+    if (selectedCity === 'all' && places.length > 0) {
+      setProfilePlaces(places);
+      setProfilePlacesLoading(false);
+      return;
+    }
+
     let isMounted = true;
     setProfilePlacesLoading(true);
 
@@ -719,6 +725,14 @@ function AppScreen() {
       isMounted = false;
     };
   }, [apiBaseUrl, screenMode]);
+
+  useEffect(() => {
+    if (screenMode !== 'profiles' || !authenticatedSession?.auth_token) {
+      return;
+    }
+
+    void refreshDashboard();
+  }, [apiBaseUrl, authenticatedSession?.auth_token, screenMode]);
 
   useEffect(() => {
     if (!showMapBrowse || !shouldUseNativeMapBoundaries || !mapRef.current) {
@@ -755,10 +769,12 @@ function AppScreen() {
     }
   }, [mappedPlaces, selectedMapPlaceKey, showMapBrowse]);
 
-  function applyBaseUrl() {
+  function handleRefreshPlaces() {
     animateNextLayout();
     setErrorMessage(null);
     setBrowseFiltersExpanded(false);
+    setPlaces([]);
+    setProfilePlaces([]);
     setSelectedMapPlaceKey(null);
     setSelectedPlaceSlug(null);
     setSelectedPlace(null);
@@ -825,8 +841,14 @@ function AppScreen() {
   function handleOpenProfiles() {
     Keyboard.dismiss();
     setProfileErrorMessage(null);
-    setProfileMessage(null);
     navigateScreen('profiles', 'forward');
+  }
+
+  function handleContinueToApp() {
+    Keyboard.dismiss();
+    setAuthMessage(null);
+    setProfileErrorMessage(null);
+    navigateScreen('browse', 'forward');
   }
 
   function handleBackFromProfiles() {
@@ -874,7 +896,8 @@ function AppScreen() {
       setAuthenticatedSession(response);
       setAuthMessage(null);
       setLoginForm(initialLoginFormState);
-      navigateScreen('browse', 'forward');
+      setProfileMessage('Signed in successfully.');
+      navigateScreen('profiles', 'forward');
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
     } finally {
@@ -897,9 +920,10 @@ function AppScreen() {
       };
       const response = await createCustomerProfile(apiBaseUrl, payload);
       setProfileForm(initialProfileFormState);
-      setAuthMessage(`Account created for ${response.username}. You can log in now.`);
-      navigateScreen('auth', 'backward');
+      setAuthenticatedSession(response);
       setAuthPortal('customer');
+      setProfileMessage(`Account created for ${response.username}. Check your email to verify your address.`);
+      navigateScreen('profiles', 'forward');
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
     } finally {
@@ -932,9 +956,10 @@ function AppScreen() {
       const response = await createBusinessProfile(apiBaseUrl, payload);
       setProfileForm(initialProfileFormState);
       setSelectedClaimPlace(null);
-      setAuthMessage(`Business claim submitted for ${response.business_name ?? 'your business'}. Admin review will happen in Django admin.`);
+      setAuthenticatedSession(response);
       setAuthPortal('business');
-      navigateScreen('auth', 'backward');
+      setProfileMessage(`Business claim submitted for ${response.business_name ?? 'your business'}. Check your email to verify your address.`);
+      navigateScreen('profiles', 'forward');
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
     } finally {
@@ -970,14 +995,96 @@ function AppScreen() {
       const response = await createManualBusinessProfile(apiBaseUrl, payload);
       setProfileForm(initialProfileFormState);
       setSelectedClaimPlace(null);
-      setAuthMessage(`Business profile submitted for ${response.business_name ?? 'your business'}. Admin review will happen in Django admin.`);
+      setAuthenticatedSession(response);
       setAuthPortal('business');
-      navigateScreen('auth', 'backward');
+      setProfileMessage(`Business profile submitted for ${response.business_name ?? 'your business'}. Check your email to verify your address.`);
+      navigateScreen('profiles', 'forward');
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
     } finally {
       setProfileSubmitting(false);
     }
+  }
+
+  async function refreshDashboard(showSpinner = true) {
+    if (!authenticatedSession?.auth_token) {
+      return;
+    }
+
+    if (showSpinner) {
+      setDashboardLoading(true);
+    }
+    setProfileErrorMessage(null);
+
+    try {
+      const response = await fetchProfileDashboard(apiBaseUrl, authenticatedSession.auth_token, authenticatedSession.portal);
+      setAuthenticatedSession(response);
+    } catch (error) {
+      setProfileErrorMessage(getErrorMessage(error));
+    } finally {
+      if (showSpinner) {
+        setDashboardLoading(false);
+      }
+    }
+  }
+
+  async function handleResendVerification() {
+    if (!authenticatedSession?.auth_token) {
+      return;
+    }
+
+    setDashboardSubmitting(true);
+    setProfileErrorMessage(null);
+
+    try {
+      const response = await resendVerificationEmail(apiBaseUrl, authenticatedSession.auth_token);
+      setProfileMessage(response.detail);
+      await refreshDashboard(false);
+    } catch (error) {
+      setProfileErrorMessage(getErrorMessage(error));
+    } finally {
+      setDashboardSubmitting(false);
+    }
+  }
+
+  async function handleToggleTwoFactor() {
+    if (!authenticatedSession?.auth_token) {
+      return;
+    }
+
+    setDashboardSubmitting(true);
+    setProfileErrorMessage(null);
+
+    try {
+      const response = await updateTwoFactorPreference(
+        apiBaseUrl,
+        authenticatedSession.auth_token,
+        !authenticatedSession.two_factor_enabled,
+        authenticatedSession.portal,
+      );
+      setAuthenticatedSession(response);
+      setProfileMessage(response.two_factor_enabled ? '2FA preference enabled.' : '2FA preference disabled.');
+    } catch (error) {
+      setProfileErrorMessage(getErrorMessage(error));
+    } finally {
+      setDashboardSubmitting(false);
+    }
+  }
+
+  function handleLogout() {
+    setAuthenticatedSession(null);
+    setProfileMessage(null);
+    setProfileErrorMessage(null);
+    setAuthMessage('You have been signed out.');
+    navigateScreen('auth', 'backward');
+  }
+
+  function handleOpenBilling() {
+    if (!authenticatedSession?.billing_portal_url) {
+      return;
+    }
+
+    void Linking.openURL(authenticatedSession.billing_portal_url);
   }
 
   function handleOpenBusinessSearch() {
@@ -1055,6 +1162,7 @@ function AppScreen() {
               loginForm={loginForm}
               loginPortal={authPortal}
               onChangeField={handleChangeLoginField}
+              onContinueToApp={handleContinueToApp}
               onOpenProfiles={handleOpenProfiles}
               onSelectPortal={setAuthPortal}
               onSubmit={handleLogin}
@@ -1065,17 +1173,35 @@ function AppScreen() {
       case 'profiles':
         return (
           <SafeAreaView style={styles.safeArea}>
-            <CreateProfileScreen
-              errorMessage={profileErrorMessage}
-              form={profileForm}
-              isLandscape={isLandscape}
-              message={profileMessage}
-              onBack={handleBackFromProfiles}
-              onChangeField={handleChangeProfileField}
-              onOpenBusinessClaim={handleOpenBusinessSearch}
-              onSubmit={handleSubmitCustomerProfile}
-              submitting={profileSubmitting}
-            />
+            {authenticatedSession ? (
+              <DashboardScreen
+                errorMessage={profileErrorMessage}
+                isLandscape={isLandscape}
+                loading={dashboardLoading}
+                message={profileMessage}
+                onBack={handleBackFromProfiles}
+                onLogout={handleLogout}
+                onOpenBilling={handleOpenBilling}
+                onOpenPlaces={handleContinueToApp}
+                onRefresh={() => void refreshDashboard()}
+                onResendVerification={() => void handleResendVerification()}
+                onToggleTwoFactor={() => void handleToggleTwoFactor()}
+                session={authenticatedSession}
+                submitting={dashboardSubmitting}
+              />
+            ) : (
+              <CreateProfileScreen
+                errorMessage={profileErrorMessage}
+                form={profileForm}
+                isLandscape={isLandscape}
+                message={profileMessage}
+                onBack={handleBackFromProfiles}
+                onChangeField={handleChangeProfileField}
+                onOpenBusinessClaim={handleOpenBusinessSearch}
+                onSubmit={handleSubmitCustomerProfile}
+                submitting={profileSubmitting}
+              />
+            )}
           </SafeAreaView>
         );
       case 'business-search':
@@ -1225,6 +1351,7 @@ function AppScreen() {
                           latitude: selectedPlaceMapRegion.latitude,
                           longitude: selectedPlaceMapRegion.longitude,
                         }}
+                        tracksViewChanges={false}
                       />
                     </MapView>
                     <View style={styles.detailMapCaption}>
@@ -1318,12 +1445,7 @@ function AppScreen() {
               mapRef.current.animateToRegion(mapRegion, 0);
             }}
             onRegionChangeComplete={(nextRegion) => {
-              const normalizedRegion = normalizeRegion(nextRegion);
               const boundedRegion = clampRegionToBounds(nextRegion);
-
-              if (mapRef.current && !areRegionsEqual(normalizedRegion, boundedRegion)) {
-                mapRef.current.animateToRegion(boundedRegion, 150);
-              }
 
               setMapRegion((currentRegion) => (
                 areRegionsEqual(currentRegion, boundedRegion) ? currentRegion : boundedRegion
@@ -1349,6 +1471,7 @@ function AppScreen() {
                 coordinate={{ latitude: place.markerLatitude, longitude: place.markerLongitude }}
                 key={place.markerKey}
                 onPress={() => setSelectedMapPlaceKey(place.markerKey)}
+                tracksViewChanges={false}
                 zIndex={mappedPlaces.length - index}
               >
                 <View style={[
@@ -1377,11 +1500,10 @@ function AppScreen() {
               overlay
               browseMode={browseMode}
               filtersExpanded={browseFiltersExpanded}
-              onOpenProfiles={handleOpenProfiles}
               onBrowseModeChange={handleBrowseModeChange}
               onChangeSearchQuery={setSearchQuery}
               onClearSearchQuery={handleClearSearchQuery}
-              onReload={applyBaseUrl}
+              onReload={handleRefreshPlaces}
               onSelectAllVenueTypes={handleSelectAllVenueTypes}
               onSelectCity={setSelectedCity}
               onToggleFilters={handleToggleBrowseFilters}
@@ -1491,11 +1613,10 @@ function AppScreen() {
             <BrowseControls
               browseMode={browseMode}
               filtersExpanded={browseFiltersExpanded}
-              onOpenProfiles={handleOpenProfiles}
               onBrowseModeChange={handleBrowseModeChange}
               onChangeSearchQuery={setSearchQuery}
               onClearSearchQuery={handleClearSearchQuery}
-              onReload={applyBaseUrl}
+              onReload={handleRefreshPlaces}
               onSelectAllVenueTypes={handleSelectAllVenueTypes}
               onSelectCity={setSelectedCity}
               onToggleFilters={handleToggleBrowseFilters}
@@ -1553,7 +1674,6 @@ function BrowseControls({
   overlay = false,
   browseMode,
   filtersExpanded,
-  onOpenProfiles,
   onBrowseModeChange,
   onChangeSearchQuery,
   onClearSearchQuery,
@@ -1595,11 +1715,8 @@ function BrowseControls({
           HappyHourApp
         </Text>
         <View style={styles.toolbarActionsRow}>
-          <Pressable onPress={onOpenProfiles} style={styles.secondaryToolbarButton}>
-            <Text style={styles.secondaryToolbarButtonText}>Profiles</Text>
-          </Pressable>
           <Pressable onPress={onReload} style={styles.reloadButton}>
-            <Text style={styles.reloadButtonText}>Reload</Text>
+            <Text style={styles.reloadButtonText}>Refresh Places</Text>
           </Pressable>
         </View>
       </View>
@@ -1670,12 +1787,6 @@ function BrowseControls({
             })}
           </View>
 
-          <View style={styles.browseSectionHeaderRow}>
-            <Text style={styles.browseSectionTitle}>Venue type</Text>
-            <Pressable onPress={onSelectAllVenueTypes}>
-              <Text style={styles.browseSectionAction}>Reset</Text>
-            </Pressable>
-          </View>
           <ScrollView
             contentContainerStyle={styles.venueFilterRow}
             horizontal
@@ -1762,6 +1873,7 @@ type AuthPortalScreenProps = {
   loginForm: LoginFormState;
   loginPortal: AuthPortal;
   onChangeField: (field: keyof LoginFormState, value: string) => void;
+  onContinueToApp: () => void;
   onOpenProfiles: () => void;
   onSelectPortal: (portal: AuthPortal) => void;
   onSubmit: () => void;
@@ -1805,6 +1917,22 @@ type BusinessVerificationScreenProps = {
   submitting: boolean;
 };
 
+type DashboardScreenProps = {
+  errorMessage: string | null;
+  isLandscape: boolean;
+  loading: boolean;
+  message: string | null;
+  onBack: () => void;
+  onLogout: () => void;
+  onOpenBilling: () => void;
+  onOpenPlaces: () => void;
+  onRefresh: () => void;
+  onResendVerification: () => void;
+  onToggleTwoFactor: () => void;
+  session: SignupResponse;
+  submitting: boolean;
+};
+
 type CompactDropdownProps = {
   onSelect: (value: string) => void;
   open: boolean;
@@ -1823,6 +1951,17 @@ function SplashScreen() {
       <Text style={styles.splashTitle}>HappyHourApp</Text>
       <Text style={styles.splashSubtitle}>Find your next deal or claim your business profile.</Text>
     </View>
+  );
+}
+
+function KeyboardAwareFormScreen({ children }: { children: React.ReactNode }) {
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.keyboardAvoidingFill}
+    >
+      {children}
+    </KeyboardAvoidingView>
   );
 }
 
@@ -1883,10 +2022,16 @@ function CompactDropdown({ onSelect, open, options, placeholder, selectedValue, 
   );
 }
 
-function AuthPortalScreen({ authMessage, errorMessage, loginForm, loginPortal, onChangeField, onOpenProfiles, onSelectPortal, onSubmit, submitting }: AuthPortalScreenProps) {
+function AuthPortalScreen({ authMessage, errorMessage, loginForm, loginPortal, onChangeField, onContinueToApp, onOpenProfiles, onSelectPortal, onSubmit, submitting }: AuthPortalScreenProps) {
   return (
     <View style={styles.authScreen}>
-      <ScrollView contentContainerStyle={styles.authScrollContent} showsVerticalScrollIndicator={false}>
+      <KeyboardAwareFormScreen>
+      <ScrollView
+        contentContainerStyle={styles.authScrollContent}
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.authHero}>
           <View style={styles.authLogoShell}>
             <Text style={styles.authLogoText}>HH</Text>
@@ -1927,11 +2072,16 @@ function AuthPortalScreen({ authMessage, errorMessage, loginForm, loginPortal, o
             <Text style={styles.linkButtonText}>{submitting ? 'Logging in...' : loginPortal === 'customer' ? 'Log in as customer' : 'Log in as business'}</Text>
           </Pressable>
 
+          <Pressable onPress={onContinueToApp} style={styles.linkButtonSecondaryWide}>
+            <Text style={styles.linkButtonSecondaryText}>Continue to App</Text>
+          </Pressable>
+
           <Pressable onPress={onOpenProfiles} style={styles.authLinkButton}>
             <Text style={styles.authLinkText}>Don&apos;t have an account? Create a free account here.</Text>
           </Pressable>
         </View>
       </ScrollView>
+      </KeyboardAwareFormScreen>
     </View>
   );
 }
@@ -1939,7 +2089,13 @@ function AuthPortalScreen({ authMessage, errorMessage, loginForm, loginPortal, o
 function CreateProfileScreen({ errorMessage, form, isLandscape, message, onBack, onChangeField, onOpenBusinessClaim, onSubmit, submitting }: CreateProfileScreenProps) {
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
-      <ScrollView contentContainerStyle={styles.profileScrollContent} showsVerticalScrollIndicator={false}>
+      <KeyboardAwareFormScreen>
+      <ScrollView
+        contentContainerStyle={styles.profileScrollContent}
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <Pressable onPress={onBack} style={styles.backButton}>
           <Text style={styles.backButtonText}>Back to login</Text>
         </Pressable>
@@ -1947,7 +2103,7 @@ function CreateProfileScreen({ errorMessage, form, isLandscape, message, onBack,
         <View style={styles.profileCard}>
           <Text style={styles.detailCity}>Create Profile</Text>
           <Text style={styles.detailTitle}>Create a customer account</Text>
-          <Text style={styles.profileIntroText}>Customer accounts will eventually support email verification, but for now you can create one directly here.</Text>
+          <Text style={styles.profileIntroText}>Customer accounts now send an email verification link after signup and open into an in-app dashboard.</Text>
 
           {message ? (
             <View style={styles.profileSuccessBanner}>
@@ -1987,6 +2143,143 @@ function CreateProfileScreen({ errorMessage, form, isLandscape, message, onBack,
           </Pressable>
         </View>
       </ScrollView>
+      </KeyboardAwareFormScreen>
+    </View>
+  );
+}
+
+function DashboardScreen({ errorMessage, isLandscape, loading, message, onBack, onLogout, onOpenBilling, onOpenPlaces, onRefresh, onResendVerification, onToggleTwoFactor, session, submitting }: DashboardScreenProps) {
+  const approvedBusinesses = session.approved_businesses ?? [];
+  const businessContact = session.business_contact ?? {};
+  const fullName = [session.first_name, session.last_name].filter(Boolean).join(' ');
+
+  return (
+    <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
+      <ScrollView contentContainerStyle={styles.profileScrollContent} showsVerticalScrollIndicator={false}>
+        <Pressable onPress={onBack} style={styles.backButton}>
+          <Text style={styles.backButtonText}>Back to places</Text>
+        </Pressable>
+
+        <View style={styles.profileCard}>
+          <Text style={styles.detailCity}>{session.profile_type === 'business' ? 'Business Dashboard' : 'Customer Dashboard'}</Text>
+          <Text style={styles.detailTitle}>{fullName || session.username}</Text>
+          <Text style={styles.profileIntroText}>Use this dashboard to manage your account, check verification status, and jump back into the main app.</Text>
+
+          {message ? (
+            <View style={styles.profileSuccessBanner}>
+              <Text style={styles.profileSuccessText}>{message}</Text>
+            </View>
+          ) : null}
+
+          {errorMessage ? (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            </View>
+          ) : null}
+
+          {loading ? (
+            <View style={styles.centerState}>
+              <ActivityIndicator color="#c65d1f" size="large" />
+              <Text style={styles.centerStateText}>Refreshing dashboard...</Text>
+            </View>
+          ) : null}
+
+          {!session.email_verified ? (
+            <View style={styles.dashboardCalloutCard}>
+              <Text style={styles.dashboardSectionTitle}>Email verification</Text>
+              <Text style={styles.dashboardSupportText}>Your email is not verified yet. Use the link sent to {session.email}, then refresh this dashboard.</Text>
+              <Pressable onPress={onResendVerification} style={[styles.linkButtonSecondaryWide, submitting ? styles.linkButtonDisabled : null]}>
+                <Text style={styles.linkButtonSecondaryText}>{submitting ? 'Sending...' : 'Resend verification email'}</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.dashboardVerifiedCard}>
+              <Text style={styles.dashboardVerifiedTitle}>Email verified</Text>
+              <Text style={styles.dashboardVerifiedText}>Your account is verified and ready to use across the app.</Text>
+            </View>
+          )}
+
+          <View style={styles.dashboardSectionCard}>
+            <Text style={styles.dashboardSectionTitle}>Profile details</Text>
+            <DashboardDetailRow label="Username" value={session.username} />
+            <DashboardDetailRow label="Email" value={session.email} />
+            <DashboardDetailRow label="First name" value={session.first_name || 'Not provided'} />
+            <DashboardDetailRow label="Last name" value={session.last_name || 'Not provided'} />
+            <DashboardDetailRow label="Profile type" value={session.profile_type === 'business' ? 'Business' : 'Customer'} />
+          </View>
+
+          <View style={styles.dashboardSectionCard}>
+            <Text style={styles.dashboardSectionTitle}>Security</Text>
+            <DashboardDetailRow label="Two-factor authentication" value={session.two_factor_enabled ? 'Enabled' : 'Disabled'} />
+            <Text style={styles.dashboardSupportText}>Enable this preference now. Sign-in challenge enforcement can be expanded next.</Text>
+            <Pressable onPress={onToggleTwoFactor} style={[styles.linkButtonSecondaryWide, submitting ? styles.linkButtonDisabled : null]}>
+              <Text style={styles.linkButtonSecondaryText}>{submitting ? 'Saving...' : session.two_factor_enabled ? 'Disable 2FA' : 'Enable 2FA'}</Text>
+            </Pressable>
+          </View>
+
+          {session.profile_type === 'business' ? (
+            <>
+              <View style={styles.dashboardSectionCard}>
+                <Text style={styles.dashboardSectionTitle}>Business status</Text>
+                <DashboardDetailRow label="Status" value={session.business_status || 'Pending'} />
+                <DashboardDetailRow label="Current business" value={session.business_name || 'No approved business yet'} />
+                {session.claim_status ? <DashboardDetailRow label="Claim review" value={session.claim_status} /> : null}
+              </View>
+
+              {Object.values(businessContact).some(Boolean) ? (
+                <View style={styles.dashboardSectionCard}>
+                  <Text style={styles.dashboardSectionTitle}>Business contact details</Text>
+                  <DashboardDetailRow label="Contact name" value={businessContact.contact_name || 'Not provided'} />
+                  <DashboardDetailRow label="Job title" value={businessContact.job_title || 'Not provided'} />
+                  <DashboardDetailRow label="Work email" value={businessContact.work_email || 'Not provided'} />
+                  <DashboardDetailRow label="Work phone" value={businessContact.work_phone || 'Not provided'} />
+                  <DashboardDetailRow label="Employer address" value={businessContact.employer_address || 'Not provided'} />
+                </View>
+              ) : null}
+
+              <View style={styles.dashboardSectionCard}>
+                <Text style={styles.dashboardSectionTitle}>Approved businesses</Text>
+                {approvedBusinesses.length ? approvedBusinesses.map((business) => (
+                  <View key={business.id} style={styles.claimResultCard}>
+                    <Text style={styles.placeTitle}>{business.name}</Text>
+                    <Text style={styles.placeMeta}>{business.city_label} • {business.venue_type_label}</Text>
+                  </View>
+                )) : (
+                  <Text style={styles.dashboardSupportText}>Claimed or created businesses appear here after admin approval.</Text>
+                )}
+              </View>
+
+              {session.billing_portal_url ? (
+                <Pressable onPress={onOpenBilling} style={styles.linkButtonSecondaryWide}>
+                  <Text style={styles.linkButtonSecondaryText}>Open billing in browser</Text>
+                </Pressable>
+              ) : null}
+            </>
+          ) : null}
+
+          <Pressable onPress={onOpenPlaces} style={styles.linkButton}>
+            <Text style={styles.linkButtonText}>Open main app features</Text>
+          </Pressable>
+
+          <View style={styles.dashboardFooterRow}>
+            <Pressable onPress={onRefresh} style={styles.secondaryToolbarButton}>
+              <Text style={styles.secondaryToolbarButtonText}>Refresh dashboard</Text>
+            </Pressable>
+            <Pressable onPress={onLogout} style={styles.secondaryToolbarButton}>
+              <Text style={styles.secondaryToolbarButtonText}>Log out</Text>
+            </Pressable>
+          </View>
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+function DashboardDetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.dashboardDetailRow}>
+      <Text style={styles.dashboardDetailLabel}>{label}</Text>
+      <Text style={styles.dashboardDetailValue}>{value}</Text>
     </View>
   );
 }
@@ -1994,7 +2287,13 @@ function CreateProfileScreen({ errorMessage, form, isLandscape, message, onBack,
 function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces, onBack, onChangeSearchQuery, onChooseManualBusiness, onSelectBusiness, results, searchQuery }: BusinessSearchScreenProps) {
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
-      <ScrollView contentContainerStyle={styles.profileScrollContent} showsVerticalScrollIndicator={false}>
+      <KeyboardAwareFormScreen>
+      <ScrollView
+        contentContainerStyle={styles.profileScrollContent}
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <Pressable onPress={onBack} style={styles.backButton}>
           <Text style={styles.backButtonText}>Back to create profile</Text>
         </Pressable>
@@ -2035,6 +2334,7 @@ function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces, onBack
           </Pressable>
         </View>
       </ScrollView>
+      </KeyboardAwareFormScreen>
     </View>
   );
 }
@@ -2050,7 +2350,13 @@ function BusinessVerificationScreen({ errorMessage, form, isLandscape, mode, onB
 
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
-      <ScrollView contentContainerStyle={styles.profileScrollContent} showsVerticalScrollIndicator={false}>
+      <KeyboardAwareFormScreen>
+      <ScrollView
+        contentContainerStyle={styles.profileScrollContent}
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <Pressable onPress={onBack} style={styles.backButton}>
           <Text style={styles.backButtonText}>Back</Text>
         </Pressable>
@@ -2156,6 +2462,7 @@ function BusinessVerificationScreen({ errorMessage, form, isLandscape, mode, onB
           </Pressable>
         </View>
       </ScrollView>
+      </KeyboardAwareFormScreen>
     </View>
   );
 }
@@ -2492,106 +2799,6 @@ function getMapRegion(mappedPlaces: MappedPlace[]) {
     latitudeDelta: Math.max((maxLatitude - minLatitude) * mapFitPaddingFactor, minLatitudeDelta),
     longitudeDelta: Math.max((maxLongitude - minLongitude) * mapFitPaddingFactor, minLongitudeDelta),
   });
-}
-
-function getDisplayMarkerCoordinates(mappedPlaces: MappedPlace[], region: Region) {
-  const clusteredPlaces = [...mappedPlaces];
-  const visitedIndices = new Set<number>();
-  const dispersionProgress = getMarkerDispersionProgress(region);
-
-  for (let index = 0; index < clusteredPlaces.length; index += 1) {
-    if (visitedIndices.has(index)) {
-      continue;
-    }
-
-    const clusterIndices = [index];
-    visitedIndices.add(index);
-
-    for (let clusterScanIndex = 0; clusterScanIndex < clusterIndices.length; clusterScanIndex += 1) {
-      const clusterIndex = clusterIndices[clusterScanIndex];
-
-      for (let compareIndex = index + 1; compareIndex < clusteredPlaces.length; compareIndex += 1) {
-        if (visitedIndices.has(compareIndex)) {
-          continue;
-        }
-
-        if (getCoordinateDistance(clusteredPlaces[clusterIndex], clusteredPlaces[compareIndex]) <= markerClusterThreshold) {
-          clusterIndices.push(compareIndex);
-          visitedIndices.add(compareIndex);
-        }
-      }
-    }
-
-    if (clusterIndices.length === 1) {
-      continue;
-    }
-
-    const clusterPlaces = clusterIndices
-      .map((clusterIndex) => clusteredPlaces[clusterIndex])
-      .sort((first, second) => first.name.localeCompare(second.name));
-    const clusterCenterLatitude = clusterPlaces.reduce((sum, place) => sum + place.latitude, 0) / clusterPlaces.length;
-    const clusterCenterLongitude = clusterPlaces.reduce((sum, place) => sum + place.longitude, 0) / clusterPlaces.length;
-    const visibleClusterRadius = interpolate(markerClusterRadius, markerMinimumVisibleRadius, dispersionProgress);
-
-    clusterPlaces.forEach((place, clusterPosition) => {
-      const { angle, radius } = getClusterMarkerOffset(clusterPlaces.length, clusterPosition, visibleClusterRadius);
-      const baseLatitude = interpolate(clusterCenterLatitude, place.latitude, dispersionProgress);
-      const baseLongitude = interpolate(clusterCenterLongitude, place.longitude, dispersionProgress);
-
-      place.markerLatitude = clamp(
-        baseLatitude + Math.sin(angle) * radius,
-        mapAreaBounds.minLatitude,
-        mapAreaBounds.maxLatitude,
-      );
-      place.markerLongitude = clamp(
-        baseLongitude + Math.cos(angle) * radius,
-        mapAreaBounds.minLongitude,
-        mapAreaBounds.maxLongitude,
-      );
-    });
-  }
-
-  return clusteredPlaces;
-}
-
-function getClusterMarkerOffset(clusterSize: number, clusterPosition: number, baseRadius: number) {
-  let remainingPosition = clusterPosition;
-  let ring = 0;
-
-  while (true) {
-    const markersInRing = getMarkersInRing(clusterSize, ring);
-    if (remainingPosition < markersInRing) {
-      const angleOffset = ring % 2 === 0 ? 0 : Math.PI / markersInRing;
-      return {
-        angle: angleOffset + ((Math.PI * 2 * remainingPosition) / markersInRing),
-        radius: baseRadius + (ring * markerClusterRingSpacing),
-      };
-    }
-
-    remainingPosition -= markersInRing;
-    ring += 1;
-  }
-}
-
-function getMarkersInRing(clusterSize: number, ring: number) {
-  if (clusterSize <= 6) {
-    return clusterSize;
-  }
-
-  return 6 + (ring * 4);
-}
-
-function getMarkerDispersionProgress(region: Region) {
-  const normalizedZoom = 1 - ((region.longitudeDelta - minLongitudeDelta) / (maxLongitudeDelta - minLongitudeDelta));
-  return Math.pow(clamp(normalizedZoom, 0, 1), 1.35);
-}
-
-function getCoordinateDistance(first: MappedPlace, second: MappedPlace) {
-  return Math.hypot(first.latitude - second.latitude, first.longitude - second.longitude);
-}
-
-function interpolate(start: number, end: number, progress: number) {
-  return start + ((end - start) * progress);
 }
 
 function normalizeRegion(region: Region): Region {
@@ -3584,6 +3791,9 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 18,
   },
+  keyboardAvoidingFill: {
+    flex: 1,
+  },
   authScrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
@@ -3645,6 +3855,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   profileScrollContent: {
+    flexGrow: 1,
     paddingTop: 24,
     paddingBottom: 32,
   },
@@ -3774,6 +3985,70 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
+  },
+  dashboardCalloutCard: {
+    backgroundColor: '#fff3e5',
+    borderColor: '#efd8bd',
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 10,
+    padding: 14,
+  },
+  dashboardVerifiedCard: {
+    backgroundColor: '#e7f6f4',
+    borderColor: '#9dcfc9',
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 8,
+    padding: 14,
+  },
+  dashboardVerifiedTitle: {
+    color: '#17413e',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  dashboardVerifiedText: {
+    color: '#17413e',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  dashboardSectionCard: {
+    backgroundColor: '#fff7ef',
+    borderColor: '#efd8bd',
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 10,
+    padding: 14,
+  },
+  dashboardSectionTitle: {
+    color: '#402214',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  dashboardSupportText: {
+    color: '#6c5443',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  dashboardDetailRow: {
+    gap: 4,
+  },
+  dashboardDetailLabel: {
+    color: '#7a4d2f',
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  dashboardDetailValue: {
+    color: '#2d221a',
+    fontSize: 15,
+    lineHeight: 20,
+  },
+  dashboardFooterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    justifyContent: 'space-between',
   },
   toggleChip: {
     alignSelf: 'flex-start',

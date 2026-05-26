@@ -108,6 +108,49 @@ BUSINESS_SOURCE_PAGES = [
 			'website_url': 'https://www.finneyscrafthouse.com/camarillo/',
 		},
 	]),
+	*multi_location_business('Cronies Sports Grill', [
+		{
+			'city': 'ventura',
+			'venue_type': 'bar',
+			'source_url': 'https://www.cronies.com/locations',
+			'source_documents': [
+				{
+					'url': 'https://www.cronies.com/locations',
+					'roles': ['identity', 'images', 'hours'],
+				},
+				{
+					'text': 'Happy Hour weekdays from 3:00pm to 6:00pm.',
+					'roles': ['deals'],
+				},
+			],
+			'address_line_1': '2855 Johnson Dr',
+			'phone_number': '(805) 650-6026',
+			'postal_code': '93003',
+			'geocode_query': 'Cronies Sports Grill, Ventura, CA',
+			'website_url': 'https://www.cronies.com/',
+		},
+		{
+			'name': 'Cronies Sports Grill Camarillo',
+			'city': 'camarillo',
+			'venue_type': 'bar',
+			'source_url': 'https://www.cronies.com/locations',
+			'source_documents': [
+				{
+					'url': 'https://www.cronies.com/locations',
+					'roles': ['identity', 'images', 'hours'],
+				},
+				{
+					'text': 'Happy Hour weekdays from 3:00pm to 6:00pm.',
+					'roles': ['deals'],
+				},
+			],
+			'address_line_1': '370 N Lantana St',
+			'phone_number': '(805) 482-5900',
+			'postal_code': '93010',
+			'geocode_query': 'Cronies Sports Grill, Camarillo, CA',
+			'website_url': 'https://www.cronies.com/',
+		},
+	]),
 	{
 		'name': "Snapper Jack's Taco Shack",
 		'enabled': False,
@@ -233,11 +276,140 @@ BUSINESS_SOURCE_PAGES = [
 		'website_url': 'https://www.institutionales.com/',
 	},
 	{
+		'name': 'Aloha Steakhouse',
+		'city': 'ventura',
+		'venue_type': 'restaurant',
+		'source_url': 'https://www.alohasteakhouse.com/',
+		'source_documents': [
+			{
+				'url': 'https://www.alohasteakhouse.com/',
+				'roles': ['identity', 'images'],
+			},
+			{
+				'text': 'Happy Hour Monday - Friday 3:00pm - 6:00pm.',
+				'roles': ['deals'],
+			},
+		],
+		'address_line_1': '364 S California St',
+		'phone_number': '(805) 652-1799',
+		'postal_code': '93001',
+		'geocode_query': 'Aloha Steakhouse, Ventura, CA',
+		'website_url': 'https://www.alohasteakhouse.com/',
+	},
+	{
+		'name': 'Bright Spark Brewing',
+		'city': 'ventura',
+		'venue_type': 'bar',
+		'source_url': 'https://www.brightsparkbrewing.com/',
+		'source_documents': [
+			{
+				'url': 'https://www.brightsparkbrewing.com/',
+				'roles': ['identity', 'images'],
+			},
+			{
+				'text': "Little Sparks Night every Tuesday: 50% off a kid's meal with the purchase of an adult meal.",
+				'roles': ['deals'],
+			},
+		],
+		'address_line_1': '4561 Market Street',
+		'phone_number': '(805) 322-8884',
+		'postal_code': '93003',
+		'geocode_query': 'Bright Spark Brewing, Ventura, CA',
+		'website_url': 'https://www.brightsparkbrewing.com/',
+	},
+	{
+		'name': 'Rumfish y Vino',
+		'city': 'ventura',
+		'venue_type': 'restaurant',
+		'source_url': 'http://www.rumfishyvinoventura.com/',
+		'source_documents': [
+			{
+				'url': 'http://www.rumfishyvinoventura.com/',
+				'roles': ['identity', 'images'],
+			},
+			{
+				'text': 'Happy Hour Monday - Friday 3:00pm to 6:00pm. Saturday 3:00pm to 5:00pm. Sunday 2:00pm to 5:00pm.',
+				'roles': ['deals'],
+			},
+			{
+				'text': 'Hours of Operation Monday - Saturday 11:30am to Close. Sunday 11:00am to Close. Lunch Monday - Saturday 11:30am to 3:00pm. Brunch Sunday 11:00am to 2:00pm. Dinner Monday - Sunday Beginning at 3:00pm.',
+				'roles': ['hours'],
+			},
+		],
+		'address_line_1': '34 N Palm St',
+		'phone_number': '(805) 667-9288',
+		'postal_code': '93001',
+		'geocode_query': 'Rumfish y Vino, Ventura, CA',
+		'website_url': 'http://www.rumfishyvinoventura.com/',
+	},
+	{
+		'name': 'Rocks & Drams',
+		'city': 'ventura',
+		'venue_type': 'bar',
+		'source_url': 'https://rocksanddrams.com/',
+		'source_documents': [
+			{
+				'url': 'https://rocksanddrams.com/',
+				'roles': ['identity', 'images'],
+			},
+			{
+				'text': 'Happy hour weekdays from 4-6pm, Saturdays from 12-2pm and Sunday all day with $2 off all menu prices on food and drinks.',
+				'roles': ['deals'],
+			},
+			{
+				'text': 'Business Hours Sunday 12:00 PM - 8:00 PM. Monday Closed. Tuesday Closed. Wednesday 4:00 PM - 10:00 PM. Thursday 4:00 PM - 10:00 PM. Friday 4:00 PM - 11:59 PM. Saturday 12:00 PM - 11:59 PM.',
+				'roles': ['hours'],
+			},
+		],
+		'address_line_1': '14 S California St',
+		'phone_number': '(805) 667-8585',
+		'postal_code': '93001',
+		'geocode_query': 'Rocks & Drams, Ventura, CA',
+		'website_url': 'https://rocksanddrams.com/',
+	},
+	{
+		'name': 'Winchesters Grill & Saloon',
+		'city': 'ventura',
+		'venue_type': 'bar',
+		'source_url': 'https://www.winchestersgrill.com/',
+		'source_documents': [
+			{
+				'url': 'https://www.winchestersgrill.com/',
+				'roles': ['identity', 'images'],
+			},
+			{
+				'text': 'Happy Hour food and drink specials from 3:00-6:00 Tuesdays thru Fridays.',
+				'roles': ['deals'],
+			},
+			{
+				'text': 'Hours of Operation Tuesday-Sunday 11:00 AM-11:00 PM. Closed Mondays.',
+				'roles': ['hours'],
+			},
+		],
+		'address_line_1': 'E Main St',
+		'phone_number': '(805) 628-3365',
+		'geocode_query': 'Winchesters Grill & Saloon, Ventura, CA',
+		'website_url': 'https://www.winchestersgrill.com/',
+	},
+	{
 		'name': 'Old Town Cafe',
-		'enabled': False,
 		'city': 'camarillo',
 		'venue_type': 'cafe',
 		'source_url': 'https://www.oldtowncafecamarillo.com/',
-		'website_url': 'https://www.oldtowncafecamarillo.com/',
+		'source_documents': [
+			{
+				'url': 'https://www.myoldtowncafe.com/',
+				'roles': ['identity', 'images'],
+			},
+			{
+				'text': 'Daily Special breakfast and lunch favorites served every day.',
+				'roles': ['deals'],
+			},
+		],
+		'address_line_1': '2050 E Ventura Blvd',
+		'phone_number': '(805) 484-5500',
+		'postal_code': '93010',
+		'geocode_query': 'Old Town Cafe, Camarillo, CA',
+		'website_url': 'https://www.myoldtowncafe.com/',
 	},
 ]

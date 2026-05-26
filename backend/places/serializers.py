@@ -4,6 +4,7 @@ from django.utils.text import slugify
 from rest_framework import serializers
 
 from .models import BusinessClaim, City, ListingSnapshot, VenueType
+from .services.account_profiles import build_account_response, get_or_create_account_profile
 
 
 class AccountResponseSerializer(serializers.Serializer):
@@ -14,41 +15,18 @@ class AccountResponseSerializer(serializers.Serializer):
 	last_name = serializers.CharField()
 	portal = serializers.CharField()
 	profile_type = serializers.CharField()
+	auth_token = serializers.CharField(required=False, allow_blank=True)
 	business_status = serializers.CharField(required=False, allow_blank=True)
 	claim_id = serializers.IntegerField(required=False, allow_null=True)
 	claim_status = serializers.CharField(required=False, allow_null=True)
 	business_name = serializers.CharField(required=False, allow_blank=True)
-
-
-def build_account_response(user, portal, claim=None):
-	claims = list(user.business_claims.select_related('listing_snapshot').order_by('-created_at'))
-	memberships = list(user.business_memberships.select_related('claim__listing_snapshot').all())
-	active_membership = next((membership for membership in memberships if membership.is_active), None)
-	primary_claim = claim or (claims[0] if claims else None)
-
-	if active_membership:
-		business_status = 'approved'
-		profile_type = 'business'
-	elif primary_claim:
-		business_status = primary_claim.status
-		profile_type = 'business' if portal == 'business' else 'customer'
-	else:
-		business_status = ''
-		profile_type = 'customer'
-
-	return AccountResponseSerializer({
-		'id': user.id,
-		'username': user.username,
-		'email': user.email,
-		'first_name': user.first_name,
-		'last_name': user.last_name,
-		'portal': portal,
-		'profile_type': profile_type,
-		'business_status': business_status,
-		'claim_id': primary_claim.id if primary_claim else None,
-		'claim_status': primary_claim.status if primary_claim else None,
-		'business_name': primary_claim.listing_snapshot.name if primary_claim else '',
-	}).data
+	email_verified = serializers.BooleanField(required=False)
+	email_verification_sent_at = serializers.DateTimeField(required=False, allow_null=True)
+	two_factor_enabled = serializers.BooleanField(required=False)
+	billing_portal_url = serializers.CharField(required=False, allow_blank=True)
+	approved_businesses = serializers.ListField(child=serializers.DictField(), required=False)
+	business_contact = serializers.DictField(required=False)
+	can_access_places = serializers.BooleanField(required=False)
 
 
 class LoginSerializer(serializers.Serializer):
@@ -76,10 +54,6 @@ class LoginSerializer(serializers.Serializer):
 		attrs['user'] = authenticated_user
 		return attrs
 
-	def to_representation(self, instance):
-		portal = self.validated_data['portal']
-		return build_account_response(instance, portal)
-
 
 class CustomerSignupSerializer(serializers.Serializer):
 	username = serializers.CharField(max_length=150)
@@ -101,10 +75,9 @@ class CustomerSignupSerializer(serializers.Serializer):
 
 	def create(self, validated_data):
 		password = validated_data.pop('password')
-		return User.objects.create_user(password=password, **validated_data)
-
-	def to_representation(self, instance):
-		return build_account_response(instance, 'customer')
+		user = User.objects.create_user(password=password, **validated_data)
+		get_or_create_account_profile(user)
+		return user
 
 
 class ClaimedBusinessSignupSerializer(CustomerSignupSerializer):
@@ -149,10 +122,6 @@ class ClaimedBusinessSignupSerializer(CustomerSignupSerializer):
 		claim.submit_for_review()
 		user._created_business_claim = claim
 		return user
-
-	def to_representation(self, instance):
-		claim = getattr(instance, '_created_business_claim', None)
-		return build_account_response(instance, 'business', claim)
 
 
 class ManualBusinessSignupSerializer(CustomerSignupSerializer):
@@ -207,10 +176,6 @@ class ManualBusinessSignupSerializer(CustomerSignupSerializer):
 		claim.submit_for_review()
 		user._created_business_claim = claim
 		return user
-
-	def to_representation(self, instance):
-		claim = getattr(instance, '_created_business_claim', None)
-		return build_account_response(instance, 'business', claim)
 
 
 def sync_listing_snapshot_from_place_payload(payload):
@@ -293,6 +258,8 @@ class PlaceLocationSerializer(serializers.Serializer):
 	image_urls = serializers.ListField(child=serializers.CharField(), required=False, default=list)
 	operating_hours = OperatingHourSerializer(many=True, required=False, default=list)
 	is_active = serializers.BooleanField()
+	has_deals = serializers.BooleanField(required=False, default=False)
+	deal_count = serializers.IntegerField(required=False, default=0)
 
 
 class PlaceLocationDetailSerializer(PlaceLocationSerializer):
@@ -318,6 +285,8 @@ class PlaceListSerializer(serializers.Serializer):
 	website_url = serializers.CharField()
 	image_urls = serializers.ListField(child=serializers.CharField(), required=False, default=list)
 	is_active = serializers.BooleanField()
+	has_deals = serializers.BooleanField(required=False, default=False)
+	deal_count = serializers.IntegerField(required=False, default=0)
 	locations = PlaceLocationSerializer(many=True, required=False, default=list)
 
 
