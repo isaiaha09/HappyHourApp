@@ -6,6 +6,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.contrib.admin.sites import AdminSite
 from django.contrib.messages.storage.fallback import FallbackStorage
+from django.conf import settings
 from django.core.cache import caches
 from django.core import mail
 from django.core.management import call_command
@@ -502,6 +503,12 @@ class DiscoveryJsonStorageTests(TestCase):
 
 
 class BusinessWebsiteImporterTests(TestCase):
+	def setUp(self):
+		caches[getattr(settings, 'SOURCE_FETCH_CACHE_ALIAS', 'default')].clear()
+
+	def tearDown(self):
+		caches[getattr(settings, 'SOURCE_FETCH_CACHE_ALIAS', 'default')].clear()
+
 	def test_importer_extracts_identity_and_promotions_from_business_pages(self):
 		home_html = """
 		<html>
@@ -1857,6 +1864,7 @@ class SourceListingIdentityTests(TestCase):
 
 		self.assertIsNone(record)
 
+	@override_settings(HERE_API_KEY='here-token', TOMTOM_API_KEY='tomtom-token', HERE_MONTHLY_LIMIT=10, HERE_MONTHLY_RESERVE=1, TOMTOM_DAILY_LIMIT=10, TOMTOM_DAILY_RESERVE=1)
 	def test_hybrid_importer_prefers_here_then_tomtom_before_osm_duplicates(self):
 		class StaticImporter:
 			def __init__(self, records, source_name):
@@ -1956,6 +1964,7 @@ class SourceListingIdentityTests(TestCase):
 		self.assertEqual(len(records), 1)
 		self.assertEqual(records[0].source_name, 'tomtom_places')
 
+	@override_settings(HERE_API_KEY='here-token', TOMTOM_API_KEY='tomtom-token', HERE_MONTHLY_LIMIT=10, HERE_MONTHLY_RESERVE=1, TOMTOM_DAILY_LIMIT=10, TOMTOM_DAILY_RESERVE=1)
 	def test_hybrid_importer_enriches_discovery_records_through_website_importer(self):
 		class WebsiteImporter:
 			source_name = 'business_websites'
@@ -2286,16 +2295,23 @@ class YelpFusionPlacesImporterTests(TestCase):
 		'default': {
 			'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
 			'LOCATION': 'test-source-fetch-cache',
+		},
+		'source_fetch': {
+			'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+			'LOCATION': 'test-source-fetch-cache-source-fetch',
 		}
 	},
+	SOURCE_FETCH_CACHE_ALIAS='source_fetch',
 	SOURCE_FETCH_CACHE_TIMEOUT=60,
 )
 class SourceFetchCacheTests(TestCase):
 	def setUp(self):
 		caches['default'].clear()
+		caches['source_fetch'].clear()
 
 	def tearDown(self):
 		caches['default'].clear()
+		caches['source_fetch'].clear()
 
 	def test_fetch_html_reuses_cached_source_response(self):
 		session = CountingSession('<html>live source payload</html>')
