@@ -1,4 +1,4 @@
-import { startTransition, useDeferredValue, useEffect, useRef, useState } from 'react';
+import { startTransition, useDeferredValue, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { StatusBar } from 'expo-status-bar';
 import {
@@ -122,6 +122,7 @@ type VenueFilterValue = (typeof venueFilters)[number]['value'];
 type AppScreenMode = 'splash' | 'auth' | 'browse' | 'profiles' | 'business-search' | 'business-claim' | 'manual-business-claim';
 type AuthPortal = 'customer' | 'business';
 type OnboardingTransitionDirection = 'forward' | 'backward';
+type TransitionAxis = 'x' | 'y';
 
 type MappedPlace = PlaceListItem & {
   latitude: number;
@@ -140,6 +141,7 @@ type BrowseControlsProps = {
   onBrowseModeChange: (mode: BrowseMode) => void;
   onChangeSearchQuery: (value: string) => void;
   onClearSearchQuery: () => void;
+  onOpenDashboard?: () => void;
   onReload: () => void;
   onSelectAllVenueTypes: () => void;
   onSelectCity: (city: CityFilterValue) => void;
@@ -216,13 +218,22 @@ function AppScreen() {
   const { height, width } = useWindowDimensions();
   const mapRef = useRef<MapView | null>(null);
   const onboardingTransitionFrameRef = useRef<number | null>(null);
+  const suppressKeyboardLayoutAnimationUntilRef = useRef(0);
+  const browseModeFadePendingRef = useRef(false);
   const splashExitOpacity = useRef(new Animated.Value(1)).current;
   const authIntroOpacity = useRef(new Animated.Value(1)).current;
+  const loginSuccessTransition = useRef(new Animated.Value(1)).current;
   const screenTransition = useRef(new Animated.Value(1)).current;
+  const profileSceneTransition = useRef(new Animated.Value(1)).current;
+  const browseSceneTransition = useRef(new Animated.Value(1)).current;
+  const browseModeTransition = useRef(new Animated.Value(1)).current;
+  const mapPinsTransition = useRef(new Animated.Value(1)).current;
   const mapResultsOpacity = useRef(new Animated.Value(0)).current;
   const [apiBaseUrl, setApiBaseUrl] = useState(initialApiBaseUrl);
   const [screenMode, setScreenMode] = useState<AppScreenMode>('splash');
   const [onboardingTransitionDirection, setOnboardingTransitionDirection] = useState<OnboardingTransitionDirection>('forward');
+  const [onboardingTransitionAxis, setOnboardingTransitionAxis] = useState<TransitionAxis>('x');
+  const [onboardingIncomingOffset, setOnboardingIncomingOffset] = useState(0);
   const [authPortal, setAuthPortal] = useState<AuthPortal>('customer');
   const [loginForm, setLoginForm] = useState<LoginFormState>(initialLoginFormState);
   const [loginSubmitting, setLoginSubmitting] = useState(false);
@@ -258,9 +269,16 @@ function AppScreen() {
   const [profilePlacesLoading, setProfilePlacesLoading] = useState(false);
   const [businessSearchQuery, setBusinessSearchQuery] = useState('');
   const [selectedClaimPlace, setSelectedClaimPlace] = useState<PlaceListItem | null>(null);
+  const [logoutTransitionSession, setLogoutTransitionSession] = useState<SignupResponse | null>(null);
   const [incomingOnboardingScreen, setIncomingOnboardingScreen] = useState<AppScreenMode | null>(null);
+  const [showLoginSuccessTransition, setShowLoginSuccessTransition] = useState(false);
+  const [showLogoutTransition, setShowLogoutTransition] = useState(false);
   const [authIntroPending, setAuthIntroPending] = useState(false);
   const [splashExiting, setSplashExiting] = useState(false);
+  const [profileEntryOffset, setProfileEntryOffset] = useState(0);
+  const [browseEntryOffset, setBrowseEntryOffset] = useState(0);
+  const [renderedMappedPlaces, setRenderedMappedPlaces] = useState<MappedPlace[]>([]);
+  const [renderedMappedPlaceKey, setRenderedMappedPlaceKey] = useState('');
   const shouldUseNativeMapBoundaries = Constants.executionEnvironment !== ExecutionEnvironment.StoreClient;
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const normalizedSearchQuery = normalizeSearchText(deferredSearchQuery);
@@ -302,18 +320,20 @@ function AppScreen() {
         })
       ))
     : [];
+  const mappedPlaceKey = mappedPlaces.map((place) => place.markerKey).join('|');
+  const displayedMapPlaces = showMapBrowse ? renderedMappedPlaces : [];
   const unplacedPlaceCount = filteredPlaces.filter((place) => (
     !getPlaceLocations(place).some((location) => location.latitude !== null && location.longitude !== null)
   )).length;
   const selectedMapPlace = selectedMapPlaceKey
-    ? mappedPlaces.find((place) => place.markerKey === selectedMapPlaceKey) ?? null
+    ? displayedMapPlaces.find((place) => place.markerKey === selectedMapPlaceKey) ?? null
     : null;
   const selectedMapImageUrls = selectedMapPlace ? dedupeImageUrls(selectedMapPlace.image_urls) : [];
   const selectedPlaceLocation = getSelectedPlaceLocation(selectedPlace, selectedLocationId, selectedCity);
   const selectedPlaceDeals = selectedPlaceLocation?.deals ?? selectedPlace?.deals ?? [];
   const selectedPlaceOperatingHours = selectedPlaceLocation?.operating_hours ?? selectedPlace?.operating_hours ?? [];
   const selectedPlaceMapRegion = getPlacePreviewRegion(selectedPlaceLocation ?? selectedPlace);
-  const mapSearchResults = normalizedSearchQuery.length ? mappedPlaces.slice(0, 5) : [];
+  const mapSearchResults = normalizedSearchQuery.length ? displayedMapPlaces.slice(0, 5) : [];
   const mapSearchResultsKey = mapSearchResults.map((place) => place.markerKey).join('|');
   const mapOverlayBottomPadding = keyboardHeight > 0
     ? Math.max(keyboardHeight - insets.bottom, 0) + 12
@@ -322,21 +342,43 @@ function AppScreen() {
   const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'business-search', 'business-claim', 'manual-business-claim']);
   const currentOnboardingScreen = onboardingScreenKeys.has(screenMode) ? screenMode : null;
   const usesOnboardingSlideTransition = currentOnboardingScreen !== null || incomingOnboardingScreen !== null;
-  const onboardingSlideOffset = onboardingTransitionDirection === 'forward' ? width : -width;
+  const onboardingSlideOffset = onboardingIncomingOffset || (onboardingTransitionDirection === 'forward' ? width : -width);
   const incomingScreenTransitionStyle = {
-    opacity: screenTransition.interpolate({
-      inputRange: [0, 0.18, 1],
-      outputRange: [0.94, 0.98, 1],
-    }),
-    transform: [
-      {
-        translateX: screenTransition.interpolate({
-          inputRange: [0, 1],
-          outputRange: [onboardingSlideOffset, 0],
+    opacity: onboardingTransitionAxis === 'y'
+      ? 1
+      : screenTransition.interpolate({
+          inputRange: [0, 0.18, 1],
+          outputRange: [0.94, 0.98, 1],
         }),
-      },
+    transform: [
+      onboardingTransitionAxis === 'y'
+        ? {
+            translateY: screenTransition.interpolate({
+              inputRange: [0, 1],
+              outputRange: [onboardingSlideOffset, 0],
+            }),
+          }
+        : {
+            translateX: screenTransition.interpolate({
+              inputRange: [0, 1],
+              outputRange: [onboardingSlideOffset, 0],
+            }),
+          },
     ],
   };
+  const currentOnboardingTransitionStyle = incomingOnboardingScreen && onboardingTransitionAxis === 'y' && currentOnboardingScreen !== incomingOnboardingScreen
+    ? {
+        opacity: 1,
+        transform: [
+          {
+            translateY: screenTransition.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, height],
+            }),
+          },
+        ],
+      }
+    : null;
   const screenTransitionStyle = {
     opacity: screenTransition,
     transform: [
@@ -344,6 +386,71 @@ function AppScreen() {
         translateY: screenTransition.interpolate({
           inputRange: [0, 1],
           outputRange: [14, 0],
+        }),
+      },
+    ],
+  };
+  const profileSceneTransitionStyle = {
+    opacity: profileSceneTransition,
+    transform: [
+      {
+        translateX: profileSceneTransition.interpolate({
+          inputRange: [0, 1],
+          outputRange: [profileEntryOffset, 0],
+        }),
+      },
+    ],
+  };
+  const browseSceneTransitionStyle = {
+    opacity: browseSceneTransition,
+    transform: [
+      {
+        translateX: browseSceneTransition.interpolate({
+          inputRange: [0, 1],
+          outputRange: [browseEntryOffset, 0],
+        }),
+      },
+    ],
+  };
+  const browseModeTransitionStyle = {
+    opacity: browseModeTransition,
+  };
+  const loginSuccessOutgoingStyle = {
+    transform: [
+      {
+        translateY: loginSuccessTransition.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, height],
+        }),
+      },
+    ],
+  };
+  const loginSuccessIncomingStyle = {
+    transform: [
+      {
+        translateY: loginSuccessTransition.interpolate({
+          inputRange: [0, 1],
+          outputRange: [-height, 0],
+        }),
+      },
+    ],
+  };
+  const logoutOutgoingStyle = {
+    transform: [
+      {
+        translateY: loginSuccessTransition.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, -height],
+        }),
+      },
+    ],
+  };
+  const logoutIncomingStyle = {
+    transform: [
+      {
+        translateY: loginSuccessTransition.interpolate({
+          inputRange: [0, 1],
+          outputRange: [height, 0],
         }),
       },
     ],
@@ -393,6 +500,11 @@ function AppScreen() {
     });
   }
 
+  function dismissKeyboardForScreenTransition() {
+    suppressKeyboardLayoutAnimationUntilRef.current = Date.now() + onboardingTransitionDuration + 120;
+    Keyboard.dismiss();
+  }
+
   useEffect(() => {
     if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
       UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -425,13 +537,103 @@ function AppScreen() {
     });
   }, [authIntroOpacity, authIntroPending, screenMode]);
 
-  function navigateScreen(nextScreen: AppScreenMode, direction: OnboardingTransitionDirection) {
+  useEffect(() => {
+    if (screenMode !== 'profiles' || incomingOnboardingScreen || profileEntryOffset === 0) {
+      return;
+    }
+
+    profileSceneTransition.stopAnimation();
+    profileSceneTransition.setValue(0);
+    Animated.timing(profileSceneTransition, {
+      duration: 320,
+      toValue: 1,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) {
+        setProfileEntryOffset(0);
+      }
+    });
+  }, [incomingOnboardingScreen, profileEntryOffset, profileSceneTransition, screenMode]);
+
+  useEffect(() => {
+    if (screenMode !== 'browse' || selectedPlaceSlug || browseEntryOffset === 0) {
+      return;
+    }
+
+    browseSceneTransition.stopAnimation();
+    browseSceneTransition.setValue(0);
+    Animated.timing(browseSceneTransition, {
+      duration: 320,
+      toValue: 1,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) {
+        setBrowseEntryOffset(0);
+      }
+    });
+  }, [browseEntryOffset, browseSceneTransition, screenMode, selectedPlaceSlug]);
+
+  useEffect(() => {
+    if (!showMapBrowse || listLoading) {
+      if (renderedMappedPlaces.length || renderedMappedPlaceKey) {
+        setRenderedMappedPlaces([]);
+        setRenderedMappedPlaceKey('');
+      }
+      mapPinsTransition.stopAnimation();
+      mapPinsTransition.setValue(1);
+      return;
+    }
+
+    const animatePinsIn = (nextPlaces: MappedPlace[], nextKey: string) => {
+      setRenderedMappedPlaces(nextPlaces);
+      setRenderedMappedPlaceKey(nextKey);
+      mapPinsTransition.stopAnimation();
+      mapPinsTransition.setValue(0);
+      requestAnimationFrame(() => {
+        Animated.timing(mapPinsTransition, {
+          duration: 340,
+          toValue: 1,
+          useNativeDriver: true,
+        }).start();
+      });
+    };
+
+    if (!renderedMappedPlaceKey) {
+      animatePinsIn(mappedPlaces, mappedPlaceKey);
+      return;
+    }
+
+    if (renderedMappedPlaceKey === mappedPlaceKey) {
+      return;
+    }
+
+    mapPinsTransition.stopAnimation();
+    Animated.timing(mapPinsTransition, {
+      duration: 160,
+      toValue: 0,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (!finished) {
+        return;
+      }
+
+      animatePinsIn(mappedPlaces, mappedPlaceKey);
+    });
+  }, [listLoading, mapPinsTransition, mappedPlaceKey, renderedMappedPlaceKey, renderedMappedPlaces.length, showMapBrowse]);
+
+  function navigateScreen(
+    nextScreen: AppScreenMode,
+    direction: OnboardingTransitionDirection,
+    transitionOverride?: { axis: TransitionAxis; incomingOffset: number },
+  ) {
     const currentScreen = screenMode;
     const shouldAnimateOnboarding = onboardingScreenKeys.has(currentScreen)
       && onboardingScreenKeys.has(nextScreen)
       && currentScreen !== nextScreen;
 
     setOnboardingTransitionDirection(direction);
+    setOnboardingTransitionAxis(transitionOverride?.axis ?? 'x');
+    setOnboardingIncomingOffset(transitionOverride?.incomingOffset ?? (direction === 'forward' ? width : -width));
     screenTransition.stopAnimation();
 
     if (onboardingTransitionFrameRef.current !== null) {
@@ -446,10 +648,10 @@ function AppScreen() {
       return;
     }
 
+    screenTransition.setValue(0);
     setIncomingOnboardingScreen(nextScreen);
     onboardingTransitionFrameRef.current = requestAnimationFrame(() => {
       onboardingTransitionFrameRef.current = null;
-      screenTransition.setValue(0);
       Animated.timing(screenTransition, {
         duration: onboardingTransitionDuration,
         toValue: 1,
@@ -459,9 +661,74 @@ function AppScreen() {
           return;
         }
 
-        setScreenMode(nextScreen);
         setIncomingOnboardingScreen(null);
+        setScreenMode(nextScreen);
         screenTransition.setValue(1);
+      });
+    });
+  }
+
+  function startLoginSuccessTransition() {
+    if (onboardingTransitionFrameRef.current !== null) {
+      cancelAnimationFrame(onboardingTransitionFrameRef.current);
+      onboardingTransitionFrameRef.current = null;
+    }
+
+    screenTransition.stopAnimation();
+    setIncomingOnboardingScreen(null);
+    setShowLoginSuccessTransition(true);
+    loginSuccessTransition.stopAnimation();
+    loginSuccessTransition.setValue(0);
+    Animated.timing(loginSuccessTransition, {
+      duration: onboardingTransitionDuration,
+      toValue: 1,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (!finished) {
+        return;
+      }
+
+      setScreenMode('profiles');
+      requestAnimationFrame(() => {
+        setShowLoginSuccessTransition(false);
+        loginSuccessTransition.setValue(1);
+      });
+    });
+  }
+
+  function startLogoutTransition() {
+    if (!authenticatedSession) {
+      setScreenMode('auth');
+      return;
+    }
+
+    if (onboardingTransitionFrameRef.current !== null) {
+      cancelAnimationFrame(onboardingTransitionFrameRef.current);
+      onboardingTransitionFrameRef.current = null;
+    }
+
+    screenTransition.stopAnimation();
+    setIncomingOnboardingScreen(null);
+    setLogoutTransitionSession(authenticatedSession);
+    setAuthenticatedSession(null);
+    setScreenMode('auth');
+    setAuthIntroPending(false);
+    setShowLogoutTransition(true);
+    loginSuccessTransition.stopAnimation();
+    loginSuccessTransition.setValue(0);
+    Animated.timing(loginSuccessTransition, {
+      duration: onboardingTransitionDuration,
+      toValue: 1,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (!finished) {
+        return;
+      }
+
+      requestAnimationFrame(() => {
+        setShowLogoutTransition(false);
+        setLogoutTransitionSession(null);
+        loginSuccessTransition.setValue(1);
       });
     });
   }
@@ -655,10 +922,20 @@ function AppScreen() {
 
   useEffect(() => {
     const showSubscription = Keyboard.addListener('keyboardDidShow', (event) => {
+      if (Date.now() < suppressKeyboardLayoutAnimationUntilRef.current) {
+        setKeyboardHeight(event.endCoordinates.height);
+        return;
+      }
+
       animateNextLayout();
       setKeyboardHeight(event.endCoordinates.height);
     });
     const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
+      if (Date.now() < suppressKeyboardLayoutAnimationUntilRef.current) {
+        setKeyboardHeight(0);
+        return;
+      }
+
       animateNextLayout();
       setKeyboardHeight(0);
     });
@@ -764,10 +1041,25 @@ function AppScreen() {
       return;
     }
 
-    if (!mappedPlaces.some((place) => place.markerKey === selectedMapPlaceKey)) {
+    if (!displayedMapPlaces.some((place) => place.markerKey === selectedMapPlaceKey)) {
       setSelectedMapPlaceKey(null);
     }
-  }, [mappedPlaces, selectedMapPlaceKey, showMapBrowse]);
+  }, [displayedMapPlaces, selectedMapPlaceKey, showMapBrowse]);
+
+  useLayoutEffect(() => {
+    if (!browseModeFadePendingRef.current) {
+      return;
+    }
+
+    browseModeFadePendingRef.current = false;
+    browseModeTransition.setValue(0);
+    browseModeTransition.stopAnimation();
+    Animated.timing(browseModeTransition, {
+      duration: 190,
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
+  }, [browseMode, browseModeTransition]);
 
   function handleRefreshPlaces() {
     animateNextLayout();
@@ -818,6 +1110,8 @@ function AppScreen() {
     animateNextLayout();
     setBrowseFiltersExpanded(false);
     setSelectedMapPlaceKey(null);
+    browseModeTransition.stopAnimation();
+    browseModeFadePendingRef.current = true;
     setBrowseMode(mode);
   }
 
@@ -839,20 +1133,27 @@ function AppScreen() {
   }
 
   function handleOpenProfiles() {
-    Keyboard.dismiss();
+    dismissKeyboardForScreenTransition();
     setProfileErrorMessage(null);
+    if (authenticatedSession && screenMode === 'browse') {
+      setProfileEntryOffset(width);
+    }
     navigateScreen('profiles', 'forward');
   }
 
   function handleContinueToApp() {
-    Keyboard.dismiss();
+    dismissKeyboardForScreenTransition();
     setAuthMessage(null);
     setProfileErrorMessage(null);
+    setBrowseEntryOffset(authenticatedSession && screenMode === 'profiles' ? -width : -width);
     navigateScreen('browse', 'forward');
   }
 
   function handleBackFromProfiles() {
-    Keyboard.dismiss();
+    dismissKeyboardForScreenTransition();
+    if (authenticatedSession) {
+      setBrowseEntryOffset(-width);
+    }
     navigateScreen(authenticatedSession ? 'browse' : 'auth', 'backward');
   }
 
@@ -897,7 +1198,7 @@ function AppScreen() {
       setAuthMessage(null);
       setLoginForm(initialLoginFormState);
       setProfileMessage('Signed in successfully.');
-      navigateScreen('profiles', 'forward');
+      startLoginSuccessTransition();
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
     } finally {
@@ -1072,11 +1373,10 @@ function AppScreen() {
   }
 
   function handleLogout() {
-    setAuthenticatedSession(null);
     setProfileMessage(null);
     setProfileErrorMessage(null);
     setAuthMessage('You have been signed out.');
-    navigateScreen('auth', 'backward');
+    startLogoutTransition();
   }
 
   function handleOpenBilling() {
@@ -1088,17 +1388,26 @@ function AppScreen() {
   }
 
   function handleOpenBusinessSearch() {
+    dismissKeyboardForScreenTransition();
     setProfileErrorMessage(null);
     setBusinessSearchQuery('');
     navigateScreen('business-search', 'forward');
   }
 
+  function handleBackToCreateProfile() {
+    dismissKeyboardForScreenTransition();
+    setProfileErrorMessage(null);
+    navigateScreen('profiles', 'backward');
+  }
+
   function handleBackToBusinessSearch() {
+    dismissKeyboardForScreenTransition();
     setProfileErrorMessage(null);
     navigateScreen('business-search', 'backward');
   }
 
   function handleOpenManualBusinessClaim() {
+    dismissKeyboardForScreenTransition();
     setProfileErrorMessage(null);
     setSelectedClaimPlace(null);
     setProfileForm((current) => ({
@@ -1115,6 +1424,7 @@ function AppScreen() {
   }
 
   function handleSelectClaimBusiness(place: PlaceListItem) {
+    dismissKeyboardForScreenTransition();
     setSelectedClaimPlace(place);
     setProfileForm((current) => ({
       ...current,
@@ -1145,7 +1455,7 @@ function AppScreen() {
     mapRef.current?.animateToRegion(nextRegion, 250);
   }
 
-  function renderOnboardingScreen(targetScreen: AppScreenMode) {
+  function renderOnboardingScreen(targetScreen: AppScreenMode, profileSessionOverride?: SignupResponse | null) {
     switch (targetScreen) {
       case 'splash':
         return (
@@ -1171,9 +1481,12 @@ function AppScreen() {
           </SafeAreaView>
         );
       case 'profiles':
+        {
+          const profileSession = profileSessionOverride ?? authenticatedSession;
+
         return (
           <SafeAreaView style={styles.safeArea}>
-            {authenticatedSession ? (
+            {profileSession ? (
               <DashboardScreen
                 errorMessage={profileErrorMessage}
                 isLandscape={isLandscape}
@@ -1186,7 +1499,7 @@ function AppScreen() {
                 onRefresh={() => void refreshDashboard()}
                 onResendVerification={() => void handleResendVerification()}
                 onToggleTwoFactor={() => void handleToggleTwoFactor()}
-                session={authenticatedSession}
+                session={profileSession}
                 submitting={dashboardSubmitting}
               />
             ) : (
@@ -1204,6 +1517,7 @@ function AppScreen() {
             )}
           </SafeAreaView>
         );
+        }
       case 'business-search':
         return (
           <SafeAreaView style={styles.safeArea}>
@@ -1211,7 +1525,7 @@ function AppScreen() {
               errorMessage={profileErrorMessage}
               isLandscape={isLandscape}
               loadingPlaces={profilePlacesLoading}
-              onBack={handleBackFromProfiles}
+              onBack={handleBackToCreateProfile}
               onChangeSearchQuery={setBusinessSearchQuery}
               onChooseManualBusiness={handleOpenManualBusinessClaim}
               onSelectBusiness={handleSelectClaimBusiness}
@@ -1266,9 +1580,41 @@ function AppScreen() {
         <Animated.View style={[styles.onboardingTransitionRoot, { opacity: splashExitOpacity }]}>
           {renderOnboardingScreen('splash')}
         </Animated.View>
+      ) : showLoginSuccessTransition ? (
+        <View style={styles.onboardingTransitionRoot}>
+          <View style={styles.screenTransitionLayer}>
+            {renderOnboardingScreen('profiles')}
+          </View>
+          <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, loginSuccessOutgoingStyle]}>
+            {renderOnboardingScreen('auth')}
+          </Animated.View>
+          <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, loginSuccessIncomingStyle]}>
+            {renderOnboardingScreen('profiles')}
+          </Animated.View>
+        </View>
+      ) : showLogoutTransition ? (
+        <View style={styles.onboardingTransitionRoot}>
+          <View style={styles.screenTransitionLayer}>
+            {renderOnboardingScreen('auth')}
+          </View>
+          <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, logoutOutgoingStyle]}>
+            {renderOnboardingScreen('profiles', logoutTransitionSession)}
+          </Animated.View>
+          <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, logoutIncomingStyle]}>
+            {renderOnboardingScreen('auth')}
+          </Animated.View>
+        </View>
       ) : usesOnboardingSlideTransition && currentOnboardingScreen ? (
         <View style={styles.onboardingTransitionRoot}>
-          <Animated.View pointerEvents={incomingOnboardingScreen ? 'none' : 'auto'} style={[styles.screenTransitionLayer, authIntroStyle]}>
+          <Animated.View
+            pointerEvents={incomingOnboardingScreen ? 'none' : 'auto'}
+            style={[
+              incomingOnboardingScreen ? styles.screenTransitionLayerAbsolute : styles.screenTransitionLayer,
+              currentOnboardingScreen === 'profiles' && !incomingOnboardingScreen ? profileSceneTransitionStyle : null,
+              authIntroStyle,
+              currentOnboardingTransitionStyle,
+            ]}
+          >
             {renderOnboardingScreen(currentOnboardingScreen)}
           </Animated.View>
           {incomingOnboardingScreen ? (
@@ -1278,7 +1624,8 @@ function AppScreen() {
           ) : null}
         </View>
       ) : selectedPlaceSlug ? (
-        <Animated.View style={[styles.screenTransitionLayer, screenTransitionStyle]}>
+        <View style={styles.fullScreenRoot}>
+        <Animated.View style={[styles.screenTransitionLayerAbsolute, screenTransitionStyle]}>
         <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
         <View style={[styles.detailScreen, isLandscape ? styles.detailScreenLandscape : null]}>
           <ScrollView
@@ -1425,8 +1772,10 @@ function AppScreen() {
         </View>
         </SafeAreaView>
         </Animated.View>
+        </View>
       ) : showMapBrowse ? (
-        <Animated.View style={[styles.screenTransitionLayer, styles.fullScreenRoot, screenTransitionStyle]}>
+        <View style={styles.fullScreenRoot}>
+        <Animated.View style={[styles.screenTransitionLayerAbsolute, styles.fullScreenRoot, screenTransitionStyle, browseSceneTransitionStyle, browseModeTransitionStyle]}>
         <View style={styles.fullScreenRoot}>
         <View style={styles.mapScreen}>
           <MapView
@@ -1462,8 +1811,9 @@ function AppScreen() {
             ref={mapRef}
             style={styles.mapBackground}
           >
-            {mappedPlaces.map((place, index) => {
+            {displayedMapPlaces.map((place, index) => {
               const markerStyle = getVenueMarkerStyle(place.venue_type);
+              const animatedMarkerStyle = getAnimatedMapMarkerStyle(place, mapRegion, width, height, mapPinsTransition);
 
               return (
               <Marker
@@ -1472,15 +1822,16 @@ function AppScreen() {
                 key={place.markerKey}
                 onPress={() => setSelectedMapPlaceKey(place.markerKey)}
                 tracksViewChanges={false}
-                zIndex={mappedPlaces.length - index}
+                zIndex={displayedMapPlaces.length - index}
               >
-                <View style={[
+                <Animated.View style={[
+                  animatedMarkerStyle,
                   styles.mapMarker,
                   { backgroundColor: markerStyle.fill, borderColor: markerStyle.stroke },
                   selectedMapPlaceKey === place.markerKey ? styles.mapMarkerActive : null,
                 ]}>
                   <Text style={styles.mapMarkerText}>{markerStyle.badge}</Text>
-                </View>
+                </Animated.View>
               </Marker>
               );
             })}
@@ -1503,6 +1854,7 @@ function AppScreen() {
               onBrowseModeChange={handleBrowseModeChange}
               onChangeSearchQuery={setSearchQuery}
               onClearSearchQuery={handleClearSearchQuery}
+              onOpenDashboard={authenticatedSession ? handleOpenProfiles : undefined}
               onReload={handleRefreshPlaces}
               onSelectAllVenueTypes={handleSelectAllVenueTypes}
               onSelectCity={setSelectedCity}
@@ -1513,6 +1865,8 @@ function AppScreen() {
               selectedCity={selectedCity}
               selectedVenueTypes={selectedVenueTypes}
             />
+
+            <BrowseModeSwitcher browseMode={browseMode} onBrowseModeChange={handleBrowseModeChange} overlay />
 
             {listLoading ? (
               <View style={styles.mapLoadingOverlay}>
@@ -1605,8 +1959,10 @@ function AppScreen() {
         </View>
         </View>
         </Animated.View>
+        </View>
       ) : (
-        <Animated.View style={[styles.screenTransitionLayer, screenTransitionStyle]}>
+        <View style={styles.fullScreenRoot}>
+        <Animated.View style={[styles.screenTransitionLayerAbsolute, screenTransitionStyle, browseSceneTransitionStyle, browseModeTransitionStyle]}>
         <SafeAreaView style={styles.safeArea}>
         <View style={[styles.screen, isLandscape ? styles.screenLandscape : null]}>
           <>
@@ -1616,6 +1972,7 @@ function AppScreen() {
               onBrowseModeChange={handleBrowseModeChange}
               onChangeSearchQuery={setSearchQuery}
               onClearSearchQuery={handleClearSearchQuery}
+              onOpenDashboard={authenticatedSession ? handleOpenProfiles : undefined}
               onReload={handleRefreshPlaces}
               onSelectAllVenueTypes={handleSelectAllVenueTypes}
               onSelectCity={setSelectedCity}
@@ -1626,6 +1983,8 @@ function AppScreen() {
               selectedCity={selectedCity}
               selectedVenueTypes={selectedVenueTypes}
             />
+
+            <BrowseModeSwitcher browseMode={browseMode} onBrowseModeChange={handleBrowseModeChange} />
 
             {listLoading ? (
               <View style={styles.centerState}>
@@ -1665,6 +2024,7 @@ function AppScreen() {
         </View>
         </SafeAreaView>
         </Animated.View>
+        </View>
       )}
     </>
   );
@@ -1677,6 +2037,7 @@ function BrowseControls({
   onBrowseModeChange,
   onChangeSearchQuery,
   onClearSearchQuery,
+  onOpenDashboard,
   onReload,
   onSelectAllVenueTypes,
   onSelectCity,
@@ -1715,6 +2076,11 @@ function BrowseControls({
           HappyHourApp
         </Text>
         <View style={styles.toolbarActionsRow}>
+          {onOpenDashboard ? (
+            <Pressable onPress={onOpenDashboard} style={styles.secondaryToolbarButton}>
+              <Text style={styles.secondaryToolbarButtonText}>Back to Dashboard</Text>
+            </Pressable>
+          ) : null}
           <Pressable onPress={onReload} style={styles.reloadButton}>
             <Text style={styles.reloadButtonText}>Refresh Places</Text>
           </Pressable>
@@ -1817,24 +2183,77 @@ function BrowseControls({
             })}
           </ScrollView>
 
-          <View style={styles.modeRow}>
-            <Pressable
-              onPress={() => onBrowseModeChange('list')}
-              style={[styles.modeButton, browseMode === 'list' ? styles.modeButtonActive : null]}
-            >
-              <Text style={[styles.modeButtonText, browseMode === 'list' ? styles.modeButtonTextActive : null]}>List</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => onBrowseModeChange('map')}
-              style={[styles.modeButton, browseMode === 'map' ? styles.modeButtonActive : null]}
-            >
-              <Text style={[styles.modeButtonText, browseMode === 'map' ? styles.modeButtonTextActive : null]}>Map</Text>
-            </Pressable>
-          </View>
         </View>
       ) : null}
     </View>
   );
+}
+
+function BrowseModeSwitcher({ browseMode, onBrowseModeChange, overlay = false }: { browseMode: BrowseMode; onBrowseModeChange: (mode: BrowseMode) => void; overlay?: boolean }) {
+  return (
+    <View style={[styles.modeSwitcherDock, overlay ? styles.modeSwitcherDockOverlay : null]}>
+      <View style={styles.modeSwitcherCard}>
+        <Pressable
+          onPress={() => onBrowseModeChange('list')}
+          style={[styles.modeButton, browseMode === 'list' ? styles.modeButtonActive : null]}
+        >
+          <Text style={[styles.modeButtonText, browseMode === 'list' ? styles.modeButtonTextActive : null]}>List</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => onBrowseModeChange('map')}
+          style={[styles.modeButton, browseMode === 'map' ? styles.modeButtonActive : null]}
+        >
+          <Text style={[styles.modeButtonText, browseMode === 'map' ? styles.modeButtonTextActive : null]}>Map</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function getAnimatedMapMarkerStyle(
+  place: MappedPlace,
+  region: Region,
+  width: number,
+  height: number,
+  transition: Animated.Value,
+) {
+  const distance = getMarkerCenterScreenDistance(place, region, width, height);
+  const maxDistance = Math.max(Math.hypot(width / 2, height / 2), 1);
+  const delayStart = Math.min((distance / maxDistance) * 0.52, 0.72);
+  const delayEnd = Math.min(delayStart + 0.22, 1);
+  const offsetX = getMarkerOffsetFromCenterX(place, region, width);
+  const offsetY = getMarkerOffsetFromCenterY(place, region, height);
+
+  return {
+    opacity: transition.interpolate({
+      inputRange: [0, delayStart, delayEnd, 1],
+      outputRange: [0, 0, 1, 1],
+      extrapolate: 'clamp',
+    }),
+    transform: [
+      {
+        translateX: transition.interpolate({
+          inputRange: [0, delayStart, delayEnd, 1],
+          outputRange: [offsetX * -0.22, offsetX * -0.12, 0, 0],
+          extrapolate: 'clamp',
+        }),
+      },
+      {
+        translateY: transition.interpolate({
+          inputRange: [0, delayStart, delayEnd, 1],
+          outputRange: [offsetY * -0.22, offsetY * -0.12, 0, 0],
+          extrapolate: 'clamp',
+        }),
+      },
+      {
+        scale: transition.interpolate({
+          inputRange: [0, delayStart, delayEnd, 1],
+          outputRange: [0.3, 0.48, 1, 1],
+          extrapolate: 'clamp',
+        }),
+      },
+    ],
+  };
 }
 
 function formatTime(value: string) {
@@ -2155,12 +2574,12 @@ function DashboardScreen({ errorMessage, isLandscape, loading, message, onBack, 
 
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
-      <ScrollView contentContainerStyle={styles.profileScrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.dashboardScrollContent} showsVerticalScrollIndicator={false}>
         <Pressable onPress={onBack} style={styles.backButton}>
           <Text style={styles.backButtonText}>Back to places</Text>
         </Pressable>
 
-        <View style={styles.profileCard}>
+        <View style={styles.dashboardCard}>
           <Text style={styles.detailCity}>{session.profile_type === 'business' ? 'Business Dashboard' : 'Customer Dashboard'}</Text>
           <Text style={styles.detailTitle}>{fullName || session.username}</Text>
           <Text style={styles.profileIntroText}>Use this dashboard to manage your account, check verification status, and jump back into the main app.</Text>
@@ -2813,6 +3232,29 @@ function normalizeRegion(region: Region): Region {
   };
 }
 
+function getMarkerCenterScreenDistance(place: MappedPlace, region: Region, width: number, height: number) {
+  return Math.hypot(
+    getMarkerOffsetFromCenterX(place, region, width),
+    getMarkerOffsetFromCenterY(place, region, height),
+  );
+}
+
+function getMarkerOffsetFromCenterX(place: MappedPlace, region: Region, width: number) {
+  if (!region.longitudeDelta) {
+    return 0;
+  }
+
+  return ((place.markerLongitude - region.longitude) / region.longitudeDelta) * width;
+}
+
+function getMarkerOffsetFromCenterY(place: MappedPlace, region: Region, height: number) {
+  if (!region.latitudeDelta) {
+    return 0;
+  }
+
+  return ((region.latitude - place.markerLatitude) / region.latitudeDelta) * height;
+}
+
 function clampRegionToBounds(region: Region): Region {
   const normalizedRegion = normalizeRegion(region);
   const latitudePadding = normalizedRegion.latitudeDelta / 2;
@@ -2863,6 +3305,7 @@ const styles = StyleSheet.create({
   },
   screenTransitionLayer: {
     flex: 1,
+    backgroundColor: '#f7efe2',
   },
   screenTransitionLayerAbsolute: {
     ...StyleSheet.absoluteFillObject,
@@ -3334,6 +3777,23 @@ const styles = StyleSheet.create({
   modeRow: {
     flexDirection: 'row',
     gap: 10,
+  },
+  modeSwitcherDock: {
+    alignItems: 'flex-start',
+    marginTop: 10,
+  },
+  modeSwitcherDockOverlay: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
+  modeSwitcherCard: {
+    backgroundColor: 'rgba(255, 250, 244, 0.96)',
+    borderColor: '#efd8bd',
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 10,
+    padding: 10,
   },
   modeButton: {
     backgroundColor: '#fff7ef',
@@ -3859,6 +4319,11 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     paddingBottom: 32,
   },
+  dashboardScrollContent: {
+    flexGrow: 1,
+    paddingTop: 8,
+    paddingBottom: 32,
+  },
   profileCard: {
     backgroundColor: '#fffaf4',
     borderColor: '#efd8bd',
@@ -3866,6 +4331,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 14,
     marginTop: 12,
+    padding: 18,
+  },
+  dashboardCard: {
+    backgroundColor: '#fffaf4',
+    borderColor: '#efd8bd',
+    borderRadius: 24,
+    borderWidth: 1,
+    gap: 14,
+    marginTop: 8,
     padding: 18,
   },
   profileIntroText: {
