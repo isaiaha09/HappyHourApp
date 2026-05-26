@@ -2226,48 +2226,15 @@ function BrowseModeSwitcher({ browseMode, onBrowseModeChange, overlay = false }:
 }
 
 function getAnimatedMapMarkerStyle(
-  place: MappedPlace,
-  region: Region,
-  width: number,
-  height: number,
-  transition: Animated.Value,
+  _place: MappedPlace,
+  _region: Region,
+  _width: number,
+  _height: number,
+  _transition: Animated.Value,
 ) {
-  const distance = getMarkerCenterScreenDistance(place, region, width, height);
-  const maxDistance = Math.max(Math.hypot(width / 2, height / 2), 1);
-  const delayStart = Math.min((distance / maxDistance) * 0.52, 0.72);
-  const delayEnd = Math.min(delayStart + 0.22, 1);
-  const offsetX = getMarkerOffsetFromCenterX(place, region, width);
-  const offsetY = getMarkerOffsetFromCenterY(place, region, height);
-
   return {
-    opacity: transition.interpolate({
-      inputRange: [0, delayStart, delayEnd, 1],
-      outputRange: [0, 0, 1, 1],
-      extrapolate: 'clamp',
-    }),
-    transform: [
-      {
-        translateX: transition.interpolate({
-          inputRange: [0, delayStart, delayEnd, 1],
-          outputRange: [offsetX * -0.22, offsetX * -0.12, 0, 0],
-          extrapolate: 'clamp',
-        }),
-      },
-      {
-        translateY: transition.interpolate({
-          inputRange: [0, delayStart, delayEnd, 1],
-          outputRange: [offsetY * -0.22, offsetY * -0.12, 0, 0],
-          extrapolate: 'clamp',
-        }),
-      },
-      {
-        scale: transition.interpolate({
-          inputRange: [0, delayStart, delayEnd, 1],
-          outputRange: [0.3, 0.48, 1, 1],
-          extrapolate: 'clamp',
-        }),
-      },
-    ],
+    opacity: 1,
+    transform: [],
   };
 }
 
