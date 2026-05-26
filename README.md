@@ -49,7 +49,7 @@ Current backend work includes:
 
 - Django project setup inside the `backend` folder
 - a `places` app for listings, claims, memberships, and account workflow
-- Django admin setup so I can manage claims, memberships, deleted businesses, and snapshots through `/admin`
+- Django admin setup so I can manage claims, memberships, deleted businesses, provider usage windows, and snapshots through `/admin`
 - API endpoints for health, places, place details, deals, login, signup, profile dashboard, and claim-related profile actions
 - importer and service layers that normalize source records into mobile-friendly JSON
 - local virtual environment and backend requirements file
@@ -70,6 +70,7 @@ Current mobile work includes:
 - business claim flow with consolidated business results and per-location address selection before verification
 - map marker rendering based on backend-provided or resolved coordinates
 - native map boundary handling for built apps, with a JS fallback for Expo Go
+- modularized screen-level mobile code so auth/profile/dashboard/detail views are no longer all inline in `mobile/App.tsx`
 
 ### Current Backend Models
 
@@ -102,10 +103,17 @@ That currently includes:
 
 - curated business source definitions in `backend/config/business_sources.py`
 - discovery data stored in `backend/config/discovered_places.json`
+- permanent source-level exclusions in `backend/config/discovery_exclusions.json`
 - grouping and deduplication in `backend/places/services/source_listings.py`
 - coordinate backfill for records that need geocode resolution before they can appear on the mobile map
 - multi-location grouping so one business profile can expose multiple addresses inside the app
 - address-quality merging so partial or duplicate discovery records collapse into a better canonical location when possible
+
+The current runtime source is `curated_json_places`, which means the app can now include:
+
+- curated businesses with happy hour or deal data
+- curated businesses with regular business information even when they do not currently expose happy hour deals
+- stored discovery businesses from live providers when they pass filtering, dedupe, and exclusion rules
 
 The current runtime goal is to keep listings source-backed and normalized while only storing claim/account workflow data permanently in the database.
 
@@ -139,6 +147,9 @@ Right now, these parts are working:
 - deal aggregation and location grouping
 - coordinate-aware map payloads for mobile browse
 - business claim and membership workflow backed by `ListingSnapshot`
+- async search in the List of Businesses admin page without full-page refreshes
+- deleted-business admin controls for restore, hard delete, and suppression through `deleted_from_business_database`
+- automatic cleanup of stale daily `tomtom_places` provider usage rows in admin
 - Expo mobile browse UI with list and map modes
 - mobile search, city filtering, and venue filtering
 - mobile auth, profile dashboard, and business claim onboarding flow
@@ -210,6 +221,12 @@ Run the focused backend API tests used during recent mobile/data fixes:
 
 ```powershell
 python manage.py test places.tests.PlaceApiTests places.tests.BusinessWebsiteImporterTests
+```
+
+Run the focused admin and discovery workflow tests used during recent data/admin updates:
+
+```powershell
+python manage.py test places.tests.ListingSnapshotAdminTests places.tests.ProviderQuotaTests places.tests.ProviderUsageWindowAdminTests places.tests.DiscoveryJsonStorageTests places.tests.HerePlacesImporterTests
 ```
 
 ## Notes From Me

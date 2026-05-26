@@ -5,17 +5,20 @@ from django.contrib.auth.admin import GroupAdmin, UserAdmin
 from django.contrib.auth.models import Group, User
 from django.core.exceptions import ValidationError
 from django.db.models import Prefetch
+from django.http import JsonResponse
 from django.http import HttpResponseRedirect
 from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils.text import slugify
+from django.utils import timezone
 
 from .admin_site import happyhour_admin_site
 from .models import BusinessAccount, BusinessClaim, BusinessMembership, CustomerAccount, DeletedBusiness, ListingSnapshot, ProviderUsageWindow
 from .services.importers.discovered_json_places import load_discovery_json_records, merge_discovery_json_records, write_discovery_json_records
 from .services.deleted_businesses import filter_deleted_business_records, imported_place_from_deleted_business, store_deleted_business
 from .services.importers.here_places import HerePlacesImporter
-from .services.provider_quota import get_provider_policy, get_provider_usage_statuses, select_discovery_provider
+from .services.provider_quota import delete_stale_provider_usage_windows, get_provider_policy, get_provider_usage_statuses, select_discovery_provider
+from .services.source_listings import get_listing_source_name, load_source_records
 
 
 LIVE_DISCOVERY_SOURCE_NAMES = {HerePlacesImporter.source_name}
@@ -74,13 +77,17 @@ def _sync_listing_snapshot_from_imported_place(place_record, snapshot=None):
 	return snapshot
 
 
-def _sync_listing_snapshots_from_imported_places(place_records, source_name):
+def _sync_listing_snapshots_from_imported_places(place_records):
 	touched_snapshot_ids = set()
+	touched_source_names = set()
 	for place_record in place_records:
 		snapshot = _sync_listing_snapshot_from_imported_place(place_record)
 		touched_snapshot_ids.add(snapshot.pk)
+		if str(place_record.source_name or '').strip():
+			touched_source_names.add(str(place_record.source_name).strip())
 
-	ListingSnapshot.objects.filter(source_name=source_name, business_claims__isnull=True).exclude(pk__in=touched_snapshot_ids).delete()
+	for source_name in touched_source_names:
+		ListingSnapshot.objects.filter(source_name=source_name, business_claims__isnull=True).exclude(pk__in=touched_snapshot_ids).delete()
 	return touched_snapshot_ids
 
 
@@ -406,6 +413,7 @@ class ListingSnapshotAdmin(admin.ModelAdmin):
 	def get_urls(self):
 		custom_urls = [
 			path('pull-all-business-data/', self.admin_site.admin_view(self.pull_all_business_data_view), name='places_listingsnapshot_pull_all'),
+			path('search-businesses/', self.admin_site.admin_view(self.search_businesses_view), name='places_listingsnapshot_search'),
 			path('<path:object_id>/pull-business-data/', self.admin_site.admin_view(self.pull_business_data_view), name='places_listingsnapshot_pull_one'),
 		]
 		return custom_urls + super().get_urls()
@@ -413,6 +421,7 @@ class ListingSnapshotAdmin(admin.ModelAdmin):
 	def changelist_view(self, request, extra_context=None):
 		extra_context = extra_context or {}
 		extra_context['pull_all_business_data_url'] = reverse('happyhour_admin:places_listingsnapshot_pull_all')
+		extra_context['search_businesses_url'] = reverse('happyhour_admin:places_listingsnapshot_search')
 		return super().changelist_view(request, extra_context=extra_context)
 
 	@admin.display(description='Pull business data')
@@ -430,15 +439,44 @@ class ListingSnapshotAdmin(admin.ModelAdmin):
 		return self._run_pull_all_business_data(request)
 
 	def _run_pull_all_business_data(self, request):
-		place_records = filter_deleted_business_records(list(HerePlacesImporter().load_records()))
-		write_discovery_json_records(place_records)
-		touched_snapshot_ids = _sync_listing_snapshots_from_imported_places(place_records, HerePlacesImporter.source_name)
+		discovery_records = filter_deleted_business_records(list(HerePlacesImporter().load_records()))
+		write_discovery_json_records(discovery_records)
+		snapshot_records = list(load_source_records(source_name=get_listing_source_name()))
+		touched_snapshot_ids = _sync_listing_snapshots_from_imported_places(snapshot_records)
 		self.message_user(
 			request,
-			f'Pulled all business data. Stored {len(place_records)} live businesses and synced {len(touched_snapshot_ids)} admin rows.',
+			f'Pulled all business data. Stored {len(discovery_records)} live businesses and synced {len(touched_snapshot_ids)} admin rows.',
 			level=messages.SUCCESS,
 		)
 		return HttpResponseRedirect(reverse('happyhour_admin:places_listingsnapshot_changelist'))
+
+	def search_businesses_view(self, request):
+		if not self.has_view_or_change_permission(request):
+			return JsonResponse({'results': []}, status=403)
+
+		query = str(request.GET.get('q') or '').strip()
+		if not query:
+			return JsonResponse({'results': [], 'count': 0})
+
+		queryset = self.get_queryset(request)
+		queryset, _use_distinct = self.get_search_results(request, queryset, query)
+		queryset = queryset.order_by('name')[:50]
+
+		results = [self._serialize_listing_snapshot_result(snapshot) for snapshot in queryset]
+		return JsonResponse({'results': results, 'count': len(results)})
+
+	def _serialize_listing_snapshot_result(self, snapshot):
+		return {
+			'id': snapshot.pk,
+			'name': snapshot.name,
+			'city': snapshot.get_city_display() or snapshot.city,
+			'venue_type': snapshot.get_venue_type_display() or snapshot.venue_type,
+			'source_name': snapshot.source_name,
+			'change_url': reverse('happyhour_admin:places_listingsnapshot_change', args=[snapshot.pk]),
+			'pull_business_data_url': reverse('happyhour_admin:places_listingsnapshot_pull_one', args=[snapshot.pk]),
+			'captured_at': timezone.localtime(snapshot.captured_at).strftime('%b. %d, %Y, %I:%M %p') if snapshot.captured_at else '',
+			'updated_at': timezone.localtime(snapshot.updated_at).strftime('%b. %d, %Y, %I:%M %p') if snapshot.updated_at else '',
+		}
 
 	def pull_business_data_view(self, request, object_id):
 		if not self.has_change_permission(request):
@@ -485,11 +523,15 @@ class ListingSnapshotAdmin(admin.ModelAdmin):
 @admin.register(DeletedBusiness, site=happyhour_admin_site)
 class DeletedBusinessAdmin(admin.ModelAdmin):
 	actions = ['restore_selected_businesses']
-	list_display = ('name', 'city', 'venue_type', 'source_name', 'restore_business_link', 'deleted_at')
-	list_filter = ('city', 'venue_type', 'source_name', 'deleted_at')
+	list_display = ('name', 'deleted_from_business_database', 'city', 'venue_type', 'source_name', 'restore_business_link', 'deleted_at')
+	list_editable = ('deleted_from_business_database',)
+	list_filter = ('deleted_from_business_database', 'city', 'venue_type', 'source_name', 'deleted_at')
 	search_fields = ('name', 'address_line_1', 'external_id', 'website_url')
 	readonly_fields = ('deleted_at', 'updated_at', 'payload')
 	fieldsets = (
+		('Status', {
+			'fields': ('deleted_from_business_database',),
+		}),
 		('Business identity', {
 			'fields': ('name', 'listing_slug', 'source_name', 'source_url', 'external_id'),
 		}),
@@ -514,14 +556,6 @@ class DeletedBusinessAdmin(admin.ModelAdmin):
 			path('<path:object_id>/restore-business/', self.admin_site.admin_view(self.restore_business_view), name='places_deletedbusiness_restore_one'),
 		]
 		return custom_urls + super().get_urls()
-
-	def get_actions(self, request):
-		actions = super().get_actions(request)
-		actions.pop('delete_selected', None)
-		return actions
-
-	def has_delete_permission(self, request, obj=None):
-		return False
 
 	@admin.display(description='Restore business')
 	def restore_business_link(self, obj):
@@ -676,6 +710,7 @@ class ProviderUsageWindowAdmin(admin.ModelAdmin):
 	ordering = ('provider_name', '-window_start')
 
 	def get_queryset(self, request):
+		delete_stale_provider_usage_windows()
 		get_provider_usage_statuses()
 		return super().get_queryset(request)
 

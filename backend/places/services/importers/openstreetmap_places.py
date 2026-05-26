@@ -5,6 +5,7 @@ from django.conf import settings
 from django.core.cache import caches
 
 from places.models import City, VenueType
+from places.services.discovery_exclusions import get_source_excluded_businesses, get_source_excluded_external_ids
 from places.services.importers.business_websites import BusinessWebsiteImporter
 from places.services.importers.here_places import HerePlacesImporter
 from places.services.importers.tomtom_places import TomTomPlacesImporter
@@ -36,16 +37,8 @@ class OpenStreetMapPlacesImporter:
 	def __init__(self, session=None):
 		self.session = session or requests.Session()
 		self.allowed_cities = tuple(getattr(settings, 'BUSINESS_SOURCE_ALLOWED_CITIES', tuple(self.CITY_QUERY_NAMES.keys())))
-		self.excluded_businesses = {
-			(self._normalize_text(city), self._normalize_text(name))
-			for city, name in getattr(settings, 'OSM_PLACE_EXCLUDED_BUSINESSES', tuple())
-			if str(city).strip() and str(name).strip()
-		}
-		self.excluded_external_ids = {
-			str(value).strip().lower()
-			for value in getattr(settings, 'OSM_PLACE_EXCLUDED_EXTERNAL_IDS', tuple())
-			if str(value).strip()
-		}
+		self.excluded_businesses = get_source_excluded_businesses(self.source_name)
+		self.excluded_external_ids = get_source_excluded_external_ids(self.source_name)
 
 	def load_records(self, html=None):
 		if html is not None:

@@ -64,7 +64,7 @@ def deleted_business_matches_place_record(deleted_business, place_record):
 
 
 def filter_deleted_business_records(place_records):
-	deleted_businesses = list(DeletedBusiness.objects.all())
+	deleted_businesses = list(DeletedBusiness.objects.filter(deleted_from_business_database=True))
 	if not deleted_businesses:
 		return list(place_records)
 
@@ -97,6 +97,7 @@ def store_deleted_business(snapshot, removed_records=None):
 	)
 
 	defaults = {
+		'deleted_from_business_database': True,
 		'name': snapshot.name,
 		'city': snapshot.city,
 		'venue_type': snapshot.venue_type,

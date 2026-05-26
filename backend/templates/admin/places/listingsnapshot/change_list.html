@@ -1,5 +1,144 @@
 {% extends "admin/change_list.html" %}
 
+{% block extrahead %}
+{{ block.super }}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const searchEndpoint = '{{ search_businesses_url|escapejs }}';
+    const searchForm = document.getElementById('changelist-search');
+    const searchInput = searchForm ? searchForm.querySelector('input[name="q"]') : null;
+    const resultTable = document.getElementById('result_list');
+    const resultBody = resultTable ? resultTable.querySelector('tbody') : null;
+    const resultCountNote = searchForm ? searchForm.querySelector('.small.quiet') : null;
+
+    if (!searchForm || !searchInput || !resultTable || !resultBody) {
+      return;
+    }
+
+    const originalBodyHtml = resultBody.innerHTML;
+    const originalCountText = resultCountNote ? resultCountNote.textContent : '';
+    let searchTimeout = null;
+    let activeRequestId = 0;
+
+    const noResultsRow = document.createElement('tr');
+    const noResultsCell = document.createElement('td');
+    const headerCount = resultTable.querySelectorAll('thead th').length || 1;
+
+    noResultsRow.className = 'no-local-results';
+    noResultsCell.colSpan = headerCount;
+    noResultsCell.textContent = 'No businesses match the current search.';
+    noResultsRow.appendChild(noResultsCell);
+
+    function setCountText(text) {
+      if (resultCountNote) {
+        resultCountNote.textContent = text;
+      }
+    }
+
+    function restoreOriginalResults() {
+      resultBody.innerHTML = originalBodyHtml;
+      setCountText(originalCountText);
+    }
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function buildRowHtml(result) {
+      return [
+        '<tr>',
+        '<td class="action-checkbox"><input type="checkbox" name="_selected_action" value="', escapeHtml(result.id), '"></td>',
+        '<th class="field-name"><a href="', escapeHtml(result.change_url), '">', escapeHtml(result.name), '</a></th>',
+        '<td class="field-city">', escapeHtml(result.city), '</td>',
+        '<td class="field-venue_type">', escapeHtml(result.venue_type), '</td>',
+        '<td class="field-source_name">', escapeHtml(result.source_name), '</td>',
+        '<td class="field-pull_business_data_link"><a class="button" href="', escapeHtml(result.pull_business_data_url), '">Pull business data</a></td>',
+        '<td class="field-captured_at nowrap">', escapeHtml(result.captured_at), '</td>',
+        '<td class="field-updated_at nowrap">', escapeHtml(result.updated_at), '</td>',
+        '</tr>'
+      ].join('');
+    }
+
+    function renderResults(results, query) {
+      if (!query) {
+        restoreOriginalResults();
+        return;
+      }
+
+      if (!results.length) {
+        resultBody.innerHTML = '';
+        resultBody.appendChild(noResultsRow);
+        setCountText('0 async results');
+        return;
+      }
+
+      resultBody.innerHTML = results.map(buildRowHtml).join('');
+      setCountText(results.length + (results.length === 1 ? ' async result' : ' async results'));
+    }
+
+    function runAsyncSearch() {
+      const query = searchInput.value.trim();
+      activeRequestId += 1;
+      const requestId = activeRequestId;
+
+      if (!query) {
+        restoreOriginalResults();
+        return;
+      }
+
+      setCountText('Searching...');
+
+      fetch(searchEndpoint + '?q=' + encodeURIComponent(query), {
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        credentials: 'same-origin'
+      })
+        .then(function (response) {
+          if (!response.ok) {
+            throw new Error('Search request failed');
+          }
+          return response.json();
+        })
+        .then(function (payload) {
+          if (requestId !== activeRequestId) {
+            return;
+          }
+
+          renderResults(payload.results || [], query);
+        })
+        .catch(function () {
+          if (requestId !== activeRequestId) {
+            return;
+          }
+
+          setCountText('Search unavailable');
+        });
+    }
+
+    searchInput.addEventListener('input', function () {
+      window.clearTimeout(searchTimeout);
+      searchTimeout = window.setTimeout(runAsyncSearch, 220);
+    });
+
+    searchForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      window.clearTimeout(searchTimeout);
+      runAsyncSearch();
+    });
+
+    if (searchInput.value.trim()) {
+      runAsyncSearch();
+    }
+  });
+</script>
+{% endblock %}
+
 {% block object-tools-items %}
 <li>
   <a href="{{ pull_all_business_data_url }}">Pull all business data</a>

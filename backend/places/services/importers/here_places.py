@@ -5,6 +5,7 @@ from django.conf import settings
 from django.core.cache import caches
 
 from places.models import City, VenueType
+from places.services.discovery_exclusions import get_source_excluded_businesses, get_source_excluded_external_ids
 from places.services.provider_quota import consume_provider_transaction
 from places.services.importers.types import ImportedPlace
 
@@ -144,16 +145,8 @@ class HerePlacesImporter:
 		self.session = session or requests.Session()
 		self.allowed_cities = tuple(getattr(settings, 'BUSINESS_SOURCE_ALLOWED_CITIES', tuple(self.CITY_CONFIG.keys())))
 		self.api_key = getattr(settings, 'HERE_API_KEY', '')
-		self.excluded_businesses = {
-			(self._normalize_text(city), self._normalize_text(name))
-			for city, name in getattr(settings, 'HERE_PLACE_EXCLUDED_BUSINESSES', tuple())
-			if str(city).strip() and str(name).strip()
-		}
-		self.excluded_external_ids = {
-			str(value).strip().lower()
-			for value in getattr(settings, 'HERE_PLACE_EXCLUDED_EXTERNAL_IDS', tuple())
-			if str(value).strip()
-		}
+		self.excluded_businesses = get_source_excluded_businesses(self.source_name)
+		self.excluded_external_ids = get_source_excluded_external_ids(self.source_name)
 
 	def load_records(self, html=None):
 		if html is not None:

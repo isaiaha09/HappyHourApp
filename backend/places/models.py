@@ -79,6 +79,7 @@ class DeletedBusiness(models.Model):
 	source_url = models.URLField(blank=True)
 	external_id = models.CharField(max_length=150, blank=True)
 	listing_slug = models.SlugField(max_length=170, blank=True)
+	deleted_from_business_database = models.BooleanField(default=True)
 	name = models.CharField(max_length=150)
 	city = models.CharField(max_length=20, choices=City.choices, blank=True)
 	venue_type = models.CharField(max_length=20, choices=VenueType.choices, blank=True)

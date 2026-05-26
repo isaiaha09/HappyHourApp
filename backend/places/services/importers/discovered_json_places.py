@@ -3,6 +3,7 @@ from pathlib import Path
 
 from django.conf import settings
 
+from places.services.discovery_exclusions import get_source_excluded_businesses, get_source_excluded_external_ids
 from places.services.importers.business_websites import BusinessWebsiteImporter
 from places.services.importers.types import ImportedDeal, ImportedHappyHour, ImportedOperatingHour, ImportedPlace
 
@@ -12,6 +13,31 @@ def get_discovery_json_path():
 	if configured_path:
 		return Path(configured_path)
 	return Path(settings.BASE_DIR) / 'config' / 'discovered_places.json'
+
+
+def _normalize_lookup_text(value):
+	return ''.join(character.lower() for character in str(value or '').strip() if character.isalnum())
+
+
+def filter_configured_place_records(place_records):
+	filtered_records = []
+	for place_record in place_records:
+		source_name = str(getattr(place_record, 'source_name', '') or '').strip().lower()
+		external_id = str(getattr(place_record, 'external_id', '') or '').strip().lower()
+		city = _normalize_lookup_text(getattr(place_record, 'city', ''))
+		name = _normalize_lookup_text(getattr(place_record, 'name', ''))
+
+		excluded_external_ids = get_source_excluded_external_ids(source_name)
+		if external_id and external_id in excluded_external_ids:
+			continue
+
+		excluded_businesses = get_source_excluded_businesses(source_name)
+		if city and name and (city, name) in excluded_businesses:
+			continue
+
+		filtered_records.append(place_record)
+
+	return filtered_records
 
 
 def serialize_imported_place(place_record):
@@ -145,13 +171,14 @@ def load_discovery_json_records(file_path=None):
 	payload = json.loads(content)
 	if not isinstance(payload, list):
 		return []
-	return [deserialize_imported_place(place_payload) for place_payload in payload if isinstance(place_payload, dict)]
+	loaded_records = [deserialize_imported_place(place_payload) for place_payload in payload if isinstance(place_payload, dict)]
+	return filter_configured_place_records(loaded_records)
 
 
 def write_discovery_json_records(place_records, file_path=None):
 	path = Path(file_path) if file_path else get_discovery_json_path()
 	path.parent.mkdir(parents=True, exist_ok=True)
-	serialized_payload = [serialize_imported_place(place_record) for place_record in place_records]
+	serialized_payload = [serialize_imported_place(place_record) for place_record in filter_configured_place_records(place_records)]
 	serialized_payload.sort(key=lambda item: (str(item.get('city') or ''), str(item.get('name') or ''), str(item.get('address_line_1') or '')))
 	path.write_text(json.dumps(serialized_payload, indent=2), encoding='utf-8')
 	return path

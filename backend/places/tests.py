@@ -1,3 +1,5 @@
+import json
+from datetime import timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from io import StringIO
@@ -17,7 +19,7 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 from bs4 import BeautifulSoup
 
-from .admin import BusinessAccountAdmin, CustomerAccountAdmin, DeletedBusinessAdmin, ListingSnapshotAdmin
+from .admin import BusinessAccountAdmin, CustomerAccountAdmin, DeletedBusinessAdmin, ListingSnapshotAdmin, ProviderUsageWindowAdmin
 from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessMembership, City, CustomerAccount, DealType, DeletedBusiness, ListingSnapshot, ProfileAuthToken, ProviderUsageWindow, VenueType, Weekday
 from .services.importers.base import BaseHtmlImporter
 from .services.importers.business_websites import BusinessWebsiteImporter
@@ -500,6 +502,107 @@ class DiscoveryJsonStorageTests(TestCase):
 
 		self.assertEqual(records, [])
 		self.assertIn('Loaded 1 discovery candidates, and 0 businesses to store.', output.getvalue())
+
+	def test_json_importer_skips_records_excluded_by_discovery_exclusions_file(self):
+		with TemporaryDirectory() as temp_dir:
+			json_path = Path(temp_dir) / 'discovered_places.json'
+			exclusions_path = Path(temp_dir) / 'discovery_exclusions.json'
+			exclusions_path.write_text(
+				'{"here_places": {"excluded_businesses": [], "excluded_external_ids": ["here:stored-1"]}}',
+				encoding='utf-8',
+			)
+			write_discovery_json_records([
+				ImportedPlace(
+					name='Stored Spot',
+					city=City.VENTURA,
+					venue_type=VenueType.RESTAURANT,
+					address_line_1='123 Main St',
+					source_name='here_places',
+					external_id='here:stored-1',
+				),
+				ImportedPlace(
+					name='Keep Spot',
+					city=City.VENTURA,
+					venue_type=VenueType.RESTAURANT,
+					address_line_1='124 Main St',
+					source_name='here_places',
+					external_id='here:stored-2',
+				),
+			], file_path=json_path)
+
+			with self.settings(DISCOVERY_JSON_PATH=json_path, DISCOVERY_EXCLUSIONS_PATH=exclusions_path):
+				records = load_discovery_json_records(json_path)
+
+		self.assertEqual(len(records), 1)
+		self.assertEqual(records[0].external_id, 'here:stored-2')
+
+	def test_refresh_discovery_json_command_skips_discovery_file_exclusions(self):
+		with TemporaryDirectory() as temp_dir:
+			json_path = Path(temp_dir) / 'discovered_places.json'
+			exclusions_path = Path(temp_dir) / 'discovery_exclusions.json'
+			exclusions_path.write_text(
+				'{"here_places": {"excluded_businesses": [], "excluded_external_ids": ["here:3"]}}',
+				encoding='utf-8',
+			)
+			output = StringIO()
+			discovery_record = ImportedPlace(
+				name='Discovery Spot',
+				city=City.CAMARILLO,
+				venue_type=VenueType.CAFE,
+				address_line_1='2 Main St',
+				website_url='https://example.com/discovery-spot',
+				source_name='here_places',
+				external_id='here:3',
+			)
+
+			class DummyDiscoveryImporter:
+				def load_records(self_inner):
+					return [discovery_record]
+
+			with self.settings(DISCOVERY_JSON_PATH=json_path, DISCOVERY_EXCLUSIONS_PATH=exclusions_path):
+				with patch.dict('places.management.commands.refresh_discovery_json.IMPORTER_REGISTRY', {'here_places': DummyDiscoveryImporter}, clear=False):
+					call_command('refresh_discovery_json', '--source', 'here_places', stdout=output)
+
+			records = load_discovery_json_records(json_path)
+
+		self.assertEqual(records, [])
+		self.assertIn('Loaded 1 discovery candidates, and 0 businesses to store.', output.getvalue())
+
+	def test_refresh_discovery_json_command_keeps_businesses_when_deleted_flag_is_cleared(self):
+		with TemporaryDirectory() as temp_dir:
+			json_path = Path(temp_dir) / 'discovered_places.json'
+			output = StringIO()
+			DeletedBusiness.objects.create(
+				name='Discovery Spot',
+				city=City.CAMARILLO,
+				venue_type=VenueType.CAFE,
+				address_line_1='2 Main St',
+				source_name='here_places',
+				external_id='here:3',
+				deleted_from_business_database=False,
+			)
+			discovery_record = ImportedPlace(
+				name='Discovery Spot',
+				city=City.CAMARILLO,
+				venue_type=VenueType.CAFE,
+				address_line_1='2 Main St',
+				website_url='https://example.com/discovery-spot',
+				source_name='here_places',
+				external_id='here:3',
+			)
+
+			class DummyDiscoveryImporter:
+				def load_records(self_inner):
+					return [discovery_record]
+
+			with self.settings(DISCOVERY_JSON_PATH=json_path):
+				with patch.dict('places.management.commands.refresh_discovery_json.IMPORTER_REGISTRY', {'here_places': DummyDiscoveryImporter}, clear=False):
+					call_command('refresh_discovery_json', '--source', 'here_places', stdout=output)
+
+			records = load_discovery_json_records(json_path)
+
+		self.assertEqual(len(records), 1)
+		self.assertEqual(records[0].external_id, 'here:3')
 
 
 class BusinessWebsiteImporterTests(TestCase):
@@ -2169,6 +2272,49 @@ class HerePlacesImporterTests(TestCase):
 
 		self.assertEqual([record.name for record in records], ['Harbor Tacos'])
 
+	@override_settings(HERE_API_KEY='test-token', HERE_CACHE_TIMEOUT=0)
+	def test_here_importer_skips_file_backed_excluded_external_ids(self):
+		with TemporaryDirectory() as temp_dir:
+			exclusions_path = Path(temp_dir) / 'discovery_exclusions.json'
+			exclusions_path.write_text(
+				'{"here_places": {"excluded_businesses": [], "excluded_external_ids": ["here:here-bad-1"]}}',
+				encoding='utf-8',
+			)
+
+			class StubSession:
+				def get(self, url, params=None, headers=None, timeout=None):
+					class Response:
+						def raise_for_status(self_inner):
+							return None
+
+						def json(self_inner):
+							return {
+								'items': [
+									{
+										'id': 'here-bad-1',
+										'title': 'Bubble Bakery',
+										'position': {'lat': 34.20, 'lng': -119.00},
+										'address': {'street': '1 Main St', 'postalCode': '93010', 'stateCode': 'CA', 'city': 'camarillo'},
+										'categories': [{'name': 'Bakery', 'primary': True}],
+									},
+									{
+										'id': 'here-good-1',
+										'title': 'Harbor Tacos',
+										'position': {'lat': 34.28, 'lng': -119.29},
+										'address': {'street': '123 Main St', 'postalCode': '93001', 'stateCode': 'CA', 'city': 'ventura'},
+										'categories': [{'name': 'Restaurant', 'primary': True}],
+									},
+								],
+							}
+
+					return Response()
+
+			with self.settings(DISCOVERY_EXCLUSIONS_PATH=exclusions_path):
+				importer = HerePlacesImporter(session=StubSession())
+				records = importer.load_records()
+
+		self.assertEqual([record.name for record in records], ['Harbor Tacos'])
+
 
 class TomTomPlacesImporterTests(TestCase):
 	@override_settings(TOMTOM_API_KEY='test-token')
@@ -2730,7 +2876,7 @@ class ListingSnapshotAdminTests(TestCase):
 				source_url='https://discover.search.hereapi.com/v1/discover',
 			)
 
-			with override_settings(DISCOVERY_JSON_PATH=json_path), patch.object(HerePlacesImporter, 'load_records', return_value=[place_record]):
+			with override_settings(DISCOVERY_JSON_PATH=json_path), patch.object(HerePlacesImporter, 'load_records', return_value=[place_record]), patch('places.admin.load_source_records', return_value=[place_record]):
 				response = self.admin.pull_all_business_data_view(self._build_request('/admin/places/listingsnapshot/pull-all-business-data/'))
 
 				self.assertEqual(response.status_code, 302)
@@ -2761,11 +2907,39 @@ class ListingSnapshotAdminTests(TestCase):
 				source_name='here_places',
 			)
 
-			with override_settings(DISCOVERY_JSON_PATH=json_path), patch.object(HerePlacesImporter, 'load_records', return_value=[place_record]):
+			with override_settings(DISCOVERY_JSON_PATH=json_path), patch.object(HerePlacesImporter, 'load_records', return_value=[place_record]), patch('places.admin.load_source_records', return_value=[]):
 				self.admin.pull_all_business_data_view(self._build_request('/admin/places/listingsnapshot/pull-all-business-data/'))
 
 				self.assertEqual(load_discovery_json_records(file_path=json_path), [])
 				self.assertFalse(ListingSnapshot.objects.filter(external_id='here:filtered-1').exists())
+
+	@override_settings(DISCOVERY_JSON_PATH='')
+	def test_pull_all_business_data_view_syncs_curated_source_records(self):
+		with TemporaryDirectory() as temp_dir:
+			json_path = Path(temp_dir) / 'discovered_places.json'
+			discovery_record = ImportedPlace(
+				name='Discovery Spot',
+				city=City.OXNARD,
+				venue_type=VenueType.RESTAURANT,
+				address_line_1='1 Collection Blvd',
+				external_id='here:discovery-1',
+				source_name='here_places',
+			)
+			curated_record = ImportedPlace(
+				name='Yard House',
+				city=City.OXNARD,
+				venue_type=VenueType.RESTAURANT,
+				address_line_1='501 Collection Blvd',
+				website_url='https://www.yardhouse.com/locations/ca/oxnard/oxnard-the-collection/8376',
+				external_id='curated:yard-house',
+				source_name='business_websites',
+			)
+
+			with override_settings(DISCOVERY_JSON_PATH=json_path), patch.object(HerePlacesImporter, 'load_records', return_value=[discovery_record]), patch('places.admin.load_source_records', return_value=[curated_record, discovery_record]):
+				self.admin.pull_all_business_data_view(self._build_request('/admin/places/listingsnapshot/pull-all-business-data/'))
+
+			self.assertTrue(ListingSnapshot.objects.filter(name='Yard House', source_name='business_websites').exists())
+			self.assertTrue(ListingSnapshot.objects.filter(name='Discovery Spot', source_name='here_places').exists())
 
 	@override_settings(DISCOVERY_JSON_PATH='')
 	def test_pull_business_data_view_delete_moves_to_deleted_businesses_and_restore_brings_it_back(self):
@@ -2818,8 +2992,81 @@ class ListingSnapshotAdminTests(TestCase):
 				self.assertEqual(len(restored_records), 1)
 				self.assertEqual(restored_records[0].external_id, 'here:cronies-ventura')
 
-	def test_deleted_business_admin_disables_hard_delete(self):
+	def test_search_businesses_view_returns_matching_rows(self):
+		match_snapshot = ListingSnapshot.objects.create(
+			name='Lure Fish House',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='60 S California St',
+			source_name='here_places',
+		)
+		ListingSnapshot.objects.create(
+			name='Harbor Tacos',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='123 Main St',
+			source_name='here_places',
+		)
+
+		response = self.admin.search_businesses_view(self._build_request('/admin/places/listingsnapshot/search-businesses/?q=Lure'))
+
+		self.assertEqual(response.status_code, 200)
+		payload = json.loads(response.content)
+		self.assertEqual(payload['count'], 1)
+		self.assertEqual(payload['results'][0]['name'], 'Lure Fish House')
+		self.assertEqual(payload['results'][0]['change_url'], reverse('happyhour_admin:places_listingsnapshot_change', args=[match_snapshot.pk]))
+
+	def test_deleted_business_admin_allows_hard_delete(self):
 		request = self._build_request('/admin/places/deletedbusiness/')
 
-		self.assertFalse(self.deleted_admin.has_delete_permission(request))
-		self.assertNotIn('delete_selected', self.deleted_admin.get_actions(request))
+		self.assertTrue(self.deleted_admin.has_delete_permission(request))
+		self.assertIn('delete_selected', self.deleted_admin.get_actions(request))
+
+
+class ProviderUsageWindowAdminTests(TestCase):
+	def setUp(self):
+		self.site = AdminSite()
+		self.admin = ProviderUsageWindowAdmin(ProviderUsageWindow, self.site)
+		self.request_factory = RequestFactory()
+		self.admin_user = User.objects.create_superuser(username='provider_usage_admin', email='provider_usage_admin@example.com', password='test-pass-123')
+
+	def _build_request(self, path='/admin/'):
+		request = self.request_factory.get(path)
+		request.user = self.admin_user
+		setattr(request, 'session', {})
+		setattr(request, '_messages', FallbackStorage(request))
+		return request
+
+	def test_get_queryset_deletes_stale_tomtom_daily_windows(self):
+		today = timezone.localdate()
+		stale_window = ProviderUsageWindow.objects.create(
+			provider_name='tomtom_places',
+			window_kind=ProviderUsageWindow.WindowKind.DAY,
+			window_start=today - timedelta(days=1),
+			consumed_transactions=3,
+			transaction_limit=50000,
+			reserve_threshold=250,
+		)
+		current_window = ProviderUsageWindow.objects.create(
+			provider_name='tomtom_places',
+			window_kind=ProviderUsageWindow.WindowKind.DAY,
+			window_start=today,
+			consumed_transactions=1,
+			transaction_limit=50000,
+			reserve_threshold=250,
+		)
+		here_window = ProviderUsageWindow.objects.create(
+			provider_name='here_places',
+			window_kind=ProviderUsageWindow.WindowKind.MONTH,
+			window_start=today.replace(day=1),
+			consumed_transactions=20,
+			transaction_limit=250000,
+			reserve_threshold=1000,
+		)
+
+		queryset = self.admin.get_queryset(self._build_request('/admin/places/providerusagewindow/'))
+
+		self.assertFalse(ProviderUsageWindow.objects.filter(pk=stale_window.pk).exists())
+		self.assertTrue(ProviderUsageWindow.objects.filter(pk=current_window.pk).exists())
+		self.assertTrue(ProviderUsageWindow.objects.filter(pk=here_window.pk).exists())
+		self.assertIn(current_window.pk, queryset.values_list('pk', flat=True))

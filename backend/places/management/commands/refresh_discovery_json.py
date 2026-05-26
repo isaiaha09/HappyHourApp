@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand, CommandError
 
-from places.services.importers.discovered_json_places import merge_discovery_json_records, write_discovery_json_records
+from places.services.importers.discovered_json_places import filter_configured_place_records, merge_discovery_json_records, write_discovery_json_records
 from places.services.importers.here_places import HerePlacesImporter
 from places.services.importers.openstreetmap_places import OpenStreetMapPlacesImporter
 from places.services.importers.tomtom_places import TomTomPlacesImporter
@@ -31,7 +31,7 @@ class Command(BaseCommand):
 
 		try:
 			discovery_records = list(discovery_importer.load_records())
-			filtered_records = filter_deleted_business_records(discovery_records)
+			filtered_records = filter_configured_place_records(filter_deleted_business_records(discovery_records))
 			if selected_city:
 				filtered_records = [record for record in filtered_records if str(getattr(record, 'city', '') or '').strip().lower() == selected_city]
 			if limit:

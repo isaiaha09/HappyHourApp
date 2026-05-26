@@ -1,0 +1,12 @@
+{
+  "here_places": {
+    "excluded_businesses": [],
+    "excluded_external_ids": [
+      "here:here:pds:place:8409q56e-64e4d5abd397451783c4bdfe6a363885"
+    ]
+  },
+  "openstreetmap_places": {
+    "excluded_businesses": [],
+    "excluded_external_ids": []
+  }
+}

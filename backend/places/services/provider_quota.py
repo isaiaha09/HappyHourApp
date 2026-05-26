@@ -98,6 +98,19 @@ def get_provider_usage_statuses():
 	return statuses
 
 
+def delete_stale_provider_usage_windows():
+	today = timezone.localdate()
+	for policy in DISCOVERY_PROVIDER_POLICIES:
+		if policy.window_kind != ProviderUsageWindow.WindowKind.DAY:
+			continue
+
+		ProviderUsageWindow.objects.filter(
+			provider_name=policy.provider_name,
+			window_kind=policy.window_kind,
+			window_start__lt=today,
+		).delete()
+
+
 def _get_or_create_usage_window(policy, for_update=False):
 	window_start = _window_start_for_policy(policy)
 	queryset = ProviderUsageWindow.objects
