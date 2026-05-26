@@ -1808,6 +1808,10 @@ function AppScreen() {
               setMapRegion((currentRegion) => (
                 areRegionsEqual(currentRegion, boundedRegion) ? currentRegion : boundedRegion
               ));
+
+              if (shouldSnapRegionToBounds(nextRegion)) {
+                mapRef.current?.animateToRegion(boundedRegion, 180);
+              }
             }}
             onPress={(event) => {
               Keyboard.dismiss();
@@ -3362,6 +3366,24 @@ function clampRegionToBounds(region: Region): Region {
     latitudeDelta: normalizedRegion.latitudeDelta,
     longitudeDelta: normalizedRegion.longitudeDelta,
   };
+}
+
+function shouldSnapRegionToBounds(region: Region) {
+  const normalizedRegion = normalizeRegion(region);
+  const latitudePadding = normalizedRegion.latitudeDelta / 2;
+  const longitudePadding = normalizedRegion.longitudeDelta / 2;
+  const minLatitude = mapAreaBounds.minLatitude + latitudePadding;
+  const maxLatitude = mapAreaBounds.maxLatitude - latitudePadding;
+  const minLongitude = mapAreaBounds.minLongitude + longitudePadding;
+  const maxLongitude = mapAreaBounds.maxLongitude - longitudePadding;
+  const snapTolerance = 0.0005;
+
+  return (
+    normalizedRegion.latitude < minLatitude - snapTolerance ||
+    normalizedRegion.latitude > maxLatitude + snapTolerance ||
+    normalizedRegion.longitude < minLongitude - snapTolerance ||
+    normalizedRegion.longitude > maxLongitude + snapTolerance
+  );
 }
 
 function areRegionsEqual(first: Region, second: Region) {

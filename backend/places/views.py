@@ -78,7 +78,7 @@ class PlaceListView(generics.GenericAPIView):
 			city=city,
 			venue_type=venue_type,
 			has_deals=has_deals,
-			resolve_missing_coordinates=False,
+			resolve_missing_coordinates=True,
 		)
 
 		page = self.paginate_queryset(payloads)

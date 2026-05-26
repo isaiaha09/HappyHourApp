@@ -127,7 +127,7 @@ class PlaceApiTests(APITestCase):
 			response = self.client.get(reverse('place-list'), {'has_deals': 'true'})
 
 		self.assertEqual(response.status_code, 200)
-		mock_get_source_place_payloads.assert_called_once_with(city=None, venue_type=None, has_deals=True, resolve_missing_coordinates=False)
+		mock_get_source_place_payloads.assert_called_once_with(city=None, venue_type=None, has_deals=True, resolve_missing_coordinates=True)
 
 	def test_place_list_endpoint_allows_large_page_size(self):
 		payloads = [
@@ -565,6 +565,47 @@ class BusinessWebsiteImporterTests(TestCase):
 		self.assertEqual(records[0].phone_number, '805-555-0100')
 		self.assertGreaterEqual(len(records[0].deals), 2)
 		self.assertIn('Happy Hour', records[0].deals[0].title)
+
+	def test_importer_preserves_configured_coordinates(self):
+		html = """
+		<html>
+			<head>
+				<script type="application/ld+json">
+				{
+					"@context": "https://schema.org",
+					"@type": "Restaurant",
+					"name": "Cronies Sports Grill",
+					"telephone": "805-555-0100",
+					"address": {
+						"streetAddress": "2855 Johnson Dr",
+						"addressLocality": "Ventura",
+						"addressRegion": "CA",
+						"postalCode": "93003"
+					}
+				}
+				</script>
+			</head>
+			<body></body>
+		</html>
+		"""
+
+		importer = BusinessWebsiteImporter(
+			session=CountingSession(html),
+			business_sources=[
+				{
+					'city': City.VENTURA,
+					'venue_type': VenueType.BAR,
+					'source_url': 'https://example.com/cronies',
+					'latitude': 34.2477,
+					'longitude': -119.19652,
+				}
+			],
+		)
+
+		records = importer.load_records()
+
+		self.assertEqual(records[0].latitude, 34.2477)
+		self.assertEqual(records[0].longitude, -119.19652)
 
 	def test_importer_skips_broken_source_when_not_strict(self):
 		class BrokenSession:

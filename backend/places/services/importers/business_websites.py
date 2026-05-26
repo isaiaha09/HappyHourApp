@@ -422,6 +422,8 @@ class BusinessWebsiteImporter(BaseHtmlImporter):
 			neighborhood=identity['neighborhood'],
 			state=identity['state'],
 			postal_code=identity['postal_code'],
+			latitude=source.get('latitude'),
+			longitude=source.get('longitude'),
 			geocode_query=source.get('geocode_query', ''),
 			phone_number=identity['phone_number'],
 			website_url=identity['website_url'],
