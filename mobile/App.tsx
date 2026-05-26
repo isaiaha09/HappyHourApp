@@ -1803,13 +1803,15 @@ function AppScreen() {
               mapRef.current.animateToRegion(mapRegion, 0);
             }}
             onRegionChangeComplete={(nextRegion) => {
-              const boundedRegion = clampRegionToBounds(nextRegion);
+              const boundedRegion = shouldUseNativeMapBoundaries
+                ? normalizeRegion(nextRegion)
+                : clampRegionToBounds(nextRegion);
 
               setMapRegion((currentRegion) => (
                 areRegionsEqual(currentRegion, boundedRegion) ? currentRegion : boundedRegion
               ));
 
-              if (shouldSnapRegionToBounds(nextRegion)) {
+              if (!shouldUseNativeMapBoundaries && shouldSnapRegionToBounds(nextRegion)) {
                 mapRef.current?.animateToRegion(boundedRegion, 180);
               }
             }}

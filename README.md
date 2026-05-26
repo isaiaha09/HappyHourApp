@@ -39,21 +39,37 @@ This is the stack I chose for the project:
 
 Right now, the backend is the part that is furthest along because I wanted the mobile app to be built against real API endpoints instead of fake UI-only data.
 
+That said, the mobile app is no longer just a placeholder. It now has a working browse experience, auth/profile flows, and business claim screens wired to the backend.
+
 ## What I Have Built So Far
 
-### Phase 1: Backend Skeleton
-
-So far I have built the first backend foundation using Django.
+### Backend Foundation
 
 Current backend work includes:
 
 - Django project setup inside the `backend` folder
-- a `places` app for the core happy hour data
-- models for claims, memberships, and listing snapshots
-- Django admin setup so I can manage the data through `/admin`
-- API endpoints for health, places, place details, and deals
+- a `places` app for listings, claims, memberships, and account workflow
+- Django admin setup so I can manage claims, memberships, deleted businesses, and snapshots through `/admin`
+- API endpoints for health, places, place details, deals, login, signup, profile dashboard, and claim-related profile actions
+- importer and service layers that normalize source records into mobile-friendly JSON
 - local virtual environment and backend requirements file
-- passing migrations and tests
+- passing migrations and backend tests
+
+### Mobile App Progress
+
+The Expo / React Native app is now partially built and connected to the real backend.
+
+Current mobile work includes:
+
+- browse mode with both list and map views
+- city filters and venue-type filters
+- keyword search across names, venue types, cities, and addresses
+- place detail cards with photos, deal sections, hours, phone numbers, and map previews
+- login and account creation flows
+- profile dashboard flow with animated transitions between auth, browse, and dashboard screens
+- business claim flow with consolidated business results and per-location address selection before verification
+- map marker rendering based on backend-provided or resolved coordinates
+- native map boundary handling for built apps, with a JS fallback for Expo Go
 
 ### Current Backend Models
 
@@ -69,26 +85,29 @@ Legacy catalog models for `Place`, `Deal`, `HappyHour`, and `ImportRun` have bee
 
 ### Current API Direction
 
-The backend now reads listing data directly from configured business websites and only keeps short-lived cache entries in memory.
+The backend now builds listing responses from source records instead of serving a long-lived `Place` catalog out of the database.
 
-That means the plan is:
+That means the current direction is:
 
-- fetch listing data from business websites
-- normalize it at request time through the backend
-- expose it through API endpoints
-- build the mobile UI against those endpoints
-- keep the app thin and simple while storing only app-owned data in the database
+- pull curated business website records and discovery records from configured sources
+- normalize and group them at request time through the backend service layer
+- expose them through API endpoints that the mobile app consumes directly
+- keep app-owned workflow data in the database while leaving listing data source-backed
 
-## Phase 2 Progress: Source-Backed Listings
+## Current Listing Pipeline
 
-The listing APIs now pull directly from configured business websites instead of storing a full place/deal catalog in the database.
+The listing APIs now build responses from a mix of curated website-backed businesses and stored discovery records.
 
-That means I now have:
+That currently includes:
 
-- a live website importer that fetches business pages directly
-- short-lived Django local-memory caching for fetched source HTML
-- API endpoints that normalize website data into the app response shape
-- claims and memberships stored separately from the live listing catalog
+- curated business source definitions in `backend/config/business_sources.py`
+- discovery data stored in `backend/config/discovered_places.json`
+- grouping and deduplication in `backend/places/services/source_listings.py`
+- coordinate backfill for records that need geocode resolution before they can appear on the mobile map
+- multi-location grouping so one business profile can expose multiple addresses inside the app
+- address-quality merging so partial or duplicate discovery records collapse into a better canonical location when possible
+
+The current runtime goal is to keep listings source-backed and normalized while only storing claim/account workflow data permanently in the database.
 
 ### Multi-Location Source Rule
 
@@ -113,38 +132,40 @@ HappyHourApp/
 
 ## What Is Ready Right Now
 
-Right now, these parts are ready:
+Right now, these parts are working:
 
-- backend project structure
-- Django admin
-- base API endpoints
-- live source-backed listing fetches
-- local-memory cache for source HTML
-- snapshot-based business claim workflow
-- tests passing for the backend
+- backend project structure and admin workflow
+- source-backed place list and place detail APIs
+- deal aggregation and location grouping
+- coordinate-aware map payloads for mobile browse
+- business claim and membership workflow backed by `ListingSnapshot`
+- Expo mobile browse UI with list and map modes
+- mobile search, city filtering, and venue filtering
+- mobile auth, profile dashboard, and business claim onboarding flow
+- backend tests for the source listing pipeline, API endpoints, and importer behavior
 
 ## What Is Not Built Yet
 
 These parts are not built yet:
 
-- Expo mobile UI
+- a completed polished mobile app release
 - Next.js website UI
 - production deployment
 - expanded city coverage outside the first 805 launch area
 - site-specific extraction rules for every business website I want to support reliably
+- a finalized production cache strategy for source fetches and geocoding
 
 ## Current Focus
 
-The next major step is building the Expo mobile app against the backend endpoints and live source-backed listing data.
+The current focus is tightening the existing mobile + backend loop instead of starting from scratch.
 
-I want to start simple and only build screens that match the actual backend data that already exists.
+That mainly means:
 
-That will probably start with:
-
-- place list screen
-- place detail screen
-- basic city filtering
-- deal display from the live backend
+- improving mobile browse/map polish and gesture behavior
+- improving source data quality and duplicate-location cleanup
+- tightening claim/account flows
+- expanding reliable business coverage inside Ventura, Oxnard, and Camarillo
+- keeping the README and local workflow notes aligned with the actual codebase state
 
 ## How To Run The Backend Locally
 
@@ -162,6 +183,15 @@ Then Django admin should be available at:
 http://127.0.0.1:8000/admin/
 ```
 
+The mobile app reads from the backend API, so the backend needs to be running while testing the Expo app locally.
+
+From the `mobile` folder:
+
+```powershell
+npm install
+npx expo start
+```
+
 ## Helpful Backend Commands
 
 Run tests:
@@ -170,10 +200,16 @@ Run tests:
 python manage.py test places
 ```
 
-Preview the configured live website sources without writing catalog rows to the database:
+Preview the configured source data without writing catalog rows to the database:
 
 ```powershell
 python manage.py import_source_data --source business_websites
+```
+
+Run the focused backend API tests used during recent mobile/data fixes:
+
+```powershell
+python manage.py test places.tests.PlaceApiTests places.tests.BusinessWebsiteImporterTests
 ```
 
 ## Notes From Me
@@ -181,9 +217,9 @@ python manage.py import_source_data --source business_websites
 I am intentionally trying to build this in phases:
 
 1. backend skeleton
-2. live source-backed listings
-3. thin mobile app
-4. better site-specific extraction rules
+2. source-backed and discovery-backed listings
+3. working thin mobile app
+4. better extraction rules and data cleanup
 5. broader city expansion later
 
 I am still learning, so I am keeping the structure practical and understandable instead of trying to make it perfect too early.
