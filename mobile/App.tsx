@@ -1,5 +1,4 @@
 import { startTransition, useDeferredValue, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { StatusBar } from 'expo-status-bar';
 import {
   ActivityIndicator,
@@ -88,6 +87,7 @@ const minLatitudeDelta = 0.01;
 const minLongitudeDelta = 0.01;
 const maxLatitudeDelta = 0.24;
 const maxLongitudeDelta = 0.32;
+const maxMapGestureDelta = Math.hypot(maxLatitudeDelta, maxLongitudeDelta);
 const mapFitPaddingFactor = 1.15;
 const defaultMapRegion = {
   latitude: (mapAreaBounds.minLatitude + mapAreaBounds.maxLatitude) / 2,
@@ -166,6 +166,7 @@ export default function App() {
 function AppScreen() {
   const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
+  const initialMapRegionRef = useRef<Region>(clampRegionToBounds(defaultMapRegion));
   const mapRef = useRef<MapView | null>(null);
   const onboardingTransitionFrameRef = useRef<number | null>(null);
   const suppressKeyboardLayoutAnimationUntilRef = useRef(0);
@@ -201,7 +202,8 @@ function AppScreen() {
   const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null);
   const [listLoading, setListLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [mapRegion, setMapRegion] = useState<Region>(() => clampRegionToBounds(defaultMapRegion));
+  const [mapRegion, setMapRegion] = useState<Region>(() => initialMapRegionRef.current);
+  const mapRegionRef = useRef(mapRegion);
   const [reloadCount, setReloadCount] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -230,7 +232,7 @@ function AppScreen() {
   const [browseEntryOffset, setBrowseEntryOffset] = useState(0);
   const [renderedMappedPlaces, setRenderedMappedPlaces] = useState<MappedPlace[]>([]);
   const [renderedMappedPlaceKey, setRenderedMappedPlaceKey] = useState('');
-  const shouldUseNativeMapBoundaries = Constants.executionEnvironment !== ExecutionEnvironment.StoreClient;
+  const shouldUseNativeMapBoundaries = false;
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const normalizedSearchQuery = normalizeSearchText(deferredSearchQuery);
   const onboardingTransitionDuration = 480;
@@ -283,6 +285,11 @@ function AppScreen() {
   const selectedPlaceLocation = getSelectedPlaceLocation(selectedPlace, selectedLocationId, selectedCity);
   const selectedPlaceDeals = selectedPlaceLocation?.deals ?? selectedPlace?.deals ?? [];
   const selectedPlaceOperatingHours = selectedPlaceLocation?.operating_hours ?? selectedPlace?.operating_hours ?? [];
+
+  useEffect(() => {
+    mapRegionRef.current = mapRegion;
+  }, [mapRegion]);
+
   const mapSearchResults = normalizedSearchQuery.length ? displayedMapPlaces.slice(0, 5) : [];
   const mapSearchResultsKey = mapSearchResults.map((place) => place.markerKey).join('|');
   const mapOverlayBottomPadding = keyboardHeight > 0
@@ -1400,13 +1407,15 @@ function AppScreen() {
 
   function handleFocusMapResult(place: MappedPlace) {
     setSelectedMapPlaceKey(place.markerKey);
+    const currentMapRegion = mapRegionRef.current;
     const nextRegion = clampRegionToBounds({
       latitude: place.latitude,
       longitude: place.longitude,
-      latitudeDelta: Math.min(mapRegion.latitudeDelta, 0.04),
-      longitudeDelta: Math.min(mapRegion.longitudeDelta, 0.04),
+      latitudeDelta: Math.min(currentMapRegion.latitudeDelta, 0.04),
+      longitudeDelta: Math.min(currentMapRegion.longitudeDelta, 0.04),
     });
 
+    mapRegionRef.current = nextRegion;
     setMapRegion(nextRegion);
     mapRef.current?.animateToRegion(nextRegion, 250);
   }
@@ -1605,8 +1614,8 @@ function AppScreen() {
         <View style={styles.fullScreenRoot}>
         <View style={styles.mapScreen}>
           <MapView
-            initialRegion={mapRegion}
-            maxDelta={maxLatitudeDelta}
+            initialRegion={initialMapRegionRef.current}
+            maxDelta={maxMapGestureDelta}
             minDelta={minLatitudeDelta}
             onMapReady={() => {
               if (!shouldUseNativeMapBoundaries || !mapRef.current) {
@@ -1617,12 +1626,28 @@ function AppScreen() {
                 { latitude: mapAreaBounds.maxLatitude, longitude: mapAreaBounds.maxLongitude },
                 { latitude: mapAreaBounds.minLatitude, longitude: mapAreaBounds.minLongitude },
               );
-              mapRef.current.animateToRegion(mapRegion, 0);
+              mapRef.current.animateToRegion(mapRegionRef.current, 0);
             }}
-            onRegionChangeComplete={(nextRegion) => {
+            onRegionChangeComplete={(nextRegion, details) => {
+              const previousRegion = mapRegionRef.current;
               const boundedRegion = shouldUseNativeMapBoundaries
                 ? normalizeRegion(nextRegion)
                 : clampRegionToBounds(nextRegion);
+
+              mapRegionRef.current = boundedRegion;
+
+              if (details.isGesture) {
+                const shouldIgnoreSnapForStationaryGesture = isStationaryMapGesture(previousRegion, nextRegion);
+
+                if (!shouldUseNativeMapBoundaries && !shouldIgnoreSnapForStationaryGesture && shouldSnapRegionToBounds(nextRegion)) {
+                  setMapRegion((currentRegion) => (
+                    areRegionsEqual(currentRegion, boundedRegion) ? currentRegion : boundedRegion
+                  ));
+                  mapRef.current?.animateToRegion(boundedRegion, 180);
+                }
+
+                return;
+              }
 
               setMapRegion((currentRegion) => (
                 areRegionsEqual(currentRegion, boundedRegion) ? currentRegion : boundedRegion
@@ -1641,6 +1666,7 @@ function AppScreen() {
               handleClearMapSelection();
             }}
             ref={mapRef}
+            rotateEnabled
             style={styles.mapBackground}
           >
             {displayedMapPlaces.map((place, index) => {
@@ -2108,6 +2134,21 @@ function areRegionsEqual(first: Region, second: Region) {
     nearlyEqual(first.latitudeDelta, second.latitudeDelta) &&
     nearlyEqual(first.longitudeDelta, second.longitudeDelta)
   );
+}
+
+function isStationaryMapGesture(previousRegion: Region, nextRegion: Region) {
+  const centerTolerance = 0.0005;
+  const deltaTolerance = 0.0001;
+
+  const centerStayedPut =
+    Math.abs(previousRegion.latitude - nextRegion.latitude) < centerTolerance &&
+    Math.abs(previousRegion.longitude - nextRegion.longitude) < centerTolerance;
+
+  const deltaChanged =
+    Math.abs(previousRegion.latitudeDelta - nextRegion.latitudeDelta) > deltaTolerance ||
+    Math.abs(previousRegion.longitudeDelta - nextRegion.longitudeDelta) > deltaTolerance;
+
+  return centerStayedPut && deltaChanged;
 }
 
 function nearlyEqual(first: number, second: number) {
