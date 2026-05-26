@@ -68,7 +68,11 @@ export const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
+  toolbarRowTrailing: {
+    justifyContent: 'flex-end',
+  },
   toolbarActionsRow: {
+    alignItems: 'center',
     flexDirection: 'row',
     gap: 8,
   },
@@ -440,10 +444,12 @@ export const styles = StyleSheet.create({
     fontWeight: '700',
   },
   reloadButton: {
+    alignItems: 'center',
     backgroundColor: '#1f5f5b',
     borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
   },
   secondaryToolbarButton: {
     backgroundColor: '#fff7ef',
@@ -460,7 +466,7 @@ export const styles = StyleSheet.create({
   },
   reloadButtonText: {
     color: '#f4fffe',
-    fontSize: 14,
+    fontSize: 22,
     fontWeight: '700',
   },
   sectionTitle: {
@@ -501,6 +507,12 @@ export const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     padding: 10,
+  },
+  modeSwitcherCardInline: {
+    padding: 6,
+  },
+  modeSwitcherCardOverlay: {
+    backgroundColor: 'rgba(255, 247, 239, 0.98)',
   },
   modeButton: {
     backgroundColor: '#fff7ef',

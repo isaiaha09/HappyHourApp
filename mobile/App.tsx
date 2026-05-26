@@ -45,7 +45,7 @@ import {
   type VenueFilterValue,
 } from './src/browseConfig';
 import { DashboardScreen } from './src/screens/DashboardScreen';
-import { BrowseControls, BrowseModeSwitcher } from './src/screens/BrowseControls';
+import { BrowseControls } from './src/screens/BrowseControls';
 import { PlaceDetailScreen } from './src/screens/PlaceDetailScreen';
 import { SplashScreen } from './src/screens/SplashScreen';
 import {
@@ -1706,10 +1706,12 @@ function AppScreen() {
               ]}
             >
             <BrowseControls
+              browseMode={browseMode}
               overlay
               filtersExpanded={browseFiltersExpanded}
               onChangeSearchQuery={setSearchQuery}
               onClearSearchQuery={handleClearSearchQuery}
+              onBrowseModeChange={handleBrowseModeChange}
               onOpenDashboard={authenticatedSession ? handleOpenProfiles : undefined}
               onReload={handleRefreshPlaces}
               onSelectAllVenueTypes={handleSelectAllVenueTypes}
@@ -1721,8 +1723,6 @@ function AppScreen() {
               selectedCity={selectedCity}
               selectedVenueTypes={selectedVenueTypes}
             />
-
-            <BrowseModeSwitcher browseMode={browseMode} onBrowseModeChange={handleBrowseModeChange} overlay />
 
             {listLoading ? (
               <View style={styles.mapLoadingOverlay}>
@@ -1823,9 +1823,11 @@ function AppScreen() {
         <View style={[styles.screen, isLandscape ? styles.screenLandscape : null]}>
           <>
             <BrowseControls
+              browseMode={browseMode}
               filtersExpanded={browseFiltersExpanded}
               onChangeSearchQuery={setSearchQuery}
               onClearSearchQuery={handleClearSearchQuery}
+              onBrowseModeChange={handleBrowseModeChange}
               onOpenDashboard={authenticatedSession ? handleOpenProfiles : undefined}
               onReload={handleRefreshPlaces}
               onSelectAllVenueTypes={handleSelectAllVenueTypes}
@@ -1837,8 +1839,6 @@ function AppScreen() {
               selectedCity={selectedCity}
               selectedVenueTypes={selectedVenueTypes}
             />
-
-            <BrowseModeSwitcher browseMode={browseMode} onBrowseModeChange={handleBrowseModeChange} />
 
             {listLoading ? (
               <View style={styles.centerState}>

@@ -5,10 +5,12 @@ import { styles } from '../appStyles';
 import { normalizeSearchText } from '../placeHelpers';
 
 export type BrowseControlsProps = {
+  browseMode: BrowseMode;
   overlay?: boolean;
   filtersExpanded: boolean;
   onChangeSearchQuery: (value: string) => void;
   onClearSearchQuery: () => void;
+  onBrowseModeChange: (mode: BrowseMode) => void;
   onOpenDashboard?: () => void;
   onReload: () => void;
   onSelectAllVenueTypes: () => void;
@@ -21,17 +23,13 @@ export type BrowseControlsProps = {
   selectedVenueTypes: VenueFilterValue[];
 };
 
-export type BrowseModeSwitcherProps = {
-  browseMode: BrowseMode;
-  onBrowseModeChange: (mode: BrowseMode) => void;
-  overlay?: boolean;
-};
-
 export function BrowseControls({
+  browseMode,
   overlay = false,
   filtersExpanded,
   onChangeSearchQuery,
   onClearSearchQuery,
+  onBrowseModeChange,
   onOpenDashboard,
   onReload,
   onSelectAllVenueTypes,
@@ -62,23 +60,35 @@ export function BrowseControls({
         landscapeControlsWidth ? { width: landscapeControlsWidth } : null,
       ]}
     >
-      <View style={[styles.toolbarRow, compactLandscapeControls ? styles.toolbarRowLandscape : null]}>
-        <Text
-          style={[
-            overlay ? styles.mapAppTitle : styles.appTitle,
-            compactLandscapeControls ? styles.controlsTitleLandscape : null,
-          ]}
-        >
-          HappyHourApp
-        </Text>
+      <View
+        style={[
+          styles.toolbarRow,
+          compactLandscapeControls ? styles.toolbarRowLandscape : null,
+          !onOpenDashboard ? styles.toolbarRowTrailing : null,
+        ]}
+      >
+        {onOpenDashboard ? (
+          <Pressable onPress={onOpenDashboard} style={styles.secondaryToolbarButton}>
+            <Text style={styles.secondaryToolbarButtonText}>Back to Dashboard</Text>
+          </Pressable>
+        ) : null}
         <View style={styles.toolbarActionsRow}>
-          {onOpenDashboard ? (
-            <Pressable onPress={onOpenDashboard} style={styles.secondaryToolbarButton}>
-              <Text style={styles.secondaryToolbarButtonText}>Back to Dashboard</Text>
+          <View style={[styles.modeSwitcherCard, styles.modeSwitcherCardInline, overlay ? styles.modeSwitcherCardOverlay : null]}>
+            <Pressable
+              onPress={() => onBrowseModeChange('list')}
+              style={[styles.modeButton, browseMode === 'list' ? styles.modeButtonActive : null]}
+            >
+              <Text style={[styles.modeButtonText, browseMode === 'list' ? styles.modeButtonTextActive : null]}>List</Text>
             </Pressable>
-          ) : null}
-          <Pressable onPress={onReload} style={styles.reloadButton}>
-            <Text style={styles.reloadButtonText}>Refresh Places</Text>
+            <Pressable
+              onPress={() => onBrowseModeChange('map')}
+              style={[styles.modeButton, browseMode === 'map' ? styles.modeButtonActive : null]}
+            >
+              <Text style={[styles.modeButtonText, browseMode === 'map' ? styles.modeButtonTextActive : null]}>Map</Text>
+            </Pressable>
+          </View>
+          <Pressable accessibilityLabel="Refresh places" onPress={onReload} style={styles.reloadButton}>
+            <Text style={styles.reloadButtonText}>↻</Text>
           </Pressable>
         </View>
       </View>
@@ -180,27 +190,6 @@ export function BrowseControls({
           </ScrollView>
         </View>
       ) : null}
-    </View>
-  );
-}
-
-export function BrowseModeSwitcher({ browseMode, onBrowseModeChange, overlay = false }: BrowseModeSwitcherProps) {
-  return (
-    <View style={[styles.modeSwitcherDock, overlay ? styles.modeSwitcherDockOverlay : null]}>
-      <View style={styles.modeSwitcherCard}>
-        <Pressable
-          onPress={() => onBrowseModeChange('list')}
-          style={[styles.modeButton, browseMode === 'list' ? styles.modeButtonActive : null]}
-        >
-          <Text style={[styles.modeButtonText, browseMode === 'list' ? styles.modeButtonTextActive : null]}>List</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => onBrowseModeChange('map')}
-          style={[styles.modeButton, browseMode === 'map' ? styles.modeButtonActive : null]}
-        >
-          <Text style={[styles.modeButtonText, browseMode === 'map' ? styles.modeButtonTextActive : null]}>Map</Text>
-        </Pressable>
-      </View>
     </View>
   );
 }
