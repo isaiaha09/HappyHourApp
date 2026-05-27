@@ -1727,6 +1727,29 @@ function AppScreen() {
     );
   }
 
+  function renderProfilesScreenRoot() {
+    const shouldShowBrowseOverlay = usesBrowseProfileSlideTransition
+      && browseProfileTransitionFrom === 'profiles'
+      && incomingBrowseProfileScreen === 'browse';
+
+    return (
+      <View style={shouldShowBrowseOverlay ? styles.onboardingTransitionRoot : styles.fullScreenRoot}>
+        <Animated.View style={[styles.screenTransitionLayerAbsolute, shouldShowBrowseOverlay ? browseProfileOutgoingStyle : null]}>
+          {renderProfilesScreen()}
+        </Animated.View>
+        {shouldShowBrowseOverlay ? (
+          <Animated.View style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, browseProfileIncomingStyle]}>
+            {renderBrowseScreen({
+              suppressBrowseSceneTransitionStyle: true,
+              suppressScreenTransitionStyle: true,
+              suppressTransitionOverlay: true,
+            })}
+          </Animated.View>
+        ) : null}
+      </View>
+    );
+  }
+
   function renderOnboardingScreen(targetScreen: AppScreenMode, profileSessionOverride?: SignupResponse | null) {
     switch (targetScreen) {
       case 'splash':
@@ -1811,10 +1834,23 @@ function AppScreen() {
     }
   }
 
-  function renderBrowseScreen() {
+  function renderBrowseScreen(options?: { suppressScreenTransitionStyle?: boolean; suppressBrowseSceneTransitionStyle?: boolean; suppressTransitionOverlay?: boolean }) {
+    const browseScreenAnimationStyle = options?.suppressScreenTransitionStyle ? null : screenTransitionStyle;
+    const browseSceneAnimationStyle = options?.suppressBrowseSceneTransitionStyle ? null : browseSceneTransitionStyle;
+    const shouldShowProfileOverlay = !options?.suppressTransitionOverlay
+      && usesBrowseProfileSlideTransition
+      && browseProfileTransitionFrom === 'browse'
+      && incomingBrowseProfileScreen === 'profiles';
+
     return (
-      <View style={styles.fullScreenRoot}>
-        <Animated.View style={[styles.screenTransitionLayerAbsolute, styles.fullScreenRoot, screenTransitionStyle, browseSceneTransitionStyle]}>
+      <View style={shouldShowProfileOverlay ? styles.onboardingTransitionRoot : styles.fullScreenRoot}>
+        <Animated.View style={[
+          styles.screenTransitionLayerAbsolute,
+          styles.fullScreenRoot,
+          browseScreenAnimationStyle,
+          browseSceneAnimationStyle,
+          shouldShowProfileOverlay ? browseProfileOutgoingStyle : null,
+        ]}>
           <View style={styles.fullScreenRoot}>
             <Animated.View pointerEvents={browseMode === 'map' ? 'auto' : 'none'} style={[styles.mapModeContentLayer, browseModeTransitionStyle]}>
               <View style={styles.mapScreen}>
@@ -2156,6 +2192,11 @@ function AppScreen() {
             </SafeAreaView>
           </View>
         </Animated.View>
+        {shouldShowProfileOverlay ? (
+          <Animated.View style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, browseProfileIncomingStyle]}>
+            {renderProfilesScreen()}
+          </Animated.View>
+        ) : null}
       </View>
     );
   }
@@ -2191,19 +2232,8 @@ function AppScreen() {
             {renderOnboardingScreen('auth')}
           </Animated.View>
         </View>
-      ) : usesBrowseProfileSlideTransition ? (
-        <View style={styles.onboardingTransitionRoot}>
-          <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, browseProfileOutgoingStyle]}>
-            {browseProfileTransitionFrom === 'profiles' ? renderProfilesScreen() : renderBrowseScreen()}
-          </Animated.View>
-          <Animated.View style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, browseProfileIncomingStyle]}>
-            {incomingBrowseProfileScreen === 'profiles' ? renderProfilesScreen() : renderBrowseScreen()}
-          </Animated.View>
-        </View>
       ) : authenticatedSession && screenMode === 'profiles' ? (
-        <View style={styles.fullScreenRoot}>
-          {renderProfilesScreen()}
-        </View>
+        renderProfilesScreenRoot()
       ) : usesOnboardingSlideTransition && currentOnboardingScreen ? (
         <View style={styles.onboardingTransitionRoot}>
           <Animated.View
