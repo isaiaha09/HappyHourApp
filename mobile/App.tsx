@@ -230,8 +230,11 @@ function AppScreen() {
   const [loadingMoreMapResults, setLoadingMoreMapResults] = useState(false);
   const [listRevealToken, setListRevealToken] = useState(0);
   const [listRevealEnabled, setListRevealEnabled] = useState(browseMode === 'list');
+  const [mapMarkersTrackViewChanges, setMapMarkersTrackViewChanges] = useState(true);
   const showMoreMapResultsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoFitMapRegionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mapMarkersTrackViewChangesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingImmediateMapPinsRefreshRef = useRef(false);
   const pendingListRevealRef = useRef(false);
   const [profileForm, setProfileForm] = useState<ProfileFormState>(initialProfileFormState);
   const [profileSubmitting, setProfileSubmitting] = useState(false);
@@ -331,9 +334,19 @@ function AppScreen() {
     autoFitMapRegionTimeoutRef.current = null;
   }
 
+  function clearMapMarkersTrackViewChangesTimer() {
+    if (mapMarkersTrackViewChangesTimeoutRef.current === null) {
+      return;
+    }
+
+    clearTimeout(mapMarkersTrackViewChangesTimeoutRef.current);
+    mapMarkersTrackViewChangesTimeoutRef.current = null;
+  }
+
   useEffect(() => () => {
     clearShowMoreMapResultsTimer();
     clearAutoFitMapRegionTimer();
+    clearMapMarkersTrackViewChangesTimer();
   }, []);
   const availableClaimPlaces = consolidatePlacesBySlug(availableProfilePlaces);
   const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'business-search', 'business-claim', 'manual-business-claim']);
@@ -617,42 +630,16 @@ function AppScreen() {
       return;
     }
 
-    const animatePinsIn = (nextPlaces: MappedPlace[], nextKey: string) => {
-      setRenderedMappedPlaces(nextPlaces);
-      setRenderedMappedPlaceKey(nextKey);
-      mapPinsTransition.stopAnimation();
-      mapPinsTransition.setValue(0);
-      requestAnimationFrame(() => {
-        Animated.timing(mapPinsTransition, {
-          duration: 340,
-          toValue: 1,
-          useNativeDriver: true,
-        }).start();
-      });
-    };
-
-    if (!renderedMappedPlaceKey) {
-      animatePinsIn(mappedPlaces, mappedPlaceKey);
+    if (renderedMappedPlaceKey === mappedPlaceKey && !pendingImmediateMapPinsRefreshRef.current) {
       return;
     }
 
-    if (renderedMappedPlaceKey === mappedPlaceKey) {
-      return;
-    }
-
+    pendingImmediateMapPinsRefreshRef.current = false;
     mapPinsTransition.stopAnimation();
-    Animated.timing(mapPinsTransition, {
-      duration: 160,
-      toValue: 0,
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (!finished) {
-        return;
-      }
-
-      animatePinsIn(mappedPlaces, mappedPlaceKey);
-    });
-  }, [listLoading, mapPinsTransition, mappedPlaceKey, renderedMappedPlaceKey, renderedMappedPlaces.length, showMapBrowse]);
+    mapPinsTransition.setValue(1);
+    setRenderedMappedPlaces(mappedPlaces);
+    setRenderedMappedPlaceKey(mappedPlaceKey);
+  }, [listLoading, mapPinsTransition, mappedPlaceKey, mappedPlaces, renderedMappedPlaceKey, renderedMappedPlaces.length, showMapBrowse]);
 
   function navigateScreen(
     nextScreen: AppScreenMode,
@@ -1095,6 +1082,21 @@ function AppScreen() {
   }, [filteredPlaceKey, listLoading, normalizedSearchQuery.length, selectedCity, showMapBrowse]);
 
   useEffect(() => {
+    if (!showMapBrowse) {
+      clearMapMarkersTrackViewChangesTimer();
+      setMapMarkersTrackViewChanges(true);
+      return;
+    }
+
+    setMapMarkersTrackViewChanges(true);
+    clearMapMarkersTrackViewChangesTimer();
+    mapMarkersTrackViewChangesTimeoutRef.current = setTimeout(() => {
+      setMapMarkersTrackViewChanges(false);
+      mapMarkersTrackViewChangesTimeoutRef.current = null;
+    }, 280);
+  }, [renderedMappedPlaceKey, selectedMapPlaceKey, showMapBrowse]);
+
+  useEffect(() => {
     if (!['profiles', 'business-search', 'business-claim', 'manual-business-claim'].includes(screenMode)) {
       return;
     }
@@ -1372,12 +1374,21 @@ function AppScreen() {
       verifiedBusinessesOnly,
     });
     const clearedMappedPlaces = getMappedPlacesForBrowse(clearedFilteredPlaces);
-    const clearedMappedPlaceKey = clearedMappedPlaces.map((place) => place.markerKey).join('|');
 
+    pendingImmediateMapPinsRefreshRef.current = true;
+    clearAutoFitMapRegionTimer();
     setSearchQuery('');
     setSelectedMapPlaceKey(null);
-    setRenderedMappedPlaces(clearedMappedPlaces);
-    setRenderedMappedPlaceKey(clearedMappedPlaceKey);
+    mapResultsOpacity.stopAnimation();
+    mapResultsOpacity.setValue(0);
+    mapResultsExpandedProgress.stopAnimation();
+    mapResultsExpandedProgress.setValue(1);
+    setShowMapResultsCard(false);
+    setMapResultsCollapsed(false);
+    setRenderedMapSearchResults([]);
+    setRenderedMapResultsKey('');
+    setRenderedMapResultCount(0);
+    setVisibleMapResultCount(0);
     setLoadingMoreMapResults(false);
     clearShowMoreMapResultsTimer();
 
@@ -1385,7 +1396,6 @@ function AppScreen() {
       const nextRegion = getBrowseMapRegion(selectedCity, clearedMappedPlaces);
       mapRegionRef.current = nextRegion;
       setMapRegion(nextRegion);
-      mapRef.current?.animateToRegion(nextRegion, 250);
     }
   }
 
@@ -1721,6 +1731,9 @@ function AppScreen() {
   }
 
   function handleFocusMapResult(place: MappedPlace) {
+    mapResultsOpacity.stopAnimation();
+    mapResultsOpacity.setValue(0);
+    setShowMapResultsCard(false);
     setSelectedMapPlaceKey(place.markerKey);
     const currentMapRegion = mapRegionRef.current;
     const nextRegion = clampRegionToBounds({
@@ -1966,7 +1979,8 @@ function AppScreen() {
             <Animated.View pointerEvents={browseMode === 'map' ? 'auto' : 'none'} style={[styles.mapModeContentLayer, browseModeTransitionStyle]}>
               <View style={styles.mapScreen}>
                 <MapView
-                  initialRegion={initialMapRegionRef.current}
+                  key={renderedMappedPlaceKey || 'empty-map'}
+                  region={mapRegion}
                   maxDelta={maxMapGestureDelta}
                   minDelta={minLatitudeDelta}
                   userInterfaceStyle={Platform.OS === 'ios' ? (displayedDarkMapMode ? 'dark' : 'light') : undefined}
@@ -1981,7 +1995,6 @@ function AppScreen() {
                       { latitude: mapAreaBounds.maxLatitude, longitude: mapAreaBounds.maxLongitude },
                       { latitude: mapAreaBounds.minLatitude, longitude: mapAreaBounds.minLongitude },
                     );
-                    mapRef.current.animateToRegion(mapRegionRef.current, 0);
                   }}
                   onRegionChangeComplete={(nextRegion, details) => {
                     const previousRegion = mapRegionRef.current;
@@ -2046,7 +2059,7 @@ function AppScreen() {
                         coordinate={{ latitude: place.markerLatitude, longitude: place.markerLongitude }}
                         key={place.markerKey}
                         onPress={() => setSelectedMapPlaceKey(place.markerKey)}
-                        tracksViewChanges={false}
+                          tracksViewChanges={mapMarkersTrackViewChanges}
                         zIndex={displayedMapPlaces.length - index}
                       >
                         <Animated.View style={[
@@ -2065,6 +2078,7 @@ function AppScreen() {
                 {Platform.OS === 'ios' && transitioningMapTheme !== null ? (
                   <Animated.View pointerEvents="none" style={[styles.mapThemeTransitionLayer, { opacity: mapThemeFade }]}>
                     <MapView
+                      key={`transition-${renderedMappedPlaceKey || 'empty-map'}`}
                       mapType="standard"
                       region={mapRegion}
                       rotateEnabled={false}
@@ -2085,7 +2099,7 @@ function AppScreen() {
                             anchor={{ x: 0.5, y: 0.5 }}
                             coordinate={{ latitude: place.markerLatitude, longitude: place.markerLongitude }}
                             key={`transition-${place.markerKey}`}
-                            tracksViewChanges={false}
+                            tracksViewChanges={mapMarkersTrackViewChanges}
                             zIndex={displayedMapPlaces.length - index}
                           >
                             <Animated.View style={[
