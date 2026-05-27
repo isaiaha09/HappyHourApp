@@ -63,10 +63,6 @@ export function getBrowseSummaryLabel(
 ) {
   const summaryParts: string[] = [];
 
-  if (searchQuery.length) {
-    summaryParts.push(`Search: ${searchQuery}`);
-  }
-
   if (selectedCity !== 'all') {
     const cityLabel = cityFilters.find((filter) => filter.value === selectedCity)?.label ?? selectedCity;
     summaryParts.push(cityLabel);

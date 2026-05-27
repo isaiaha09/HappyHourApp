@@ -1,4 +1,4 @@
-import { startTransition, useDeferredValue, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { startTransition, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import {
   ActivityIndicator,
@@ -183,6 +183,7 @@ function AppScreen() {
   const browseModeTransition = useRef(new Animated.Value(0)).current;
   const mapPinsTransition = useRef(new Animated.Value(1)).current;
   const mapResultsOpacity = useRef(new Animated.Value(0)).current;
+  const mapResultsExpandedProgress = useRef(new Animated.Value(1)).current;
   const mapPreviewOpacity = useRef(new Animated.Value(0)).current;
   const mapThemeFade = useRef(new Animated.Value(0)).current;
   const [apiBaseUrl, setApiBaseUrl] = useState(initialApiBaseUrl);
@@ -221,6 +222,7 @@ function AppScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [showMapResultsCard, setShowMapResultsCard] = useState(false);
+  const [mapResultsCollapsed, setMapResultsCollapsed] = useState(false);
   const [renderedMapSearchResults, setRenderedMapSearchResults] = useState<MappedPlace[]>([]);
   const [renderedMapResultsKey, setRenderedMapResultsKey] = useState('');
   const [renderedMapResultCount, setRenderedMapResultCount] = useState(0);
@@ -254,8 +256,7 @@ function AppScreen() {
   const [renderedMappedPlaces, setRenderedMappedPlaces] = useState<MappedPlace[]>([]);
   const [renderedMappedPlaceKey, setRenderedMappedPlaceKey] = useState('');
   const shouldUseNativeMapBoundaries = false;
-  const deferredSearchQuery = useDeferredValue(searchQuery);
-  const normalizedSearchQuery = normalizeSearchText(deferredSearchQuery);
+  const normalizedSearchQuery = normalizeSearchText(searchQuery);
   const onboardingTransitionDuration = 480;
   const showTransitionMapBrowse = browseProfileTransitionFrom !== null
     && incomingBrowseProfileScreen !== null
@@ -280,38 +281,7 @@ function AppScreen() {
   });
   const filteredPlaceKey = filteredPlaces.map((place) => place.id).join('|');
 
-  const mappedPlaces = showMapBrowse
-    ? filteredPlaces.flatMap((place) => (
-        getPlaceLocations(place).flatMap((location) => {
-          if (location.latitude === null || location.longitude === null) {
-            return [];
-          }
-
-          return [
-            {
-              ...place,
-              city: location.city,
-              city_label: location.city_label,
-              address_line_1: location.address_line_1,
-              address_line_2: location.address_line_2,
-              neighborhood: location.neighborhood,
-              state: location.state,
-              postal_code: location.postal_code,
-              latitude: location.latitude,
-              longitude: location.longitude,
-              phone_number: location.phone_number,
-              website_url: location.website_url,
-              image_urls: location.image_urls,
-              fullAddress: formatPlaceAddress(location),
-              locationId: location.id,
-              markerLatitude: location.latitude,
-              markerLongitude: location.longitude,
-              markerKey: `${place.slug}:${location.id}`,
-            },
-          ];
-        })
-      ))
-    : [];
+  const mappedPlaces = showMapBrowse ? getMappedPlacesForBrowse(filteredPlaces) : [];
   const mappedPlaceKey = mappedPlaces.map((place) => place.markerKey).join('|');
   const displayedMapPlaces = showMapBrowse ? renderedMappedPlaces : [];
   const unplacedPlaceCount = filteredPlaces.filter((place) => (
@@ -933,6 +903,7 @@ function AppScreen() {
       }
 
       setShowMapResultsCard(false);
+      setMapResultsCollapsed(false);
       setRenderedMapSearchResults([]);
       setRenderedMapResultsKey('');
       setRenderedMapResultCount(0);
@@ -950,6 +921,15 @@ function AppScreen() {
     shouldShowMapResults,
     showMapResultsCard,
   ]);
+
+  useEffect(() => {
+    Animated.timing(mapResultsExpandedProgress, {
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
+      toValue: mapResultsCollapsed ? 0 : 1,
+      useNativeDriver: false,
+    }).start();
+  }, [mapResultsCollapsed, mapResultsExpandedProgress]);
 
   function handleShowMoreMapResults() {
     if (loadingMoreMapResults) {
@@ -969,6 +949,10 @@ function AppScreen() {
       setLoadingMoreMapResults(false);
       showMoreMapResultsTimeoutRef.current = null;
     }, 1000);
+  }
+
+  function handleToggleMapResultsCollapsed() {
+    setMapResultsCollapsed((current) => !current);
   }
 
   useEffect(() => {
@@ -1348,8 +1332,38 @@ function AppScreen() {
 
   function handleClearSearchQuery() {
     animateNextLayout();
+    const clearedFilteredPlaces = getFilteredPlaces(places, {
+      confirmedDealsOnly,
+      searchQuery: '',
+      selectedDealDays,
+      selectedOperatingDays,
+      selectedVenueTypes,
+      verifiedBusinessesOnly,
+    });
+    const clearedMappedPlaces = getMappedPlacesForBrowse(clearedFilteredPlaces);
+    const clearedMappedPlaceKey = clearedMappedPlaces.map((place) => place.markerKey).join('|');
+
     setSearchQuery('');
     setSelectedMapPlaceKey(null);
+    setRenderedMappedPlaces(clearedMappedPlaces);
+    setRenderedMappedPlaceKey(clearedMappedPlaceKey);
+    setShowMapResultsCard(false);
+    setMapResultsCollapsed(false);
+    setRenderedMapSearchResults([]);
+    setRenderedMapResultsKey('');
+    setRenderedMapResultCount(0);
+    setVisibleMapResultCount(0);
+    setLoadingMoreMapResults(false);
+    mapResultsOpacity.stopAnimation();
+    mapResultsOpacity.setValue(0);
+    clearShowMoreMapResultsTimer();
+
+    if (showMapBrowse && !listLoading) {
+      const nextRegion = getBrowseMapRegion(selectedCity, clearedMappedPlaces);
+      mapRegionRef.current = nextRegion;
+      setMapRegion(nextRegion);
+      mapRef.current?.animateToRegion(nextRegion, 250);
+    }
   }
 
   function handleBackToBrowse() {
@@ -1697,6 +1711,31 @@ function AppScreen() {
     setMapRegion(nextRegion);
     mapRef.current?.animateToRegion(nextRegion, 250);
   }
+
+  const mapResultsCardAnimatedMaxHeight = mapResultsExpandedProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [92, mapResultsCardMaxHeight],
+  });
+  const mapResultsContentOpacity = mapResultsExpandedProgress.interpolate({
+    inputRange: [0, 0.2, 1],
+    outputRange: [0, 0.18, 1],
+  });
+  const mapResultsContentTranslateY = mapResultsExpandedProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-8, 0],
+  });
+  const mapResultsChevronLeftRotate = mapResultsExpandedProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['45deg', '-45deg'],
+  });
+  const mapResultsChevronRightRotate = mapResultsExpandedProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['-45deg', '45deg'],
+  });
+  const mapResultsChevronArmOffset = mapResultsExpandedProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, -1],
+  });
 
   function renderProfilesScreen(profileSessionOverride?: SignupResponse | null) {
     const profileSession = profileSessionOverride ?? authenticatedSession;
@@ -2127,13 +2166,64 @@ function AppScreen() {
                         )}
                       </Animated.View>
                     ) : showMapResultsCard ? (
-                      <Animated.View style={[styles.mapResultsCard, { maxHeight: mapResultsCardMaxHeight, opacity: mapResultsOpacity }] }>
+                      <Animated.View style={{ opacity: mapResultsOpacity }}>
+                        <Animated.View style={[styles.mapResultsCard, { maxHeight: mapResultsCardAnimatedMaxHeight }] }>
                         <View style={styles.mapResultsHeader}>
-                          <Text style={styles.mapResultsTitle}>Best matches</Text>
-                          <Text style={styles.mapResultsMeta}>Top {renderedMapSearchResults.length} of {renderedMapResultCount} in view</Text>
+                          <View style={styles.mapResultsHeaderCopy}>
+                            <Text style={styles.mapResultsTitle}>Best matches</Text>
+                            <Text style={styles.mapResultsMeta}>Top {renderedMapSearchResults.length} of {renderedMapResultCount} in view</Text>
+                          </View>
+                          <View style={styles.mapResultsHeaderActions}>
+                            <Pressable
+                              accessibilityLabel={mapResultsCollapsed ? 'Expand best matches' : 'Collapse best matches'}
+                              onPress={handleToggleMapResultsCollapsed}
+                              style={styles.mapResultsCollapseButton}
+                            >
+                              <View style={styles.mapResultsChevronIcon}>
+                                <Animated.View
+                                  style={[
+                                    styles.mapResultsChevronLine,
+                                    styles.mapResultsChevronLineLeft,
+                                    {
+                                      transform: [
+                                        { translateY: mapResultsChevronArmOffset },
+                                        { rotate: mapResultsChevronLeftRotate },
+                                      ],
+                                    },
+                                  ]}
+                                />
+                                <Animated.View
+                                  style={[
+                                    styles.mapResultsChevronLine,
+                                    styles.mapResultsChevronLineRight,
+                                    {
+                                      transform: [
+                                        { translateY: mapResultsChevronArmOffset },
+                                        { rotate: mapResultsChevronRightRotate },
+                                      ],
+                                    },
+                                  ]}
+                                />
+                              </View>
+                            </Pressable>
+                          </View>
                         </View>
-                        {renderedMapSearchResults.length ? (
-                          <>
+                        <Animated.View
+                          pointerEvents={mapResultsCollapsed ? 'none' : 'auto'}
+                          style={[
+                            styles.mapResultsContent,
+                            {
+                              maxHeight: mapResultsExpandedProgress.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [0, Math.max(mapResultsCardMaxHeight - 76, 0)],
+                              }),
+                              opacity: mapResultsContentOpacity,
+                              transform: [{ translateY: mapResultsContentTranslateY }],
+                            },
+                          ]}
+                        >
+                          {renderedMapSearchResults.length ? (
+                            <>
                             <ScrollView
                               contentContainerStyle={styles.mapResultsList}
                               keyboardDismissMode="on-drag"
@@ -2177,6 +2267,8 @@ function AppScreen() {
                         ) : (
                           <Text style={styles.mapResultEmptyText}>No map matches found for that search yet.</Text>
                         )}
+                        </Animated.View>
+                        </Animated.View>
                       </Animated.View>
                     ) : null}
 
@@ -2493,6 +2585,39 @@ function getFilteredPlaces(
       return second.score - first.score || first.place.name.localeCompare(second.place.name);
     })
     .map(({ place }) => place);
+}
+
+function getMappedPlacesForBrowse(filteredPlaces: PlaceListItem[]): MappedPlace[] {
+  return filteredPlaces.flatMap((place) => (
+    getPlaceLocations(place).flatMap((location) => {
+      if (location.latitude === null || location.longitude === null) {
+        return [];
+      }
+
+      return [
+        {
+          ...place,
+          city: location.city,
+          city_label: location.city_label,
+          address_line_1: location.address_line_1,
+          address_line_2: location.address_line_2,
+          neighborhood: location.neighborhood,
+          state: location.state,
+          postal_code: location.postal_code,
+          latitude: location.latitude,
+          longitude: location.longitude,
+          phone_number: location.phone_number,
+          website_url: location.website_url,
+          image_urls: location.image_urls,
+          fullAddress: formatPlaceAddress(location),
+          locationId: location.id,
+          markerLatitude: location.latitude,
+          markerLongitude: location.longitude,
+          markerKey: `${place.slug}:${location.id}`,
+        },
+      ];
+    })
+  ));
 }
 
 function hasAnyMatchingWeekday(placeWeekdays: number[], selectedWeekdays: WeekdayFilterValue[]) {

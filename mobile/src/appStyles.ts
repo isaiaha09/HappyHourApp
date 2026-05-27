@@ -213,6 +213,16 @@ export const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
+  mapResultsHeaderCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  mapResultsHeaderActions: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    marginLeft: 12,
+  },
   mapResultsTitle: {
     color: '#2d221a',
     fontSize: 18,
@@ -249,6 +259,42 @@ export const styles = StyleSheet.create({
     color: '#1f5f5b',
     fontSize: 13,
     fontWeight: '800',
+  },
+  mapResultsCollapseButton: {
+    alignItems: 'center',
+    backgroundColor: '#fff7ef',
+    borderColor: '#ddc4a7',
+    borderRadius: 12,
+    borderWidth: 1,
+    height: 32,
+    justifyContent: 'center',
+    width: 32,
+  },
+  mapResultsChevronIcon: {
+    height: 14,
+    position: 'relative',
+    width: 16,
+  },
+  mapResultsChevronLine: {
+    backgroundColor: '#5d4637',
+    borderRadius: 999,
+    height: 2.5,
+    position: 'absolute',
+    top: 6,
+    width: 8,
+  },
+  mapResultsChevronLineLeft: {
+    left: 0.5,
+    transformOrigin: 'right center',
+  },
+  mapResultsChevronLineRight: {
+    right: 0.5,
+    transformOrigin: 'left center',
+  },
+  mapResultsContent: {
+    gap: 12,
+    minHeight: 0,
+    overflow: 'hidden',
   },
   mapResultRow: {
     alignItems: 'center',
