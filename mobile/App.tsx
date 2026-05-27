@@ -1993,7 +1993,7 @@ function AppScreen() {
               <View style={styles.mapScreen}>
                 <MapView
                   key={renderedMappedPlaceKey || 'empty-map'}
-                  region={mapRegion}
+                  initialRegion={mapRegionRef.current}
                   maxDelta={maxMapGestureDelta}
                   minDelta={minLatitudeDelta}
                   userInterfaceStyle={Platform.OS === 'ios' ? (displayedDarkMapMode ? 'dark' : 'light') : undefined}
@@ -2010,38 +2010,32 @@ function AppScreen() {
                     );
                   }}
                   onRegionChangeComplete={(nextRegion, details) => {
-                    const previousRegion = mapRegionRef.current;
+                    const normalizedRegion = normalizeRegion(nextRegion);
                     const boundedRegion = shouldUseNativeMapBoundaries
-                      ? normalizeRegion(nextRegion)
-                      : clampRegionToBounds(nextRegion);
+                      ? normalizedRegion
+                      : clampRegionToBounds(normalizedRegion);
 
                     if (details.isGesture) {
                       clearAutoFitMapRegionTimer();
                     }
 
-                    mapRegionRef.current = boundedRegion;
-
                     if (details.isGesture) {
-                      const shouldIgnoreSnapForStationaryGesture = isStationaryMapGesture(previousRegion, nextRegion);
+                      const shouldSnapToBounds = !shouldUseNativeMapBoundaries && shouldSnapRegionToBounds(normalizedRegion);
+                      const nextControlledRegion = shouldSnapToBounds ? boundedRegion : normalizedRegion;
 
-                      if (!shouldUseNativeMapBoundaries && shouldIgnoreSnapForStationaryGesture && isWideMapRegion(nextRegion)) {
-                        mapRegionRef.current = previousRegion;
-                        setMapRegion((currentRegion) => (
-                          areRegionsEqual(currentRegion, previousRegion) ? currentRegion : previousRegion
-                        ));
-                        mapRef.current?.animateToRegion(previousRegion, 180);
-                        return;
-                      }
+                      mapRegionRef.current = nextControlledRegion;
+                      setMapRegion((currentRegion) => (
+                        areRegionsEqual(currentRegion, nextControlledRegion) ? currentRegion : nextControlledRegion
+                      ));
 
-                      if (!shouldUseNativeMapBoundaries && !shouldIgnoreSnapForStationaryGesture && shouldSnapRegionToBounds(nextRegion)) {
-                        setMapRegion((currentRegion) => (
-                          areRegionsEqual(currentRegion, boundedRegion) ? currentRegion : boundedRegion
-                        ));
+                      if (shouldSnapToBounds) {
                         mapRef.current?.animateToRegion(boundedRegion, 180);
                       }
 
                       return;
                     }
+
+                    mapRegionRef.current = boundedRegion;
 
                     setMapRegion((currentRegion) => (
                       areRegionsEqual(currentRegion, boundedRegion) ? currentRegion : boundedRegion
