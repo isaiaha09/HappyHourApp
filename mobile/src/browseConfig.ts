@@ -17,8 +17,19 @@ export const venueFilters = [
   { label: 'Other', value: 'other' },
 ] as const;
 
+export const weekdayFilters = [
+  { label: 'Sunday', shortLabel: 'Sun', value: 6 },
+  { label: 'Monday', shortLabel: 'Mon', value: 0 },
+  { label: 'Tuesday', shortLabel: 'Tue', value: 1 },
+  { label: 'Wednesday', shortLabel: 'Wed', value: 2 },
+  { label: 'Thursday', shortLabel: 'Thu', value: 3 },
+  { label: 'Friday', shortLabel: 'Fri', value: 4 },
+  { label: 'Saturday', shortLabel: 'Sat', value: 5 },
+] as const;
+
 export type BrowseMode = 'list' | 'map';
 export type VenueFilterValue = (typeof venueFilters)[number]['value'];
+export type WeekdayFilterValue = (typeof weekdayFilters)[number]['value'];
 
 export const manualBusinessCityOptions = cityFilters.filter((filter) => filter.value !== 'all');
 export const manualBusinessVenueOptions = venueFilters;
@@ -37,7 +48,19 @@ export function getVenueMarkerStyle(venueType: string) {
   return venueMarkerStyles[venueType as keyof typeof venueMarkerStyles] ?? venueMarkerStyles.other;
 }
 
-export function getBrowseSummaryLabel(selectedCity: CityFilterValue, selectedVenueTypes: VenueFilterValue[], searchQuery: string) {
+type BrowseSummaryOptions = {
+  confirmedDealsOnly?: boolean;
+  selectedDealDays?: WeekdayFilterValue[];
+  selectedOperatingDays?: WeekdayFilterValue[];
+  verifiedBusinessesOnly?: boolean;
+};
+
+export function getBrowseSummaryLabel(
+  selectedCity: CityFilterValue,
+  selectedVenueTypes: VenueFilterValue[],
+  searchQuery: string,
+  options: BrowseSummaryOptions = {},
+) {
   const summaryParts: string[] = [];
 
   if (searchQuery.length) {
@@ -51,6 +74,22 @@ export function getBrowseSummaryLabel(selectedCity: CityFilterValue, selectedVen
 
   if (selectedVenueTypes.length !== venueFilters.length) {
     summaryParts.push(`${selectedVenueTypes.length} types`);
+  }
+
+  if (options.confirmedDealsOnly) {
+    summaryParts.push('Deals only');
+  }
+
+  if ((options.selectedOperatingDays ?? []).length) {
+    summaryParts.push(`${options.selectedOperatingDays?.length ?? 0} hours days`);
+  }
+
+  if ((options.selectedDealDays ?? []).length) {
+    summaryParts.push(`${options.selectedDealDays?.length ?? 0} deal days`);
+  }
+
+  if (options.verifiedBusinessesOnly) {
+    summaryParts.push('Verified');
   }
 
   return summaryParts.length ? summaryParts.join(' • ') : 'All cities • all venue types';

@@ -145,6 +145,17 @@ def _build_grouped_place_payload(place_records, preferred_city=None, resolve_mis
 		'is_active': any(place_record.is_active for place_record in canonical_place_records),
 		'has_deals': bool(grouped_deals),
 		'deal_count': len(grouped_deals),
+		'operating_weekdays': sorted({
+			weekday
+			for location in location_payloads
+			for weekday in location.get('operating_weekdays', [])
+		}),
+		'deal_weekdays': sorted({
+			weekday
+			for location in location_payloads
+			for weekday in location.get('deal_weekdays', [])
+		}),
+		'is_verified': any(bool(location.get('is_verified')) for location in location_payloads),
 		'deals': grouped_deals,
 		'locations': location_payloads,
 	}
@@ -278,6 +289,9 @@ def _build_location_payload(place_record, resolve_missing_coordinates=True):
 		'is_active': place_record.is_active,
 		'has_deals': any(deal_record.is_active for deal_record in place_record.deals),
 		'deal_count': sum(1 for deal_record in place_record.deals if deal_record.is_active),
+		'operating_weekdays': _build_operating_weekdays(place_record),
+		'deal_weekdays': _build_deal_weekdays(place_record),
+		'is_verified': _is_verified_place_record(place_record),
 		'deals': [
 			_build_deal_payload(place_record, deal_record, place_slug)
 			for deal_record in place_record.deals
@@ -440,6 +454,26 @@ def _build_deal_payload(place_record, deal_record, place_slug):
 			for happy_hour in deal_record.happy_hours
 		],
 	}
+
+
+def _build_operating_weekdays(place_record):
+	return sorted({
+		operating_hour.weekday
+		for operating_hour in getattr(place_record, 'operating_hours', [])
+	})
+
+
+def _build_deal_weekdays(place_record):
+	return sorted({
+		happy_hour.weekday
+		for deal_record in getattr(place_record, 'deals', [])
+		if deal_record.is_active
+		for happy_hour in deal_record.happy_hours
+	})
+
+
+def _is_verified_place_record(place_record):
+	return getattr(place_record, 'source_name', '') == 'business_websites'
 
 
 def _build_deal_identity_key(deal_record):

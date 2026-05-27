@@ -51,6 +51,9 @@ export type PlaceLocation = {
   is_active: boolean;
   has_deals: boolean;
   deal_count: number;
+  operating_weekdays: number[];
+  deal_weekdays: number[];
+  is_verified: boolean;
 };
 
 export type PlaceLocationDetail = PlaceLocation & {

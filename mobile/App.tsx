@@ -43,6 +43,8 @@ import {
   manualBusinessVenueOptions,
   venueFilters,
   type VenueFilterValue,
+  weekdayFilters,
+  type WeekdayFilterValue,
 } from './src/browseConfig';
 import { DashboardScreen } from './src/screens/DashboardScreen';
 import { BrowseControls } from './src/screens/BrowseControls';
@@ -195,6 +197,10 @@ function AppScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCity, setSelectedCity] = useState<(typeof cityFilters)[number]['value']>('all');
   const [selectedVenueTypes, setSelectedVenueTypes] = useState<VenueFilterValue[]>(() => venueFilters.map((filter) => filter.value));
+  const [confirmedDealsOnly, setConfirmedDealsOnly] = useState(false);
+  const [selectedOperatingDays, setSelectedOperatingDays] = useState<WeekdayFilterValue[]>([]);
+  const [selectedDealDays, setSelectedDealDays] = useState<WeekdayFilterValue[]>([]);
+  const [verifiedBusinessesOnly, setVerifiedBusinessesOnly] = useState(false);
   const [places, setPlaces] = useState<PlaceListItem[]>([]);
   const [selectedPlaceSlug, setSelectedPlaceSlug] = useState<string | null>(null);
   const [selectedPlace, setSelectedPlace] = useState<PlaceDetail | null>(null);
@@ -211,6 +217,7 @@ function AppScreen() {
   const [renderedMapSearchResults, setRenderedMapSearchResults] = useState<MappedPlace[]>([]);
   const [renderedMapResultsKey, setRenderedMapResultsKey] = useState('');
   const [renderedMapResultCount, setRenderedMapResultCount] = useState(0);
+  const [visibleMapResultCount, setVisibleMapResultCount] = useState(0);
   const [profileForm, setProfileForm] = useState<ProfileFormState>(initialProfileFormState);
   const [profileSubmitting, setProfileSubmitting] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
@@ -238,7 +245,14 @@ function AppScreen() {
   const onboardingTransitionDuration = 480;
   const showMapBrowse = screenMode === 'browse' && !selectedPlaceSlug && browseMode === 'map';
 
-  const filteredPlaces = getFilteredPlaces(places, selectedVenueTypes, normalizedSearchQuery);
+  const filteredPlaces = getFilteredPlaces(places, {
+    confirmedDealsOnly,
+    searchQuery: normalizedSearchQuery,
+    selectedDealDays,
+    selectedOperatingDays,
+    selectedVenueTypes,
+    verifiedBusinessesOnly,
+  });
   const filteredPlaceKey = filteredPlaces.map((place) => place.id).join('|');
 
   const mappedPlaces = showMapBrowse
@@ -290,11 +304,15 @@ function AppScreen() {
     mapRegionRef.current = mapRegion;
   }, [mapRegion]);
 
-  const mapSearchResults = normalizedSearchQuery.length ? displayedMapPlaces.slice(0, 5) : [];
-  const mapSearchResultsKey = mapSearchResults.map((place) => place.markerKey).join('|');
-  const mapOverlayBottomPadding = keyboardHeight > 0
-    ? Math.max(keyboardHeight - insets.bottom, 0) + 12
-    : Math.max(insets.bottom + 12, 20);
+  const mapSearchResultPool = normalizedSearchQuery.length ? displayedMapPlaces : [];
+  const mapSearchResultsKey = mapSearchResultPool.map((place) => place.markerKey).join('|');
+  const mapOverlayBottomPadding = Math.max(insets.bottom + 12, 20);
+  const mapResultsCardMaxHeight = Math.max(
+    width > height
+      ? Math.min(height * 0.5, keyboardHeight > 0 ? 300 : 360)
+      : Math.min(height * 0.58, keyboardHeight > 0 ? 380 : 500),
+    220,
+  );
   const availableProfilePlaces = profilePlaces.length ? profilePlaces : places;
   const availableClaimPlaces = consolidatePlacesBySlug(availableProfilePlaces);
   const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'business-search', 'business-claim', 'manual-business-claim']);
@@ -432,6 +450,7 @@ function AppScreen() {
   const useWideLandscapeLayout = isLandscape && width >= 760;
   const browseListColumns = useWideLandscapeLayout ? 2 : 1;
   const normalizedBusinessSearchQuery = normalizeSearchText(businessSearchQuery);
+  const nextMapResultsIncrement = getMapResultsIncrement(renderedMapResultCount);
   const businessSearchResults = normalizedBusinessSearchQuery.length
     ? availableClaimPlaces
       .map((place) => ({ place, score: getPlaceSearchScore(place, normalizedBusinessSearchQuery) }))
@@ -738,7 +757,9 @@ function AppScreen() {
       );
 
       if (resultsChanged) {
-        setRenderedMapSearchResults(mapSearchResults);
+        const nextVisibleCount = Math.min(5, mapSearchResultPool.length);
+        setVisibleMapResultCount(nextVisibleCount);
+        setRenderedMapSearchResults(mapSearchResultPool.slice(0, nextVisibleCount));
         setRenderedMapResultsKey(mapSearchResultsKey);
         setRenderedMapResultCount(filteredPlaces.length);
       }
@@ -791,17 +812,28 @@ function AppScreen() {
       setRenderedMapSearchResults([]);
       setRenderedMapResultsKey('');
       setRenderedMapResultCount(0);
+      setVisibleMapResultCount(0);
     });
   }, [
     filteredPlaces.length,
     mapResultsOpacity,
-    mapSearchResults,
+    mapSearchResultPool,
     mapSearchResultsKey,
     renderedMapResultCount,
     renderedMapResultsKey,
     shouldShowMapResults,
     showMapResultsCard,
   ]);
+
+  function handleShowMoreMapResults() {
+    const nextVisibleCount = Math.min(
+      visibleMapResultCount + nextMapResultsIncrement,
+      mapSearchResultPool.length,
+    );
+
+    setVisibleMapResultCount(nextVisibleCount);
+    setRenderedMapSearchResults(mapSearchResultPool.slice(0, nextVisibleCount));
+  }
 
   useEffect(() => {
     let isMounted = true;
@@ -1059,6 +1091,26 @@ function AppScreen() {
   function handleSelectAllVenueTypes() {
     animateNextLayout();
     setSelectedVenueTypes(venueFilters.map((filter) => filter.value));
+  }
+
+  function handleToggleConfirmedDealsOnly() {
+    animateNextLayout();
+    setConfirmedDealsOnly((current) => !current);
+  }
+
+  function handleToggleOperatingDay(day: WeekdayFilterValue) {
+    animateNextLayout();
+    setSelectedOperatingDays((current) => toggleWeekdaySelection(current, day));
+  }
+
+  function handleToggleDealDay(day: WeekdayFilterValue) {
+    animateNextLayout();
+    setSelectedDealDays((current) => toggleWeekdaySelection(current, day));
+  }
+
+  function handleToggleVerifiedBusinessesOnly() {
+    animateNextLayout();
+    setVerifiedBusinessesOnly((current) => !current);
   }
 
   function handleBrowseModeChange(mode: BrowseMode) {
@@ -1617,6 +1669,7 @@ function AppScreen() {
             initialRegion={initialMapRegionRef.current}
             maxDelta={maxMapGestureDelta}
             minDelta={minLatitudeDelta}
+            rotateEnabled={false}
             onMapReady={() => {
               if (!shouldUseNativeMapBoundaries || !mapRef.current) {
                 return;
@@ -1638,6 +1691,15 @@ function AppScreen() {
 
               if (details.isGesture) {
                 const shouldIgnoreSnapForStationaryGesture = isStationaryMapGesture(previousRegion, nextRegion);
+
+                if (!shouldUseNativeMapBoundaries && shouldIgnoreSnapForStationaryGesture && isWideMapRegion(nextRegion)) {
+                  mapRegionRef.current = previousRegion;
+                  setMapRegion((currentRegion) => (
+                    areRegionsEqual(currentRegion, previousRegion) ? currentRegion : previousRegion
+                  ));
+                  mapRef.current?.animateToRegion(previousRegion, 180);
+                  return;
+                }
 
                 if (!shouldUseNativeMapBoundaries && !shouldIgnoreSnapForStationaryGesture && shouldSnapRegionToBounds(nextRegion)) {
                   setMapRegion((currentRegion) => (
@@ -1666,7 +1728,6 @@ function AppScreen() {
               handleClearMapSelection();
             }}
             ref={mapRef}
-            rotateEnabled
             style={styles.mapBackground}
           >
             {displayedMapPlaces.map((place, index) => {
@@ -1707,6 +1768,7 @@ function AppScreen() {
             >
             <BrowseControls
               browseMode={browseMode}
+              confirmedDealsOnly={confirmedDealsOnly}
               overlay
               filtersExpanded={browseFiltersExpanded}
               onChangeSearchQuery={setSearchQuery}
@@ -1716,12 +1778,19 @@ function AppScreen() {
               onReload={handleRefreshPlaces}
               onSelectAllVenueTypes={handleSelectAllVenueTypes}
               onSelectCity={setSelectedCity}
+              onToggleConfirmedDealsOnly={handleToggleConfirmedDealsOnly}
+              onToggleDealDay={handleToggleDealDay}
               onToggleFilters={handleToggleBrowseFilters}
+              onToggleOperatingDay={handleToggleOperatingDay}
               onToggleVenueType={handleToggleVenueType}
+              onToggleVerifiedBusinessesOnly={handleToggleVerifiedBusinessesOnly}
               resultCount={filteredPlaces.length}
               searchQuery={searchQuery}
+              selectedDealDays={selectedDealDays}
               selectedCity={selectedCity}
+              selectedOperatingDays={selectedOperatingDays}
               selectedVenueTypes={selectedVenueTypes}
+              verifiedBusinessesOnly={verifiedBusinessesOnly}
             />
 
             {listLoading ? (
@@ -1759,6 +1828,9 @@ function AppScreen() {
                   <ScrollView
                     contentContainerStyle={[styles.mapPreviewGallery, isLandscape ? styles.mapPreviewGalleryLandscape : null]}
                     horizontal
+                    keyboardDismissMode="on-drag"
+                    keyboardShouldPersistTaps="handled"
+                    onScrollBeginDrag={Keyboard.dismiss}
                     pagingEnabled
                     showsHorizontalScrollIndicator={false}
                   >
@@ -1777,29 +1849,46 @@ function AppScreen() {
                 )}
               </View>
             ) : showMapResultsCard ? (
-              <Animated.View style={[styles.mapResultsCard, { opacity: mapResultsOpacity }]}>
+              <Animated.View style={[styles.mapResultsCard, { maxHeight: mapResultsCardMaxHeight, opacity: mapResultsOpacity }] }>
                 <View style={styles.mapResultsHeader}>
                   <Text style={styles.mapResultsTitle}>Best matches</Text>
-                  <Text style={styles.mapResultsMeta}>{renderedMapResultCount} in view</Text>
+                  <Text style={styles.mapResultsMeta}>Top {renderedMapSearchResults.length} of {renderedMapResultCount} in view</Text>
                 </View>
                 {renderedMapSearchResults.length ? (
-                  <View style={styles.mapResultsList}>
-                    {renderedMapSearchResults.map((place) => (
-                      <Pressable
-                        key={place.markerKey}
-                        onPress={() => handleFocusMapResult(place)}
-                        style={styles.mapResultRow}
-                      >
-                        <View style={styles.mapResultCopy}>
-                          <Text numberOfLines={1} style={styles.mapResultTitle}>{place.name}</Text>
-                          <Text numberOfLines={2} style={styles.mapResultMeta}>
-                            {place.venue_type_label} • {place.fullAddress}
-                          </Text>
-                        </View>
-                        <Text style={styles.mapResultAction}>Focus</Text>
+                  <>
+                    <ScrollView
+                      contentContainerStyle={styles.mapResultsList}
+                      keyboardDismissMode="on-drag"
+                      keyboardShouldPersistTaps="handled"
+                      nestedScrollEnabled
+                      onScrollBeginDrag={Keyboard.dismiss}
+                      showsVerticalScrollIndicator
+                      style={styles.mapResultsScroll}
+                    >
+                      {renderedMapSearchResults.map((place) => (
+                        <Pressable
+                          key={place.markerKey}
+                          onPress={() => handleFocusMapResult(place)}
+                          style={styles.mapResultRow}
+                        >
+                          <View style={styles.mapResultCopy}>
+                            <Text numberOfLines={1} style={styles.mapResultTitle}>{place.name}</Text>
+                            <Text numberOfLines={2} style={styles.mapResultMeta}>
+                              {place.venue_type_label} • {place.fullAddress}
+                            </Text>
+                          </View>
+                          <Text style={styles.mapResultAction}>Focus</Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                    {renderedMapSearchResults.length < renderedMapResultCount ? (
+                      <Pressable onPress={handleShowMoreMapResults} style={styles.mapResultsMoreButton}>
+                        <Text style={styles.mapResultsMoreButtonText}>
+                          Show next {Math.min(nextMapResultsIncrement, renderedMapResultCount - renderedMapSearchResults.length)}
+                        </Text>
                       </Pressable>
-                    ))}
-                  </View>
+                    ) : null}
+                  </>
                 ) : (
                   <Text style={styles.mapResultEmptyText}>No map matches found for that search yet.</Text>
                 )}
@@ -1824,6 +1913,7 @@ function AppScreen() {
           <>
             <BrowseControls
               browseMode={browseMode}
+              confirmedDealsOnly={confirmedDealsOnly}
               filtersExpanded={browseFiltersExpanded}
               onChangeSearchQuery={setSearchQuery}
               onClearSearchQuery={handleClearSearchQuery}
@@ -1832,12 +1922,19 @@ function AppScreen() {
               onReload={handleRefreshPlaces}
               onSelectAllVenueTypes={handleSelectAllVenueTypes}
               onSelectCity={setSelectedCity}
+              onToggleConfirmedDealsOnly={handleToggleConfirmedDealsOnly}
+              onToggleDealDay={handleToggleDealDay}
               onToggleFilters={handleToggleBrowseFilters}
+              onToggleOperatingDay={handleToggleOperatingDay}
               onToggleVenueType={handleToggleVenueType}
+              onToggleVerifiedBusinessesOnly={handleToggleVerifiedBusinessesOnly}
               resultCount={filteredPlaces.length}
               searchQuery={searchQuery}
+              selectedDealDays={selectedDealDays}
               selectedCity={selectedCity}
+              selectedOperatingDays={selectedOperatingDays}
               selectedVenueTypes={selectedVenueTypes}
+              verifiedBusinessesOnly={verifiedBusinessesOnly}
             />
 
             {listLoading ? (
@@ -1945,24 +2042,70 @@ function getBrowseMapRegion(selectedCity: CityFilterValue, mappedPlaces: MappedP
   return getMapRegion(mappedPlaces);
 }
 
-function getFilteredPlaces(places: PlaceListItem[], selectedVenueTypes: VenueFilterValue[], searchQuery: string) {
+function toggleWeekdaySelection(current: WeekdayFilterValue[], day: WeekdayFilterValue) {
+  const next = current.includes(day)
+    ? current.filter((value) => value !== day)
+    : [...current, day];
+  const weekdayOrder = weekdayFilters.map((filter) => filter.value);
+
+  return next.sort((first, second) => weekdayOrder.indexOf(first) - weekdayOrder.indexOf(second));
+}
+
+function getFilteredPlaces(
+  places: PlaceListItem[],
+  filters: {
+    confirmedDealsOnly: boolean;
+    searchQuery: string;
+    selectedDealDays: WeekdayFilterValue[];
+    selectedOperatingDays: WeekdayFilterValue[];
+    selectedVenueTypes: VenueFilterValue[];
+    verifiedBusinessesOnly: boolean;
+  },
+) {
   return places
     .map((place, index) => ({
       index,
       place,
-      score: getPlaceSearchScore(place, searchQuery),
+      score: getPlaceSearchScore(place, filters.searchQuery),
     }))
-    .filter(({ place, score }) => (
-      selectedVenueTypes.includes(place.venue_type as VenueFilterValue) && (searchQuery.length === 0 || score > 0)
-    ))
+    .filter(({ place, score }) => {
+      const matchesVenueType = filters.selectedVenueTypes.includes(place.venue_type as VenueFilterValue);
+      const matchesSearch = filters.searchQuery.length === 0 || score > 0;
+      const matchesDeals = !filters.confirmedDealsOnly || place.has_deals || place.deal_count > 0;
+      const matchesOperatingDays = !filters.selectedOperatingDays.length || hasAnyMatchingWeekday(place.operating_weekdays, filters.selectedOperatingDays);
+      const matchesDealDays = !filters.selectedDealDays.length || hasAnyMatchingWeekday(place.deal_weekdays, filters.selectedDealDays);
+      const matchesVerified = !filters.verifiedBusinessesOnly || place.is_verified;
+
+      return matchesVenueType && matchesSearch && matchesDeals && matchesOperatingDays && matchesDealDays && matchesVerified;
+    })
     .sort((first, second) => {
-      if (searchQuery.length === 0) {
+      if (filters.searchQuery.length === 0) {
         return first.index - second.index;
       }
 
       return second.score - first.score || first.place.name.localeCompare(second.place.name);
     })
     .map(({ place }) => place);
+}
+
+function hasAnyMatchingWeekday(placeWeekdays: number[], selectedWeekdays: WeekdayFilterValue[]) {
+  return selectedWeekdays.some((weekday) => placeWeekdays.includes(weekday));
+}
+
+function getMapResultsIncrement(totalResults: number) {
+  if (totalResults >= 300) {
+    return 30;
+  }
+
+  if (totalResults >= 200) {
+    return 20;
+  }
+
+  if (totalResults >= 100) {
+    return 10;
+  }
+
+  return 5;
 }
 
 function getPlaceSearchScore(place: PlaceListItem, searchQuery: string) {
@@ -2149,6 +2292,13 @@ function isStationaryMapGesture(previousRegion: Region, nextRegion: Region) {
     Math.abs(previousRegion.longitudeDelta - nextRegion.longitudeDelta) > deltaTolerance;
 
   return centerStayedPut && deltaChanged;
+}
+
+function isWideMapRegion(region: Region) {
+  return (
+    region.latitudeDelta >= maxLatitudeDelta * 0.75 ||
+    region.longitudeDelta >= maxLongitudeDelta * 0.75
+  );
 }
 
 function nearlyEqual(first: number, second: number) {

@@ -95,7 +95,8 @@ export const styles = StyleSheet.create({
   },
   mapOverlayLayer: {
     ...StyleSheet.absoluteFillObject,
-    justifyContent: 'space-between',
+    gap: 12,
+    justifyContent: 'flex-start',
     paddingHorizontal: 18,
     paddingTop: 0,
     paddingBottom: 0,
@@ -144,6 +145,7 @@ export const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 1,
     gap: 12,
+    minHeight: 0,
     padding: 16,
   },
   mapResultsHeader: {
@@ -163,6 +165,25 @@ export const styles = StyleSheet.create({
   },
   mapResultsList: {
     gap: 10,
+    paddingRight: 4,
+  },
+  mapResultsScroll: {
+    minHeight: 0,
+  },
+  mapResultsMoreButton: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    backgroundColor: '#fff7ef',
+    borderColor: '#ddc4a7',
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  mapResultsMoreButtonText: {
+    color: '#1f5f5b',
+    fontSize: 13,
+    fontWeight: '800',
   },
   mapResultRow: {
     alignItems: 'center',
@@ -417,11 +438,17 @@ export const styles = StyleSheet.create({
     borderTopColor: '#efd8bd',
     borderTopWidth: 1,
     gap: 12,
+    minHeight: 0,
     paddingTop: 12,
   },
   filtersPanelLandscape: {
     gap: 8,
     paddingTop: 8,
+  },
+  filtersPanelScrollContent: {
+    gap: 12,
+    paddingBottom: 4,
+    paddingRight: 4,
   },
   browseSectionHeaderRow: {
     alignItems: 'center',

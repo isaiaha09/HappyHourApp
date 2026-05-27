@@ -84,6 +84,9 @@ class PlaceApiTests(APITestCase):
 			'phone_number': '805-555-0111',
 			'website_url': 'https://example.com/805-tacos',
 			'is_active': True,
+			'operating_weekdays': [Weekday.MONDAY, Weekday.TUESDAY],
+			'deal_weekdays': [Weekday.TUESDAY],
+			'is_verified': True,
 			'deals': [
 				{
 					'id': 202,
@@ -124,6 +127,8 @@ class PlaceApiTests(APITestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response.json()['count'], 1)
 		self.assertEqual(response.json()['results'][0]['name'], '805 Tacos')
+		self.assertEqual(response.json()['results'][0]['deal_weekdays'], [Weekday.TUESDAY])
+		self.assertTrue(response.json()['results'][0]['is_verified'])
 
 	def test_place_list_endpoint_passes_has_deals_filter(self):
 		with patch('places.views.get_source_place_payloads', return_value=[self.place_payload]) as mock_get_source_place_payloads:
@@ -1796,9 +1801,13 @@ class SourceListingIdentityTests(TestCase):
 		self.assertEqual([deal['title'] for deal in payloads[0]['deals']], ['Late Night', 'Happy Hour'])
 		self.assertTrue(payloads[0]['has_deals'])
 		self.assertEqual(payloads[0]['deal_count'], 2)
+		self.assertEqual(payloads[0]['operating_weekdays'], [])
+		self.assertEqual(payloads[0]['deal_weekdays'], [])
+		self.assertTrue(payloads[0]['is_verified'])
 		self.assertEqual(payloads[1]['slug'], 'no-deal-cafe')
 		self.assertFalse(payloads[1]['has_deals'])
 		self.assertEqual(payloads[1]['deal_count'], 0)
+		self.assertFalse(payloads[1]['is_verified'])
 
 		verified_payloads = get_source_place_payloads(has_deals=True)
 		self.assertEqual(len(verified_payloads), 1)

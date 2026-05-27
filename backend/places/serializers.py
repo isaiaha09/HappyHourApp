@@ -260,6 +260,9 @@ class PlaceLocationSerializer(serializers.Serializer):
 	is_active = serializers.BooleanField()
 	has_deals = serializers.BooleanField(required=False, default=False)
 	deal_count = serializers.IntegerField(required=False, default=0)
+	operating_weekdays = serializers.ListField(child=serializers.IntegerField(), required=False, default=list)
+	deal_weekdays = serializers.ListField(child=serializers.IntegerField(), required=False, default=list)
+	is_verified = serializers.BooleanField(required=False, default=False)
 
 
 class PlaceLocationDetailSerializer(PlaceLocationSerializer):
@@ -287,6 +290,9 @@ class PlaceListSerializer(serializers.Serializer):
 	is_active = serializers.BooleanField()
 	has_deals = serializers.BooleanField(required=False, default=False)
 	deal_count = serializers.IntegerField(required=False, default=0)
+	operating_weekdays = serializers.ListField(child=serializers.IntegerField(), required=False, default=list)
+	deal_weekdays = serializers.ListField(child=serializers.IntegerField(), required=False, default=list)
+	is_verified = serializers.BooleanField(required=False, default=False)
 	locations = PlaceLocationSerializer(many=True, required=False, default=list)
 
 
