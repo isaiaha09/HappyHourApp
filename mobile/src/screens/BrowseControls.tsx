@@ -88,17 +88,32 @@ export function BrowseControls({
   const chipTextStyle = overlay ? styles.overlayChipText : styles.filterChipText;
   const chipTextActiveStyle = overlay ? styles.overlayChipTextActive : styles.filterChipTextActive;
   const normalizedSearchQuery = normalizeSearchText(searchQuery);
-  const modeSwitchProgress = useRef(new Animated.Value(browseMode === 'map' ? 1 : 0)).current;
+  const modeSwitchTranslateProgress = useRef(new Animated.Value(browseMode === 'map' ? 1 : 0)).current;
+  const modeSwitchColorProgress = useRef(new Animated.Value(browseMode === 'map' ? 1 : 0)).current;
+  const listLabelColor = modeSwitchColorProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['#f4fffe', '#5d4637'],
+  });
+  const mapLabelColor = modeSwitchColorProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['#5d4637', '#f4fffe'],
+  });
 
   useEffect(() => {
-    Animated.spring(modeSwitchProgress, {
+    Animated.spring(modeSwitchTranslateProgress, {
       damping: 16,
       mass: 0.8,
       stiffness: 180,
       toValue: browseMode === 'map' ? 1 : 0,
       useNativeDriver: true,
     }).start();
-  }, [browseMode, modeSwitchProgress]);
+
+    Animated.timing(modeSwitchColorProgress, {
+      duration: 180,
+      toValue: browseMode === 'map' ? 1 : 0,
+      useNativeDriver: false,
+    }).start();
+  }, [browseMode, modeSwitchColorProgress, modeSwitchTranslateProgress]);
 
   return (
     <View
@@ -153,7 +168,7 @@ export function BrowseControls({
                 {
                   width: modeSwitchThumbWidth,
                   transform: [{
-                    translateX: modeSwitchProgress.interpolate({
+                    translateX: modeSwitchTranslateProgress.interpolate({
                       inputRange: [0, 1],
                       outputRange: [0, modeSwitchThumbWidth],
                     }),
@@ -165,13 +180,13 @@ export function BrowseControls({
               onPress={() => onBrowseModeChange('list')}
               style={[styles.modeSwitchOption, { width: modeSwitchThumbWidth }]}
             >
-              <Text style={[styles.modeSwitchOptionText, browseMode === 'list' ? styles.modeSwitchOptionTextActive : null]}>List</Text>
+              <Animated.Text style={[styles.modeSwitchOptionText, { color: listLabelColor }]}>List</Animated.Text>
             </Pressable>
             <Pressable
               onPress={() => onBrowseModeChange('map')}
               style={[styles.modeSwitchOption, { width: modeSwitchThumbWidth }]}
             >
-              <Text style={[styles.modeSwitchOptionText, browseMode === 'map' ? styles.modeSwitchOptionTextActive : null]}>Map</Text>
+              <Animated.Text style={[styles.modeSwitchOptionText, { color: mapLabelColor }]}>Map</Animated.Text>
             </Pressable>
           </View>
           {overlay && onToggleMapTheme ? (

@@ -223,7 +223,10 @@ function AppScreen() {
   const [renderedMapResultCount, setRenderedMapResultCount] = useState(0);
   const [visibleMapResultCount, setVisibleMapResultCount] = useState(0);
   const [loadingMoreMapResults, setLoadingMoreMapResults] = useState(false);
+  const [listRevealToken, setListRevealToken] = useState(0);
+  const [listRevealEnabled, setListRevealEnabled] = useState(browseMode === 'list');
   const showMoreMapResultsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingListRevealRef = useRef(false);
   const [profileForm, setProfileForm] = useState<ProfileFormState>(initialProfileFormState);
   const [profileSubmitting, setProfileSubmitting] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
@@ -1081,7 +1084,15 @@ function AppScreen() {
       duration: 190,
       toValue: 1,
       useNativeDriver: true,
-    }).start();
+    }).start(({ finished }) => {
+      if (!finished || browseMode !== 'list' || !pendingListRevealRef.current) {
+        return;
+      }
+
+      pendingListRevealRef.current = false;
+      setListRevealEnabled(true);
+      setListRevealToken((current) => current + 1);
+    });
   }, [browseMode, browseModeTransition]);
 
   function handleRefreshPlaces() {
@@ -1183,6 +1194,8 @@ function AppScreen() {
     animateNextLayout();
     setBrowseFiltersExpanded(false);
     setSelectedMapPlaceKey(null);
+    pendingListRevealRef.current = mode === 'list';
+    setListRevealEnabled(false);
     browseModeTransition.stopAnimation();
     browseModeFadePendingRef.current = true;
     setBrowseMode(mode);
@@ -1868,7 +1881,7 @@ function AppScreen() {
               style={[
                 styles.mapOverlayLayer,
                 {
-                  paddingTop: Math.max(insets.top + 12, 24),
+                  paddingTop: insets.top + 14,
                   paddingBottom: mapOverlayBottomPadding,
                 },
               ]}
@@ -2083,19 +2096,19 @@ function AppScreen() {
                 data={filteredPlaces}
                 keyExtractor={(item) => item.id.toString()}
                 key={browseListColumns}
+                initialNumToRender={6}
                 numColumns={browseListColumns}
-                renderItem={({ item }) => (
-                  <Pressable
+                renderItem={({ item, index }) => (
+                  <AnimatedListPlaceCard
+                    browseListColumns={browseListColumns}
+                    item={item}
+                    listRevealEnabled={listRevealEnabled}
+                    revealIndex={index}
+                    revealToken={listRevealToken}
                     onPress={() => handleSelectPlace(item)}
-                    style={[styles.placeCard, browseListColumns > 1 ? styles.placeCardLandscape : null]}
-                  >
-                    <Text style={styles.placeCity}>{getPlaceCardEyebrow(item)}</Text>
-                    <Text style={styles.placeTitle}>{item.name}</Text>
-                    <Text style={styles.placeMeta}>{item.venue_type_label}</Text>
-                    <Text style={styles.placeAddress}>{getPlaceCardAddress(item)}</Text>
-                  </Pressable>
+                  />
                 )}
-                ListEmptyComponent={<Text style={styles.emptyStateText}>{getBrowseEmptyStateMessage(normalizedSearchQuery)}</Text>}
+                ListEmptyComponent={filteredPlaces.length === 0 ? <Text style={styles.emptyStateText}>{getBrowseEmptyStateMessage(normalizedSearchQuery)}</Text> : null}
                 showsVerticalScrollIndicator={false}
               />
             )}
@@ -2113,6 +2126,67 @@ function AppScreen() {
         </View>
       )}
     </>
+  );
+}
+
+function AnimatedListPlaceCard({
+  browseListColumns,
+  item,
+  listRevealEnabled,
+  onPress,
+  revealIndex,
+  revealToken,
+}: {
+  browseListColumns: number;
+  item: PlaceListItem;
+  listRevealEnabled: boolean;
+  onPress: () => void;
+  revealIndex: number;
+  revealToken: number;
+}) {
+  const entrance = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    entrance.stopAnimation();
+
+    if (!listRevealEnabled) {
+      entrance.setValue(0);
+      return;
+    }
+
+    entrance.setValue(0);
+    Animated.timing(entrance, {
+      delay: Math.min(revealIndex * 55, 700),
+      duration: 180,
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
+  }, [entrance, item.id, listRevealEnabled, revealIndex, revealToken]);
+
+  return (
+    <Animated.View
+      style={[
+        {
+          opacity: entrance,
+          transform: [{
+            translateY: entrance.interpolate({
+              inputRange: [0, 1],
+              outputRange: [16, 0],
+            }),
+          }],
+        },
+      ]}
+    >
+      <Pressable
+        onPress={onPress}
+        style={[styles.placeCard, browseListColumns > 1 ? styles.placeCardLandscape : null]}
+      >
+        <Text style={styles.placeCity}>{getPlaceCardEyebrow(item)}</Text>
+        <Text style={styles.placeTitle}>{item.name}</Text>
+        <Text style={styles.placeMeta}>{item.venue_type_label}</Text>
+        <Text style={styles.placeAddress}>{getPlaceCardAddress(item)}</Text>
+      </Pressable>
+    </Animated.View>
   );
 }
 

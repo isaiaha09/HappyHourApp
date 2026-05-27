@@ -148,7 +148,7 @@ export const styles = StyleSheet.create({
     gap: 12,
   },
   mapTopPanel: {
-    backgroundColor: 'rgba(247, 239, 226, 0.92)',
+    backgroundColor: '#fffaf4',
     borderColor: '#efd8bd',
     borderRadius: 24,
     borderWidth: 1,
@@ -158,7 +158,7 @@ export const styles = StyleSheet.create({
   mapTopPanelLandscape: {
     alignSelf: 'center',
     gap: 8,
-    maxWidth: 560,
+    maxWidth: 620,
     padding: 12,
   },
   mapLoadingOverlay: {
@@ -414,7 +414,7 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   searchInputShellOverlay: {
-    backgroundColor: 'rgba(248, 239, 227, 0.94)',
+    backgroundColor: '#f8efe3',
   },
   searchInputIcon: {
     color: '#9a6440',
@@ -699,11 +699,8 @@ export const styles = StyleSheet.create({
   },
   overlayChip: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255, 247, 239, 0.96)',
+    backgroundColor: 'rgba(255, 250, 244, 0.96)',
     borderColor: '#ddc4a7',
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 14,
     paddingVertical: 10,
   },
   overlayChipActive: {
