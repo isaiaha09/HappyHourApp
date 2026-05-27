@@ -511,6 +511,9 @@ export const styles = StyleSheet.create({
   filtersToggleButtonInline: {
     minHeight: 44,
   },
+  filtersToggleButtonPressable: {
+    borderRadius: 16,
+  },
   filtersToggleButtonLandscape: {
     minHeight: 42,
     paddingHorizontal: 10,
@@ -627,13 +630,21 @@ export const styles = StyleSheet.create({
   },
   mapThemeToggleButton: {
     alignItems: 'center',
+    borderRadius: 14,
+    justifyContent: 'center',
+    height: 44,
+    overflow: 'hidden',
+    width: 44,
+  },
+  mapThemeToggleButtonFill: {
+    alignItems: 'center',
     backgroundColor: '#fff7ef',
     borderColor: '#ddc4a7',
     borderRadius: 14,
     borderWidth: 1,
+    height: '100%',
     justifyContent: 'center',
-    height: 44,
-    width: 44,
+    width: '100%',
   },
   mapThemeToggleButtonActive: {
     backgroundColor: '#2d403f',
@@ -643,6 +654,9 @@ export const styles = StyleSheet.create({
     color: '#5d4637',
     fontSize: 18,
     fontWeight: '800',
+  },
+  mapThemeToggleButtonTextLayer: {
+    position: 'absolute',
   },
   mapThemeToggleButtonTextActive: {
     color: '#f4fffe',

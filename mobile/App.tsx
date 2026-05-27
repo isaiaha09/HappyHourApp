@@ -636,9 +636,17 @@ function AppScreen() {
 
     pendingImmediateMapPinsRefreshRef.current = false;
     mapPinsTransition.stopAnimation();
-    mapPinsTransition.setValue(1);
     setRenderedMappedPlaces(mappedPlaces);
     setRenderedMappedPlaceKey(mappedPlaceKey);
+    mapPinsTransition.setValue(0);
+    requestAnimationFrame(() => {
+      Animated.timing(mapPinsTransition, {
+        duration: 1450,
+        easing: Easing.out(Easing.cubic),
+        toValue: 1,
+        useNativeDriver: true,
+      }).start();
+    });
   }, [listLoading, mapPinsTransition, mappedPlaceKey, mappedPlaces, renderedMappedPlaceKey, renderedMappedPlaces.length, showMapBrowse]);
 
   function navigateScreen(
@@ -1093,7 +1101,7 @@ function AppScreen() {
     mapMarkersTrackViewChangesTimeoutRef.current = setTimeout(() => {
       setMapMarkersTrackViewChanges(false);
       mapMarkersTrackViewChangesTimeoutRef.current = null;
-    }, 280);
+    }, 1600);
   }, [renderedMappedPlaceKey, selectedMapPlaceKey, showMapBrowse]);
 
   useEffect(() => {
@@ -1303,31 +1311,10 @@ function AppScreen() {
   function handleToggleMapTheme() {
     const nextDarkMode = !darkMapMode;
     setDarkMapMode(nextDarkMode);
-
-    if (Platform.OS !== 'ios' || nextDarkMode === displayedDarkMapMode) {
-      setDisplayedDarkMapMode(nextDarkMode);
-      setTransitioningMapTheme(null);
-      mapThemeFade.stopAnimation();
-      mapThemeFade.setValue(0);
-      return;
-    }
-
-    setTransitioningMapTheme(nextDarkMode);
+    setDisplayedDarkMapMode(nextDarkMode);
+    setTransitioningMapTheme(null);
     mapThemeFade.stopAnimation();
     mapThemeFade.setValue(0);
-    Animated.timing(mapThemeFade, {
-      duration: 240,
-      toValue: 1,
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (!finished) {
-        return;
-      }
-
-      setDisplayedDarkMapMode(nextDarkMode);
-      setTransitioningMapTheme(null);
-      mapThemeFade.setValue(0);
-    });
   }
 
   function handleBrowseModeChange(mode: BrowseMode) {
@@ -1345,7 +1332,6 @@ function AppScreen() {
   }
 
   function handleToggleBrowseFilters() {
-    animateNextLayout();
     setBrowseFiltersExpanded((current) => !current);
   }
 
@@ -1992,7 +1978,6 @@ function AppScreen() {
             <Animated.View pointerEvents={browseMode === 'map' ? 'auto' : 'none'} style={[styles.mapModeContentLayer, browseModeTransitionStyle]}>
               <View style={styles.mapScreen}>
                 <MapView
-                  key={renderedMappedPlaceKey || 'empty-map'}
                   initialRegion={mapRegionRef.current}
                   maxDelta={maxMapGestureDelta}
                   minDelta={minLatitudeDelta}
@@ -2085,7 +2070,6 @@ function AppScreen() {
                 {Platform.OS === 'ios' && transitioningMapTheme !== null ? (
                   <Animated.View pointerEvents="none" style={[styles.mapThemeTransitionLayer, { opacity: mapThemeFade }]}>
                     <MapView
-                      key={`transition-${renderedMappedPlaceKey || 'empty-map'}`}
                       mapType="standard"
                       region={mapRegion}
                       rotateEnabled={false}
@@ -2529,14 +2513,27 @@ function AnimatedListPlaceCard({
 }
 
 function getAnimatedMapMarkerStyle(
-  _place: MappedPlace,
-  _region: Region,
-  _width: number,
-  _height: number,
-  _transition: Animated.Value,
+  place: MappedPlace,
+  region: Region,
+  width: number,
+  height: number,
+  transition: Animated.Value,
 ) {
+  const maxDistanceFromCenter = Math.max(Math.hypot(width / 2, height / 2), 1);
+  const normalizedDistanceFromCenter = clamp(
+    getMarkerCenterScreenDistance(place, region, width, height) / maxDistanceFromCenter,
+    0,
+    1,
+  );
+  const revealStart = normalizedDistanceFromCenter * 0.58;
+  const revealEnd = Math.min(revealStart + 0.22, 1);
+
   return {
-    opacity: 1,
+    opacity: transition.interpolate({
+      inputRange: [0, revealStart, revealEnd, 1],
+      outputRange: [0, 0, 1, 1],
+      extrapolate: 'clamp',
+    }),
     transform: [],
   };
 }

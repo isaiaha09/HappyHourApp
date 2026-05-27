@@ -90,6 +90,8 @@ export function BrowseControls({
   const normalizedSearchQuery = normalizeSearchText(searchQuery);
   const modeSwitchTranslateProgress = useRef(new Animated.Value(browseMode === 'map' ? 1 : 0)).current;
   const modeSwitchColorProgress = useRef(new Animated.Value(browseMode === 'map' ? 1 : 0)).current;
+  const filtersPanelProgress = useRef(new Animated.Value(filtersExpanded ? 1 : 0)).current;
+  const mapThemeToggleProgress = useRef(new Animated.Value(isDarkMapMode ? 1 : 0)).current;
   const listLabelColor = modeSwitchColorProgress.interpolate({
     inputRange: [0, 1],
     outputRange: ['#f4fffe', '#5d4637'],
@@ -97,6 +99,62 @@ export function BrowseControls({
   const mapLabelColor = modeSwitchColorProgress.interpolate({
     inputRange: [0, 1],
     outputRange: ['#5d4637', '#f4fffe'],
+  });
+  const filtersPanelOpacity = filtersPanelProgress.interpolate({
+    inputRange: [0, 0.12, 1],
+    outputRange: [0, 0.35, 1],
+  });
+  const filtersPanelTranslateY = filtersPanelProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-6, 0],
+  });
+  const filtersPanelAnimatedMaxHeight = filtersPanelProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, filtersPanelMaxHeight],
+  });
+  const filtersToggleBackgroundColor = filtersPanelProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['#fff7ef', '#402214'],
+  });
+  const filtersToggleBorderColor = filtersPanelProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['#ddc4a7', '#402214'],
+  });
+  const filtersToggleTextColor = filtersPanelProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['#5d4637', '#fff7ef'],
+  });
+  const mapThemeToggleBackgroundColor = mapThemeToggleProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['#fff7ef', '#2d403f'],
+  });
+  const mapThemeToggleBorderColor = mapThemeToggleProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['#ddc4a7', '#2d403f'],
+  });
+  const mapThemeToggleSunOpacity = mapThemeToggleProgress.interpolate({
+    inputRange: [0, 0.45, 1],
+    outputRange: [1, 0, 0],
+  });
+  const mapThemeToggleMoonOpacity = mapThemeToggleProgress.interpolate({
+    inputRange: [0, 0.55, 1],
+    outputRange: [0, 0, 1],
+  });
+  const mapThemeToggleSunScale = mapThemeToggleProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 0.8],
+  });
+  const mapThemeToggleMoonScale = mapThemeToggleProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.8, 1],
+  });
+  const mapThemeToggleSunRotate = mapThemeToggleProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '-50deg'],
+  });
+  const mapThemeToggleMoonRotate = mapThemeToggleProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['50deg', '0deg'],
   });
 
   useEffect(() => {
@@ -114,6 +172,24 @@ export function BrowseControls({
       useNativeDriver: false,
     }).start();
   }, [browseMode, modeSwitchColorProgress, modeSwitchTranslateProgress]);
+
+  useEffect(() => {
+    Animated.timing(filtersPanelProgress, {
+      duration: 280,
+      easing: Easing.out(Easing.cubic),
+      toValue: filtersExpanded ? 1 : 0,
+      useNativeDriver: false,
+    }).start();
+  }, [filtersExpanded, filtersPanelProgress]);
+
+  useEffect(() => {
+    Animated.timing(mapThemeToggleProgress, {
+      duration: 260,
+      easing: Easing.out(Easing.cubic),
+      toValue: isDarkMapMode ? 1 : 0,
+      useNativeDriver: false,
+    }).start();
+  }, [isDarkMapMode, mapThemeToggleProgress]);
 
   return (
     <View
@@ -193,11 +269,43 @@ export function BrowseControls({
             <Pressable
               accessibilityLabel={isDarkMapMode ? 'Switch to light map' : 'Switch to dark map'}
               onPress={onToggleMapTheme}
-              style={[styles.mapThemeToggleButton, isDarkMapMode ? styles.mapThemeToggleButtonActive : null]}
+              style={styles.mapThemeToggleButton}
             >
-              <Text style={[styles.mapThemeToggleButtonText, isDarkMapMode ? styles.mapThemeToggleButtonTextActive : null]}>
-                {isDarkMapMode ? '☾' : '☀'}
-              </Text>
+              <Animated.View
+                style={[
+                  styles.mapThemeToggleButtonFill,
+                  {
+                    backgroundColor: mapThemeToggleBackgroundColor,
+                    borderColor: mapThemeToggleBorderColor,
+                  },
+                ]}
+              >
+                <Animated.Text
+                  style={[
+                    styles.mapThemeToggleButtonText,
+                    styles.mapThemeToggleButtonTextLayer,
+                    {
+                      opacity: mapThemeToggleSunOpacity,
+                      transform: [{ scale: mapThemeToggleSunScale }, { rotate: mapThemeToggleSunRotate }],
+                    },
+                  ]}
+                >
+                  ☀
+                </Animated.Text>
+                <Animated.Text
+                  style={[
+                    styles.mapThemeToggleButtonText,
+                    styles.mapThemeToggleButtonTextActive,
+                    styles.mapThemeToggleButtonTextLayer,
+                    {
+                      opacity: mapThemeToggleMoonOpacity,
+                      transform: [{ scale: mapThemeToggleMoonScale }, { rotate: mapThemeToggleMoonRotate }],
+                    },
+                  ]}
+                >
+                  ☾
+                </Animated.Text>
+              </Animated.View>
             </Pressable>
           ) : null}
           <Pressable accessibilityLabel="Refresh places" onPress={onReload} style={styles.reloadButton}>
@@ -205,16 +313,23 @@ export function BrowseControls({
           </Pressable>
           <Pressable
             onPress={onToggleFilters}
-            style={[
-              styles.filtersToggleButton,
-              styles.filtersToggleButtonInline,
-              compactLandscapeControls ? styles.filtersToggleButtonLandscape : null,
-              filtersExpanded ? styles.filtersToggleButtonActive : null,
-            ]}
+            style={styles.filtersToggleButtonPressable}
           >
-            <Text style={[styles.filtersToggleText, filtersExpanded ? styles.filtersToggleTextActive : null]}>
-              {filtersExpanded ? 'Hide filters' : 'Filters'}
-            </Text>
+            <Animated.View
+              style={[
+                styles.filtersToggleButton,
+                styles.filtersToggleButtonInline,
+                compactLandscapeControls ? styles.filtersToggleButtonLandscape : null,
+                {
+                  backgroundColor: filtersToggleBackgroundColor,
+                  borderColor: filtersToggleBorderColor,
+                },
+              ]}
+            >
+              <Animated.Text style={[styles.filtersToggleText, { color: filtersToggleTextColor }]}>
+                {filtersExpanded ? 'Hide filters' : 'Filters'}
+              </Animated.Text>
+            </Animated.View>
           </Pressable>
         </View>
         {onOpenDashboard ? (
@@ -236,14 +351,20 @@ export function BrowseControls({
         </Text>
       </View>
 
-      {filtersExpanded ? (
-        <View
-          style={[
-            styles.filtersPanel,
-            compactLandscapeControls ? styles.filtersPanelLandscape : null,
-            { maxHeight: filtersPanelMaxHeight },
-          ]}
-        >
+      <Animated.View
+        pointerEvents={filtersExpanded ? 'auto' : 'none'}
+        style={[
+          styles.filtersPanel,
+          compactLandscapeControls ? styles.filtersPanelLandscape : null,
+          {
+            maxHeight: filtersPanelAnimatedMaxHeight,
+            opacity: filtersPanelOpacity,
+            overflow: 'hidden',
+            transform: [{ translateY: filtersPanelTranslateY }],
+          },
+        ]}
+      >
+        <View style={{ maxHeight: filtersPanelMaxHeight }}>
           <ScrollView
             contentContainerStyle={styles.filtersPanelScrollContent}
             nestedScrollEnabled
@@ -360,7 +481,7 @@ export function BrowseControls({
             </View>
           </ScrollView>
         </View>
-      ) : null}
+      </Animated.View>
     </View>
   );
 }
