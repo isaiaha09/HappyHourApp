@@ -165,11 +165,11 @@ export function AuthPortalScreen({ authMessage, errorMessage, loginForm, loginPo
 
           <View style={styles.profileCard}>
             <View style={styles.modeRow}>
-              <Pressable onPress={() => onSelectPortal('customer')} style={[styles.modeButton, loginPortal === 'customer' ? styles.modeButtonActive : null]}>
-                <Text style={[styles.modeButtonText, loginPortal === 'customer' ? styles.modeButtonTextActive : null]}>Customer</Text>
+              <Pressable onPress={() => onSelectPortal('customer')} style={[styles.authPortalButton, loginPortal === 'customer' ? styles.authPortalButtonActive : null]}>
+                <Text style={[styles.authPortalButtonText, loginPortal === 'customer' ? styles.authPortalButtonTextActive : null]}>Customer</Text>
               </Pressable>
-              <Pressable onPress={() => onSelectPortal('business')} style={[styles.modeButton, loginPortal === 'business' ? styles.modeButtonActive : null]}>
-                <Text style={[styles.modeButtonText, loginPortal === 'business' ? styles.modeButtonTextActive : null]}>Business</Text>
+              <Pressable onPress={() => onSelectPortal('business')} style={[styles.authPortalButton, loginPortal === 'business' ? styles.authPortalButtonActive : null]}>
+                <Text style={[styles.authPortalButtonText, loginPortal === 'business' ? styles.authPortalButtonTextActive : null]}>Business</Text>
               </Pressable>
             </View>
 
@@ -185,14 +185,14 @@ export function AuthPortalScreen({ authMessage, errorMessage, loginForm, loginPo
               </View>
             ) : null}
 
-            <Text style={styles.profileFieldLabel}>Username or email</Text>
+            <Text style={styles.profileFieldLabel}>Username or Email</Text>
             <TextInput autoCapitalize="none" onChangeText={(value) => onChangeField('identifier', value)} style={styles.profileInput} value={loginForm.identifier} />
 
             <Text style={styles.profileFieldLabel}>Password</Text>
             <TextInput onChangeText={(value) => onChangeField('password', value)} secureTextEntry style={styles.profileInput} value={loginForm.password} />
 
             <Pressable onPress={() => void onSubmit()} style={[styles.linkButton, submitting ? styles.linkButtonDisabled : null]}>
-              <Text style={styles.linkButtonText}>{submitting ? 'Logging in...' : loginPortal === 'customer' ? 'Log in as customer' : 'Log in as business'}</Text>
+              <Text style={styles.linkButtonText}>{submitting ? 'Logging in...' : loginPortal === 'customer' ? 'Log in as Customer' : 'Log in as Business'}</Text>
             </Pressable>
 
             <Pressable onPress={onContinueToApp} style={styles.linkButtonSecondaryWide}>

@@ -182,6 +182,7 @@ function AppScreen() {
   const browseModeTransition = useRef(new Animated.Value(1)).current;
   const mapPinsTransition = useRef(new Animated.Value(1)).current;
   const mapResultsOpacity = useRef(new Animated.Value(0)).current;
+  const mapThemeFade = useRef(new Animated.Value(0)).current;
   const [apiBaseUrl, setApiBaseUrl] = useState(initialApiBaseUrl);
   const [screenMode, setScreenMode] = useState<AppScreenMode>('splash');
   const [onboardingTransitionDirection, setOnboardingTransitionDirection] = useState<OnboardingTransitionDirection>('forward');
@@ -194,6 +195,9 @@ function AppScreen() {
   const [authenticatedSession, setAuthenticatedSession] = useState<SignupResponse | null>(null);
   const [browseMode, setBrowseMode] = useState<BrowseMode>('list');
   const [browseFiltersExpanded, setBrowseFiltersExpanded] = useState(false);
+  const [darkMapMode, setDarkMapMode] = useState(false);
+  const [displayedDarkMapMode, setDisplayedDarkMapMode] = useState(false);
+  const [transitioningMapTheme, setTransitioningMapTheme] = useState<boolean | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCity, setSelectedCity] = useState<(typeof cityFilters)[number]['value']>('all');
   const [selectedVenueTypes, setSelectedVenueTypes] = useState<VenueFilterValue[]>(() => venueFilters.map((filter) => filter.value));
@@ -218,6 +222,8 @@ function AppScreen() {
   const [renderedMapResultsKey, setRenderedMapResultsKey] = useState('');
   const [renderedMapResultCount, setRenderedMapResultCount] = useState(0);
   const [visibleMapResultCount, setVisibleMapResultCount] = useState(0);
+  const [loadingMoreMapResults, setLoadingMoreMapResults] = useState(false);
+  const showMoreMapResultsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [profileForm, setProfileForm] = useState<ProfileFormState>(initialProfileFormState);
   const [profileSubmitting, setProfileSubmitting] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
@@ -307,6 +313,7 @@ function AppScreen() {
   const mapSearchResultPool = normalizedSearchQuery.length ? displayedMapPlaces : [];
   const mapSearchResultsKey = mapSearchResultPool.map((place) => place.markerKey).join('|');
   const mapOverlayBottomPadding = Math.max(insets.bottom + 12, 20);
+  const floatingDashboardButtonOffset = Math.max(insets.bottom + 16, 24);
   const mapResultsCardMaxHeight = Math.max(
     width > height
       ? Math.min(height * 0.5, keyboardHeight > 0 ? 300 : 360)
@@ -314,6 +321,19 @@ function AppScreen() {
     220,
   );
   const availableProfilePlaces = profilePlaces.length ? profilePlaces : places;
+
+  function clearShowMoreMapResultsTimer() {
+    if (showMoreMapResultsTimeoutRef.current === null) {
+      return;
+    }
+
+    clearTimeout(showMoreMapResultsTimeoutRef.current);
+    showMoreMapResultsTimeoutRef.current = null;
+  }
+
+  useEffect(() => () => {
+    clearShowMoreMapResultsTimer();
+  }, []);
   const availableClaimPlaces = consolidatePlacesBySlug(availableProfilePlaces);
   const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'business-search', 'business-claim', 'manual-business-claim']);
   const currentOnboardingScreen = onboardingScreenKeys.has(screenMode) ? screenMode : null;
@@ -813,6 +833,8 @@ function AppScreen() {
       setRenderedMapResultsKey('');
       setRenderedMapResultCount(0);
       setVisibleMapResultCount(0);
+      setLoadingMoreMapResults(false);
+      clearShowMoreMapResultsTimer();
     });
   }, [
     filteredPlaces.length,
@@ -826,13 +848,23 @@ function AppScreen() {
   ]);
 
   function handleShowMoreMapResults() {
+    if (loadingMoreMapResults) {
+      return;
+    }
+
     const nextVisibleCount = Math.min(
       visibleMapResultCount + nextMapResultsIncrement,
       mapSearchResultPool.length,
     );
 
-    setVisibleMapResultCount(nextVisibleCount);
-    setRenderedMapSearchResults(mapSearchResultPool.slice(0, nextVisibleCount));
+    setLoadingMoreMapResults(true);
+    clearShowMoreMapResultsTimer();
+    showMoreMapResultsTimeoutRef.current = setTimeout(() => {
+      setVisibleMapResultCount(nextVisibleCount);
+      setRenderedMapSearchResults(mapSearchResultPool.slice(0, nextVisibleCount));
+      setLoadingMoreMapResults(false);
+      showMoreMapResultsTimeoutRef.current = null;
+    }, 1000);
   }
 
   useEffect(() => {
@@ -1111,6 +1143,36 @@ function AppScreen() {
   function handleToggleVerifiedBusinessesOnly() {
     animateNextLayout();
     setVerifiedBusinessesOnly((current) => !current);
+  }
+
+  function handleToggleMapTheme() {
+    const nextDarkMode = !darkMapMode;
+    setDarkMapMode(nextDarkMode);
+
+    if (Platform.OS !== 'ios' || nextDarkMode === displayedDarkMapMode) {
+      setDisplayedDarkMapMode(nextDarkMode);
+      setTransitioningMapTheme(null);
+      mapThemeFade.stopAnimation();
+      mapThemeFade.setValue(0);
+      return;
+    }
+
+    setTransitioningMapTheme(nextDarkMode);
+    mapThemeFade.stopAnimation();
+    mapThemeFade.setValue(0);
+    Animated.timing(mapThemeFade, {
+      duration: 240,
+      toValue: 1,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (!finished) {
+        return;
+      }
+
+      setDisplayedDarkMapMode(nextDarkMode);
+      setTransitioningMapTheme(null);
+      mapThemeFade.setValue(0);
+    });
   }
 
   function handleBrowseModeChange(mode: BrowseMode) {
@@ -1669,7 +1731,9 @@ function AppScreen() {
             initialRegion={initialMapRegionRef.current}
             maxDelta={maxMapGestureDelta}
             minDelta={minLatitudeDelta}
+            userInterfaceStyle={Platform.OS === 'ios' ? (displayedDarkMapMode ? 'dark' : 'light') : undefined}
             rotateEnabled={false}
+            mapType="standard"
             onMapReady={() => {
               if (!shouldUseNativeMapBoundaries || !mapRef.current) {
                 return;
@@ -1756,6 +1820,47 @@ function AppScreen() {
             })}
           </MapView>
 
+          {Platform.OS === 'ios' && transitioningMapTheme !== null ? (
+            <Animated.View pointerEvents="none" style={[styles.mapThemeTransitionLayer, { opacity: mapThemeFade }]}>
+              <MapView
+                mapType="standard"
+                region={mapRegion}
+                rotateEnabled={false}
+                scrollEnabled={false}
+                showsCompass={false}
+                showsMyLocationButton={false}
+                toolbarEnabled={false}
+                userInterfaceStyle={transitioningMapTheme ? 'dark' : 'light'}
+                zoomEnabled={false}
+                style={styles.mapBackground}
+              >
+                {displayedMapPlaces.map((place, index) => {
+                  const markerStyle = getVenueMarkerStyle(place.venue_type);
+                  const animatedMarkerStyle = getAnimatedMapMarkerStyle(place, mapRegion, width, height, mapPinsTransition);
+
+                  return (
+                  <Marker
+                    anchor={{ x: 0.5, y: 0.5 }}
+                    coordinate={{ latitude: place.markerLatitude, longitude: place.markerLongitude }}
+                    key={`transition-${place.markerKey}`}
+                    tracksViewChanges={false}
+                    zIndex={displayedMapPlaces.length - index}
+                  >
+                    <Animated.View style={[
+                      animatedMarkerStyle,
+                      styles.mapMarker,
+                      { backgroundColor: markerStyle.fill, borderColor: markerStyle.stroke },
+                      selectedMapPlaceKey === place.markerKey ? styles.mapMarkerActive : null,
+                    ]}>
+                      <Text style={styles.mapMarkerText}>{markerStyle.badge}</Text>
+                    </Animated.View>
+                  </Marker>
+                  );
+                })}
+              </MapView>
+            </Animated.View>
+          ) : null}
+
             <View
               pointerEvents="box-none"
               style={[
@@ -1771,16 +1876,17 @@ function AppScreen() {
               confirmedDealsOnly={confirmedDealsOnly}
               overlay
               filtersExpanded={browseFiltersExpanded}
+              isDarkMapMode={darkMapMode}
               onChangeSearchQuery={setSearchQuery}
               onClearSearchQuery={handleClearSearchQuery}
               onBrowseModeChange={handleBrowseModeChange}
-              onOpenDashboard={authenticatedSession ? handleOpenProfiles : undefined}
               onReload={handleRefreshPlaces}
               onSelectAllVenueTypes={handleSelectAllVenueTypes}
               onSelectCity={setSelectedCity}
               onToggleConfirmedDealsOnly={handleToggleConfirmedDealsOnly}
               onToggleDealDay={handleToggleDealDay}
               onToggleFilters={handleToggleBrowseFilters}
+              onToggleMapTheme={handleToggleMapTheme}
               onToggleOperatingDay={handleToggleOperatingDay}
               onToggleVenueType={handleToggleVenueType}
               onToggleVerifiedBusinessesOnly={handleToggleVerifiedBusinessesOnly}
@@ -1882,10 +1988,17 @@ function AppScreen() {
                       ))}
                     </ScrollView>
                     {renderedMapSearchResults.length < renderedMapResultCount ? (
-                      <Pressable onPress={handleShowMoreMapResults} style={styles.mapResultsMoreButton}>
-                        <Text style={styles.mapResultsMoreButtonText}>
-                          Show next {Math.min(nextMapResultsIncrement, renderedMapResultCount - renderedMapSearchResults.length)}
-                        </Text>
+                      <Pressable disabled={loadingMoreMapResults} onPress={handleShowMoreMapResults} style={styles.mapResultsMoreButton}>
+                        {loadingMoreMapResults ? (
+                          <View style={styles.mapResultsMoreButtonLoadingContent}>
+                            <ActivityIndicator color="#1f5f5b" size="small" />
+                            <Text style={styles.mapResultsMoreButtonText}>Loading...</Text>
+                          </View>
+                        ) : (
+                          <Text style={styles.mapResultsMoreButtonText}>
+                            Show next {Math.min(nextMapResultsIncrement, renderedMapResultCount - renderedMapSearchResults.length)}
+                          </Text>
+                        )}
                       </Pressable>
                     ) : null}
                   </>
@@ -1899,6 +2012,19 @@ function AppScreen() {
               <View style={[styles.errorBanner, styles.mapErrorBanner]}>
                 <Text style={styles.errorText}>{errorMessage}</Text>
               </View>
+            ) : null}
+
+            {authenticatedSession ? (
+              <Pressable
+                onPress={handleOpenProfiles}
+                style={[
+                  styles.floatingDashboardButton,
+                  styles.floatingDashboardButtonMap,
+                  { bottom: floatingDashboardButtonOffset, right: 18 },
+                ]}
+              >
+                <Text style={styles.floatingDashboardButtonText}>Back to Dashboard</Text>
+              </Pressable>
             ) : null}
           </View>
         </View>
@@ -1915,16 +2041,17 @@ function AppScreen() {
               browseMode={browseMode}
               confirmedDealsOnly={confirmedDealsOnly}
               filtersExpanded={browseFiltersExpanded}
+              isDarkMapMode={darkMapMode}
               onChangeSearchQuery={setSearchQuery}
               onClearSearchQuery={handleClearSearchQuery}
               onBrowseModeChange={handleBrowseModeChange}
-              onOpenDashboard={authenticatedSession ? handleOpenProfiles : undefined}
               onReload={handleRefreshPlaces}
               onSelectAllVenueTypes={handleSelectAllVenueTypes}
               onSelectCity={setSelectedCity}
               onToggleConfirmedDealsOnly={handleToggleConfirmedDealsOnly}
               onToggleDealDay={handleToggleDealDay}
               onToggleFilters={handleToggleBrowseFilters}
+              onToggleMapTheme={handleToggleMapTheme}
               onToggleOperatingDay={handleToggleOperatingDay}
               onToggleVenueType={handleToggleVenueType}
               onToggleVerifiedBusinessesOnly={handleToggleVerifiedBusinessesOnly}
@@ -1971,6 +2098,18 @@ function AppScreen() {
             <View style={styles.errorBanner}>
               <Text style={styles.errorText}>{errorMessage}</Text>
             </View>
+          ) : null}
+
+          {authenticatedSession ? (
+            <Pressable
+              onPress={handleOpenProfiles}
+              style={[
+                styles.floatingDashboardButton,
+                { bottom: floatingDashboardButtonOffset, right: 18 },
+              ]}
+            >
+              <Text style={styles.floatingDashboardButtonText}>Back to Dashboard</Text>
+            </Pressable>
           ) : null}
         </View>
         </SafeAreaView>

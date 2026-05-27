@@ -92,7 +92,7 @@ export function getBrowseSummaryLabel(
     summaryParts.push('Verified');
   }
 
-  return summaryParts.length ? summaryParts.join(' • ') : 'All cities • all venue types';
+  return summaryParts.length ? summaryParts.join(' • ') : 'All Cities • All Venue Types';
 }
 
 export function getBrowseEmptyStateMessage(searchQuery: string) {

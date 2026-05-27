@@ -74,7 +74,8 @@ export const styles = StyleSheet.create({
   toolbarActionsRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
+    justifyContent: 'flex-end',
   },
   toolbarRowLandscape: {
     minHeight: 36,
@@ -89,6 +90,38 @@ export const styles = StyleSheet.create({
   },
   mapScreen: {
     flex: 1,
+  },
+  mapThemeTransitionLayer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  floatingDashboardButton: {
+    alignItems: 'center',
+    backgroundColor: '#fff7ef',
+    borderColor: '#ddc4a7',
+    borderRadius: 18,
+    borderWidth: 1,
+    bottom: 0,
+    justifyContent: 'center',
+    minHeight: 48,
+    minWidth: 146,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    position: 'absolute',
+    right: 0,
+    shadowColor: '#2d221a',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 10,
+    zIndex: 30,
+  },
+  floatingDashboardButtonMap: {
+    zIndex: 40,
+  },
+  floatingDashboardButtonText: {
+    color: '#5d4637',
+    fontSize: 14,
+    fontWeight: '700',
   },
   mapBackground: {
     ...StyleSheet.absoluteFillObject,
@@ -179,6 +212,11 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 14,
     paddingVertical: 10,
+  },
+  mapResultsMoreButtonLoadingContent: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
   },
   mapResultsMoreButtonText: {
     color: '#1f5f5b',
@@ -397,6 +435,9 @@ export const styles = StyleSheet.create({
     minHeight: 52,
     paddingHorizontal: 14,
   },
+  filtersToggleButtonInline: {
+    minHeight: 44,
+  },
   filtersToggleButtonLandscape: {
     minHeight: 42,
     paddingHorizontal: 10,
@@ -496,6 +537,28 @@ export const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
   },
+  mapThemeToggleButton: {
+    alignItems: 'center',
+    backgroundColor: '#fff7ef',
+    borderColor: '#ddc4a7',
+    borderRadius: 14,
+    borderWidth: 1,
+    justifyContent: 'center',
+    height: 44,
+    width: 44,
+  },
+  mapThemeToggleButtonActive: {
+    backgroundColor: '#2d403f',
+    borderColor: '#2d403f',
+  },
+  mapThemeToggleButtonText: {
+    color: '#5d4637',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  mapThemeToggleButtonTextActive: {
+    color: '#f4fffe',
+  },
   sectionTitle: {
     color: '#402214',
     fontSize: 18,
@@ -518,6 +581,30 @@ export const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
   },
+  authPortalButton: {
+    alignItems: 'center',
+    backgroundColor: '#fff7ef',
+    borderColor: '#ddc4a7',
+    borderRadius: 14,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 48,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  authPortalButtonActive: {
+    backgroundColor: '#1f5f5b',
+    borderColor: '#1f5f5b',
+  },
+  authPortalButtonText: {
+    color: '#5d4637',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  authPortalButtonTextActive: {
+    color: '#f4fffe',
+  },
   modeSwitcherDock: {
     alignItems: 'flex-start',
     marginTop: 10,
@@ -526,39 +613,39 @@ export const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginTop: 8,
   },
-  modeSwitcherCard: {
+  modeSwitcherTrack: {
     backgroundColor: 'rgba(255, 250, 244, 0.96)',
     borderColor: '#efd8bd',
     borderRadius: 18,
     borderWidth: 1,
     flexDirection: 'row',
-    gap: 10,
-    padding: 10,
+    height: 44,
+    overflow: 'hidden',
+    padding: 4,
+    position: 'relative',
   },
-  modeSwitcherCardInline: {
-    padding: 6,
-  },
-  modeSwitcherCardOverlay: {
+  modeSwitcherTrackOverlay: {
     backgroundColor: 'rgba(255, 247, 239, 0.98)',
   },
-  modeButton: {
-    backgroundColor: '#fff7ef',
-    borderColor: '#ddc4a7',
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  modeButtonActive: {
+  modeSwitcherThumb: {
     backgroundColor: '#1f5f5b',
-    borderColor: '#1f5f5b',
+    borderRadius: 999,
+    bottom: 4,
+    left: 4,
+    position: 'absolute',
+    top: 4,
   },
-  modeButtonText: {
+  modeSwitchOption: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
+  },
+  modeSwitchOptionText: {
     color: '#5d4637',
     fontSize: 13,
     fontWeight: '700',
   },
-  modeButtonTextActive: {
+  modeSwitchOptionTextActive: {
     color: '#f4fffe',
   },
   filterChip: {
@@ -660,10 +747,10 @@ export const styles = StyleSheet.create({
   },
   listContent: {
     gap: 12,
-    paddingBottom: 24,
+    paddingBottom: 96,
   },
   listContentLandscape: {
-    paddingBottom: 32,
+    paddingBottom: 104,
   },
   placeCardColumn: {
     gap: 12,

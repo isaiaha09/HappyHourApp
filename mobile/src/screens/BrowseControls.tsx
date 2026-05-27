@@ -1,4 +1,5 @@
-import { TextInput, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Animated, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
 import {
   cityFilters,
@@ -19,16 +20,17 @@ export type BrowseControlsProps = {
   confirmedDealsOnly: boolean;
   overlay?: boolean;
   filtersExpanded: boolean;
+  isDarkMapMode?: boolean;
   onChangeSearchQuery: (value: string) => void;
   onClearSearchQuery: () => void;
   onBrowseModeChange: (mode: BrowseMode) => void;
-  onOpenDashboard?: () => void;
   onReload: () => void;
   onSelectAllVenueTypes: () => void;
   onSelectCity: (city: CityFilterValue) => void;
   onToggleConfirmedDealsOnly: () => void;
   onToggleDealDay: (day: WeekdayFilterValue) => void;
   onToggleFilters: () => void;
+  onToggleMapTheme?: () => void;
   onToggleOperatingDay: (day: WeekdayFilterValue) => void;
   onToggleVenueType: (venueType: VenueFilterValue) => void;
   onToggleVerifiedBusinessesOnly: () => void;
@@ -46,16 +48,17 @@ export function BrowseControls({
   confirmedDealsOnly,
   overlay = false,
   filtersExpanded,
+  isDarkMapMode = false,
   onChangeSearchQuery,
   onClearSearchQuery,
   onBrowseModeChange,
-  onOpenDashboard,
   onReload,
   onSelectAllVenueTypes,
   onSelectCity,
   onToggleConfirmedDealsOnly,
   onToggleDealDay,
   onToggleFilters,
+  onToggleMapTheme,
   onToggleOperatingDay,
   onToggleVenueType,
   onToggleVerifiedBusinessesOnly,
@@ -69,6 +72,8 @@ export function BrowseControls({
 }: BrowseControlsProps) {
   const { height, width } = useWindowDimensions();
   const compactLandscapeControls = width > height && width >= 760;
+  const modeSwitchThumbWidth = compactLandscapeControls ? 50 : 58;
+  const modeSwitchTrackWidth = modeSwitchThumbWidth * 2 + 8;
   const filtersPanelMaxHeight = Math.max(
     compactLandscapeControls ? Math.min(height * 0.42, 260) : Math.min(height * 0.5, 420),
     compactLandscapeControls ? 180 : 220,
@@ -81,6 +86,17 @@ export function BrowseControls({
   const chipTextStyle = overlay ? styles.overlayChipText : styles.filterChipText;
   const chipTextActiveStyle = overlay ? styles.overlayChipTextActive : styles.filterChipTextActive;
   const normalizedSearchQuery = normalizeSearchText(searchQuery);
+  const modeSwitchProgress = useRef(new Animated.Value(browseMode === 'map' ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.spring(modeSwitchProgress, {
+      damping: 16,
+      mass: 0.8,
+      stiffness: 180,
+      toValue: browseMode === 'map' ? 1 : 0,
+      useNativeDriver: true,
+    }).start();
+  }, [browseMode, modeSwitchProgress]);
 
   return (
     <View
@@ -90,39 +106,6 @@ export function BrowseControls({
         landscapeControlsWidth ? { width: landscapeControlsWidth } : null,
       ]}
     >
-      <View
-        style={[
-          styles.toolbarRow,
-          compactLandscapeControls ? styles.toolbarRowLandscape : null,
-          !onOpenDashboard ? styles.toolbarRowTrailing : null,
-        ]}
-      >
-        {onOpenDashboard ? (
-          <Pressable onPress={onOpenDashboard} style={styles.secondaryToolbarButton}>
-            <Text style={styles.secondaryToolbarButtonText}>Back to Dashboard</Text>
-          </Pressable>
-        ) : null}
-        <View style={styles.toolbarActionsRow}>
-          <View style={[styles.modeSwitcherCard, styles.modeSwitcherCardInline, overlay ? styles.modeSwitcherCardOverlay : null]}>
-            <Pressable
-              onPress={() => onBrowseModeChange('list')}
-              style={[styles.modeButton, browseMode === 'list' ? styles.modeButtonActive : null]}
-            >
-              <Text style={[styles.modeButtonText, browseMode === 'list' ? styles.modeButtonTextActive : null]}>List</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => onBrowseModeChange('map')}
-              style={[styles.modeButton, browseMode === 'map' ? styles.modeButtonActive : null]}
-            >
-              <Text style={[styles.modeButtonText, browseMode === 'map' ? styles.modeButtonTextActive : null]}>Map</Text>
-            </Pressable>
-          </View>
-          <Pressable accessibilityLabel="Refresh places" onPress={onReload} style={styles.reloadButton}>
-            <Text style={styles.reloadButtonText}>↻</Text>
-          </Pressable>
-        </View>
-      </View>
-
       <View style={[styles.searchRow, compactLandscapeControls ? styles.searchRowLandscape : null]}>
         <View
           style={[
@@ -145,19 +128,78 @@ export function BrowseControls({
             </Pressable>
           ) : null}
         </View>
+      </View>
 
-        <Pressable
-          onPress={onToggleFilters}
-          style={[
-            styles.filtersToggleButton,
-            compactLandscapeControls ? styles.filtersToggleButtonLandscape : null,
-            filtersExpanded ? styles.filtersToggleButtonActive : null,
-          ]}
-        >
-          <Text style={[styles.filtersToggleText, filtersExpanded ? styles.filtersToggleTextActive : null]}>
-            {filtersExpanded ? 'Hide filters' : 'Filters'}
-          </Text>
-        </Pressable>
+      <View
+        style={[
+          styles.toolbarRow,
+          compactLandscapeControls ? styles.toolbarRowLandscape : null,
+          styles.toolbarRowTrailing,
+        ]}
+      >
+        <View style={styles.toolbarActionsRow}>
+          <View
+            style={[
+              styles.modeSwitcherTrack,
+              overlay ? styles.modeSwitcherTrackOverlay : null,
+              { width: modeSwitchTrackWidth },
+            ]}
+          >
+            <Animated.View
+              style={[
+                styles.modeSwitcherThumb,
+                {
+                  width: modeSwitchThumbWidth,
+                  transform: [{
+                    translateX: modeSwitchProgress.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, modeSwitchThumbWidth],
+                    }),
+                  }],
+                },
+              ]}
+            />
+            <Pressable
+              onPress={() => onBrowseModeChange('list')}
+              style={[styles.modeSwitchOption, { width: modeSwitchThumbWidth }]}
+            >
+              <Text style={[styles.modeSwitchOptionText, browseMode === 'list' ? styles.modeSwitchOptionTextActive : null]}>List</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => onBrowseModeChange('map')}
+              style={[styles.modeSwitchOption, { width: modeSwitchThumbWidth }]}
+            >
+              <Text style={[styles.modeSwitchOptionText, browseMode === 'map' ? styles.modeSwitchOptionTextActive : null]}>Map</Text>
+            </Pressable>
+          </View>
+          {overlay && onToggleMapTheme ? (
+            <Pressable
+              accessibilityLabel={isDarkMapMode ? 'Switch to light map' : 'Switch to dark map'}
+              onPress={onToggleMapTheme}
+              style={[styles.mapThemeToggleButton, isDarkMapMode ? styles.mapThemeToggleButtonActive : null]}
+            >
+              <Text style={[styles.mapThemeToggleButtonText, isDarkMapMode ? styles.mapThemeToggleButtonTextActive : null]}>
+                {isDarkMapMode ? '☾' : '☀'}
+              </Text>
+            </Pressable>
+          ) : null}
+          <Pressable
+            onPress={onToggleFilters}
+            style={[
+              styles.filtersToggleButton,
+              styles.filtersToggleButtonInline,
+              compactLandscapeControls ? styles.filtersToggleButtonLandscape : null,
+              filtersExpanded ? styles.filtersToggleButtonActive : null,
+            ]}
+          >
+            <Text style={[styles.filtersToggleText, filtersExpanded ? styles.filtersToggleTextActive : null]}>
+              {filtersExpanded ? 'Hide filters' : 'Filters'}
+            </Text>
+          </Pressable>
+          <Pressable accessibilityLabel="Refresh places" onPress={onReload} style={styles.reloadButton}>
+            <Text style={styles.reloadButtonText}>↻</Text>
+          </Pressable>
+        </View>
       </View>
 
       <View style={[styles.browseStatsRow, compactLandscapeControls ? styles.browseStatsRowLandscape : null]}>
