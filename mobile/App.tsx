@@ -1724,9 +1724,10 @@ function AppScreen() {
         </View>
       ) : showMapBrowse ? (
         <View style={styles.fullScreenRoot}>
-        <Animated.View style={[styles.screenTransitionLayerAbsolute, styles.fullScreenRoot, screenTransitionStyle, browseSceneTransitionStyle, browseModeTransitionStyle]}>
+        <Animated.View style={[styles.screenTransitionLayerAbsolute, styles.fullScreenRoot, screenTransitionStyle, browseSceneTransitionStyle]}>
         <View style={styles.fullScreenRoot}>
         <View style={styles.mapScreen}>
+          <Animated.View style={[styles.mapModeContentLayer, browseModeTransitionStyle]}>
           <MapView
             initialRegion={initialMapRegionRef.current}
             maxDelta={maxMapGestureDelta}
@@ -1860,6 +1861,7 @@ function AppScreen() {
               </MapView>
             </Animated.View>
           ) : null}
+          </Animated.View>
 
             <View
               pointerEvents="box-none"
@@ -1898,6 +1900,8 @@ function AppScreen() {
               selectedVenueTypes={selectedVenueTypes}
               verifiedBusinessesOnly={verifiedBusinessesOnly}
             />
+
+            <Animated.View pointerEvents="box-none" style={[styles.mapOverlayContentLayer, browseModeTransitionStyle]}>
 
             {listLoading ? (
               <View style={styles.mapLoadingOverlay}>
@@ -2013,6 +2017,7 @@ function AppScreen() {
                 <Text style={styles.errorText}>{errorMessage}</Text>
               </View>
             ) : null}
+            </Animated.View>
 
             {authenticatedSession ? (
               <Pressable
@@ -2033,10 +2038,9 @@ function AppScreen() {
         </View>
       ) : (
         <View style={styles.fullScreenRoot}>
-        <Animated.View style={[styles.screenTransitionLayerAbsolute, screenTransitionStyle, browseSceneTransitionStyle, browseModeTransitionStyle]}>
+        <Animated.View style={[styles.screenTransitionLayerAbsolute, screenTransitionStyle, browseSceneTransitionStyle]}>
         <SafeAreaView style={styles.safeArea}>
         <View style={[styles.screen, isLandscape ? styles.screenLandscape : null]}>
-          <>
             <BrowseControls
               browseMode={browseMode}
               confirmedDealsOnly={confirmedDealsOnly}
@@ -2045,6 +2049,7 @@ function AppScreen() {
               onChangeSearchQuery={setSearchQuery}
               onClearSearchQuery={handleClearSearchQuery}
               onBrowseModeChange={handleBrowseModeChange}
+              onOpenDashboard={authenticatedSession ? handleOpenProfiles : undefined}
               onReload={handleRefreshPlaces}
               onSelectAllVenueTypes={handleSelectAllVenueTypes}
               onSelectCity={setSelectedCity}
@@ -2063,6 +2068,8 @@ function AppScreen() {
               selectedVenueTypes={selectedVenueTypes}
               verifiedBusinessesOnly={verifiedBusinessesOnly}
             />
+
+            <Animated.View style={[styles.browseModeContentLayer, browseModeTransitionStyle]}>
 
             {listLoading ? (
               <View style={styles.centerState}>
@@ -2092,7 +2099,6 @@ function AppScreen() {
                 showsVerticalScrollIndicator={false}
               />
             )}
-          </>
 
           {errorMessage ? (
             <View style={styles.errorBanner}>
@@ -2100,17 +2106,7 @@ function AppScreen() {
             </View>
           ) : null}
 
-          {authenticatedSession ? (
-            <Pressable
-              onPress={handleOpenProfiles}
-              style={[
-                styles.floatingDashboardButton,
-                { bottom: floatingDashboardButtonOffset, right: 18 },
-              ]}
-            >
-              <Text style={styles.floatingDashboardButtonText}>Back to Dashboard</Text>
-            </Pressable>
-          ) : null}
+            </Animated.View>
         </View>
         </SafeAreaView>
         </Animated.View>

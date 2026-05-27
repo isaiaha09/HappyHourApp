@@ -24,6 +24,7 @@ export type BrowseControlsProps = {
   onChangeSearchQuery: (value: string) => void;
   onClearSearchQuery: () => void;
   onBrowseModeChange: (mode: BrowseMode) => void;
+  onOpenDashboard?: () => void;
   onReload: () => void;
   onSelectAllVenueTypes: () => void;
   onSelectCity: (city: CityFilterValue) => void;
@@ -52,6 +53,7 @@ export function BrowseControls({
   onChangeSearchQuery,
   onClearSearchQuery,
   onBrowseModeChange,
+  onOpenDashboard,
   onReload,
   onSelectAllVenueTypes,
   onSelectCity,
@@ -134,10 +136,10 @@ export function BrowseControls({
         style={[
           styles.toolbarRow,
           compactLandscapeControls ? styles.toolbarRowLandscape : null,
-          styles.toolbarRowLeading,
+          !onOpenDashboard ? styles.toolbarRowLeading : null,
         ]}
       >
-        <View style={styles.toolbarActionsRow}>
+        <View style={[styles.toolbarActionsRow, !onOpenDashboard ? styles.toolbarActionsRowFill : null]}>
           <View
             style={[
               styles.modeSwitcherTrack,
@@ -200,6 +202,11 @@ export function BrowseControls({
             </Text>
           </Pressable>
         </View>
+        {onOpenDashboard ? (
+          <Pressable accessibilityLabel="Back to dashboard" onPress={onOpenDashboard} style={styles.toolbarArrowButton}>
+            <Text style={styles.toolbarArrowButtonText}>→</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <View style={[styles.browseStatsRow, compactLandscapeControls ? styles.browseStatsRowLandscape : null]}>

@@ -74,12 +74,18 @@ export const styles = StyleSheet.create({
   toolbarActionsRow: {
     alignItems: 'center',
     flexDirection: 'row',
+    flexShrink: 1,
     gap: 6,
     justifyContent: 'flex-start',
-    width: '100%',
+  },
+  toolbarActionsRowFill: {
+    flex: 1,
   },
   toolbarRowLandscape: {
     minHeight: 36,
+  },
+  browseModeContentLayer: {
+    flex: 1,
   },
   appTitle: {
     color: '#2d221a',
@@ -91,6 +97,9 @@ export const styles = StyleSheet.create({
   },
   mapScreen: {
     flex: 1,
+  },
+  mapModeContentLayer: {
+    ...StyleSheet.absoluteFillObject,
   },
   mapThemeTransitionLayer: {
     ...StyleSheet.absoluteFillObject,
@@ -134,6 +143,9 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 0,
     paddingBottom: 0,
+  },
+  mapOverlayContentLayer: {
+    gap: 12,
   },
   mapTopPanel: {
     backgroundColor: 'rgba(247, 239, 226, 0.92)',
@@ -531,6 +543,21 @@ export const styles = StyleSheet.create({
   secondaryToolbarButtonText: {
     color: '#5d4637',
     fontSize: 14,
+    fontWeight: '700',
+  },
+  toolbarArrowButton: {
+    alignItems: 'center',
+    backgroundColor: '#fff7ef',
+    borderColor: '#ddc4a7',
+    borderRadius: 14,
+    borderWidth: 1,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
+  toolbarArrowButtonText: {
+    color: '#5d4637',
+    fontSize: 22,
     fontWeight: '700',
   },
   reloadButtonText: {
