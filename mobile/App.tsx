@@ -243,6 +243,8 @@ function AppScreen() {
   const [selectedClaimLocationId, setSelectedClaimLocationId] = useState<number | null>(null);
   const [logoutTransitionSession, setLogoutTransitionSession] = useState<SignupResponse | null>(null);
   const [incomingOnboardingScreen, setIncomingOnboardingScreen] = useState<AppScreenMode | null>(null);
+  const [browseProfileTransitionFrom, setBrowseProfileTransitionFrom] = useState<'profiles' | 'browse' | null>(null);
+  const [incomingBrowseProfileScreen, setIncomingBrowseProfileScreen] = useState<'profiles' | 'browse' | null>(null);
   const [showLoginSuccessTransition, setShowLoginSuccessTransition] = useState(false);
   const [showLogoutTransition, setShowLogoutTransition] = useState(false);
   const [authIntroPending, setAuthIntroPending] = useState(false);
@@ -344,6 +346,10 @@ function AppScreen() {
   const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'business-search', 'business-claim', 'manual-business-claim']);
   const currentOnboardingScreen = onboardingScreenKeys.has(screenMode) ? screenMode : null;
   const usesOnboardingSlideTransition = currentOnboardingScreen !== null || incomingOnboardingScreen !== null;
+  const usesBrowseProfileSlideTransition = browseProfileTransitionFrom !== null
+    && incomingBrowseProfileScreen !== null
+    && browseProfileTransitionFrom !== incomingBrowseProfileScreen;
+  const profileToBrowseTransition = browseProfileTransitionFrom === 'profiles' && incomingBrowseProfileScreen === 'browse';
   const onboardingSlideOffset = onboardingIncomingOffset || (onboardingTransitionDirection === 'forward' ? width : -width);
   const incomingScreenTransitionStyle = {
     opacity: onboardingTransitionAxis === 'y'
@@ -381,6 +387,30 @@ function AppScreen() {
         ],
       }
     : null;
+  const browseProfileOutgoingStyle = {
+    transform: [
+      {
+        translateX: screenTransition.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, profileToBrowseTransition ? width : -width],
+        }),
+      },
+    ],
+  };
+  const browseProfileIncomingStyle = {
+    opacity: screenTransition.interpolate({
+      inputRange: [0, 0.12, 1],
+      outputRange: [0.96, 0.98, 1],
+    }),
+    transform: [
+      {
+        translateX: screenTransition.interpolate({
+          inputRange: [0, 1],
+          outputRange: [profileToBrowseTransition ? -width : width, 0],
+        }),
+      },
+    ],
+  };
   const screenTransitionStyle = {
     opacity: screenTransition,
     transform: [
@@ -652,6 +682,8 @@ function AppScreen() {
     }
 
     if (!shouldAnimateOnboarding) {
+      setBrowseProfileTransitionFrom(null);
+      setIncomingBrowseProfileScreen(null);
       setIncomingOnboardingScreen(null);
       screenTransition.setValue(1);
       setScreenMode(nextScreen);
@@ -674,6 +706,57 @@ function AppScreen() {
         setIncomingOnboardingScreen(null);
         setScreenMode(nextScreen);
         screenTransition.setValue(1);
+      });
+    });
+  }
+
+  function navigateBrowseProfileTransition(nextScreen: 'profiles' | 'browse') {
+    if (screenMode === nextScreen) {
+      return;
+    }
+
+    const currentBrowseProfileScreen = screenMode === 'profiles' ? 'profiles' : 'browse';
+
+    if (onboardingTransitionFrameRef.current !== null) {
+      cancelAnimationFrame(onboardingTransitionFrameRef.current);
+      onboardingTransitionFrameRef.current = null;
+    }
+
+    screenTransition.stopAnimation();
+    profileSceneTransition.stopAnimation();
+    browseSceneTransition.stopAnimation();
+    profileSceneTransition.setValue(1);
+    browseSceneTransition.setValue(1);
+    setProfileEntryOffset(0);
+    setBrowseEntryOffset(0);
+    setBrowseProfileTransitionFrom(currentBrowseProfileScreen);
+    setIncomingBrowseProfileScreen(null);
+    setIncomingOnboardingScreen(null);
+    screenTransition.setValue(0);
+    setIncomingBrowseProfileScreen(nextScreen);
+    onboardingTransitionFrameRef.current = requestAnimationFrame(() => {
+      onboardingTransitionFrameRef.current = null;
+      Animated.timing(screenTransition, {
+        duration: onboardingTransitionDuration,
+        toValue: 1,
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (!finished) {
+          setBrowseProfileTransitionFrom(null);
+          setIncomingBrowseProfileScreen(null);
+          return;
+        }
+
+        setScreenMode(nextScreen);
+        requestAnimationFrame(() => {
+          profileSceneTransition.setValue(1);
+          browseSceneTransition.setValue(1);
+          setProfileEntryOffset(0);
+          setBrowseEntryOffset(0);
+          setBrowseProfileTransitionFrom(null);
+          setIncomingBrowseProfileScreen(null);
+          screenTransition.setValue(1);
+        });
       });
     });
   }
@@ -1269,6 +1352,11 @@ function AppScreen() {
   function handleOpenProfiles() {
     dismissKeyboardForScreenTransition();
     setProfileErrorMessage(null);
+    if (authenticatedSession && screenMode === 'browse' && !selectedPlaceSlug) {
+      navigateBrowseProfileTransition('profiles');
+      return;
+    }
+
     if (authenticatedSession && screenMode === 'browse') {
       setProfileEntryOffset(width);
     }
@@ -1279,14 +1367,20 @@ function AppScreen() {
     dismissKeyboardForScreenTransition();
     setAuthMessage(null);
     setProfileErrorMessage(null);
-    setBrowseEntryOffset(authenticatedSession && screenMode === 'profiles' ? -width : -width);
+    if (authenticatedSession && screenMode === 'profiles') {
+      navigateBrowseProfileTransition('browse');
+      return;
+    }
+
+    setBrowseEntryOffset(-width);
     navigateScreen('browse', 'forward');
   }
 
   function handleBackFromProfiles() {
     dismissKeyboardForScreenTransition();
     if (authenticatedSession) {
-      setBrowseEntryOffset(-width);
+      navigateBrowseProfileTransition('browse');
+      return;
     }
     navigateScreen(authenticatedSession ? 'browse' : 'auth', 'backward');
   }
@@ -1595,6 +1689,44 @@ function AppScreen() {
     mapRef.current?.animateToRegion(nextRegion, 250);
   }
 
+  function renderProfilesScreen(profileSessionOverride?: SignupResponse | null) {
+    const profileSession = profileSessionOverride ?? authenticatedSession;
+
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        {profileSession ? (
+          <DashboardScreen
+            errorMessage={profileErrorMessage}
+            isLandscape={isLandscape}
+            loading={dashboardLoading}
+            message={profileMessage}
+            onBack={handleBackFromProfiles}
+            onLogout={handleLogout}
+            onOpenBilling={handleOpenBilling}
+            onOpenPlaces={handleContinueToApp}
+            onRefresh={() => void refreshDashboard()}
+            onResendVerification={() => void handleResendVerification()}
+            onToggleTwoFactor={() => void handleToggleTwoFactor()}
+            session={profileSession}
+            submitting={dashboardSubmitting}
+          />
+        ) : (
+          <CreateProfileScreen
+            errorMessage={profileErrorMessage}
+            form={profileForm}
+            isLandscape={isLandscape}
+            message={profileMessage}
+            onBack={handleBackFromProfiles}
+            onChangeField={handleChangeProfileField}
+            onOpenBusinessClaim={handleOpenBusinessSearch}
+            onSubmit={handleSubmitCustomerProfile}
+            submitting={profileSubmitting}
+          />
+        )}
+      </SafeAreaView>
+    );
+  }
+
   function renderOnboardingScreen(targetScreen: AppScreenMode, profileSessionOverride?: SignupResponse | null) {
     switch (targetScreen) {
       case 'splash':
@@ -1621,43 +1753,7 @@ function AppScreen() {
           </SafeAreaView>
         );
       case 'profiles':
-        {
-          const profileSession = profileSessionOverride ?? authenticatedSession;
-
-        return (
-          <SafeAreaView style={styles.safeArea}>
-            {profileSession ? (
-              <DashboardScreen
-                errorMessage={profileErrorMessage}
-                isLandscape={isLandscape}
-                loading={dashboardLoading}
-                message={profileMessage}
-                onBack={handleBackFromProfiles}
-                onLogout={handleLogout}
-                onOpenBilling={handleOpenBilling}
-                onOpenPlaces={handleContinueToApp}
-                onRefresh={() => void refreshDashboard()}
-                onResendVerification={() => void handleResendVerification()}
-                onToggleTwoFactor={() => void handleToggleTwoFactor()}
-                session={profileSession}
-                submitting={dashboardSubmitting}
-              />
-            ) : (
-              <CreateProfileScreen
-                errorMessage={profileErrorMessage}
-                form={profileForm}
-                isLandscape={isLandscape}
-                message={profileMessage}
-                onBack={handleBackFromProfiles}
-                onChangeField={handleChangeProfileField}
-                onOpenBusinessClaim={handleOpenBusinessSearch}
-                onSubmit={handleSubmitCustomerProfile}
-                submitting={profileSubmitting}
-              />
-            )}
-          </SafeAreaView>
-        );
-        }
+        return renderProfilesScreen(profileSessionOverride);
       case 'business-search':
         return (
           <SafeAreaView style={styles.safeArea}>
@@ -1715,6 +1811,355 @@ function AppScreen() {
     }
   }
 
+  function renderBrowseScreen() {
+    return (
+      <View style={styles.fullScreenRoot}>
+        <Animated.View style={[styles.screenTransitionLayerAbsolute, styles.fullScreenRoot, screenTransitionStyle, browseSceneTransitionStyle]}>
+          <View style={styles.fullScreenRoot}>
+            <Animated.View pointerEvents={browseMode === 'map' ? 'auto' : 'none'} style={[styles.mapModeContentLayer, browseModeTransitionStyle]}>
+              <View style={styles.mapScreen}>
+                <MapView
+                  initialRegion={initialMapRegionRef.current}
+                  maxDelta={maxMapGestureDelta}
+                  minDelta={minLatitudeDelta}
+                  userInterfaceStyle={Platform.OS === 'ios' ? (displayedDarkMapMode ? 'dark' : 'light') : undefined}
+                  rotateEnabled={false}
+                  mapType="standard"
+                  onMapReady={() => {
+                    if (!shouldUseNativeMapBoundaries || !mapRef.current) {
+                      return;
+                    }
+
+                    mapRef.current.setMapBoundaries(
+                      { latitude: mapAreaBounds.maxLatitude, longitude: mapAreaBounds.maxLongitude },
+                      { latitude: mapAreaBounds.minLatitude, longitude: mapAreaBounds.minLongitude },
+                    );
+                    mapRef.current.animateToRegion(mapRegionRef.current, 0);
+                  }}
+                  onRegionChangeComplete={(nextRegion, details) => {
+                    const previousRegion = mapRegionRef.current;
+                    const boundedRegion = shouldUseNativeMapBoundaries
+                      ? normalizeRegion(nextRegion)
+                      : clampRegionToBounds(nextRegion);
+
+                    mapRegionRef.current = boundedRegion;
+
+                    if (details.isGesture) {
+                      const shouldIgnoreSnapForStationaryGesture = isStationaryMapGesture(previousRegion, nextRegion);
+
+                      if (!shouldUseNativeMapBoundaries && shouldIgnoreSnapForStationaryGesture && isWideMapRegion(nextRegion)) {
+                        mapRegionRef.current = previousRegion;
+                        setMapRegion((currentRegion) => (
+                          areRegionsEqual(currentRegion, previousRegion) ? currentRegion : previousRegion
+                        ));
+                        mapRef.current?.animateToRegion(previousRegion, 180);
+                        return;
+                      }
+
+                      if (!shouldUseNativeMapBoundaries && !shouldIgnoreSnapForStationaryGesture && shouldSnapRegionToBounds(nextRegion)) {
+                        setMapRegion((currentRegion) => (
+                          areRegionsEqual(currentRegion, boundedRegion) ? currentRegion : boundedRegion
+                        ));
+                        mapRef.current?.animateToRegion(boundedRegion, 180);
+                      }
+
+                      return;
+                    }
+
+                    setMapRegion((currentRegion) => (
+                      areRegionsEqual(currentRegion, boundedRegion) ? currentRegion : boundedRegion
+                    ));
+
+                    if (!shouldUseNativeMapBoundaries && shouldSnapRegionToBounds(nextRegion)) {
+                      mapRef.current?.animateToRegion(boundedRegion, 180);
+                    }
+                  }}
+                  onPress={(event) => {
+                    Keyboard.dismiss();
+                    if (event.nativeEvent.action === 'marker-press') {
+                      return;
+                    }
+
+                    handleClearMapSelection();
+                  }}
+                  ref={mapRef}
+                  style={styles.mapBackground}
+                >
+                  {displayedMapPlaces.map((place, index) => {
+                    const markerStyle = getVenueMarkerStyle(place.venue_type);
+                    const animatedMarkerStyle = getAnimatedMapMarkerStyle(place, mapRegion, width, height, mapPinsTransition);
+
+                    return (
+                      <Marker
+                        anchor={{ x: 0.5, y: 0.5 }}
+                        coordinate={{ latitude: place.markerLatitude, longitude: place.markerLongitude }}
+                        key={place.markerKey}
+                        onPress={() => setSelectedMapPlaceKey(place.markerKey)}
+                        tracksViewChanges={false}
+                        zIndex={displayedMapPlaces.length - index}
+                      >
+                        <Animated.View style={[
+                          animatedMarkerStyle,
+                          styles.mapMarker,
+                          { backgroundColor: markerStyle.fill, borderColor: markerStyle.stroke },
+                          selectedMapPlaceKey === place.markerKey ? styles.mapMarkerActive : null,
+                        ]}>
+                          <Text style={styles.mapMarkerText}>{markerStyle.badge}</Text>
+                        </Animated.View>
+                      </Marker>
+                    );
+                  })}
+                </MapView>
+
+                {Platform.OS === 'ios' && transitioningMapTheme !== null ? (
+                  <Animated.View pointerEvents="none" style={[styles.mapThemeTransitionLayer, { opacity: mapThemeFade }]}>
+                    <MapView
+                      mapType="standard"
+                      region={mapRegion}
+                      rotateEnabled={false}
+                      scrollEnabled={false}
+                      showsCompass={false}
+                      showsMyLocationButton={false}
+                      toolbarEnabled={false}
+                      userInterfaceStyle={transitioningMapTheme ? 'dark' : 'light'}
+                      zoomEnabled={false}
+                      style={styles.mapBackground}
+                    >
+                      {displayedMapPlaces.map((place, index) => {
+                        const markerStyle = getVenueMarkerStyle(place.venue_type);
+                        const animatedMarkerStyle = getAnimatedMapMarkerStyle(place, mapRegion, width, height, mapPinsTransition);
+
+                        return (
+                          <Marker
+                            anchor={{ x: 0.5, y: 0.5 }}
+                            coordinate={{ latitude: place.markerLatitude, longitude: place.markerLongitude }}
+                            key={`transition-${place.markerKey}`}
+                            tracksViewChanges={false}
+                            zIndex={displayedMapPlaces.length - index}
+                          >
+                            <Animated.View style={[
+                              animatedMarkerStyle,
+                              styles.mapMarker,
+                              { backgroundColor: markerStyle.fill, borderColor: markerStyle.stroke },
+                              selectedMapPlaceKey === place.markerKey ? styles.mapMarkerActive : null,
+                            ]}>
+                              <Text style={styles.mapMarkerText}>{markerStyle.badge}</Text>
+                            </Animated.View>
+                          </Marker>
+                        );
+                      })}
+                    </MapView>
+                  </Animated.View>
+                ) : null}
+              </View>
+            </Animated.View>
+
+            <SafeAreaView edges={['top', 'left', 'right']} pointerEvents="box-none" style={styles.safeAreaTransparent}>
+              <View pointerEvents="box-none" style={[styles.screen, isLandscape ? styles.screenLandscape : null]}>
+                <BrowseControls
+                  browseMode={browseMode}
+                  confirmedDealsOnly={confirmedDealsOnly}
+                  filtersExpanded={browseFiltersExpanded}
+                  isDarkMapMode={darkMapMode}
+                  onChangeSearchQuery={setSearchQuery}
+                  onClearSearchQuery={handleClearSearchQuery}
+                  onBrowseModeChange={handleBrowseModeChange}
+                  onOpenDashboard={authenticatedSession && browseMode === 'list' ? handleOpenProfiles : undefined}
+                  onReload={handleRefreshPlaces}
+                  onSelectAllVenueTypes={handleSelectAllVenueTypes}
+                  onSelectCity={setSelectedCity}
+                  onToggleConfirmedDealsOnly={handleToggleConfirmedDealsOnly}
+                  onToggleDealDay={handleToggleDealDay}
+                  onToggleFilters={handleToggleBrowseFilters}
+                  onToggleMapTheme={browseMode === 'map' ? handleToggleMapTheme : undefined}
+                  onToggleOperatingDay={handleToggleOperatingDay}
+                  onToggleVenueType={handleToggleVenueType}
+                  onToggleVerifiedBusinessesOnly={handleToggleVerifiedBusinessesOnly}
+                  resultCount={filteredPlaces.length}
+                  searchQuery={searchQuery}
+                  selectedDealDays={selectedDealDays}
+                  selectedCity={selectedCity}
+                  selectedOperatingDays={selectedOperatingDays}
+                  selectedVenueTypes={selectedVenueTypes}
+                  verifiedBusinessesOnly={verifiedBusinessesOnly}
+                />
+
+                <View style={styles.browseContentStage}>
+                  <Animated.View pointerEvents={browseMode === 'map' ? 'box-none' : 'none'} style={[styles.browseContentFill, styles.mapOverlayContentLayer, browseModeTransitionStyle]}>
+                    {listLoading ? (
+                      <View style={styles.mapLoadingOverlay}>
+                        <ActivityIndicator color="#c65d1f" size="large" />
+                        <Text style={styles.mapOverlayText}>Loading places...</Text>
+                      </View>
+                    ) : null}
+
+                    {displayedMapPreviewPlace ? (
+                      <Animated.View style={[styles.mapPreviewCard, isLandscape ? styles.mapPreviewCardLandscape : null, { opacity: mapPreviewOpacity }]}>
+                        <View style={styles.mapPreviewHeader}>
+                          <View style={styles.mapPreviewCopy}>
+                            <Text style={[styles.mapPreviewTitle, isLandscape ? styles.mapPreviewTitleLandscape : null]}>{displayedMapPreviewPlace.name}</Text>
+                            <Text style={[styles.mapPreviewMeta, isLandscape ? styles.mapPreviewMetaLandscape : null]}>{displayedMapPreviewPlace.venue_type_label}</Text>
+                          </View>
+                          <View style={styles.mapPreviewActions}>
+                            <Pressable onPress={handleClearMapSelection} style={[styles.mapPreviewIconButton, isLandscape ? styles.mapPreviewIconButtonLandscape : null]}>
+                              <Text style={[styles.mapPreviewIconText, isLandscape ? styles.mapPreviewIconTextLandscape : null]}>×</Text>
+                            </Pressable>
+                            <Pressable onPress={() => handleSelectPlace(displayedMapPreviewPlace)} style={[styles.mapPreviewIconButton, isLandscape ? styles.mapPreviewIconButtonLandscape : null]}>
+                              <Text style={[styles.mapPreviewIconText, isLandscape ? styles.mapPreviewIconTextLandscape : null]}>↗</Text>
+                            </Pressable>
+                          </View>
+                        </View>
+
+                        <View style={styles.mapPreviewDetails}>
+                          <Text style={[styles.mapPreviewDetailText, isLandscape ? styles.mapPreviewDetailTextLandscape : null]}>{displayedMapPreviewPlace.fullAddress}</Text>
+                          {displayedMapPreviewPlace.phone_number ? (
+                            <Text style={[styles.mapPreviewDetailText, isLandscape ? styles.mapPreviewDetailTextLandscape : null]}>{displayedMapPreviewPlace.phone_number}</Text>
+                          ) : null}
+                        </View>
+
+                        {displayedMapPreviewImageUrls.length ? (
+                          <ScrollView
+                            contentContainerStyle={[styles.mapPreviewGallery, isLandscape ? styles.mapPreviewGalleryLandscape : null]}
+                            horizontal
+                            keyboardDismissMode="on-drag"
+                            keyboardShouldPersistTaps="handled"
+                            onScrollBeginDrag={Keyboard.dismiss}
+                            pagingEnabled
+                            showsHorizontalScrollIndicator={false}
+                          >
+                            {displayedMapPreviewImageUrls.map((imageUrl) => (
+                              <Image
+                                key={imageUrl}
+                                source={{ uri: imageUrl }}
+                                style={[styles.mapPreviewImage, isLandscape ? styles.mapPreviewImageLandscape : null]}
+                              />
+                            ))}
+                          </ScrollView>
+                        ) : (
+                          <View style={[styles.mapPreviewEmptyState, isLandscape ? styles.mapPreviewEmptyStateLandscape : null]}>
+                            <Text style={[styles.mapPreviewEmptyText, isLandscape ? styles.mapPreviewEmptyTextLandscape : null]}>Photos from this business page have not been found yet.</Text>
+                          </View>
+                        )}
+                      </Animated.View>
+                    ) : showMapResultsCard ? (
+                      <Animated.View style={[styles.mapResultsCard, { maxHeight: mapResultsCardMaxHeight, opacity: mapResultsOpacity }] }>
+                        <View style={styles.mapResultsHeader}>
+                          <Text style={styles.mapResultsTitle}>Best matches</Text>
+                          <Text style={styles.mapResultsMeta}>Top {renderedMapSearchResults.length} of {renderedMapResultCount} in view</Text>
+                        </View>
+                        {renderedMapSearchResults.length ? (
+                          <>
+                            <ScrollView
+                              contentContainerStyle={styles.mapResultsList}
+                              keyboardDismissMode="on-drag"
+                              keyboardShouldPersistTaps="handled"
+                              nestedScrollEnabled
+                              onScrollBeginDrag={Keyboard.dismiss}
+                              showsVerticalScrollIndicator
+                              style={styles.mapResultsScroll}
+                            >
+                              {renderedMapSearchResults.map((place) => (
+                                <Pressable
+                                  key={place.markerKey}
+                                  onPress={() => handleFocusMapResult(place)}
+                                  style={styles.mapResultRow}
+                                >
+                                  <View style={styles.mapResultCopy}>
+                                    <Text numberOfLines={1} style={styles.mapResultTitle}>{place.name}</Text>
+                                    <Text numberOfLines={2} style={styles.mapResultMeta}>
+                                      {place.venue_type_label} • {place.fullAddress}
+                                    </Text>
+                                  </View>
+                                  <Text style={styles.mapResultAction}>Focus</Text>
+                                </Pressable>
+                              ))}
+                            </ScrollView>
+                            {renderedMapSearchResults.length < renderedMapResultCount ? (
+                              <Pressable disabled={loadingMoreMapResults} onPress={handleShowMoreMapResults} style={styles.mapResultsMoreButton}>
+                                {loadingMoreMapResults ? (
+                                  <View style={styles.mapResultsMoreButtonLoadingContent}>
+                                    <ActivityIndicator color="#1f5f5b" size="small" />
+                                    <Text style={styles.mapResultsMoreButtonText}>Loading...</Text>
+                                  </View>
+                                ) : (
+                                  <Text style={styles.mapResultsMoreButtonText}>
+                                    Show next {Math.min(nextMapResultsIncrement, renderedMapResultCount - renderedMapSearchResults.length)}
+                                  </Text>
+                                )}
+                              </Pressable>
+                            ) : null}
+                          </>
+                        ) : (
+                          <Text style={styles.mapResultEmptyText}>No map matches found for that search yet.</Text>
+                        )}
+                      </Animated.View>
+                    ) : null}
+
+                    {errorMessage ? (
+                      <View style={[styles.errorBanner, styles.mapErrorBanner]}>
+                        <Text style={styles.errorText}>{errorMessage}</Text>
+                      </View>
+                    ) : null}
+                  </Animated.View>
+
+                  <Animated.View pointerEvents={browseMode === 'list' ? 'auto' : 'none'} style={[styles.browseContentFill, styles.browseModeContentLayer, listModeTransitionStyle]}>
+                    {listLoading ? (
+                      <View style={styles.centerState}>
+                        <ActivityIndicator color="#c65d1f" size="large" />
+                        <Text style={styles.centerStateText}>Loading places...</Text>
+                      </View>
+                    ) : (
+                      <FlatList
+                        columnWrapperStyle={browseListColumns > 1 ? styles.placeCardColumn : undefined}
+                        contentContainerStyle={[styles.listContent, browseListColumns > 1 ? styles.listContentLandscape : null]}
+                        data={filteredPlaces}
+                        keyExtractor={(item) => item.id.toString()}
+                        key={browseListColumns}
+                        initialNumToRender={6}
+                        numColumns={browseListColumns}
+                        renderItem={({ item, index }) => (
+                          <AnimatedListPlaceCard
+                            browseListColumns={browseListColumns}
+                            item={item}
+                            listRevealEnabled={listRevealEnabled}
+                            revealIndex={index}
+                            revealToken={listRevealToken}
+                            onPress={() => handleSelectPlace(item)}
+                          />
+                        )}
+                        ListEmptyComponent={filteredPlaces.length === 0 ? <Text style={styles.emptyStateText}>{getBrowseEmptyStateMessage(normalizedSearchQuery)}</Text> : null}
+                        showsVerticalScrollIndicator={false}
+                      />
+                    )}
+
+                    {errorMessage ? (
+                      <View style={styles.errorBanner}>
+                        <Text style={styles.errorText}>{errorMessage}</Text>
+                      </View>
+                    ) : null}
+                  </Animated.View>
+                </View>
+
+                {authenticatedSession && browseMode === 'map' ? (
+                  <Pressable
+                    onPress={handleOpenProfiles}
+                    style={[
+                      styles.floatingDashboardButton,
+                      styles.floatingDashboardButtonMap,
+                      { bottom: floatingDashboardButtonOffset, right: 18 },
+                    ]}
+                  >
+                    <Text style={styles.floatingDashboardButtonText}>Back to Dashboard</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </SafeAreaView>
+          </View>
+        </Animated.View>
+      </View>
+    );
+  }
+
   return (
     <>
       <StatusBar backgroundColor="transparent" style="dark" translucent={showMapBrowse} />
@@ -1745,6 +2190,19 @@ function AppScreen() {
           <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, logoutIncomingStyle]}>
             {renderOnboardingScreen('auth')}
           </Animated.View>
+        </View>
+      ) : usesBrowseProfileSlideTransition ? (
+        <View style={styles.onboardingTransitionRoot}>
+          <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, browseProfileOutgoingStyle]}>
+            {browseProfileTransitionFrom === 'profiles' ? renderProfilesScreen() : renderBrowseScreen()}
+          </Animated.View>
+          <Animated.View style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, browseProfileIncomingStyle]}>
+            {incomingBrowseProfileScreen === 'profiles' ? renderProfilesScreen() : renderBrowseScreen()}
+          </Animated.View>
+        </View>
+      ) : authenticatedSession && screenMode === 'profiles' ? (
+        <View style={styles.fullScreenRoot}>
+          {renderProfilesScreen()}
         </View>
       ) : usesOnboardingSlideTransition && currentOnboardingScreen ? (
         <View style={styles.onboardingTransitionRoot}>
@@ -1784,351 +2242,7 @@ function AppScreen() {
         </Animated.View>
         </View>
       ) : (
-        <View style={styles.fullScreenRoot}>
-        <Animated.View style={[styles.screenTransitionLayerAbsolute, styles.fullScreenRoot, screenTransitionStyle, browseSceneTransitionStyle]}>
-        <View style={styles.fullScreenRoot}>
-          <Animated.View pointerEvents={browseMode === 'map' ? 'auto' : 'none'} style={[styles.mapModeContentLayer, browseModeTransitionStyle]}>
-        <View style={styles.mapScreen}>
-          <MapView
-            initialRegion={initialMapRegionRef.current}
-            maxDelta={maxMapGestureDelta}
-            minDelta={minLatitudeDelta}
-            userInterfaceStyle={Platform.OS === 'ios' ? (displayedDarkMapMode ? 'dark' : 'light') : undefined}
-            rotateEnabled={false}
-            mapType="standard"
-            onMapReady={() => {
-              if (!shouldUseNativeMapBoundaries || !mapRef.current) {
-                return;
-              }
-
-              mapRef.current.setMapBoundaries(
-                { latitude: mapAreaBounds.maxLatitude, longitude: mapAreaBounds.maxLongitude },
-                { latitude: mapAreaBounds.minLatitude, longitude: mapAreaBounds.minLongitude },
-              );
-              mapRef.current.animateToRegion(mapRegionRef.current, 0);
-            }}
-            onRegionChangeComplete={(nextRegion, details) => {
-              const previousRegion = mapRegionRef.current;
-              const boundedRegion = shouldUseNativeMapBoundaries
-                ? normalizeRegion(nextRegion)
-                : clampRegionToBounds(nextRegion);
-
-              mapRegionRef.current = boundedRegion;
-
-              if (details.isGesture) {
-                const shouldIgnoreSnapForStationaryGesture = isStationaryMapGesture(previousRegion, nextRegion);
-
-                if (!shouldUseNativeMapBoundaries && shouldIgnoreSnapForStationaryGesture && isWideMapRegion(nextRegion)) {
-                  mapRegionRef.current = previousRegion;
-                  setMapRegion((currentRegion) => (
-                    areRegionsEqual(currentRegion, previousRegion) ? currentRegion : previousRegion
-                  ));
-                  mapRef.current?.animateToRegion(previousRegion, 180);
-                  return;
-                }
-
-                if (!shouldUseNativeMapBoundaries && !shouldIgnoreSnapForStationaryGesture && shouldSnapRegionToBounds(nextRegion)) {
-                  setMapRegion((currentRegion) => (
-                    areRegionsEqual(currentRegion, boundedRegion) ? currentRegion : boundedRegion
-                  ));
-                  mapRef.current?.animateToRegion(boundedRegion, 180);
-                }
-
-                return;
-              }
-
-              setMapRegion((currentRegion) => (
-                areRegionsEqual(currentRegion, boundedRegion) ? currentRegion : boundedRegion
-              ));
-
-              if (!shouldUseNativeMapBoundaries && shouldSnapRegionToBounds(nextRegion)) {
-                mapRef.current?.animateToRegion(boundedRegion, 180);
-              }
-            }}
-            onPress={(event) => {
-              Keyboard.dismiss();
-              if (event.nativeEvent.action === 'marker-press') {
-                return;
-              }
-
-              handleClearMapSelection();
-            }}
-            ref={mapRef}
-            style={styles.mapBackground}
-          >
-            {displayedMapPlaces.map((place, index) => {
-              const markerStyle = getVenueMarkerStyle(place.venue_type);
-              const animatedMarkerStyle = getAnimatedMapMarkerStyle(place, mapRegion, width, height, mapPinsTransition);
-
-              return (
-              <Marker
-                anchor={{ x: 0.5, y: 0.5 }}
-                coordinate={{ latitude: place.markerLatitude, longitude: place.markerLongitude }}
-                key={place.markerKey}
-                onPress={() => setSelectedMapPlaceKey(place.markerKey)}
-                tracksViewChanges={false}
-                zIndex={displayedMapPlaces.length - index}
-              >
-                <Animated.View style={[
-                  animatedMarkerStyle,
-                  styles.mapMarker,
-                  { backgroundColor: markerStyle.fill, borderColor: markerStyle.stroke },
-                  selectedMapPlaceKey === place.markerKey ? styles.mapMarkerActive : null,
-                ]}>
-                  <Text style={styles.mapMarkerText}>{markerStyle.badge}</Text>
-                </Animated.View>
-              </Marker>
-              );
-            })}
-          </MapView>
-
-          {Platform.OS === 'ios' && transitioningMapTheme !== null ? (
-            <Animated.View pointerEvents="none" style={[styles.mapThemeTransitionLayer, { opacity: mapThemeFade }]}>
-              <MapView
-                mapType="standard"
-                region={mapRegion}
-                rotateEnabled={false}
-                scrollEnabled={false}
-                showsCompass={false}
-                showsMyLocationButton={false}
-                toolbarEnabled={false}
-                userInterfaceStyle={transitioningMapTheme ? 'dark' : 'light'}
-                zoomEnabled={false}
-                style={styles.mapBackground}
-              >
-                {displayedMapPlaces.map((place, index) => {
-                  const markerStyle = getVenueMarkerStyle(place.venue_type);
-                  const animatedMarkerStyle = getAnimatedMapMarkerStyle(place, mapRegion, width, height, mapPinsTransition);
-
-                  return (
-                  <Marker
-                    anchor={{ x: 0.5, y: 0.5 }}
-                    coordinate={{ latitude: place.markerLatitude, longitude: place.markerLongitude }}
-                    key={`transition-${place.markerKey}`}
-                    tracksViewChanges={false}
-                    zIndex={displayedMapPlaces.length - index}
-                  >
-                    <Animated.View style={[
-                      animatedMarkerStyle,
-                      styles.mapMarker,
-                      { backgroundColor: markerStyle.fill, borderColor: markerStyle.stroke },
-                      selectedMapPlaceKey === place.markerKey ? styles.mapMarkerActive : null,
-                    ]}>
-                      <Text style={styles.mapMarkerText}>{markerStyle.badge}</Text>
-                    </Animated.View>
-                  </Marker>
-                  );
-                })}
-              </MapView>
-            </Animated.View>
-          ) : null}
-        </View>
-          </Animated.View>
-
-        <SafeAreaView edges={['top', 'left', 'right']} pointerEvents="box-none" style={styles.safeAreaTransparent}>
-        <View pointerEvents="box-none" style={[styles.screen, isLandscape ? styles.screenLandscape : null]}>
-            <BrowseControls
-              browseMode={browseMode}
-              confirmedDealsOnly={confirmedDealsOnly}
-              filtersExpanded={browseFiltersExpanded}
-              isDarkMapMode={darkMapMode}
-              onChangeSearchQuery={setSearchQuery}
-              onClearSearchQuery={handleClearSearchQuery}
-              onBrowseModeChange={handleBrowseModeChange}
-              onOpenDashboard={authenticatedSession && browseMode === 'list' ? handleOpenProfiles : undefined}
-              onReload={handleRefreshPlaces}
-              onSelectAllVenueTypes={handleSelectAllVenueTypes}
-              onSelectCity={setSelectedCity}
-              onToggleConfirmedDealsOnly={handleToggleConfirmedDealsOnly}
-              onToggleDealDay={handleToggleDealDay}
-              onToggleFilters={handleToggleBrowseFilters}
-              onToggleMapTheme={browseMode === 'map' ? handleToggleMapTheme : undefined}
-              onToggleOperatingDay={handleToggleOperatingDay}
-              onToggleVenueType={handleToggleVenueType}
-              onToggleVerifiedBusinessesOnly={handleToggleVerifiedBusinessesOnly}
-              resultCount={filteredPlaces.length}
-              searchQuery={searchQuery}
-              selectedDealDays={selectedDealDays}
-              selectedCity={selectedCity}
-              selectedOperatingDays={selectedOperatingDays}
-              selectedVenueTypes={selectedVenueTypes}
-              verifiedBusinessesOnly={verifiedBusinessesOnly}
-            />
-
-            <View style={styles.browseContentStage}>
-            <Animated.View pointerEvents={browseMode === 'map' ? 'box-none' : 'none'} style={[styles.browseContentFill, styles.mapOverlayContentLayer, browseModeTransitionStyle]}>
-
-            {listLoading ? (
-              <View style={styles.mapLoadingOverlay}>
-                <ActivityIndicator color="#c65d1f" size="large" />
-                <Text style={styles.mapOverlayText}>Loading places...</Text>
-              </View>
-            ) : null}
-
-            {displayedMapPreviewPlace ? (
-              <Animated.View style={[styles.mapPreviewCard, isLandscape ? styles.mapPreviewCardLandscape : null, { opacity: mapPreviewOpacity }]}>
-                <View style={styles.mapPreviewHeader}>
-                  <View style={styles.mapPreviewCopy}>
-                    <Text style={[styles.mapPreviewTitle, isLandscape ? styles.mapPreviewTitleLandscape : null]}>{displayedMapPreviewPlace.name}</Text>
-                    <Text style={[styles.mapPreviewMeta, isLandscape ? styles.mapPreviewMetaLandscape : null]}>{displayedMapPreviewPlace.venue_type_label}</Text>
-                  </View>
-                  <View style={styles.mapPreviewActions}>
-                    <Pressable onPress={handleClearMapSelection} style={[styles.mapPreviewIconButton, isLandscape ? styles.mapPreviewIconButtonLandscape : null]}>
-                      <Text style={[styles.mapPreviewIconText, isLandscape ? styles.mapPreviewIconTextLandscape : null]}>×</Text>
-                    </Pressable>
-                    <Pressable onPress={() => handleSelectPlace(displayedMapPreviewPlace)} style={[styles.mapPreviewIconButton, isLandscape ? styles.mapPreviewIconButtonLandscape : null]}>
-                      <Text style={[styles.mapPreviewIconText, isLandscape ? styles.mapPreviewIconTextLandscape : null]}>↗</Text>
-                    </Pressable>
-                  </View>
-                </View>
-
-                <View style={styles.mapPreviewDetails}>
-                  <Text style={[styles.mapPreviewDetailText, isLandscape ? styles.mapPreviewDetailTextLandscape : null]}>{displayedMapPreviewPlace.fullAddress}</Text>
-                  {displayedMapPreviewPlace.phone_number ? (
-                    <Text style={[styles.mapPreviewDetailText, isLandscape ? styles.mapPreviewDetailTextLandscape : null]}>{displayedMapPreviewPlace.phone_number}</Text>
-                  ) : null}
-                </View>
-
-                {displayedMapPreviewImageUrls.length ? (
-                  <ScrollView
-                    contentContainerStyle={[styles.mapPreviewGallery, isLandscape ? styles.mapPreviewGalleryLandscape : null]}
-                    horizontal
-                    keyboardDismissMode="on-drag"
-                    keyboardShouldPersistTaps="handled"
-                    onScrollBeginDrag={Keyboard.dismiss}
-                    pagingEnabled
-                    showsHorizontalScrollIndicator={false}
-                  >
-                    {displayedMapPreviewImageUrls.map((imageUrl) => (
-                      <Image
-                        key={imageUrl}
-                        source={{ uri: imageUrl }}
-                        style={[styles.mapPreviewImage, isLandscape ? styles.mapPreviewImageLandscape : null]}
-                      />
-                    ))}
-                  </ScrollView>
-                ) : (
-                  <View style={[styles.mapPreviewEmptyState, isLandscape ? styles.mapPreviewEmptyStateLandscape : null]}>
-                    <Text style={[styles.mapPreviewEmptyText, isLandscape ? styles.mapPreviewEmptyTextLandscape : null]}>Photos from this business page have not been found yet.</Text>
-                  </View>
-                )}
-              </Animated.View>
-            ) : showMapResultsCard ? (
-              <Animated.View style={[styles.mapResultsCard, { maxHeight: mapResultsCardMaxHeight, opacity: mapResultsOpacity }] }>
-                <View style={styles.mapResultsHeader}>
-                  <Text style={styles.mapResultsTitle}>Best matches</Text>
-                  <Text style={styles.mapResultsMeta}>Top {renderedMapSearchResults.length} of {renderedMapResultCount} in view</Text>
-                </View>
-                {renderedMapSearchResults.length ? (
-                  <>
-                    <ScrollView
-                      contentContainerStyle={styles.mapResultsList}
-                      keyboardDismissMode="on-drag"
-                      keyboardShouldPersistTaps="handled"
-                      nestedScrollEnabled
-                      onScrollBeginDrag={Keyboard.dismiss}
-                      showsVerticalScrollIndicator
-                      style={styles.mapResultsScroll}
-                    >
-                      {renderedMapSearchResults.map((place) => (
-                        <Pressable
-                          key={place.markerKey}
-                          onPress={() => handleFocusMapResult(place)}
-                          style={styles.mapResultRow}
-                        >
-                          <View style={styles.mapResultCopy}>
-                            <Text numberOfLines={1} style={styles.mapResultTitle}>{place.name}</Text>
-                            <Text numberOfLines={2} style={styles.mapResultMeta}>
-                              {place.venue_type_label} • {place.fullAddress}
-                            </Text>
-                          </View>
-                          <Text style={styles.mapResultAction}>Focus</Text>
-                        </Pressable>
-                      ))}
-                    </ScrollView>
-                    {renderedMapSearchResults.length < renderedMapResultCount ? (
-                      <Pressable disabled={loadingMoreMapResults} onPress={handleShowMoreMapResults} style={styles.mapResultsMoreButton}>
-                        {loadingMoreMapResults ? (
-                          <View style={styles.mapResultsMoreButtonLoadingContent}>
-                            <ActivityIndicator color="#1f5f5b" size="small" />
-                            <Text style={styles.mapResultsMoreButtonText}>Loading...</Text>
-                          </View>
-                        ) : (
-                          <Text style={styles.mapResultsMoreButtonText}>
-                            Show next {Math.min(nextMapResultsIncrement, renderedMapResultCount - renderedMapSearchResults.length)}
-                          </Text>
-                        )}
-                      </Pressable>
-                    ) : null}
-                  </>
-                ) : (
-                  <Text style={styles.mapResultEmptyText}>No map matches found for that search yet.</Text>
-                )}
-              </Animated.View>
-            ) : null}
-
-            {errorMessage ? (
-              <View style={[styles.errorBanner, styles.mapErrorBanner]}>
-                <Text style={styles.errorText}>{errorMessage}</Text>
-              </View>
-            ) : null}
-            </Animated.View>
-
-            <Animated.View pointerEvents={browseMode === 'list' ? 'auto' : 'none'} style={[styles.browseContentFill, styles.browseModeContentLayer, listModeTransitionStyle]}>
-            {listLoading ? (
-              <View style={styles.centerState}>
-                <ActivityIndicator color="#c65d1f" size="large" />
-                <Text style={styles.centerStateText}>Loading places...</Text>
-              </View>
-            ) : (
-              <FlatList
-                columnWrapperStyle={browseListColumns > 1 ? styles.placeCardColumn : undefined}
-                contentContainerStyle={[styles.listContent, browseListColumns > 1 ? styles.listContentLandscape : null]}
-                data={filteredPlaces}
-                keyExtractor={(item) => item.id.toString()}
-                key={browseListColumns}
-                initialNumToRender={6}
-                numColumns={browseListColumns}
-                renderItem={({ item, index }) => (
-                  <AnimatedListPlaceCard
-                    browseListColumns={browseListColumns}
-                    item={item}
-                    listRevealEnabled={listRevealEnabled}
-                    revealIndex={index}
-                    revealToken={listRevealToken}
-                    onPress={() => handleSelectPlace(item)}
-                  />
-                )}
-                ListEmptyComponent={filteredPlaces.length === 0 ? <Text style={styles.emptyStateText}>{getBrowseEmptyStateMessage(normalizedSearchQuery)}</Text> : null}
-                showsVerticalScrollIndicator={false}
-              />
-            )}
-
-            {errorMessage ? (
-              <View style={styles.errorBanner}>
-                <Text style={styles.errorText}>{errorMessage}</Text>
-              </View>
-            ) : null}
-            </Animated.View>
-            </View>
-
-            {authenticatedSession && browseMode === 'map' ? (
-              <Pressable
-                onPress={handleOpenProfiles}
-                style={[
-                  styles.floatingDashboardButton,
-                  styles.floatingDashboardButtonMap,
-                  { bottom: floatingDashboardButtonOffset, right: 18 },
-                ]}
-              >
-                <Text style={styles.floatingDashboardButtonText}>Back to Dashboard</Text>
-              </Pressable>
-            ) : null}
-        </View>
-        </SafeAreaView>
-        </View>
-        </Animated.View>
-        </View>
+        renderBrowseScreen()
       )}
     </>
   );
