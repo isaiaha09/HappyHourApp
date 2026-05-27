@@ -1727,7 +1727,20 @@ function AppScreen() {
   }
 
   function handleClearMapSelection() {
+    if (showMapBrowse && normalizedSearchQuery.length > 0) {
+      mapResultsOpacity.stopAnimation();
+      mapResultsOpacity.setValue(1);
+      setShowMapResultsCard(true);
+    }
+
     setSelectedMapPlaceKey(null);
+  }
+
+  function handleSelectMapPin(placeKey: string) {
+    mapResultsOpacity.stopAnimation();
+    mapResultsOpacity.setValue(1);
+    setShowMapResultsCard(false);
+    setSelectedMapPlaceKey(placeKey);
   }
 
   function handleFocusMapResult(place: MappedPlace) {
@@ -2058,7 +2071,7 @@ function AppScreen() {
                         anchor={{ x: 0.5, y: 0.5 }}
                         coordinate={{ latitude: place.markerLatitude, longitude: place.markerLongitude }}
                         key={place.markerKey}
-                        onPress={() => setSelectedMapPlaceKey(place.markerKey)}
+                        onPress={() => handleSelectMapPin(place.markerKey)}
                           tracksViewChanges={mapMarkersTrackViewChanges}
                         zIndex={displayedMapPlaces.length - index}
                       >
