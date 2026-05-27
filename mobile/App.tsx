@@ -231,6 +231,7 @@ function AppScreen() {
   const [listRevealToken, setListRevealToken] = useState(0);
   const [listRevealEnabled, setListRevealEnabled] = useState(browseMode === 'list');
   const showMoreMapResultsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoFitMapRegionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingListRevealRef = useRef(false);
   const [profileForm, setProfileForm] = useState<ProfileFormState>(initialProfileFormState);
   const [profileSubmitting, setProfileSubmitting] = useState(false);
@@ -274,6 +275,7 @@ function AppScreen() {
   const filteredPlaces = getFilteredPlaces(places, {
     confirmedDealsOnly,
     searchQuery: normalizedSearchQuery,
+    selectedCity,
     selectedDealDays,
     selectedOperatingDays,
     selectedVenueTypes,
@@ -320,8 +322,18 @@ function AppScreen() {
     showMoreMapResultsTimeoutRef.current = null;
   }
 
+  function clearAutoFitMapRegionTimer() {
+    if (autoFitMapRegionTimeoutRef.current === null) {
+      return;
+    }
+
+    clearTimeout(autoFitMapRegionTimeoutRef.current);
+    autoFitMapRegionTimeoutRef.current = null;
+  }
+
   useEffect(() => () => {
     clearShowMoreMapResultsTimer();
+    clearAutoFitMapRegionTimer();
   }, []);
   const availableClaimPlaces = consolidatePlacesBySlug(availableProfilePlaces);
   const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'business-search', 'business-claim', 'manual-business-claim']);
@@ -1059,23 +1071,28 @@ function AppScreen() {
 
   useEffect(() => {
     if (!showMapBrowse || listLoading) {
+      clearAutoFitMapRegionTimer();
       return;
     }
 
     const nextRegion = getBrowseMapRegion(selectedCity, mappedPlaces);
-    setMapRegion((currentRegion) => {
-      const boundedRegion = clampRegionToBounds(nextRegion);
-      if (areRegionsEqual(currentRegion, boundedRegion)) {
-        return currentRegion;
-      }
+    const boundedRegion = clampRegionToBounds(nextRegion);
 
-      if (mapRef.current) {
-        mapRef.current.animateToRegion(boundedRegion, 250);
-      }
+    if (areRegionsEqual(mapRegionRef.current, boundedRegion)) {
+      clearAutoFitMapRegionTimer();
+      return;
+    }
 
-      return boundedRegion;
-    });
-  }, [filteredPlaceKey, listLoading, selectedCity, showMapBrowse]);
+    clearAutoFitMapRegionTimer();
+    autoFitMapRegionTimeoutRef.current = setTimeout(() => {
+      mapRegionRef.current = boundedRegion;
+      setMapRegion((currentRegion) => (
+        areRegionsEqual(currentRegion, boundedRegion) ? currentRegion : boundedRegion
+      ));
+      mapRef.current?.animateToRegion(boundedRegion, 220);
+      autoFitMapRegionTimeoutRef.current = null;
+    }, normalizedSearchQuery.length > 0 ? 140 : 0);
+  }, [filteredPlaceKey, listLoading, normalizedSearchQuery.length, selectedCity, showMapBrowse]);
 
   useEffect(() => {
     if (!['profiles', 'business-search', 'business-claim', 'manual-business-claim'].includes(screenMode)) {
@@ -1330,11 +1347,25 @@ function AppScreen() {
     setBrowseFiltersExpanded((current) => !current);
   }
 
+  function handleChangeSearchQuery(value: string) {
+    if (!normalizeSearchText(value).length) {
+      if (!searchQuery.length) {
+        return;
+      }
+
+      handleClearSearchQuery();
+      return;
+    }
+
+    setSearchQuery(value);
+  }
+
   function handleClearSearchQuery() {
     animateNextLayout();
     const clearedFilteredPlaces = getFilteredPlaces(places, {
       confirmedDealsOnly,
       searchQuery: '',
+      selectedCity,
       selectedDealDays,
       selectedOperatingDays,
       selectedVenueTypes,
@@ -1347,15 +1378,7 @@ function AppScreen() {
     setSelectedMapPlaceKey(null);
     setRenderedMappedPlaces(clearedMappedPlaces);
     setRenderedMappedPlaceKey(clearedMappedPlaceKey);
-    setShowMapResultsCard(false);
-    setMapResultsCollapsed(false);
-    setRenderedMapSearchResults([]);
-    setRenderedMapResultsKey('');
-    setRenderedMapResultCount(0);
-    setVisibleMapResultCount(0);
     setLoadingMoreMapResults(false);
-    mapResultsOpacity.stopAnimation();
-    mapResultsOpacity.setValue(0);
     clearShowMoreMapResultsTimer();
 
     if (showMapBrowse && !listLoading) {
@@ -1966,6 +1989,10 @@ function AppScreen() {
                       ? normalizeRegion(nextRegion)
                       : clampRegionToBounds(nextRegion);
 
+                    if (details.isGesture) {
+                      clearAutoFitMapRegionTimer();
+                    }
+
                     mapRegionRef.current = boundedRegion;
 
                     if (details.isGesture) {
@@ -2085,7 +2112,7 @@ function AppScreen() {
                   confirmedDealsOnly={confirmedDealsOnly}
                   filtersExpanded={browseFiltersExpanded}
                   isDarkMapMode={darkMapMode}
-                  onChangeSearchQuery={setSearchQuery}
+                  onChangeSearchQuery={handleChangeSearchQuery}
                   onClearSearchQuery={handleClearSearchQuery}
                   onBrowseModeChange={handleBrowseModeChange}
                   onOpenDashboard={authenticatedSession && browseMode === 'list' ? handleOpenProfiles : undefined}
@@ -2555,6 +2582,7 @@ function getFilteredPlaces(
   filters: {
     confirmedDealsOnly: boolean;
     searchQuery: string;
+    selectedCity: CityFilterValue;
     selectedDealDays: WeekdayFilterValue[];
     selectedOperatingDays: WeekdayFilterValue[];
     selectedVenueTypes: VenueFilterValue[];
@@ -2568,6 +2596,8 @@ function getFilteredPlaces(
       score: getPlaceSearchScore(place, filters.searchQuery),
     }))
     .filter(({ place, score }) => {
+      const placeCities = new Set(getPlaceLocations(place).map((location) => location.city));
+      const matchesCity = filters.selectedCity === 'all' || placeCities.has(filters.selectedCity);
       const matchesVenueType = filters.selectedVenueTypes.includes(place.venue_type as VenueFilterValue);
       const matchesSearch = filters.searchQuery.length === 0 || score > 0;
       const matchesDeals = !filters.confirmedDealsOnly || place.has_deals || place.deal_count > 0;
@@ -2575,7 +2605,7 @@ function getFilteredPlaces(
       const matchesDealDays = !filters.selectedDealDays.length || hasAnyMatchingWeekday(place.deal_weekdays, filters.selectedDealDays);
       const matchesVerified = !filters.verifiedBusinessesOnly || place.is_verified;
 
-      return matchesVenueType && matchesSearch && matchesDeals && matchesOperatingDays && matchesDealDays && matchesVerified;
+      return matchesCity && matchesVenueType && matchesSearch && matchesDeals && matchesOperatingDays && matchesDealDays && matchesVerified;
     })
     .sort((first, second) => {
       if (filters.searchQuery.length === 0) {
