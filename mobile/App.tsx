@@ -183,6 +183,7 @@ function AppScreen() {
   const browseModeTransition = useRef(new Animated.Value(0)).current;
   const mapPinsTransition = useRef(new Animated.Value(1)).current;
   const mapResultsOpacity = useRef(new Animated.Value(0)).current;
+  const mapPreviewOpacity = useRef(new Animated.Value(0)).current;
   const mapThemeFade = useRef(new Animated.Value(0)).current;
   const [apiBaseUrl, setApiBaseUrl] = useState(initialApiBaseUrl);
   const [screenMode, setScreenMode] = useState<AppScreenMode>('splash');
@@ -210,6 +211,7 @@ function AppScreen() {
   const [selectedPlaceSlug, setSelectedPlaceSlug] = useState<string | null>(null);
   const [selectedPlace, setSelectedPlace] = useState<PlaceDetail | null>(null);
   const [selectedMapPlaceKey, setSelectedMapPlaceKey] = useState<string | null>(null);
+  const [displayedMapPreviewPlace, setDisplayedMapPreviewPlace] = useState<MappedPlace | null>(null);
   const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null);
   const [listLoading, setListLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -305,7 +307,7 @@ function AppScreen() {
   const selectedMapPlace = selectedMapPlaceKey
     ? displayedMapPlaces.find((place) => place.markerKey === selectedMapPlaceKey) ?? null
     : null;
-  const selectedMapImageUrls = selectedMapPlace ? dedupeImageUrls(selectedMapPlace.image_urls) : [];
+  const displayedMapPreviewImageUrls = displayedMapPreviewPlace ? dedupeImageUrls(displayedMapPreviewPlace.image_urls) : [];
   const selectedPlaceLocation = getSelectedPlaceLocation(selectedPlace, selectedLocationId, selectedCity);
   const selectedPlaceDeals = selectedPlaceLocation?.deals ?? selectedPlace?.deals ?? [];
   const selectedPlaceOperatingHours = selectedPlaceLocation?.operating_hours ?? selectedPlace?.operating_hours ?? [];
@@ -1078,6 +1080,46 @@ function AppScreen() {
       setSelectedMapPlaceKey(null);
     }
   }, [displayedMapPlaces, selectedMapPlaceKey, showMapBrowse]);
+
+  useEffect(() => {
+    if (!showMapBrowse) {
+      mapPreviewOpacity.stopAnimation();
+      mapPreviewOpacity.setValue(0);
+      if (displayedMapPreviewPlace !== null) {
+        setDisplayedMapPreviewPlace(null);
+      }
+      return;
+    }
+
+    if (selectedMapPlace) {
+      setDisplayedMapPreviewPlace(selectedMapPlace);
+      mapPreviewOpacity.stopAnimation();
+      mapPreviewOpacity.setValue(0);
+      Animated.timing(mapPreviewOpacity, {
+        duration: 180,
+        toValue: 1,
+        useNativeDriver: true,
+      }).start();
+      return;
+    }
+
+    if (!displayedMapPreviewPlace) {
+      return;
+    }
+
+    mapPreviewOpacity.stopAnimation();
+    Animated.timing(mapPreviewOpacity, {
+      duration: 150,
+      toValue: 0,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (!finished || selectedMapPlace !== null) {
+        return;
+      }
+
+      setDisplayedMapPreviewPlace(null);
+    });
+  }, [displayedMapPreviewPlace, mapPreviewOpacity, selectedMapPlace, showMapBrowse]);
 
   useLayoutEffect(() => {
     if (!browseModeFadePendingRef.current) {
@@ -1883,8 +1925,8 @@ function AppScreen() {
         </View>
           </Animated.View>
 
-        <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeAreaTransparent}>
-        <View style={[styles.screen, isLandscape ? styles.screenLandscape : null]}>
+        <SafeAreaView edges={['top', 'left', 'right']} pointerEvents="box-none" style={styles.safeAreaTransparent}>
+        <View pointerEvents="box-none" style={[styles.screen, isLandscape ? styles.screenLandscape : null]}>
             <BrowseControls
               browseMode={browseMode}
               confirmedDealsOnly={confirmedDealsOnly}
@@ -1923,31 +1965,31 @@ function AppScreen() {
               </View>
             ) : null}
 
-            {selectedMapPlace ? (
-              <View style={[styles.mapPreviewCard, isLandscape ? styles.mapPreviewCardLandscape : null]}>
+            {displayedMapPreviewPlace ? (
+              <Animated.View style={[styles.mapPreviewCard, isLandscape ? styles.mapPreviewCardLandscape : null, { opacity: mapPreviewOpacity }]}>
                 <View style={styles.mapPreviewHeader}>
                   <View style={styles.mapPreviewCopy}>
-                    <Text style={[styles.mapPreviewTitle, isLandscape ? styles.mapPreviewTitleLandscape : null]}>{selectedMapPlace.name}</Text>
-                    <Text style={[styles.mapPreviewMeta, isLandscape ? styles.mapPreviewMetaLandscape : null]}>{selectedMapPlace.venue_type_label}</Text>
+                    <Text style={[styles.mapPreviewTitle, isLandscape ? styles.mapPreviewTitleLandscape : null]}>{displayedMapPreviewPlace.name}</Text>
+                    <Text style={[styles.mapPreviewMeta, isLandscape ? styles.mapPreviewMetaLandscape : null]}>{displayedMapPreviewPlace.venue_type_label}</Text>
                   </View>
                   <View style={styles.mapPreviewActions}>
                     <Pressable onPress={handleClearMapSelection} style={[styles.mapPreviewIconButton, isLandscape ? styles.mapPreviewIconButtonLandscape : null]}>
                       <Text style={[styles.mapPreviewIconText, isLandscape ? styles.mapPreviewIconTextLandscape : null]}>×</Text>
                     </Pressable>
-                    <Pressable onPress={() => handleSelectPlace(selectedMapPlace)} style={[styles.mapPreviewIconButton, isLandscape ? styles.mapPreviewIconButtonLandscape : null]}>
+                    <Pressable onPress={() => handleSelectPlace(displayedMapPreviewPlace)} style={[styles.mapPreviewIconButton, isLandscape ? styles.mapPreviewIconButtonLandscape : null]}>
                       <Text style={[styles.mapPreviewIconText, isLandscape ? styles.mapPreviewIconTextLandscape : null]}>↗</Text>
                     </Pressable>
                   </View>
                 </View>
 
                 <View style={styles.mapPreviewDetails}>
-                  <Text style={[styles.mapPreviewDetailText, isLandscape ? styles.mapPreviewDetailTextLandscape : null]}>{selectedMapPlace.fullAddress}</Text>
-                  {selectedMapPlace.phone_number ? (
-                    <Text style={[styles.mapPreviewDetailText, isLandscape ? styles.mapPreviewDetailTextLandscape : null]}>{selectedMapPlace.phone_number}</Text>
+                  <Text style={[styles.mapPreviewDetailText, isLandscape ? styles.mapPreviewDetailTextLandscape : null]}>{displayedMapPreviewPlace.fullAddress}</Text>
+                  {displayedMapPreviewPlace.phone_number ? (
+                    <Text style={[styles.mapPreviewDetailText, isLandscape ? styles.mapPreviewDetailTextLandscape : null]}>{displayedMapPreviewPlace.phone_number}</Text>
                   ) : null}
                 </View>
 
-                {selectedMapImageUrls.length ? (
+                {displayedMapPreviewImageUrls.length ? (
                   <ScrollView
                     contentContainerStyle={[styles.mapPreviewGallery, isLandscape ? styles.mapPreviewGalleryLandscape : null]}
                     horizontal
@@ -1957,7 +1999,7 @@ function AppScreen() {
                     pagingEnabled
                     showsHorizontalScrollIndicator={false}
                   >
-                    {selectedMapImageUrls.map((imageUrl) => (
+                    {displayedMapPreviewImageUrls.map((imageUrl) => (
                       <Image
                         key={imageUrl}
                         source={{ uri: imageUrl }}
@@ -1970,7 +2012,7 @@ function AppScreen() {
                     <Text style={[styles.mapPreviewEmptyText, isLandscape ? styles.mapPreviewEmptyTextLandscape : null]}>Photos from this business page have not been found yet.</Text>
                   </View>
                 )}
-              </View>
+              </Animated.View>
             ) : showMapResultsCard ? (
               <Animated.View style={[styles.mapResultsCard, { maxHeight: mapResultsCardMaxHeight, opacity: mapResultsOpacity }] }>
                 <View style={styles.mapResultsHeader}>
