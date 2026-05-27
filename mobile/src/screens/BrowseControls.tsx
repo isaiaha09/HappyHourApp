@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Animated, Easing, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
 import {
   cityFilters,
@@ -100,16 +100,16 @@ export function BrowseControls({
   });
 
   useEffect(() => {
-    Animated.spring(modeSwitchTranslateProgress, {
-      damping: 16,
-      mass: 0.8,
-      stiffness: 180,
+    Animated.timing(modeSwitchTranslateProgress, {
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
       toValue: browseMode === 'map' ? 1 : 0,
       useNativeDriver: true,
     }).start();
 
     Animated.timing(modeSwitchColorProgress, {
-      duration: 180,
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
       toValue: browseMode === 'map' ? 1 : 0,
       useNativeDriver: false,
     }).start();
@@ -189,7 +189,7 @@ export function BrowseControls({
               <Animated.Text style={[styles.modeSwitchOptionText, { color: mapLabelColor }]}>Map</Animated.Text>
             </Pressable>
           </View>
-          {overlay && onToggleMapTheme ? (
+          {onToggleMapTheme ? (
             <Pressable
               accessibilityLabel={isDarkMapMode ? 'Switch to light map' : 'Switch to dark map'}
               onPress={onToggleMapTheme}

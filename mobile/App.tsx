@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import {
   ActivityIndicator,
   Animated,
+  Easing,
   FlatList,
   Image,
   Keyboard,
@@ -179,7 +180,7 @@ function AppScreen() {
   const screenTransition = useRef(new Animated.Value(1)).current;
   const profileSceneTransition = useRef(new Animated.Value(1)).current;
   const browseSceneTransition = useRef(new Animated.Value(1)).current;
-  const browseModeTransition = useRef(new Animated.Value(1)).current;
+  const browseModeTransition = useRef(new Animated.Value(0)).current;
   const mapPinsTransition = useRef(new Animated.Value(1)).current;
   const mapResultsOpacity = useRef(new Animated.Value(0)).current;
   const mapThemeFade = useRef(new Animated.Value(0)).current;
@@ -413,6 +414,12 @@ function AppScreen() {
   };
   const browseModeTransitionStyle = {
     opacity: browseModeTransition,
+  };
+  const listModeTransitionStyle = {
+    opacity: browseModeTransition.interpolate({
+      inputRange: [0, 1],
+      outputRange: [1, 0],
+    }),
   };
   const loginSuccessOutgoingStyle = {
     transform: [
@@ -1078,11 +1085,11 @@ function AppScreen() {
     }
 
     browseModeFadePendingRef.current = false;
-    browseModeTransition.setValue(0);
     browseModeTransition.stopAnimation();
     Animated.timing(browseModeTransition, {
-      duration: 190,
-      toValue: 1,
+      duration: 220,
+      easing: Easing.inOut(Easing.cubic),
+      toValue: browseMode === 'map' ? 1 : 0,
       useNativeDriver: true,
     }).start(({ finished }) => {
       if (!finished || browseMode !== 'list' || !pendingListRevealRef.current) {
@@ -1191,7 +1198,6 @@ function AppScreen() {
       return;
     }
 
-    animateNextLayout();
     setBrowseFiltersExpanded(false);
     setSelectedMapPlaceKey(null);
     pendingListRevealRef.current = mode === 'list';
@@ -1735,12 +1741,12 @@ function AppScreen() {
         </SafeAreaView>
         </Animated.View>
         </View>
-      ) : showMapBrowse ? (
+      ) : (
         <View style={styles.fullScreenRoot}>
         <Animated.View style={[styles.screenTransitionLayerAbsolute, styles.fullScreenRoot, screenTransitionStyle, browseSceneTransitionStyle]}>
         <View style={styles.fullScreenRoot}>
+          <Animated.View pointerEvents={browseMode === 'map' ? 'auto' : 'none'} style={[styles.mapModeContentLayer, browseModeTransitionStyle]}>
         <View style={styles.mapScreen}>
-          <Animated.View style={[styles.mapModeContentLayer, browseModeTransitionStyle]}>
           <MapView
             initialRegion={initialMapRegionRef.current}
             maxDelta={maxMapGestureDelta}
@@ -1874,34 +1880,27 @@ function AppScreen() {
               </MapView>
             </Animated.View>
           ) : null}
+        </View>
           </Animated.View>
 
-            <View
-              pointerEvents="box-none"
-              style={[
-                styles.mapOverlayLayer,
-                {
-                  paddingTop: insets.top + 14,
-                  paddingBottom: mapOverlayBottomPadding,
-                },
-              ]}
-            >
+        <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeAreaTransparent}>
+        <View style={[styles.screen, isLandscape ? styles.screenLandscape : null]}>
             <BrowseControls
               browseMode={browseMode}
               confirmedDealsOnly={confirmedDealsOnly}
-              overlay
               filtersExpanded={browseFiltersExpanded}
               isDarkMapMode={darkMapMode}
               onChangeSearchQuery={setSearchQuery}
               onClearSearchQuery={handleClearSearchQuery}
               onBrowseModeChange={handleBrowseModeChange}
+              onOpenDashboard={authenticatedSession && browseMode === 'list' ? handleOpenProfiles : undefined}
               onReload={handleRefreshPlaces}
               onSelectAllVenueTypes={handleSelectAllVenueTypes}
               onSelectCity={setSelectedCity}
               onToggleConfirmedDealsOnly={handleToggleConfirmedDealsOnly}
               onToggleDealDay={handleToggleDealDay}
               onToggleFilters={handleToggleBrowseFilters}
-              onToggleMapTheme={handleToggleMapTheme}
+              onToggleMapTheme={browseMode === 'map' ? handleToggleMapTheme : undefined}
               onToggleOperatingDay={handleToggleOperatingDay}
               onToggleVenueType={handleToggleVenueType}
               onToggleVerifiedBusinessesOnly={handleToggleVerifiedBusinessesOnly}
@@ -1914,7 +1913,8 @@ function AppScreen() {
               verifiedBusinessesOnly={verifiedBusinessesOnly}
             />
 
-            <Animated.View pointerEvents="box-none" style={[styles.mapOverlayContentLayer, browseModeTransitionStyle]}>
+            <View style={styles.browseContentStage}>
+            <Animated.View pointerEvents={browseMode === 'map' ? 'box-none' : 'none'} style={[styles.browseContentFill, styles.mapOverlayContentLayer, browseModeTransitionStyle]}>
 
             {listLoading ? (
               <View style={styles.mapLoadingOverlay}>
@@ -2032,58 +2032,7 @@ function AppScreen() {
             ) : null}
             </Animated.View>
 
-            {authenticatedSession ? (
-              <Pressable
-                onPress={handleOpenProfiles}
-                style={[
-                  styles.floatingDashboardButton,
-                  styles.floatingDashboardButtonMap,
-                  { bottom: floatingDashboardButtonOffset, right: 18 },
-                ]}
-              >
-                <Text style={styles.floatingDashboardButtonText}>Back to Dashboard</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
-        </View>
-        </Animated.View>
-        </View>
-      ) : (
-        <View style={styles.fullScreenRoot}>
-        <Animated.View style={[styles.screenTransitionLayerAbsolute, screenTransitionStyle, browseSceneTransitionStyle]}>
-        <SafeAreaView style={styles.safeArea}>
-        <View style={[styles.screen, isLandscape ? styles.screenLandscape : null]}>
-            <BrowseControls
-              browseMode={browseMode}
-              confirmedDealsOnly={confirmedDealsOnly}
-              filtersExpanded={browseFiltersExpanded}
-              isDarkMapMode={darkMapMode}
-              onChangeSearchQuery={setSearchQuery}
-              onClearSearchQuery={handleClearSearchQuery}
-              onBrowseModeChange={handleBrowseModeChange}
-              onOpenDashboard={authenticatedSession ? handleOpenProfiles : undefined}
-              onReload={handleRefreshPlaces}
-              onSelectAllVenueTypes={handleSelectAllVenueTypes}
-              onSelectCity={setSelectedCity}
-              onToggleConfirmedDealsOnly={handleToggleConfirmedDealsOnly}
-              onToggleDealDay={handleToggleDealDay}
-              onToggleFilters={handleToggleBrowseFilters}
-              onToggleMapTheme={handleToggleMapTheme}
-              onToggleOperatingDay={handleToggleOperatingDay}
-              onToggleVenueType={handleToggleVenueType}
-              onToggleVerifiedBusinessesOnly={handleToggleVerifiedBusinessesOnly}
-              resultCount={filteredPlaces.length}
-              searchQuery={searchQuery}
-              selectedDealDays={selectedDealDays}
-              selectedCity={selectedCity}
-              selectedOperatingDays={selectedOperatingDays}
-              selectedVenueTypes={selectedVenueTypes}
-              verifiedBusinessesOnly={verifiedBusinessesOnly}
-            />
-
-            <Animated.View style={[styles.browseModeContentLayer, browseModeTransitionStyle]}>
-
+            <Animated.View pointerEvents={browseMode === 'list' ? 'auto' : 'none'} style={[styles.browseContentFill, styles.browseModeContentLayer, listModeTransitionStyle]}>
             {listLoading ? (
               <View style={styles.centerState}>
                 <ActivityIndicator color="#c65d1f" size="large" />
@@ -2113,15 +2062,29 @@ function AppScreen() {
               />
             )}
 
-          {errorMessage ? (
-            <View style={styles.errorBanner}>
-              <Text style={styles.errorText}>{errorMessage}</Text>
-            </View>
-          ) : null}
-
+            {errorMessage ? (
+              <View style={styles.errorBanner}>
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              </View>
+            ) : null}
             </Animated.View>
+            </View>
+
+            {authenticatedSession && browseMode === 'map' ? (
+              <Pressable
+                onPress={handleOpenProfiles}
+                style={[
+                  styles.floatingDashboardButton,
+                  styles.floatingDashboardButtonMap,
+                  { bottom: floatingDashboardButtonOffset, right: 18 },
+                ]}
+              >
+                <Text style={styles.floatingDashboardButtonText}>Back to Dashboard</Text>
+              </Pressable>
+            ) : null}
         </View>
         </SafeAreaView>
+        </View>
         </Animated.View>
         </View>
       )}

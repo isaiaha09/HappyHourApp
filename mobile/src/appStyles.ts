@@ -29,6 +29,10 @@ export const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f7efe2',
   },
+  safeAreaTransparent: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
   screen: {
     flex: 1,
     paddingHorizontal: 18,
@@ -86,6 +90,13 @@ export const styles = StyleSheet.create({
   },
   browseModeContentLayer: {
     flex: 1,
+  },
+  browseContentStage: {
+    flex: 1,
+    position: 'relative',
+  },
+  browseContentFill: {
+    ...StyleSheet.absoluteFillObject,
   },
   appTitle: {
     color: '#2d221a',
