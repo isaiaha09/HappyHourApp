@@ -68,14 +68,15 @@ export const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  toolbarRowTrailing: {
-    justifyContent: 'flex-end',
+  toolbarRowLeading: {
+    justifyContent: 'flex-start',
   },
   toolbarActionsRow: {
     alignItems: 'center',
     flexDirection: 'row',
     gap: 6,
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
+    width: '100%',
   },
   toolbarRowLandscape: {
     minHeight: 36,

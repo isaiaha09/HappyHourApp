@@ -134,7 +134,7 @@ export function BrowseControls({
         style={[
           styles.toolbarRow,
           compactLandscapeControls ? styles.toolbarRowLandscape : null,
-          styles.toolbarRowTrailing,
+          styles.toolbarRowLeading,
         ]}
       >
         <View style={styles.toolbarActionsRow}>
@@ -183,6 +183,9 @@ export function BrowseControls({
               </Text>
             </Pressable>
           ) : null}
+          <Pressable accessibilityLabel="Refresh places" onPress={onReload} style={styles.reloadButton}>
+            <Text style={styles.reloadButtonText}>↻</Text>
+          </Pressable>
           <Pressable
             onPress={onToggleFilters}
             style={[
@@ -195,9 +198,6 @@ export function BrowseControls({
             <Text style={[styles.filtersToggleText, filtersExpanded ? styles.filtersToggleTextActive : null]}>
               {filtersExpanded ? 'Hide filters' : 'Filters'}
             </Text>
-          </Pressable>
-          <Pressable accessibilityLabel="Refresh places" onPress={onReload} style={styles.reloadButton}>
-            <Text style={styles.reloadButtonText}>↻</Text>
           </Pressable>
         </View>
       </View>
