@@ -257,7 +257,18 @@ function AppScreen() {
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const normalizedSearchQuery = normalizeSearchText(deferredSearchQuery);
   const onboardingTransitionDuration = 480;
-  const showMapBrowse = screenMode === 'browse' && !selectedPlaceSlug && browseMode === 'map';
+  const showTransitionMapBrowse = browseProfileTransitionFrom !== null
+    && incomingBrowseProfileScreen !== null
+    && browseProfileTransitionFrom !== incomingBrowseProfileScreen
+    && !selectedPlaceSlug
+    && browseMode === 'map'
+    && (browseProfileTransitionFrom === 'browse' || incomingBrowseProfileScreen === 'browse');
+  const showMapBrowse = (screenMode === 'browse' && !selectedPlaceSlug && browseMode === 'map') || showTransitionMapBrowse;
+  const translucentStatusBar = (screenMode === 'browse' && !selectedPlaceSlug && browseMode === 'map')
+    || (browseProfileTransitionFrom === 'profiles'
+      && incomingBrowseProfileScreen === 'browse'
+      && !selectedPlaceSlug
+      && browseMode === 'map');
 
   const filteredPlaces = getFilteredPlaces(places, {
     confirmedDealsOnly,
@@ -748,15 +759,13 @@ function AppScreen() {
         }
 
         setScreenMode(nextScreen);
-        requestAnimationFrame(() => {
-          profileSceneTransition.setValue(1);
-          browseSceneTransition.setValue(1);
-          setProfileEntryOffset(0);
-          setBrowseEntryOffset(0);
-          setBrowseProfileTransitionFrom(null);
-          setIncomingBrowseProfileScreen(null);
-          screenTransition.setValue(1);
-        });
+        profileSceneTransition.setValue(1);
+        browseSceneTransition.setValue(1);
+        setProfileEntryOffset(0);
+        setBrowseEntryOffset(0);
+        setBrowseProfileTransitionFrom(null);
+        setIncomingBrowseProfileScreen(null);
+        screenTransition.setValue(1);
       });
     });
   }
@@ -1733,12 +1742,12 @@ function AppScreen() {
       && incomingBrowseProfileScreen === 'browse';
 
     return (
-      <View style={shouldShowBrowseOverlay ? styles.onboardingTransitionRoot : styles.fullScreenRoot}>
+      <View style={[styles.fullScreenRoot, shouldShowBrowseOverlay ? styles.transitionClipRoot : null]}>
         <Animated.View style={[styles.screenTransitionLayerAbsolute, shouldShowBrowseOverlay ? browseProfileOutgoingStyle : null]}>
           {renderProfilesScreen()}
         </Animated.View>
         {shouldShowBrowseOverlay ? (
-          <Animated.View style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, browseProfileIncomingStyle]}>
+          <Animated.View style={[styles.screenTransitionLayerAbsolute, browseProfileIncomingStyle]}>
             {renderBrowseScreen({
               suppressBrowseSceneTransitionStyle: true,
               suppressScreenTransitionStyle: true,
@@ -1746,6 +1755,46 @@ function AppScreen() {
             })}
           </Animated.View>
         ) : null}
+      </View>
+    );
+  }
+
+  function renderAuthenticatedMainShell() {
+    const transitionActive = usesBrowseProfileSlideTransition;
+    const showingProfile = screenMode === 'profiles';
+    const profileLayerStyle = transitionActive
+      ? browseProfileTransitionFrom === 'profiles'
+        ? browseProfileOutgoingStyle
+        : browseProfileIncomingStyle
+      : showingProfile
+        ? null
+        : { opacity: 0, transform: [{ translateX: width }] };
+    const browseLayerStyle = transitionActive
+      ? browseProfileTransitionFrom === 'browse'
+        ? browseProfileOutgoingStyle
+        : browseProfileIncomingStyle
+      : showingProfile
+        ? { opacity: 0, transform: [{ translateX: -width }] }
+        : null;
+
+    return (
+      <View style={[styles.fullScreenRoot, transitionActive ? styles.transitionClipRoot : null]}>
+        <Animated.View
+          pointerEvents={showingProfile && !transitionActive ? 'auto' : 'none'}
+          style={[styles.screenTransitionLayerAbsolute, profileLayerStyle]}
+        >
+          {renderProfilesScreen()}
+        </Animated.View>
+        <Animated.View
+          pointerEvents={!showingProfile && !transitionActive ? 'auto' : 'none'}
+          style={[styles.screenTransitionLayerAbsolute, browseLayerStyle]}
+        >
+          {renderBrowseScreen({
+            suppressBrowseSceneTransitionStyle: true,
+            suppressScreenTransitionStyle: true,
+            suppressTransitionOverlay: true,
+          })}
+        </Animated.View>
       </View>
     );
   }
@@ -1835,15 +1884,15 @@ function AppScreen() {
   }
 
   function renderBrowseScreen(options?: { suppressScreenTransitionStyle?: boolean; suppressBrowseSceneTransitionStyle?: boolean; suppressTransitionOverlay?: boolean }) {
-    const browseScreenAnimationStyle = options?.suppressScreenTransitionStyle ? null : screenTransitionStyle;
-    const browseSceneAnimationStyle = options?.suppressBrowseSceneTransitionStyle ? null : browseSceneTransitionStyle;
     const shouldShowProfileOverlay = !options?.suppressTransitionOverlay
       && usesBrowseProfileSlideTransition
       && browseProfileTransitionFrom === 'browse'
       && incomingBrowseProfileScreen === 'profiles';
+    const browseScreenAnimationStyle = options?.suppressScreenTransitionStyle || shouldShowProfileOverlay ? null : screenTransitionStyle;
+    const browseSceneAnimationStyle = options?.suppressBrowseSceneTransitionStyle || shouldShowProfileOverlay ? null : browseSceneTransitionStyle;
 
     return (
-      <View style={shouldShowProfileOverlay ? styles.onboardingTransitionRoot : styles.fullScreenRoot}>
+      <View style={[styles.fullScreenRoot, shouldShowProfileOverlay ? styles.transitionClipRoot : null]}>
         <Animated.View style={[
           styles.screenTransitionLayerAbsolute,
           styles.fullScreenRoot,
@@ -2193,7 +2242,7 @@ function AppScreen() {
           </View>
         </Animated.View>
         {shouldShowProfileOverlay ? (
-          <Animated.View style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, browseProfileIncomingStyle]}>
+          <Animated.View style={[styles.screenTransitionLayerAbsolute, browseProfileIncomingStyle]}>
             {renderProfilesScreen()}
           </Animated.View>
         ) : null}
@@ -2203,7 +2252,7 @@ function AppScreen() {
 
   return (
     <>
-      <StatusBar backgroundColor="transparent" style="dark" translucent={showMapBrowse} />
+      <StatusBar backgroundColor="transparent" style="dark" translucent={translucentStatusBar} />
       {screenMode === 'splash' ? (
         <Animated.View style={[styles.onboardingTransitionRoot, { opacity: splashExitOpacity }]}>
           {renderOnboardingScreen('splash')}
@@ -2232,8 +2281,8 @@ function AppScreen() {
             {renderOnboardingScreen('auth')}
           </Animated.View>
         </View>
-      ) : authenticatedSession && screenMode === 'profiles' ? (
-        renderProfilesScreenRoot()
+      ) : authenticatedSession && !selectedPlaceSlug && (screenMode === 'profiles' || screenMode === 'browse' || usesBrowseProfileSlideTransition) ? (
+        renderAuthenticatedMainShell()
       ) : usesOnboardingSlideTransition && currentOnboardingScreen ? (
         <View style={styles.onboardingTransitionRoot}>
           <Animated.View

@@ -5,6 +5,9 @@ export const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f7efe2',
   },
+  transitionClipRoot: {
+    overflow: 'hidden',
+  },
   onboardingTransitionRoot: {
     flex: 1,
     backgroundColor: '#f7efe2',

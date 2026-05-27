@@ -30,8 +30,8 @@ For the initial launch, I am keeping the scope small on purpose and only targeti
 
 This is the stack I chose for the project:
 
-- Expo / React Native for the mobile app
-- Django for the backend
+- Expo 54 / React Native 0.81 / React 19 for the mobile app
+- Django 6 + Django REST Framework for the backend
 - Next.js for the website
 - Vercel for hosting the website later
 - Render for hosting the backend later
@@ -63,7 +63,12 @@ Current mobile work includes:
 
 - browse mode with both list and map views
 - city filters and venue-type filters
+- confirmed-deal, weekday, and verified-business filtering
 - keyword search across names, venue types, cities, and addresses
+- shared browse controls across list and map so the search container stays stable during mode changes
+- animated list/map switching and profile-dashboard transitions
+- Apple Maps-style light/dark map support on iOS with a smooth theme transition
+- map result trays, selected-place preview cards, and animated marker rendering
 - place detail cards with photos, deal sections, hours, phone numbers, and map previews
 - login and account creation flows
 - profile dashboard flow with animated transitions between auth, browse, and dashboard screens
@@ -86,34 +91,27 @@ Legacy catalog models for `Place`, `Deal`, `HappyHour`, and `ImportRun` have bee
 
 ### Current API Direction
 
-The backend now builds listing responses from source records instead of serving a long-lived `Place` catalog out of the database.
+The backend now builds listing responses from source-backed records instead of serving a long-lived `Place` catalog out of the database.
 
 That means the current direction is:
 
-- pull curated business website records and discovery records from configured sources
+- pull configured listing data from curated and discovery-oriented sources
 - normalize and group them at request time through the backend service layer
 - expose them through API endpoints that the mobile app consumes directly
 - keep app-owned workflow data in the database while leaving listing data source-backed
 
 ## Current Listing Pipeline
 
-The listing APIs now build responses from a mix of curated website-backed businesses and stored discovery records.
+The listing APIs are built from source-backed records and normalized for the mobile app.
 
 That currently includes:
 
 - curated business source definitions in `backend/config/business_sources.py`
 - discovery data stored in `backend/config/discovered_places.json`
-- permanent source-level exclusions in `backend/config/discovery_exclusions.json`
 - grouping and deduplication in `backend/places/services/source_listings.py`
 - coordinate backfill for records that need geocode resolution before they can appear on the mobile map
 - multi-location grouping so one business profile can expose multiple addresses inside the app
-- address-quality merging so partial or duplicate discovery records collapse into a better canonical location when possible
-
-The current runtime source is `curated_json_places`, which means the app can now include:
-
-- curated businesses with happy hour or deal data
-- curated businesses with regular business information even when they do not currently expose happy hour deals
-- stored discovery businesses from live providers when they pass filtering, dedupe, and exclusion rules
+- address-quality merging so partial or duplicate records collapse into a better canonical location when possible
 
 The current runtime goal is to keep listings source-backed and normalized while only storing claim/account workflow data permanently in the database.
 
@@ -151,7 +149,7 @@ Right now, these parts are working:
 - deleted-business admin controls for restore, hard delete, and suppression through `deleted_from_business_database`
 - automatic cleanup of stale daily `tomtom_places` provider usage rows in admin
 - Expo mobile browse UI with list and map modes
-- mobile search, city filtering, and venue filtering
+- mobile search, city filtering, venue filtering, and map/list UX polish
 - mobile auth, profile dashboard, and business claim onboarding flow
 - backend tests for the source listing pipeline, API endpoints, and importer behavior
 
@@ -173,6 +171,7 @@ The current focus is tightening the existing mobile + backend loop instead of st
 That mainly means:
 
 - improving mobile browse/map polish and gesture behavior
+- smoothing browse/profile transitions and map/list interaction polish
 - improving source data quality and duplicate-location cleanup
 - tightening claim/account flows
 - expanding reliable business coverage inside Ventura, Oxnard, and Camarillo
@@ -188,6 +187,12 @@ python manage.py migrate
 python manage.py runserver
 ```
 
+Or use the helper script from the backend folder:
+
+```powershell
+.\start-mobile-dev.ps1
+```
+
 Then Django admin should be available at:
 
 ```text
@@ -200,7 +205,15 @@ From the `mobile` folder:
 
 ```powershell
 npm install
-npx expo start
+npm start
+```
+
+Other useful mobile commands:
+
+```powershell
+npm run ios
+npm run android
+npx tsc --noEmit
 ```
 
 ## Helpful Backend Commands
@@ -227,6 +240,13 @@ Run the focused admin and discovery workflow tests used during recent data/admin
 
 ```powershell
 python manage.py test places.tests.ListingSnapshotAdminTests places.tests.ProviderQuotaTests places.tests.ProviderUsageWindowAdminTests places.tests.DiscoveryJsonStorageTests places.tests.HerePlacesImporterTests
+```
+
+Run a broader backend validation pass:
+
+```powershell
+python manage.py check
+python manage.py test places
 ```
 
 ## Notes From Me
