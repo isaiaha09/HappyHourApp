@@ -468,6 +468,9 @@ export function CreateProfileScreen({ errorMessage, form, isLandscape, message, 
               <Text style={styles.profileFieldLabel}>Password</Text>
               <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('password', value)} scrollViewRef={scrollViewRef} secureTextEntry style={styles.profileInput} value={form.password} />
 
+              <Text style={styles.profileFieldLabel}>Confirm password</Text>
+              <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('confirm_password', value)} scrollViewRef={scrollViewRef} secureTextEntry style={styles.profileInput} value={form.confirm_password} />
+
               <Text style={styles.profileFieldLabel}>First name</Text>
               <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('first_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.first_name} />
 
@@ -595,7 +598,7 @@ export function BusinessVerificationScreen({ errorMessage, form, isLandscape, mo
             <Text style={styles.detailTitle}>{isManual ? 'Create a business profile' : 'Verify this business claim'}</Text>
             <Text style={styles.profileIntroText}>
               {isManual
-                ? 'For upcoming or smaller businesses, some fields stay optional but recommended. Admin will review the submission in Django admin.'
+                ? 'This is for upcoming businesses and businesses that are not yet displayed on DiningDealz. Some fields stay optional but highly recommended.'
                 : 'Claimed businesses require full verification details before they move into admin review.'}
             </Text>
 
@@ -657,6 +660,9 @@ export function BusinessVerificationScreen({ errorMessage, form, isLandscape, mo
 
               <Text style={styles.profileFieldLabel}>Password</Text>
               <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('password', value)} scrollViewRef={scrollViewRef} secureTextEntry style={styles.profileInput} value={form.password} />
+
+              <Text style={styles.profileFieldLabel}>Confirm password</Text>
+              <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('confirm_password', value)} scrollViewRef={scrollViewRef} secureTextEntry style={styles.profileInput} value={form.confirm_password} />
 
               <Text style={styles.profileFieldLabel}>First name</Text>
               <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('first_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.first_name} />

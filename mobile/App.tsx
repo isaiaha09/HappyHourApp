@@ -145,6 +145,7 @@ const initialProfileFormState: ProfileFormState = {
   username: '',
   email: '',
   password: '',
+  confirm_password: '',
   first_name: '',
   last_name: '',
   business_slug: '',
@@ -1635,6 +1636,12 @@ function AppScreen() {
   }
 
   async function handleSubmitCustomerProfile() {
+    if (profileForm.password !== profileForm.confirm_password) {
+      setProfileErrorMessage('Password and confirm password must match.');
+      setProfileMessage(null);
+      return;
+    }
+
     setProfileSubmitting(true);
     setProfileErrorMessage(null);
     setProfileMessage(null);
@@ -1661,6 +1668,12 @@ function AppScreen() {
   }
 
   async function handleSubmitClaimedBusinessProfile() {
+    if (profileForm.password !== profileForm.confirm_password) {
+      setProfileErrorMessage('Password and confirm password must match.');
+      setProfileMessage(null);
+      return;
+    }
+
     setProfileSubmitting(true);
     setProfileErrorMessage(null);
     setProfileMessage(null);
@@ -1697,6 +1710,12 @@ function AppScreen() {
   }
 
   async function handleSubmitManualBusinessProfile() {
+    if (profileForm.password !== profileForm.confirm_password) {
+      setProfileErrorMessage('Password and confirm password must match.');
+      setProfileMessage(null);
+      return;
+    }
+
     setProfileSubmitting(true);
     setProfileErrorMessage(null);
     setProfileMessage(null);
