@@ -1222,7 +1222,7 @@ function AppScreen() {
       return;
     }
 
-    void refreshDashboard();
+    void refreshDashboard(false);
   }, [apiBaseUrl, authenticatedSession?.auth_token, screenMode]);
 
   useEffect(() => {
