@@ -1,10 +1,13 @@
-import { useRef, useState, type ComponentProps, type ReactNode, type RefObject } from 'react';
+import { useEffect, useRef, useState, type ComponentProps, type ReactNode, type RefObject } from 'react';
 import {
   ActivityIndicator,
   Animated,
   findNodeHandle,
+  Keyboard,
   KeyboardAvoidingView,
   LayoutAnimation,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   Platform,
   Pressable,
   ScrollView,
@@ -103,8 +106,61 @@ type KeyboardScrollViewHandle = ScrollView & {
 };
 
 type AutoScrollTextInputProps = ComponentProps<typeof TextInput> & {
+  onBeforeAutoScroll?: () => void;
   scrollViewRef: RefObject<ScrollView | null>;
 };
+
+type AutoScrollFormController = {
+  handleFieldFocus: () => void;
+  handleScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+  scrollViewRef: RefObject<ScrollView | null>;
+};
+
+function useAutoScrollForm(): AutoScrollFormController {
+  const scrollViewRef = useRef<ScrollView | null>(null);
+  const currentScrollOffsetRef = useRef(0);
+  const restoreScrollOffsetRef = useRef(0);
+  const keyboardVisibleRef = useRef(false);
+
+  useEffect(() => {
+    const keyboardShowEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const keyboardHideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSubscription = Keyboard.addListener(keyboardShowEvent, () => {
+      keyboardVisibleRef.current = true;
+    });
+    const hideSubscription = Keyboard.addListener(keyboardHideEvent, () => {
+      keyboardVisibleRef.current = false;
+      scrollViewRef.current?.scrollTo({
+        animated: true,
+        y: restoreScrollOffsetRef.current,
+      });
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
+  function handleFieldFocus() {
+    if (!keyboardVisibleRef.current) {
+      restoreScrollOffsetRef.current = currentScrollOffsetRef.current;
+    }
+  }
+
+  function handleScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    currentScrollOffsetRef.current = event.nativeEvent.contentOffset.y;
+    if (!keyboardVisibleRef.current) {
+      restoreScrollOffsetRef.current = currentScrollOffsetRef.current;
+    }
+  }
+
+  return {
+    handleFieldFocus,
+    handleScroll,
+    scrollViewRef,
+  };
+}
 
 function scrollFocusedFieldIntoView(scrollViewRef: RefObject<ScrollView | null>, target: number | null) {
   if (target === null) {
@@ -117,7 +173,7 @@ function scrollFocusedFieldIntoView(scrollViewRef: RefObject<ScrollView | null>,
   });
 }
 
-function AutoScrollTextInput({ onFocus, scrollViewRef, ...props }: AutoScrollTextInputProps) {
+function AutoScrollTextInput({ onBeforeAutoScroll, onFocus, scrollViewRef, ...props }: AutoScrollTextInputProps) {
   const inputRef = useRef<TextInput | null>(null);
 
   return (
@@ -125,6 +181,7 @@ function AutoScrollTextInput({ onFocus, scrollViewRef, ...props }: AutoScrollTex
       {...props}
       ref={inputRef}
       onFocus={(event) => {
+        onBeforeAutoScroll?.();
         scrollFocusedFieldIntoView(scrollViewRef, findNodeHandle(inputRef.current));
         onFocus?.(event);
       }}
@@ -190,7 +247,7 @@ function CompactDropdown({ onSelect, open, options, placeholder, selectedValue, 
 }
 
 export function AuthPortalScreen({ authMessage, autoFocusIdentifier, errorMessage, loginForm, loginPortal, onBackToLanding, onChangeField, onForgotPassword, onForgotUsername, onSubmit, showTwoFactorCodeField, submitting }: AuthPortalScreenProps) {
-  const scrollViewRef = useRef<ScrollView | null>(null);
+  const { handleFieldFocus, handleScroll, scrollViewRef } = useAutoScrollForm();
   const [recoveryMode, setRecoveryMode] = useState<AuthRecoveryMode>(null);
   const [recoveryValue, setRecoveryValue] = useState('');
   const recoveryFade = useRef(new Animated.Value(0)).current;
@@ -259,7 +316,9 @@ export function AuthPortalScreen({ authMessage, autoFocusIdentifier, errorMessag
           contentContainerStyle={styles.authScrollContent}
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           keyboardShouldPersistTaps="handled"
+          onScroll={handleScroll}
           ref={scrollViewRef}
+          scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
         >
           <Pressable onPress={onBackToLanding} style={styles.backButton}>
@@ -284,10 +343,10 @@ export function AuthPortalScreen({ authMessage, autoFocusIdentifier, errorMessag
             ) : null}
 
             <Text style={styles.profileFieldLabel}>Username</Text>
-            <AutoScrollTextInput autoCapitalize="none" autoFocus={autoFocusIdentifier} onChangeText={(value) => onChangeField('identifier', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={loginForm.identifier} />
+            <AutoScrollTextInput autoCapitalize="none" autoFocus={autoFocusIdentifier} onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('identifier', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={loginForm.identifier} />
 
             <Text style={styles.profileFieldLabel}>Password</Text>
-            <AutoScrollTextInput onChangeText={(value) => onChangeField('password', value)} scrollViewRef={scrollViewRef} secureTextEntry style={styles.profileInput} value={loginForm.password} />
+            <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('password', value)} scrollViewRef={scrollViewRef} secureTextEntry style={styles.profileInput} value={loginForm.password} />
 
             {showTwoFactorCodeField ? (
               <>
@@ -295,6 +354,7 @@ export function AuthPortalScreen({ authMessage, autoFocusIdentifier, errorMessag
                 <AutoScrollTextInput
                   autoCapitalize="none"
                   keyboardType="number-pad"
+                  onBeforeAutoScroll={handleFieldFocus}
                   onChangeText={(value) => onChangeField('two_factor_code', value)}
                   scrollViewRef={scrollViewRef}
                   style={styles.profileInput}
@@ -332,6 +392,7 @@ export function AuthPortalScreen({ authMessage, autoFocusIdentifier, errorMessag
                   autoCapitalize="none"
                   autoFocus
                   keyboardType={recoveryMode === 'username' ? 'email-address' : 'default'}
+                  onBeforeAutoScroll={handleFieldFocus}
                   onChangeText={setRecoveryValue}
                   placeholder={recoveryMode === 'username' ? 'Enter your account email' : 'Enter your username or email'}
                   placeholderTextColor="#9a7f6c"
@@ -362,16 +423,18 @@ export function AuthPortalScreen({ authMessage, autoFocusIdentifier, errorMessag
 }
 
 export function CreateProfileScreen({ errorMessage, form, isLandscape, message, onBack, onChangeField, onOpenBusinessClaim, onSubmit, submitting }: CreateProfileScreenProps) {
-  const scrollViewRef = useRef<ScrollView | null>(null);
+  const { handleFieldFocus, handleScroll, scrollViewRef } = useAutoScrollForm();
 
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
       <KeyboardAwareFormScreen>
         <ScrollView
-          contentContainerStyle={styles.profileScrollContent}
+          contentContainerStyle={[styles.profileScrollContent, styles.createProfileScrollContent]}
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           keyboardShouldPersistTaps="handled"
+          onScroll={handleScroll}
           ref={scrollViewRef}
+          scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
         >
           <Pressable onPress={onBack} style={styles.backButton}>
@@ -397,19 +460,19 @@ export function CreateProfileScreen({ errorMessage, form, isLandscape, message, 
 
             <View style={styles.profileFormSection}>
               <Text style={styles.profileFieldLabel}>Username</Text>
-              <AutoScrollTextInput autoCapitalize="none" onChangeText={(value) => onChangeField('username', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.username} />
+              <AutoScrollTextInput autoCapitalize="none" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('username', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.username} />
 
               <Text style={styles.profileFieldLabel}>Email</Text>
-              <AutoScrollTextInput autoCapitalize="none" keyboardType="email-address" onChangeText={(value) => onChangeField('email', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.email} />
+              <AutoScrollTextInput autoCapitalize="none" keyboardType="email-address" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('email', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.email} />
 
               <Text style={styles.profileFieldLabel}>Password</Text>
-              <AutoScrollTextInput onChangeText={(value) => onChangeField('password', value)} scrollViewRef={scrollViewRef} secureTextEntry style={styles.profileInput} value={form.password} />
+              <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('password', value)} scrollViewRef={scrollViewRef} secureTextEntry style={styles.profileInput} value={form.password} />
 
               <Text style={styles.profileFieldLabel}>First name</Text>
-              <AutoScrollTextInput onChangeText={(value) => onChangeField('first_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.first_name} />
+              <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('first_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.first_name} />
 
               <Text style={styles.profileFieldLabel}>Last name</Text>
-              <AutoScrollTextInput onChangeText={(value) => onChangeField('last_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.last_name} />
+              <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('last_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.last_name} />
             </View>
 
             <Pressable onPress={() => void onSubmit()} style={[styles.linkButton, submitting ? styles.linkButtonDisabled : null]}>
@@ -427,7 +490,7 @@ export function CreateProfileScreen({ errorMessage, form, isLandscape, message, 
 }
 
 export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces, onBack, onChangeSearchQuery, onChooseManualBusiness, onSelectBusiness, results, searchQuery }: BusinessSearchScreenProps) {
-  const scrollViewRef = useRef<ScrollView | null>(null);
+  const { handleFieldFocus, handleScroll, scrollViewRef } = useAutoScrollForm();
 
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
@@ -436,7 +499,9 @@ export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces,
           contentContainerStyle={styles.profileScrollContent}
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           keyboardShouldPersistTaps="handled"
+          onScroll={handleScroll}
           ref={scrollViewRef}
+          scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
         >
           <Pressable onPress={onBack} style={styles.backButton}>
@@ -453,7 +518,7 @@ export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces,
               </View>
             ) : null}
 
-            <AutoScrollTextInput placeholder="Search by business name" placeholderTextColor="#9a7f6c" onChangeText={onChangeSearchQuery} scrollViewRef={scrollViewRef} style={styles.profileInput} value={searchQuery} />
+            <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} placeholder="Search by business name" placeholderTextColor="#9a7f6c" onChangeText={onChangeSearchQuery} scrollViewRef={scrollViewRef} style={styles.profileInput} value={searchQuery} />
 
             {normalizeSearchText(searchQuery).length === 0 ? (
               <Text style={styles.centerStateText}>Start typing to search for your business.</Text>
@@ -502,7 +567,7 @@ export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces,
 export function BusinessVerificationScreen({ errorMessage, form, isLandscape, mode, onBack, onChangeField, onToggleAddressNotApplicable, onSubmit, selectedLocation, selectedPlace, submitting }: BusinessVerificationScreenProps) {
   const isManual = mode === 'manual';
   const [openDropdown, setOpenDropdown] = useState<'city' | 'venue' | null>(null);
-  const scrollViewRef = useRef<ScrollView | null>(null);
+  const { handleFieldFocus, handleScroll, scrollViewRef } = useAutoScrollForm();
 
   function handleSelectDropdownValue(field: 'business_city' | 'business_venue_type', value: string) {
     onChangeField(field, value);
@@ -516,7 +581,9 @@ export function BusinessVerificationScreen({ errorMessage, form, isLandscape, mo
           contentContainerStyle={styles.profileScrollContent}
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           keyboardShouldPersistTaps="handled"
+          onScroll={handleScroll}
           ref={scrollViewRef}
+          scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
         >
           <Pressable onPress={onBack} style={styles.backButton}>
@@ -555,7 +622,7 @@ export function BusinessVerificationScreen({ errorMessage, form, isLandscape, mo
               {isManual ? (
                 <>
                   <Text style={styles.profileFieldLabel}>Business name</Text>
-                  <AutoScrollTextInput onChangeText={(value) => onChangeField('business_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.business_name} />
+                  <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('business_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.business_name} />
 
                   <Text style={styles.profileFieldLabel}>City</Text>
                   <CompactDropdown
@@ -578,39 +645,39 @@ export function BusinessVerificationScreen({ errorMessage, form, isLandscape, mo
                   />
 
                   <Text style={styles.profileFieldLabel}>Website URL (optional)</Text>
-                  <AutoScrollTextInput autoCapitalize="none" onChangeText={(value) => onChangeField('business_website_url', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.business_website_url} />
+                  <AutoScrollTextInput autoCapitalize="none" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('business_website_url', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.business_website_url} />
                 </>
               ) : null}
 
               <Text style={styles.profileFieldLabel}>Username</Text>
-              <AutoScrollTextInput autoCapitalize="none" onChangeText={(value) => onChangeField('username', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.username} />
+              <AutoScrollTextInput autoCapitalize="none" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('username', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.username} />
 
               <Text style={styles.profileFieldLabel}>Email</Text>
-              <AutoScrollTextInput autoCapitalize="none" keyboardType="email-address" onChangeText={(value) => onChangeField('email', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.email} />
+              <AutoScrollTextInput autoCapitalize="none" keyboardType="email-address" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('email', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.email} />
 
               <Text style={styles.profileFieldLabel}>Password</Text>
-              <AutoScrollTextInput onChangeText={(value) => onChangeField('password', value)} scrollViewRef={scrollViewRef} secureTextEntry style={styles.profileInput} value={form.password} />
+              <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('password', value)} scrollViewRef={scrollViewRef} secureTextEntry style={styles.profileInput} value={form.password} />
 
               <Text style={styles.profileFieldLabel}>First name</Text>
-              <AutoScrollTextInput onChangeText={(value) => onChangeField('first_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.first_name} />
+              <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('first_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.first_name} />
 
               <Text style={styles.profileFieldLabel}>Last name</Text>
-              <AutoScrollTextInput onChangeText={(value) => onChangeField('last_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.last_name} />
+              <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('last_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.last_name} />
 
               <Text style={styles.profileFieldLabel}>Contact name</Text>
-              <AutoScrollTextInput onChangeText={(value) => onChangeField('contact_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.contact_name} />
+              <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('contact_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.contact_name} />
 
               <Text style={styles.profileFieldLabel}>{isManual ? 'Job title (recommended)' : 'Job title'}</Text>
-              <AutoScrollTextInput onChangeText={(value) => onChangeField('job_title', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.job_title} />
+              <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('job_title', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.job_title} />
 
               <Text style={styles.profileFieldLabel}>Work email</Text>
-              <AutoScrollTextInput autoCapitalize="none" keyboardType="email-address" onChangeText={(value) => onChangeField('work_email', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.work_email} />
+              <AutoScrollTextInput autoCapitalize="none" keyboardType="email-address" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('work_email', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.work_email} />
 
               <Text style={styles.profileFieldLabel}>{isManual ? 'Work phone (recommended)' : 'Work phone'}</Text>
-              <AutoScrollTextInput onChangeText={(value) => onChangeField('work_phone', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.work_phone} />
+              <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('work_phone', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.work_phone} />
 
               <Text style={styles.profileFieldLabel}>{isManual ? 'Employer address or “Address Not Applicable”' : 'Employer address'}</Text>
-              <AutoScrollTextInput onChangeText={(value) => onChangeField('employer_address', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.employer_address} />
+              <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('employer_address', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.employer_address} />
 
               {isManual ? (
                 <Pressable onPress={() => onToggleAddressNotApplicable(!form.address_not_applicable)} style={[styles.toggleChip, form.address_not_applicable ? styles.toggleChipActive : null]}>
@@ -619,10 +686,10 @@ export function BusinessVerificationScreen({ errorMessage, form, isLandscape, mo
               ) : null}
 
               <Text style={styles.profileFieldLabel}>Verification summary</Text>
-              <AutoScrollTextInput multiline onChangeText={(value) => onChangeField('verification_summary', value)} scrollViewRef={scrollViewRef} style={[styles.profileInput, styles.profileTextarea]} value={form.verification_summary} />
+              <AutoScrollTextInput multiline onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('verification_summary', value)} scrollViewRef={scrollViewRef} style={[styles.profileInput, styles.profileTextarea]} value={form.verification_summary} />
 
               <Text style={styles.profileFieldLabel}>{isManual ? 'Supporting details (recommended)' : 'Supporting details'}</Text>
-              <AutoScrollTextInput multiline onChangeText={(value) => onChangeField('supporting_details', value)} scrollViewRef={scrollViewRef} style={[styles.profileInput, styles.profileTextarea]} value={form.supporting_details} />
+              <AutoScrollTextInput multiline onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('supporting_details', value)} scrollViewRef={scrollViewRef} style={[styles.profileInput, styles.profileTextarea]} value={form.supporting_details} />
             </View>
 
             <Pressable onPress={() => void onSubmit()} style={[styles.linkButton, submitting ? styles.linkButtonDisabled : null]}>

@@ -1333,6 +1333,9 @@ export const styles = StyleSheet.create({
     paddingTop: 44,
     paddingBottom: 20,
   },
+  createProfileScrollContent: {
+    paddingBottom: 140,
+  },
   dashboardScrollContent: {
     flexGrow: 1,
     paddingTop: 44,
