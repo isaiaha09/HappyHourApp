@@ -1,6 +1,7 @@
 import { useRef, useState, type ComponentProps, type ReactNode, type RefObject } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   findNodeHandle,
   KeyboardAvoidingView,
   LayoutAnimation,
@@ -192,10 +193,52 @@ export function AuthPortalScreen({ authMessage, autoFocusIdentifier, errorMessag
   const scrollViewRef = useRef<ScrollView | null>(null);
   const [recoveryMode, setRecoveryMode] = useState<AuthRecoveryMode>(null);
   const [recoveryValue, setRecoveryValue] = useState('');
+  const recoveryFade = useRef(new Animated.Value(0)).current;
+  const recoveryTranslateY = useRef(new Animated.Value(-14)).current;
+
+  function animateRecoveryPanel(toOpacity: number, toTranslateY: number, onComplete?: () => void) {
+    recoveryFade.stopAnimation();
+    recoveryTranslateY.stopAnimation();
+    Animated.parallel([
+      Animated.timing(recoveryFade, {
+        duration: 180,
+        toValue: toOpacity,
+        useNativeDriver: true,
+      }),
+      Animated.timing(recoveryTranslateY, {
+        duration: 180,
+        toValue: toTranslateY,
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) {
+        onComplete?.();
+      }
+    });
+  }
 
   function handleOpenRecovery(mode: Exclude<AuthRecoveryMode, null>) {
-    setRecoveryMode(mode);
     setRecoveryValue(loginForm.identifier.trim());
+
+    if (recoveryMode === null) {
+      recoveryFade.setValue(0);
+      recoveryTranslateY.setValue(-14);
+      setRecoveryMode(mode);
+      requestAnimationFrame(() => {
+        animateRecoveryPanel(1, 0);
+      });
+      return;
+    }
+
+    setRecoveryMode(mode);
+    animateRecoveryPanel(1, 0);
+  }
+
+  function handleCloseRecovery() {
+    animateRecoveryPanel(0, -14, () => {
+      setRecoveryMode(null);
+      setRecoveryValue('');
+    });
   }
 
   function handleSubmitRecovery() {
@@ -275,7 +318,15 @@ export function AuthPortalScreen({ authMessage, autoFocusIdentifier, errorMessag
             </View>
 
             {recoveryMode ? (
-              <View style={styles.authRecoveryPanel}>
+              <Animated.View
+                style={[
+                  styles.authRecoveryPanel,
+                  {
+                    opacity: recoveryFade,
+                    transform: [{ translateY: recoveryTranslateY }],
+                  },
+                ]}
+              >
                 <Text style={styles.profileFieldLabel}>{recoveryMode === 'username' ? 'Account email' : 'Username or email'}</Text>
                 <AutoScrollTextInput
                   autoCapitalize="none"
@@ -297,11 +348,11 @@ export function AuthPortalScreen({ authMessage, autoFocusIdentifier, errorMessag
                   <Pressable onPress={handleSubmitRecovery} style={[styles.linkButtonSecondaryWide, submitting ? styles.linkButtonDisabled : null]}>
                     <Text style={styles.linkButtonSecondaryText}>{submitting ? 'Sending...' : recoveryMode === 'username' ? 'Email my username' : 'Send password reset link'}</Text>
                   </Pressable>
-                  <Pressable onPress={() => setRecoveryMode(null)} style={styles.authRecoveryDismissButton}>
+                  <Pressable onPress={handleCloseRecovery} style={styles.authRecoveryDismissButton}>
                     <Text style={styles.authRecoveryDismissText}>Cancel</Text>
                   </Pressable>
                 </View>
-              </View>
+              </Animated.View>
             ) : null}
           </View>
         </ScrollView>
