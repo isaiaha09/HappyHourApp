@@ -72,7 +72,7 @@ export const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 1,
     gap: 12,
-    padding: 16,
+    padding: 14,
   },
   browseHeaderCardLandscape: {
     alignSelf: 'center',
@@ -83,6 +83,7 @@ export const styles = StyleSheet.create({
   toolbarRow: {
     alignItems: 'center',
     flexDirection: 'row',
+    gap: 6,
     justifyContent: 'space-between',
   },
   toolbarRowLeading: {
@@ -92,11 +93,15 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     flexShrink: 1,
-    gap: 6,
+    gap: 4,
     justifyContent: 'flex-start',
   },
   toolbarActionsRowFill: {
     flex: 1,
+  },
+  toolbarActionsRowWithDashboard: {
+    flex: 1,
+    minWidth: 0,
   },
   toolbarRowLandscape: {
     minHeight: 36,
@@ -520,6 +525,7 @@ export const styles = StyleSheet.create({
   },
   filtersToggleButtonInline: {
     minHeight: 44,
+    paddingHorizontal: 10,
   },
   filtersToggleButtonPressable: {
     borderRadius: 16,
@@ -536,6 +542,9 @@ export const styles = StyleSheet.create({
     color: '#5d4637',
     fontSize: 13,
     fontWeight: '700',
+  },
+  filtersToggleTextInline: {
+    fontSize: 12,
   },
   filtersToggleTextActive: {
     color: '#fff7ef',

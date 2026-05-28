@@ -230,7 +230,7 @@ export function BrowseControls({
           !onOpenDashboard ? styles.toolbarRowLeading : null,
         ]}
       >
-        <View style={[styles.toolbarActionsRow, !onOpenDashboard ? styles.toolbarActionsRowFill : null]}>
+        <View style={[styles.toolbarActionsRow, !onOpenDashboard ? styles.toolbarActionsRowFill : styles.toolbarActionsRowWithDashboard]}>
           <View
             style={[
               styles.modeSwitcherTrack,
@@ -326,7 +326,10 @@ export function BrowseControls({
                 },
               ]}
             >
-              <Animated.Text style={[styles.filtersToggleText, { color: filtersToggleTextColor }]}>
+              <Animated.Text
+                numberOfLines={1}
+                style={[styles.filtersToggleText, styles.filtersToggleTextInline, { color: filtersToggleTextColor }]}
+              >
                 {filtersExpanded ? 'Hide filters' : 'Filters'}
               </Animated.Text>
             </Animated.View>
