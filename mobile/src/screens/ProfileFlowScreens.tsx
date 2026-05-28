@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   LayoutAnimation,
   Platform,
@@ -157,7 +158,7 @@ export function AuthPortalScreen({ authMessage, errorMessage, loginForm, loginPo
         >
           <View style={styles.authHero}>
             <View style={styles.authLogoShell}>
-              <Text style={styles.authLogoText}>HH</Text>
+              <Image source={require('../../assets/DiningDealz-Icon-Transparent.png')} style={styles.authLogoImage} resizeMode="contain" />
             </View>
             <Text style={styles.authTitle}>Welcome back</Text>
             <Text style={styles.authSubtitle}>Choose a customer or business portal to continue.</Text>

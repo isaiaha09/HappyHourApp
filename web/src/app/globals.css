@@ -1,0 +1,134 @@
+@import "tailwindcss";
+
+:root {
+  --background: #080101;
+  --foreground: #fff5e7;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+a,
+button,
+input {
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    opacity 180ms ease,
+    transform 180ms ease,
+    box-shadow 180ms ease;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at top, rgba(255, 80, 43, 0.2), transparent 24%),
+    radial-gradient(circle at 20% 85%, rgba(255, 190, 0, 0.12), transparent 20%),
+    radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.05), transparent 18%);
+}
+
+.dd-site-shell {
+  min-height: 100vh;
+  background:
+    linear-gradient(180deg, rgba(20, 4, 4, 0.96), rgba(6, 0, 0, 0.98)),
+    #080101;
+}
+
+.dd-panel {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 32px;
+  background:
+    linear-gradient(180deg, rgba(33, 6, 6, 0.94), rgba(12, 1, 1, 0.96));
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 0 1px rgba(255, 96, 59, 0.08);
+}
+
+.dd-kicker {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: #ffb100;
+}
+
+.dd-input {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff5e7;
+  padding: 0.95rem 1rem;
+  outline: none;
+}
+
+.dd-input::placeholder {
+  color: rgba(255, 231, 216, 0.45);
+}
+
+.dd-input:focus {
+  border-color: rgba(255, 178, 0, 0.7);
+  box-shadow: 0 0 0 4px rgba(255, 177, 0, 0.14);
+}
+
+.dd-button-primary,
+.dd-button-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3.25rem;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  padding: 0.85rem 1.4rem;
+}
+
+.dd-button-primary {
+  border: 1px solid rgba(255, 202, 74, 0.3);
+  color: #210500;
+  background: linear-gradient(180deg, #ffd45b, #ffad00);
+  box-shadow: 0 0 34px rgba(255, 173, 0, 0.24);
+}
+
+.dd-button-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 42px rgba(255, 173, 0, 0.32);
+}
+
+.dd-button-primary:disabled {
+  opacity: 0.66;
+}
+
+.dd-button-secondary {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff3e6;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.dd-button-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+}

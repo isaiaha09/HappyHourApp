@@ -2747,6 +2747,7 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertIsNotNone(self.profile.email_verification_sent_at)
 		self.assertEqual(len(mail.outbox), 1)
 		self.assertIn(self.profile.email_verification_token, mail.outbox[0].body)
+		self.assertIn('text/html', mail.outbox[0].alternatives[0][1])
 
 	def test_toggle_two_factor_updates_profile(self):
 		response = self.client.post(
@@ -2771,6 +2772,23 @@ class ProfileDashboardApiTests(APITestCase):
 		self.profile.refresh_from_db()
 		self.assertTrue(self.profile.email_is_verified)
 		self.assertEqual(self.profile.email_verification_token, '')
+
+	@override_settings(PROFILE_EMAIL_VERIFICATION_SUCCESS_URL='happyhourapp://verified')
+	def test_verify_email_redirects_when_success_url_is_configured(self):
+		token = self.profile.ensure_verification_token(force=True)
+		self.profile.save(update_fields=['email_verification_token', 'updated_at'])
+
+		response = self.client.get(reverse('profile-verify-email', kwargs={'token': token}))
+
+		self.assertEqual(response.status_code, 302)
+		self.assertEqual(response['Location'], 'happyhourapp://verified')
+
+	@override_settings(PROFILE_EMAIL_VERIFICATION_FAILURE_URL='happyhourapp://verification-error')
+	def test_verify_email_redirects_when_failure_url_is_configured(self):
+		response = self.client.get(reverse('profile-verify-email', kwargs={'token': 'missing-token'}))
+
+		self.assertEqual(response.status_code, 302)
+		self.assertEqual(response['Location'], 'happyhourapp://verification-error')
 
 
 class AccountProxyTests(APITestCase):

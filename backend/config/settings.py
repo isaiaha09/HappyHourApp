@@ -10,53 +10,15 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
-import os
 from pathlib import Path
 
 from .business_sources import BUSINESS_SOURCE_PAGES
+from .env import get_bool_env, get_env, get_int_env, load_env_file
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
-def _load_env_file():
-    env_path = BASE_DIR / '.env'
-    if not env_path.exists():
-        return {}
-
-    values = {}
-    for line in env_path.read_text(encoding='utf-8').splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith('#') or '=' not in stripped:
-            continue
-
-        key, raw_value = stripped.split('=', 1)
-        key = key.strip()
-        if not key:
-            continue
-
-        value = raw_value.strip().strip('"').strip("'")
-        values[key] = value
-
-    return values
-
-
-ENV_VALUES = _load_env_file()
-
-
-def _get_env(name, default=''):
-    return os.environ.get(name, ENV_VALUES.get(name, default))
-
-
-def _get_int_env(name, default=0):
-    value = _get_env(name, '')
-    if value == '':
-        return default
-
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
+ENV_VALUES = load_env_file(BASE_DIR)
 
 
 # Quick-start development settings - unsuitable for production
@@ -197,7 +159,7 @@ OSM_PLACE_EXCLUDED_EXTERNAL_IDS = (
     'osm:way:410595933',
 )
 HERE_DISCOVERY_URL = 'https://discover.search.hereapi.com/v1/discover'
-HERE_API_KEY = _get_env('HERE_API_KEY', '')
+HERE_API_KEY = get_env('HERE_API_KEY', ENV_VALUES, '')
 HERE_TIMEOUT = 20
 HERE_CACHE_TIMEOUT = 3600
 HERE_PAGE_SIZE = 100
@@ -207,19 +169,19 @@ HERE_PLACE_EXCLUDED_BUSINESSES = (
     ('camarillo', 'Institution Ale Company'),
 )
 HERE_PLACE_EXCLUDED_EXTERNAL_IDS = ()
-HERE_MONTHLY_LIMIT = _get_int_env('HERE_MONTHLY_LIMIT', 250000)
-HERE_MONTHLY_RESERVE = _get_int_env('HERE_MONTHLY_RESERVE', 1000)
+HERE_MONTHLY_LIMIT = get_int_env('HERE_MONTHLY_LIMIT', ENV_VALUES, 250000)
+HERE_MONTHLY_RESERVE = get_int_env('HERE_MONTHLY_RESERVE', ENV_VALUES, 1000)
 TOMTOM_CATEGORY_SEARCH_URL = 'https://api.tomtom.com/search/2/categorySearch/{query}.json'
-TOMTOM_API_KEY = _get_env('TOMTOM_API_KEY', '')
+TOMTOM_API_KEY = get_env('TOMTOM_API_KEY', ENV_VALUES, '')
 TOMTOM_TIMEOUT = 20
 TOMTOM_CACHE_TIMEOUT = 3600
 TOMTOM_PAGE_SIZE = 100
 TOMTOM_MAX_RESULTS = 200
 TOMTOM_USER_AGENT = 'HappyHourApp/1.0'
-TOMTOM_DAILY_LIMIT = _get_int_env('TOMTOM_DAILY_LIMIT', 50000)
-TOMTOM_DAILY_RESERVE = _get_int_env('TOMTOM_DAILY_RESERVE', 250)
+TOMTOM_DAILY_LIMIT = get_int_env('TOMTOM_DAILY_LIMIT', ENV_VALUES, 50000)
+TOMTOM_DAILY_RESERVE = get_int_env('TOMTOM_DAILY_RESERVE', ENV_VALUES, 250)
 YELP_FUSION_API_URL = 'https://api.yelp.com/v3/businesses/search'
-YELP_FUSION_API_KEY = _get_env('YELP_FUSION_API_KEY', '')
+YELP_FUSION_API_KEY = get_env('YELP_FUSION_API_KEY', ENV_VALUES, '')
 YELP_FUSION_TIMEOUT = 20
 YELP_FUSION_CACHE_TIMEOUT = 3600
 YELP_FUSION_PAGE_SIZE = 50
@@ -280,9 +242,21 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 20,
 }
 
-EMAIL_BACKEND = _get_env('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
-DEFAULT_FROM_EMAIL = _get_env('DEFAULT_FROM_EMAIL', 'noreply@happyhourapp.local')
-PROFILE_EMAIL_VERIFICATION_URL_BASE = _get_env('PROFILE_EMAIL_VERIFICATION_URL_BASE', 'http://127.0.0.1:8000/api/profiles/verify-email')
-PROFILE_BILLING_PORTAL_URL = _get_env('PROFILE_BILLING_PORTAL_URL', 'https://example.com/billing')
+EMAIL_BACKEND = get_env('EMAIL_BACKEND', ENV_VALUES, 'django.core.mail.backends.console.EmailBackend')
+EMAIL_HOST = get_env('EMAIL_HOST', ENV_VALUES, get_env('BREVO_SMTP_HOST', ENV_VALUES, 'localhost'))
+EMAIL_PORT = get_int_env('EMAIL_PORT', ENV_VALUES, get_int_env('BREVO_SMTP_PORT', ENV_VALUES, 25))
+EMAIL_HOST_USER = get_env('EMAIL_HOST_USER', ENV_VALUES, get_env('BREVO_SMTP_USER', ENV_VALUES, ''))
+EMAIL_HOST_PASSWORD = get_env('EMAIL_HOST_PASSWORD', ENV_VALUES, get_env('BREVO_SMTP_KEY', ENV_VALUES, ''))
+EMAIL_USE_TLS = get_bool_env('EMAIL_USE_TLS', ENV_VALUES, False)
+EMAIL_USE_SSL = get_bool_env('EMAIL_USE_SSL', ENV_VALUES, False)
+EMAIL_TIMEOUT = get_int_env('EMAIL_TIMEOUT', ENV_VALUES, 20)
+DEFAULT_FROM_EMAIL = get_env('DEFAULT_FROM_EMAIL', ENV_VALUES, 'noreply@happyhourapp.local')
+SERVER_EMAIL = get_env('SERVER_EMAIL', ENV_VALUES, DEFAULT_FROM_EMAIL)
+
+PROFILE_EMAIL_VERIFICATION_URL_BASE = get_env('PROFILE_EMAIL_VERIFICATION_URL_BASE', ENV_VALUES, 'http://127.0.0.1:8000/api/profiles/verify-email')
+PROFILE_EMAIL_VERIFICATION_SUCCESS_URL = get_env('PROFILE_EMAIL_VERIFICATION_SUCCESS_URL', ENV_VALUES, '')
+PROFILE_EMAIL_VERIFICATION_FAILURE_URL = get_env('PROFILE_EMAIL_VERIFICATION_FAILURE_URL', ENV_VALUES, '')
+PROFILE_EMAIL_VERIFICATION_RETURN_URL = get_env('PROFILE_EMAIL_VERIFICATION_RETURN_URL', ENV_VALUES, '')
+PROFILE_BILLING_PORTAL_URL = get_env('PROFILE_BILLING_PORTAL_URL', ENV_VALUES, 'https://example.com/billing')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

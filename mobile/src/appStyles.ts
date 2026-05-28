@@ -494,7 +494,7 @@ export const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   searchClearButtonText: {
-    color: '#1f5f5b',
+    color: '#9e5b49',
     fontSize: 13,
     fontWeight: '700',
   },
@@ -573,7 +573,7 @@ export const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   browseSectionTitle: {
-    color: '#402214',
+    color: '#8f6438',
     fontSize: 14,
     fontWeight: '800',
   },
@@ -583,13 +583,13 @@ export const styles = StyleSheet.create({
     fontWeight: '600',
   },
   browseSectionAction: {
-    color: '#1f5f5b',
+    color: '#9e5b49',
     fontSize: 12,
     fontWeight: '700',
   },
   reloadButton: {
     alignItems: 'center',
-    backgroundColor: '#1f5f5b',
+    backgroundColor: '#9e5b49',
     borderRadius: 14,
     height: 44,
     justifyContent: 'center',
@@ -647,8 +647,8 @@ export const styles = StyleSheet.create({
     width: '100%',
   },
   mapThemeToggleButtonActive: {
-    backgroundColor: '#2d403f',
-    borderColor: '#2d403f',
+    backgroundColor: '#9e5b49',
+    borderColor: '#9e5b49',
   },
   mapThemeToggleButtonText: {
     color: '#5d4637',
@@ -696,8 +696,8 @@ export const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   authPortalButtonActive: {
-    backgroundColor: '#1f5f5b',
-    borderColor: '#1f5f5b',
+    backgroundColor: '#9e5b49',
+    borderColor: '#9e5b49',
   },
   authPortalButtonText: {
     color: '#5d4637',
@@ -730,7 +730,7 @@ export const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 247, 239, 0.98)',
   },
   modeSwitcherThumb: {
-    backgroundColor: '#1f5f5b',
+    backgroundColor: '#9e5b49',
     borderRadius: 999,
     bottom: 4,
     left: 4,
@@ -760,8 +760,8 @@ export const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   filterChipActive: {
-    backgroundColor: '#402214',
-    borderColor: '#402214',
+    backgroundColor: '#9e5b49',
+    borderColor: '#9e5b49',
   },
   filterChipText: {
     color: '#5d4637',
@@ -778,8 +778,8 @@ export const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   overlayChipActive: {
-    backgroundColor: '#402214',
-    borderColor: '#402214',
+    backgroundColor: '#9e5b49',
+    borderColor: '#9e5b49',
   },
   overlayChipText: {
     color: '#5d4637',
@@ -807,8 +807,8 @@ export const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   venueFilterChipActive: {
-    backgroundColor: '#402214',
-    borderColor: '#402214',
+    backgroundColor: '#9e5b49',
+    borderColor: '#9e5b49',
   },
   venueFilterBadge: {
     alignItems: 'center',
@@ -865,7 +865,7 @@ export const styles = StyleSheet.create({
     flex: 1,
   },
   placeCity: {
-    color: '#c65d1f',
+    color: '#b07a3f',
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.8,
@@ -932,7 +932,7 @@ export const styles = StyleSheet.create({
     width: '100%',
   },
   detailCity: {
-    color: '#c65d1f',
+    color: '#b07a3f',
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.8,
@@ -958,7 +958,7 @@ export const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   detailLinkText: {
-    color: '#1f5f5b',
+    color: '#9e5b49',
     fontSize: 14,
     fontWeight: '700',
     marginTop: 4,
@@ -1026,7 +1026,7 @@ export const styles = StyleSheet.create({
   },
   linkButton: {
     alignSelf: 'flex-start',
-    backgroundColor: '#1f5f5b',
+    backgroundColor: '#9e5b49',
     borderRadius: 14,
     marginTop: 14,
     paddingHorizontal: 14,
@@ -1039,7 +1039,7 @@ export const styles = StyleSheet.create({
   linkButtonSecondary: {
     alignSelf: 'flex-start',
     backgroundColor: '#fff7ef',
-    borderColor: '#1f5f5b',
+    borderColor: '#9e5b49',
     borderRadius: 14,
     borderWidth: 1,
     marginTop: 10,
@@ -1047,7 +1047,7 @@ export const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   linkButtonSecondaryText: {
-    color: '#1f5f5b',
+    color: '#9e5b49',
     fontWeight: '700',
   },
   dealCard: {
@@ -1075,12 +1075,12 @@ export const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   pillText: {
-    color: '#7f461f',
+    color: '#9a6a34',
     fontSize: 12,
     fontWeight: '700',
   },
   dealPrice: {
-    color: '#bf4d0f',
+    color: '#b07a3f',
     fontSize: 15,
     fontWeight: '700',
     marginTop: 10,
@@ -1109,7 +1109,7 @@ export const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   hourGroupDays: {
-    color: '#7f461f',
+    color: '#9a6a34',
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.4,
@@ -1149,21 +1149,12 @@ export const styles = StyleSheet.create({
   },
   splashLogoShell: {
     alignItems: 'center',
-    backgroundColor: '#1f5f5b',
-    borderRadius: 36,
-    height: 112,
     justifyContent: 'center',
-    shadowColor: '#1b443f',
-    shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-    width: 112,
+    marginBottom: 6,
   },
-  splashLogoText: {
-    color: '#effffd',
-    fontSize: 38,
-    fontWeight: '800',
-    letterSpacing: 2,
+  splashLogoImage: {
+    height: 240,
+    width: 240,
   },
   splashTitle: {
     color: '#2d221a',
@@ -1198,17 +1189,12 @@ export const styles = StyleSheet.create({
   },
   authLogoShell: {
     alignItems: 'center',
-    backgroundColor: '#1f5f5b',
-    borderRadius: 28,
-    height: 84,
     justifyContent: 'center',
-    width: 84,
+    marginBottom: 4,
   },
-  authLogoText: {
-    color: '#effffd',
-    fontSize: 30,
-    fontWeight: '800',
-    letterSpacing: 1.5,
+  authLogoImage: {
+    height: 112,
+    width: 112,
   },
   authTitle: {
     color: '#2d221a',
@@ -1232,7 +1218,7 @@ export const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   authLinkText: {
-    color: '#1f5f5b',
+    color: '#9e5b49',
     fontSize: 14,
     fontWeight: '700',
     textAlign: 'center',
@@ -1280,15 +1266,15 @@ export const styles = StyleSheet.create({
     lineHeight: 20,
   },
   profileSuccessBanner: {
-    backgroundColor: '#e7f6f4',
-    borderColor: '#9dcfc9',
+    backgroundColor: '#f5ebe2',
+    borderColor: '#dfc3af',
     borderRadius: 16,
     borderWidth: 1,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   profileSuccessText: {
-    color: '#17413e',
+    color: '#8d6042',
     fontSize: 13,
     fontWeight: '700',
   },
@@ -1325,7 +1311,7 @@ export const styles = StyleSheet.create({
     paddingVertical: 9,
   },
   compactDropdownButtonOpen: {
-    borderColor: '#1f5f5b',
+    borderColor: '#9e5b49',
   },
   compactDropdownText: {
     color: '#2d221a',
@@ -1353,7 +1339,7 @@ export const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   compactDropdownOptionSelected: {
-    backgroundColor: '#e7f6f4',
+    backgroundColor: '#f5ebe2',
   },
   compactDropdownOptionText: {
     color: '#2d221a',
@@ -1361,7 +1347,7 @@ export const styles = StyleSheet.create({
     lineHeight: 18,
   },
   compactDropdownOptionTextSelected: {
-    color: '#17413e',
+    color: '#8d6042',
     fontWeight: '700',
   },
   profileSupportText: {
@@ -1385,7 +1371,7 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     alignSelf: 'stretch',
     backgroundColor: '#fff7ef',
-    borderColor: '#1f5f5b',
+    borderColor: '#9e5b49',
     borderRadius: 14,
     borderWidth: 1,
     marginTop: 10,
@@ -1429,20 +1415,20 @@ export const styles = StyleSheet.create({
     lineHeight: 18,
   },
   dashboardVerifiedCard: {
-    backgroundColor: '#e7f6f4',
-    borderColor: '#9dcfc9',
+    backgroundColor: '#f5ebe2',
+    borderColor: '#dfc3af',
     borderRadius: 18,
     borderWidth: 1,
     gap: 8,
     padding: 14,
   },
   dashboardVerifiedTitle: {
-    color: '#17413e',
+    color: '#8d6042',
     fontSize: 16,
     fontWeight: '800',
   },
   dashboardVerifiedText: {
-    color: '#17413e',
+    color: '#8d6042',
     fontSize: 13,
     lineHeight: 18,
   },
@@ -1495,8 +1481,8 @@ export const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   toggleChipActive: {
-    backgroundColor: '#1f5f5b',
-    borderColor: '#1f5f5b',
+    backgroundColor: '#9e5b49',
+    borderColor: '#9e5b49',
   },
   toggleChipText: {
     color: '#7a4d2f',

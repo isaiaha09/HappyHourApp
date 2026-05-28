@@ -259,6 +259,7 @@ function AppScreen() {
   const [browseEntryOffset, setBrowseEntryOffset] = useState(0);
   const [renderedMappedPlaces, setRenderedMappedPlaces] = useState<MappedPlace[]>([]);
   const [renderedMappedPlaceKey, setRenderedMappedPlaceKey] = useState('');
+  const authenticatedSessionRef = useRef<SignupResponse | null>(null);
   const shouldUseNativeMapBoundaries = false;
   const normalizedSearchQuery = normalizeSearchText(searchQuery);
   const onboardingTransitionDuration = 480;
@@ -304,6 +305,10 @@ function AppScreen() {
     mapRegionRef.current = mapRegion;
   }, [mapRegion]);
 
+  useEffect(() => {
+    authenticatedSessionRef.current = authenticatedSession;
+  }, [authenticatedSession]);
+
   const mapSearchResultPool = normalizedSearchQuery.length ? displayedMapPlaces : [];
   const mapSearchResultsKey = mapSearchResultPool.map((place) => place.markerKey).join('|');
   const mapOverlayBottomPadding = Math.max(insets.bottom + 12, 20);
@@ -348,6 +353,24 @@ function AppScreen() {
     clearAutoFitMapRegionTimer();
     clearMapMarkersTrackViewChangesTimer();
   }, []);
+
+  useEffect(() => {
+    async function handleInitialUrl() {
+      const initialUrl = await Linking.getInitialURL();
+      if (initialUrl) {
+        await handleAppUrl(initialUrl);
+      }
+    }
+
+    void handleInitialUrl();
+    const subscription = Linking.addEventListener('url', (event) => {
+      void handleAppUrl(event.url);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [apiBaseUrl]);
   const availableClaimPlaces = consolidatePlacesBySlug(availableProfilePlaces);
   const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'business-search', 'business-claim', 'manual-business-claim']);
   const currentOnboardingScreen = onboardingScreenKeys.has(screenMode) ? screenMode : null;
@@ -518,6 +541,55 @@ function AppScreen() {
   const useWideLandscapeLayout = isLandscape && width >= 760;
   const browseListColumns = useWideLandscapeLayout ? 2 : 1;
   const normalizedBusinessSearchQuery = normalizeSearchText(businessSearchQuery);
+
+  async function handleAppUrl(url: string) {
+    const normalizedUrl = url.trim();
+    if (!normalizedUrl) {
+      return;
+    }
+
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(normalizedUrl);
+    } catch {
+      return;
+    }
+
+    const route = `${parsedUrl.host}${parsedUrl.pathname}`.replace(/^\/+|\/+$/g, '').toLowerCase();
+    if (route !== 'email-verification') {
+      return;
+    }
+
+    const status = (parsedUrl.searchParams.get('status') ?? '').trim().toLowerCase();
+    if (status === 'success') {
+      setProfileErrorMessage(null);
+      setAuthMessage(null);
+      setProfileMessage('Email verified successfully.');
+
+      const currentSession = authenticatedSessionRef.current;
+      if (currentSession?.auth_token) {
+        try {
+          const response = await fetchProfileDashboard(apiBaseUrl, currentSession.auth_token, currentSession.portal);
+          setAuthenticatedSession(response);
+          setScreenMode('profiles');
+        } catch (error) {
+          setProfileErrorMessage(getErrorMessage(error));
+        }
+      } else {
+        setScreenMode('auth');
+        setAuthMessage('Email verified successfully. Sign in to continue.');
+      }
+      return;
+    }
+
+    if (status === 'failure') {
+      setProfileMessage(null);
+      setProfileErrorMessage('Verification link is invalid or expired. Request a new verification email and try again.');
+      if (!authenticatedSessionRef.current) {
+        setScreenMode('auth');
+      }
+    }
+  }
   const nextMapResultsIncrement = getMapResultsIncrement(renderedMapResultCount);
   const businessSearchResults = normalizedBusinessSearchQuery.length
     ? availableClaimPlaces

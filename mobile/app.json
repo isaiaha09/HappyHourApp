@@ -3,28 +3,27 @@
     "name": "HappyHourApp",
     "slug": "happy-hour-app",
     "version": "1.0.0",
+    "scheme": "diningdealz",
     "orientation": "default",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/DiningDealz-Icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/DiningDealz-Logo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#f7efe2"
+      "backgroundColor": "#080101"
     },
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#080101",
+        "foregroundImage": "./assets/DiningDealz-Icon.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/DiningDealz-Icon.png"
     }
   }
 }

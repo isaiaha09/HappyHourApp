@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.core.mail import send_mail
+from django.utils.html import escape
 from django.utils import timezone
 
 from places.models import AccountProfile, BusinessClaim, ProfileAuthToken
@@ -104,6 +105,12 @@ def send_verification_email(user, profile):
 	profile.save(update_fields=['email_verification_token', 'email_verification_sent_at', 'updated_at'])
 	verification_base = str(getattr(settings, 'PROFILE_EMAIL_VERIFICATION_URL_BASE', '') or '').rstrip('/')
 	verification_url = f'{verification_base}/{token}/'
+	html_message = (
+		f'<p>Hi {escape(user.first_name or user.username)},</p>'
+		'<p>Please verify your email for HappyHourApp by opening the link below.</p>'
+		f'<p><a href="{escape(verification_url)}">Verify your email</a></p>'
+		'<p>If you did not create this account, you can ignore this email.</p>'
+	)
 	send_mail(
 		subject='Verify your HappyHourApp email',
 		message=(
@@ -111,6 +118,7 @@ def send_verification_email(user, profile):
 			f'Please verify your email for HappyHourApp by opening this link:\n{verification_url}\n\n'
 			'If you did not create this account, you can ignore this email.'
 		),
+		html_message=html_message,
 		from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@happyhourapp.local'),
 		recipient_list=[user.email],
 		fail_silently=False,
