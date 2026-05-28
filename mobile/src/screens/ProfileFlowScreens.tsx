@@ -1,7 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
-  Image,
   KeyboardAvoidingView,
   LayoutAnimation,
   Platform,
@@ -16,7 +15,6 @@ import { styles } from '../appStyles';
 import type { AuthPortal, LoginFormState, ProfileFormState } from '../appFlowTypes';
 import { manualBusinessCityOptions, manualBusinessVenueOptions } from '../browseConfig';
 import { formatPlaceAddress, getPlaceLocations, normalizeSearchText } from '../placeHelpers';
-import { BrandHero } from './SplashScreen';
 import type { PlaceListItem, PlaceLocation } from '../types';
 
 type CompactDropdownProps = {
@@ -30,6 +28,7 @@ type CompactDropdownProps = {
 
 export type AuthPortalScreenProps = {
   authMessage: string | null;
+  autoFocusIdentifier: boolean;
   errorMessage: string | null;
   loginForm: LoginFormState;
   loginPortal: AuthPortal;
@@ -148,7 +147,7 @@ function CompactDropdown({ onSelect, open, options, placeholder, selectedValue, 
   );
 }
 
-export function AuthPortalScreen({ authMessage, errorMessage, loginForm, loginPortal, onBackToLanding, onChangeField, onForgotPassword, onForgotUsername, onSubmit, showTwoFactorCodeField, submitting }: AuthPortalScreenProps) {
+export function AuthPortalScreen({ authMessage, autoFocusIdentifier, errorMessage, loginForm, loginPortal, onBackToLanding, onChangeField, onForgotPassword, onForgotUsername, onSubmit, showTwoFactorCodeField, submitting }: AuthPortalScreenProps) {
   return (
     <View style={styles.authScreen}>
       <KeyboardAwareFormScreen>
@@ -162,11 +161,7 @@ export function AuthPortalScreen({ authMessage, errorMessage, loginForm, loginPo
             <Text style={styles.backButtonText}>Back</Text>
           </Pressable>
 
-          <View style={styles.authHero}>
-            <BrandHero />
-          </View>
-
-          <View style={styles.profileCard}>
+          <View style={styles.authFormStack}>
             <Text style={styles.detailCity}>{loginPortal === 'customer' ? 'Customer Login' : 'Business Login'}</Text>
             <Text style={styles.detailTitle}>Welcome back</Text>
             <Text style={styles.profileIntroText}>Enter your username or email and password to continue.</Text>
@@ -184,7 +179,7 @@ export function AuthPortalScreen({ authMessage, errorMessage, loginForm, loginPo
             ) : null}
 
             <Text style={styles.profileFieldLabel}>Username or Email</Text>
-            <TextInput autoCapitalize="none" onChangeText={(value) => onChangeField('identifier', value)} style={styles.profileInput} value={loginForm.identifier} />
+            <TextInput autoCapitalize="none" autoFocus={autoFocusIdentifier} onChangeText={(value) => onChangeField('identifier', value)} style={styles.profileInput} value={loginForm.identifier} />
 
             <Text style={styles.profileFieldLabel}>Password</Text>
             <TextInput onChangeText={(value) => onChangeField('password', value)} secureTextEntry style={styles.profileInput} value={loginForm.password} />

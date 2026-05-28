@@ -204,6 +204,7 @@ function AppScreen() {
   const [authPortal, setAuthPortal] = useState<AuthPortal>('customer');
   const [loginForm, setLoginForm] = useState<LoginFormState>(initialLoginFormState);
   const [showLoginTwoFactorCodeField, setShowLoginTwoFactorCodeField] = useState(false);
+  const [shouldAutoFocusLoginField, setShouldAutoFocusLoginField] = useState(false);
   const [loginSubmitting, setLoginSubmitting] = useState(false);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [twoFactorSetup, setTwoFactorSetup] = useState<TwoFactorSetupResponse | null>(null);
@@ -1485,6 +1486,7 @@ function AppScreen() {
     setAuthPortal(portal);
     setAuthMessage(null);
     setProfileErrorMessage(null);
+    setShouldAutoFocusLoginField(true);
     setShowLoginTwoFactorCodeField(false);
     setLoginForm(initialLoginFormState);
     navigateScreen('auth', 'forward');
@@ -1494,6 +1496,7 @@ function AppScreen() {
     dismissKeyboardForScreenTransition();
     setAuthMessage(null);
     setProfileErrorMessage(null);
+    setShouldAutoFocusLoginField(false);
     setShowLoginTwoFactorCodeField(false);
     setLoginForm(initialLoginFormState);
     navigateScreen('splash', 'backward');
@@ -1840,6 +1843,7 @@ function AppScreen() {
     setProfileMessage(null);
     setProfileErrorMessage(null);
     setAuthMessage('You have been signed out.');
+    setShouldAutoFocusLoginField(false);
     setTwoFactorSetup(null);
     setTwoFactorSetupCode('');
     setTwoFactorDisableCode('');
@@ -1973,7 +1977,7 @@ function AppScreen() {
     const profileSession = profileSessionOverride ?? authenticatedSession;
 
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
         {profileSession ? (
           <DashboardScreen
             errorMessage={profileErrorMessage}
@@ -2081,15 +2085,16 @@ function AppScreen() {
     switch (targetScreen) {
       case 'splash':
         return (
-          <SafeAreaView style={styles.safeArea}>
+          <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
             <SplashScreen onCreateAccount={handleOpenProfiles} onSelectPortal={handleOpenAuthFromLanding} />
           </SafeAreaView>
         );
       case 'auth':
         return (
-          <SafeAreaView style={styles.safeArea}>
+          <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
             <AuthPortalScreen
               authMessage={authMessage}
+              autoFocusIdentifier={shouldAutoFocusLoginField}
               errorMessage={profileErrorMessage}
               loginForm={loginForm}
               loginPortal={authPortal}
@@ -2107,7 +2112,7 @@ function AppScreen() {
         return renderProfilesScreen(profileSessionOverride);
       case 'business-search':
         return (
-          <SafeAreaView style={styles.safeArea}>
+          <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
             <BusinessSearchScreen
               errorMessage={profileErrorMessage}
               isLandscape={isLandscape}
@@ -2123,7 +2128,7 @@ function AppScreen() {
         );
       case 'business-claim':
         return (
-          <SafeAreaView style={styles.safeArea}>
+          <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
             <BusinessVerificationScreen
               errorMessage={profileErrorMessage}
               form={profileForm}
@@ -2141,7 +2146,7 @@ function AppScreen() {
         );
       case 'manual-business-claim':
         return (
-          <SafeAreaView style={styles.safeArea}>
+          <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
             <BusinessVerificationScreen
               errorMessage={profileErrorMessage}
               form={profileForm}

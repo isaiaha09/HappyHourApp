@@ -4,7 +4,7 @@
     "slug": "happy-hour-app",
     "version": "1.0.0",
     "scheme": "diningdealz",
-    "orientation": "default",
+    "orientation": "portrait",
     "icon": "./assets/DiningDealz-Icon.png",
     "userInterfaceStyle": "light",
     "splash": {

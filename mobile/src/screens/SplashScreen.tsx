@@ -108,17 +108,17 @@ export function SplashScreen({ onCreateAccount, onSelectPortal }: SplashScreenPr
   return (
     <View style={styles.splashScreen}>
       <BrandHero animateSlogan />
-      <View style={styles.splashActionCard}>
+      <View style={styles.splashActionGroup}>
         <View style={styles.modeRow}>
-          <Pressable onPress={() => onSelectPortal('customer')} style={styles.authPortalButton}>
-            <Text style={styles.authPortalButtonText}>Customer</Text>
+          <Pressable onPress={() => onSelectPortal('customer')} style={styles.splashPortalButton}>
+            <Text style={styles.splashPortalButtonText}>Customer</Text>
           </Pressable>
-          <Pressable onPress={() => onSelectPortal('business')} style={styles.authPortalButton}>
-            <Text style={styles.authPortalButtonText}>Business</Text>
+          <Pressable onPress={() => onSelectPortal('business')} style={styles.splashPortalButton}>
+            <Text style={styles.splashPortalButtonText}>Business</Text>
           </Pressable>
         </View>
-        <Pressable onPress={onCreateAccount} style={styles.authLinkButton}>
-          <Text style={styles.authLinkText}>Don&apos;t have an account? Create a free account here.</Text>
+        <Pressable onPress={onCreateAccount} style={styles.splashCreateAccountLink}>
+          <Text style={styles.splashCreateAccountText}>Don&apos;t have an account? Create a free account here.</Text>
         </Pressable>
       </View>
     </View>
