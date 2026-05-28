@@ -1291,6 +1291,28 @@ export const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
   },
+  authRecoveryPanel: {
+    backgroundColor: '#fff7ef',
+    borderColor: '#efd8bd',
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 10,
+    padding: 14,
+  },
+  authRecoveryPanelActions: {
+    gap: 10,
+  },
+  authRecoveryDismissButton: {
+    alignSelf: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  authRecoveryDismissText: {
+    color: '#9e5b49',
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
   authLinkText: {
     color: '#9e5b49',
     fontSize: 14,
@@ -1559,6 +1581,27 @@ export const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1.2,
   },
+  dashboardCodeActionButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#fff7ef',
+    borderColor: '#ddc4a7',
+    borderRadius: 999,
+    borderWidth: 1,
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  dashboardCodeActionText: {
+    color: '#5d4637',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  dashboardCodeHelpText: {
+    color: '#6c5443',
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 10,
+  },
   dashboardQrCard: {
     alignItems: 'center',
     backgroundColor: '#fffaf4',
@@ -1570,14 +1613,28 @@ export const styles = StyleSheet.create({
     paddingVertical: 18,
   },
   dashboardQrImage: {
+    alignItems: 'center',
     borderRadius: 12,
     height: 180,
+    justifyContent: 'center',
     width: 180,
+  },
+  dashboardQrMatrix: {
+    alignItems: 'stretch',
+    backgroundColor: '#fffaf4',
+    padding: 8,
+  },
+  dashboardQrMatrixRow: {
+    flexDirection: 'row',
+  },
+  dashboardQrMatrixCell: {
+    backgroundColor: '#fffaf4',
   },
   dashboardQrLoadingState: {
     alignItems: 'center',
     height: 180,
     justifyContent: 'center',
+    paddingHorizontal: 12,
     width: 180,
   },
   dashboardQrMeta: {

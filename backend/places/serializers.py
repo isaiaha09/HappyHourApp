@@ -42,9 +42,7 @@ class LoginSerializer(serializers.Serializer):
 		identifier = attrs['identifier'].strip()
 		user = User.objects.filter(username__iexact=identifier).first()
 		if user is None:
-			user = User.objects.filter(email__iexact=identifier.lower()).first()
-		if user is None:
-			raise serializers.ValidationError('No account matches that username or email.')
+			raise serializers.ValidationError('No account matches that username.')
 
 		authenticated_user = authenticate(username=user.username, password=attrs['password'])
 		if authenticated_user is None:

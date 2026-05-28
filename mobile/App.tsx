@@ -1594,10 +1594,10 @@ function AppScreen() {
     }
   }
 
-  async function handleForgotUsername() {
-    const email = loginForm.identifier.trim();
-    if (!email) {
-      setProfileErrorMessage('Enter your email address in the Username or Email field first.');
+  async function handleForgotUsername(email: string) {
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) {
+	  setProfileErrorMessage('Enter the email address for your account.');
       return;
     }
 
@@ -1605,7 +1605,7 @@ function AppScreen() {
     setProfileErrorMessage(null);
 
     try {
-      const response = await requestUsernameReminder(apiBaseUrl, email);
+      const response = await requestUsernameReminder(apiBaseUrl, normalizedEmail);
       setAuthMessage(response.detail);
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
@@ -1614,10 +1614,10 @@ function AppScreen() {
     }
   }
 
-  async function handleForgotPassword() {
-    const identifier = loginForm.identifier.trim();
-    if (!identifier) {
-      setProfileErrorMessage('Enter your username or email in the Username or Email field first.');
+  async function handleForgotPassword(identifier: string) {
+    const normalizedIdentifier = identifier.trim();
+    if (!normalizedIdentifier) {
+	  setProfileErrorMessage('Enter your username or email for password recovery.');
       return;
     }
 
@@ -1625,7 +1625,7 @@ function AppScreen() {
     setProfileErrorMessage(null);
 
     try {
-      const response = await requestPasswordReset(apiBaseUrl, identifier);
+      const response = await requestPasswordReset(apiBaseUrl, normalizedIdentifier);
       setAuthMessage(response.detail);
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
@@ -2100,8 +2100,8 @@ function AppScreen() {
               loginPortal={authPortal}
               onBackToLanding={handleBackToLanding}
               onChangeField={handleChangeLoginField}
-              onForgotPassword={() => void handleForgotPassword()}
-              onForgotUsername={() => void handleForgotUsername()}
+              onForgotPassword={(identifier) => void handleForgotPassword(identifier)}
+	          onForgotUsername={(email) => void handleForgotUsername(email)}
               onSubmit={handleLogin}
               showTwoFactorCodeField={showLoginTwoFactorCodeField}
               submitting={loginSubmitting}

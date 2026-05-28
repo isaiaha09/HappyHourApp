@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
+import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { styles } from '../appStyles';
 import type { SignupResponse, TwoFactorSetupResponse } from '../types';
@@ -36,39 +37,76 @@ function DashboardDetailRow({ label, value }: { label: string; value: string }) 
   );
 }
 
+type QrMatrix = {
+  cells: boolean[][];
+  moduleSize: number;
+};
+
 export function DashboardScreen({ errorMessage, isLandscape, loading, message, onBack, onBeginTwoFactorSetup, onChangeTwoFactorDisableCode, onChangeTwoFactorSetupCode, onConfirmTwoFactorSetup, onDisableTwoFactor, onLogout, onOpenBilling, onOpenPlaces, onRefresh, onResendVerification, session, submitting, twoFactorDisableCode, twoFactorSetup, twoFactorSetupCode }: DashboardScreenProps) {
   const approvedBusinesses = session.approved_businesses ?? [];
   const businessContact = session.business_contact ?? {};
   const fullName = [session.first_name, session.last_name].filter(Boolean).join(' ');
-  const [twoFactorQrCodeUri, setTwoFactorQrCodeUri] = useState<string | null>(null);
+  const [twoFactorQrMatrix, setTwoFactorQrMatrix] = useState<QrMatrix | null>(null);
+  const [twoFactorQrLoadFailed, setTwoFactorQrLoadFailed] = useState(false);
+  const [twoFactorKeyCopied, setTwoFactorKeyCopied] = useState(false);
+
+  async function handleOpenAuthenticatorApp() {
+    if (!twoFactorSetup?.otpauth_url) {
+      return;
+    }
+
+    try {
+      await Linking.openURL(twoFactorSetup.otpauth_url);
+    } catch {
+      // Leave the manual key visible as the fallback path when no authenticator app handles the scheme.
+    }
+  }
+
+  async function handleCopyManualKey() {
+    if (!twoFactorSetup?.manual_entry_key) {
+      return;
+    }
+
+    try {
+      await Clipboard.setStringAsync(twoFactorSetup.manual_entry_key);
+      setTwoFactorKeyCopied(true);
+    } catch {
+      setTwoFactorKeyCopied(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadQrCode() {
       if (!twoFactorSetup?.otpauth_url) {
-        setTwoFactorQrCodeUri(null);
+        setTwoFactorQrMatrix(null);
+        setTwoFactorQrLoadFailed(false);
+        setTwoFactorKeyCopied(false);
         return;
       }
 
+      setTwoFactorQrMatrix(null);
+      setTwoFactorQrLoadFailed(false);
+      setTwoFactorKeyCopied(false);
+
       try {
         const { default: QRCode } = await import('qrcode');
-        const dataUri = await QRCode.toDataURL(twoFactorSetup.otpauth_url, {
+        const qrCode = QRCode.create(twoFactorSetup.otpauth_url, {
           errorCorrectionLevel: 'M',
-          margin: 1,
-          width: 512,
-          color: {
-            dark: '#2d221a',
-            light: '#fffaf4',
-          },
         });
+        const moduleCount = qrCode.modules.size;
+        const moduleSize = Math.max(4, Math.floor(156 / moduleCount));
+        const cells = Array.from({ length: moduleCount }, (_, rowIndex) => (
+          Array.from({ length: moduleCount }, (_, columnIndex) => Boolean(qrCode.modules.get(rowIndex, columnIndex)))
+        ));
 
         if (!cancelled) {
-          setTwoFactorQrCodeUri(dataUri);
+          setTwoFactorQrMatrix({ cells, moduleSize });
         }
       } catch {
         if (!cancelled) {
-          setTwoFactorQrCodeUri(null);
+          setTwoFactorQrLoadFailed(true);
         }
       }
     }
@@ -82,7 +120,15 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
 
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
-      <ScrollView contentContainerStyle={styles.dashboardScrollContent} showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardAvoidingFill}
+      >
+        <ScrollView
+          contentContainerStyle={styles.dashboardScrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
         <Pressable onPress={onBack} style={styles.backButton}>
           <Text style={styles.backButtonText}>Back to places</Text>
         </Pressable>
@@ -148,11 +194,44 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
               </>
             ) : twoFactorSetup ? (
               <>
-                <Text style={styles.dashboardSupportText}>Scan this QR code with your authenticator app. If you are setting this up on the same phone, use the manual key below instead.</Text>
+                <Text style={styles.dashboardSupportText}>Scan this QR code with your authenticator app.</Text>
                 {twoFactorSetup.otpauth_url ? (
                   <View style={styles.dashboardQrCard}>
-                    {twoFactorQrCodeUri ? (
-                      <Image source={{ uri: twoFactorQrCodeUri }} style={styles.dashboardQrImage} />
+                    {twoFactorQrMatrix ? (
+                      <View style={styles.dashboardQrImage}>
+                        <View
+                          style={[
+                            styles.dashboardQrMatrix,
+                            {
+                              height: twoFactorQrMatrix.cells.length * twoFactorQrMatrix.moduleSize,
+                              width: twoFactorQrMatrix.cells.length * twoFactorQrMatrix.moduleSize,
+                            },
+                          ]}
+                        >
+                          {twoFactorQrMatrix.cells.map((row, rowIndex) => (
+                            <View key={`qr-row-${rowIndex}`} style={styles.dashboardQrMatrixRow}>
+                              {row.map((isDark, columnIndex) => (
+                                <View
+                                  key={`qr-cell-${rowIndex}-${columnIndex}`}
+                                  style={[
+                                    styles.dashboardQrMatrixCell,
+                                    {
+                                      backgroundColor: isDark ? '#2d221a' : '#fffaf4',
+                                      height: twoFactorQrMatrix.moduleSize,
+                                      width: twoFactorQrMatrix.moduleSize,
+                                    },
+                                  ]}
+                                />
+                              ))}
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    ) : twoFactorQrLoadFailed ? (
+                      <View style={styles.dashboardQrLoadingState}>
+                        <Text style={styles.dashboardQrSubtitle}>QR code could not be rendered on this device.</Text>
+                        <Text style={styles.dashboardQrSubtitle}>Use the manual setup key below instead.</Text>
+                      </View>
                     ) : (
                       <View style={styles.dashboardQrLoadingState}>
                         <ActivityIndicator color="#c65d1f" size="small" />
@@ -163,11 +242,18 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
                       <Text style={styles.dashboardQrTitle}>{twoFactorSetup.issuer}</Text>
                       <Text style={styles.dashboardQrSubtitle}>{twoFactorSetup.account_name}</Text>
                     </View>
+                    <Pressable onPress={() => void handleOpenAuthenticatorApp()} style={styles.linkButtonSecondaryWide}>
+                      <Text style={styles.linkButtonSecondaryText}>Open in authenticator app</Text>
+                    </Pressable>
                   </View>
                 ) : null}
                 <View style={styles.dashboardCodeCard}>
                   <Text style={styles.dashboardCodeLabel}>Manual setup key</Text>
                   <Text style={styles.dashboardCodeValue}>{twoFactorSetup.manual_entry_key}</Text>
+                  <Pressable onPress={() => void handleCopyManualKey()} style={styles.dashboardCodeActionButton}>
+                    <Text style={styles.dashboardCodeActionText}>{twoFactorKeyCopied ? 'Copied' : 'Copy key'}</Text>
+                  </Pressable>
+                  <Text style={styles.dashboardCodeHelpText}>Copy the key manually, set it up in your authenticator app, and paste the 6-digit code in the line below.</Text>
                 </View>
                 <TextInput keyboardType="number-pad" onChangeText={onChangeTwoFactorSetupCode} style={styles.profileInput} value={twoFactorSetupCode} />
                 <Pressable onPress={onConfirmTwoFactorSetup} style={[styles.linkButtonSecondaryWide, submitting ? styles.linkButtonDisabled : null]}>
@@ -237,7 +323,8 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
             </Pressable>
           </View>
         </View>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }

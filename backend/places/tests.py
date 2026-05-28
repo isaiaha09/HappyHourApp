@@ -2716,7 +2716,7 @@ class ProfileSignupApiTests(APITestCase):
 			reverse('profile-login'),
 			{
 				'portal': 'customer',
-				'identifier': 'secure-login@example.com',
+				'identifier': 'secure_login',
 				'password': 'test-pass-123',
 				'two_factor_code': pyotp.TOTP(secret).now(),
 			},
@@ -2725,6 +2725,22 @@ class ProfileSignupApiTests(APITestCase):
 
 		self.assertEqual(response.status_code, 200)
 		self.assertTrue(response.data['auth_token'])
+
+	def test_login_rejects_email_identifier(self):
+		user = User.objects.create_user(username='email_login_user', email='email-login@example.com', password='test-pass-123')
+
+		response = self.client.post(
+			reverse('profile-login'),
+			{
+				'portal': 'customer',
+				'identifier': user.email,
+				'password': 'test-pass-123',
+			},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, 400)
+		self.assertEqual(response.data['non_field_errors'][0], 'No account matches that username.')
 
 
 @override_settings(
