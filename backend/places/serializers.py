@@ -1,5 +1,7 @@
+from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils.text import slugify
 from rest_framework import serializers
 
@@ -27,12 +29,14 @@ class AccountResponseSerializer(serializers.Serializer):
 	approved_businesses = serializers.ListField(child=serializers.DictField(), required=False)
 	business_contact = serializers.DictField(required=False)
 	can_access_places = serializers.BooleanField(required=False)
+	two_factor_pending_setup = serializers.BooleanField(required=False)
 
 
 class LoginSerializer(serializers.Serializer):
 	portal = serializers.ChoiceField(choices=['customer', 'business'])
 	identifier = serializers.CharField(max_length=150)
 	password = serializers.CharField(write_only=True, style={'input_type': 'password'})
+	two_factor_code = serializers.CharField(max_length=12, required=False, allow_blank=True, write_only=True)
 
 	def validate(self, attrs):
 		identifier = attrs['identifier'].strip()
@@ -51,8 +55,61 @@ class LoginSerializer(serializers.Serializer):
 		):
 			raise serializers.ValidationError('That account does not have a business profile or claim yet.')
 
+		profile = get_or_create_account_profile(authenticated_user)
+		if profile.two_factor_enabled:
+			code = attrs.get('two_factor_code', '')
+			if not code:
+				raise serializers.ValidationError({'two_factor_code': ['Enter the 6-digit code from your authenticator app.']})
+			if not profile.verify_two_factor_code(code):
+				raise serializers.ValidationError({'two_factor_code': ['The authenticator code is invalid or expired.']})
+
 		attrs['user'] = authenticated_user
 		return attrs
+
+
+class UsernameReminderSerializer(serializers.Serializer):
+	email = serializers.EmailField()
+
+	def validate_email(self, value):
+		return value.strip().lower()
+
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+	identifier = serializers.CharField(max_length=150)
+
+	def validate_identifier(self, value):
+		return value.strip()
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+	token = serializers.CharField(max_length=128)
+	new_password = serializers.CharField(min_length=8, write_only=True, style={'input_type': 'password'})
+
+	def validate(self, attrs):
+		from .models import AccountProfile
+
+		profile = AccountProfile.objects.select_related('user').filter(password_reset_token=attrs['token']).first()
+		if profile is None:
+			raise serializers.ValidationError({'token': ['That password reset link is invalid or expired.']})
+
+		try:
+			validate_password(attrs['new_password'], user=profile.user)
+		except DjangoValidationError as error:
+			raise serializers.ValidationError({'new_password': list(error.messages)})
+
+		attrs['profile'] = profile
+		return attrs
+
+
+class TwoFactorCodeSerializer(serializers.Serializer):
+	code = serializers.CharField(max_length=12)
+	portal = serializers.ChoiceField(choices=['customer', 'business'], required=False)
+
+	def validate_code(self, value):
+		normalized = ''.join(character for character in str(value or '') if character.isdigit())
+		if len(normalized) != 6:
+			raise serializers.ValidationError('Enter a valid 6-digit authenticator code.')
+		return normalized
 
 
 class CustomerSignupSerializer(serializers.Serializer):

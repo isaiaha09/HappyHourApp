@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
+import pyotp
 import secrets
 
 
@@ -311,6 +312,10 @@ class AccountProfile(models.Model):
 	email_verification_sent_at = models.DateTimeField(null=True, blank=True)
 	email_verified_at = models.DateTimeField(null=True, blank=True)
 	two_factor_enabled = models.BooleanField(default=False)
+	two_factor_secret = models.CharField(max_length=64, blank=True)
+	two_factor_pending_secret = models.CharField(max_length=64, blank=True)
+	password_reset_token = models.CharField(max_length=64, blank=True)
+	password_reset_sent_at = models.DateTimeField(null=True, blank=True)
 	billing_portal_url = models.URLField(blank=True)
 	created_at = models.DateTimeField(auto_now_add=True)
 	updated_at = models.DateTimeField(auto_now=True)
@@ -336,6 +341,52 @@ class AccountProfile(models.Model):
 		self.email_verified_at = timezone.now()
 		self.email_verification_token = ''
 		self.save(update_fields=['email_verified_at', 'email_verification_token', 'updated_at'])
+
+	def begin_two_factor_setup(self):
+		self.two_factor_pending_secret = pyotp.random_base32()
+		self.save(update_fields=['two_factor_pending_secret', 'updated_at'])
+		return self.two_factor_pending_secret
+
+	def get_two_factor_account_name(self):
+		return (self.user.email or self.user.username).strip()
+
+	def get_two_factor_provisioning_uri(self, use_pending=False):
+		secret = self.two_factor_pending_secret if use_pending else self.two_factor_secret
+		if not secret:
+			return ''
+		issuer = str(getattr(settings, 'PROFILE_TWO_FACTOR_ISSUER', 'DiningDealz') or 'DiningDealz')
+		return pyotp.TOTP(secret).provisioning_uri(name=self.get_two_factor_account_name(), issuer_name=issuer)
+
+	def verify_two_factor_code(self, code, use_pending=False):
+		secret = self.two_factor_pending_secret if use_pending else self.two_factor_secret
+		normalized = ''.join(character for character in str(code or '') if character.isdigit())
+		if not secret or len(normalized) != 6:
+			return False
+		return pyotp.TOTP(secret).verify(normalized, valid_window=1)
+
+	def enable_two_factor(self):
+		if not self.two_factor_pending_secret:
+			raise ValidationError('No pending authenticator setup was found.')
+		self.two_factor_secret = self.two_factor_pending_secret
+		self.two_factor_pending_secret = ''
+		self.two_factor_enabled = True
+		self.save(update_fields=['two_factor_secret', 'two_factor_pending_secret', 'two_factor_enabled', 'updated_at'])
+
+	def disable_two_factor(self):
+		self.two_factor_enabled = False
+		self.two_factor_secret = ''
+		self.two_factor_pending_secret = ''
+		self.save(update_fields=['two_factor_enabled', 'two_factor_secret', 'two_factor_pending_secret', 'updated_at'])
+
+	def issue_password_reset_token(self, force=False):
+		if force or not self.password_reset_token:
+			self.password_reset_token = secrets.token_urlsafe(32)
+		return self.password_reset_token
+
+	def clear_password_reset_token(self):
+		self.password_reset_token = ''
+		self.password_reset_sent_at = None
+		self.save(update_fields=['password_reset_token', 'password_reset_sent_at', 'updated_at'])
 
 
 class ProfileAuthToken(models.Model):

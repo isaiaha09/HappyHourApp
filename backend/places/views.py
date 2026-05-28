@@ -1,3 +1,4 @@
+from django.contrib.auth.models import User
 from django.conf import settings
 from django.http import Http404, HttpResponse
 from rest_framework import generics, status
@@ -12,12 +13,16 @@ from .serializers import (
 	CustomerSignupSerializer,
 	DealSerializer,
 	LoginSerializer,
+	PasswordResetConfirmSerializer,
+	PasswordResetRequestSerializer,
 	ManualBusinessSignupSerializer,
 	PlaceDetailSerializer,
 	PlaceListSerializer,
+	TwoFactorCodeSerializer,
+	UsernameReminderSerializer,
 	sync_listing_snapshot_from_place_payload,
 )
-from .services.account_profiles import build_account_response, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, send_verification_email
+from .services.account_profiles import build_account_response, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, send_password_reset_email, send_username_reminder_email, send_verification_email
 from .services.source_listings import get_source_deal_payloads, get_source_place_payload, get_source_place_payloads, load_source_records
 
 
@@ -155,6 +160,38 @@ class LoginView(generics.GenericAPIView):
 		return Response(build_account_response(user, portal, token=token))
 
 
+class UsernameReminderView(generics.GenericAPIView):
+	serializer_class = UsernameReminderSerializer
+
+	def post(self, request):
+		serializer = self.get_serializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		user = User.objects.filter(email__iexact=serializer.validated_data['email']).first()
+		if user is not None and user.email:
+			send_username_reminder_email(user)
+		return Response({'detail': 'If that email address is registered, a username reminder has been sent.'})
+
+
+class PasswordResetRequestView(generics.GenericAPIView):
+	serializer_class = PasswordResetRequestSerializer
+
+	def post(self, request):
+		serializer = self.get_serializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		user = self._find_user(serializer.validated_data['identifier'])
+		if user is not None and user.email:
+			profile = get_or_create_account_profile(user)
+			send_password_reset_email(user, profile)
+		return Response({'detail': 'If that account exists, a password reset link has been sent.'})
+
+	def _find_user(self, identifier):
+		normalized = str(identifier or '').strip()
+		user = User.objects.filter(username__iexact=normalized).first()
+		if user is None:
+			user = User.objects.filter(email__iexact=normalized.lower()).first()
+		return user
+
+
 class BusinessSignupView(generics.GenericAPIView):
 	serializer_class = ClaimedBusinessSignupSerializer
 
@@ -216,11 +253,55 @@ class ToggleTwoFactorView(APIView):
 	permission_classes = [IsAuthenticated]
 
 	def post(self, request):
-		enabled = bool(request.data.get('enabled', False))
 		profile = get_or_create_account_profile(request.user)
-		profile.two_factor_enabled = enabled
-		profile.save(update_fields=['two_factor_enabled', 'updated_at'])
-		portal = infer_portal_for_user(request.user, request.data.get('portal'))
+		if profile.two_factor_enabled:
+			return Response({'detail': 'Authenticator-based 2FA is already enabled.'})
+		if profile.two_factor_secret:
+			profile.two_factor_enabled = False
+			profile.save(update_fields=['two_factor_enabled', 'updated_at'])
+		manual_entry_key = profile.begin_two_factor_setup()
+		return Response({
+			'detail': 'Add this key to your authenticator app, then confirm with a 6-digit code.',
+			'manual_entry_key': manual_entry_key,
+			'otpauth_url': profile.get_two_factor_provisioning_uri(use_pending=True),
+			'issuer': str(getattr(settings, 'PROFILE_TWO_FACTOR_ISSUER', 'DiningDealz') or 'DiningDealz'),
+			'account_name': profile.get_two_factor_account_name(),
+		})
+
+
+class ConfirmTwoFactorView(generics.GenericAPIView):
+	serializer_class = TwoFactorCodeSerializer
+	authentication_classes = [ProfileTokenAuthentication]
+	permission_classes = [IsAuthenticated]
+
+	def post(self, request):
+		serializer = self.get_serializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		profile = get_or_create_account_profile(request.user)
+		if not profile.two_factor_pending_secret:
+			return Response({'detail': 'Start authenticator setup before confirming it.'}, status=status.HTTP_400_BAD_REQUEST)
+		if not profile.verify_two_factor_code(serializer.validated_data['code'], use_pending=True):
+			return Response({'code': ['The authenticator code is invalid or expired.']}, status=status.HTTP_400_BAD_REQUEST)
+		profile.enable_two_factor()
+		portal = infer_portal_for_user(request.user, serializer.validated_data.get('portal'))
+		return Response(build_account_response(request.user, portal, token=request.auth))
+
+
+class DisableTwoFactorView(generics.GenericAPIView):
+	serializer_class = TwoFactorCodeSerializer
+	authentication_classes = [ProfileTokenAuthentication]
+	permission_classes = [IsAuthenticated]
+
+	def post(self, request):
+		serializer = self.get_serializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		profile = get_or_create_account_profile(request.user)
+		if not profile.two_factor_enabled or not profile.two_factor_secret:
+			return Response({'detail': 'Authenticator-based 2FA is not enabled.'}, status=status.HTTP_400_BAD_REQUEST)
+		if not profile.verify_two_factor_code(serializer.validated_data['code']):
+			return Response({'code': ['The authenticator code is invalid or expired.']}, status=status.HTTP_400_BAD_REQUEST)
+		profile.disable_two_factor()
+		portal = infer_portal_for_user(request.user, serializer.validated_data.get('portal'))
 		return Response(build_account_response(request.user, portal, token=request.auth))
 
 
@@ -273,5 +354,65 @@ class VerifyEmailView(APIView):
 			f'<h1 style="margin:0 0 12px;font-size:30px;line-height:1.1;">{title}</h1>'
 			f'<p style="margin:0;font-size:16px;line-height:1.5;color:#5d4637;">{message}</p>'
 			f'{return_link}'
+			'</div></div></body></html>'
+		)
+
+
+class PasswordResetView(generics.GenericAPIView):
+	serializer_class = PasswordResetConfirmSerializer
+	permission_classes = []
+	authentication_classes = []
+
+	def get(self, request, token):
+		from .models import AccountProfile
+		profile = AccountProfile.objects.select_related('user').filter(password_reset_token=token).first()
+		if profile is None:
+			return HttpResponse(self._build_html(title='Password reset link is invalid or expired.', message='', token='', error=True), status=404)
+		return HttpResponse(self._build_html(title='Reset your password', message='Enter a new password for your account.', token=token))
+
+	def post(self, request, token):
+		payload = {
+			'token': token,
+			'new_password': request.data.get('new_password') or request.POST.get('new_password', ''),
+		}
+		serializer = self.get_serializer(data=payload)
+		if serializer.is_valid():
+			profile = serializer.validated_data['profile']
+			user = profile.user
+			user.set_password(serializer.validated_data['new_password'])
+			user.save(update_fields=['password'])
+			profile.clear_password_reset_token()
+			user.profile_auth_tokens.all().delete()
+			return HttpResponse(self._build_html(title='Password updated successfully.', message='You can return to the app and sign in with your new password.', token='', success=True))
+
+		error_message = ' '.join(sum((messages for messages in serializer.errors.values()), [])) or 'Unable to reset the password.'
+		return HttpResponse(self._build_html(title='Reset your password', message='Enter a new password for your account.', token=token, error_message=error_message), status=400)
+
+	def _build_html(self, title, message, token, error_message='', success=False, error=False):
+		status_color = '#8d2500' if error or error_message else '#5d4637'
+		success_block = ''
+		form_block = ''
+		if token and not success and not error:
+			form_block = (
+				f'<form method="post" style="margin-top:24px;display:grid;gap:14px;">'
+				f'<input type="password" name="new_password" placeholder="New password" '
+				'style="padding:14px 16px;border:1px solid #ddc4a7;border-radius:14px;font-size:16px;">'
+				'<button type="submit" '
+				'style="padding:12px 18px;border:none;border-radius:999px;background:#9e5b49;color:#fffaf4;font-size:15px;font-weight:700;cursor:pointer;">'
+				'Update password</button></form>'
+			)
+		if success:
+			success_block = '<p style="margin-top:24px;font-size:15px;line-height:1.5;color:#5d4637;">You can close this page after returning to the app.</p>'
+		error_block = f'<p style="margin:16px 0 0;font-size:14px;line-height:1.5;color:{status_color};">{error_message}</p>' if error_message else ''
+		return (
+			'<!doctype html>'
+			'<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+			'<title>DiningDealz Password Reset</title></head>'
+			'<body style="margin:0;font-family:Arial,sans-serif;background:#f7efe2;color:#2d221a;">'
+			'<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;">'
+			'<div style="max-width:520px;width:100%;background:#fffaf4;border:1px solid #efd8bd;border-radius:24px;padding:32px;box-sizing:border-box;">'
+			f'<h1 style="margin:0 0 12px;font-size:30px;line-height:1.1;">{title}</h1>'
+			f'<p style="margin:0;font-size:16px;line-height:1.5;color:#5d4637;">{message}</p>'
+			f'{error_block}{form_block}{success_block}'
 			'</div></div></body></html>'
 		)

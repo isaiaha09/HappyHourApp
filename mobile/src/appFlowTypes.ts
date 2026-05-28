@@ -24,4 +24,5 @@ export type ProfileFormState = {
 export type LoginFormState = {
   identifier: string;
   password: string;
+  two_factor_code: string;
 };

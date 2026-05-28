@@ -1,7 +1,8 @@
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Image, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { styles } from '../appStyles';
-import type { SignupResponse } from '../types';
+import type { SignupResponse, TwoFactorSetupResponse } from '../types';
 
 export type DashboardScreenProps = {
   errorMessage: string | null;
@@ -14,9 +15,16 @@ export type DashboardScreenProps = {
   onOpenPlaces: () => void;
   onRefresh: () => void;
   onResendVerification: () => void;
-  onToggleTwoFactor: () => void;
+  onBeginTwoFactorSetup: () => void;
+  onChangeTwoFactorDisableCode: (value: string) => void;
+  onChangeTwoFactorSetupCode: (value: string) => void;
+  onConfirmTwoFactorSetup: () => void;
+  onDisableTwoFactor: () => void;
   session: SignupResponse;
   submitting: boolean;
+  twoFactorDisableCode: string;
+  twoFactorSetup: TwoFactorSetupResponse | null;
+  twoFactorSetupCode: string;
 };
 
 function DashboardDetailRow({ label, value }: { label: string; value: string }) {
@@ -28,10 +36,49 @@ function DashboardDetailRow({ label, value }: { label: string; value: string }) 
   );
 }
 
-export function DashboardScreen({ errorMessage, isLandscape, loading, message, onBack, onLogout, onOpenBilling, onOpenPlaces, onRefresh, onResendVerification, onToggleTwoFactor, session, submitting }: DashboardScreenProps) {
+export function DashboardScreen({ errorMessage, isLandscape, loading, message, onBack, onBeginTwoFactorSetup, onChangeTwoFactorDisableCode, onChangeTwoFactorSetupCode, onConfirmTwoFactorSetup, onDisableTwoFactor, onLogout, onOpenBilling, onOpenPlaces, onRefresh, onResendVerification, session, submitting, twoFactorDisableCode, twoFactorSetup, twoFactorSetupCode }: DashboardScreenProps) {
   const approvedBusinesses = session.approved_businesses ?? [];
   const businessContact = session.business_contact ?? {};
   const fullName = [session.first_name, session.last_name].filter(Boolean).join(' ');
+  const [twoFactorQrCodeUri, setTwoFactorQrCodeUri] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadQrCode() {
+      if (!twoFactorSetup?.otpauth_url) {
+        setTwoFactorQrCodeUri(null);
+        return;
+      }
+
+      try {
+        const { default: QRCode } = await import('qrcode');
+        const dataUri = await QRCode.toDataURL(twoFactorSetup.otpauth_url, {
+          errorCorrectionLevel: 'M',
+          margin: 1,
+          width: 512,
+          color: {
+            dark: '#2d221a',
+            light: '#fffaf4',
+          },
+        });
+
+        if (!cancelled) {
+          setTwoFactorQrCodeUri(dataUri);
+        }
+      } catch {
+        if (!cancelled) {
+          setTwoFactorQrCodeUri(null);
+        }
+      }
+    }
+
+    void loadQrCode();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [twoFactorSetup?.otpauth_url]);
 
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
@@ -91,10 +138,50 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
           <View style={styles.dashboardSectionCard}>
             <Text style={styles.dashboardSectionTitle}>Security</Text>
             <DashboardDetailRow label="Two-factor authentication" value={session.two_factor_enabled ? 'Enabled' : 'Disabled'} />
-            <Text style={styles.dashboardSupportText}>Enable this preference now. Sign-in challenge enforcement can be expanded next.</Text>
-            <Pressable onPress={onToggleTwoFactor} style={[styles.linkButtonSecondaryWide, submitting ? styles.linkButtonDisabled : null]}>
-              <Text style={styles.linkButtonSecondaryText}>{submitting ? 'Saving...' : session.two_factor_enabled ? 'Disable 2FA' : 'Enable 2FA'}</Text>
-            </Pressable>
+            {session.two_factor_enabled ? (
+              <>
+                <Text style={styles.dashboardSupportText}>Enter a current authenticator code to disable 2FA on this account.</Text>
+                <TextInput keyboardType="number-pad" onChangeText={onChangeTwoFactorDisableCode} style={styles.profileInput} value={twoFactorDisableCode} />
+                <Pressable onPress={onDisableTwoFactor} style={[styles.linkButtonSecondaryWide, submitting ? styles.linkButtonDisabled : null]}>
+                  <Text style={styles.linkButtonSecondaryText}>{submitting ? 'Saving...' : 'Disable authenticator 2FA'}</Text>
+                </Pressable>
+              </>
+            ) : twoFactorSetup ? (
+              <>
+                <Text style={styles.dashboardSupportText}>Scan this QR code with your authenticator app. If you are setting this up on the same phone, use the manual key below instead.</Text>
+                {twoFactorSetup.otpauth_url ? (
+                  <View style={styles.dashboardQrCard}>
+                    {twoFactorQrCodeUri ? (
+                      <Image source={{ uri: twoFactorQrCodeUri }} style={styles.dashboardQrImage} />
+                    ) : (
+                      <View style={styles.dashboardQrLoadingState}>
+                        <ActivityIndicator color="#c65d1f" size="small" />
+                        <Text style={styles.dashboardQrSubtitle}>Preparing QR code...</Text>
+                      </View>
+                    )}
+                    <View style={styles.dashboardQrMeta}>
+                      <Text style={styles.dashboardQrTitle}>{twoFactorSetup.issuer}</Text>
+                      <Text style={styles.dashboardQrSubtitle}>{twoFactorSetup.account_name}</Text>
+                    </View>
+                  </View>
+                ) : null}
+                <View style={styles.dashboardCodeCard}>
+                  <Text style={styles.dashboardCodeLabel}>Manual setup key</Text>
+                  <Text style={styles.dashboardCodeValue}>{twoFactorSetup.manual_entry_key}</Text>
+                </View>
+                <TextInput keyboardType="number-pad" onChangeText={onChangeTwoFactorSetupCode} style={styles.profileInput} value={twoFactorSetupCode} />
+                <Pressable onPress={onConfirmTwoFactorSetup} style={[styles.linkButtonSecondaryWide, submitting ? styles.linkButtonDisabled : null]}>
+                  <Text style={styles.linkButtonSecondaryText}>{submitting ? 'Saving...' : 'Confirm authenticator setup'}</Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <Text style={styles.dashboardSupportText}>Set up an authenticator app to require a 6-digit verification code each time you sign in.</Text>
+                <Pressable onPress={onBeginTwoFactorSetup} style={[styles.linkButtonSecondaryWide, submitting ? styles.linkButtonDisabled : null]}>
+                  <Text style={styles.linkButtonSecondaryText}>{submitting ? 'Preparing...' : 'Set up authenticator app'}</Text>
+                </Pressable>
+              </>
+            )}
           </View>
 
           {session.profile_type === 'business' ? (

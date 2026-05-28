@@ -21,16 +21,20 @@ import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-
 import MapView, { Marker, type Region } from 'react-native-maps';
 
 import {
+  beginTwoFactorSetup,
+  confirmTwoFactorSetup,
   createBusinessProfile,
   createCustomerProfile,
   createManualBusinessProfile,
+  disableTwoFactor,
   fetchProfileDashboard,
   fetchPlaceDetail,
   fetchPlaces,
   getDefaultApiBaseUrl,
   loginProfile,
+  requestPasswordReset,
+  requestUsernameReminder,
   resendVerificationEmail,
-  updateTwoFactorPreference,
 } from './src/api';
 import type { AuthPortal, LoginFormState, ProfileFormState } from './src/appFlowTypes';
 import { styles } from './src/appStyles';
@@ -77,9 +81,14 @@ import type {
   PlaceLocation,
   PlaceLocationDetail,
   SignupResponse,
+  TwoFactorSetupResponse,
 } from './src/types';
 
 const initialApiBaseUrl = getDefaultApiBaseUrl();
+const startupImageSources = [
+  require('./assets/DiningDealz-Logo-Transparent.png'),
+  require('./assets/DiningDealz-Icon-Transparent.png'),
+] as const;
 const mapAreaBounds = {
   minLatitude: 34.0,
   maxLatitude: 34.5,
@@ -156,6 +165,7 @@ const initialProfileFormState: ProfileFormState = {
 const initialLoginFormState: LoginFormState = {
   identifier: '',
   password: '',
+  two_factor_code: '',
 };
 
 export default function App() {
@@ -193,8 +203,12 @@ function AppScreen() {
   const [onboardingIncomingOffset, setOnboardingIncomingOffset] = useState(0);
   const [authPortal, setAuthPortal] = useState<AuthPortal>('customer');
   const [loginForm, setLoginForm] = useState<LoginFormState>(initialLoginFormState);
+  const [showLoginTwoFactorCodeField, setShowLoginTwoFactorCodeField] = useState(false);
   const [loginSubmitting, setLoginSubmitting] = useState(false);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
+  const [twoFactorSetup, setTwoFactorSetup] = useState<TwoFactorSetupResponse | null>(null);
+  const [twoFactorSetupCode, setTwoFactorSetupCode] = useState('');
+  const [twoFactorDisableCode, setTwoFactorDisableCode] = useState('');
   const [authenticatedSession, setAuthenticatedSession] = useState<SignupResponse | null>(null);
   const [browseMode, setBrowseMode] = useState<BrowseMode>('list');
   const [browseFiltersExpanded, setBrowseFiltersExpanded] = useState(false);
@@ -255,11 +269,13 @@ function AppScreen() {
   const [showLogoutTransition, setShowLogoutTransition] = useState(false);
   const [authIntroPending, setAuthIntroPending] = useState(false);
   const [splashExiting, setSplashExiting] = useState(false);
+  const [startupImagesReady, setStartupImagesReady] = useState(false);
   const [profileEntryOffset, setProfileEntryOffset] = useState(0);
   const [browseEntryOffset, setBrowseEntryOffset] = useState(0);
   const [renderedMappedPlaces, setRenderedMappedPlaces] = useState<MappedPlace[]>([]);
   const [renderedMappedPlaceKey, setRenderedMappedPlaceKey] = useState('');
   const authenticatedSessionRef = useRef<SignupResponse | null>(null);
+  const startupImageLoadCountRef = useRef(0);
   const shouldUseNativeMapBoundaries = false;
   const normalizedSearchQuery = normalizeSearchText(searchQuery);
   const onboardingTransitionDuration = 480;
@@ -308,6 +324,20 @@ function AppScreen() {
   useEffect(() => {
     authenticatedSessionRef.current = authenticatedSession;
   }, [authenticatedSession]);
+
+  useEffect(() => {
+    if (startupImagesReady) {
+      return;
+    }
+
+    const fallbackId = setTimeout(() => {
+      setStartupImagesReady(true);
+    }, 2200);
+
+    return () => {
+      clearTimeout(fallbackId);
+    };
+  }, [startupImagesReady]);
 
   const mapSearchResultPool = normalizedSearchQuery.length ? displayedMapPlaces : [];
   const mapSearchResultsKey = mapSearchResultPool.map((place) => place.markerKey).join('|');
@@ -884,43 +914,16 @@ function AppScreen() {
     });
   }
 
-  useEffect(() => {
-    if (screenMode !== 'splash') {
+  function handleStartupImageLoaded() {
+    if (startupImagesReady) {
       return;
     }
 
-    const timeoutId = setTimeout(() => {
-      const nextScreen = authenticatedSession ? 'browse' : 'auth';
-
-      if (splashExiting) {
-        return;
-      }
-
-      setSplashExiting(true);
-      splashExitOpacity.stopAnimation();
-      splashExitOpacity.setValue(1);
-      Animated.timing(splashExitOpacity, {
-        duration: 260,
-        toValue: 0,
-        useNativeDriver: true,
-      }).start(({ finished }) => {
-        if (!finished) {
-          return;
-        }
-
-        setAuthIntroPending(nextScreen === 'auth');
-        setScreenMode(nextScreen);
-        setSplashExiting(false);
-        requestAnimationFrame(() => {
-          splashExitOpacity.setValue(1);
-        });
-      });
-    }, 1200);
-
-    return () => {
-      clearTimeout(timeoutId);
-    };
-  }, [authenticatedSession, screenMode, splashExitOpacity, splashExiting]);
+    startupImageLoadCountRef.current += 1;
+    if (startupImageLoadCountRef.current >= startupImageSources.length) {
+      setStartupImagesReady(true);
+    }
+  }
 
   useEffect(() => {
     if (shouldShowMapResults) {
@@ -1477,6 +1480,25 @@ function AppScreen() {
     navigateScreen('profiles', 'forward');
   }
 
+  function handleOpenAuthFromLanding(portal: AuthPortal) {
+    dismissKeyboardForScreenTransition();
+    setAuthPortal(portal);
+    setAuthMessage(null);
+    setProfileErrorMessage(null);
+    setShowLoginTwoFactorCodeField(false);
+    setLoginForm(initialLoginFormState);
+    navigateScreen('auth', 'forward');
+  }
+
+  function handleBackToLanding() {
+    dismissKeyboardForScreenTransition();
+    setAuthMessage(null);
+    setProfileErrorMessage(null);
+    setShowLoginTwoFactorCodeField(false);
+    setLoginForm(initialLoginFormState);
+    navigateScreen('splash', 'backward');
+  }
+
   function handleContinueToApp() {
     dismissKeyboardForScreenTransition();
     setAuthMessage(null);
@@ -1496,11 +1518,23 @@ function AppScreen() {
       navigateBrowseProfileTransition('browse');
       return;
     }
-    navigateScreen(authenticatedSession ? 'browse' : 'auth', 'backward');
+    navigateScreen('splash', 'backward');
   }
 
   function handleChangeLoginField(field: keyof LoginFormState, value: string) {
+    if (field === 'identifier') {
+      setShowLoginTwoFactorCodeField(false);
+      setLoginForm((current) => ({ ...current, identifier: value, two_factor_code: '' }));
+      return;
+    }
+
     setLoginForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function handleSelectAuthPortal(portal: AuthPortal) {
+    setAuthPortal(portal);
+    setShowLoginTwoFactorCodeField(false);
+    setLoginForm((current) => ({ ...current, two_factor_code: '' }));
   }
 
   function handleChangeProfileField(field: keyof ProfileFormState, value: string) {
@@ -1534,13 +1568,62 @@ function AppScreen() {
         portal: authPortal,
         identifier: loginForm.identifier,
         password: loginForm.password,
+        two_factor_code: loginForm.two_factor_code.trim(),
       };
       const response = await loginProfile(apiBaseUrl, payload);
       setAuthenticatedSession(response);
       setAuthMessage(null);
+      setShowLoginTwoFactorCodeField(false);
       setLoginForm(initialLoginFormState);
       setProfileMessage('Signed in successfully.');
       startLoginSuccessTransition();
+    } catch (error) {
+      const message = getErrorMessage(error);
+      const requiresTwoFactorCode = message.includes('two_factor_code:');
+
+      if (requiresTwoFactorCode) {
+        setShowLoginTwoFactorCodeField(true);
+      }
+
+      setProfileErrorMessage(requiresTwoFactorCode ? message.replace(/^two_factor_code:\s*/i, '') : message);
+    } finally {
+      setLoginSubmitting(false);
+    }
+  }
+
+  async function handleForgotUsername() {
+    const email = loginForm.identifier.trim();
+    if (!email) {
+      setProfileErrorMessage('Enter your email address in the Username or Email field first.');
+      return;
+    }
+
+    setLoginSubmitting(true);
+    setProfileErrorMessage(null);
+
+    try {
+      const response = await requestUsernameReminder(apiBaseUrl, email);
+      setAuthMessage(response.detail);
+    } catch (error) {
+      setProfileErrorMessage(getErrorMessage(error));
+    } finally {
+      setLoginSubmitting(false);
+    }
+  }
+
+  async function handleForgotPassword() {
+    const identifier = loginForm.identifier.trim();
+    if (!identifier) {
+      setProfileErrorMessage('Enter your username or email in the Username or Email field first.');
+      return;
+    }
+
+    setLoginSubmitting(true);
+    setProfileErrorMessage(null);
+
+    try {
+      const response = await requestPasswordReset(apiBaseUrl, identifier);
+      setAuthMessage(response.detail);
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
     } finally {
@@ -1690,7 +1773,7 @@ function AppScreen() {
     }
   }
 
-  async function handleToggleTwoFactor() {
+  async function handleBeginTwoFactorSetup() {
     if (!authenticatedSession?.auth_token) {
       return;
     }
@@ -1699,14 +1782,53 @@ function AppScreen() {
     setProfileErrorMessage(null);
 
     try {
-      const response = await updateTwoFactorPreference(
-        apiBaseUrl,
-        authenticatedSession.auth_token,
-        !authenticatedSession.two_factor_enabled,
-        authenticatedSession.portal,
-      );
+      const response = await beginTwoFactorSetup(apiBaseUrl, authenticatedSession.auth_token);
+      setTwoFactorSetup(response);
+      setTwoFactorSetupCode('');
+      setProfileMessage(response.detail);
+    } catch (error) {
+      setProfileErrorMessage(getErrorMessage(error));
+    } finally {
+      setDashboardSubmitting(false);
+    }
+  }
+
+  async function handleConfirmTwoFactorSetup() {
+    if (!authenticatedSession?.auth_token || !twoFactorSetup) {
+      return;
+    }
+
+    setDashboardSubmitting(true);
+    setProfileErrorMessage(null);
+
+    try {
+      const response = await confirmTwoFactorSetup(apiBaseUrl, authenticatedSession.auth_token, twoFactorSetupCode, authenticatedSession.portal);
       setAuthenticatedSession(response);
-      setProfileMessage(response.two_factor_enabled ? '2FA preference enabled.' : '2FA preference disabled.');
+      setTwoFactorSetup(null);
+      setTwoFactorSetupCode('');
+      setProfileMessage('Authenticator-based 2FA enabled. Use your authenticator code every time you sign in.');
+    } catch (error) {
+      setProfileErrorMessage(getErrorMessage(error));
+    } finally {
+      setDashboardSubmitting(false);
+    }
+  }
+
+  async function handleDisableTwoFactor() {
+    if (!authenticatedSession?.auth_token) {
+      return;
+    }
+
+    setDashboardSubmitting(true);
+    setProfileErrorMessage(null);
+
+    try {
+      const response = await disableTwoFactor(apiBaseUrl, authenticatedSession.auth_token, twoFactorDisableCode, authenticatedSession.portal);
+      setAuthenticatedSession(response);
+      setTwoFactorDisableCode('');
+      setTwoFactorSetup(null);
+      setTwoFactorSetupCode('');
+      setProfileMessage('Authenticator-based 2FA disabled.');
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
     } finally {
@@ -1718,6 +1840,9 @@ function AppScreen() {
     setProfileMessage(null);
     setProfileErrorMessage(null);
     setAuthMessage('You have been signed out.');
+    setTwoFactorSetup(null);
+    setTwoFactorSetupCode('');
+    setTwoFactorDisableCode('');
     startLogoutTransition();
   }
 
@@ -1856,14 +1981,21 @@ function AppScreen() {
             loading={dashboardLoading}
             message={profileMessage}
             onBack={handleBackFromProfiles}
+            onBeginTwoFactorSetup={() => void handleBeginTwoFactorSetup()}
+            onChangeTwoFactorDisableCode={setTwoFactorDisableCode}
+            onChangeTwoFactorSetupCode={setTwoFactorSetupCode}
+            onConfirmTwoFactorSetup={() => void handleConfirmTwoFactorSetup()}
+            onDisableTwoFactor={() => void handleDisableTwoFactor()}
             onLogout={handleLogout}
             onOpenBilling={handleOpenBilling}
             onOpenPlaces={handleContinueToApp}
             onRefresh={() => void refreshDashboard()}
             onResendVerification={() => void handleResendVerification()}
-            onToggleTwoFactor={() => void handleToggleTwoFactor()}
             session={profileSession}
             submitting={dashboardSubmitting}
+            twoFactorDisableCode={twoFactorDisableCode}
+            twoFactorSetup={twoFactorSetup}
+            twoFactorSetupCode={twoFactorSetupCode}
           />
         ) : (
           <CreateProfileScreen
@@ -1950,7 +2082,7 @@ function AppScreen() {
       case 'splash':
         return (
           <SafeAreaView style={styles.safeArea}>
-            <SplashScreen />
+            <SplashScreen onCreateAccount={handleOpenProfiles} onSelectPortal={handleOpenAuthFromLanding} />
           </SafeAreaView>
         );
       case 'auth':
@@ -1961,11 +2093,12 @@ function AppScreen() {
               errorMessage={profileErrorMessage}
               loginForm={loginForm}
               loginPortal={authPortal}
+              onBackToLanding={handleBackToLanding}
               onChangeField={handleChangeLoginField}
-              onContinueToApp={handleContinueToApp}
-              onOpenProfiles={handleOpenProfiles}
-              onSelectPortal={setAuthPortal}
+              onForgotPassword={() => void handleForgotPassword()}
+              onForgotUsername={() => void handleForgotUsername()}
               onSubmit={handleLogin}
+              showTwoFactorCodeField={showLoginTwoFactorCodeField}
               submitting={loginSubmitting}
             />
           </SafeAreaView>
@@ -2449,11 +2582,21 @@ function AppScreen() {
   return (
     <>
       <StatusBar backgroundColor="transparent" style="dark" translucent={translucentStatusBar} />
-      {screenMode === 'splash' ? (
-        <Animated.View style={[styles.onboardingTransitionRoot, { opacity: splashExitOpacity }]}>
-          {renderOnboardingScreen('splash')}
-        </Animated.View>
-      ) : showLoginSuccessTransition ? (
+      {!startupImagesReady ? (
+        <View pointerEvents="none" style={styles.startupImagePreloadLayer}>
+          {startupImageSources.map((source, index) => (
+            <Image
+              key={index}
+              fadeDuration={0}
+              onError={handleStartupImageLoaded}
+              onLoadEnd={handleStartupImageLoaded}
+              source={source}
+              style={styles.startupImagePreload}
+            />
+          ))}
+        </View>
+      ) : null}
+      {showLoginSuccessTransition ? (
         <View style={styles.onboardingTransitionRoot}>
           <View style={styles.screenTransitionLayer}>
             {renderOnboardingScreen('profiles')}

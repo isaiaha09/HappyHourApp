@@ -18,6 +18,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APITestCase
 from bs4 import BeautifulSoup
+import pyotp
 
 from .admin import BusinessAccountAdmin, CustomerAccountAdmin, DeletedBusinessAdmin, ListingSnapshotAdmin, ProviderUsageWindowAdmin
 from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessMembership, City, CustomerAccount, DealType, DeletedBusiness, ListingSnapshot, ProfileAuthToken, ProviderUsageWindow, VenueType, Weekday
@@ -2688,6 +2689,43 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(response.data['portal'], 'business')
 		self.assertEqual(response.data['claim_status'], BusinessClaim.Status.SUBMITTED)
 
+	def test_login_requires_authenticator_code_when_two_factor_is_enabled(self):
+		user = User.objects.create_user(username='secure_customer', email='secure@example.com', password='test-pass-123')
+		profile = AccountProfile.objects.create(user=user, two_factor_enabled=True, two_factor_secret=pyotp.random_base32())
+
+		response = self.client.post(
+			reverse('profile-login'),
+			{
+				'portal': 'customer',
+				'identifier': 'secure_customer',
+				'password': 'test-pass-123',
+			},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, 400)
+		self.assertIn('two_factor_code', response.data)
+		self.assertTrue(profile.two_factor_enabled)
+
+	def test_login_accepts_authenticator_code_when_two_factor_is_enabled(self):
+		user = User.objects.create_user(username='secure_login', email='secure-login@example.com', password='test-pass-123')
+		secret = pyotp.random_base32()
+		AccountProfile.objects.create(user=user, two_factor_enabled=True, two_factor_secret=secret)
+
+		response = self.client.post(
+			reverse('profile-login'),
+			{
+				'portal': 'customer',
+				'identifier': 'secure-login@example.com',
+				'password': 'test-pass-123',
+				'two_factor_code': pyotp.TOTP(secret).now(),
+			},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertTrue(response.data['auth_token'])
+
 
 @override_settings(
 	EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
@@ -2749,19 +2787,78 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertIn(self.profile.email_verification_token, mail.outbox[0].body)
 		self.assertIn('text/html', mail.outbox[0].alternatives[0][1])
 
-	def test_toggle_two_factor_updates_profile(self):
+	def test_recover_username_sends_message(self):
 		response = self.client.post(
-			reverse('profile-toggle-two-factor'),
-			{'enabled': True, 'portal': 'customer'},
+			reverse('profile-recover-username'),
+			{'email': self.user.email},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data['detail'], 'If that email address is registered, a username reminder has been sent.')
+		self.assertEqual(len(mail.outbox), 1)
+		self.assertIn(self.user.username, mail.outbox[0].body)
+
+	def test_password_reset_request_and_confirm_updates_password(self):
+		request_response = self.client.post(
+			reverse('profile-password-reset-request'),
+			{'identifier': self.user.username},
+			format='json',
+		)
+
+		self.assertEqual(request_response.status_code, 200)
+		self.profile.refresh_from_db()
+		self.assertTrue(self.profile.password_reset_token)
+		self.assertEqual(len(mail.outbox), 1)
+		self.assertIn(self.profile.password_reset_token, mail.outbox[0].body)
+
+		confirm_response = self.client.post(
+			reverse('profile-password-reset', kwargs={'token': self.profile.password_reset_token}),
+			{'new_password': 'new-test-pass-123'},
+		)
+
+		self.assertEqual(confirm_response.status_code, 200)
+		self.user.refresh_from_db()
+		self.profile.refresh_from_db()
+		self.assertTrue(self.user.check_password('new-test-pass-123'))
+		self.assertEqual(self.profile.password_reset_token, '')
+		self.assertEqual(self.user.profile_auth_tokens.count(), 0)
+
+	def test_two_factor_setup_confirm_and_disable_round_trip(self):
+		setup_response = self.client.post(reverse('profile-toggle-two-factor'), {}, format='json', **self.auth_headers())
+
+		self.assertEqual(setup_response.status_code, 200)
+		self.assertIn('manual_entry_key', setup_response.data)
+		self.profile.refresh_from_db()
+		self.assertEqual(self.profile.two_factor_pending_secret, setup_response.data['manual_entry_key'])
+
+		confirm_response = self.client.post(
+			reverse('profile-confirm-two-factor'),
+			{'code': pyotp.TOTP(setup_response.data['manual_entry_key']).now(), 'portal': 'customer'},
 			format='json',
 			**self.auth_headers(),
 		)
 
-		self.assertEqual(response.status_code, 200)
-		self.assertTrue(response.data['two_factor_enabled'])
+		self.assertEqual(confirm_response.status_code, 200)
+		self.assertTrue(confirm_response.data['two_factor_enabled'])
 		self.profile.refresh_from_db()
 		self.assertTrue(self.profile.two_factor_enabled)
+		self.assertTrue(self.profile.two_factor_secret)
 
+		disable_response = self.client.post(
+			reverse('profile-disable-two-factor'),
+			{'code': pyotp.TOTP(self.profile.two_factor_secret).now(), 'portal': 'customer'},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(disable_response.status_code, 200)
+		self.assertFalse(disable_response.data['two_factor_enabled'])
+		self.profile.refresh_from_db()
+		self.assertFalse(self.profile.two_factor_enabled)
+		self.assertEqual(self.profile.two_factor_secret, '')
+
+	@override_settings(PROFILE_EMAIL_VERIFICATION_SUCCESS_URL='')
 	def test_verify_email_marks_profile_as_verified(self):
 		token = self.profile.ensure_verification_token(force=True)
 		self.profile.save(update_fields=['email_verification_token', 'updated_at'])

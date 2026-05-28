@@ -16,6 +16,7 @@ import { styles } from '../appStyles';
 import type { AuthPortal, LoginFormState, ProfileFormState } from '../appFlowTypes';
 import { manualBusinessCityOptions, manualBusinessVenueOptions } from '../browseConfig';
 import { formatPlaceAddress, getPlaceLocations, normalizeSearchText } from '../placeHelpers';
+import { BrandHero } from './SplashScreen';
 import type { PlaceListItem, PlaceLocation } from '../types';
 
 type CompactDropdownProps = {
@@ -32,11 +33,12 @@ export type AuthPortalScreenProps = {
   errorMessage: string | null;
   loginForm: LoginFormState;
   loginPortal: AuthPortal;
+  onBackToLanding: () => void;
   onChangeField: (field: keyof LoginFormState, value: string) => void;
-  onContinueToApp: () => void;
-  onOpenProfiles: () => void;
-  onSelectPortal: (portal: AuthPortal) => void;
+  onForgotPassword: () => void;
+  onForgotUsername: () => void;
   onSubmit: () => void;
+  showTwoFactorCodeField: boolean;
   submitting: boolean;
 };
 
@@ -146,7 +148,7 @@ function CompactDropdown({ onSelect, open, options, placeholder, selectedValue, 
   );
 }
 
-export function AuthPortalScreen({ authMessage, errorMessage, loginForm, loginPortal, onChangeField, onContinueToApp, onOpenProfiles, onSelectPortal, onSubmit, submitting }: AuthPortalScreenProps) {
+export function AuthPortalScreen({ authMessage, errorMessage, loginForm, loginPortal, onBackToLanding, onChangeField, onForgotPassword, onForgotUsername, onSubmit, showTwoFactorCodeField, submitting }: AuthPortalScreenProps) {
   return (
     <View style={styles.authScreen}>
       <KeyboardAwareFormScreen>
@@ -156,23 +158,18 @@ export function AuthPortalScreen({ authMessage, errorMessage, loginForm, loginPo
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          <Pressable onPress={onBackToLanding} style={styles.backButton}>
+            <Text style={styles.backButtonText}>Back</Text>
+          </Pressable>
+
           <View style={styles.authHero}>
-            <View style={styles.authLogoShell}>
-              <Image source={require('../../assets/DiningDealz-Icon-Transparent.png')} style={styles.authLogoImage} resizeMode="contain" />
-            </View>
-            <Text style={styles.authTitle}>Welcome back</Text>
-            <Text style={styles.authSubtitle}>Choose a customer or business portal to continue.</Text>
+            <BrandHero />
           </View>
 
           <View style={styles.profileCard}>
-            <View style={styles.modeRow}>
-              <Pressable onPress={() => onSelectPortal('customer')} style={[styles.authPortalButton, loginPortal === 'customer' ? styles.authPortalButtonActive : null]}>
-                <Text style={[styles.authPortalButtonText, loginPortal === 'customer' ? styles.authPortalButtonTextActive : null]}>Customer</Text>
-              </Pressable>
-              <Pressable onPress={() => onSelectPortal('business')} style={[styles.authPortalButton, loginPortal === 'business' ? styles.authPortalButtonActive : null]}>
-                <Text style={[styles.authPortalButtonText, loginPortal === 'business' ? styles.authPortalButtonTextActive : null]}>Business</Text>
-              </Pressable>
-            </View>
+            <Text style={styles.detailCity}>{loginPortal === 'customer' ? 'Customer Login' : 'Business Login'}</Text>
+            <Text style={styles.detailTitle}>Welcome back</Text>
+            <Text style={styles.profileIntroText}>Enter your username or email and password to continue.</Text>
 
             {authMessage ? (
               <View style={styles.profileSuccessBanner}>
@@ -192,17 +189,32 @@ export function AuthPortalScreen({ authMessage, errorMessage, loginForm, loginPo
             <Text style={styles.profileFieldLabel}>Password</Text>
             <TextInput onChangeText={(value) => onChangeField('password', value)} secureTextEntry style={styles.profileInput} value={loginForm.password} />
 
+            {showTwoFactorCodeField ? (
+              <>
+                <Text style={styles.profileFieldLabel}>Authenticator Code</Text>
+                <TextInput
+                  autoCapitalize="none"
+                  keyboardType="number-pad"
+                  onChangeText={(value) => onChangeField('two_factor_code', value)}
+                  style={styles.profileInput}
+                  value={loginForm.two_factor_code}
+                />
+                <Text style={styles.profileSupportText}>Enter the 6-digit code from your authenticator app to finish signing in.</Text>
+              </>
+            ) : null}
+
             <Pressable onPress={() => void onSubmit()} style={[styles.linkButton, submitting ? styles.linkButtonDisabled : null]}>
               <Text style={styles.linkButtonText}>{submitting ? 'Logging in...' : loginPortal === 'customer' ? 'Log in as Customer' : 'Log in as Business'}</Text>
             </Pressable>
 
-            <Pressable onPress={onContinueToApp} style={styles.linkButtonSecondaryWide}>
-              <Text style={styles.linkButtonSecondaryText}>Continue to App</Text>
-            </Pressable>
-
-            <Pressable onPress={onOpenProfiles} style={styles.authLinkButton}>
-              <Text style={styles.authLinkText}>Don&apos;t have an account? Create a free account here.</Text>
-            </Pressable>
+            <View style={styles.authRecoveryRow}>
+              <Pressable onPress={onForgotUsername} style={[styles.authRecoveryButton, submitting ? styles.linkButtonDisabled : null]}>
+                <Text style={styles.authRecoveryButtonText}>Forgot username?</Text>
+              </Pressable>
+              <Pressable onPress={onForgotPassword} style={[styles.authRecoveryButton, submitting ? styles.linkButtonDisabled : null]}>
+                <Text style={styles.authRecoveryButtonText}>Forgot password?</Text>
+              </Pressable>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAwareFormScreen>

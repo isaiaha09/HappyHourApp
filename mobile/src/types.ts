@@ -92,6 +92,7 @@ export type SignupResponse = {
   email_verified: boolean;
   email_verification_sent_at?: string | null;
   two_factor_enabled: boolean;
+  two_factor_pending_setup?: boolean;
   billing_portal_url?: string;
   approved_businesses?: Array<{
     id: number;
@@ -116,6 +117,15 @@ export type LoginRequest = {
   portal: 'customer' | 'business';
   identifier: string;
   password: string;
+  two_factor_code?: string;
+};
+
+export type TwoFactorSetupResponse = {
+  detail: string;
+  manual_entry_key: string;
+  otpauth_url: string;
+  issuer: string;
+  account_name: string;
 };
 
 export type CustomerSignupRequest = {

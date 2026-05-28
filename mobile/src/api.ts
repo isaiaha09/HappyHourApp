@@ -9,6 +9,7 @@ import type {
   PlaceDetail,
   PlaceListItem,
   SignupResponse,
+  TwoFactorSetupResponse,
 } from './types';
 
 const FALLBACK_API_BASE_URL = 'http://127.0.0.1:8000/api';
@@ -75,11 +76,24 @@ export async function resendVerificationEmail(baseUrl: string, authToken: string
   return postAuthedJson<{ detail: string }>(baseUrl, '/profiles/resend-verification/', authToken, {});
 }
 
-export async function updateTwoFactorPreference(baseUrl: string, authToken: string, enabled: boolean, portal?: 'customer' | 'business') {
-  return postAuthedJson<SignupResponse>(baseUrl, '/profiles/two-factor/', authToken, {
-    enabled,
-    portal,
-  });
+export async function requestUsernameReminder(baseUrl: string, email: string) {
+  return postJson<{ detail: string }>(baseUrl, '/profiles/recover-username/', { email });
+}
+
+export async function requestPasswordReset(baseUrl: string, identifier: string) {
+  return postJson<{ detail: string }>(baseUrl, '/profiles/password-reset-request/', { identifier });
+}
+
+export async function beginTwoFactorSetup(baseUrl: string, authToken: string) {
+  return postAuthedJson<TwoFactorSetupResponse>(baseUrl, '/profiles/two-factor/', authToken, {});
+}
+
+export async function confirmTwoFactorSetup(baseUrl: string, authToken: string, code: string, portal?: 'customer' | 'business') {
+  return postAuthedJson<SignupResponse>(baseUrl, '/profiles/two-factor/confirm/', authToken, { code, portal });
+}
+
+export async function disableTwoFactor(baseUrl: string, authToken: string, code: string, portal?: 'customer' | 'business') {
+  return postAuthedJson<SignupResponse>(baseUrl, '/profiles/two-factor/disable/', authToken, { code, portal });
 }
 
 export async function createBusinessProfile(baseUrl: string, payload: BusinessSignupRequest) {
