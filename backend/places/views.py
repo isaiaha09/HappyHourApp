@@ -2,6 +2,7 @@ from django.contrib.auth.models import User
 from django.conf import settings
 from django.http import Http404, HttpResponse
 from rest_framework import generics, status
+from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
@@ -9,6 +10,7 @@ from rest_framework.views import APIView
 
 from .authentication import ProfileTokenAuthentication
 from .serializers import (
+	BusinessLocationUpdateSerializer,
 	ClaimedBusinessSignupSerializer,
 	CustomerSignupSerializer,
 	DealSerializer,
@@ -25,6 +27,7 @@ from .serializers import (
 	sync_listing_snapshot_from_place_payload,
 )
 from .services.account_profiles import build_account_response, build_email_verification_challenge, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, send_password_reset_email, send_username_reminder_email, send_verification_email
+from .models import VenueType
 from .services.source_listings import get_source_deal_payloads, get_source_place_payload, get_source_place_payloads, load_source_records
 
 
@@ -276,6 +279,31 @@ class ProfileDashboardView(APIView):
 	def get(self, request):
 		portal = infer_portal_for_user(request.user, request.query_params.get('portal'))
 		return Response(build_account_response(request.user, portal, token=request.auth))
+
+
+class BusinessLocationUpdateView(generics.GenericAPIView):
+	serializer_class = BusinessLocationUpdateSerializer
+	authentication_classes = [ProfileTokenAuthentication]
+	permission_classes = [IsAuthenticated]
+
+	def post(self, request):
+		serializer = self.get_serializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		membership = request.user.business_memberships.select_related('claim__listing_snapshot').filter(is_active=True).first()
+		if membership is None:
+			return Response({'detail': 'An approved business membership is required before sending location updates.'}, status=status.HTTP_400_BAD_REQUEST)
+
+		snapshot = membership.claim.listing_snapshot
+		if snapshot.venue_type != VenueType.MOBILE:
+			return Response({'detail': 'Live location updates are only required for On the Move businesses.'}, status=status.HTTP_400_BAD_REQUEST)
+
+		snapshot.tracked_location_latitude = serializer.validated_data['latitude']
+		snapshot.tracked_location_longitude = serializer.validated_data['longitude']
+		snapshot.tracked_location_accuracy_meters = serializer.validated_data.get('accuracy_meters')
+		snapshot.tracked_location_updated_at = timezone.now()
+		snapshot.save(update_fields=['tracked_location_latitude', 'tracked_location_longitude', 'tracked_location_accuracy_meters', 'tracked_location_updated_at', 'updated_at'])
+
+		return Response(build_account_response(request.user, 'business', token=request.auth))
 
 
 class ResendVerificationEmailView(APIView):

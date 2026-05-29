@@ -986,6 +986,10 @@ export function BusinessVerificationScreen({ errorMessage, form, isLandscape, mo
                     selectedValue={form.business_venue_type}
                   />
 
+                  {form.business_venue_type === 'mobile' ? (
+                    <Text style={styles.profileSupportText}>On the Move businesses are required to share their approximate phone location after approval so the map pin follows their current service area.</Text>
+                  ) : null}
+
                   <Text style={styles.profileFieldLabel}>Website URL (optional)</Text>
                   <AutoScrollTextInput autoCapitalize="none" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('business_website_url', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.business_website_url} />
                 </>

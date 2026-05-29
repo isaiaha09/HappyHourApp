@@ -252,6 +252,10 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
   const approvedBusinesses = session.approved_businesses ?? [];
   const businessContact = session.business_contact ?? {};
   const fullName = [session.first_name, session.last_name].filter(Boolean).join(' ');
+  const trackedBusinessLocation = session.tracked_business_location ?? {};
+  const trackedBusinessLocationUpdatedAt = trackedBusinessLocation.updated_at
+    ? new Date(trackedBusinessLocation.updated_at).toLocaleString()
+    : null;
 
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
@@ -330,6 +334,13 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
                   <DashboardDetailRow label="Status" value={session.business_status || 'Pending'} />
                   <DashboardDetailRow label="Current business" value={session.business_name || 'No approved business yet'} />
                   {session.claim_status ? <DashboardDetailRow label="Claim review" value={session.claim_status} /> : null}
+                  {session.requires_business_location_tracking ? (
+                    <>
+                      <DashboardDetailRow label="Location tracking" value="Required for On the Move pins" />
+                      <DashboardDetailRow label="Last pin update" value={trackedBusinessLocationUpdatedAt || 'Waiting for the first phone location update'} />
+                      <Text style={styles.dashboardSupportText}>Keep location access enabled on this device so your map pin reflects your approximate current phone location.</Text>
+                    </>
+                  ) : null}
                 </View>
 
                 {Object.values(businessContact).some(Boolean) ? (

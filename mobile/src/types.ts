@@ -110,6 +110,13 @@ export type SignupResponse = {
     employer_address?: string;
     verification_summary?: string;
   };
+  requires_business_location_tracking?: boolean;
+  tracked_business_location?: {
+    latitude?: number | null;
+    longitude?: number | null;
+    accuracy_meters?: number | null;
+    updated_at?: string | null;
+  };
   can_access_places?: boolean;
 };
 
@@ -179,4 +186,10 @@ export type ManualBusinessSignupRequest = CustomerSignupRequest & {
   address_not_applicable: boolean;
   verification_summary: string;
   supporting_details: string;
+};
+
+export type BusinessLocationUpdateRequest = {
+  latitude: number;
+  longitude: number;
+  accuracy_meters?: number | null;
 };

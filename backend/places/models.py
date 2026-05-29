@@ -19,6 +19,7 @@ class City(models.TextChoices):
 class VenueType(models.TextChoices):
 	RESTAURANT = 'restaurant', 'Restaurant'
 	FAST_FOOD = 'fast_food', 'Fast Food'
+	MOBILE = 'mobile', 'On the Move'
 	BAR = 'bar', 'Bar'
 	CAFE = 'cafe', 'Cafe'
 	SHOP = 'shop', 'Shop'
@@ -59,6 +60,10 @@ class ListingSnapshot(models.Model):
 	postal_code = models.CharField(max_length=10, blank=True)
 	phone_number = models.CharField(max_length=20, blank=True)
 	website_url = models.URLField(blank=True)
+	tracked_location_latitude = models.FloatField(null=True, blank=True)
+	tracked_location_longitude = models.FloatField(null=True, blank=True)
+	tracked_location_accuracy_meters = models.FloatField(null=True, blank=True)
+	tracked_location_updated_at = models.DateTimeField(null=True, blank=True)
 	captured_at = models.DateTimeField(auto_now_add=True)
 	updated_at = models.DateTimeField(auto_now=True)
 

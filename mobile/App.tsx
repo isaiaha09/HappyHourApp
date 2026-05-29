@@ -1,5 +1,6 @@
 import { startTransition, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import * as Location from 'expo-location';
 import {
   ActivityIndicator,
   Animated,
@@ -36,6 +37,7 @@ import {
   requestUsernameReminder,
   resendVerificationCode,
   resendVerificationEmail,
+  updateBusinessLocation,
   verifyEmailCode,
 } from './src/api';
 import type { AuthPortal, LoginFormState, ProfileFormState } from './src/appFlowTypes';
@@ -134,6 +136,7 @@ const cityMapRegions: Record<Exclude<CityFilterValue, 'all'>, Region> = {
     longitudeDelta: 0.13,
   },
 };
+const mobileBusinessVenueType = 'mobile';
 type AppScreenMode = 'splash' | 'auth' | 'browse' | 'profiles' | 'settings' | 'support' | 'privacy-policy' | 'terms-of-service' | 'business-search' | 'business-claim' | 'manual-business-claim' | 'email-verification';
 type OnboardingTransitionDirection = 'forward' | 'backward';
 type TransitionAxis = 'x' | 'y';
@@ -287,6 +290,8 @@ function AppScreen() {
   const [renderedMappedPlaces, setRenderedMappedPlaces] = useState<MappedPlace[]>([]);
   const [renderedMappedPlaceKey, setRenderedMappedPlaceKey] = useState('');
   const authenticatedSessionRef = useRef<SignupResponse | null>(null);
+  const businessLocationWatcherRef = useRef<Location.LocationSubscription | null>(null);
+  const businessLocationLastReportedRef = useRef<string>('');
   const startupImageLoadCountRef = useRef(0);
   const shouldUseNativeMapBoundaries = false;
   const normalizedSearchQuery = normalizeSearchText(searchQuery);
@@ -336,6 +341,105 @@ function AppScreen() {
   useEffect(() => {
     authenticatedSessionRef.current = authenticatedSession;
   }, [authenticatedSession]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function startBusinessLocationTracking() {
+      if (
+        !authenticatedSession?.auth_token
+        || authenticatedSession.portal !== 'business'
+        || !authenticatedSession.requires_business_location_tracking
+      ) {
+        businessLocationLastReportedRef.current = '';
+        businessLocationWatcherRef.current?.remove();
+        businessLocationWatcherRef.current = null;
+        return;
+      }
+
+      if (businessLocationWatcherRef.current) {
+        return;
+      }
+
+      try {
+        const permission = await Location.requestForegroundPermissionsAsync();
+        if (cancelled) {
+          return;
+        }
+
+        if (!permission.granted) {
+          setProfileErrorMessage('On the Move businesses must enable location access so their map pin can follow their current service area.');
+          return;
+        }
+
+        const reportLocation = async (coords: { latitude: number; longitude: number; accuracy?: number | null }) => {
+          const currentSession = authenticatedSessionRef.current;
+          if (!currentSession?.auth_token || !currentSession.requires_business_location_tracking) {
+            return;
+          }
+
+          const roundedLocationKey = `${coords.latitude.toFixed(4)}:${coords.longitude.toFixed(4)}`;
+          if (businessLocationLastReportedRef.current === roundedLocationKey) {
+            return;
+          }
+
+          businessLocationLastReportedRef.current = roundedLocationKey;
+          try {
+            const response = await updateBusinessLocation(apiBaseUrl, currentSession.auth_token, {
+              latitude: coords.latitude,
+              longitude: coords.longitude,
+              accuracy_meters: coords.accuracy ?? null,
+            });
+            if (!cancelled) {
+              setAuthenticatedSession(response);
+            }
+          } catch (error) {
+            if (!cancelled) {
+              setProfileErrorMessage(getErrorMessage(error));
+            }
+          }
+        };
+
+        const initialPosition = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        if (cancelled) {
+          return;
+        }
+        void reportLocation(initialPosition.coords);
+
+        const watcher = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.Balanced,
+            distanceInterval: 75,
+            timeInterval: 60000,
+          },
+          (position) => {
+            void reportLocation(position.coords);
+          },
+        );
+
+        if (cancelled) {
+          watcher.remove();
+          return;
+        }
+
+        businessLocationWatcherRef.current = watcher;
+      } catch (error) {
+        if (!cancelled) {
+          setProfileErrorMessage(getErrorMessage(error));
+        }
+      }
+    }
+
+    void startBusinessLocationTracking();
+
+    return () => {
+      cancelled = true;
+      businessLocationWatcherRef.current?.remove();
+      businessLocationWatcherRef.current = null;
+    };
+  }, [apiBaseUrl, authenticatedSession?.auth_token, authenticatedSession?.portal, authenticatedSession?.requires_business_location_tracking]);
 
   useEffect(() => {
     if (startupImagesReady) {
@@ -1620,7 +1724,18 @@ function AppScreen() {
   }
 
   function handleChangeProfileField(field: keyof ProfileFormState, value: string) {
-    setProfileForm((current) => ({ ...current, [field]: value }));
+  setProfileForm((current) => {
+    if (field === 'business_venue_type') {
+      const nextIsMobileBusiness = value === mobileBusinessVenueType;
+      return {
+        ...current,
+        business_venue_type: value,
+        address_not_applicable: nextIsMobileBusiness && !current.employer_address ? true : current.address_not_applicable,
+      };
+    }
+
+    return { ...current, [field]: value };
+  });
   }
 
   function handleChangeProfileToggle(field: 'address_not_applicable', value: boolean) {
@@ -1868,6 +1983,8 @@ function AppScreen() {
     setProfileErrorMessage(null);
     setProfileMessage(null);
 
+    const isMobileBusiness = profileForm.business_venue_type === mobileBusinessVenueType;
+
     try {
       const payload: ManualBusinessSignupRequest = {
         username: profileForm.username,
@@ -1884,7 +2001,7 @@ function AppScreen() {
         work_email: profileForm.work_email,
         work_phone: profileForm.work_phone,
         employer_address: profileForm.employer_address,
-        address_not_applicable: profileForm.address_not_applicable,
+        address_not_applicable: isMobileBusiness && !profileForm.employer_address ? true : profileForm.address_not_applicable,
         verification_summary: profileForm.verification_summary,
         supporting_details: profileForm.supporting_details,
       };

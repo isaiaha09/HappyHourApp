@@ -1,6 +1,7 @@
 import { NativeModules } from 'react-native';
 
 import type {
+  BusinessLocationUpdateRequest,
   BusinessSignupRequest,
   CustomerSignupRequest,
   EmailVerificationChallengeResponse,
@@ -105,6 +106,10 @@ export async function createBusinessProfile(baseUrl: string, payload: BusinessSi
 
 export async function createManualBusinessProfile(baseUrl: string, payload: ManualBusinessSignupRequest) {
   return postJson<EmailVerificationChallengeResponse>(baseUrl, '/profiles/manual-business-signup/', payload);
+}
+
+export async function updateBusinessLocation(baseUrl: string, authToken: string, payload: BusinessLocationUpdateRequest) {
+  return postAuthedJson<SignupResponse>(baseUrl, '/profiles/business-location/', authToken, payload);
 }
 
 export async function verifyEmailCode(baseUrl: string, payload: EmailVerificationCodeRequest) {

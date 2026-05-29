@@ -3,7 +3,7 @@ from django.core.mail import send_mail
 from django.utils.html import escape
 from django.utils import timezone
 
-from places.models import AccountProfile, BusinessClaim, ProfileAuthToken
+from places.models import AccountProfile, BusinessClaim, ProfileAuthToken, VenueType
 
 
 def get_or_create_account_profile(user):
@@ -76,6 +76,18 @@ def build_account_response(user, portal, claim=None, token=None):
 			'verification_summary': primary_claim.verification_summary,
 		}
 
+	tracked_business_location = {}
+	requires_business_location_tracking = False
+	tracked_snapshot = active_membership.claim.listing_snapshot if active_membership else (primary_claim.listing_snapshot if primary_claim else None)
+	if tracked_snapshot is not None and tracked_snapshot.venue_type == VenueType.MOBILE:
+		requires_business_location_tracking = True
+		tracked_business_location = {
+			'latitude': tracked_snapshot.tracked_location_latitude,
+			'longitude': tracked_snapshot.tracked_location_longitude,
+			'accuracy_meters': tracked_snapshot.tracked_location_accuracy_meters,
+			'updated_at': tracked_snapshot.tracked_location_updated_at,
+		}
+
 	return {
 		'id': user.id,
 		'username': user.username,
@@ -96,6 +108,8 @@ def build_account_response(user, portal, claim=None, token=None):
 		'billing_portal_url': profile.billing_portal_url if profile_type == 'business' else '',
 		'approved_businesses': approved_businesses,
 		'business_contact': business_contact,
+		'requires_business_location_tracking': requires_business_location_tracking,
+		'tracked_business_location': tracked_business_location,
 		'can_access_places': True,
 	}
 

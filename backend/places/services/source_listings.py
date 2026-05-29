@@ -7,13 +7,14 @@ from django.core.cache import caches
 from django.core.exceptions import ImproperlyConfigured
 from django.utils.text import slugify
 
-from places.models import City, DealType, VenueType, Weekday
+from places.models import BusinessMembership, City, DealType, VenueType, Weekday
 from places.services.importers.business_websites import BusinessWebsiteImporter
 from places.services.importers.discovered_json_places import CuratedJsonPlacesImporter, DiscoveryJsonPlacesImporter
 from places.services.importers.example_html import ExampleHtmlImporter
 from places.services.importers.here_places import HerePlacesImporter
 from places.services.importers.openstreetmap_places import HybridPlacesImporter, OpenStreetMapPlacesImporter
 from places.services.importers.tomtom_places import TomTomPlacesImporter
+from places.services.importers.types import ImportedPlace
 from places.services.importers.yelp_places import YelpFusionPlacesImporter
 
 
@@ -47,7 +48,7 @@ def load_source_records(source_name=None):
 
 
 def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_deals=None, resolve_missing_coordinates=True):
-	payloads = []
+	payloads_by_slug = {}
 	for place_records in _group_source_records(load_source_records(source_name=source_name)).values():
 		payload = _build_grouped_place_payload(
 			place_records,
@@ -56,6 +57,21 @@ def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_
 		)
 		if payload is None:
 			continue
+		payloads_by_slug[payload['slug']] = payload
+
+	for snapshot in _get_active_business_snapshots():
+		snapshot_payload = _build_snapshot_place_payload(snapshot, resolve_missing_coordinates=resolve_missing_coordinates)
+		if snapshot_payload is None:
+			continue
+		existing_payload = payloads_by_slug.get(snapshot_payload['slug'])
+		if existing_payload is None:
+			payloads_by_slug[snapshot_payload['slug']] = snapshot_payload
+			continue
+		if snapshot.venue_type == VenueType.MOBILE:
+			payloads_by_slug[snapshot_payload['slug']] = _merge_mobile_snapshot_payload(existing_payload, snapshot_payload)
+
+	payloads = []
+	for payload in payloads_by_slug.values():
 		if has_deals is True and not payload['has_deals']:
 			continue
 		if has_deals is False and payload['has_deals']:
@@ -159,6 +175,76 @@ def _build_grouped_place_payload(place_records, preferred_city=None, resolve_mis
 		'deals': grouped_deals,
 		'locations': location_payloads,
 	}
+
+
+def _get_active_business_snapshots():
+	memberships = (
+		BusinessMembership.objects
+		.select_related('claim__listing_snapshot')
+		.filter(is_active=True)
+		.order_by('-approved_at', '-created_at')
+	)
+	seen_snapshot_ids = set()
+	for membership in memberships:
+		snapshot = membership.claim.listing_snapshot
+		if snapshot.pk in seen_snapshot_ids:
+			continue
+		seen_snapshot_ids.add(snapshot.pk)
+		yield snapshot
+
+
+def _build_snapshot_place_payload(snapshot, resolve_missing_coordinates=True):
+	should_resolve_coordinates = resolve_missing_coordinates and snapshot.venue_type != VenueType.MOBILE
+	place_record = ImportedPlace(
+		name=snapshot.name,
+		profile_name=snapshot.name,
+		profile_slug=snapshot.listing_slug,
+		city=snapshot.city,
+		venue_type=snapshot.venue_type,
+		address_line_1=_snapshot_display_address(snapshot),
+		address_line_2=snapshot.address_line_2,
+		neighborhood=snapshot.neighborhood,
+		state=snapshot.state,
+		postal_code=snapshot.postal_code,
+		latitude=snapshot.tracked_location_latitude if snapshot.venue_type == VenueType.MOBILE else None,
+		longitude=snapshot.tracked_location_longitude if snapshot.venue_type == VenueType.MOBILE else None,
+		phone_number=snapshot.phone_number,
+		website_url=snapshot.website_url,
+		external_id=snapshot.external_id or snapshot.listing_slug or f'listing-snapshot-{snapshot.pk}',
+		source_name='claimed_business',
+		source_url=snapshot.source_url or snapshot.website_url,
+	)
+	return _build_place_payload(place_record, resolve_missing_coordinates=should_resolve_coordinates)
+
+
+def _snapshot_display_address(snapshot):
+	if snapshot.venue_type == VenueType.MOBILE:
+		if snapshot.tracked_location_latitude is not None and snapshot.tracked_location_longitude is not None:
+			return 'Approximate live location'
+		return snapshot.address_line_1 or 'Approximate live location unavailable'
+	return snapshot.address_line_1
+
+
+def _merge_mobile_snapshot_payload(existing_payload, snapshot_payload):
+	merged_payload = dict(existing_payload)
+	merged_payload.update({
+		'city': snapshot_payload['city'],
+		'city_label': snapshot_payload['city_label'],
+		'venue_type': snapshot_payload['venue_type'],
+		'venue_type_label': snapshot_payload['venue_type_label'],
+		'address_line_1': snapshot_payload['address_line_1'],
+		'address_line_2': snapshot_payload['address_line_2'],
+		'neighborhood': snapshot_payload['neighborhood'],
+		'state': snapshot_payload['state'],
+		'postal_code': snapshot_payload['postal_code'],
+		'latitude': snapshot_payload['latitude'],
+		'longitude': snapshot_payload['longitude'],
+		'phone_number': snapshot_payload['phone_number'] or existing_payload['phone_number'],
+		'website_url': snapshot_payload['website_url'] or existing_payload['website_url'],
+		'is_verified': True,
+		'locations': snapshot_payload['locations'],
+	})
+	return merged_payload
 
 
 def _dedupe_profile_locations(place_records):
@@ -473,7 +559,7 @@ def _build_deal_weekdays(place_record):
 
 
 def _is_verified_place_record(place_record):
-	return getattr(place_record, 'source_name', '') == 'business_websites'
+	return getattr(place_record, 'source_name', '') in {'business_websites', 'claimed_business'}
 
 
 def _build_deal_identity_key(deal_record):

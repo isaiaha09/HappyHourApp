@@ -34,6 +34,8 @@ class AccountResponseSerializer(serializers.Serializer):
 	business_contact = serializers.DictField(required=False)
 	can_access_places = serializers.BooleanField(required=False)
 	two_factor_pending_setup = serializers.BooleanField(required=False)
+	requires_business_location_tracking = serializers.BooleanField(required=False)
+	tracked_business_location = serializers.DictField(required=False)
 
 
 class LoginSerializer(serializers.Serializer):
@@ -233,16 +235,22 @@ class ManualBusinessSignupSerializer(CustomerSignupSerializer):
 
 	def validate(self, attrs):
 		attrs = super().validate(attrs)
+		is_mobile_business = attrs.get('business_venue_type') == VenueType.MOBILE
+		if is_mobile_business and not attrs.get('employer_address'):
+			attrs['address_not_applicable'] = True
 		if not attrs.get('address_not_applicable') and not attrs.get('employer_address'):
 			raise serializers.ValidationError({'employer_address': ['Employer address is required unless you mark Address Not Applicable.']})
 		return attrs
 
 	def create(self, validated_data):
+		business_venue_type = validated_data.pop('business_venue_type', '')
+		is_mobile_business = business_venue_type == VenueType.MOBILE
+		listing_address = validated_data.get('employer_address') or ('Approximate live location' if is_mobile_business else 'Address Not Applicable')
 		listing_snapshot = ListingSnapshot.objects.create(
 			name=validated_data.pop('business_name'),
 			city=validated_data.pop('business_city', ''),
-			venue_type=validated_data.pop('business_venue_type', ''),
-			address_line_1=validated_data.get('employer_address') or 'Address Not Applicable',
+			venue_type=business_venue_type,
+			address_line_1=listing_address,
 			website_url=validated_data.pop('business_website_url', ''),
 			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
 			external_id=f'manual-{slugify(validated_data.get("username", "business"))}',
@@ -269,6 +277,12 @@ class ManualBusinessSignupSerializer(CustomerSignupSerializer):
 		claim.submit_for_review()
 		user._created_business_claim = claim
 		return user
+
+
+class BusinessLocationUpdateSerializer(serializers.Serializer):
+	latitude = serializers.FloatField(min_value=-90, max_value=90)
+	longitude = serializers.FloatField(min_value=-180, max_value=180)
+	accuracy_meters = serializers.FloatField(required=False, allow_null=True, min_value=0)
 
 
 def sync_listing_snapshot_from_place_payload(payload):

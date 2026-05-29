@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    BusinessLocationUpdateView,
     BusinessSignupView,
     CustomerSignupView,
     DealListView,
@@ -35,6 +36,7 @@ urlpatterns = [
     path('profiles/password-reset-request/', PasswordResetRequestView.as_view(), name='profile-password-reset-request'),
     path('profiles/reset-password/<str:token>/', PasswordResetView.as_view(), name='profile-password-reset'),
     path('profiles/me/', ProfileDashboardView.as_view(), name='profile-dashboard'),
+    path('profiles/business-location/', BusinessLocationUpdateView.as_view(), name='profile-business-location'),
     path('profiles/resend-verification-code/', ResendEmailVerificationCodeView.as_view(), name='profile-resend-verification-code'),
     path('profiles/resend-verification/', ResendVerificationEmailView.as_view(), name='profile-resend-verification'),
     path('profiles/two-factor/', ToggleTwoFactorView.as_view(), name='profile-toggle-two-factor'),

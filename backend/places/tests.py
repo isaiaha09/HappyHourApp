@@ -1845,6 +1845,40 @@ class SourceListingIdentityTests(TestCase):
 		self.assertIsNone(payloads[0]['locations'][0]['longitude'])
 		mock_get_place_coordinates.assert_called_once_with(mock_load_source_records.return_value[0], resolve_missing=False)
 
+	@patch('places.services.source_listings.load_source_records')
+	def test_mobile_business_membership_overrides_map_coordinates(self, mock_load_source_records):
+		mock_load_source_records.return_value = []
+		user = User.objects.create_user(username='mobile_owner', email='mobile-owner@example.com', password='test-pass-123')
+		snapshot = ListingSnapshot.objects.create(
+			name='Scoops Truck',
+			listing_slug='scoops-truck',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+			tracked_location_latitude=34.2789,
+			tracked_location_longitude=-119.2914,
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=user,
+			listing_snapshot=snapshot,
+			contact_name='Mobile Owner',
+			work_email='owner@scoops.example.com',
+			verification_summary='I operate this truck.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(user=user, claim=claim, is_active=True)
+
+		payloads = get_source_place_payloads(resolve_missing_coordinates=False)
+
+		self.assertEqual(len(payloads), 1)
+		self.assertEqual(payloads[0]['slug'], 'scoops-truck')
+		self.assertEqual(payloads[0]['venue_type'], VenueType.MOBILE)
+		self.assertEqual(payloads[0]['venue_type_label'], 'On the Move')
+		self.assertEqual(payloads[0]['latitude'], 34.2789)
+		self.assertEqual(payloads[0]['longitude'], -119.2914)
+		self.assertEqual(payloads[0]['locations'][0]['address_line_1'], 'Approximate live location')
+		self.assertTrue(payloads[0]['is_verified'])
+
 	@override_settings(HERE_API_KEY='', TOMTOM_API_KEY='')
 	def test_hybrid_importer_adds_osm_places_without_duplicating_curated_sources(self):
 		class StaticImporter:
@@ -2665,6 +2699,37 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(claim.listing_snapshot.source_name, BusinessClaim.MANUAL_SOURCE_NAME)
 		self.assertEqual(claim.listing_snapshot.address_line_1, 'Address Not Applicable')
 
+	def test_manual_mobile_business_signup_defaults_to_live_location_placeholder(self):
+		response = self.client.post(
+			reverse('manual-business-signup'),
+			{
+				'username': 'icecream_truck_owner',
+				'email': 'icecream@example.com',
+				'password': 'test-pass-123',
+				'first_name': 'Taylor',
+				'last_name': 'Driver',
+				'business_name': 'Scoops Truck',
+				'business_city': City.VENTURA,
+				'business_venue_type': VenueType.MOBILE,
+				'business_website_url': 'https://example.com/scoops-truck',
+				'contact_name': 'Taylor Driver',
+				'job_title': '',
+				'work_email': 'hello@scoopstruck.com',
+				'work_phone': '',
+				'employer_address': '',
+				'address_not_applicable': False,
+				'verification_summary': 'We operate a mobile ice cream truck across Ventura County.',
+				'supporting_details': '',
+			},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, 201)
+		claim = BusinessClaim.objects.select_related('listing_snapshot').get(claimant__username='icecream_truck_owner')
+		self.assertTrue(claim.address_not_applicable)
+		self.assertEqual(claim.listing_snapshot.venue_type, VenueType.MOBILE)
+		self.assertEqual(claim.listing_snapshot.address_line_1, 'Approximate live location')
+
 	def test_business_portal_login_returns_claim_status(self):
 		user = User.objects.create_user(username='pending_owner', email='pending@example.com', password='test-pass-123')
 		snapshot = ListingSnapshot.objects.create(
@@ -2884,6 +2949,69 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(len(response.data['approved_businesses']), 1)
 		self.assertEqual(response.data['approved_businesses'][0]['name'], 'Approved Spot')
 		self.assertEqual(response.data['business_contact']['work_email'], 'owner@approvedspot.com')
+
+	def test_profile_dashboard_includes_mobile_location_tracking_status(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Scoops Truck',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+			tracked_location_latitude=34.2791,
+			tracked_location_longitude=-119.2908,
+			tracked_location_accuracy_meters=42.0,
+			tracked_location_updated_at=timezone.now(),
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@scoops.example.com',
+			employer_address='',
+			verification_summary='I operate the truck.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+
+		response = self.client.get(reverse('profile-dashboard'), {'portal': 'business'}, **self.auth_headers())
+
+		self.assertEqual(response.status_code, 200)
+		self.assertTrue(response.data['requires_business_location_tracking'])
+		self.assertEqual(response.data['tracked_business_location']['latitude'], 34.2791)
+		self.assertEqual(response.data['tracked_business_location']['accuracy_meters'], 42.0)
+
+	def test_business_location_update_updates_mobile_snapshot(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Scoops Truck',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@scoops.example.com',
+			employer_address='',
+			verification_summary='I operate the truck.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+
+		response = self.client.post(
+			reverse('profile-business-location'),
+			{'latitude': 34.2812, 'longitude': -119.2944, 'accuracy_meters': 35.5},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 200)
+		snapshot.refresh_from_db()
+		self.assertEqual(snapshot.tracked_location_latitude, 34.2812)
+		self.assertEqual(snapshot.tracked_location_longitude, -119.2944)
+		self.assertEqual(snapshot.tracked_location_accuracy_meters, 35.5)
+		self.assertTrue(response.data['requires_business_location_tracking'])
 
 	def test_resend_verification_email_sends_message(self):
 		response = self.client.post(reverse('profile-resend-verification'), {}, format='json', **self.auth_headers())
