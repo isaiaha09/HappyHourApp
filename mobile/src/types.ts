@@ -113,11 +113,29 @@ export type SignupResponse = {
   can_access_places?: boolean;
 };
 
+export type EmailVerificationChallengeResponse = SignupResponse & {
+  detail?: string;
+  email_verification_required?: boolean;
+  verification_code_expires_at?: string | null;
+  verification_code_ttl_seconds?: number;
+};
+
 export type LoginRequest = {
   portal: 'customer' | 'business';
   identifier: string;
   password: string;
   two_factor_code?: string;
+};
+
+export type EmailVerificationCodeRequest = {
+  username: string;
+  code: string;
+  portal?: 'customer' | 'business';
+};
+
+export type ResendEmailVerificationCodeRequest = {
+  username: string;
+  portal?: 'customer' | 'business';
 };
 
 export type TwoFactorSetupResponse = {

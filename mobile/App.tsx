@@ -34,7 +34,9 @@ import {
   loginProfile,
   requestPasswordReset,
   requestUsernameReminder,
+  resendVerificationCode,
   resendVerificationEmail,
+  verifyEmailCode,
 } from './src/api';
 import type { AuthPortal, LoginFormState, ProfileFormState } from './src/appFlowTypes';
 import { styles } from './src/appStyles';
@@ -51,7 +53,7 @@ import {
   weekdayFilters,
   type WeekdayFilterValue,
 } from './src/browseConfig';
-import { DashboardScreen } from './src/screens/DashboardScreen';
+import { AccountSettingsScreen, DashboardScreen } from './src/screens/DashboardScreen';
 import { BrowseControls } from './src/screens/BrowseControls';
 import { PlaceDetailScreen } from './src/screens/PlaceDetailScreen';
 import { SplashScreen } from './src/screens/SplashScreen';
@@ -59,7 +61,11 @@ import {
   AuthPortalScreen,
   BusinessSearchScreen,
   BusinessVerificationScreen,
+  ContactSupportScreen,
   CreateProfileScreen,
+  EmailVerificationScreen,
+  PrivacyPolicyScreen,
+  TermsOfServiceScreen,
 } from './src/screens/ProfileFlowScreens';
 import {
   consolidatePlacesBySlug,
@@ -74,6 +80,7 @@ import {
 import type {
   BusinessSignupRequest,
   CustomerSignupRequest,
+  EmailVerificationChallengeResponse,
   LoginRequest,
   ManualBusinessSignupRequest,
   PlaceDetail,
@@ -127,7 +134,7 @@ const cityMapRegions: Record<Exclude<CityFilterValue, 'all'>, Region> = {
     longitudeDelta: 0.13,
   },
 };
-type AppScreenMode = 'splash' | 'auth' | 'browse' | 'profiles' | 'business-search' | 'business-claim' | 'manual-business-claim';
+type AppScreenMode = 'splash' | 'auth' | 'browse' | 'profiles' | 'settings' | 'support' | 'privacy-policy' | 'terms-of-service' | 'business-search' | 'business-claim' | 'manual-business-claim' | 'email-verification';
 type OnboardingTransitionDirection = 'forward' | 'backward';
 type TransitionAxis = 'x' | 'y';
 
@@ -256,6 +263,9 @@ function AppScreen() {
   const [profileSubmitting, setProfileSubmitting] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [profileErrorMessage, setProfileErrorMessage] = useState<string | null>(null);
+  const [supportDraftContext, setSupportDraftContext] = useState<{ message: string; subject: string } | null>(null);
+  const [pendingEmailVerification, setPendingEmailVerification] = useState<EmailVerificationChallengeResponse | null>(null);
+  const [emailVerificationCode, setEmailVerificationCode] = useState('');
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [dashboardSubmitting, setDashboardSubmitting] = useState(false);
   const [profilePlaces, setProfilePlaces] = useState<PlaceListItem[]>([]);
@@ -404,9 +414,14 @@ function AppScreen() {
     };
   }, [apiBaseUrl]);
   const availableClaimPlaces = consolidatePlacesBySlug(availableProfilePlaces);
-  const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'business-search', 'business-claim', 'manual-business-claim']);
+  const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'settings', 'support', 'privacy-policy', 'terms-of-service', 'business-search', 'business-claim', 'manual-business-claim', 'email-verification']);
+  const profileStackTransitionScreens = new Set<AppScreenMode>(['profiles', 'settings', 'support', 'privacy-policy', 'terms-of-service']);
   const currentOnboardingScreen = onboardingScreenKeys.has(screenMode) ? screenMode : null;
   const usesOnboardingSlideTransition = currentOnboardingScreen !== null || incomingOnboardingScreen !== null;
+  const usesProfileStackSlideTransition = currentOnboardingScreen !== null
+    && incomingOnboardingScreen !== null
+    && profileStackTransitionScreens.has(currentOnboardingScreen)
+    && profileStackTransitionScreens.has(incomingOnboardingScreen);
   const usesBrowseProfileSlideTransition = browseProfileTransitionFrom !== null
     && incomingBrowseProfileScreen !== null
     && browseProfileTransitionFrom !== incomingBrowseProfileScreen;
@@ -594,6 +609,7 @@ function AppScreen() {
 
     const status = (parsedUrl.searchParams.get('status') ?? '').trim().toLowerCase();
     if (status === 'success') {
+      dismissKeyboardForScreenTransition();
       setProfileErrorMessage(null);
       setAuthMessage(null);
       setProfileMessage('Email verified successfully.');
@@ -852,6 +868,8 @@ function AppScreen() {
   }
 
   function startLoginSuccessTransition() {
+    dismissKeyboardForScreenTransition();
+
     if (onboardingTransitionFrameRef.current !== null) {
       cancelAnimationFrame(onboardingTransitionFrameRef.current);
       onboardingTransitionFrameRef.current = null;
@@ -894,6 +912,8 @@ function AppScreen() {
     setIncomingOnboardingScreen(null);
     setLogoutTransitionSession(authenticatedSession);
     setAuthenticatedSession(null);
+    setPendingEmailVerification(null);
+    setEmailVerificationCode('');
     setScreenMode('auth');
     setAuthIntroPending(false);
     setShowLogoutTransition(true);
@@ -1471,6 +1491,8 @@ function AppScreen() {
   function handleOpenProfiles() {
     dismissKeyboardForScreenTransition();
     setProfileErrorMessage(null);
+    setPendingEmailVerification(null);
+    setEmailVerificationCode('');
     if (authenticatedSession && screenMode === 'browse' && !selectedPlaceSlug) {
       navigateBrowseProfileTransition('profiles');
       return;
@@ -1487,6 +1509,9 @@ function AppScreen() {
     setAuthPortal(portal);
     setAuthMessage(null);
     setProfileErrorMessage(null);
+    setProfileMessage(null);
+    setPendingEmailVerification(null);
+    setEmailVerificationCode('');
     setShouldAutoFocusLoginField(true);
     setShowLoginTwoFactorCodeField(false);
     setLoginForm(initialLoginFormState);
@@ -1523,6 +1548,59 @@ function AppScreen() {
       return;
     }
     navigateScreen('splash', 'backward');
+  }
+
+  function handleOpenSupport() {
+    dismissKeyboardForScreenTransition();
+    setProfileErrorMessage(null);
+    setProfileMessage(null);
+    setSupportDraftContext(null);
+    navigateScreen('support', 'forward');
+  }
+
+  function handleBackFromSupport() {
+    dismissKeyboardForScreenTransition();
+    setProfileErrorMessage(null);
+    navigateScreen('settings', 'backward');
+  }
+
+  function handleOpenSettings() {
+    dismissKeyboardForScreenTransition();
+    setProfileErrorMessage(null);
+    setProfileMessage(null);
+    navigateScreen('settings', 'forward');
+  }
+
+  function handleBackFromSettings() {
+    dismissKeyboardForScreenTransition();
+    setProfileErrorMessage(null);
+    navigateScreen('profiles', 'backward');
+  }
+
+  function handleOpenPrivacyPolicy() {
+    dismissKeyboardForScreenTransition();
+    setProfileErrorMessage(null);
+    navigateScreen('privacy-policy', 'forward');
+  }
+
+  function handleOpenTermsOfService() {
+    dismissKeyboardForScreenTransition();
+    setProfileErrorMessage(null);
+    navigateScreen('terms-of-service', 'forward');
+  }
+
+  function handleBackToSettings() {
+    dismissKeyboardForScreenTransition();
+    setProfileErrorMessage(null);
+    navigateScreen('settings', 'backward');
+  }
+
+  function handleOpenSupportWithDraft(subject: string, message: string) {
+    dismissKeyboardForScreenTransition();
+    setProfileErrorMessage(null);
+    setProfileMessage(null);
+    setSupportDraftContext({ subject, message });
+    navigateScreen('support', 'forward');
   }
 
   function handleChangeLoginField(field: keyof LoginFormState, value: string) {
@@ -1563,6 +1641,20 @@ function AppScreen() {
     }));
   }
 
+  function moveToEmailVerification(response: EmailVerificationChallengeResponse, direction: OnboardingTransitionDirection = 'forward') {
+    dismissKeyboardForScreenTransition();
+    setAuthenticatedSession(null);
+    setPendingEmailVerification(response);
+    setEmailVerificationCode('');
+    setAuthPortal(response.portal);
+    setAuthMessage(null);
+    setProfileErrorMessage(null);
+    setProfileMessage(response.detail ?? `Enter the code we sent to ${response.email}.`);
+    setShowLoginTwoFactorCodeField(false);
+    setLoginForm(initialLoginFormState);
+    navigateScreen('email-verification', direction);
+  }
+
   async function handleLogin() {
     setLoginSubmitting(true);
     setProfileErrorMessage(null);
@@ -1575,7 +1667,13 @@ function AppScreen() {
         two_factor_code: loginForm.two_factor_code.trim(),
       };
       const response = await loginProfile(apiBaseUrl, payload);
+      if (response.email_verification_required || !response.auth_token) {
+        moveToEmailVerification(response);
+        return;
+      }
+
       setAuthenticatedSession(response);
+      setPendingEmailVerification(null);
       setAuthMessage(null);
       setShowLoginTwoFactorCodeField(false);
       setLoginForm(initialLoginFormState);
@@ -1592,6 +1690,61 @@ function AppScreen() {
       setProfileErrorMessage(requiresTwoFactorCode ? message.replace(/^two_factor_code:\s*/i, '') : message);
     } finally {
       setLoginSubmitting(false);
+    }
+  }
+
+  async function handleSubmitEmailVerificationCode() {
+    if (!pendingEmailVerification) {
+      return;
+    }
+
+    if (emailVerificationCode.trim().length !== 6) {
+      setProfileErrorMessage('Enter the 6-digit verification code.');
+      return;
+    }
+
+    setProfileSubmitting(true);
+    setProfileErrorMessage(null);
+
+    try {
+      const response = await verifyEmailCode(apiBaseUrl, {
+        username: pendingEmailVerification.username,
+        code: emailVerificationCode,
+        portal: pendingEmailVerification.portal,
+      });
+      dismissKeyboardForScreenTransition();
+      setPendingEmailVerification(null);
+      setEmailVerificationCode('');
+      setAuthenticatedSession(response);
+      setProfileMessage('Email verified successfully.');
+      navigateScreen('profiles', 'forward');
+    } catch (error) {
+      setProfileErrorMessage(getErrorMessage(error));
+    } finally {
+      setProfileSubmitting(false);
+    }
+  }
+
+  async function handleResendEmailVerificationCode() {
+    if (!pendingEmailVerification) {
+      return;
+    }
+
+    setProfileSubmitting(true);
+    setProfileErrorMessage(null);
+
+    try {
+      const response = await resendVerificationCode(apiBaseUrl, {
+        username: pendingEmailVerification.username,
+        portal: pendingEmailVerification.portal,
+      });
+      setPendingEmailVerification(response);
+      setEmailVerificationCode('');
+      setProfileMessage(response.detail ?? `A new verification code was sent to ${response.email}.`);
+    } catch (error) {
+      setProfileErrorMessage(getErrorMessage(error));
+    } finally {
+      setProfileSubmitting(false);
     }
   }
 
@@ -1656,10 +1809,7 @@ function AppScreen() {
       };
       const response = await createCustomerProfile(apiBaseUrl, payload);
       setProfileForm(initialProfileFormState);
-      setAuthenticatedSession(response);
-      setAuthPortal('customer');
-      setProfileMessage(`Account created for ${response.username}. Check your email to verify your address.`);
-      navigateScreen('profiles', 'forward');
+      moveToEmailVerification(response);
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
     } finally {
@@ -1698,10 +1848,8 @@ function AppScreen() {
       const response = await createBusinessProfile(apiBaseUrl, payload);
       setProfileForm(initialProfileFormState);
       setSelectedClaimPlace(null);
-      setAuthenticatedSession(response);
-      setAuthPortal('business');
-      setProfileMessage(`Business claim submitted for ${response.business_name ?? 'your business'}. Check your email to verify your address.`);
-      navigateScreen('profiles', 'forward');
+      setSelectedClaimLocationId(null);
+      moveToEmailVerification(response);
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
     } finally {
@@ -1743,10 +1891,8 @@ function AppScreen() {
       const response = await createManualBusinessProfile(apiBaseUrl, payload);
       setProfileForm(initialProfileFormState);
       setSelectedClaimPlace(null);
-      setAuthenticatedSession(response);
-      setAuthPortal('business');
-      setProfileMessage(`Business profile submitted for ${response.business_name ?? 'your business'}. Check your email to verify your address.`);
-      navigateScreen('profiles', 'forward');
+      setSelectedClaimLocationId(null);
+      moveToEmailVerification(response);
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
     } finally {
@@ -1891,6 +2037,14 @@ function AppScreen() {
     navigateScreen('profiles', 'backward');
   }
 
+  function handleBackFromEmailVerification() {
+    dismissKeyboardForScreenTransition();
+    setProfileErrorMessage(null);
+    setProfileMessage(null);
+    setEmailVerificationCode('');
+    navigateScreen('auth', 'backward');
+  }
+
   function handleBackToBusinessSearch() {
     dismissKeyboardForScreenTransition();
     setProfileErrorMessage(null);
@@ -1992,8 +2146,75 @@ function AppScreen() {
     outputRange: [1, -1],
   });
 
-  function renderProfilesScreen(profileSessionOverride?: SignupResponse | null) {
+  function renderProfilesScreen(profileSessionOverride?: SignupResponse | null, targetScreenOverride?: AppScreenMode) {
     const profileSession = profileSessionOverride ?? authenticatedSession;
+    const targetScreen = targetScreenOverride ?? screenMode;
+
+    if (targetScreen === 'support' && profileSession) {
+      return (
+        <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
+          <ContactSupportScreen
+            errorMessage={profileErrorMessage}
+            initialMessage={supportDraftContext?.message}
+            initialSubject={supportDraftContext?.subject}
+            isLandscape={isLandscape}
+            onBack={handleBackFromSupport}
+            session={profileSession}
+          />
+        </SafeAreaView>
+      );
+    }
+
+    if (targetScreen === 'privacy-policy' && profileSession) {
+      return (
+        <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
+          <PrivacyPolicyScreen isLandscape={isLandscape} onBack={handleBackToSettings} />
+        </SafeAreaView>
+      );
+    }
+
+    if (targetScreen === 'terms-of-service' && profileSession) {
+      return (
+        <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
+          <TermsOfServiceScreen isLandscape={isLandscape} onBack={handleBackToSettings} />
+        </SafeAreaView>
+      );
+    }
+
+    if (targetScreen === 'settings' && profileSession) {
+      return (
+        <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
+          <AccountSettingsScreen
+            errorMessage={profileErrorMessage}
+            isLandscape={isLandscape}
+            message={profileMessage}
+            onBack={handleBackFromSettings}
+            onBeginTwoFactorSetup={() => void handleBeginTwoFactorSetup()}
+            onChangeTwoFactorDisableCode={setTwoFactorDisableCode}
+            onChangeTwoFactorSetupCode={setTwoFactorSetupCode}
+            onConfirmTwoFactorSetup={() => void handleConfirmTwoFactorSetup()}
+            onDisableTwoFactor={() => void handleDisableTwoFactor()}
+            onLogout={handleLogout}
+            onOpenContactSupport={handleOpenSupport}
+            onOpenDisableAccountRequest={() => handleOpenSupportWithDraft(
+              'Disable my DiningDealz account',
+              'Please disable my DiningDealz account. I understand this request is processed by the support team after account-owner verification.',
+            )}
+            onOpenPrivacyPolicy={handleOpenPrivacyPolicy}
+            onOpenTermsOfService={handleOpenTermsOfService}
+            onOpenDeleteAccountRequest={() => handleOpenSupportWithDraft(
+              'Delete my DiningDealz account',
+              'Please permanently delete my DiningDealz account and associated profile data. I understand this request is processed by the support team after account-owner verification.',
+            )}
+            session={profileSession}
+            submitting={dashboardSubmitting}
+            twoFactorDisableCode={twoFactorDisableCode}
+            twoFactorSetup={twoFactorSetup}
+            twoFactorSetupCode={twoFactorSetupCode}
+          />
+        </SafeAreaView>
+      );
+    }
 
     return (
       <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
@@ -2004,21 +2225,13 @@ function AppScreen() {
             loading={dashboardLoading}
             message={profileMessage}
             onBack={handleBackFromProfiles}
-            onBeginTwoFactorSetup={() => void handleBeginTwoFactorSetup()}
-            onChangeTwoFactorDisableCode={setTwoFactorDisableCode}
-            onChangeTwoFactorSetupCode={setTwoFactorSetupCode}
-            onConfirmTwoFactorSetup={() => void handleConfirmTwoFactorSetup()}
-            onDisableTwoFactor={() => void handleDisableTwoFactor()}
-            onLogout={handleLogout}
             onOpenBilling={handleOpenBilling}
             onOpenPlaces={handleContinueToApp}
+            onOpenSettings={handleOpenSettings}
             onRefresh={() => void refreshDashboard()}
             onResendVerification={() => void handleResendVerification()}
             session={profileSession}
             submitting={dashboardSubmitting}
-            twoFactorDisableCode={twoFactorDisableCode}
-            twoFactorSetup={twoFactorSetup}
-            twoFactorSetupCode={twoFactorSetupCode}
           />
         ) : (
           <CreateProfileScreen
@@ -2062,7 +2275,7 @@ function AppScreen() {
 
   function renderAuthenticatedMainShell() {
     const transitionActive = usesBrowseProfileSlideTransition;
-    const showingProfile = screenMode === 'profiles';
+    const showingProfile = ['profiles', 'settings', 'support', 'privacy-policy', 'terms-of-service'].includes(screenMode);
     const profileLayerStyle = transitionActive
       ? browseProfileTransitionFrom === 'profiles'
         ? browseProfileOutgoingStyle
@@ -2128,7 +2341,32 @@ function AppScreen() {
           </SafeAreaView>
         );
       case 'profiles':
-        return renderProfilesScreen(profileSessionOverride);
+        return renderProfilesScreen(profileSessionOverride, 'profiles');
+      case 'settings':
+        return renderProfilesScreen(profileSessionOverride, 'settings');
+      case 'support':
+        return renderProfilesScreen(profileSessionOverride, 'support');
+      case 'privacy-policy':
+        return renderProfilesScreen(profileSessionOverride, 'privacy-policy');
+      case 'terms-of-service':
+        return renderProfilesScreen(profileSessionOverride, 'terms-of-service');
+      case 'email-verification':
+        return (
+          <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
+            <EmailVerificationScreen
+              errorMessage={profileErrorMessage}
+              isLandscape={isLandscape}
+              message={profileMessage}
+              onBack={handleBackFromEmailVerification}
+              onChangeCode={setEmailVerificationCode}
+              onResend={() => void handleResendEmailVerificationCode()}
+              onSubmit={() => void handleSubmitEmailVerificationCode()}
+              pendingVerification={pendingEmailVerification}
+              submitting={profileSubmitting}
+              verificationCode={emailVerificationCode}
+            />
+          </SafeAreaView>
+        );
       case 'business-search':
         return (
           <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
@@ -2644,7 +2882,7 @@ function AppScreen() {
             {renderOnboardingScreen('auth')}
           </Animated.View>
         </View>
-      ) : authenticatedSession && !selectedPlaceSlug && (screenMode === 'profiles' || screenMode === 'browse' || usesBrowseProfileSlideTransition) ? (
+      ) : authenticatedSession && !selectedPlaceSlug && !usesProfileStackSlideTransition && (['profiles', 'settings', 'support', 'privacy-policy', 'terms-of-service', 'browse'].includes(screenMode) || usesBrowseProfileSlideTransition) ? (
         renderAuthenticatedMainShell()
       ) : usesOnboardingSlideTransition && currentOnboardingScreen ? (
         <View style={styles.onboardingTransitionRoot}>

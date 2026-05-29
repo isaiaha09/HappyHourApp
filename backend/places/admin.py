@@ -13,7 +13,7 @@ from django.utils.text import slugify
 from django.utils import timezone
 
 from .admin_site import happyhour_admin_site
-from .models import BusinessAccount, BusinessClaim, BusinessMembership, CustomerAccount, DeletedBusiness, ListingSnapshot, ProviderUsageWindow
+from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessMembership, CustomerAccount, DeletedBusiness, ListingSnapshot, ProviderUsageWindow
 from .services.importers.discovered_json_places import load_discovery_json_records, merge_discovery_json_records, write_discovery_json_records
 from .services.deleted_businesses import filter_deleted_business_records, imported_place_from_deleted_business, store_deleted_business
 from .services.importers.here_places import HerePlacesImporter
@@ -233,6 +233,7 @@ class CustomerAccountAdmin(UserAdmin):
 		'email',
 		'first_name',
 		'last_name',
+		'email_verification_status',
 		'account_pathway',
 		'claim_status',
 		'claimed_businesses',
@@ -265,9 +266,16 @@ class CustomerAccountAdmin(UserAdmin):
 	)
 
 	def get_queryset(self, request):
-		return CustomerAccount.objects.prefetch_related(
+		return CustomerAccount.objects.select_related('account_profile').prefetch_related(
 			Prefetch('business_claims', queryset=BusinessClaim.objects.select_related('listing_snapshot').order_by('-created_at'))
 		)
+
+	@admin.display(boolean=True, description='Verified', ordering='account_profile__email_verified_at')
+	def email_verification_status(self, obj):
+		try:
+			return obj.account_profile.email_is_verified
+		except AccountProfile.DoesNotExist:
+			return False
 
 	@admin.display(description='Account pathway')
 	def account_pathway(self, obj):
@@ -308,6 +316,7 @@ class BusinessAccountAdmin(UserAdmin):
 		'email',
 		'first_name',
 		'last_name',
+		'email_verification_status',
 		'business_status',
 		'membership_status',
 		'claim_count',
@@ -337,10 +346,17 @@ class BusinessAccountAdmin(UserAdmin):
 	)
 
 	def get_queryset(self, request):
-		return BusinessAccount.objects.prefetch_related(
+		return BusinessAccount.objects.select_related('account_profile').prefetch_related(
 			'business_claims',
 			Prefetch('business_memberships', queryset=BusinessMembership.objects.select_related('claim__listing_snapshot')),
 		)
+
+	@admin.display(boolean=True, description='Verified', ordering='account_profile__email_verified_at')
+	def email_verification_status(self, obj):
+		try:
+			return obj.account_profile.email_is_verified
+		except AccountProfile.DoesNotExist:
+			return False
 
 	@admin.display(description='Business status')
 	def business_status(self, obj):

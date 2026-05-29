@@ -3,11 +3,14 @@ import { NativeModules } from 'react-native';
 import type {
   BusinessSignupRequest,
   CustomerSignupRequest,
+  EmailVerificationChallengeResponse,
+  EmailVerificationCodeRequest,
   LoginRequest,
   ManualBusinessSignupRequest,
   PaginatedResponse,
   PlaceDetail,
   PlaceListItem,
+  ResendEmailVerificationCodeRequest,
   SignupResponse,
   TwoFactorSetupResponse,
 } from './types';
@@ -60,11 +63,11 @@ export async function fetchPlaceDetail(baseUrl: string, slug: string) {
 }
 
 export async function createCustomerProfile(baseUrl: string, payload: CustomerSignupRequest) {
-  return postJson<SignupResponse>(baseUrl, '/profiles/customer-signup/', payload);
+  return postJson<EmailVerificationChallengeResponse>(baseUrl, '/profiles/customer-signup/', payload);
 }
 
 export async function loginProfile(baseUrl: string, payload: LoginRequest) {
-  return postJson<SignupResponse>(baseUrl, '/profiles/login/', payload);
+  return postJson<EmailVerificationChallengeResponse>(baseUrl, '/profiles/login/', payload);
 }
 
 export async function fetchProfileDashboard(baseUrl: string, authToken: string, portal?: 'customer' | 'business') {
@@ -97,11 +100,19 @@ export async function disableTwoFactor(baseUrl: string, authToken: string, code:
 }
 
 export async function createBusinessProfile(baseUrl: string, payload: BusinessSignupRequest) {
-  return postJson<SignupResponse>(baseUrl, '/profiles/business-signup/', payload);
+  return postJson<EmailVerificationChallengeResponse>(baseUrl, '/profiles/business-signup/', payload);
 }
 
 export async function createManualBusinessProfile(baseUrl: string, payload: ManualBusinessSignupRequest) {
-  return postJson<SignupResponse>(baseUrl, '/profiles/manual-business-signup/', payload);
+  return postJson<EmailVerificationChallengeResponse>(baseUrl, '/profiles/manual-business-signup/', payload);
+}
+
+export async function verifyEmailCode(baseUrl: string, payload: EmailVerificationCodeRequest) {
+  return postJson<SignupResponse>(baseUrl, '/profiles/verify-email-code/', payload);
+}
+
+export async function resendVerificationCode(baseUrl: string, payload: ResendEmailVerificationCodeRequest) {
+  return postJson<EmailVerificationChallengeResponse>(baseUrl, '/profiles/resend-verification-code/', payload);
 }
 
 async function fetchJson<T>(baseUrl: string, path: string): Promise<T> {

@@ -15,12 +15,15 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Linking } from 'react-native';
 
 import { styles } from '../appStyles';
 import type { AuthPortal, LoginFormState, ProfileFormState } from '../appFlowTypes';
 import { manualBusinessCityOptions, manualBusinessVenueOptions } from '../browseConfig';
 import { formatPlaceAddress, getPlaceLocations, normalizeSearchText } from '../placeHelpers';
-import type { PlaceListItem, PlaceLocation } from '../types';
+import type { EmailVerificationChallengeResponse, PlaceListItem, PlaceLocation, SignupResponse } from '../types';
+
+const SUPPORT_EMAIL = 'support@diningdealz.com';
 
 type CompactDropdownProps = {
   onSelect: (value: string) => void;
@@ -84,6 +87,37 @@ export type BusinessVerificationScreenProps = {
   selectedLocation: PlaceLocation | null;
   selectedPlace: PlaceListItem | null;
   submitting: boolean;
+};
+
+export type EmailVerificationScreenProps = {
+  errorMessage: string | null;
+  isLandscape: boolean;
+  message: string | null;
+  onBack: () => void;
+  onChangeCode: (value: string) => void;
+  onResend: () => void;
+  onSubmit: () => void;
+  pendingVerification: EmailVerificationChallengeResponse | null;
+  submitting: boolean;
+  verificationCode: string;
+};
+
+export type ContactSupportScreenProps = {
+  errorMessage: string | null;
+  initialMessage?: string;
+  initialSubject?: string;
+  isLandscape: boolean;
+  onBack: () => void;
+  session: SignupResponse;
+};
+
+type LegalDocumentScreenProps = {
+  eyebrow: string;
+  intro: string;
+  isLandscape: boolean;
+  onBack: () => void;
+  sections: ReadonlyArray<{ title: string; body: string }>;
+  title: string;
 };
 
 function KeyboardAwareFormScreen({ children }: { children: ReactNode }) {
@@ -444,7 +478,7 @@ export function CreateProfileScreen({ errorMessage, form, isLandscape, message, 
           <View style={styles.profileCard}>
             <Text style={styles.detailCity}>Create Profile</Text>
             <Text style={styles.detailTitle}>Create a customer account</Text>
-            <Text style={styles.profileIntroText}>Customer accounts now send an email verification link after signup and open into an in-app dashboard.</Text>
+            <Text style={styles.profileIntroText}>Customer accounts now move into a short email code check after signup before the dashboard unlocks.</Text>
 
             {message ? (
               <View style={styles.profileSuccessBanner}>
@@ -489,6 +523,311 @@ export function CreateProfileScreen({ errorMessage, form, isLandscape, message, 
         </ScrollView>
       </KeyboardAwareFormScreen>
     </View>
+  );
+}
+
+function formatVerificationCountdown(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+export function EmailVerificationScreen({ errorMessage, isLandscape, message, onBack, onChangeCode, onResend, onSubmit, pendingVerification, submitting, verificationCode }: EmailVerificationScreenProps) {
+  const { handleFieldFocus, handleScroll, scrollViewRef } = useAutoScrollForm();
+  const [secondsRemaining, setSecondsRemaining] = useState(0);
+
+  useEffect(() => {
+    const verificationExpiresAt = pendingVerification?.verification_code_expires_at ?? '';
+    if (!verificationExpiresAt) {
+      setSecondsRemaining(0);
+      return;
+    }
+
+    function updateRemainingTime() {
+      const expiresAt = new Date(verificationExpiresAt).getTime();
+      if (Number.isNaN(expiresAt)) {
+        setSecondsRemaining(0);
+        return;
+      }
+
+      setSecondsRemaining(Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000)));
+    }
+
+    updateRemainingTime();
+    const timer = setInterval(updateRemainingTime, 250);
+    return () => clearInterval(timer);
+  }, [pendingVerification?.verification_code_expires_at]);
+
+  return (
+    <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
+      <KeyboardAwareFormScreen>
+        <ScrollView
+          contentContainerStyle={[styles.profileScrollContent, styles.createProfileScrollContent]}
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          keyboardShouldPersistTaps="handled"
+          onScroll={handleScroll}
+          ref={scrollViewRef}
+          scrollEventThrottle={16}
+          showsVerticalScrollIndicator={false}
+        >
+          <Pressable onPress={onBack} style={styles.backButton}>
+            <Text style={styles.backButtonText}>Back to login</Text>
+          </Pressable>
+
+          <View style={styles.profileCard}>
+            <Text style={styles.detailCity}>Email Verification</Text>
+            <Text style={styles.detailTitle}>Enter your 6-digit code</Text>
+            <Text style={styles.profileIntroText}>
+              {pendingVerification?.email
+                ? `We sent a code to ${pendingVerification.email}. Enter it before it expires to unlock your dashboard.`
+                : 'We sent a code to your email. Enter it before it expires to unlock your dashboard.'}
+            </Text>
+
+            {message ? (
+              <View style={styles.profileSuccessBanner}>
+                <Text style={styles.profileSuccessText}>{message}</Text>
+              </View>
+            ) : null}
+
+            {errorMessage ? (
+              <View style={styles.errorBanner}>
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.profileFormSection}>
+              <Text style={styles.profileFieldLabel}>Verification code</Text>
+              <AutoScrollTextInput
+                autoCapitalize="none"
+                autoComplete="one-time-code"
+                keyboardType="number-pad"
+                maxLength={6}
+                onBeforeAutoScroll={handleFieldFocus}
+                onChangeText={(value) => onChangeCode(value.replace(/[^0-9]/g, ''))}
+                placeholder="000000"
+                placeholderTextColor="#9a7f6c"
+                scrollViewRef={scrollViewRef}
+                style={[styles.profileInput, styles.verificationCodeInput]}
+                textContentType="oneTimeCode"
+                value={verificationCode}
+              />
+
+              {secondsRemaining > 0 ? (
+                <Text style={styles.verificationCountdownText}>
+                  Code expires in {formatVerificationCountdown(secondsRemaining)}
+                </Text>
+              ) : (
+                <Text style={styles.profileSupportText}>Your last code expired. Request a new one to continue.</Text>
+              )}
+
+              <Text style={styles.profileSupportText}>
+                Username: {pendingVerification?.username ?? 'Unavailable'}
+              </Text>
+            </View>
+
+            <Pressable onPress={() => void onSubmit()} style={[styles.linkButton, submitting ? styles.linkButtonDisabled : null]}>
+              <Text style={styles.linkButtonText}>{submitting ? 'Verifying...' : 'Verify email and continue'}</Text>
+            </Pressable>
+
+            <Pressable
+              disabled={secondsRemaining > 0 || submitting}
+              onPress={() => void onResend()}
+              style={[styles.linkButtonSecondaryWide, secondsRemaining > 0 || submitting ? styles.linkButtonDisabled : null]}
+            >
+              <Text style={styles.linkButtonSecondaryText}>Resend verification code</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </KeyboardAwareFormScreen>
+    </View>
+  );
+}
+
+export function ContactSupportScreen({ errorMessage, initialMessage = '', initialSubject = 'DiningDealz support request', isLandscape, onBack, session }: ContactSupportScreenProps) {
+  const { handleFieldFocus, handleScroll, scrollViewRef } = useAutoScrollForm();
+  const [subject, setSubject] = useState(initialSubject);
+  const [message, setMessage] = useState(initialMessage);
+  const displayName = [session.first_name, session.last_name].filter(Boolean).join(' ') || session.username;
+
+  useEffect(() => {
+    setSubject(initialSubject);
+  }, [initialSubject]);
+
+  useEffect(() => {
+    setMessage(initialMessage);
+  }, [initialMessage]);
+
+  async function handleOpenEmailDraft() {
+    const body = [
+      `Name: ${displayName}`,
+      `Username: ${session.username}`,
+      `Email: ${session.email}`,
+      `Account type: ${session.profile_type}`,
+      '',
+      message.trim(),
+    ].join('\n');
+    const mailtoUrl = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject.trim() || 'DiningDealz support request')}&body=${encodeURIComponent(body)}`;
+    await Linking.openURL(mailtoUrl);
+  }
+
+  return (
+    <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
+      <KeyboardAwareFormScreen>
+        <ScrollView
+          contentContainerStyle={[styles.profileScrollContent, styles.createProfileScrollContent]}
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          keyboardShouldPersistTaps="handled"
+          onScroll={handleScroll}
+          ref={scrollViewRef}
+          scrollEventThrottle={16}
+          showsVerticalScrollIndicator={false}
+        >
+          <Pressable onPress={onBack} style={styles.backButton}>
+            <Text style={styles.backButtonText}>Back to dashboard</Text>
+          </Pressable>
+
+          <View style={styles.profileCard}>
+            <Text style={styles.detailCity}>Contact Support</Text>
+            <Text style={styles.detailTitle}>Reach the DiningDealz support team</Text>
+            <Text style={styles.profileIntroText}>Use this page to prepare a support email with your account details already included, so Apple review and real users both have a clear contact path inside the app.</Text>
+
+            {errorMessage ? (
+              <View style={styles.errorBanner}>
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.dashboardSectionCard}>
+              <Text style={styles.dashboardSectionTitle}>Direct email</Text>
+              <Text style={styles.dashboardDetailValue}>{SUPPORT_EMAIL}</Text>
+              <Text style={styles.dashboardSupportText}>Best for account help, business onboarding, verification issues, billing questions, or general app support.</Text>
+            </View>
+
+            <View style={styles.profileFormSection}>
+              <Text style={styles.profileFieldLabel}>Subject</Text>
+              <AutoScrollTextInput
+                onBeforeAutoScroll={handleFieldFocus}
+                onChangeText={setSubject}
+                scrollViewRef={scrollViewRef}
+                style={styles.profileInput}
+                value={subject}
+              />
+
+              <Text style={styles.profileFieldLabel}>Message</Text>
+              <AutoScrollTextInput
+                multiline
+                numberOfLines={7}
+                onBeforeAutoScroll={handleFieldFocus}
+                onChangeText={setMessage}
+                placeholder="Tell us what you need help with."
+                placeholderTextColor="#9a7f6c"
+                scrollViewRef={scrollViewRef}
+                style={[styles.profileInput, styles.supportMessageInput]}
+                textAlignVertical="top"
+                value={message}
+              />
+
+              <Text style={styles.profileSupportText}>Your name, username, email, and account type will be added to the email draft automatically.</Text>
+            </View>
+
+            <Pressable onPress={() => void handleOpenEmailDraft()} style={styles.linkButton}>
+              <Text style={styles.linkButtonText}>Open support email draft</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </KeyboardAwareFormScreen>
+    </View>
+  );
+}
+
+function LegalDocumentScreen({ eyebrow, intro, isLandscape, onBack, sections, title }: LegalDocumentScreenProps) {
+  return (
+    <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
+      <KeyboardAwareFormScreen>
+        <ScrollView
+          contentContainerStyle={[styles.profileScrollContent, styles.createProfileScrollContent]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <Pressable onPress={onBack} style={styles.backButton}>
+            <Text style={styles.backButtonText}>Back to settings</Text>
+          </Pressable>
+
+          <View style={styles.profileCard}>
+            <Text style={styles.detailCity}>{eyebrow}</Text>
+            <Text style={styles.detailTitle}>{title}</Text>
+            <Text style={styles.profileIntroText}>{intro}</Text>
+
+            {sections.map((section) => (
+              <View key={section.title} style={styles.legalSectionCard}>
+                <Text style={styles.dashboardSectionTitle}>{section.title}</Text>
+                <Text style={styles.dashboardSupportText}>{section.body}</Text>
+              </View>
+            ))}
+          </View>
+        </ScrollView>
+      </KeyboardAwareFormScreen>
+    </View>
+  );
+}
+
+export function PrivacyPolicyScreen({ isLandscape, onBack }: Pick<LegalDocumentScreenProps, 'isLandscape' | 'onBack'>) {
+  return (
+    <LegalDocumentScreen
+      eyebrow="Privacy Policy"
+      intro="This page outlines the types of information DiningDealz may collect, how that information supports the service, and the controls users have over their data."
+      isLandscape={isLandscape}
+      onBack={onBack}
+      sections={[
+        {
+          title: 'Information we collect',
+          body: 'DiningDealz may collect account details such as usernames, email addresses, profile type, verification state, and business information submitted through signup, claims, contact requests, or dashboard features.',
+        },
+        {
+          title: 'How information is used',
+          body: 'Information is used to operate the app and website, authenticate users, send account-related messages, respond to support requests, improve listings, and support business features such as verification and billing access.',
+        },
+        {
+          title: 'Sharing and disclosure',
+          body: 'DiningDealz does not sell personal information as part of the standard product experience. Information may be shared with service providers that support operations such as hosting, email delivery, analytics, payment processing, or security, but only as needed to run the platform.',
+        },
+        {
+          title: 'Your choices',
+          body: 'Users may contact DiningDealz to request account help, update certain information, or ask privacy-related questions. Where applicable, users may also manage their own account details from the product interface.',
+        },
+      ]}
+      title="How DiningDealz collects and uses information."
+    />
+  );
+}
+
+export function TermsOfServiceScreen({ isLandscape, onBack }: Pick<LegalDocumentScreenProps, 'isLandscape' | 'onBack'>) {
+  return (
+    <LegalDocumentScreen
+      eyebrow="Terms of Service & Agreements"
+      intro="These terms describe the baseline expectations for customers, businesses, and visitors using the DiningDealz app, website, and related services."
+      isLandscape={isLandscape}
+      onBack={onBack}
+      sections={[
+        {
+          title: 'Use of the platform',
+          body: 'DiningDealz may be used only for lawful purposes and in a way that does not interfere with the service, other users, or participating businesses. Account holders are responsible for activity performed through their account credentials.',
+        },
+        {
+          title: 'Business listings and offers',
+          body: 'Business information, offers, hours, and promotional details may change. DiningDealz does not guarantee uninterrupted availability of any specific deal, listing, reservation option, or billing feature. Businesses remain responsible for the accuracy of their submitted information and the fulfillment of their published offers.',
+        },
+        {
+          title: 'Accounts and billing',
+          body: 'Some features are available only to verified or subscribed business accounts. If billing features are enabled, recurring charges, renewal timing, cancellation terms, and related account controls will be presented within the applicable billing flow or business dashboard.',
+        },
+        {
+          title: 'Changes to the service',
+          body: 'DiningDealz may modify, suspend, or retire features as the platform evolves. Continued use of the service after an update takes effect constitutes acceptance of the revised terms to the extent permitted by law.',
+        },
+      ]}
+      title="Rules for using DiningDealz services."
+    />
   );
 }
 

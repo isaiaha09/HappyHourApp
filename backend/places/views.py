@@ -12,17 +12,19 @@ from .serializers import (
 	ClaimedBusinessSignupSerializer,
 	CustomerSignupSerializer,
 	DealSerializer,
+	EmailVerificationCodeSerializer,
 	LoginSerializer,
 	PasswordResetConfirmSerializer,
 	PasswordResetRequestSerializer,
 	ManualBusinessSignupSerializer,
 	PlaceDetailSerializer,
 	PlaceListSerializer,
+	ResendEmailVerificationCodeSerializer,
 	TwoFactorCodeSerializer,
 	UsernameReminderSerializer,
 	sync_listing_snapshot_from_place_payload,
 )
-from .services.account_profiles import build_account_response, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, send_password_reset_email, send_username_reminder_email, send_verification_email
+from .services.account_profiles import build_account_response, build_email_verification_challenge, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, send_password_reset_email, send_username_reminder_email, send_verification_email
 from .services.source_listings import get_source_deal_payloads, get_source_place_payload, get_source_place_payloads, load_source_records
 
 
@@ -142,10 +144,7 @@ class CustomerSignupView(generics.GenericAPIView):
 		serializer = self.get_serializer(data=request.data)
 		serializer.is_valid(raise_exception=True)
 		user = serializer.save()
-		profile = get_or_create_account_profile(user)
-		send_verification_email(user, profile)
-		token = get_or_create_profile_token(user)
-		return Response(build_account_response(user, 'customer', token=token), status=status.HTTP_201_CREATED)
+		return Response(build_email_verification_challenge(user, 'customer'), status=status.HTTP_201_CREATED)
 
 
 class LoginView(generics.GenericAPIView):
@@ -155,7 +154,9 @@ class LoginView(generics.GenericAPIView):
 		serializer = self.get_serializer(data=request.data)
 		serializer.is_valid(raise_exception=True)
 		user = serializer.validated_data['user']
-		portal = serializer.validated_data['portal']
+		portal = infer_portal_for_user(user, serializer.validated_data.get('portal'))
+		if serializer.validated_data.get('email_verification_required'):
+			return Response(build_email_verification_challenge(user, portal))
 		token = get_or_create_profile_token(user)
 		return Response(build_account_response(user, portal, token=token))
 
@@ -207,10 +208,7 @@ class BusinessSignupView(generics.GenericAPIView):
 		serializer.validated_data['listing_snapshot'] = sync_listing_snapshot_from_place_payload(place_payload)
 		user = serializer.save()
 		claim = getattr(user, '_created_business_claim', None)
-		profile = get_or_create_account_profile(user)
-		send_verification_email(user, profile)
-		token = get_or_create_profile_token(user)
-		return Response(build_account_response(user, 'business', claim=claim, token=token), status=status.HTTP_201_CREATED)
+		return Response(build_email_verification_challenge(user, 'business', claim=claim), status=status.HTTP_201_CREATED)
 
 
 class ManualBusinessSignupView(generics.GenericAPIView):
@@ -221,10 +219,54 @@ class ManualBusinessSignupView(generics.GenericAPIView):
 		serializer.is_valid(raise_exception=True)
 		user = serializer.save()
 		claim = getattr(user, '_created_business_claim', None)
+		return Response(build_email_verification_challenge(user, 'business', claim=claim), status=status.HTTP_201_CREATED)
+
+
+class VerifyEmailCodeView(generics.GenericAPIView):
+	serializer_class = EmailVerificationCodeSerializer
+
+	def post(self, request):
+		serializer = self.get_serializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		user = User.objects.filter(username__iexact=serializer.validated_data['username']).first()
+		if user is None:
+			return Response({'detail': 'No account matches that username.'}, status=status.HTTP_404_NOT_FOUND)
+
 		profile = get_or_create_account_profile(user)
-		send_verification_email(user, profile)
+		if profile.email_is_verified:
+			return Response({'detail': 'That email is already verified.'}, status=status.HTTP_400_BAD_REQUEST)
+		if not profile.verify_email_verification_code(serializer.validated_data['code']):
+			return Response({'detail': 'The email verification code is invalid or expired.'}, status=status.HTTP_400_BAD_REQUEST)
+
+		profile.mark_email_verified()
+		portal = infer_portal_for_user(user, serializer.validated_data.get('portal'))
 		token = get_or_create_profile_token(user)
-		return Response(build_account_response(user, 'business', claim=claim, token=token), status=status.HTTP_201_CREATED)
+		return Response(build_account_response(user, portal, token=token))
+
+
+class ResendEmailVerificationCodeView(generics.GenericAPIView):
+	serializer_class = ResendEmailVerificationCodeSerializer
+
+	def post(self, request):
+		serializer = self.get_serializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		user = User.objects.filter(username__iexact=serializer.validated_data['username']).first()
+		if user is None:
+			return Response({'detail': 'No account matches that username.'}, status=status.HTTP_404_NOT_FOUND)
+
+		profile = get_or_create_account_profile(user)
+		if profile.email_is_verified:
+			return Response({'detail': 'That email is already verified.'}, status=status.HTTP_400_BAD_REQUEST)
+
+		seconds_remaining = profile.get_email_verification_seconds_remaining()
+		if seconds_remaining > 0:
+			return Response({
+				'detail': 'Wait for the current verification code to expire before requesting a new one.',
+				'seconds_remaining': seconds_remaining,
+			}, status=status.HTTP_400_BAD_REQUEST)
+
+		portal = infer_portal_for_user(user, serializer.validated_data.get('portal'))
+		return Response(build_email_verification_challenge(user, portal, force_resend=True))
 
 
 class ProfileDashboardView(APIView):

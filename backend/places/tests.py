@@ -2551,14 +2551,19 @@ class ProfileSignupApiTests(APITestCase):
 
 		self.assertEqual(response.status_code, 201)
 		self.assertEqual(response.data['profile_type'], 'customer')
-		self.assertTrue(response.data['auth_token'])
+		self.assertEqual(response.data['auth_token'], '')
+		self.assertTrue(response.data['email_verification_required'])
+		self.assertFalse(response.data['can_access_places'])
+		self.assertIsNotNone(response.data['verification_code_expires_at'])
 		self.assertFalse(response.data['email_verified'])
 		user = User.objects.get(username='ventura_fan')
 		profile = AccountProfile.objects.get(user=user)
 		self.assertEqual(user.email, 'fan@example.com')
 		self.assertTrue(user.check_password('test-pass-123'))
 		self.assertIsNotNone(profile.email_verification_sent_at)
+		self.assertTrue(profile.email_verification_code)
 		self.assertEqual(len(mail.outbox), 1)
+		self.assertIn(profile.email_verification_code, mail.outbox[0].body)
 		self.assertIn('/api/profiles/verify-email/', mail.outbox[0].body)
 
 	@patch('places.views.get_source_place_payload')
@@ -2618,6 +2623,8 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(response.status_code, 201)
 		self.assertEqual(response.data['profile_type'], 'business')
 		self.assertEqual(response.data['claim_status'], BusinessClaim.Status.SUBMITTED)
+		self.assertEqual(response.data['auth_token'], '')
+		self.assertTrue(response.data['email_verification_required'])
 		claim = BusinessClaim.objects.select_related('claimant', 'listing_snapshot').get(claimant__username='finneys_owner')
 		self.assertEqual(claim.work_email, 'pat@finneys.com')
 		self.assertEqual(claim.listing_snapshot.listing_slug, 'finneys-crafthouse')
@@ -2650,6 +2657,8 @@ class ProfileSignupApiTests(APITestCase):
 		)
 
 		self.assertEqual(response.status_code, 201)
+		self.assertEqual(response.data['auth_token'], '')
+		self.assertTrue(response.data['email_verification_required'])
 		claim = BusinessClaim.objects.select_related('listing_snapshot').get(claimant__username='new_bistro_owner')
 		self.assertEqual(claim.status, BusinessClaim.Status.SUBMITTED)
 		self.assertTrue(claim.address_not_applicable)
@@ -2691,7 +2700,7 @@ class ProfileSignupApiTests(APITestCase):
 
 	def test_login_requires_authenticator_code_when_two_factor_is_enabled(self):
 		user = User.objects.create_user(username='secure_customer', email='secure@example.com', password='test-pass-123')
-		profile = AccountProfile.objects.create(user=user, two_factor_enabled=True, two_factor_secret=pyotp.random_base32())
+		profile = AccountProfile.objects.create(user=user, email_verified_at=timezone.now(), two_factor_enabled=True, two_factor_secret=pyotp.random_base32())
 
 		response = self.client.post(
 			reverse('profile-login'),
@@ -2710,7 +2719,7 @@ class ProfileSignupApiTests(APITestCase):
 	def test_login_accepts_authenticator_code_when_two_factor_is_enabled(self):
 		user = User.objects.create_user(username='secure_login', email='secure-login@example.com', password='test-pass-123')
 		secret = pyotp.random_base32()
-		AccountProfile.objects.create(user=user, two_factor_enabled=True, two_factor_secret=secret)
+		AccountProfile.objects.create(user=user, email_verified_at=timezone.now(), two_factor_enabled=True, two_factor_secret=secret)
 
 		response = self.client.post(
 			reverse('profile-login'),
@@ -2741,6 +2750,90 @@ class ProfileSignupApiTests(APITestCase):
 
 		self.assertEqual(response.status_code, 400)
 		self.assertEqual(response.data['non_field_errors'][0], 'No account matches that username.')
+
+	def test_login_returns_email_verification_challenge_for_unverified_account(self):
+		user = User.objects.create_user(
+			username='needsverify',
+			email='needsverify@example.com',
+			password='test-pass-123',
+		)
+		profile = AccountProfile.objects.create(user=user)
+		profile.issue_email_verification_code(force=True)
+		profile.email_verification_sent_at = profile.email_verification_code_sent_at
+		profile.save(update_fields=['email_verification_code', 'email_verification_code_sent_at', 'email_verification_sent_at', 'updated_at'])
+
+		response = self.client.post(
+			reverse('profile-login'),
+			{
+				'portal': 'customer',
+				'identifier': 'needsverify',
+				'password': 'test-pass-123',
+			},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data['auth_token'], '')
+		self.assertTrue(response.data['email_verification_required'])
+		self.assertFalse(response.data['can_access_places'])
+
+	def test_verify_email_code_returns_token_and_marks_email_verified(self):
+		signup_response = self.client.post(
+			reverse('customer-signup'),
+			{
+				'username': 'code_verify_user',
+				'email': 'code-verify@example.com',
+				'password': 'test-pass-123',
+				'first_name': 'Code',
+				'last_name': 'Verify',
+			},
+			format='json',
+		)
+
+		self.assertEqual(signup_response.status_code, 201)
+		profile = AccountProfile.objects.get(user__username='code_verify_user')
+
+		verify_response = self.client.post(
+			reverse('profile-verify-email-code'),
+			{
+				'username': 'code_verify_user',
+				'portal': 'customer',
+				'code': profile.email_verification_code,
+			},
+			format='json',
+		)
+
+		self.assertEqual(verify_response.status_code, 200)
+		self.assertTrue(verify_response.data['auth_token'])
+		profile.refresh_from_db()
+		self.assertTrue(profile.email_is_verified)
+		self.assertEqual(profile.email_verification_code, '')
+
+	def test_resend_email_code_requires_previous_code_to_expire(self):
+		signup_response = self.client.post(
+			reverse('customer-signup'),
+			{
+				'username': 'resend_gate_user',
+				'email': 'resend@example.com',
+				'password': 'test-pass-123',
+				'first_name': 'Resend',
+				'last_name': 'Gate',
+			},
+			format='json',
+		)
+
+		self.assertEqual(signup_response.status_code, 201)
+		resend_response = self.client.post(
+			reverse('profile-resend-verification-code'),
+			{
+				'username': 'resend_gate_user',
+				'portal': 'customer',
+			},
+			format='json',
+		)
+
+		self.assertEqual(resend_response.status_code, 400)
+		self.assertIn('seconds_remaining', resend_response.data)
 
 
 @override_settings(

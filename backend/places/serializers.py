@@ -15,6 +15,7 @@ class AccountResponseSerializer(serializers.Serializer):
 	email = serializers.EmailField()
 	first_name = serializers.CharField()
 	last_name = serializers.CharField()
+	detail = serializers.CharField(required=False, allow_blank=True)
 	portal = serializers.CharField()
 	profile_type = serializers.CharField()
 	auth_token = serializers.CharField(required=False, allow_blank=True)
@@ -24,6 +25,9 @@ class AccountResponseSerializer(serializers.Serializer):
 	business_name = serializers.CharField(required=False, allow_blank=True)
 	email_verified = serializers.BooleanField(required=False)
 	email_verification_sent_at = serializers.DateTimeField(required=False, allow_null=True)
+	email_verification_required = serializers.BooleanField(required=False)
+	verification_code_expires_at = serializers.DateTimeField(required=False, allow_null=True)
+	verification_code_ttl_seconds = serializers.IntegerField(required=False)
 	two_factor_enabled = serializers.BooleanField(required=False)
 	billing_portal_url = serializers.CharField(required=False, allow_blank=True)
 	approved_businesses = serializers.ListField(child=serializers.DictField(), required=False)
@@ -54,6 +58,11 @@ class LoginSerializer(serializers.Serializer):
 			raise serializers.ValidationError('That account does not have a business profile or claim yet.')
 
 		profile = get_or_create_account_profile(authenticated_user)
+		if not profile.email_is_verified:
+			attrs['user'] = authenticated_user
+			attrs['email_verification_required'] = True
+			return attrs
+
 		if profile.two_factor_enabled:
 			code = attrs.get('two_factor_code', '')
 			if not code:
@@ -63,6 +72,35 @@ class LoginSerializer(serializers.Serializer):
 
 		attrs['user'] = authenticated_user
 		return attrs
+
+
+class EmailVerificationCodeSerializer(serializers.Serializer):
+	username = serializers.CharField(max_length=150)
+	code = serializers.CharField(max_length=12, write_only=True)
+	portal = serializers.ChoiceField(choices=['customer', 'business'], required=False, allow_blank=True)
+
+	def validate_username(self, value):
+		normalized = value.strip()
+		if not normalized:
+			raise serializers.ValidationError('Enter your username.')
+		return normalized
+
+	def validate_code(self, value):
+		normalized = ''.join(character for character in str(value or '') if character.isdigit())
+		if len(normalized) != 6:
+			raise serializers.ValidationError('Enter the 6-digit verification code.')
+		return normalized
+
+
+class ResendEmailVerificationCodeSerializer(serializers.Serializer):
+	username = serializers.CharField(max_length=150)
+	portal = serializers.ChoiceField(choices=['customer', 'business'], required=False, allow_blank=True)
+
+	def validate_username(self, value):
+		normalized = value.strip()
+		if not normalized:
+			raise serializers.ValidationError('Enter your username.')
+		return normalized
 
 
 class UsernameReminderSerializer(serializers.Serializer):

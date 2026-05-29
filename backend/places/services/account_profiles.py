@@ -100,15 +100,35 @@ def build_account_response(user, portal, claim=None, token=None):
 	}
 
 
+def build_email_verification_challenge(user, portal, claim=None, force_resend=False):
+	profile = get_or_create_account_profile(user)
+	if force_resend or not profile.email_verification_code_is_active():
+		send_verification_email(user, profile)
+
+	payload = build_account_response(user, portal, claim=claim, token=None)
+	payload.update({
+		'auth_token': '',
+		'can_access_places': False,
+		'detail': 'Enter the 6-digit verification code we sent to your email to continue.',
+		'email_verification_required': True,
+		'verification_code_expires_at': profile.get_email_verification_code_expires_at(),
+		'verification_code_ttl_seconds': profile.get_email_verification_code_ttl_seconds(),
+	})
+	return payload
+
+
 def send_verification_email(user, profile):
+	code = profile.issue_email_verification_code(force=True)
 	token = profile.ensure_verification_token(force=True)
-	profile.email_verification_sent_at = timezone.now()
-	profile.save(update_fields=['email_verification_token', 'email_verification_sent_at', 'updated_at'])
+	profile.email_verification_sent_at = profile.email_verification_code_sent_at or timezone.now()
+	profile.save(update_fields=['email_verification_token', 'email_verification_code', 'email_verification_code_sent_at', 'email_verification_sent_at', 'updated_at'])
 	verification_base = str(getattr(settings, 'PROFILE_EMAIL_VERIFICATION_URL_BASE', '') or '').rstrip('/')
 	verification_url = f'{verification_base}/{token}/'
 	html_message = (
 		f'<p>Hi {escape(user.first_name or user.username)},</p>'
-		'<p>Please verify your email for HappyHourApp by opening the link below.</p>'
+		f'<p>Your HappyHourApp verification code is <strong>{escape(code)}</strong>.</p>'
+		'<p>Enter that code in the app within 60 seconds, or request a new one.</p>'
+		'<p>You can also verify your email by opening the link below.</p>'
 		f'<p><a href="{escape(verification_url)}">Verify your email</a></p>'
 		'<p>If you did not create this account, you can ignore this email.</p>'
 	)
@@ -116,7 +136,8 @@ def send_verification_email(user, profile):
 		subject='Verify your HappyHourApp email',
 		message=(
 			f'Hi {user.first_name or user.username},\n\n'
-			f'Please verify your email for HappyHourApp by opening this link:\n{verification_url}\n\n'
+			f'Your HappyHourApp verification code is {code}. Enter it in the app within 60 seconds, or request a new one.\n\n'
+			f'You can also verify your email for HappyHourApp by opening this link:\n{verification_url}\n\n'
 			'If you did not create this account, you can ignore this email.'
 		),
 		html_message=html_message,

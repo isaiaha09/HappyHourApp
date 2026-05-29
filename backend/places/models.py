@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
@@ -309,6 +311,8 @@ class BusinessAccount(User):
 class AccountProfile(models.Model):
 	user = models.OneToOneField(settings.AUTH_USER_MODEL, related_name='account_profile', on_delete=models.CASCADE)
 	email_verification_token = models.CharField(max_length=64, blank=True)
+	email_verification_code = models.CharField(max_length=6, blank=True)
+	email_verification_code_sent_at = models.DateTimeField(null=True, blank=True)
 	email_verification_sent_at = models.DateTimeField(null=True, blank=True)
 	email_verified_at = models.DateTimeField(null=True, blank=True)
 	two_factor_enabled = models.BooleanField(default=False)
@@ -333,6 +337,40 @@ class AccountProfile(models.Model):
 			self.email_verification_token = secrets.token_urlsafe(32)
 		return self.email_verification_token
 
+	def issue_email_verification_code(self, force=False):
+		if force or not self.email_verification_code:
+			self.email_verification_code = f'{secrets.randbelow(1000000):06d}'
+			self.email_verification_code_sent_at = timezone.now()
+		return self.email_verification_code
+
+	def get_email_verification_code_ttl_seconds(self):
+		return max(int(getattr(settings, 'PROFILE_EMAIL_VERIFICATION_CODE_TTL_SECONDS', 60) or 60), 1)
+
+	def get_email_verification_code_expires_at(self):
+		if self.email_verification_code_sent_at is None:
+			return None
+		return self.email_verification_code_sent_at + timedelta(seconds=self.get_email_verification_code_ttl_seconds())
+
+	def get_email_verification_seconds_remaining(self):
+		expires_at = self.get_email_verification_code_expires_at()
+		if expires_at is None:
+			return 0
+		remaining = int((expires_at - timezone.now()).total_seconds())
+		return max(remaining, 0)
+
+	def email_verification_code_is_active(self):
+		return bool(self.email_verification_code) and self.get_email_verification_seconds_remaining() > 0
+
+	def verify_email_verification_code(self, code):
+		normalized = ''.join(character for character in str(code or '') if character.isdigit())
+		if len(normalized) != 6 or not self.email_verification_code_is_active():
+			return False
+		return secrets.compare_digest(normalized, self.email_verification_code)
+
+	def clear_email_verification_code(self):
+		self.email_verification_code = ''
+		self.email_verification_code_sent_at = None
+
 	@property
 	def email_is_verified(self):
 		return self.email_verified_at is not None
@@ -340,7 +378,8 @@ class AccountProfile(models.Model):
 	def mark_email_verified(self):
 		self.email_verified_at = timezone.now()
 		self.email_verification_token = ''
-		self.save(update_fields=['email_verified_at', 'email_verification_token', 'updated_at'])
+		self.clear_email_verification_code()
+		self.save(update_fields=['email_verified_at', 'email_verification_token', 'email_verification_code', 'email_verification_code_sent_at', 'updated_at'])
 
 	def begin_two_factor_setup(self):
 		self.two_factor_pending_secret = pyotp.random_base32()
