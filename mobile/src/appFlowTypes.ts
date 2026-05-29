@@ -18,6 +18,10 @@ export type ProfileFormState = {
   work_phone: string;
   employer_address: string;
   address_not_applicable: boolean;
+  social_media_links_text: string;
+  offer_entries_text: string;
+  hours_of_operation_entries_text: string;
+  photo_references_text: string;
   verification_summary: string;
   supporting_details: string;
 };

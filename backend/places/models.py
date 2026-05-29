@@ -1,4 +1,5 @@
 from datetime import timedelta
+from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -56,6 +57,7 @@ class ListingSnapshot(models.Model):
 	address_line_1 = models.CharField(max_length=255)
 	address_line_2 = models.CharField(max_length=255, blank=True)
 	neighborhood = models.CharField(max_length=120, blank=True)
+	serves_multiple_areas = models.BooleanField(default=False)
 	state = models.CharField(max_length=2, default='CA')
 	postal_code = models.CharField(max_length=10, blank=True)
 	phone_number = models.CharField(max_length=20, blank=True)
@@ -145,6 +147,22 @@ class ProviderUsageWindow(models.Model):
 
 class BusinessClaim(models.Model):
 	MANUAL_SOURCE_NAME = 'manual_submission'
+	MULTIPLE_AREAS_VALUE = 'multiple_areas'
+
+	class ProfileEntryKind(models.TextChoices):
+		SOCIAL_MEDIA_LINK = 'social_media_link', 'Social Media Link'
+		OFFER = 'offer', 'Offer'
+		OPERATING_HOUR = 'operating_hour', 'Operating Hour'
+		PHOTO_REFERENCE = 'photo_reference', 'Photo Reference'
+
+	class Pathway(models.TextChoices):
+		CLAIMED = 'claimed', 'Claimed Business'
+		ESTABLISHED = 'established', 'Create Business Profile'
+		INFORMAL = 'informal', 'Informal Business or Vendor'
+
+	class JobTitle(models.TextChoices):
+		OWNER = 'owner', 'Owner'
+		MANAGER = 'manager', 'Manager'
 
 	class Status(models.TextChoices):
 		DRAFT = 'draft', 'Draft'
@@ -156,6 +174,7 @@ class BusinessClaim(models.Model):
 
 	claimant = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='business_claims', on_delete=models.CASCADE)
 	listing_snapshot = models.ForeignKey(ListingSnapshot, related_name='business_claims', on_delete=models.CASCADE)
+	pathway = models.CharField(max_length=20, choices=Pathway.choices, default=Pathway.CLAIMED)
 	status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
 	contact_name = models.CharField(max_length=120)
 	job_title = models.CharField(max_length=120, blank=True)
@@ -163,6 +182,13 @@ class BusinessClaim(models.Model):
 	work_phone = models.CharField(max_length=20, blank=True)
 	employer_address = models.CharField(max_length=255, blank=True)
 	address_not_applicable = models.BooleanField(default=False)
+	serves_multiple_areas = models.BooleanField(default=False)
+	business_website_url = models.URLField(blank=True)
+	social_media_links = models.JSONField(default=list, blank=True)
+	offer_entries = models.JSONField(default=list, blank=True)
+	hours_of_operation_entries = models.JSONField(default=list, blank=True)
+	photo_references = models.JSONField(default=list, blank=True)
+	verification_documents = models.JSONField(default=dict, blank=True)
 	verification_summary = models.TextField(blank=True)
 	supporting_details = models.TextField(blank=True)
 	reviewer_notes = models.TextField(blank=True)
@@ -189,24 +215,67 @@ class BusinessClaim(models.Model):
 	def __str__(self):
 		return f'{self.listing_snapshot.name} claim by {self.contact_name}'
 
+	def get_profile_entry_values(self, entry_kind):
+		if not self.pk:
+			return []
+		return list(
+			self.profile_entries.filter(entry_kind=entry_kind)
+			.order_by('sort_order', 'id')
+			.values_list('value', flat=True)
+		)
+
 	def clean(self):
 		if self.status in {self.Status.SUBMITTED, self.Status.UNDER_REVIEW, self.Status.APPROVED}:
 			missing_fields = []
-			for field_name in ['contact_name', 'work_email', 'verification_summary']:
+			for field_name in ['verification_summary']:
 				if not getattr(self, field_name):
 					missing_fields.append(field_name)
 
 			is_manual_submission = self.listing_snapshot.source_name == self.MANUAL_SOURCE_NAME
-			if not is_manual_submission and not self.job_title:
-				missing_fields.append('job_title')
-			if not self.address_not_applicable and not self.employer_address:
-				missing_fields.append('employer_address')
+			if self.pathway in {self.Pathway.CLAIMED, self.Pathway.ESTABLISHED}:
+				for field_name in ['contact_name', 'work_email', 'work_phone']:
+					if not getattr(self, field_name):
+						missing_fields.append(field_name)
+				if not self.address_not_applicable and not self.employer_address:
+					missing_fields.append('employer_address')
+				if not self.job_title:
+					missing_fields.append('job_title')
+				if self.job_title and self.job_title not in self.JobTitle.values:
+					raise ValidationError('Job title must be Owner or Manager for claimed and established businesses.')
+				if not self.business_registration_documents and not self.has_attachment_kind(BusinessClaimAttachment.AttachmentKind.BUSINESS_REGISTRATION):
+					raise ValidationError('Business registration documentation is required for claimed and established businesses.')
+				if self.listing_snapshot.venue_type in {VenueType.RESTAURANT, VenueType.FAST_FOOD, VenueType.CAFE} and not self.health_permit_documents and not self.has_attachment_kind(BusinessClaimAttachment.AttachmentKind.HEALTH_PERMIT):
+					raise ValidationError('Health permit documentation is required for food businesses.')
+				if self.listing_snapshot.venue_type == VenueType.BAR and not self.abc_license_documents and not self.has_attachment_kind(BusinessClaimAttachment.AttachmentKind.ABC_LICENSE):
+					raise ValidationError('ABC license documentation is required for bars.')
+			elif self.pathway == self.Pathway.INFORMAL:
+				if self.contact_name:
+					pass
+			if self.serves_multiple_areas:
+				self.address_not_applicable = True
 			if not is_manual_submission and self.address_not_applicable:
 				raise ValidationError('Address not applicable is only available for manually submitted businesses.')
 			if missing_fields:
 				raise ValidationError(
 					f'Claim is missing required verification fields: {", ".join(missing_fields)}.'
 				)
+
+	@property
+	def business_registration_documents(self):
+		return list((self.verification_documents or {}).get('business_registration', []))
+
+	@property
+	def health_permit_documents(self):
+		return list((self.verification_documents or {}).get('health_permit', []))
+
+	@property
+	def abc_license_documents(self):
+		return list((self.verification_documents or {}).get('abc_license', []))
+
+	def has_attachment_kind(self, attachment_kind):
+		if not self.pk:
+			return False
+		return self.attachments.filter(attachment_kind=attachment_kind).exists()
 
 	def submit_for_review(self):
 		self.full_clean()
@@ -247,6 +316,56 @@ class BusinessClaim(models.Model):
 		self.reviewed_at = timezone.now()
 		self.reviewer_notes = reviewer_notes or self.reviewer_notes
 		self.save()
+
+
+class BusinessClaimProfileEntry(models.Model):
+	claim = models.ForeignKey(BusinessClaim, related_name='profile_entries', on_delete=models.CASCADE)
+	entry_kind = models.CharField(max_length=40, choices=BusinessClaim.ProfileEntryKind.choices)
+	value = models.TextField()
+	sort_order = models.PositiveIntegerField(default=0)
+	metadata = models.JSONField(default=dict, blank=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ['entry_kind', 'sort_order', 'id']
+		verbose_name = 'Business Claim Profile Entry'
+		verbose_name_plural = 'Business Claim Profile Entries'
+
+	def __str__(self):
+		return f'{self.claim_id} {self.entry_kind}: {self.value[:40]}'
+
+
+def business_claim_attachment_upload_to(instance, filename):
+	filename_root = Path(filename or 'attachment').stem or 'attachment'
+	filename_suffix = Path(filename or '').suffix
+	safe_name = slugify(filename_root) or 'attachment'
+	return f'business-claim-attachments/{instance.claim_id}/{instance.attachment_kind}/{safe_name}{filename_suffix}'
+
+
+class BusinessClaimAttachment(models.Model):
+	class AttachmentKind(models.TextChoices):
+		SOCIAL_MEDIA = 'social_media', 'Social Media Attachment'
+		BUSINESS_REGISTRATION = 'business_registration', 'Business Registration Attachment'
+		HEALTH_PERMIT = 'health_permit', 'Health Permit Attachment'
+		ABC_LICENSE = 'abc_license', 'ABC License Attachment'
+		PROOF_OF_ADDRESS_CONTROL = 'proof_of_address_control', 'Proof of Address Control Attachment'
+
+	claim = models.ForeignKey(BusinessClaim, related_name='attachments', on_delete=models.CASCADE)
+	attachment_kind = models.CharField(max_length=40, choices=AttachmentKind.choices)
+	file = models.FileField(upload_to=business_claim_attachment_upload_to)
+	original_filename = models.CharField(max_length=255)
+	content_type = models.CharField(max_length=120, blank=True)
+	file_size = models.PositiveIntegerField(default=0)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ['attachment_kind', 'created_at']
+		verbose_name = 'Business Claim Attachment'
+		verbose_name_plural = 'Business Claim Attachments'
+
+	def __str__(self):
+		return f'{self.claim_id} {self.attachment_kind} {self.original_filename}'
 
 
 class BusinessMembership(models.Model):

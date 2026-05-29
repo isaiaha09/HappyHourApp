@@ -1,11 +1,14 @@
 import { NativeModules } from 'react-native';
 
 import type {
+  BusinessAttachmentBuckets,
+  BusinessAttachmentKind,
   BusinessLocationUpdateRequest,
   BusinessSignupRequest,
   CustomerSignupRequest,
   EmailVerificationChallengeResponse,
   EmailVerificationCodeRequest,
+  InformalBusinessSignupRequest,
   LoginRequest,
   ManualBusinessSignupRequest,
   PaginatedResponse,
@@ -17,6 +20,14 @@ import type {
 } from './types';
 
 const FALLBACK_API_BASE_URL = 'http://127.0.0.1:8000/api';
+
+const businessAttachmentFieldNames: Record<BusinessAttachmentKind, string> = {
+  social_media: 'social_media_attachments',
+  business_registration: 'business_registration_attachments',
+  health_permit: 'health_permit_attachments',
+  abc_license: 'abc_license_attachments',
+  proof_of_address_control: 'proof_of_address_control_attachments',
+};
 
 export function getDefaultApiBaseUrl() {
   const configured = process.env.EXPO_PUBLIC_API_BASE_URL;
@@ -101,11 +112,15 @@ export async function disableTwoFactor(baseUrl: string, authToken: string, code:
 }
 
 export async function createBusinessProfile(baseUrl: string, payload: BusinessSignupRequest) {
-  return postJson<EmailVerificationChallengeResponse>(baseUrl, '/profiles/business-signup/', payload);
+  return postMultipartJson<EmailVerificationChallengeResponse>(baseUrl, '/profiles/business-signup/', buildBusinessSignupFormData(payload));
 }
 
 export async function createManualBusinessProfile(baseUrl: string, payload: ManualBusinessSignupRequest) {
-  return postJson<EmailVerificationChallengeResponse>(baseUrl, '/profiles/manual-business-signup/', payload);
+  return postMultipartJson<EmailVerificationChallengeResponse>(baseUrl, '/profiles/manual-business-signup/', buildBusinessSignupFormData(payload));
+}
+
+export async function createInformalBusinessProfile(baseUrl: string, payload: InformalBusinessSignupRequest) {
+  return postMultipartJson<EmailVerificationChallengeResponse>(baseUrl, '/profiles/informal-business-signup/', buildBusinessSignupFormData(payload));
 }
 
 export async function updateBusinessLocation(baseUrl: string, authToken: string, payload: BusinessLocationUpdateRequest) {
@@ -155,6 +170,26 @@ async function postJson<T>(baseUrl: string, path: string, payload: object): Prom
   return response.json() as Promise<T>;
 }
 
+async function postMultipartJson<T>(baseUrl: string, path: string, payload: FormData): Promise<T> {
+  const response = await fetch(buildApiUrl(baseUrl, path), {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+    },
+    body: payload,
+  });
+
+  if (!response.ok) {
+    const errorPayload = await response.json().catch(() => null);
+    const message = errorPayload && typeof errorPayload === 'object'
+      ? flattenApiError(errorPayload)
+      : `Backend request failed with status ${response.status}.`;
+    throw new Error(message);
+  }
+
+  return response.json() as Promise<T>;
+}
+
 async function fetchAllPaginatedJson<T>(baseUrl: string, path: string): Promise<T[]> {
   const items: T[] = [];
   let nextUrl: string | null = buildApiUrl(baseUrl, path);
@@ -180,6 +215,44 @@ async function fetchAllPaginatedJson<T>(baseUrl: string, path: string): Promise<
 
 function buildApiUrl(baseUrl: string, path: string) {
   return `${normalizeApiBaseUrl(baseUrl)}${path}`;
+}
+
+function buildBusinessSignupFormData(payload: BusinessSignupRequest | ManualBusinessSignupRequest | InformalBusinessSignupRequest) {
+  const formData = new FormData();
+  const { attachments, ...rest } = payload;
+
+  Object.entries(rest).forEach(([key, value]) => {
+    if (value === undefined || value === null) {
+      return;
+    }
+
+    if (Array.isArray(value) || typeof value === 'object') {
+      formData.append(key, JSON.stringify(value));
+      return;
+    }
+
+    formData.append(key, String(value));
+  });
+
+  appendBusinessAttachments(formData, attachments);
+  return formData;
+}
+
+function appendBusinessAttachments(formData: FormData, attachments?: BusinessAttachmentBuckets) {
+  if (!attachments) {
+    return;
+  }
+
+  (Object.entries(attachments) as Array<[BusinessAttachmentKind, BusinessAttachmentBuckets[BusinessAttachmentKind]]>).forEach(([attachmentKind, files]) => {
+    const fieldName = businessAttachmentFieldNames[attachmentKind];
+    files.forEach((file) => {
+      formData.append(fieldName, {
+        uri: file.uri,
+        name: file.name,
+        type: file.mimeType ?? 'application/octet-stream',
+      } as any);
+    });
+  });
 }
 
 function flattenApiError(value: unknown): string {

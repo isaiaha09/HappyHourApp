@@ -79,7 +79,7 @@ def build_account_response(user, portal, claim=None, token=None):
 	tracked_business_location = {}
 	requires_business_location_tracking = False
 	tracked_snapshot = active_membership.claim.listing_snapshot if active_membership else (primary_claim.listing_snapshot if primary_claim else None)
-	if tracked_snapshot is not None and tracked_snapshot.venue_type == VenueType.MOBILE:
+	if tracked_snapshot is not None and (tracked_snapshot.venue_type == VenueType.MOBILE or tracked_snapshot.serves_multiple_areas):
 		requires_business_location_tracking = True
 		tracked_business_location = {
 			'latitude': tracked_snapshot.tracked_location_latitude,

@@ -8,6 +8,7 @@ from .views import (
     DiscoveryEnrichmentStatusView,
     DisableTwoFactorView,
     HealthCheckView,
+    InformalBusinessSignupView,
     LoginView,
     ManualBusinessSignupView,
     PasswordResetRequestView,
@@ -47,4 +48,5 @@ urlpatterns = [
     path('profiles/customer-signup/', CustomerSignupView.as_view(), name='customer-signup'),
     path('profiles/business-signup/', BusinessSignupView.as_view(), name='business-signup'),
     path('profiles/manual-business-signup/', ManualBusinessSignupView.as_view(), name='manual-business-signup'),
+    path('profiles/informal-business-signup/', InformalBusinessSignupView.as_view(), name='informal-business-signup'),
 ]

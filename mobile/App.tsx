@@ -1,5 +1,6 @@
 import { startTransition, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import * as DocumentPicker from 'expo-document-picker';
 import * as Location from 'expo-location';
 import {
   ActivityIndicator,
@@ -26,6 +27,7 @@ import {
   confirmTwoFactorSetup,
   createBusinessProfile,
   createCustomerProfile,
+  createInformalBusinessProfile,
   createManualBusinessProfile,
   disableTwoFactor,
   fetchProfileDashboard,
@@ -50,6 +52,7 @@ import {
   type CityFilterValue,
   manualBusinessCityOptions,
   manualBusinessVenueOptions,
+  multipleAreasBusinessCityOption,
   venueFilters,
   type VenueFilterValue,
   weekdayFilters,
@@ -80,11 +83,19 @@ import {
   normalizeSearchText,
 } from './src/placeHelpers';
 import type {
+  BusinessAttachmentBuckets,
+  BusinessAttachmentDraft,
+  BusinessAttachmentKind,
+  BusinessVerificationDocuments,
   BusinessSignupRequest,
   CustomerSignupRequest,
+  Deal,
   EmailVerificationChallengeResponse,
+  HappyHourWindow,
+  InformalBusinessSignupRequest,
   LoginRequest,
   ManualBusinessSignupRequest,
+  OperatingHourWindow,
   PlaceDetail,
   PlaceListItem,
   PlaceLocation,
@@ -137,7 +148,8 @@ const cityMapRegions: Record<Exclude<CityFilterValue, 'all'>, Region> = {
   },
 };
 const mobileBusinessVenueType = 'mobile';
-type AppScreenMode = 'splash' | 'auth' | 'browse' | 'profiles' | 'settings' | 'support' | 'privacy-policy' | 'terms-of-service' | 'business-search' | 'business-claim' | 'manual-business-claim' | 'email-verification';
+const multipleAreasBusinessCityValue = multipleAreasBusinessCityOption.value;
+type AppScreenMode = 'splash' | 'auth' | 'browse' | 'profiles' | 'settings' | 'support' | 'privacy-policy' | 'terms-of-service' | 'business-search' | 'business-claim' | 'manual-business-claim' | 'informal-business-claim' | 'email-verification';
 type OnboardingTransitionDirection = 'forward' | 'backward';
 type TransitionAxis = 'x' | 'y';
 
@@ -169,9 +181,173 @@ const initialProfileFormState: ProfileFormState = {
   work_phone: '',
   employer_address: '',
   address_not_applicable: false,
+  social_media_links_text: '',
+  offer_entries_text: '',
+  hours_of_operation_entries_text: '',
+  photo_references_text: '',
   verification_summary: '',
   supporting_details: '',
 };
+
+const initialBusinessAttachments: BusinessAttachmentBuckets = {
+  social_media: [],
+  business_registration: [],
+  health_permit: [],
+  abc_license: [],
+  proof_of_address_control: [],
+};
+
+const verificationAttachmentMimeTypes = ['application/pdf', 'image/*'];
+
+function splitMultilineEntries(value: string) {
+  return value
+    .split(/\r?\n/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function formatPrefillTime(value: string) {
+  const match = value.match(/^(\d{1,2}):(\d{2})/);
+  if (!match) {
+    return value;
+  }
+
+  const hour = Number.parseInt(match[1], 10);
+  const minute = match[2];
+  const suffix = hour >= 12 ? 'PM' : 'AM';
+  const hour12 = hour % 12 || 12;
+  return `${hour12}:${minute} ${suffix}`;
+}
+
+function joinUniqueEntries(entries: string[]) {
+  const uniqueEntries: string[] = [];
+  const seenEntries = new Set<string>();
+
+  entries.forEach((entry) => {
+    const normalized = entry.trim();
+    if (!normalized) {
+      return;
+    }
+    const key = normalized.toLowerCase();
+    if (seenEntries.has(key)) {
+      return;
+    }
+    seenEntries.add(key);
+    uniqueEntries.push(normalized);
+  });
+
+  return uniqueEntries;
+}
+
+function formatOperatingHourEntry(window: OperatingHourWindow) {
+  return `${window.weekday_label}: ${formatPrefillTime(window.open_time)} - ${formatPrefillTime(window.close_time)}`;
+}
+
+function formatHappyHourWindowEntry(window: HappyHourWindow) {
+  if (window.all_day) {
+    return `${window.weekday_label}: all day`;
+  }
+
+  return `${window.weekday_label}: ${formatPrefillTime(window.start_time)} - ${formatPrefillTime(window.end_time)}`;
+}
+
+function formatDealEntry(deal: Deal) {
+  const sections = [deal.title.trim()];
+
+  if (deal.price_text.trim()) {
+    sections.push(deal.price_text.trim());
+  }
+  if (deal.description.trim()) {
+    sections.push(deal.description.trim());
+  }
+  if (deal.terms.trim()) {
+    sections.push(`Terms: ${deal.terms.trim()}`);
+  }
+  if (deal.happy_hours.length) {
+    sections.push(`Happy hour: ${deal.happy_hours.map(formatHappyHourWindowEntry).join(', ')}`);
+  }
+
+  return sections.join(' | ');
+}
+
+function buildClaimPrefill(detail: PlaceDetail, locationId: number | null) {
+  const selectedLocation = detail.locations.find((location) => location.id === locationId) ?? detail.locations[0] ?? detail;
+  const operatingHours = selectedLocation.operating_hours.length ? selectedLocation.operating_hours : detail.operating_hours;
+  const deals = selectedLocation.deals.length ? selectedLocation.deals : detail.deals;
+  const imageReferences = dedupeImageUrls([...selectedLocation.image_urls, ...detail.image_urls]);
+
+  return {
+    locationId: selectedLocation.id,
+    business_city: selectedLocation.city,
+    business_venue_type: selectedLocation.venue_type,
+    business_website_url: selectedLocation.website_url || detail.website_url,
+    offer_entries_text: joinUniqueEntries(deals.map(formatDealEntry)).join('\n'),
+    hours_of_operation_entries_text: joinUniqueEntries(operatingHours.map(formatOperatingHourEntry)).join('\n'),
+    photo_references_text: imageReferences.join('\n'),
+  };
+}
+
+function buildVerificationDocuments(): BusinessVerificationDocuments {
+  return {
+    business_registration: [],
+    health_permit: [],
+    abc_license: [],
+    proof_of_address_control: [],
+  };
+}
+
+function buildSharedBusinessDetails(form: ProfileFormState) {
+  return {
+    business_website_url: form.business_website_url.trim(),
+    social_media_links: splitMultilineEntries(form.social_media_links_text),
+    offer_entries: splitMultilineEntries(form.offer_entries_text),
+    hours_of_operation_entries: splitMultilineEntries(form.hours_of_operation_entries_text),
+    photo_references: splitMultilineEntries(form.photo_references_text),
+  };
+}
+
+function normalizeBusinessAttachment(asset: DocumentPicker.DocumentPickerAsset): BusinessAttachmentDraft {
+  return {
+    id: `${asset.uri}::${asset.name}::${asset.size ?? 0}`,
+    name: asset.name,
+    uri: asset.uri,
+    mimeType: asset.mimeType ?? null,
+    size: asset.size ?? null,
+  };
+}
+
+function mergeBusinessAttachments(current: BusinessAttachmentDraft[], next: BusinessAttachmentDraft[]) {
+  const merged = [...current];
+  next.forEach((attachment) => {
+    if (!merged.some((existing) => existing.id === attachment.id)) {
+      merged.push(attachment);
+    }
+  });
+  return merged;
+}
+
+function resetBusinessVerificationFields(current: ProfileFormState): ProfileFormState {
+  return {
+    ...current,
+    business_slug: '',
+    business_name: '',
+    business_city: '',
+    business_venue_type: '',
+    business_website_url: '',
+    contact_name: '',
+    job_title: '',
+    work_email: '',
+    work_phone: '',
+    employer_address: '',
+    address_not_applicable: false,
+    social_media_links_text: '',
+    offer_entries_text: '',
+    hours_of_operation_entries_text: '',
+    photo_references_text: '',
+    verification_summary: '',
+    supporting_details: '',
+  };
+}
 
 const initialLoginFormState: LoginFormState = {
   identifier: '',
@@ -263,6 +439,7 @@ function AppScreen() {
   const pendingImmediateMapPinsRefreshRef = useRef(false);
   const pendingListRevealRef = useRef(false);
   const [profileForm, setProfileForm] = useState<ProfileFormState>(initialProfileFormState);
+  const [businessAttachments, setBusinessAttachments] = useState<BusinessAttachmentBuckets>(initialBusinessAttachments);
   const [profileSubmitting, setProfileSubmitting] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [profileErrorMessage, setProfileErrorMessage] = useState<string | null>(null);
@@ -292,6 +469,8 @@ function AppScreen() {
   const authenticatedSessionRef = useRef<SignupResponse | null>(null);
   const businessLocationWatcherRef = useRef<Location.LocationSubscription | null>(null);
   const businessLocationLastReportedRef = useRef<string>('');
+  const claimPrefillRequestRef = useRef(0);
+  const claimPrefillLoadedKeyRef = useRef('');
   const startupImageLoadCountRef = useRef(0);
   const shouldUseNativeMapBoundaries = false;
   const normalizedSearchQuery = normalizeSearchText(searchQuery);
@@ -518,7 +697,7 @@ function AppScreen() {
     };
   }, [apiBaseUrl]);
   const availableClaimPlaces = consolidatePlacesBySlug(availableProfilePlaces);
-  const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'settings', 'support', 'privacy-policy', 'terms-of-service', 'business-search', 'business-claim', 'manual-business-claim', 'email-verification']);
+  const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'settings', 'support', 'privacy-policy', 'terms-of-service', 'business-search', 'business-claim', 'manual-business-claim', 'informal-business-claim', 'email-verification']);
   const profileStackTransitionScreens = new Set<AppScreenMode>(['profiles', 'settings', 'support', 'privacy-policy', 'terms-of-service']);
   const currentOnboardingScreen = onboardingScreenKeys.has(screenMode) ? screenMode : null;
   const usesOnboardingSlideTransition = currentOnboardingScreen !== null || incomingOnboardingScreen !== null;
@@ -1306,7 +1485,7 @@ function AppScreen() {
   }, [renderedMappedPlaceKey, selectedMapPlaceKey, showMapBrowse]);
 
   useEffect(() => {
-    if (!['profiles', 'business-search', 'business-claim', 'manual-business-claim'].includes(screenMode)) {
+    if (!['profiles', 'business-search', 'business-claim', 'manual-business-claim', 'informal-business-claim'].includes(screenMode)) {
       return;
     }
 
@@ -1349,6 +1528,62 @@ function AppScreen() {
 
     void refreshDashboard(false);
   }, [apiBaseUrl, authenticatedSession?.auth_token, screenMode]);
+
+  useEffect(() => {
+    if (screenMode !== 'business-claim' || !profileForm.business_slug) {
+      return;
+    }
+
+    const prefillKey = `${profileForm.business_slug}:${selectedClaimLocationId ?? 'default'}`;
+    if (claimPrefillLoadedKeyRef.current === prefillKey) {
+      return;
+    }
+
+    let isMounted = true;
+    const requestId = claimPrefillRequestRef.current + 1;
+    claimPrefillRequestRef.current = requestId;
+
+    void fetchPlaceDetail(apiBaseUrl, profileForm.business_slug)
+      .then((detail) => {
+        if (!isMounted || claimPrefillRequestRef.current !== requestId) {
+          return;
+        }
+
+        const prefill = buildClaimPrefill(detail, selectedClaimLocationId);
+        claimPrefillLoadedKeyRef.current = prefillKey;
+
+        startTransition(() => {
+          setSelectedClaimPlace(detail);
+          setSelectedClaimLocationId(prefill.locationId);
+          setProfileForm((current) => {
+            if (current.business_slug !== profileForm.business_slug) {
+              return current;
+            }
+
+            return {
+              ...current,
+              business_city: current.business_city || prefill.business_city,
+              business_venue_type: current.business_venue_type || prefill.business_venue_type,
+              business_website_url: current.business_website_url || prefill.business_website_url,
+              offer_entries_text: current.offer_entries_text.trim() ? current.offer_entries_text : prefill.offer_entries_text,
+              hours_of_operation_entries_text: current.hours_of_operation_entries_text.trim() ? current.hours_of_operation_entries_text : prefill.hours_of_operation_entries_text,
+              photo_references_text: current.photo_references_text.trim() ? current.photo_references_text : prefill.photo_references_text,
+            };
+          });
+        });
+      })
+      .catch(() => {
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    apiBaseUrl,
+    profileForm.business_slug,
+    screenMode,
+    selectedClaimLocationId,
+  ]);
 
   useEffect(() => {
     if (!showMapBrowse || !shouldUseNativeMapBoundaries || !mapRef.current) {
@@ -1724,22 +1959,52 @@ function AppScreen() {
   }
 
   function handleChangeProfileField(field: keyof ProfileFormState, value: string) {
-  setProfileForm((current) => {
-    if (field === 'business_venue_type') {
-      const nextIsMobileBusiness = value === mobileBusinessVenueType;
-      return {
-        ...current,
-        business_venue_type: value,
-        address_not_applicable: nextIsMobileBusiness && !current.employer_address ? true : current.address_not_applicable,
-      };
-    }
+    setProfileForm((current) => {
+      if (field === 'business_city') {
+        const servesMultipleAreas = value === multipleAreasBusinessCityValue;
+        return {
+          ...current,
+          business_city: value,
+          address_not_applicable: servesMultipleAreas,
+          employer_address: servesMultipleAreas ? '' : current.employer_address,
+        };
+      }
 
-    return { ...current, [field]: value };
-  });
+      return { ...current, [field]: value };
+    });
   }
 
   function handleChangeProfileToggle(field: 'address_not_applicable', value: boolean) {
     setProfileForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function handleAddBusinessAttachments(kind: BusinessAttachmentKind) {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        copyToCacheDirectory: true,
+        multiple: true,
+        type: kind === 'social_media' ? '*/*' : verificationAttachmentMimeTypes,
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      const nextAttachments = result.assets.map(normalizeBusinessAttachment);
+      setBusinessAttachments((current) => ({
+        ...current,
+        [kind]: mergeBusinessAttachments(current[kind], nextAttachments),
+      }));
+    } catch (error) {
+      setProfileErrorMessage(getErrorMessage(error));
+    }
+  }
+
+  function handleRemoveBusinessAttachment(kind: BusinessAttachmentKind, attachmentId: string) {
+    setBusinessAttachments((current) => ({
+      ...current,
+      [kind]: current[kind].filter((attachment) => attachment.id !== attachmentId),
+    }));
   }
 
   function handleSelectBusinessSlug(slug: string) {
@@ -1950,6 +2215,8 @@ function AppScreen() {
         password: profileForm.password,
         first_name: profileForm.first_name,
         last_name: profileForm.last_name,
+        attachments: businessAttachments,
+        ...buildSharedBusinessDetails(profileForm),
         business_slug: profileForm.business_slug,
         contact_name: profileForm.contact_name,
         job_title: profileForm.job_title,
@@ -1957,11 +2224,12 @@ function AppScreen() {
         work_phone: profileForm.work_phone,
         employer_address: profileForm.employer_address,
         address_not_applicable: false,
-        verification_summary: profileForm.verification_summary,
+        verification_documents: buildVerificationDocuments(),
         supporting_details: profileForm.supporting_details,
       };
       const response = await createBusinessProfile(apiBaseUrl, payload);
       setProfileForm(initialProfileFormState);
+      setBusinessAttachments(initialBusinessAttachments);
       setSelectedClaimPlace(null);
       setSelectedClaimLocationId(null);
       moveToEmailVerification(response);
@@ -1983,7 +2251,7 @@ function AppScreen() {
     setProfileErrorMessage(null);
     setProfileMessage(null);
 
-    const isMobileBusiness = profileForm.business_venue_type === mobileBusinessVenueType;
+    const servesMultipleAreas = profileForm.business_city === multipleAreasBusinessCityValue;
 
     try {
       const payload: ManualBusinessSignupRequest = {
@@ -1992,21 +2260,60 @@ function AppScreen() {
         password: profileForm.password,
         first_name: profileForm.first_name,
         last_name: profileForm.last_name,
+        attachments: businessAttachments,
+        ...buildSharedBusinessDetails(profileForm),
         business_name: profileForm.business_name,
         business_city: profileForm.business_city,
         business_venue_type: profileForm.business_venue_type,
-        business_website_url: profileForm.business_website_url,
         contact_name: profileForm.contact_name,
         job_title: profileForm.job_title,
         work_email: profileForm.work_email,
         work_phone: profileForm.work_phone,
         employer_address: profileForm.employer_address,
-        address_not_applicable: isMobileBusiness && !profileForm.employer_address ? true : profileForm.address_not_applicable,
-        verification_summary: profileForm.verification_summary,
+        address_not_applicable: servesMultipleAreas ? true : profileForm.address_not_applicable,
+        verification_documents: buildVerificationDocuments(),
         supporting_details: profileForm.supporting_details,
       };
       const response = await createManualBusinessProfile(apiBaseUrl, payload);
       setProfileForm(initialProfileFormState);
+      setBusinessAttachments(initialBusinessAttachments);
+      setSelectedClaimPlace(null);
+      setSelectedClaimLocationId(null);
+      moveToEmailVerification(response);
+    } catch (error) {
+      setProfileErrorMessage(getErrorMessage(error));
+    } finally {
+      setProfileSubmitting(false);
+    }
+  }
+
+  async function handleSubmitInformalBusinessProfile() {
+    if (profileForm.password !== profileForm.confirm_password) {
+      setProfileErrorMessage('Password and confirm password must match.');
+      setProfileMessage(null);
+      return;
+    }
+
+    setProfileSubmitting(true);
+    setProfileErrorMessage(null);
+    setProfileMessage(null);
+
+    try {
+      const payload: InformalBusinessSignupRequest = {
+        username: profileForm.username,
+        email: profileForm.email,
+        password: profileForm.password,
+        first_name: profileForm.first_name,
+        last_name: profileForm.last_name,
+        attachments: businessAttachments,
+        ...buildSharedBusinessDetails(profileForm),
+        business_name: profileForm.business_name,
+        business_city: profileForm.business_city,
+        business_venue_type: profileForm.business_venue_type,
+      };
+      const response = await createInformalBusinessProfile(apiBaseUrl, payload);
+      setProfileForm(initialProfileFormState);
+      setBusinessAttachments(initialBusinessAttachments);
       setSelectedClaimPlace(null);
       setSelectedClaimLocationId(null);
       moveToEmailVerification(response);
@@ -2142,6 +2449,8 @@ function AppScreen() {
 
   function handleOpenBusinessSearch() {
     dismissKeyboardForScreenTransition();
+    claimPrefillRequestRef.current += 1;
+    claimPrefillLoadedKeyRef.current = '';
     setProfileErrorMessage(null);
     setBusinessSearchQuery('');
     setSelectedClaimLocationId(null);
@@ -2164,35 +2473,45 @@ function AppScreen() {
 
   function handleBackToBusinessSearch() {
     dismissKeyboardForScreenTransition();
+    claimPrefillRequestRef.current += 1;
+    claimPrefillLoadedKeyRef.current = '';
     setProfileErrorMessage(null);
     navigateScreen('business-search', 'backward');
   }
 
   function handleOpenManualBusinessClaim() {
     dismissKeyboardForScreenTransition();
+    claimPrefillRequestRef.current += 1;
+    claimPrefillLoadedKeyRef.current = '';
     setProfileErrorMessage(null);
     setSelectedClaimPlace(null);
     setSelectedClaimLocationId(null);
-    setProfileForm((current) => ({
-      ...current,
-      business_slug: '',
-      business_name: '',
-      business_city: '',
-      business_venue_type: '',
-      business_website_url: '',
-      employer_address: '',
-      address_not_applicable: false,
-    }));
+    setBusinessAttachments(initialBusinessAttachments);
+    setProfileForm((current) => resetBusinessVerificationFields(current));
     navigateScreen('manual-business-claim', 'forward');
+  }
+
+  function handleOpenInformalBusinessClaim() {
+    dismissKeyboardForScreenTransition();
+    claimPrefillRequestRef.current += 1;
+    claimPrefillLoadedKeyRef.current = '';
+    setProfileErrorMessage(null);
+    setSelectedClaimPlace(null);
+    setSelectedClaimLocationId(null);
+    setBusinessAttachments(initialBusinessAttachments);
+    setProfileForm((current) => resetBusinessVerificationFields(current));
+    navigateScreen('informal-business-claim', 'forward');
   }
 
   function handleSelectClaimBusiness(place: PlaceListItem, locationId: number) {
     dismissKeyboardForScreenTransition();
     const selectedLocation = getPlaceLocations(place).find((location) => location.id === locationId) ?? getPlaceLocations(place)[0] ?? place;
+    claimPrefillLoadedKeyRef.current = '';
     setSelectedClaimPlace(place);
     setSelectedClaimLocationId(selectedLocation.id);
+    setBusinessAttachments(initialBusinessAttachments);
     setProfileForm((current) => ({
-      ...current,
+      ...resetBusinessVerificationFields(current),
       business_slug: place.slug,
       business_name: place.name,
       business_city: selectedLocation.city,
@@ -2493,6 +2812,7 @@ function AppScreen() {
               loadingPlaces={profilePlacesLoading}
               onBack={handleBackToCreateProfile}
               onChangeSearchQuery={setBusinessSearchQuery}
+              onChooseInformalBusiness={handleOpenInformalBusinessClaim}
               onChooseManualBusiness={handleOpenManualBusinessClaim}
               onSelectBusiness={handleSelectClaimBusiness}
               results={businessSearchResults}
@@ -2504,12 +2824,15 @@ function AppScreen() {
         return (
           <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
             <BusinessVerificationScreen
+              attachments={businessAttachments}
               errorMessage={profileErrorMessage}
               form={profileForm}
               isLandscape={isLandscape}
               mode="claimed"
+              onAddAttachments={handleAddBusinessAttachments}
               onBack={handleBackToBusinessSearch}
               onChangeField={handleChangeProfileField}
+              onRemoveAttachment={handleRemoveBusinessAttachment}
               onToggleAddressNotApplicable={(value) => handleChangeProfileToggle('address_not_applicable', value)}
               onSubmit={handleSubmitClaimedBusinessProfile}
               selectedLocation={selectedClaimLocation}
@@ -2522,14 +2845,38 @@ function AppScreen() {
         return (
           <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
             <BusinessVerificationScreen
+              attachments={businessAttachments}
               errorMessage={profileErrorMessage}
               form={profileForm}
               isLandscape={isLandscape}
               mode="manual"
+              onAddAttachments={handleAddBusinessAttachments}
               onBack={handleBackToBusinessSearch}
               onChangeField={handleChangeProfileField}
+              onRemoveAttachment={handleRemoveBusinessAttachment}
               onToggleAddressNotApplicable={(value) => handleChangeProfileToggle('address_not_applicable', value)}
               onSubmit={handleSubmitManualBusinessProfile}
+              selectedLocation={null}
+              selectedPlace={null}
+              submitting={profileSubmitting}
+            />
+          </SafeAreaView>
+        );
+      case 'informal-business-claim':
+        return (
+          <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
+            <BusinessVerificationScreen
+              attachments={businessAttachments}
+              errorMessage={profileErrorMessage}
+              form={profileForm}
+              isLandscape={isLandscape}
+              mode="informal"
+              onAddAttachments={handleAddBusinessAttachments}
+              onBack={handleBackToBusinessSearch}
+              onChangeField={handleChangeProfileField}
+              onRemoveAttachment={handleRemoveBusinessAttachment}
+              onToggleAddressNotApplicable={(value) => handleChangeProfileToggle('address_not_applicable', value)}
+              onSubmit={handleSubmitInformalBusinessProfile}
               selectedLocation={null}
               selectedPlace={null}
               submitting={profileSubmitting}

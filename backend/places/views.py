@@ -1,6 +1,7 @@
 from django.contrib.auth.models import User
 from django.conf import settings
 from django.http import Http404, HttpResponse
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework import generics, status
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
@@ -15,6 +16,7 @@ from .serializers import (
 	CustomerSignupSerializer,
 	DealSerializer,
 	EmailVerificationCodeSerializer,
+	InformalBusinessSignupSerializer,
 	LoginSerializer,
 	PasswordResetConfirmSerializer,
 	PasswordResetRequestSerializer,
@@ -24,6 +26,7 @@ from .serializers import (
 	ResendEmailVerificationCodeSerializer,
 	TwoFactorCodeSerializer,
 	UsernameReminderSerializer,
+	build_signup_request_data,
 	sync_listing_snapshot_from_place_payload,
 )
 from .services.account_profiles import build_account_response, build_email_verification_challenge, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, send_password_reset_email, send_username_reminder_email, send_verification_email
@@ -198,15 +201,16 @@ class PasswordResetRequestView(generics.GenericAPIView):
 
 class BusinessSignupView(generics.GenericAPIView):
 	serializer_class = ClaimedBusinessSignupSerializer
+	parser_classes = [MultiPartParser, FormParser, JSONParser]
 
 	def post(self, request):
-		payload = dict(request.data)
+		payload = build_signup_request_data(request.data)
 		business_slug = payload.get('business_slug')
 		place_payload = get_source_place_payload(business_slug)
 		if place_payload is None:
 			return Response({'business_slug': ['Business listing not found.']}, status=status.HTTP_400_BAD_REQUEST)
 
-		serializer = self.get_serializer(data=request.data)
+		serializer = self.get_serializer(data=payload)
 		serializer.is_valid(raise_exception=True)
 		serializer.validated_data['listing_snapshot'] = sync_listing_snapshot_from_place_payload(place_payload)
 		user = serializer.save()
@@ -216,9 +220,22 @@ class BusinessSignupView(generics.GenericAPIView):
 
 class ManualBusinessSignupView(generics.GenericAPIView):
 	serializer_class = ManualBusinessSignupSerializer
+	parser_classes = [MultiPartParser, FormParser, JSONParser]
 
 	def post(self, request):
-		serializer = self.get_serializer(data=request.data)
+		serializer = self.get_serializer(data=build_signup_request_data(request.data))
+		serializer.is_valid(raise_exception=True)
+		user = serializer.save()
+		claim = getattr(user, '_created_business_claim', None)
+		return Response(build_email_verification_challenge(user, 'business', claim=claim), status=status.HTTP_201_CREATED)
+
+
+class InformalBusinessSignupView(generics.GenericAPIView):
+	serializer_class = InformalBusinessSignupSerializer
+	parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+	def post(self, request):
+		serializer = self.get_serializer(data=build_signup_request_data(request.data))
 		serializer.is_valid(raise_exception=True)
 		user = serializer.save()
 		claim = getattr(user, '_created_business_claim', None)
@@ -294,7 +311,7 @@ class BusinessLocationUpdateView(generics.GenericAPIView):
 			return Response({'detail': 'An approved business membership is required before sending location updates.'}, status=status.HTTP_400_BAD_REQUEST)
 
 		snapshot = membership.claim.listing_snapshot
-		if snapshot.venue_type != VenueType.MOBILE:
+		if snapshot.venue_type != VenueType.MOBILE and not snapshot.serves_multiple_areas:
 			return Response({'detail': 'Live location updates are only required for On the Move businesses.'}, status=status.HTTP_400_BAD_REQUEST)
 
 		snapshot.tracked_location_latitude = serializer.validated_data['latitude']

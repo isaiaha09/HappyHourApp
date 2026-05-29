@@ -11,6 +11,7 @@ from django.contrib.messages.storage.fallback import FallbackStorage
 from django.conf import settings
 from django.core.cache import caches
 from django.core import mail
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.core.exceptions import ValidationError
 from django.test import RequestFactory, TestCase, override_settings
@@ -21,7 +22,7 @@ from bs4 import BeautifulSoup
 import pyotp
 
 from .admin import BusinessAccountAdmin, CustomerAccountAdmin, DeletedBusinessAdmin, ListingSnapshotAdmin, ProviderUsageWindowAdmin
-from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessMembership, City, CustomerAccount, DealType, DeletedBusiness, ListingSnapshot, ProfileAuthToken, ProviderUsageWindow, VenueType, Weekday
+from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessMembership, City, CustomerAccount, DealType, DeletedBusiness, ListingSnapshot, ProfileAuthToken, ProviderUsageWindow, VenueType, Weekday
 from .services.importers.base import BaseHtmlImporter
 from .services.importers.business_websites import BusinessWebsiteImporter
 from .services.importers.discovered_json_places import CuratedJsonPlacesImporter, DiscoveryJsonPlacesImporter, load_discovery_json_records, write_discovery_json_records
@@ -84,6 +85,16 @@ class PlaceApiTests(APITestCase):
 			'longitude': -119.2931,
 			'phone_number': '805-555-0111',
 			'website_url': 'https://example.com/805-tacos',
+			'image_urls': [],
+			'operating_hours': [
+				{
+					'id': 404,
+					'weekday': Weekday.MONDAY,
+					'weekday_label': 'Monday',
+					'open_time': '11:00',
+					'close_time': '21:00',
+				},
+			],
 			'is_active': True,
 			'operating_weekdays': [Weekday.MONDAY, Weekday.TUESDAY],
 			'deal_weekdays': [Weekday.TUESDAY],
@@ -111,6 +122,43 @@ class PlaceApiTests(APITestCase):
 							'all_day': False,
 						}
 					],
+				},
+			],
+			'locations': [
+				{
+					'id': 505,
+					'slug': '805-tacos-downtown-ventura',
+					'name': '805 Tacos',
+					'city': City.VENTURA,
+					'city_label': 'Ventura',
+					'venue_type': VenueType.RESTAURANT,
+					'venue_type_label': 'Restaurant',
+					'address_line_1': '123 Main St',
+					'address_line_2': '',
+					'neighborhood': '',
+					'state': 'CA',
+					'postal_code': '93001',
+					'latitude': 34.2783,
+					'longitude': -119.2931,
+					'phone_number': '805-555-0111',
+					'website_url': 'https://example.com/805-tacos',
+					'image_urls': [],
+					'operating_hours': [
+						{
+							'id': 404,
+							'weekday': Weekday.MONDAY,
+							'weekday_label': 'Monday',
+							'open_time': '11:00',
+							'close_time': '21:00',
+						},
+					],
+					'is_active': True,
+					'has_deals': True,
+					'deal_count': 1,
+					'operating_weekdays': [Weekday.MONDAY, Weekday.TUESDAY],
+					'deal_weekdays': [Weekday.TUESDAY],
+					'is_verified': True,
+					'deals': [],
 				},
 			],
 		}
@@ -204,6 +252,15 @@ class PlaceApiTests(APITestCase):
 
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(len(response.json()['deals']), 1)
+
+	def test_place_detail_accepts_location_slug(self):
+		location_slug = self.place_payload['locations'][0]['slug']
+		with patch('places.views.get_source_place_payload', return_value=self.place_payload) as mock_get_source_place_payload:
+			response = self.client.get(reverse('place-detail', kwargs={'slug': location_slug}))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.json()['slug'], self.place_payload['slug'])
+		mock_get_source_place_payload.assert_called_once_with(location_slug)
 
 	def test_deal_list_endpoint(self):
 		with patch('places.views.get_source_deal_payloads', return_value=self.place_payload['deals']):
@@ -2643,12 +2700,17 @@ class ProfileSignupApiTests(APITestCase):
 				'last_name': 'Owner',
 				'business_slug': 'finneys-crafthouse',
 				'contact_name': 'Pat Owner',
-				'job_title': 'General Manager',
+				'job_title': BusinessClaim.JobTitle.MANAGER,
 				'work_email': 'pat@finneys.com',
 				'work_phone': '805-555-0100',
 				'employer_address': '494 E Main St, Ventura, CA 93001',
 				'address_not_applicable': False,
-				'verification_summary': 'I manage this location and can verify promotions.',
+				'business_website_url': 'https://finneysventura.example.com',
+				'social_media_links': ['https://instagram.com/finneysventura'],
+				'verification_documents': {
+					'business_registration': ['CA business license #123'],
+					'health_permit': ['Ventura County permit #A-55'],
+				},
 				'supporting_details': 'Available to provide payroll and licensing records upon request.',
 			},
 			format='json',
@@ -2664,6 +2726,12 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(claim.listing_snapshot.listing_slug, 'finneys-crafthouse')
 		self.assertEqual(claim.listing_snapshot.name, "Finney's Crafthouse")
 		self.assertEqual(claim.employer_address, '494 E Main St, Ventura, CA 93001')
+		self.assertEqual(claim.pathway, BusinessClaim.Pathway.CLAIMED)
+		self.assertEqual(claim.business_website_url, 'https://finneysventura.example.com')
+		self.assertEqual(
+			claim.get_profile_entry_values(BusinessClaim.ProfileEntryKind.SOCIAL_MEDIA_LINK),
+			['https://instagram.com/finneysventura'],
+		)
 
 	def test_manual_business_signup_supports_address_not_applicable(self):
 		response = self.client.post(
@@ -2675,16 +2743,19 @@ class ProfileSignupApiTests(APITestCase):
 				'first_name': 'Casey',
 				'last_name': 'Founder',
 				'business_name': 'Corner Bistro',
-				'business_city': City.VENTURA,
+				'business_city': BusinessClaim.MULTIPLE_AREAS_VALUE,
 				'business_venue_type': VenueType.CAFE,
 				'business_website_url': 'https://example.com/corner-bistro',
 				'contact_name': 'Casey Founder',
-				'job_title': '',
+				'job_title': BusinessClaim.JobTitle.OWNER,
 				'work_email': 'owner@cornerbistro.com',
-				'work_phone': '',
+				'work_phone': '805-555-0133',
 				'employer_address': '',
 				'address_not_applicable': True,
-				'verification_summary': 'We are a new business preparing to open and need a profile.',
+				'verification_documents': {
+					'business_registration': ['Articles of organization filed with CA Secretary of State'],
+					'health_permit': ['Ventura County temporary permit receipt'],
+				},
 				'supporting_details': 'Happy to provide incorporation documents during review.',
 			},
 			format='json',
@@ -2696,8 +2767,9 @@ class ProfileSignupApiTests(APITestCase):
 		claim = BusinessClaim.objects.select_related('listing_snapshot').get(claimant__username='new_bistro_owner')
 		self.assertEqual(claim.status, BusinessClaim.Status.SUBMITTED)
 		self.assertTrue(claim.address_not_applicable)
+		self.assertTrue(claim.serves_multiple_areas)
 		self.assertEqual(claim.listing_snapshot.source_name, BusinessClaim.MANUAL_SOURCE_NAME)
-		self.assertEqual(claim.listing_snapshot.address_line_1, 'Address Not Applicable')
+		self.assertEqual(claim.listing_snapshot.address_line_1, 'Approximate live location')
 
 	def test_manual_mobile_business_signup_defaults_to_live_location_placeholder(self):
 		response = self.client.post(
@@ -2709,16 +2781,19 @@ class ProfileSignupApiTests(APITestCase):
 				'first_name': 'Taylor',
 				'last_name': 'Driver',
 				'business_name': 'Scoops Truck',
-				'business_city': City.VENTURA,
+				'business_city': BusinessClaim.MULTIPLE_AREAS_VALUE,
 				'business_venue_type': VenueType.MOBILE,
 				'business_website_url': 'https://example.com/scoops-truck',
 				'contact_name': 'Taylor Driver',
-				'job_title': '',
+				'job_title': BusinessClaim.JobTitle.OWNER,
 				'work_email': 'hello@scoopstruck.com',
-				'work_phone': '',
+				'work_phone': '805-555-0155',
 				'employer_address': '',
 				'address_not_applicable': False,
-				'verification_summary': 'We operate a mobile ice cream truck across Ventura County.',
+				'verification_documents': {
+					'business_registration': ['Ventura county vendor registration'],
+					'health_permit': ['County mobile food permit'],
+				},
 				'supporting_details': '',
 			},
 			format='json',
@@ -2729,6 +2804,93 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertTrue(claim.address_not_applicable)
 		self.assertEqual(claim.listing_snapshot.venue_type, VenueType.MOBILE)
 		self.assertEqual(claim.listing_snapshot.address_line_1, 'Approximate live location')
+
+	def test_informal_business_signup_creates_informal_claim(self):
+		response = self.client.post(
+			reverse('informal-business-signup'),
+			{
+				'username': 'street_vendor',
+				'email': 'vendor@example.com',
+				'password': 'test-pass-123',
+				'first_name': 'Riley',
+				'last_name': 'Vendor',
+				'business_name': 'Riley Snacks',
+				'business_city': BusinessClaim.MULTIPLE_AREAS_VALUE,
+				'business_venue_type': VenueType.FAST_FOOD,
+				'business_website_url': '',
+				'social_media_links': ['https://instagram.com/rileysnacks'],
+				'offer_entries': ['2 tacos for $5'],
+				'hours_of_operation_entries': ['Fri-Sun 6pm-11pm'],
+				'photo_references': ['https://example.com/rileysnacks-cart.jpg'],
+			},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, 201)
+		claim = BusinessClaim.objects.select_related('listing_snapshot').get(claimant__username='street_vendor')
+		self.assertEqual(claim.pathway, BusinessClaim.Pathway.INFORMAL)
+		self.assertTrue(claim.serves_multiple_areas)
+		self.assertEqual(claim.listing_snapshot.address_line_1, 'Approximate live location')
+		self.assertEqual(
+			claim.get_profile_entry_values(BusinessClaim.ProfileEntryKind.OFFER),
+			['2 tacos for $5'],
+		)
+
+	def test_manual_business_signup_accepts_multiple_social_and_verification_attachments(self):
+		with TemporaryDirectory() as temp_dir:
+			with override_settings(MEDIA_ROOT=Path(temp_dir)):
+				response = self.client.post(
+					reverse('manual-business-signup'),
+					{
+						'username': 'attachment_owner',
+						'email': 'attachment@example.com',
+						'password': 'test-pass-123',
+						'first_name': 'File',
+						'last_name': 'Owner',
+						'business_name': 'Attachment Bistro',
+						'business_city': BusinessClaim.MULTIPLE_AREAS_VALUE,
+						'business_venue_type': VenueType.CAFE,
+						'business_website_url': 'https://example.com/attachment-bistro',
+						'contact_name': 'File Owner',
+						'job_title': BusinessClaim.JobTitle.OWNER,
+						'work_email': 'owner@attachmentbistro.com',
+						'work_phone': '805-555-0198',
+						'employer_address': '',
+						'address_not_applicable': 'true',
+						'social_media_links': json.dumps(['https://instagram.com/attachmentbistro']),
+						'verification_documents': json.dumps({
+							'business_registration': [],
+							'health_permit': [],
+							'abc_license': [],
+							'proof_of_address_control': [],
+						}),
+						'social_media_attachments': [
+							SimpleUploadedFile('instagram-proof.pdf', b'social-proof', content_type='application/pdf'),
+							SimpleUploadedFile('facebook-proof.pdf', b'second-social-proof', content_type='application/pdf'),
+						],
+						'business_registration_attachments': [
+							SimpleUploadedFile('business-license.pdf', b'business-license', content_type='application/pdf'),
+						],
+						'health_permit_attachments': [
+							SimpleUploadedFile('health-permit.pdf', b'health-permit', content_type='application/pdf'),
+						],
+					},
+					format='multipart',
+				)
+
+				self.assertEqual(response.status_code, 201)
+				claim = BusinessClaim.objects.get(claimant__username='attachment_owner')
+				attachments = list(claim.attachments.order_by('attachment_kind', 'original_filename'))
+				self.assertEqual(len(attachments), 4)
+				self.assertEqual(
+					[attachment.attachment_kind for attachment in attachments],
+					[
+						BusinessClaimAttachment.AttachmentKind.BUSINESS_REGISTRATION,
+						BusinessClaimAttachment.AttachmentKind.HEALTH_PERMIT,
+						BusinessClaimAttachment.AttachmentKind.SOCIAL_MEDIA,
+						BusinessClaimAttachment.AttachmentKind.SOCIAL_MEDIA,
+					],
+				)
 
 	def test_business_portal_login_returns_claim_status(self):
 		user = User.objects.create_user(username='pending_owner', email='pending@example.com', password='test-pass-123')

@@ -67,7 +67,7 @@ def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_
 		if existing_payload is None:
 			payloads_by_slug[snapshot_payload['slug']] = snapshot_payload
 			continue
-		if snapshot.venue_type == VenueType.MOBILE:
+		if snapshot.venue_type == VenueType.MOBILE or snapshot.serves_multiple_areas:
 			payloads_by_slug[snapshot_payload['slug']] = _merge_mobile_snapshot_payload(existing_payload, snapshot_payload)
 
 	payloads = []
@@ -89,6 +89,9 @@ def get_source_place_payload(slug, source_name=None):
 	for payload in get_source_place_payloads(source_name=source_name, resolve_missing_coordinates=True):
 		if payload['slug'] == slug:
 			return payload
+		for location in payload.get('locations', []):
+			if location.get('slug') == slug:
+				return payload
 	return None
 
 
@@ -194,7 +197,8 @@ def _get_active_business_snapshots():
 
 
 def _build_snapshot_place_payload(snapshot, resolve_missing_coordinates=True):
-	should_resolve_coordinates = resolve_missing_coordinates and snapshot.venue_type != VenueType.MOBILE
+	is_live_location_business = snapshot.venue_type == VenueType.MOBILE or snapshot.serves_multiple_areas
+	should_resolve_coordinates = resolve_missing_coordinates and not is_live_location_business
 	place_record = ImportedPlace(
 		name=snapshot.name,
 		profile_name=snapshot.name,
@@ -206,8 +210,8 @@ def _build_snapshot_place_payload(snapshot, resolve_missing_coordinates=True):
 		neighborhood=snapshot.neighborhood,
 		state=snapshot.state,
 		postal_code=snapshot.postal_code,
-		latitude=snapshot.tracked_location_latitude if snapshot.venue_type == VenueType.MOBILE else None,
-		longitude=snapshot.tracked_location_longitude if snapshot.venue_type == VenueType.MOBILE else None,
+		latitude=snapshot.tracked_location_latitude if is_live_location_business else None,
+		longitude=snapshot.tracked_location_longitude if is_live_location_business else None,
 		phone_number=snapshot.phone_number,
 		website_url=snapshot.website_url,
 		external_id=snapshot.external_id or snapshot.listing_slug or f'listing-snapshot-{snapshot.pk}',
@@ -218,7 +222,7 @@ def _build_snapshot_place_payload(snapshot, resolve_missing_coordinates=True):
 
 
 def _snapshot_display_address(snapshot):
-	if snapshot.venue_type == VenueType.MOBILE:
+	if snapshot.venue_type == VenueType.MOBILE or snapshot.serves_multiple_areas:
 		if snapshot.tracked_location_latitude is not None and snapshot.tracked_location_longitude is not None:
 			return 'Approximate live location'
 		return snapshot.address_line_1 or 'Approximate live location unavailable'

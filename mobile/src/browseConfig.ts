@@ -32,7 +32,8 @@ export type BrowseMode = 'list' | 'map';
 export type VenueFilterValue = (typeof venueFilters)[number]['value'];
 export type WeekdayFilterValue = (typeof weekdayFilters)[number]['value'];
 
-export const manualBusinessCityOptions = cityFilters.filter((filter) => filter.value !== 'all');
+export const multipleAreasBusinessCityOption = { label: 'On the Move / Serves Multiple Areas', value: 'multiple_areas' } as const;
+export const manualBusinessCityOptions = [...cityFilters.filter((filter) => filter.value !== 'all'), multipleAreasBusinessCityOption] as const;
 export const manualBusinessVenueOptions = venueFilters;
 
 const venueMarkerStyles = {

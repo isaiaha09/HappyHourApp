@@ -161,7 +161,40 @@ export type CustomerSignupRequest = {
   last_name: string;
 };
 
-export type BusinessSignupRequest = CustomerSignupRequest & {
+export type BusinessVerificationDocuments = {
+  business_registration: string[];
+  health_permit: string[];
+  abc_license: string[];
+  proof_of_address_control: string[];
+};
+
+export type BusinessAttachmentKind =
+  | 'social_media'
+  | 'business_registration'
+  | 'health_permit'
+  | 'abc_license'
+  | 'proof_of_address_control';
+
+export type BusinessAttachmentDraft = {
+  id: string;
+  name: string;
+  uri: string;
+  mimeType: string | null;
+  size: number | null;
+};
+
+export type BusinessAttachmentBuckets = Record<BusinessAttachmentKind, BusinessAttachmentDraft[]>;
+
+type SharedBusinessDetails = {
+  business_website_url: string;
+  social_media_links: string[];
+  offer_entries: string[];
+  hours_of_operation_entries: string[];
+  photo_references: string[];
+};
+
+export type BusinessSignupRequest = CustomerSignupRequest & SharedBusinessDetails & {
+  attachments?: BusinessAttachmentBuckets;
   business_slug: string;
   contact_name: string;
   job_title: string;
@@ -169,11 +202,12 @@ export type BusinessSignupRequest = CustomerSignupRequest & {
   work_phone: string;
   employer_address: string;
   address_not_applicable: boolean;
-  verification_summary: string;
+  verification_documents: BusinessVerificationDocuments;
   supporting_details: string;
 };
 
-export type ManualBusinessSignupRequest = CustomerSignupRequest & {
+export type ManualBusinessSignupRequest = CustomerSignupRequest & SharedBusinessDetails & {
+  attachments?: BusinessAttachmentBuckets;
   business_name: string;
   business_city: string;
   business_venue_type: string;
@@ -184,8 +218,15 @@ export type ManualBusinessSignupRequest = CustomerSignupRequest & {
   work_phone: string;
   employer_address: string;
   address_not_applicable: boolean;
-  verification_summary: string;
+  verification_documents: BusinessVerificationDocuments;
   supporting_details: string;
+};
+
+export type InformalBusinessSignupRequest = CustomerSignupRequest & SharedBusinessDetails & {
+  attachments?: BusinessAttachmentBuckets;
+  business_name: string;
+  business_city: string;
+  business_venue_type: string;
 };
 
 export type BusinessLocationUpdateRequest = {

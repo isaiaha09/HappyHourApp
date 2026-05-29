@@ -1,12 +1,133 @@
+import json
+
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from django.utils.text import slugify
 from rest_framework import serializers
 
-from .models import BusinessClaim, City, ListingSnapshot, VenueType
+from .models import BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, City, ListingSnapshot, VenueType
 from .services.account_profiles import build_account_response, get_or_create_account_profile
+
+
+BUSINESS_DOCUMENT_KEYS = (
+	'business_registration',
+	'health_permit',
+	'abc_license',
+	'proof_of_address_control',
+)
+
+ATTACHMENT_FIELD_NAME_MAP = {
+	'social_media_attachments': BusinessClaimAttachment.AttachmentKind.SOCIAL_MEDIA,
+	'business_registration_attachments': BusinessClaimAttachment.AttachmentKind.BUSINESS_REGISTRATION,
+	'health_permit_attachments': BusinessClaimAttachment.AttachmentKind.HEALTH_PERMIT,
+	'abc_license_attachments': BusinessClaimAttachment.AttachmentKind.ABC_LICENSE,
+	'proof_of_address_control_attachments': BusinessClaimAttachment.AttachmentKind.PROOF_OF_ADDRESS_CONTROL,
+}
+
+PROFILE_ENTRY_FIELD_KIND_MAP = {
+	'social_media_links': BusinessClaim.ProfileEntryKind.SOCIAL_MEDIA_LINK,
+	'offer_entries': BusinessClaim.ProfileEntryKind.OFFER,
+	'hours_of_operation_entries': BusinessClaim.ProfileEntryKind.OPERATING_HOUR,
+	'photo_references': BusinessClaim.ProfileEntryKind.PHOTO_REFERENCE,
+}
+
+LIST_JSON_FIELD_NAMES = (
+	'social_media_links',
+	'offer_entries',
+	'hours_of_operation_entries',
+	'photo_references',
+)
+
+DICT_JSON_FIELD_NAMES = (
+	'verification_documents',
+)
+
+
+def build_signup_request_data(data):
+	if hasattr(data, 'lists'):
+		normalized = {
+			key: values if len(values) > 1 else values[0]
+			for key, values in data.lists()
+		}
+	else:
+		normalized = dict(data)
+
+	for key in LIST_JSON_FIELD_NAMES:
+		if key not in normalized:
+			continue
+		value = normalized[key]
+		if isinstance(value, list):
+			continue
+		if isinstance(value, str):
+			stripped = value.strip()
+			normalized[key] = json.loads(stripped) if stripped else []
+
+	for key in DICT_JSON_FIELD_NAMES:
+		if key not in normalized:
+			continue
+		value = normalized[key]
+		if isinstance(value, dict):
+			continue
+		if isinstance(value, str):
+			stripped = value.strip()
+			normalized[key] = json.loads(stripped) if stripped else {}
+
+	return normalized
+
+
+def _normalize_string_list(value):
+	if value is None or value == '':
+		return []
+	if isinstance(value, str):
+		items = value.splitlines()
+	else:
+		items = list(value)
+	return [str(item).strip() for item in items if str(item).strip()]
+
+
+def _normalize_document_map(value):
+	if not value:
+		return {key: [] for key in BUSINESS_DOCUMENT_KEYS}
+	if not isinstance(value, dict):
+		raise serializers.ValidationError('Verification documents must be grouped by document type.')
+	return {
+		key: _normalize_string_list(value.get(key, []))
+		for key in BUSINESS_DOCUMENT_KEYS
+	}
+
+
+def _create_claim_attachments(claim, request):
+	if request is None:
+		return
+	for request_field_name, attachment_kind in ATTACHMENT_FIELD_NAME_MAP.items():
+		for uploaded_file in request.FILES.getlist(request_field_name):
+			BusinessClaimAttachment.objects.create(
+				claim=claim,
+				attachment_kind=attachment_kind,
+				file=uploaded_file,
+				original_filename=uploaded_file.name,
+				content_type=getattr(uploaded_file, 'content_type', '') or '',
+				file_size=getattr(uploaded_file, 'size', 0) or 0,
+			)
+
+
+def _create_claim_profile_entries(claim, validated_data):
+	entry_rows = []
+	for field_name, entry_kind in PROFILE_ENTRY_FIELD_KIND_MAP.items():
+		for index, value in enumerate(validated_data.get(field_name, [])):
+			entry_rows.append(
+				BusinessClaimProfileEntry(
+					claim=claim,
+					entry_kind=entry_kind,
+					value=value,
+					sort_order=index,
+				)
+			)
+	if entry_rows:
+		BusinessClaimProfileEntry.objects.bulk_create(entry_rows)
 
 
 class AccountResponseSerializer(serializers.Serializer):
@@ -178,105 +299,241 @@ class CustomerSignupSerializer(serializers.Serializer):
 class ClaimedBusinessSignupSerializer(CustomerSignupSerializer):
 	business_slug = serializers.SlugField(write_only=True)
 	contact_name = serializers.CharField(max_length=120)
-	job_title = serializers.CharField(max_length=120)
+	job_title = serializers.ChoiceField(choices=BusinessClaim.JobTitle.choices)
 	work_email = serializers.EmailField()
-	work_phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
+	work_phone = serializers.CharField(max_length=20)
 	employer_address = serializers.CharField(max_length=255)
 	address_not_applicable = serializers.BooleanField(default=False)
-	verification_summary = serializers.CharField(max_length=2000)
+	business_website_url = serializers.URLField(required=False, allow_blank=True)
+	social_media_links = serializers.ListField(child=serializers.CharField(max_length=500), required=False, allow_empty=True)
+	offer_entries = serializers.ListField(child=serializers.CharField(max_length=500), required=False, allow_empty=True)
+	hours_of_operation_entries = serializers.ListField(child=serializers.CharField(max_length=500), required=False, allow_empty=True)
+	photo_references = serializers.ListField(child=serializers.CharField(max_length=500), required=False, allow_empty=True)
+	verification_documents = serializers.JSONField(required=False)
 	supporting_details = serializers.CharField(max_length=4000, required=False, allow_blank=True)
 
 	def validate(self, attrs):
 		attrs = super().validate(attrs)
 		if attrs.get('address_not_applicable'):
 			raise serializers.ValidationError({'address_not_applicable': ['Address Not Applicable is only available when you create a new business profile.']})
+		attrs['social_media_links'] = _normalize_string_list(attrs.get('social_media_links', []))
+		attrs['offer_entries'] = _normalize_string_list(attrs.get('offer_entries', []))
+		attrs['hours_of_operation_entries'] = _normalize_string_list(attrs.get('hours_of_operation_entries', []))
+		attrs['photo_references'] = _normalize_string_list(attrs.get('photo_references', []))
+		attrs['verification_documents'] = _normalize_document_map(attrs.get('verification_documents', {}))
 		return attrs
 
 	def create(self, validated_data):
 		listing_snapshot = validated_data.pop('listing_snapshot')
 		validated_data.pop('business_slug', None)
+		listing_snapshot.website_url = validated_data.pop('business_website_url', '') or listing_snapshot.website_url
+		listing_snapshot.save(update_fields=['website_url', 'updated_at'])
 		claim_data = {
+			'pathway': BusinessClaim.Pathway.CLAIMED,
 			'contact_name': validated_data.pop('contact_name'),
 			'job_title': validated_data.pop('job_title'),
 			'work_email': validated_data.pop('work_email'),
-			'work_phone': validated_data.pop('work_phone', ''),
+			'work_phone': validated_data.pop('work_phone'),
 			'employer_address': validated_data.pop('employer_address'),
 			'address_not_applicable': validated_data.pop('address_not_applicable', False),
-			'verification_summary': validated_data.pop('verification_summary'),
+			'business_website_url': listing_snapshot.website_url,
+			'social_media_links': validated_data.pop('social_media_links', []),
+			'offer_entries': validated_data.pop('offer_entries', []),
+			'hours_of_operation_entries': validated_data.pop('hours_of_operation_entries', []),
+			'photo_references': validated_data.pop('photo_references', []),
+			'verification_documents': validated_data.pop('verification_documents', {}),
+			'verification_summary': 'Submitted through the claimed business verification flow.',
 			'supporting_details': validated_data.pop('supporting_details', ''),
 		}
+		request = self.context.get('request')
 		password = validated_data.pop('password')
 
-		user = User.objects.create_user(password=password, **validated_data)
-		claim = BusinessClaim.objects.create(
-			claimant=user,
-			listing_snapshot=listing_snapshot,
-			status=BusinessClaim.Status.SUBMITTED,
-			**claim_data,
-		)
-		claim.submit_for_review()
-		user._created_business_claim = claim
-		return user
+		with transaction.atomic():
+			user = User.objects.create_user(password=password, **validated_data)
+			claim = BusinessClaim.objects.create(
+				claimant=user,
+				listing_snapshot=listing_snapshot,
+				status=BusinessClaim.Status.DRAFT,
+				**claim_data,
+			)
+			_create_claim_profile_entries(claim, claim_data)
+			_create_claim_attachments(claim, request)
+			claim.submit_for_review()
+			user._created_business_claim = claim
+			return user
 
 
-class ManualBusinessSignupSerializer(CustomerSignupSerializer):
+class EstablishedBusinessSignupSerializer(CustomerSignupSerializer):
 	business_name = serializers.CharField(max_length=150)
-	business_city = serializers.ChoiceField(choices=City.choices, required=False, allow_blank=True)
-	business_venue_type = serializers.ChoiceField(choices=VenueType.choices, required=False, allow_blank=True)
-	business_website_url = serializers.URLField(required=False, allow_blank=True)
+	business_city = serializers.CharField(max_length=40)
+	business_venue_type = serializers.ChoiceField(choices=VenueType.choices)
+	business_website_url = serializers.URLField()
 	contact_name = serializers.CharField(max_length=120)
-	job_title = serializers.CharField(max_length=120, required=False, allow_blank=True)
+	job_title = serializers.ChoiceField(choices=BusinessClaim.JobTitle.choices)
 	work_email = serializers.EmailField()
-	work_phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
+	work_phone = serializers.CharField(max_length=20)
 	employer_address = serializers.CharField(max_length=255, required=False, allow_blank=True)
 	address_not_applicable = serializers.BooleanField(default=False)
-	verification_summary = serializers.CharField(max_length=2000)
+	social_media_links = serializers.ListField(child=serializers.CharField(max_length=500), required=False, allow_empty=True)
+	offer_entries = serializers.ListField(child=serializers.CharField(max_length=500), required=False, allow_empty=True)
+	hours_of_operation_entries = serializers.ListField(child=serializers.CharField(max_length=500), required=False, allow_empty=True)
+	photo_references = serializers.ListField(child=serializers.CharField(max_length=500), required=False, allow_empty=True)
+	verification_documents = serializers.JSONField(required=False)
 	supporting_details = serializers.CharField(max_length=4000, required=False, allow_blank=True)
+
+	def validate_business_city(self, value):
+		normalized = str(value or '').strip().lower()
+		if normalized in City.values or normalized == BusinessClaim.MULTIPLE_AREAS_VALUE:
+			return normalized
+		raise serializers.ValidationError('Select a supported city or On the Move / Serves Multiple Areas.')
 
 	def validate(self, attrs):
 		attrs = super().validate(attrs)
-		is_mobile_business = attrs.get('business_venue_type') == VenueType.MOBILE
-		if is_mobile_business and not attrs.get('employer_address'):
+		serves_multiple_areas = attrs.get('business_city') == BusinessClaim.MULTIPLE_AREAS_VALUE
+		attrs['serves_multiple_areas'] = serves_multiple_areas
+		if serves_multiple_areas and not attrs.get('employer_address'):
 			attrs['address_not_applicable'] = True
+		if serves_multiple_areas:
+			attrs['business_city'] = ''
 		if not attrs.get('address_not_applicable') and not attrs.get('employer_address'):
 			raise serializers.ValidationError({'employer_address': ['Employer address is required unless you mark Address Not Applicable.']})
+		attrs['social_media_links'] = _normalize_string_list(attrs.get('social_media_links', []))
+		attrs['offer_entries'] = _normalize_string_list(attrs.get('offer_entries', []))
+		attrs['hours_of_operation_entries'] = _normalize_string_list(attrs.get('hours_of_operation_entries', []))
+		attrs['photo_references'] = _normalize_string_list(attrs.get('photo_references', []))
+		attrs['verification_documents'] = _normalize_document_map(attrs.get('verification_documents', {}))
 		return attrs
 
 	def create(self, validated_data):
-		business_venue_type = validated_data.pop('business_venue_type', '')
-		is_mobile_business = business_venue_type == VenueType.MOBILE
-		listing_address = validated_data.get('employer_address') or ('Approximate live location' if is_mobile_business else 'Address Not Applicable')
+		business_venue_type = validated_data.pop('business_venue_type')
+		serves_multiple_areas = validated_data.pop('serves_multiple_areas', False)
+		listing_address = validated_data.get('employer_address') or ('Approximate live location' if serves_multiple_areas else 'Address Not Applicable')
 		listing_snapshot = ListingSnapshot.objects.create(
 			name=validated_data.pop('business_name'),
 			city=validated_data.pop('business_city', ''),
 			venue_type=business_venue_type,
 			address_line_1=listing_address,
+			serves_multiple_areas=serves_multiple_areas,
 			website_url=validated_data.pop('business_website_url', ''),
 			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
 			external_id=f'manual-{slugify(validated_data.get("username", "business"))}',
 		)
 
 		claim_data = {
+			'pathway': BusinessClaim.Pathway.ESTABLISHED,
 			'contact_name': validated_data.pop('contact_name'),
-			'job_title': validated_data.pop('job_title', ''),
+			'job_title': validated_data.pop('job_title'),
 			'work_email': validated_data.pop('work_email'),
-			'work_phone': validated_data.pop('work_phone', ''),
+			'work_phone': validated_data.pop('work_phone'),
 			'employer_address': validated_data.pop('employer_address', ''),
 			'address_not_applicable': validated_data.pop('address_not_applicable', False),
-			'verification_summary': validated_data.pop('verification_summary'),
+			'serves_multiple_areas': serves_multiple_areas,
+			'business_website_url': listing_snapshot.website_url,
+			'social_media_links': validated_data.pop('social_media_links', []),
+			'offer_entries': validated_data.pop('offer_entries', []),
+			'hours_of_operation_entries': validated_data.pop('hours_of_operation_entries', []),
+			'photo_references': validated_data.pop('photo_references', []),
+			'verification_documents': validated_data.pop('verification_documents', {}),
+			'verification_summary': 'Submitted through the established business creation flow.',
 			'supporting_details': validated_data.pop('supporting_details', ''),
 		}
+		request = self.context.get('request')
 		password = validated_data.pop('password')
-		user = User.objects.create_user(password=password, **validated_data)
-		claim = BusinessClaim.objects.create(
-			claimant=user,
-			listing_snapshot=listing_snapshot,
-			status=BusinessClaim.Status.SUBMITTED,
-			**claim_data,
+		with transaction.atomic():
+			user = User.objects.create_user(password=password, **validated_data)
+			claim = BusinessClaim.objects.create(
+				claimant=user,
+				listing_snapshot=listing_snapshot,
+				status=BusinessClaim.Status.DRAFT,
+				**claim_data,
+			)
+			_create_claim_profile_entries(claim, claim_data)
+			_create_claim_attachments(claim, request)
+			claim.submit_for_review()
+			user._created_business_claim = claim
+			return user
+
+
+class InformalBusinessSignupSerializer(CustomerSignupSerializer):
+	business_name = serializers.CharField(max_length=150)
+	business_city = serializers.CharField(max_length=40)
+	business_venue_type = serializers.ChoiceField(choices=VenueType.choices)
+	business_website_url = serializers.URLField(required=False, allow_blank=True)
+	social_media_links = serializers.ListField(child=serializers.CharField(max_length=500), required=False, allow_empty=True)
+	offer_entries = serializers.ListField(child=serializers.CharField(max_length=500), required=False, allow_empty=True)
+	hours_of_operation_entries = serializers.ListField(child=serializers.CharField(max_length=500), required=False, allow_empty=True)
+	photo_references = serializers.ListField(child=serializers.CharField(max_length=500), required=False, allow_empty=True)
+
+	def validate_business_city(self, value):
+		normalized = str(value or '').strip().lower()
+		if normalized in City.values or normalized == BusinessClaim.MULTIPLE_AREAS_VALUE:
+			return normalized
+		raise serializers.ValidationError('Select a supported city or On the Move / Serves Multiple Areas.')
+
+	def validate(self, attrs):
+		attrs = super().validate(attrs)
+		attrs['serves_multiple_areas'] = attrs.get('business_city') == BusinessClaim.MULTIPLE_AREAS_VALUE
+		if attrs['serves_multiple_areas']:
+			attrs['business_city'] = ''
+		attrs['social_media_links'] = _normalize_string_list(attrs.get('social_media_links', []))
+		attrs['offer_entries'] = _normalize_string_list(attrs.get('offer_entries', []))
+		attrs['hours_of_operation_entries'] = _normalize_string_list(attrs.get('hours_of_operation_entries', []))
+		attrs['photo_references'] = _normalize_string_list(attrs.get('photo_references', []))
+		return attrs
+
+	def create(self, validated_data):
+		serves_multiple_areas = validated_data.pop('serves_multiple_areas', False)
+		social_media_links = validated_data.pop('social_media_links', [])
+		offer_entries = validated_data.pop('offer_entries', [])
+		hours_of_operation_entries = validated_data.pop('hours_of_operation_entries', [])
+		photo_references = validated_data.pop('photo_references', [])
+		listing_snapshot = ListingSnapshot.objects.create(
+			name=validated_data.pop('business_name'),
+			city=validated_data.pop('business_city', ''),
+			venue_type=validated_data.pop('business_venue_type'),
+			address_line_1='Approximate live location' if serves_multiple_areas else 'Address not yet provided',
+			serves_multiple_areas=serves_multiple_areas,
+			website_url=validated_data.pop('business_website_url', ''),
+			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+			external_id=f'informal-{slugify(validated_data.get("username", "business"))}',
 		)
-		claim.submit_for_review()
-		user._created_business_claim = claim
-		return user
+
+		request = self.context.get('request')
+		password = validated_data.pop('password')
+		with transaction.atomic():
+			user = User.objects.create_user(password=password, **validated_data)
+			claim = BusinessClaim.objects.create(
+				claimant=user,
+				listing_snapshot=listing_snapshot,
+				pathway=BusinessClaim.Pathway.INFORMAL,
+				status=BusinessClaim.Status.DRAFT,
+				contact_name=' '.join(part for part in [user.first_name, user.last_name] if part).strip() or user.username,
+				work_email=user.email,
+				address_not_applicable=serves_multiple_areas,
+				serves_multiple_areas=serves_multiple_areas,
+				business_website_url=listing_snapshot.website_url,
+				social_media_links=social_media_links,
+				offer_entries=offer_entries,
+				hours_of_operation_entries=hours_of_operation_entries,
+				photo_references=photo_references,
+				verification_summary='Submitted through the informal business and vendor flow.',
+			)
+			_create_claim_profile_entries(
+				claim,
+				{
+					'social_media_links': social_media_links,
+					'offer_entries': offer_entries,
+					'hours_of_operation_entries': hours_of_operation_entries,
+					'photo_references': photo_references,
+				},
+			)
+			_create_claim_attachments(claim, request)
+			claim.submit_for_review()
+			user._created_business_claim = claim
+			return user
+
+
+ManualBusinessSignupSerializer = EstablishedBusinessSignupSerializer
 
 
 class BusinessLocationUpdateSerializer(serializers.Serializer):

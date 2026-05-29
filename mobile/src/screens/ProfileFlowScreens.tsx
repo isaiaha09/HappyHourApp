@@ -21,7 +21,7 @@ import { styles } from '../appStyles';
 import type { AuthPortal, LoginFormState, ProfileFormState } from '../appFlowTypes';
 import { manualBusinessCityOptions, manualBusinessVenueOptions } from '../browseConfig';
 import { formatPlaceAddress, getPlaceLocations, normalizeSearchText } from '../placeHelpers';
-import type { EmailVerificationChallengeResponse, PlaceListItem, PlaceLocation, SignupResponse } from '../types';
+import type { BusinessAttachmentBuckets, BusinessAttachmentKind, EmailVerificationChallengeResponse, PlaceListItem, PlaceLocation, SignupResponse } from '../types';
 
 const SUPPORT_EMAIL = 'support@diningdealz.com';
 
@@ -33,6 +33,8 @@ type CompactDropdownProps = {
   selectedValue: string;
   onToggle: () => void;
 };
+
+type StructuredListField = 'social_media_links_text' | 'offer_entries_text' | 'hours_of_operation_entries_text' | 'photo_references_text';
 
 export type AuthPortalScreenProps = {
   authMessage: string | null;
@@ -69,6 +71,7 @@ export type BusinessSearchScreenProps = {
   loadingPlaces: boolean;
   onBack: () => void;
   onChangeSearchQuery: (value: string) => void;
+  onChooseInformalBusiness: () => void;
   onChooseManualBusiness: () => void;
   onSelectBusiness: (place: PlaceListItem, locationId: number) => void;
   results: PlaceListItem[];
@@ -76,12 +79,15 @@ export type BusinessSearchScreenProps = {
 };
 
 export type BusinessVerificationScreenProps = {
+  attachments: BusinessAttachmentBuckets;
   errorMessage: string | null;
   form: ProfileFormState;
   isLandscape: boolean;
-  mode: 'claimed' | 'manual';
+  mode: 'claimed' | 'manual' | 'informal';
+  onAddAttachments: (kind: BusinessAttachmentKind) => void;
   onBack: () => void;
   onChangeField: (field: keyof ProfileFormState, value: string) => void;
+  onRemoveAttachment: (kind: BusinessAttachmentKind, attachmentId: string) => void;
   onToggleAddressNotApplicable: (value: boolean) => void;
   onSubmit: () => void;
   selectedLocation: PlaceLocation | null;
@@ -831,7 +837,7 @@ export function TermsOfServiceScreen({ isLandscape, onBack }: Pick<LegalDocument
   );
 }
 
-export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces, onBack, onChangeSearchQuery, onChooseManualBusiness, onSelectBusiness, results, searchQuery }: BusinessSearchScreenProps) {
+export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces, onBack, onChangeSearchQuery, onChooseInformalBusiness, onChooseManualBusiness, onSelectBusiness, results, searchQuery }: BusinessSearchScreenProps) {
   const { handleFieldFocus, handleScroll, scrollViewRef } = useAutoScrollForm();
 
   return (
@@ -897,7 +903,11 @@ export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces,
             )}
 
             <Pressable onPress={onChooseManualBusiness} style={styles.authLinkButton}>
-              <Text style={styles.authLinkText}>Can&apos;t find your business? Create a business profile for it here.</Text>
+              <Text style={styles.authLinkText}>Can&apos;t find your business? Create a business profile for an established business here.</Text>
+            </Pressable>
+
+            <Pressable onPress={onChooseInformalBusiness} style={styles.authLinkButton}>
+              <Text style={styles.authLinkText}>For Informal Businesses and Vendors, create your profile here.</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -906,14 +916,225 @@ export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces,
   );
 }
 
-export function BusinessVerificationScreen({ errorMessage, form, isLandscape, mode, onBack, onChangeField, onToggleAddressNotApplicable, onSubmit, selectedLocation, selectedPlace, submitting }: BusinessVerificationScreenProps) {
-  const isManual = mode === 'manual';
-  const [openDropdown, setOpenDropdown] = useState<'city' | 'venue' | null>(null);
+export function BusinessVerificationScreen({ attachments, errorMessage, form, isLandscape, mode, onAddAttachments, onBack, onChangeField, onRemoveAttachment, onToggleAddressNotApplicable, onSubmit, selectedLocation, selectedPlace, submitting }: BusinessVerificationScreenProps) {
+  const isClaimed = mode === 'claimed';
+  const isEstablished = mode === 'manual';
+  const isInformal = mode === 'informal';
+  const servesMultipleAreas = form.business_city === 'multiple_areas';
+  const requiresHealthPermit = ['restaurant', 'fast_food', 'cafe'].includes(form.business_venue_type);
+  const requiresAbcLicense = form.business_venue_type === 'bar';
+  const [openDropdown, setOpenDropdown] = useState<'city' | 'venue' | 'job' | null>(null);
+  const [entryDrafts, setEntryDrafts] = useState<Record<StructuredListField, string>>({
+    social_media_links_text: '',
+    offer_entries_text: '',
+    hours_of_operation_entries_text: '',
+    photo_references_text: '',
+  });
+  const [entryErrors, setEntryErrors] = useState<Partial<Record<StructuredListField, string>>>({});
   const { handleFieldFocus, handleScroll, scrollViewRef } = useAutoScrollForm();
+
+  const verificationTitle = isClaimed
+    ? 'Verify this business claim'
+    : isInformal
+      ? 'Set up an informal business or vendor profile'
+      : 'Create a business profile';
+  const verificationIntro = isClaimed
+    ? 'Claimed businesses need ownership or manager verification details before they move into review.'
+    : isInformal
+      ? 'Use this path for smaller vendors, pop-ups, and informal businesses that still need a clean profile on DiningDealz.'
+      : 'Use this path for established businesses that are not on DiningDealz yet and need full verification review.';
+  const submitLabel = isClaimed
+    ? 'Submit business claim'
+    : isInformal
+      ? 'Create informal business profile'
+      : 'Create business profile';
+  const jobTitleOptions = [
+    { label: 'Owner', value: 'owner' },
+    { label: 'Manager', value: 'manager' },
+  ] as const;
+  const socialLinkEntries = form.social_media_links_text
+    .split(/\r?\n/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  function parseStructuredEntries(value: string) {
+    return value
+      .split(/\r?\n/)
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
 
   function handleSelectDropdownValue(field: 'business_city' | 'business_venue_type', value: string) {
     onChangeField(field, value);
     setOpenDropdown(null);
+  }
+
+  function normalizeSocialLink(value: string) {
+    if (!value) {
+      return null;
+    }
+
+    if (/^https?:\/\//i.test(value)) {
+      return value;
+    }
+
+    if (/^[\w.-]+\.[a-z]{2,}(?:[/?#].*)?$/i.test(value)) {
+      return `https://${value}`;
+    }
+
+    return null;
+  }
+
+  async function handleOpenSocialLink(value: string) {
+    const normalizedLink = normalizeSocialLink(value);
+    if (!normalizedLink) {
+      return;
+    }
+
+    const supported = await Linking.canOpenURL(normalizedLink);
+    if (!supported) {
+      return;
+    }
+
+    await Linking.openURL(normalizedLink);
+  }
+
+  function renderMultilineField(field: keyof ProfileFormState, label: string, value: string, options?: { placeholder?: string; support?: string }) {
+    return (
+      <>
+        <Text style={styles.profileFieldLabel}>{label}</Text>
+        <AutoScrollTextInput
+          multiline
+          onBeforeAutoScroll={handleFieldFocus}
+          onChangeText={(nextValue) => onChangeField(field, nextValue)}
+          placeholder={options?.placeholder}
+          placeholderTextColor="#9a7f6c"
+          scrollViewRef={scrollViewRef}
+          style={[styles.profileInput, styles.profileTextarea]}
+          textAlignVertical="top"
+          value={value}
+        />
+        {options?.support ? <Text style={styles.profileSupportText}>{options.support}</Text> : null}
+      </>
+    );
+  }
+
+  function validateStructuredEntry(field: StructuredListField, value: string) {
+    const normalizedValue = value.trim();
+    if (!normalizedValue) {
+      return 'Enter a value before adding it.';
+    }
+
+    if (field === 'social_media_links_text' && !normalizeSocialLink(normalizedValue)) {
+      return 'Enter a full social profile URL such as https://instagram.com/yourbusiness.';
+    }
+
+    if (field === 'hours_of_operation_entries_text' && !/[a-z]{3}/i.test(normalizedValue)) {
+      return 'Use a readable schedule like Mon-Fri 3:00 PM - 6:00 PM.';
+    }
+
+    return null;
+  }
+
+  function setStructuredFieldEntries(field: StructuredListField, entries: string[]) {
+    onChangeField(field, entries.join('\n'));
+  }
+
+  function handleChangeStructuredDraft(field: StructuredListField, value: string) {
+    setEntryDrafts((current) => ({ ...current, [field]: value }));
+    setEntryErrors((current) => ({ ...current, [field]: undefined }));
+  }
+
+  function handleAddStructuredEntry(field: StructuredListField) {
+    const draftValue = entryDrafts[field].trim();
+    const validationError = validateStructuredEntry(field, draftValue);
+    if (validationError) {
+      setEntryErrors((current) => ({ ...current, [field]: validationError }));
+      return;
+    }
+
+    const currentEntries = parseStructuredEntries(form[field]);
+    if (currentEntries.includes(draftValue)) {
+      setEntryErrors((current) => ({ ...current, [field]: 'That item is already added.' }));
+      return;
+    }
+
+    setStructuredFieldEntries(field, [...currentEntries, draftValue]);
+    setEntryDrafts((current) => ({ ...current, [field]: '' }));
+    setEntryErrors((current) => ({ ...current, [field]: undefined }));
+  }
+
+  function handleRemoveStructuredEntry(field: StructuredListField, entryToRemove: string) {
+    setStructuredFieldEntries(
+      field,
+      parseStructuredEntries(form[field]).filter((entry) => entry !== entryToRemove),
+    );
+  }
+
+  function renderStructuredEntryField(field: StructuredListField, label: string, options?: { placeholder?: string; support?: string; addLabel?: string }) {
+    const entries = parseStructuredEntries(form[field]);
+
+    return (
+      <View style={styles.structuredEntrySection}>
+        <Text style={styles.profileFieldLabel}>{label}</Text>
+        <View style={styles.structuredEntryInputRow}>
+          <AutoScrollTextInput
+            onBeforeAutoScroll={handleFieldFocus}
+            onChangeText={(value) => handleChangeStructuredDraft(field, value)}
+            placeholder={options?.placeholder}
+            placeholderTextColor="#9a7f6c"
+            scrollViewRef={scrollViewRef}
+            style={[styles.profileInput, styles.structuredEntryInput]}
+            value={entryDrafts[field]}
+          />
+          <Pressable onPress={() => handleAddStructuredEntry(field)} style={styles.structuredEntryAddButton}>
+            <Text style={styles.structuredEntryAddButtonText}>{options?.addLabel ?? 'Add'}</Text>
+          </Pressable>
+        </View>
+        {options?.support ? <Text style={styles.profileSupportText}>{options.support}</Text> : null}
+        {entryErrors[field] ? <Text style={styles.structuredEntryErrorText}>{entryErrors[field]}</Text> : null}
+        {entries.length ? (
+          <View style={styles.structuredEntryList}>
+            {entries.map((entry) => (
+              <View key={`${field}:${entry}`} style={styles.structuredEntryCard}>
+                <Text style={styles.structuredEntryText}>{entry}</Text>
+                <Pressable onPress={() => handleRemoveStructuredEntry(field, entry)} style={styles.structuredEntryRemoveButton}>
+                  <Text style={styles.structuredEntryRemoveButtonText}>Remove</Text>
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        ) : null}
+      </View>
+    );
+  }
+
+  function renderAttachmentPicker(kind: BusinessAttachmentKind, label: string, support?: string) {
+    const selectedAttachments = attachments[kind];
+
+    return (
+      <View style={styles.attachmentSection}>
+        <Pressable onPress={() => onAddAttachments(kind)} style={styles.linkButtonSecondary}>
+          <Text style={styles.linkButtonSecondaryText}>{selectedAttachments.length ? `Add more to ${label}` : `Attach files to ${label}`}</Text>
+        </Pressable>
+        {support ? <Text style={styles.profileSupportText}>{support}</Text> : null}
+        {selectedAttachments.length ? (
+          <View style={styles.attachmentList}>
+            {selectedAttachments.map((attachment) => (
+              <View key={attachment.id} style={styles.attachmentCard}>
+                <View style={styles.attachmentMeta}>
+                  <Text numberOfLines={1} style={styles.attachmentName}>{attachment.name}</Text>
+                  <Text style={styles.attachmentDetail}>{attachment.size ? `${Math.max(1, Math.round(attachment.size / 1024))} KB` : 'Selected file'}</Text>
+                </View>
+                <Pressable onPress={() => onRemoveAttachment(kind, attachment.id)} style={styles.attachmentRemoveButton}>
+                  <Text style={styles.attachmentRemoveButtonText}>Remove</Text>
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        ) : null}
+      </View>
+    );
   }
 
   return (
@@ -934,14 +1155,10 @@ export function BusinessVerificationScreen({ errorMessage, form, isLandscape, mo
 
           <View style={styles.profileCard}>
             <Text style={styles.detailCity}>Verification</Text>
-            <Text style={styles.detailTitle}>{isManual ? 'Create a business profile' : 'Verify this business claim'}</Text>
-            <Text style={styles.profileIntroText}>
-              {isManual
-                ? 'This is for upcoming businesses and businesses that are not yet displayed on DiningDealz. Some fields stay optional but highly recommended.'
-                : 'Claimed businesses require full verification details before they move into admin review.'}
-            </Text>
+            <Text style={styles.detailTitle}>{verificationTitle}</Text>
+            <Text style={styles.profileIntroText}>{verificationIntro}</Text>
 
-            {!isManual && selectedPlace ? (
+            {isClaimed && selectedPlace ? (
               <View style={styles.claimResultCard}>
                 <Text style={styles.placeTitle}>{selectedPlace.name}</Text>
                 <Text style={styles.placeMeta}>{selectedPlace.venue_type_label}</Text>
@@ -961,7 +1178,7 @@ export function BusinessVerificationScreen({ errorMessage, form, isLandscape, mo
             ) : null}
 
             <View style={styles.profileFormSection}>
-              {isManual ? (
+              {!isClaimed ? (
                 <>
                   <Text style={styles.profileFieldLabel}>Business name</Text>
                   <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('business_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.business_name} />
@@ -972,7 +1189,7 @@ export function BusinessVerificationScreen({ errorMessage, form, isLandscape, mo
                     onToggle={() => setOpenDropdown((current) => current === 'city' ? null : 'city')}
                     open={openDropdown === 'city'}
                     options={[{ label: 'Select a city', value: '' }, ...manualBusinessCityOptions]}
-                    placeholder="Select a city"
+                    placeholder="Select a city or service area"
                     selectedValue={form.business_city}
                   />
 
@@ -986,10 +1203,17 @@ export function BusinessVerificationScreen({ errorMessage, form, isLandscape, mo
                     selectedValue={form.business_venue_type}
                   />
 
-                  {form.business_venue_type === 'mobile' ? (
-                    <Text style={styles.profileSupportText}>On the Move businesses are required to share their approximate phone location after approval so the map pin follows their current service area.</Text>
+                  {servesMultipleAreas ? (
+                    <Text style={styles.profileSupportText}>It is highly recommend for smaller businesses and vendors that do not have a dedicated business address to turn on location services for DiningDealz after account is verified so you have can a business pin on the map.</Text>
                   ) : null}
 
+                  <Text style={styles.profileFieldLabel}>{isInformal ? 'Website URL (optional)' : 'Website URL'}</Text>
+                  <AutoScrollTextInput autoCapitalize="none" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('business_website_url', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.business_website_url} />
+                </>
+              ) : null}
+
+              {isClaimed ? (
+                <>
                   <Text style={styles.profileFieldLabel}>Website URL (optional)</Text>
                   <AutoScrollTextInput autoCapitalize="none" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('business_website_url', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.business_website_url} />
                 </>
@@ -1013,36 +1237,135 @@ export function BusinessVerificationScreen({ errorMessage, form, isLandscape, mo
               <Text style={styles.profileFieldLabel}>Last name</Text>
               <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('last_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.last_name} />
 
-              <Text style={styles.profileFieldLabel}>Contact name</Text>
-              <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('contact_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.contact_name} />
+              {!isInformal ? (
+                <>
+                  <Text style={styles.profileFieldLabel}>Contact name</Text>
+                  <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('contact_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.contact_name} />
 
-              <Text style={styles.profileFieldLabel}>{isManual ? 'Job title (recommended)' : 'Job title'}</Text>
-              <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('job_title', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.job_title} />
+                  <Text style={styles.profileFieldLabel}>Role</Text>
+                  <CompactDropdown
+                    onSelect={(value) => {
+                      onChangeField('job_title', value);
+                      setOpenDropdown(null);
+                    }}
+                    onToggle={() => setOpenDropdown((current) => current === 'job' ? null : 'job')}
+                    open={openDropdown === 'job'}
+                    options={[{ label: 'Select owner or manager', value: '' }, ...jobTitleOptions]}
+                    placeholder="Select owner or manager"
+                    selectedValue={form.job_title}
+                  />
 
-              <Text style={styles.profileFieldLabel}>Work email</Text>
-              <AutoScrollTextInput autoCapitalize="none" keyboardType="email-address" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('work_email', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.work_email} />
+                  <Text style={styles.profileFieldLabel}>Employer email</Text>
+                  <AutoScrollTextInput autoCapitalize="none" keyboardType="email-address" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('work_email', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.work_email} />
 
-              <Text style={styles.profileFieldLabel}>{isManual ? 'Work phone (recommended)' : 'Work phone'}</Text>
-              <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('work_phone', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.work_phone} />
+                  <Text style={styles.profileFieldLabel}>Employer phone</Text>
+                  <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('work_phone', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.work_phone} />
 
-              <Text style={styles.profileFieldLabel}>{isManual ? 'Employer address or “Address Not Applicable”' : 'Employer address'}</Text>
-              <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('employer_address', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.employer_address} />
+                  <Text style={styles.profileFieldLabel}>{isEstablished && servesMultipleAreas ? 'Business address (optional for multi-area businesses)' : 'Business address'}</Text>
+                  <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('employer_address', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.employer_address} />
 
-              {isManual ? (
-                <Pressable onPress={() => onToggleAddressNotApplicable(!form.address_not_applicable)} style={[styles.toggleChip, form.address_not_applicable ? styles.toggleChipActive : null]}>
-                  <Text style={[styles.toggleChipText, form.address_not_applicable ? styles.toggleChipTextActive : null]}>Address Not Applicable</Text>
-                </Pressable>
+                  {isEstablished && servesMultipleAreas ? (
+                    <Pressable onPress={() => onToggleAddressNotApplicable(!form.address_not_applicable)} style={[styles.toggleChip, form.address_not_applicable ? styles.toggleChipActive : null]}>
+                      <Text style={[styles.toggleChipText, form.address_not_applicable ? styles.toggleChipTextActive : null]}>Address Not Applicable</Text>
+                    </Pressable>
+                  ) : null}
+                </>
               ) : null}
 
-              <Text style={styles.profileFieldLabel}>Verification summary</Text>
-              <AutoScrollTextInput multiline onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('verification_summary', value)} scrollViewRef={scrollViewRef} style={[styles.profileInput, styles.profileTextarea]} value={form.verification_summary} />
+              {renderStructuredEntryField('social_media_links_text', 'Social media links', {
+                placeholder: 'https://instagram.com/yourbusiness',
+                support: 'Add each social profile as its own entry so the business profile can reuse them cleanly.',
+                addLabel: 'Add link',
+              })}
+              {socialLinkEntries.length ? (
+                <View style={styles.socialPreviewList}>
+                  {socialLinkEntries.map((entry) => {
+                    const normalizedLink = normalizeSocialLink(entry);
+                    return (
+                      <Pressable
+                        key={entry}
+                        disabled={!normalizedLink}
+                        onPress={() => void handleOpenSocialLink(entry)}
+                        style={[styles.socialPreviewCard, !normalizedLink ? styles.socialPreviewCardDisabled : null]}
+                      >
+                        <Text numberOfLines={1} style={styles.socialPreviewLink}>{entry}</Text>
+                        <Text style={styles.socialPreviewAction}>{normalizedLink ? 'Open link' : 'Invalid link format'}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
 
-              <Text style={styles.profileFieldLabel}>{isManual ? 'Supporting details (recommended)' : 'Supporting details'}</Text>
-              <AutoScrollTextInput multiline onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('supporting_details', value)} scrollViewRef={scrollViewRef} style={[styles.profileInput, styles.profileTextarea]} value={form.supporting_details} />
+              {isClaimed ? renderMultilineField(
+                'offer_entries_text',
+                'Deals, discounts, or specials (optional)',
+                form.offer_entries_text,
+                {
+                  placeholder: 'Taco Tuesday: 2 tacos for $5',
+                  support: 'Existing business deals will prefill here when available, and you can edit each line before submitting.',
+                },
+              ) : renderStructuredEntryField('offer_entries_text', 'Deals, discounts, or specials (optional)', {
+                placeholder: 'Taco Tuesday: 2 tacos for $5',
+                support: 'Add each offer separately so it can be listed individually on the business profile.',
+                addLabel: 'Add offer',
+              })}
+
+              {isClaimed ? renderMultilineField(
+                'hours_of_operation_entries_text',
+                'Hours of operation (optional)',
+                form.hours_of_operation_entries_text,
+                {
+                  placeholder: 'Mon-Fri 3:00 PM - 6:00 PM',
+                  support: 'Existing operating hours will prefill here when available, and you can edit the schedule lines before submitting.',
+                },
+              ) : renderStructuredEntryField('hours_of_operation_entries_text', 'Hours of operation (optional)', {
+                placeholder: 'Mon-Fri 3:00 PM - 6:00 PM',
+                support: 'Add each schedule line separately using a readable day and time format.',
+                addLabel: 'Add hours',
+              })}
+
+              {isClaimed ? renderMultilineField(
+                'photo_references_text',
+                'Photo links or references (optional)',
+                form.photo_references_text,
+                {
+                  placeholder: 'https://example.com/storefront.jpg',
+                  support: 'Existing media references will prefill here when available, and you can edit them before submitting.',
+                },
+              ) : renderStructuredEntryField('photo_references_text', 'Photo links or references (optional)', {
+                placeholder: 'https://example.com/storefront.jpg',
+                support: 'Add each photo reference separately so the system can treat them as individual media items.',
+                addLabel: 'Add photo',
+              })}
+
+              {!isInformal ? (
+                <>
+                  <Text style={styles.profileFieldLabel}>Business registration documents</Text>
+                  {renderAttachmentPicker('business_registration', 'business registration documents', 'Attach one or more business registration files.')}
+
+                  <Text style={styles.profileFieldLabel}>{requiresHealthPermit ? 'Health permit documents' : 'Health permit documents (if applicable)'}</Text>
+                  {renderAttachmentPicker('health_permit', 'health permit documents', 'Attach one or more health permit files when they apply to this business type.')}
+
+                  <Text style={styles.profileFieldLabel}>{requiresAbcLicense ? 'ABC license documents' : 'ABC license documents (bars only)'}</Text>
+                  {renderAttachmentPicker('abc_license', 'ABC license documents', 'Attach one or more ABC license files when required.')}
+
+                  <Text style={styles.profileFieldLabel}>Proof of address control (optional)</Text>
+                  {renderAttachmentPicker('proof_of_address_control', 'proof of address control', 'Attach leases, utility documents, or similar supporting files if needed.')}
+
+                  {renderMultilineField(
+                    'supporting_details',
+                    'Anything else for review? (optional)',
+                    form.supporting_details,
+                    {
+                      placeholder: 'Add any context the review team should know.',
+                    },
+                  )}
+                </>
+              ) : null}
             </View>
 
             <Pressable onPress={() => void onSubmit()} style={[styles.linkButton, submitting ? styles.linkButtonDisabled : null]}>
-              <Text style={styles.linkButtonText}>{submitting ? 'Submitting...' : isManual ? 'Create business profile' : 'Submit business claim'}</Text>
+              <Text style={styles.linkButtonText}>{submitting ? 'Submitting...' : submitLabel}</Text>
             </Pressable>
           </View>
         </ScrollView>
