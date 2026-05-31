@@ -1395,6 +1395,30 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
+  passwordFieldRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  passwordFieldInput: {
+    flex: 1,
+  },
+  passwordToggleButton: {
+    alignItems: 'center',
+    backgroundColor: '#fff7ef',
+    borderColor: '#caa98d',
+    borderRadius: 12,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 47,
+    minWidth: 62,
+    paddingHorizontal: 12,
+  },
+  passwordToggleText: {
+    color: '#7a4d2f',
+    fontSize: 13,
+    fontWeight: '700',
+  },
   compactDropdownWrap: {
     gap: 6,
   },
@@ -1749,7 +1773,13 @@ export const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   attachmentSection: {
-    marginTop: 8,
+    marginTop: 2,
+  },
+  attachmentPickerButton: {
+    marginTop: 0,
+  },
+  attachmentSupportText: {
+    marginTop: 4,
   },
   attachmentList: {
     gap: 8,
@@ -1771,6 +1801,9 @@ export const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
+  attachmentPreviewButton: {
+    flex: 1,
+  },
   attachmentName: {
     color: '#3b2a1f',
     fontSize: 13,
@@ -1790,6 +1823,77 @@ export const styles = StyleSheet.create({
     color: '#8d2500',
     fontSize: 12,
     fontWeight: '700',
+  },
+  attachmentPreviewOverlay: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(45, 34, 26, 0.62)',
+    flex: 1,
+    justifyContent: 'center',
+    padding: 16,
+  },
+  attachmentPreviewSheet: {
+    backgroundColor: '#f7efe2',
+    borderColor: '#ddc4a7',
+    borderRadius: 22,
+    borderWidth: 1,
+    flex: 1,
+    maxHeight: '92%',
+    maxWidth: 920,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  attachmentPreviewHeader: {
+    alignItems: 'center',
+    borderBottomColor: '#ead6bf',
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  attachmentPreviewTitle: {
+    color: '#402214',
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  attachmentPreviewCloseButton: {
+    backgroundColor: '#fff7ef',
+    borderColor: '#caa98d',
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  attachmentPreviewCloseButtonText: {
+    color: '#7a4d2f',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  attachmentPreviewBody: {
+    backgroundColor: '#f3e7d8',
+    flex: 1,
+  },
+  attachmentPreviewLoadingState: {
+    alignItems: 'center',
+    flex: 1,
+    gap: 12,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  attachmentPreviewLoadingText: {
+    color: '#7d614f',
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  attachmentPreviewImage: {
+    flex: 1,
+    width: '100%',
+  },
+  attachmentPreviewWebView: {
+    backgroundColor: '#f3e7d8',
+    flex: 1,
   },
   socialPreviewList: {
     gap: 8,

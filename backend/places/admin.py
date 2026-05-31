@@ -13,7 +13,7 @@ from django.utils.text import slugify
 from django.utils import timezone
 
 from .admin_site import happyhour_admin_site
-from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessMembership, CustomerAccount, DeletedBusiness, ListingSnapshot, ProviderUsageWindow
+from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessMembership, CustomerAccount, DeletedBusiness, ListingSnapshot, ProviderUsageWindow
 from .services.importers.discovered_json_places import load_discovery_json_records, merge_discovery_json_records, write_discovery_json_records
 from .services.deleted_businesses import filter_deleted_business_records, imported_place_from_deleted_business, store_deleted_business
 from .services.importers.here_places import HerePlacesImporter
@@ -618,9 +618,42 @@ class DeletedBusinessAdmin(admin.ModelAdmin):
 		deleted_business.delete()
 
 
+class BusinessClaimProfileEntryInline(admin.TabularInline):
+	model = BusinessClaimProfileEntry
+	extra = 0
+	can_delete = False
+	fields = ('entry_kind', 'value', 'sort_order', 'metadata', 'created_at', 'updated_at')
+	readonly_fields = ('entry_kind', 'value', 'sort_order', 'metadata', 'created_at', 'updated_at')
+	ordering = ('entry_kind', 'sort_order', 'id')
+	verbose_name = 'Submitted profile entry'
+	verbose_name_plural = 'Submitted profile entries'
+
+
+class BusinessClaimAttachmentInline(admin.TabularInline):
+	model = BusinessClaimAttachment
+	extra = 0
+	can_delete = False
+	fields = ('attachment_kind', 'original_filename', 'file_link', 'content_type', 'file_size_display', 'created_at')
+	readonly_fields = ('attachment_kind', 'original_filename', 'file_link', 'content_type', 'file_size_display', 'created_at')
+	ordering = ('attachment_kind', 'created_at')
+	verbose_name = 'Submitted attachment'
+	verbose_name_plural = 'Submitted attachments'
+
+	@admin.display(description='Stored file')
+	def file_link(self, obj):
+		if not obj.file:
+			return 'No file'
+		return format_html('<a href="{}" target="_blank" rel="noopener">{}</a>', obj.file.url, obj.original_filename or 'Open file')
+
+	@admin.display(description='File size')
+	def file_size_display(self, obj):
+		return f'{(obj.file_size or 0) / (1024 ** 3):.4f} GB'
+
+
 @admin.register(BusinessClaim, site=happyhour_admin_site)
 class BusinessClaimAdmin(admin.ModelAdmin):
 	actions = ['mark_under_review', 'approve_selected_claims', 'reject_selected_claims']
+	inlines = (BusinessClaimProfileEntryInline, BusinessClaimAttachmentInline)
 	list_display = ('listing_snapshot', 'contact_name', 'claimant', 'status', 'verification_score_display', 'verification_flags_display', 'work_email', 'submitted_at', 'reviewed_at')
 	list_filter = ('status', 'listing_snapshot__city')
 	search_fields = ('listing_snapshot__name', 'contact_name', 'claimant__username', 'work_email')
@@ -630,14 +663,14 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 	list_per_page = 25
 	fieldsets = (
 		('Claim status', {
-			'fields': ('status', 'listing_snapshot', 'claimant'),
+			'fields': ('status', 'pathway', 'listing_snapshot', 'claimant'),
 		}),
 		('Business contact', {
-			'fields': ('contact_name', 'job_title', 'work_email', 'work_phone', 'employer_address', 'address_not_applicable'),
+			'fields': ('contact_name', 'job_title', 'work_email', 'work_phone', 'employer_address', 'address_not_applicable', 'serves_multiple_areas', 'business_website_url'),
 		}),
 		('Verification details', {
 			'fields': ('verification_summary', 'supporting_details', 'verification_score', 'verification_flags_display'),
-			'description': 'These are the materials submitted by the business claimant for review.',
+			'description': 'These are the claim-level materials submitted by the business claimant for review. Uploaded files and structured profile details appear in the inline sections below.',
 		}),
 		('Admin review', {
 			'fields': ('reviewer_notes', 'reviewed_by', 'reviewed_at'),

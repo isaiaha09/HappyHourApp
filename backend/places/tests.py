@@ -21,8 +21,9 @@ from rest_framework.test import APITestCase
 from bs4 import BeautifulSoup
 import pyotp
 
-from .admin import BusinessAccountAdmin, CustomerAccountAdmin, DeletedBusinessAdmin, ListingSnapshotAdmin, ProviderUsageWindowAdmin
-from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessMembership, City, CustomerAccount, DealType, DeletedBusiness, ListingSnapshot, ProfileAuthToken, ProviderUsageWindow, VenueType, Weekday
+from .admin import BusinessAccountAdmin, BusinessClaimAdmin, CustomerAccountAdmin, DeletedBusinessAdmin, ListingSnapshotAdmin, ProviderUsageWindowAdmin
+from .admin_site import happyhour_admin_site
+from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessMembership, City, CustomerAccount, DealType, DeletedBusiness, ListingSnapshot, ProfileAuthToken, ProviderUsageWindow, VenueType, Weekday
 from .services.importers.base import BaseHtmlImporter
 from .services.importers.business_websites import BusinessWebsiteImporter
 from .services.importers.discovered_json_places import CuratedJsonPlacesImporter, DiscoveryJsonPlacesImporter, load_discovery_json_records, write_discovery_json_records
@@ -3748,6 +3749,91 @@ class ListingSnapshotAdminTests(TestCase):
 
 		self.assertTrue(self.deleted_admin.has_delete_permission(request))
 		self.assertIn('delete_selected', self.deleted_admin.get_actions(request))
+
+
+class BusinessClaimAdminTests(TestCase):
+	def setUp(self):
+		self.site = AdminSite()
+		self.admin = BusinessClaimAdmin(BusinessClaim, self.site)
+		self.admin_user = User.objects.create_superuser(username='claim_admin', email='claim_admin@example.com', password='test-pass-123')
+		self.claimant = User.objects.create_user(username='claim_owner', email='owner@example.com', password='test-pass-123')
+		self.snapshot = ListingSnapshot.objects.create(
+			name='Claimed Place',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='123 Main St',
+			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+		)
+		self.claim = BusinessClaim.objects.create(
+			claimant=self.claimant,
+			listing_snapshot=self.snapshot,
+			pathway=BusinessClaim.Pathway.ESTABLISHED,
+			status=BusinessClaim.Status.SUBMITTED,
+			contact_name='Owner Name',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='owner@claimed-place.com',
+			work_phone='805-555-0199',
+			employer_address='123 Main St',
+			business_website_url='https://claimed-place.example.com',
+			verification_summary='Submitted through testing.',
+		)
+		BusinessClaimProfileEntry.objects.create(
+			claim=self.claim,
+			entry_kind=BusinessClaim.ProfileEntryKind.SOCIAL_MEDIA_LINK,
+			value='https://instagram.com/claimedplace',
+			sort_order=0,
+		)
+		BusinessClaimAttachment.objects.create(
+			claim=self.claim,
+			attachment_kind=BusinessClaimAttachment.AttachmentKind.PROOF_OF_AUTHORITY,
+			file=SimpleUploadedFile('authority.pdf', b'authority-file', content_type='application/pdf'),
+			original_filename='authority.pdf',
+			content_type='application/pdf',
+			file_size=14,
+		)
+
+	def test_change_view_shows_submitted_related_claim_data(self):
+		self.client.force_login(self.admin_user)
+
+		response = self.client.get(reverse('happyhour_admin:places_businessclaim_change', args=[self.claim.pk]))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'Submitted profile entries')
+		self.assertContains(response, 'Submitted attachments')
+		self.assertContains(response, 'https://instagram.com/claimedplace')
+		self.assertContains(response, 'authority.pdf')
+		self.assertContains(response, 'https://claimed-place.example.com')
+		self.assertContains(response, BusinessClaim.Pathway.ESTABLISHED)
+		self.assertContains(response, '0.0000 GB')
+
+
+class HappyHourAdminSiteTests(TestCase):
+	def setUp(self):
+		self.admin_user = User.objects.create_superuser(username='site_admin', email='site_admin@example.com', password='test-pass-123')
+
+	def test_admin_index_shows_database_storage_in_header(self):
+		self.client.force_login(self.admin_user)
+
+		with patch.object(
+			happyhour_admin_site,
+			'get_total_admin_storage_breakdown',
+			return_value={
+				'database_bytes': 5 * 1024 * 1024,
+				'media_bytes': 2 * 1024 * 1024,
+				'discovery_bytes': 512 * 1024,
+				'total_bytes': (5 * 1024 * 1024) + (2 * 1024 * 1024) + (512 * 1024),
+			},
+		):
+			response = self.client.get(reverse('happyhour_admin:index'))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'Total stored data')
+		self.assertContains(response, '7.50 MB')
+		self.assertContains(response, 'DB 5.00 MB')
+		self.assertContains(response, 'uploads 2.00 MB')
+		self.assertContains(response, 'discovery 512.00 KB')
+		self.assertContains(response, '5.00 MB')
+		self.assertContains(response, '0.0073 GB')
 
 
 class ProviderUsageWindowAdminTests(TestCase):

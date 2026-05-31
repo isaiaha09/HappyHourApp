@@ -1,0 +1,16 @@
+{% extends "admin/base_site.html" %}
+
+{% block branding %}
+<div id="site-name" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+  <a href="{% url 'admin:index' %}">{{ site_header }}</a>
+  <span style="display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; background: #163949; color: #f5fbff; font-size: 12px; font-weight: 600; letter-spacing: 0.01em;">
+    Total stored data: {{ admin_total_storage_display }} ({{ admin_total_storage_gb }} GB)
+  </span>
+  <span style="display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; background: #f3fbff; color: #163949; border: 1px solid #2f647e; font-size: 12px; font-weight: 600; letter-spacing: 0.01em;">
+    DB {{ admin_database_storage_display }} • uploads {{ admin_media_storage_display }} • discovery {{ admin_discovery_storage_display }}
+  </span>
+</div>
+{% if user.is_anonymous %}
+  {% include "admin/color_theme_toggle.html" %}
+{% endif %}
+{% endblock %}

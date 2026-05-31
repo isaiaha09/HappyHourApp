@@ -1,11 +1,17 @@
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode, type RefObject } from 'react';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as IntentLauncher from 'expo-intent-launcher';
+import * as Sharing from 'expo-sharing';
 import {
+  Alert,
   ActivityIndicator,
   Animated,
   findNodeHandle,
+  Image,
   Keyboard,
   KeyboardAvoidingView,
   LayoutAnimation,
+  Modal,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   Platform,
@@ -16,6 +22,7 @@ import {
   View,
 } from 'react-native';
 import { Linking } from 'react-native';
+import { WebView } from 'react-native-webview';
 
 import { styles } from '../appStyles';
 import type { AuthPortal, LoginFormState, ProfileFormState } from '../appFlowTypes';
@@ -35,6 +42,120 @@ type CompactDropdownProps = {
 };
 
 type StructuredListField = 'social_media_links_text' | 'offer_entries_text' | 'hours_of_operation_entries_text' | 'photo_references_text';
+
+type AttachmentPreviewState =
+  | { kind: 'image'; name: string; uri: string }
+  | { kind: 'pdf'; name: string; html: string };
+
+function getAttachmentPreviewKind(mimeType: string | null, fileName: string) {
+  const normalizedMimeType = String(mimeType || '').trim().toLowerCase();
+  const normalizedFileName = String(fileName || '').trim().toLowerCase();
+
+  if (normalizedMimeType.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp)$/i.test(normalizedFileName)) {
+    return 'image' as const;
+  }
+  if (normalizedMimeType === 'application/pdf' || normalizedFileName.endsWith('.pdf')) {
+    return 'pdf' as const;
+  }
+  return null;
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function buildPdfPreviewHtml(base64Document: string, fileName: string) {
+  const safeName = escapeHtml(fileName || 'Document preview');
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+        <title>${safeName}</title>
+        <style>
+          body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f3e7d8;
+            color: #402214;
+          }
+          #status {
+            padding: 16px;
+            text-align: center;
+            font-size: 14px;
+            color: #7d614f;
+          }
+          #pages {
+            padding: 12px;
+          }
+          .page {
+            margin: 0 auto 14px;
+            width: fit-content;
+            box-shadow: 0 8px 24px rgba(45, 34, 26, 0.14);
+            background: white;
+          }
+          canvas {
+            display: block;
+            max-width: 100%;
+            height: auto;
+          }
+        </style>
+      </head>
+      <body>
+        <div id="status">Loading PDF preview...</div>
+        <div id="pages"></div>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+        <script>
+          const status = document.getElementById('status');
+          const pages = document.getElementById('pages');
+          const base64 = '${base64Document}';
+
+          function base64ToUint8Array(input) {
+            const binary = atob(input);
+            const length = binary.length;
+            const bytes = new Uint8Array(length);
+            for (let index = 0; index < length; index += 1) {
+              bytes[index] = binary.charCodeAt(index);
+            }
+            return bytes;
+          }
+
+          async function renderPdf() {
+            try {
+              pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+              const pdf = await pdfjsLib.getDocument({ data: base64ToUint8Array(base64) }).promise;
+              status.textContent = 'Rendering pages...';
+              for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+                const page = await pdf.getPage(pageNumber);
+                const viewport = page.getViewport({ scale: 1.25 });
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                const wrapper = document.createElement('div');
+                wrapper.className = 'page';
+                wrapper.appendChild(canvas);
+                pages.appendChild(wrapper);
+                await page.render({ canvasContext: context, viewport }).promise;
+              }
+              status.remove();
+            } catch (error) {
+              status.textContent = 'Unable to preview this PDF in-app.';
+            }
+          }
+
+          renderPdf();
+        </script>
+      </body>
+    </html>
+  `;
+}
 
 export type AuthPortalScreenProps = {
   authMessage: string | null;
@@ -156,6 +277,13 @@ type AutoScrollFormController = {
   scrollViewRef: RefObject<ScrollView | null>;
 };
 
+type PasswordFieldProps = {
+  onBeforeAutoScroll?: () => void;
+  onChangeText: (value: string) => void;
+  scrollViewRef: RefObject<ScrollView | null>;
+  value: string;
+};
+
 function useAutoScrollForm(): AutoScrollFormController {
   const scrollViewRef = useRef<ScrollView | null>(null);
   const currentScrollOffsetRef = useRef(0);
@@ -226,6 +354,26 @@ function AutoScrollTextInput({ onBeforeAutoScroll, onFocus, scrollViewRef, ...pr
         onFocus?.(event);
       }}
     />
+  );
+}
+
+function PasswordField({ onBeforeAutoScroll, onChangeText, scrollViewRef, value }: PasswordFieldProps) {
+  const [isVisible, setIsVisible] = useState(false);
+
+  return (
+    <View style={styles.passwordFieldRow}>
+      <AutoScrollTextInput
+        onBeforeAutoScroll={onBeforeAutoScroll}
+        onChangeText={onChangeText}
+        scrollViewRef={scrollViewRef}
+        secureTextEntry={!isVisible}
+        style={[styles.profileInput, styles.passwordFieldInput]}
+        value={value}
+      />
+      <Pressable onPress={() => setIsVisible((current) => !current)} style={styles.passwordToggleButton}>
+        <Text style={styles.passwordToggleText}>{isVisible ? 'Hide' : 'View'}</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -386,7 +534,7 @@ export function AuthPortalScreen({ authMessage, autoFocusIdentifier, errorMessag
             <AutoScrollTextInput autoCapitalize="none" autoFocus={autoFocusIdentifier} onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('identifier', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={loginForm.identifier} />
 
             <Text style={styles.profileFieldLabel}>Password</Text>
-            <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('password', value)} scrollViewRef={scrollViewRef} secureTextEntry style={styles.profileInput} value={loginForm.password} />
+            <PasswordField onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('password', value)} scrollViewRef={scrollViewRef} value={loginForm.password} />
 
             {showTwoFactorCodeField ? (
               <>
@@ -506,10 +654,10 @@ export function CreateProfileScreen({ errorMessage, form, isLandscape, message, 
               <AutoScrollTextInput autoCapitalize="none" keyboardType="email-address" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('email', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.email} />
 
               <Text style={styles.profileFieldLabel}>Password</Text>
-              <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('password', value)} scrollViewRef={scrollViewRef} secureTextEntry style={styles.profileInput} value={form.password} />
+              <PasswordField onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('password', value)} scrollViewRef={scrollViewRef} value={form.password} />
 
               <Text style={styles.profileFieldLabel}>Confirm password</Text>
-              <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('confirm_password', value)} scrollViewRef={scrollViewRef} secureTextEntry style={styles.profileInput} value={form.confirm_password} />
+              <PasswordField onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('confirm_password', value)} scrollViewRef={scrollViewRef} value={form.confirm_password} />
 
               <Text style={styles.profileFieldLabel}>First name</Text>
               <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('first_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.first_name} />
@@ -931,6 +1079,8 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
     photo_references_text: '',
   });
   const [entryErrors, setEntryErrors] = useState<Partial<Record<StructuredListField, string>>>({});
+  const [attachmentPreview, setAttachmentPreview] = useState<AttachmentPreviewState | null>(null);
+  const [attachmentPreviewLoading, setAttachmentPreviewLoading] = useState(false);
   const { handleFieldFocus, handleScroll, scrollViewRef } = useAutoScrollForm();
 
   const verificationTitle = isClaimed
@@ -997,6 +1147,74 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
     }
 
     await Linking.openURL(normalizedLink);
+  }
+
+  async function openAttachmentExternally(uri: string, mimeType: string | null, attachmentName: string) {
+    if (!uri) {
+      return;
+    }
+
+    try {
+      if (Platform.OS === 'android') {
+        const targetUri = uri.startsWith('file://') ? await FileSystem.getContentUriAsync(uri) : uri;
+        await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+          data: targetUri,
+          flags: 1,
+          type: mimeType ?? undefined,
+        });
+        return;
+      }
+
+      const supported = await Linking.canOpenURL(uri);
+      if (supported) {
+        await Linking.openURL(uri);
+        return;
+      }
+    } catch {
+      // Fall through to the native share/open sheet below.
+    }
+
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(uri, {
+        dialogTitle: `Open ${attachmentName}`,
+        mimeType: mimeType ?? undefined,
+      });
+      return;
+    }
+
+    Alert.alert('Unable to open file', 'This document could not be opened on this device.');
+  }
+
+  async function handleOpenAttachment(uri: string, mimeType: string | null, attachmentName: string) {
+    if (!uri) {
+      return;
+    }
+
+    const previewKind = getAttachmentPreviewKind(mimeType, attachmentName);
+    if (previewKind === 'image') {
+      setAttachmentPreview({ kind: 'image', name: attachmentName, uri });
+      return;
+    }
+
+    if (previewKind === 'pdf') {
+      setAttachmentPreviewLoading(true);
+      try {
+        const base64Document = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
+        setAttachmentPreview({
+          kind: 'pdf',
+          name: attachmentName,
+          html: buildPdfPreviewHtml(base64Document, attachmentName),
+        });
+        return;
+      } catch {
+        await openAttachmentExternally(uri, mimeType, attachmentName);
+        return;
+      } finally {
+        setAttachmentPreviewLoading(false);
+      }
+    }
+
+    await openAttachmentExternally(uri, mimeType, attachmentName);
   }
 
   function renderMultilineField(field: keyof ProfileFormState, label: string, value: string, options?: { placeholder?: string; support?: string }) {
@@ -1114,18 +1332,20 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
 
     return (
       <View style={styles.attachmentSection}>
-        <Pressable onPress={() => onAddAttachments(kind)} style={styles.linkButtonSecondary}>
+        <Pressable onPress={() => onAddAttachments(kind)} style={[styles.linkButtonSecondary, styles.attachmentPickerButton]}>
           <Text style={styles.linkButtonSecondaryText}>{selectedAttachments.length ? `Add more to ${label}` : `Attach files to ${label}`}</Text>
         </Pressable>
-        {support ? <Text style={styles.profileSupportText}>{support}</Text> : null}
+        {support ? <Text style={[styles.profileSupportText, styles.attachmentSupportText]}>{support}</Text> : null}
         {selectedAttachments.length ? (
           <View style={styles.attachmentList}>
             {selectedAttachments.map((attachment) => (
               <View key={attachment.id} style={styles.attachmentCard}>
-                <View style={styles.attachmentMeta}>
-                  <Text numberOfLines={1} style={styles.attachmentName}>{attachment.name}</Text>
-                  <Text style={styles.attachmentDetail}>{attachment.size ? `${Math.max(1, Math.round(attachment.size / 1024))} KB` : 'Selected file'}</Text>
-                </View>
+                <Pressable onPress={() => void handleOpenAttachment(attachment.uri, attachment.mimeType, attachment.name)} style={styles.attachmentPreviewButton}>
+                  <View style={styles.attachmentMeta}>
+                    <Text numberOfLines={1} style={styles.attachmentName}>{attachment.name}</Text>
+                    <Text style={styles.attachmentDetail}>{attachment.size ? `${Math.max(1, Math.round(attachment.size / 1024))} KB • Tap to view` : 'Selected file • Tap to view'}</Text>
+                  </View>
+                </Pressable>
                 <Pressable onPress={() => onRemoveAttachment(kind, attachment.id)} style={styles.attachmentRemoveButton}>
                   <Text style={styles.attachmentRemoveButtonText}>Remove</Text>
                 </Pressable>
@@ -1139,6 +1359,30 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
 
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
+      <Modal animationType="slide" onRequestClose={() => setAttachmentPreview(null)} transparent visible={attachmentPreview !== null || attachmentPreviewLoading}>
+        <View style={styles.attachmentPreviewOverlay}>
+          <View style={styles.attachmentPreviewSheet}>
+            <View style={styles.attachmentPreviewHeader}>
+              <Text numberOfLines={1} style={styles.attachmentPreviewTitle}>{attachmentPreview?.name ?? 'Preparing preview...'}</Text>
+              <Pressable onPress={() => setAttachmentPreview(null)} style={styles.attachmentPreviewCloseButton}>
+                <Text style={styles.attachmentPreviewCloseButtonText}>Close</Text>
+              </Pressable>
+            </View>
+            <View style={styles.attachmentPreviewBody}>
+              {attachmentPreviewLoading ? (
+                <View style={styles.attachmentPreviewLoadingState}>
+                  <ActivityIndicator color="#9e5b49" size="large" />
+                  <Text style={styles.attachmentPreviewLoadingText}>Preparing document preview...</Text>
+                </View>
+              ) : attachmentPreview?.kind === 'image' ? (
+                <Image resizeMode="contain" source={{ uri: attachmentPreview.uri }} style={styles.attachmentPreviewImage} />
+              ) : attachmentPreview?.kind === 'pdf' ? (
+                <WebView originWhitelist={["*"]} source={{ html: attachmentPreview.html }} style={styles.attachmentPreviewWebView} />
+              ) : null}
+            </View>
+          </View>
+        </View>
+      </Modal>
       <KeyboardAwareFormScreen>
         <ScrollView
           contentContainerStyle={styles.profileScrollContent}
@@ -1226,10 +1470,10 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
               <AutoScrollTextInput autoCapitalize="none" keyboardType="email-address" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('email', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.email} />
 
               <Text style={styles.profileFieldLabel}>Password</Text>
-              <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('password', value)} scrollViewRef={scrollViewRef} secureTextEntry style={styles.profileInput} value={form.password} />
+              <PasswordField onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('password', value)} scrollViewRef={scrollViewRef} value={form.password} />
 
               <Text style={styles.profileFieldLabel}>Confirm password</Text>
-              <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('confirm_password', value)} scrollViewRef={scrollViewRef} secureTextEntry style={styles.profileInput} value={form.confirm_password} />
+              <PasswordField onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('confirm_password', value)} scrollViewRef={scrollViewRef} value={form.confirm_password} />
 
               <Text style={styles.profileFieldLabel}>First name</Text>
               <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('first_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.first_name} />
