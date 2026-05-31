@@ -4,7 +4,7 @@ from django.contrib import admin, messages
 from django.contrib.auth.admin import GroupAdmin, UserAdmin
 from django.contrib.auth.models import Group, User
 from django.core.exceptions import ValidationError
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Q
 from django.http import JsonResponse
 from django.http import HttpResponseRedirect
 from django.urls import path, reverse
@@ -18,7 +18,7 @@ from .services.importers.discovered_json_places import load_discovery_json_recor
 from .services.deleted_businesses import filter_deleted_business_records, imported_place_from_deleted_business, store_deleted_business
 from .services.importers.here_places import HerePlacesImporter
 from .services.provider_quota import delete_stale_provider_usage_windows, get_provider_policy, get_provider_usage_statuses, select_discovery_provider
-from .services.source_listings import get_listing_source_name, load_source_records
+from .services.source_listings import get_listing_source_name, load_canonical_source_records, load_source_records
 
 
 LIVE_DISCOVERY_SOURCE_NAMES = {HerePlacesImporter.source_name}
@@ -63,7 +63,11 @@ def _sync_listing_snapshot_from_imported_place(place_record, snapshot=None):
 
 	lookup = {}
 	if defaults['source_name'] and defaults['external_id']:
-		lookup = {'source_name': defaults['source_name'], 'external_id': defaults['external_id']}
+		lookup = {
+			'source_name': defaults['source_name'],
+			'external_id': defaults['external_id'],
+			'address_line_1': defaults['address_line_1'],
+		}
 	elif defaults['listing_slug']:
 		lookup = {'listing_slug': defaults['listing_slug']}
 	else:
@@ -426,6 +430,13 @@ class ListingSnapshotAdmin(admin.ModelAdmin):
 		}),
 	)
 
+	def get_queryset(self, request):
+		queryset = super().get_queryset(request)
+		return queryset.filter(
+			~Q(source_name=BusinessClaim.MANUAL_SOURCE_NAME)
+			| Q(business_claims__membership__is_active=True)
+		).distinct()
+
 	def get_urls(self):
 		custom_urls = [
 			path('pull-all-business-data/', self.admin_site.admin_view(self.pull_all_business_data_view), name='places_listingsnapshot_pull_all'),
@@ -457,7 +468,7 @@ class ListingSnapshotAdmin(admin.ModelAdmin):
 	def _run_pull_all_business_data(self, request):
 		discovery_records = filter_deleted_business_records(list(HerePlacesImporter().load_records()))
 		write_discovery_json_records(discovery_records)
-		snapshot_records = list(load_source_records(source_name=get_listing_source_name()))
+		snapshot_records = list(load_canonical_source_records(source_name=get_listing_source_name()))
 		touched_snapshot_ids = _sync_listing_snapshots_from_imported_places(snapshot_records)
 		self.message_user(
 			request,
@@ -610,10 +621,10 @@ class DeletedBusinessAdmin(admin.ModelAdmin):
 @admin.register(BusinessClaim, site=happyhour_admin_site)
 class BusinessClaimAdmin(admin.ModelAdmin):
 	actions = ['mark_under_review', 'approve_selected_claims', 'reject_selected_claims']
-	list_display = ('listing_snapshot', 'contact_name', 'claimant', 'status', 'work_email', 'submitted_at', 'reviewed_at')
+	list_display = ('listing_snapshot', 'contact_name', 'claimant', 'status', 'verification_score_display', 'verification_flags_display', 'work_email', 'submitted_at', 'reviewed_at')
 	list_filter = ('status', 'listing_snapshot__city')
 	search_fields = ('listing_snapshot__name', 'contact_name', 'claimant__username', 'work_email')
-	readonly_fields = ('submitted_at', 'reviewed_at', 'reviewed_by', 'created_at', 'updated_at')
+	readonly_fields = ('verification_score', 'verification_flags_display', 'submitted_at', 'reviewed_at', 'reviewed_by', 'created_at', 'updated_at')
 	autocomplete_fields = ('claimant', 'listing_snapshot', 'reviewed_by')
 	list_select_related = ('listing_snapshot', 'claimant', 'reviewed_by')
 	list_per_page = 25
@@ -625,7 +636,7 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 			'fields': ('contact_name', 'job_title', 'work_email', 'work_phone', 'employer_address', 'address_not_applicable'),
 		}),
 		('Verification details', {
-			'fields': ('verification_summary', 'supporting_details'),
+			'fields': ('verification_summary', 'supporting_details', 'verification_score', 'verification_flags_display'),
 			'description': 'These are the materials submitted by the business claimant for review.',
 		}),
 		('Admin review', {
@@ -661,9 +672,18 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 		self.message_user(request, f'{queryset.count()} claim(s) rejected.')
 
 	def save_model(self, request, obj, form, change):
+		obj.refresh_verification_state(save=False)
 		if obj.status == BusinessClaim.Status.UNDER_REVIEW and not obj.reviewed_by:
 			obj.reviewed_by = request.user
 		super().save_model(request, obj, form, change)
+
+	@admin.display(description='Trust score')
+	def verification_score_display(self, obj):
+		return obj.verification_score
+
+	@admin.display(description='Verification flags')
+	def verification_flags_display(self, obj):
+		return ', '.join(obj.verification_flags or []) or 'None'
 
 
 @admin.register(BusinessMembership, site=happyhour_admin_site)

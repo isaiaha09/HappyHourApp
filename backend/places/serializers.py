@@ -25,6 +25,7 @@ ATTACHMENT_FIELD_NAME_MAP = {
 	'health_permit_attachments': BusinessClaimAttachment.AttachmentKind.HEALTH_PERMIT,
 	'abc_license_attachments': BusinessClaimAttachment.AttachmentKind.ABC_LICENSE,
 	'proof_of_address_control_attachments': BusinessClaimAttachment.AttachmentKind.PROOF_OF_ADDRESS_CONTROL,
+	'proof_of_authority_attachments': BusinessClaimAttachment.AttachmentKind.PROOF_OF_AUTHORITY,
 }
 
 PROFILE_ENTRY_FIELD_KIND_MAP = {
@@ -358,7 +359,10 @@ class ClaimedBusinessSignupSerializer(CustomerSignupSerializer):
 			)
 			_create_claim_profile_entries(claim, claim_data)
 			_create_claim_attachments(claim, request)
-			claim.submit_for_review()
+			try:
+				claim.submit_for_review()
+			except DjangoValidationError as error:
+				raise serializers.ValidationError(list(error.messages))
 			user._created_business_claim = claim
 			return user
 
@@ -449,7 +453,10 @@ class EstablishedBusinessSignupSerializer(CustomerSignupSerializer):
 			)
 			_create_claim_profile_entries(claim, claim_data)
 			_create_claim_attachments(claim, request)
-			claim.submit_for_review()
+			try:
+				claim.submit_for_review()
+			except DjangoValidationError as error:
+				raise serializers.ValidationError(list(error.messages))
 			user._created_business_claim = claim
 			return user
 
@@ -463,6 +470,7 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 	offer_entries = serializers.ListField(child=serializers.CharField(max_length=500), required=False, allow_empty=True)
 	hours_of_operation_entries = serializers.ListField(child=serializers.CharField(max_length=500), required=False, allow_empty=True)
 	photo_references = serializers.ListField(child=serializers.CharField(max_length=500), required=False, allow_empty=True)
+	supporting_details = serializers.CharField(max_length=4000, required=False, allow_blank=True)
 
 	def validate_business_city(self, value):
 		normalized = str(value or '').strip().lower()
@@ -487,6 +495,7 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 		offer_entries = validated_data.pop('offer_entries', [])
 		hours_of_operation_entries = validated_data.pop('hours_of_operation_entries', [])
 		photo_references = validated_data.pop('photo_references', [])
+		supporting_details = validated_data.pop('supporting_details', '')
 		listing_snapshot = ListingSnapshot.objects.create(
 			name=validated_data.pop('business_name'),
 			city=validated_data.pop('business_city', ''),
@@ -517,6 +526,7 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 				hours_of_operation_entries=hours_of_operation_entries,
 				photo_references=photo_references,
 				verification_summary='Submitted through the informal business and vendor flow.',
+				supporting_details=supporting_details,
 			)
 			_create_claim_profile_entries(
 				claim,
@@ -528,7 +538,10 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 				},
 			)
 			_create_claim_attachments(claim, request)
-			claim.submit_for_review()
+			try:
+				claim.submit_for_review()
+			except DjangoValidationError as error:
+				raise serializers.ValidationError(list(error.messages))
 			user._created_business_claim = claim
 			return user
 

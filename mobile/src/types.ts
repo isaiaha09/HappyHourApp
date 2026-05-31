@@ -173,7 +173,8 @@ export type BusinessAttachmentKind =
   | 'business_registration'
   | 'health_permit'
   | 'abc_license'
-  | 'proof_of_address_control';
+  | 'proof_of_address_control'
+  | 'proof_of_authority';
 
 export type BusinessAttachmentDraft = {
   id: string;
@@ -227,6 +228,7 @@ export type InformalBusinessSignupRequest = CustomerSignupRequest & SharedBusine
   business_name: string;
   business_city: string;
   business_venue_type: string;
+  supporting_details: string;
 };
 
 export type BusinessLocationUpdateRequest = {

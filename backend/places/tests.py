@@ -1804,6 +1804,59 @@ class SourceListingIdentityTests(TestCase):
 
 	@patch('places.services.source_listings._get_place_coordinates')
 	@patch('places.services.source_listings.load_source_records')
+	def test_place_payload_merges_same_slug_name_variants_without_losing_distinct_locations(self, mock_load_source_records, mock_get_place_coordinates):
+		mock_load_source_records.return_value = [
+			ImportedPlace(
+				name='Cronies Sports Grill',
+				profile_name='Cronies Sports Grill',
+				city=City.VENTURA,
+				venue_type=VenueType.BAR,
+				address_line_1='2855 Johnson Dr',
+				state='CA',
+				postal_code='93003',
+				website_url='https://example.com/cronies-ventura',
+				source_name='business_websites',
+				source_url='https://example.com/cronies-ventura',
+			),
+			ImportedPlace(
+				name="Cronie's Sports Grill",
+				profile_name="Cronie's Sports Grill",
+				city=City.CAMARILLO,
+				venue_type=VenueType.BAR,
+				address_line_1='N Lantana St',
+				state='CA',
+				postal_code='93010',
+				source_name='here_places',
+				source_url='https://discover.search.hereapi.com/v1/discover',
+			),
+			ImportedPlace(
+				name='Cronies Sports Grill Camarillo',
+				profile_name='Cronies Sports Grill',
+				city=City.CAMARILLO,
+				venue_type=VenueType.BAR,
+				address_line_1='370 N Lantana St',
+				state='CA',
+				postal_code='93010',
+				website_url='https://example.com/cronies-camarillo',
+				source_name='business_websites',
+				source_url='https://example.com/cronies-camarillo',
+			),
+		]
+		mock_get_place_coordinates.side_effect = [(34.2477, -119.1965), (34.2195, -119.0545), (34.2196, -119.0544)]
+
+		payloads = get_source_place_payloads()
+
+		self.assertEqual(len(payloads), 1)
+		self.assertEqual(payloads[0]['slug'], 'cronies-sports-grill')
+		self.assertEqual(payloads[0]['name'], 'Cronies Sports Grill')
+		self.assertEqual(len(payloads[0]['locations']), 2)
+		self.assertEqual(
+			{location['address_line_1'] for location in payloads[0]['locations']},
+			{'2855 Johnson Dr', '370 N Lantana St'},
+		)
+
+	@patch('places.services.source_listings._get_place_coordinates')
+	@patch('places.services.source_listings.load_source_records')
 	def test_place_payloads_include_profiles_with_and_without_verified_deals(self, mock_load_source_records, mock_get_place_coordinates):
 		coordinates_by_address = {
 			'123 Main St': (34.2783, -119.2931),
@@ -2268,60 +2321,73 @@ class HerePlacesImporterTests(TestCase):
 
 	@override_settings(HERE_API_KEY='test-token', HERE_CACHE_TIMEOUT=0)
 	def test_here_importer_filters_non_food_and_closed_results(self):
-		class StubSession:
-			def get(self, url, params=None, headers=None, timeout=None):
-				class Response:
-					def raise_for_status(self_inner):
-						return None
+		importer = HerePlacesImporter()
+		items = [
+			{
+				'id': 'here-food-1',
+				'title': 'Harbor Tacos',
+				'position': {'lat': 34.28, 'lng': -119.29},
+				'address': {'street': '123 Main St', 'postalCode': '93001', 'stateCode': 'CA'},
+				'categories': [{'name': 'Restaurant', 'primary': True}],
+			},
+			{
+				'id': 'here-junk-1',
+				'title': 'Point Mugu Fitness Center',
+				'position': {'lat': 34.20, 'lng': -119.17},
+				'address': {'street': '1 Base Rd', 'postalCode': '93042', 'stateCode': 'CA'},
+				'categories': [{'name': 'Fitness/Health Club', 'primary': True}],
+			},
+			{
+				'id': 'here-junk-2',
+				'title': 'Mugu Lanes',
+				'position': {'lat': 34.12, 'lng': -119.10},
+				'address': {
+					'street': 'Mugu Lanes, Point Mugu Naws',
+					'label': 'Mugu Lanes, Point Mugu Naws, CA 93042, United States',
+					'postalCode': '93042',
+					'stateCode': 'CA',
+				},
+				'categories': [{'name': 'Bar', 'primary': True}],
+			},
+			{
+				'id': 'here-junk-3',
+				'title': 'In Between 5 and Club House',
+				'position': {'lat': 34.23, 'lng': -119.02},
+				'address': {
+					'street': 'In Between 5 and Club House',
+					'label': 'In Between 5 and Club House, Camarillo, CA 93012, United States',
+					'postalCode': '93012',
+					'stateCode': 'CA',
+				},
+				'categories': [{'name': 'Bar', 'primary': True}],
+			},
+			{
+				'id': 'here-closed-1',
+				'title': 'Closed Burger Spot',
+				'position': {'lat': 34.30, 'lng': -119.30},
+				'address': {'street': '999 Shoreline Dr', 'postalCode': '93001', 'stateCode': 'CA'},
+				'categories': [{'name': 'Restaurant', 'primary': True}],
+				'businessStatus': 'permanently closed',
+			},
+			{
+				'id': 'here-label-1',
+				'title': 'Camarillo, CA, United States',
+				'position': {'lat': 34.21, 'lng': -119.03},
+				'address': {'label': 'Camarillo, CA, United States', 'street': '', 'postalCode': '93010', 'stateCode': 'CA'},
+				'categories': [{'name': 'Restaurant', 'primary': True}],
+			},
+			{
+				'id': 'here-supplier-1',
+				'title': 'Bimbo Bakeries USA',
+				'position': {'lat': 34.22, 'lng': -119.04},
+				'address': {'street': '456 Industry Way', 'postalCode': '93010', 'stateCode': 'CA'},
+				'categories': [{'name': 'Bakery', 'primary': True}],
+			},
+		]
 
-					def json(self_inner):
-						return {
-							'items': [
-								{
-									'id': 'here-food-1',
-									'title': 'Harbor Tacos',
-									'position': {'lat': 34.28, 'lng': -119.29},
-									'address': {'street': '123 Main St', 'postalCode': '93001', 'stateCode': 'CA'},
-									'categories': [{'name': 'Restaurant', 'primary': True}],
-								},
-								{
-									'id': 'here-junk-1',
-									'title': 'Point Mugu Fitness Center',
-									'position': {'lat': 34.20, 'lng': -119.17},
-									'address': {'street': '1 Base Rd', 'postalCode': '93042', 'stateCode': 'CA'},
-									'categories': [{'name': 'Fitness/Health Club', 'primary': True}],
-								},
-								{
-									'id': 'here-closed-1',
-									'title': 'Closed Burger Spot',
-									'position': {'lat': 34.30, 'lng': -119.30},
-									'address': {'street': '999 Shoreline Dr', 'postalCode': '93001', 'stateCode': 'CA'},
-									'categories': [{'name': 'Restaurant', 'primary': True}],
-									'businessStatus': 'permanently closed',
-								},
-								{
-									'id': 'here-label-1',
-									'title': 'Camarillo, CA, United States',
-									'position': {'lat': 34.21, 'lng': -119.03},
-									'address': {'label': 'Camarillo, CA, United States', 'street': '', 'postalCode': '93010', 'stateCode': 'CA'},
-									'categories': [{'name': 'Restaurant', 'primary': True}],
-								},
-								{
-									'id': 'here-supplier-1',
-									'title': 'Bimbo Bakeries USA',
-									'position': {'lat': 34.22, 'lng': -119.04},
-									'address': {'street': '456 Industry Way', 'postalCode': '93010', 'stateCode': 'CA'},
-									'categories': [{'name': 'Bakery', 'primary': True}],
-								},
-							],
-						}
+		kept_names = [item['title'] for item in items if importer._should_keep_item(item, search_term='bar')]
 
-				return Response()
-
-		importer = HerePlacesImporter(session=StubSession())
-		records = importer.load_records()
-
-		self.assertEqual([record.name for record in records], ['Harbor Tacos'])
+		self.assertEqual(kept_names, ['Harbor Tacos'])
 
 	@override_settings(
 		HERE_API_KEY='test-token',
@@ -2591,11 +2657,20 @@ class BusinessClaimTests(APITestCase):
 			claimant=self.user,
 			listing_snapshot=self.snapshot,
 			contact_name='Jane Manager',
-			job_title='General Manager',
+			job_title=BusinessClaim.JobTitle.MANAGER,
 			work_email='jane.manager@yardhouse.com',
 			work_phone='805-555-0101',
+			verification_documents={'business_registration': ['CA filing'], 'health_permit': ['County permit'], 'abc_license': [], 'proof_of_address_control': []},
 			verification_summary='I manage the Yard House location and can verify store promotions.',
 			status=BusinessClaim.Status.SUBMITTED,
+		)
+		BusinessClaimAttachment.objects.create(
+			claim=claim,
+			attachment_kind=BusinessClaimAttachment.AttachmentKind.PROOF_OF_AUTHORITY,
+			file=SimpleUploadedFile('authority.pdf', b'authority', content_type='application/pdf'),
+			original_filename='authority.pdf',
+			content_type='application/pdf',
+			file_size=9,
 		)
 
 		membership = claim.approve(reviewed_by=self.reviewer, reviewer_notes='Verified through manual review.')
@@ -2603,6 +2678,7 @@ class BusinessClaimTests(APITestCase):
 		claim.refresh_from_db()
 		self.assertEqual(claim.status, BusinessClaim.Status.APPROVED)
 		self.assertEqual(claim.reviewed_by, self.reviewer)
+		self.assertGreaterEqual(claim.verification_score, 60)
 		self.assertEqual(BusinessMembership.objects.count(), 1)
 		self.assertEqual(membership.user, self.user)
 		self.assertEqual(membership.claim, claim)
@@ -2613,9 +2689,25 @@ class BusinessClaimTests(APITestCase):
 			claimant=self.user,
 			listing_snapshot=self.snapshot,
 			contact_name='Jane Manager',
-			job_title='General Manager',
+			job_title=BusinessClaim.JobTitle.MANAGER,
 			work_email='jane.manager@yardhouse.com',
 			verification_summary='I manage the location.',
+		)
+
+		with self.assertRaises(ValidationError):
+			claim.approve(reviewed_by=self.reviewer)
+
+	def test_submitted_claim_requires_proof_of_authority_for_approval(self):
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=self.snapshot,
+			contact_name='Jane Manager',
+			job_title=BusinessClaim.JobTitle.MANAGER,
+			work_email='jane.manager@yardhouse.com',
+			work_phone='805-555-0101',
+			verification_documents={'business_registration': ['CA filing'], 'health_permit': ['County permit'], 'abc_license': [], 'proof_of_address_control': []},
+			verification_summary='I manage the location.',
+			status=BusinessClaim.Status.SUBMITTED,
 		)
 
 		with self.assertRaises(ValidationError):
@@ -2706,14 +2798,15 @@ class ProfileSignupApiTests(APITestCase):
 				'employer_address': '494 E Main St, Ventura, CA 93001',
 				'address_not_applicable': False,
 				'business_website_url': 'https://finneysventura.example.com',
-				'social_media_links': ['https://instagram.com/finneysventura'],
-				'verification_documents': {
+				'social_media_links': json.dumps(['https://instagram.com/finneysventura']),
+				'verification_documents': json.dumps({
 					'business_registration': ['CA business license #123'],
 					'health_permit': ['Ventura County permit #A-55'],
-				},
+				}),
+				'proof_of_authority_attachments': [SimpleUploadedFile('manager-proof.pdf', b'proof', content_type='application/pdf')],
 				'supporting_details': 'Available to provide payroll and licensing records upon request.',
 			},
-			format='json',
+			format='multipart',
 		)
 
 		self.assertEqual(response.status_code, 201)
@@ -2728,6 +2821,8 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(claim.employer_address, '494 E Main St, Ventura, CA 93001')
 		self.assertEqual(claim.pathway, BusinessClaim.Pathway.CLAIMED)
 		self.assertEqual(claim.business_website_url, 'https://finneysventura.example.com')
+		self.assertGreaterEqual(claim.verification_score, 60)
+		self.assertIn(BusinessClaimAttachment.AttachmentKind.PROOF_OF_AUTHORITY, list(claim.attachments.values_list('attachment_kind', flat=True)))
 		self.assertEqual(
 			claim.get_profile_entry_values(BusinessClaim.ProfileEntryKind.SOCIAL_MEDIA_LINK),
 			['https://instagram.com/finneysventura'],
@@ -2752,13 +2847,14 @@ class ProfileSignupApiTests(APITestCase):
 				'work_phone': '805-555-0133',
 				'employer_address': '',
 				'address_not_applicable': True,
-				'verification_documents': {
+				'verification_documents': json.dumps({
 					'business_registration': ['Articles of organization filed with CA Secretary of State'],
 					'health_permit': ['Ventura County temporary permit receipt'],
-				},
+				}),
+				'proof_of_authority_attachments': [SimpleUploadedFile('owner-proof.pdf', b'owner-proof', content_type='application/pdf')],
 				'supporting_details': 'Happy to provide incorporation documents during review.',
 			},
-			format='json',
+			format='multipart',
 		)
 
 		self.assertEqual(response.status_code, 201)
@@ -2790,13 +2886,14 @@ class ProfileSignupApiTests(APITestCase):
 				'work_phone': '805-555-0155',
 				'employer_address': '',
 				'address_not_applicable': False,
-				'verification_documents': {
+				'verification_documents': json.dumps({
 					'business_registration': ['Ventura county vendor registration'],
 					'health_permit': ['County mobile food permit'],
-				},
+				}),
+				'proof_of_authority_attachments': [SimpleUploadedFile('truck-proof.pdf', b'truck-proof', content_type='application/pdf')],
 				'supporting_details': '',
 			},
-			format='json',
+			format='multipart',
 		)
 
 		self.assertEqual(response.status_code, 201)
@@ -2822,6 +2919,7 @@ class ProfileSignupApiTests(APITestCase):
 				'offer_entries': ['2 tacos for $5'],
 				'hours_of_operation_entries': ['Fri-Sun 6pm-11pm'],
 				'photo_references': ['https://example.com/rileysnacks-cart.jpg'],
+				'supporting_details': 'I operate this snack stand at weekend events and night markets.',
 			},
 			format='json',
 		)
@@ -2835,6 +2933,25 @@ class ProfileSignupApiTests(APITestCase):
 			claim.get_profile_entry_values(BusinessClaim.ProfileEntryKind.OFFER),
 			['2 tacos for $5'],
 		)
+
+	def test_informal_business_signup_requires_presence_signal_and_summary(self):
+		response = self.client.post(
+			reverse('informal-business-signup'),
+			{
+				'username': 'empty_vendor',
+				'email': 'empty@example.com',
+				'password': 'test-pass-123',
+				'first_name': 'Empty',
+				'last_name': 'Vendor',
+				'business_name': 'Empty Booth',
+				'business_city': BusinessClaim.MULTIPLE_AREAS_VALUE,
+				'business_venue_type': VenueType.OTHER,
+			},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, 400)
+		self.assertIn('Informal businesses need at least one social link, website, or photo reference before submission.', str(response.data))
 
 	def test_manual_business_signup_accepts_multiple_social_and_verification_attachments(self):
 		with TemporaryDirectory() as temp_dir:
@@ -2874,6 +2991,9 @@ class ProfileSignupApiTests(APITestCase):
 						'health_permit_attachments': [
 							SimpleUploadedFile('health-permit.pdf', b'health-permit', content_type='application/pdf'),
 						],
+						'proof_of_authority_attachments': [
+							SimpleUploadedFile('authority.pdf', b'authority-proof', content_type='application/pdf'),
+						],
 					},
 					format='multipart',
 				)
@@ -2881,12 +3001,13 @@ class ProfileSignupApiTests(APITestCase):
 				self.assertEqual(response.status_code, 201)
 				claim = BusinessClaim.objects.get(claimant__username='attachment_owner')
 				attachments = list(claim.attachments.order_by('attachment_kind', 'original_filename'))
-				self.assertEqual(len(attachments), 4)
+				self.assertEqual(len(attachments), 5)
 				self.assertEqual(
 					[attachment.attachment_kind for attachment in attachments],
 					[
 						BusinessClaimAttachment.AttachmentKind.BUSINESS_REGISTRATION,
 						BusinessClaimAttachment.AttachmentKind.HEALTH_PERMIT,
+						BusinessClaimAttachment.AttachmentKind.PROOF_OF_AUTHORITY,
 						BusinessClaimAttachment.AttachmentKind.SOCIAL_MEDIA,
 						BusinessClaimAttachment.AttachmentKind.SOCIAL_MEDIA,
 					],
@@ -3465,6 +3586,48 @@ class ListingSnapshotAdminTests(TestCase):
 			self.assertTrue(ListingSnapshot.objects.filter(name='Discovery Spot', source_name='here_places').exists())
 
 	@override_settings(DISCOVERY_JSON_PATH='')
+	def test_pull_all_business_data_view_syncs_canonical_location_records(self):
+		with TemporaryDirectory() as temp_dir:
+			json_path = Path(temp_dir) / 'discovered_places.json'
+			ventura_record = ImportedPlace(
+				name='Cronies Sports Grill',
+				profile_name='Cronies Sports Grill',
+				city=City.VENTURA,
+				venue_type=VenueType.BAR,
+				address_line_1='2855 Johnson Dr',
+				external_id='www-cronies-com-locations-bbc01135d657',
+				source_name='business_websites',
+			)
+			partial_duplicate = ImportedPlace(
+				name="Cronie's Sports Grill",
+				profile_name="Cronie's Sports Grill",
+				city=City.CAMARILLO,
+				venue_type=VenueType.BAR,
+				address_line_1='N Lantana St',
+				external_id='here:cronies-camarillo-partial',
+				source_name='here_places',
+			)
+			camarillo_record = ImportedPlace(
+				name='Cronies Sports Grill Camarillo',
+				profile_name='Cronies Sports Grill',
+				city=City.CAMARILLO,
+				venue_type=VenueType.BAR,
+				address_line_1='370 N Lantana St',
+				external_id='www-cronies-com-locations-bbc01135d657',
+				source_name='business_websites',
+			)
+
+			with override_settings(DISCOVERY_JSON_PATH=json_path), patch.object(HerePlacesImporter, 'load_records', return_value=[]), patch('places.admin.load_canonical_source_records', return_value=[ventura_record, camarillo_record]):
+				self.admin.pull_all_business_data_view(self._build_request('/admin/places/listingsnapshot/pull-all-business-data/'))
+
+		cronies_snapshots = ListingSnapshot.objects.filter(address_line_1__in=['2855 Johnson Dr', '370 N Lantana St']).order_by('address_line_1')
+		self.assertEqual(cronies_snapshots.count(), 2)
+		self.assertEqual(
+			set(cronies_snapshots.values_list('address_line_1', flat=True)),
+			{'2855 Johnson Dr', '370 N Lantana St'},
+		)
+
+	@override_settings(DISCOVERY_JSON_PATH='')
 	def test_pull_business_data_view_delete_moves_to_deleted_businesses_and_restore_brings_it_back(self):
 		with TemporaryDirectory() as temp_dir:
 			json_path = Path(temp_dir) / 'discovered_places.json'
@@ -3514,6 +3677,47 @@ class ListingSnapshotAdminTests(TestCase):
 				restored_records = load_discovery_json_records(file_path=json_path)
 				self.assertEqual(len(restored_records), 1)
 				self.assertEqual(restored_records[0].external_id, 'here:cronies-ventura')
+
+	def test_get_queryset_excludes_non_public_manual_submissions(self):
+		public_snapshot = ListingSnapshot.objects.create(
+			name='Pulled Place',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='123 Main St',
+			source_name='here_places',
+		)
+		manual_snapshot = ListingSnapshot.objects.create(
+			name='Draft Manual Place',
+			city=City.OXNARD,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='456 Harbor Blvd',
+			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+		)
+		approved_manual_snapshot = ListingSnapshot.objects.create(
+			name='Approved Manual Place',
+			city=City.CAMARILLO,
+			venue_type=VenueType.CAFE,
+			address_line_1='789 Ventura Blvd',
+			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+		)
+		approved_user = User.objects.create_user(username='approved_manual_owner', email='approved-manual@example.com', password='test-pass-123')
+		approved_claim = BusinessClaim.objects.create(
+			claimant=approved_user,
+			listing_snapshot=approved_manual_snapshot,
+			pathway=BusinessClaim.Pathway.ESTABLISHED,
+			status=BusinessClaim.Status.APPROVED,
+			contact_name='Approved Owner',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='approved-manual@example.com',
+			verification_summary='Approved manual business.',
+		)
+		BusinessMembership.objects.create(user=approved_user, claim=approved_claim, is_active=True)
+
+		queryset = self.admin.get_queryset(self._build_request('/admin/places/listingsnapshot/'))
+
+		self.assertIn(public_snapshot, queryset)
+		self.assertNotIn(manual_snapshot, queryset)
+		self.assertIn(approved_manual_snapshot, queryset)
 
 	def test_search_businesses_view_returns_matching_rows(self):
 		match_snapshot = ListingSnapshot.objects.create(

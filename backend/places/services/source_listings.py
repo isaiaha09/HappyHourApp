@@ -47,6 +47,13 @@ def load_source_records(source_name=None):
 	return get_listing_importer(source_name=source_name).load_records()
 
 
+def load_canonical_source_records(source_name=None):
+	canonical_records = []
+	for place_records in _group_source_records(load_source_records(source_name=source_name)).values():
+		canonical_records.extend(_dedupe_profile_locations(place_records))
+	return canonical_records
+
+
 def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_deals=None, resolve_missing_coordinates=True):
 	payloads_by_slug = {}
 	for place_records in _group_source_records(load_source_records(source_name=source_name)).values():
@@ -123,7 +130,7 @@ def _group_source_records(place_records):
 	for place_record in place_records:
 		if not place_record.is_active:
 			continue
-		grouped_records.setdefault(_build_profile_key(place_record), []).append(place_record)
+		grouped_records.setdefault(_build_profile_slug(place_record), []).append(place_record)
 	return grouped_records
 
 
@@ -132,6 +139,7 @@ def _build_grouped_place_payload(place_records, preferred_city=None, resolve_mis
 		return None
 
 	canonical_place_records = _dedupe_profile_locations(place_records)
+	primary_place_record = max(canonical_place_records, key=_place_record_quality_score)
 	grouped_deals = _build_grouped_deal_payloads(canonical_place_records)
 	location_payloads = [
 		_build_location_payload(place_record, resolve_missing_coordinates=resolve_missing_coordinates)
@@ -139,17 +147,17 @@ def _build_grouped_place_payload(place_records, preferred_city=None, resolve_mis
 	]
 	location_payloads.sort(key=lambda location: (location['city_label'], location['address_line_1'], location['id']))
 	primary_location = _select_primary_location(location_payloads, preferred_city)
-	profile_name = _profile_name_for_record(canonical_place_records[0])
-	profile_slug = _build_profile_slug(canonical_place_records[0])
+	profile_name = _profile_name_for_record(primary_place_record)
+	profile_slug = _build_profile_slug(primary_place_record)
 
 	return {
-		'id': _stable_numeric_id(canonical_place_records[0].source_name, profile_slug, profile_name),
+		'id': _stable_numeric_id(primary_place_record.source_name, profile_slug, profile_name),
 		'name': profile_name,
 		'slug': profile_slug,
 		'city': primary_location['city'],
 		'city_label': primary_location['city_label'],
-		'venue_type': canonical_place_records[0].venue_type,
-		'venue_type_label': _label_for_choice(VenueType, canonical_place_records[0].venue_type),
+		'venue_type': primary_place_record.venue_type,
+		'venue_type_label': _label_for_choice(VenueType, primary_place_record.venue_type),
 		'address_line_1': primary_location['address_line_1'],
 		'address_line_2': primary_location['address_line_2'],
 		'neighborhood': primary_location['neighborhood'],

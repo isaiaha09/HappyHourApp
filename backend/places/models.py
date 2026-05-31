@@ -1,5 +1,6 @@
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import urlparse
 
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -191,6 +192,8 @@ class BusinessClaim(models.Model):
 	verification_documents = models.JSONField(default=dict, blank=True)
 	verification_summary = models.TextField(blank=True)
 	supporting_details = models.TextField(blank=True)
+	verification_score = models.PositiveSmallIntegerField(default=0)
+	verification_flags = models.JSONField(default=list, blank=True)
 	reviewer_notes = models.TextField(blank=True)
 	submitted_at = models.DateTimeField(null=True, blank=True)
 	reviewed_at = models.DateTimeField(null=True, blank=True)
@@ -215,6 +218,127 @@ class BusinessClaim(models.Model):
 	def __str__(self):
 		return f'{self.listing_snapshot.name} claim by {self.contact_name}'
 
+	def _domain_from_url(self, value):
+		normalized = str(value or '').strip()
+		if not normalized:
+			return ''
+		parsed = urlparse(normalized if '://' in normalized else f'https://{normalized}')
+		return (parsed.netloc or '').lower().removeprefix('www.')
+
+	def _domain_from_email(self, value):
+		normalized = str(value or '').strip().lower()
+		if '@' not in normalized:
+			return ''
+		return normalized.rsplit('@', 1)[1]
+
+	def _has_profile_entry_kind(self, entry_kind):
+		if not self.pk:
+			return False
+		return self.profile_entries.filter(entry_kind=entry_kind).exists()
+
+	def has_authority_attachment(self):
+		return self.has_attachment_kind(BusinessClaimAttachment.AttachmentKind.PROOF_OF_AUTHORITY)
+
+	def has_required_regulatory_documentation(self):
+		if self.listing_snapshot.venue_type in {VenueType.RESTAURANT, VenueType.FAST_FOOD, VenueType.CAFE}:
+			return bool(self.health_permit_documents or self.has_attachment_kind(BusinessClaimAttachment.AttachmentKind.HEALTH_PERMIT))
+		if self.listing_snapshot.venue_type == VenueType.BAR:
+			return bool(self.abc_license_documents or self.has_attachment_kind(BusinessClaimAttachment.AttachmentKind.ABC_LICENSE))
+		return True
+
+	def evaluate_verification(self):
+		score = 0
+		flags = []
+		blockers = []
+
+		profile = getattr(self.claimant, 'account_profile', None)
+		if profile and profile.email_is_verified:
+			score += 10
+		else:
+			flags.append('email_unverified')
+
+		if self.work_phone:
+			score += 5
+
+		website_present = bool(self.business_website_url or self.listing_snapshot.website_url)
+		if website_present:
+			score += 5
+
+		if self._has_profile_entry_kind(self.ProfileEntryKind.SOCIAL_MEDIA_LINK):
+			score += 5
+
+		if self._has_profile_entry_kind(self.ProfileEntryKind.PHOTO_REFERENCE):
+			score += 5
+
+		work_email_domain = self._domain_from_email(self.work_email)
+		website_domain = self._domain_from_url(self.business_website_url or self.listing_snapshot.website_url)
+		if work_email_domain and website_domain:
+			if work_email_domain == website_domain:
+				score += 15
+			else:
+				flags.append('work_email_domain_mismatch')
+		elif self.pathway in {self.Pathway.CLAIMED, self.Pathway.ESTABLISHED}:
+			flags.append('work_email_domain_missing')
+
+		if self.pathway in {self.Pathway.CLAIMED, self.Pathway.ESTABLISHED}:
+			if self.business_registration_documents or self.has_attachment_kind(BusinessClaimAttachment.AttachmentKind.BUSINESS_REGISTRATION):
+				score += 20
+			else:
+				blockers.append('missing_business_registration')
+
+			if self.has_authority_attachment():
+				score += 15
+			else:
+				blockers.append('missing_proof_of_authority')
+
+			if self.has_required_regulatory_documentation():
+				score += 20
+			else:
+				blockers.append('missing_required_permit')
+
+			if self.employer_address or self.address_not_applicable:
+				score += 10
+			else:
+				flags.append('business_address_missing')
+		else:
+			if self.supporting_details.strip():
+				score += 10
+			else:
+				blockers.append('missing_informal_summary')
+
+			has_visible_presence = bool(
+				self.business_website_url
+				or self._has_profile_entry_kind(self.ProfileEntryKind.SOCIAL_MEDIA_LINK)
+				or self._has_profile_entry_kind(self.ProfileEntryKind.PHOTO_REFERENCE)
+			)
+			if has_visible_presence:
+				score += 10
+			else:
+				blockers.append('missing_informal_presence_signal')
+
+			if self.has_required_regulatory_documentation():
+				score += 10
+			elif self.listing_snapshot.venue_type in {VenueType.RESTAURANT, VenueType.FAST_FOOD, VenueType.CAFE, VenueType.BAR}:
+				flags.append('informal_permit_missing')
+
+		if work_email_domain and work_email_domain in {'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com'}:
+			flags.append('generic_work_email_domain')
+			score = max(0, score - 10)
+
+		return {
+			'score': max(0, min(score, 100)),
+			'flags': sorted(set(flags + blockers)),
+			'blockers': blockers,
+		}
+
+	def refresh_verification_state(self, save=True):
+		verdict = self.evaluate_verification()
+		self.verification_score = verdict['score']
+		self.verification_flags = verdict['flags']
+		if save and self.pk:
+			self.save(update_fields=['verification_score', 'verification_flags', 'updated_at'])
+		return verdict
+
 	def get_profile_entry_values(self, entry_kind):
 		if not self.pk:
 			return []
@@ -225,6 +349,9 @@ class BusinessClaim(models.Model):
 		)
 
 	def clean(self):
+		verdict = self.evaluate_verification()
+		self.verification_score = verdict['score']
+		self.verification_flags = verdict['flags']
 		if self.status in {self.Status.SUBMITTED, self.Status.UNDER_REVIEW, self.Status.APPROVED}:
 			missing_fields = []
 			for field_name in ['verification_summary']:
@@ -244,13 +371,22 @@ class BusinessClaim(models.Model):
 					raise ValidationError('Job title must be Owner or Manager for claimed and established businesses.')
 				if not self.business_registration_documents and not self.has_attachment_kind(BusinessClaimAttachment.AttachmentKind.BUSINESS_REGISTRATION):
 					raise ValidationError('Business registration documentation is required for claimed and established businesses.')
+				if not self.has_authority_attachment():
+					raise ValidationError('Proof of authority documentation is required for claimed and established businesses.')
 				if self.listing_snapshot.venue_type in {VenueType.RESTAURANT, VenueType.FAST_FOOD, VenueType.CAFE} and not self.health_permit_documents and not self.has_attachment_kind(BusinessClaimAttachment.AttachmentKind.HEALTH_PERMIT):
 					raise ValidationError('Health permit documentation is required for food businesses.')
 				if self.listing_snapshot.venue_type == VenueType.BAR and not self.abc_license_documents and not self.has_attachment_kind(BusinessClaimAttachment.AttachmentKind.ABC_LICENSE):
 					raise ValidationError('ABC license documentation is required for bars.')
 			elif self.pathway == self.Pathway.INFORMAL:
-				if self.contact_name:
-					pass
+				if not self.supporting_details.strip():
+					missing_fields.append('supporting_details')
+				has_visible_presence = bool(
+					self.business_website_url
+					or self._has_profile_entry_kind(self.ProfileEntryKind.SOCIAL_MEDIA_LINK)
+					or self._has_profile_entry_kind(self.ProfileEntryKind.PHOTO_REFERENCE)
+				)
+				if not has_visible_presence:
+					raise ValidationError('Informal businesses need at least one social link, website, or photo reference before submission.')
 			if self.serves_multiple_areas:
 				self.address_not_applicable = True
 			if not is_manual_submission and self.address_not_applicable:
@@ -278,15 +414,27 @@ class BusinessClaim(models.Model):
 		return self.attachments.filter(attachment_kind=attachment_kind).exists()
 
 	def submit_for_review(self):
-		self.full_clean()
+		previous_status = self.status
+		previous_submitted_at = self.submitted_at
 		self.status = self.Status.SUBMITTED
 		if not self.submitted_at:
 			self.submitted_at = timezone.now()
-		self.save()
+		try:
+			self.full_clean()
+			self.refresh_verification_state(save=False)
+			self.save()
+		except Exception:
+			self.status = previous_status
+			self.submitted_at = previous_submitted_at
+			raise
 
 	def approve(self, reviewed_by=None, reviewer_notes=''):
 		if self.status == self.Status.DRAFT:
 			raise ValidationError('Draft claims must be submitted before they can be approved.')
+
+		verdict = self.refresh_verification_state(save=False)
+		if verdict['blockers']:
+			raise ValidationError(f'Claim still has verification blockers: {", ".join(verdict["blockers"])}.')
 
 		now = timezone.now()
 		self.status = self.Status.APPROVED
@@ -350,6 +498,7 @@ class BusinessClaimAttachment(models.Model):
 		HEALTH_PERMIT = 'health_permit', 'Health Permit Attachment'
 		ABC_LICENSE = 'abc_license', 'ABC License Attachment'
 		PROOF_OF_ADDRESS_CONTROL = 'proof_of_address_control', 'Proof of Address Control Attachment'
+		PROOF_OF_AUTHORITY = 'proof_of_authority', 'Proof of Authority Attachment'
 
 	claim = models.ForeignKey(BusinessClaim, related_name='attachments', on_delete=models.CASCADE)
 	attachment_kind = models.CharField(max_length=40, choices=AttachmentKind.choices)

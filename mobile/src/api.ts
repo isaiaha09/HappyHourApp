@@ -27,6 +27,7 @@ const businessAttachmentFieldNames: Record<BusinessAttachmentKind, string> = {
   health_permit: 'health_permit_attachments',
   abc_license: 'abc_license_attachments',
   proof_of_address_control: 'proof_of_address_control_attachments',
+  proof_of_authority: 'proof_of_authority_attachments',
 };
 
 export function getDefaultApiBaseUrl() {

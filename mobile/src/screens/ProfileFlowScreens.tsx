@@ -1343,6 +1343,9 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
                   <Text style={styles.profileFieldLabel}>Business registration documents</Text>
                   {renderAttachmentPicker('business_registration', 'business registration documents', 'Attach one or more business registration files.')}
 
+                  <Text style={styles.profileFieldLabel}>Proof of authority</Text>
+                  {renderAttachmentPicker('proof_of_authority', 'proof of authority', 'Attach a work badge, payroll stub, authorization letter, or similar proof that you represent this business.')}
+
                   <Text style={styles.profileFieldLabel}>{requiresHealthPermit ? 'Health permit documents' : 'Health permit documents (if applicable)'}</Text>
                   {renderAttachmentPicker('health_permit', 'health permit documents', 'Attach one or more health permit files when they apply to this business type.')}
 
@@ -1361,6 +1364,16 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
                     },
                   )}
                 </>
+              ) : null}
+
+              {isInformal ? renderMultilineField(
+                'supporting_details',
+                'Tell us about your business',
+                form.supporting_details,
+                {
+                  placeholder: 'Briefly explain how you operate, where customers can find you, and anything that helps verify the business.',
+                  support: 'Keep this short. Informal businesses need a quick summary plus at least one social link, website, or photo reference before submission.',
+                },
               ) : null}
             </View>
 

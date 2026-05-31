@@ -2,7 +2,10 @@
   "here_places": {
     "excluded_businesses": [],
     "excluded_external_ids": [
-      "here:here:pds:place:8409q56e-64e4d5abd397451783c4bdfe6a363885"
+      "here:here:pds:place:8409q56e-64e4d5abd397451783c4bdfe6a363885",
+      "here:here:pds:place:8409q55j-ce48e2c83e86421596b871f9f66b972e",
+      "here:here:pds:place:8409q56e-ce44f62357534abca94db2a84c257cc6",
+      "here:here:pds:place:8409q561-d6eddc3f69c974a87bc8c274f8e11964"
     ]
   },
   "openstreetmap_places": {

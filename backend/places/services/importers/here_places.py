@@ -57,6 +57,10 @@ class HerePlacesImporter:
 	BLOCKED_CATEGORY_KEYWORDS = (
 		'fitness',
 		'gym',
+		'bowling',
+		'recreation',
+		'country club',
+		'golf',
 		'spa',
 		'salon',
 		'beauty',
@@ -86,6 +90,15 @@ class HerePlacesImporter:
 		'manufacturer',
 	)
 	BLOCKED_NAME_KEYWORDS = (
+		'lanes',
+		'bowling',
+		'club house',
+		'clubhouse',
+		'country club',
+		'golf',
+		'naval',
+		'naws',
+		'point mugu',
 		'fitness',
 		'gym',
 		'spa',
@@ -110,6 +123,12 @@ class HerePlacesImporter:
 		'bakeries usa',
 	)
 	CLOSED_STATUS_KEYWORDS = ('closed', 'temporarily closed', 'permanently closed')
+	BLOCKED_ADDRESS_KEYWORDS = (
+		'point mugu',
+		'naws',
+		'naval',
+		'base',
+	)
 
 	CITY_CONFIG = {
 		City.VENTURA: {'label': 'Ventura, CA', 'lat': 34.2805, 'lon': -119.2945, 'radius': 12000},
@@ -233,6 +252,17 @@ class HerePlacesImporter:
 			if part
 		)
 		if any(keyword in name_text for keyword in self.BLOCKED_NAME_KEYWORDS):
+			return False
+
+		address_text = ' '.join(
+			part
+			for part in [
+				str((item.get('address') or {}).get('label') or '').strip().lower(),
+				str((item.get('address') or {}).get('street') or '').strip().lower(),
+			]
+			if part
+		)
+		if any(keyword in address_text for keyword in self.BLOCKED_ADDRESS_KEYWORDS):
 			return False
 
 		category_text = self._category_text(item)

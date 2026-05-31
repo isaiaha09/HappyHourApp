@@ -163,6 +163,12 @@ type MappedPlace = PlaceListItem & {
   markerKey: string;
 };
 
+type BrowsePlace = PlaceListItem & {
+  fullAddress: string;
+  locationId: number;
+  listKey: string;
+};
+
 const initialProfileFormState: ProfileFormState = {
   username: '',
   email: '',
@@ -195,6 +201,7 @@ const initialBusinessAttachments: BusinessAttachmentBuckets = {
   health_permit: [],
   abc_license: [],
   proof_of_address_control: [],
+  proof_of_authority: [],
 };
 
 const verificationAttachmentMimeTypes = ['application/pdf', 'image/*'];
@@ -498,8 +505,10 @@ function AppScreen() {
     verifiedBusinessesOnly,
   });
   const filteredPlaceKey = filteredPlaces.map((place) => place.id).join('|');
+  const displayedBrowsePlaces = getBrowsePlacesForDisplay(filteredPlaces);
 
   const mappedPlaces = showMapBrowse ? getMappedPlacesForBrowse(filteredPlaces) : [];
+  const browseResultCount = showMapBrowse ? mappedPlaces.length : displayedBrowsePlaces.length;
   const mappedPlaceKey = mappedPlaces.map((place) => place.markerKey).join('|');
   const displayedMapPlaces = showMapBrowse ? renderedMappedPlaces : [];
   const unplacedPlaceCount = filteredPlaces.filter((place) => (
@@ -1234,7 +1243,7 @@ function AppScreen() {
     if (shouldShowMapResults) {
       const resultsChanged = (
         mapSearchResultsKey !== renderedMapResultsKey ||
-        filteredPlaces.length !== renderedMapResultCount
+        mapSearchResultPool.length !== renderedMapResultCount
       );
 
       if (resultsChanged) {
@@ -1242,7 +1251,7 @@ function AppScreen() {
         setVisibleMapResultCount(nextVisibleCount);
         setRenderedMapSearchResults(mapSearchResultPool.slice(0, nextVisibleCount));
         setRenderedMapResultsKey(mapSearchResultsKey);
-        setRenderedMapResultCount(filteredPlaces.length);
+        setRenderedMapResultCount(mapSearchResultPool.length);
       }
 
       if (!showMapResultsCard) {
@@ -1299,9 +1308,9 @@ function AppScreen() {
       clearShowMoreMapResultsTimer();
     });
   }, [
-    filteredPlaces.length,
     mapResultsOpacity,
     mapSearchResultPool,
+    mapSearchResultPool.length,
     mapSearchResultsKey,
     renderedMapResultCount,
     renderedMapResultsKey,
@@ -2310,6 +2319,7 @@ function AppScreen() {
         business_name: profileForm.business_name,
         business_city: profileForm.business_city,
         business_venue_type: profileForm.business_venue_type,
+        supporting_details: profileForm.supporting_details,
       };
       const response = await createInformalBusinessProfile(apiBaseUrl, payload);
       setProfileForm(initialProfileFormState);
@@ -3062,7 +3072,7 @@ function AppScreen() {
                   onToggleOperatingDay={handleToggleOperatingDay}
                   onToggleVenueType={handleToggleVenueType}
                   onToggleVerifiedBusinessesOnly={handleToggleVerifiedBusinessesOnly}
-                  resultCount={filteredPlaces.length}
+                  resultCount={browseResultCount}
                   searchQuery={searchQuery}
                   selectedDealDays={selectedDealDays}
                   selectedCity={selectedCity}
@@ -3252,8 +3262,8 @@ function AppScreen() {
                       <FlatList
                         columnWrapperStyle={browseListColumns > 1 ? styles.placeCardColumn : undefined}
                         contentContainerStyle={[styles.listContent, browseListColumns > 1 ? styles.listContentLandscape : null]}
-                        data={filteredPlaces}
-                        keyExtractor={(item) => item.id.toString()}
+                        data={displayedBrowsePlaces}
+                        keyExtractor={(item) => item.listKey}
                         key={browseListColumns}
                         initialNumToRender={6}
                         numColumns={browseListColumns}
@@ -3267,7 +3277,7 @@ function AppScreen() {
                             onPress={() => handleSelectPlace(item)}
                           />
                         )}
-                        ListEmptyComponent={filteredPlaces.length === 0 ? <Text style={styles.emptyStateText}>{getBrowseEmptyStateMessage(normalizedSearchQuery)}</Text> : null}
+                        ListEmptyComponent={displayedBrowsePlaces.length === 0 ? <Text style={styles.emptyStateText}>{getBrowseEmptyStateMessage(normalizedSearchQuery)}</Text> : null}
                         showsVerticalScrollIndicator={false}
                       />
                     )}
@@ -3401,7 +3411,7 @@ function AnimatedListPlaceCard({
   revealToken,
 }: {
   browseListColumns: number;
-  item: PlaceListItem;
+  item: BrowsePlace;
   listRevealEnabled: boolean;
   onPress: () => void;
   revealIndex: number;
@@ -3606,6 +3616,30 @@ function getMappedPlacesForBrowse(filteredPlaces: PlaceListItem[]): MappedPlace[
         },
       ];
     })
+  ));
+}
+
+function getBrowsePlacesForDisplay(filteredPlaces: PlaceListItem[]): BrowsePlace[] {
+  return filteredPlaces.flatMap((place) => (
+    getPlaceLocations(place).map((location) => ({
+      ...place,
+      city: location.city,
+      city_label: location.city_label,
+      address_line_1: location.address_line_1,
+      address_line_2: location.address_line_2,
+      neighborhood: location.neighborhood,
+      state: location.state,
+      postal_code: location.postal_code,
+      latitude: location.latitude,
+      longitude: location.longitude,
+      phone_number: location.phone_number,
+      website_url: location.website_url,
+      image_urls: location.image_urls,
+      fullAddress: formatPlaceAddress(location),
+      locationId: location.id,
+      listKey: `${place.slug}:${location.id}`,
+      locations: [location],
+    }))
   ));
 }
 
