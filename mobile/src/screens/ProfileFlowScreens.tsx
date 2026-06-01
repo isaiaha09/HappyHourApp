@@ -229,6 +229,14 @@ export type EmailVerificationScreenProps = {
   verificationCode: string;
 };
 
+export type BusinessClaimReviewPendingScreenProps = {
+  errorMessage: string | null;
+  isLandscape: boolean;
+  message: string | null;
+  onBack: () => void;
+  session: SignupResponse | null;
+};
+
 export type ContactSupportScreenProps = {
   errorMessage: string | null;
   initialMessage?: string;
@@ -357,6 +365,17 @@ function AutoScrollTextInput({ onBeforeAutoScroll, onFocus, scrollViewRef, ...pr
   );
 }
 
+function PasswordToggleIcon({ isVisible }: { isVisible: boolean }) {
+  return (
+    <View style={styles.passwordEyeIcon}>
+      <View style={styles.passwordEyeOutline}>
+        <View style={styles.passwordEyePupil} />
+      </View>
+      {isVisible ? <View style={styles.passwordEyeSlash} /> : null}
+    </View>
+  );
+}
+
 function PasswordField({ onBeforeAutoScroll, onChangeText, scrollViewRef, value }: PasswordFieldProps) {
   const [isVisible, setIsVisible] = useState(false);
 
@@ -370,8 +389,12 @@ function PasswordField({ onBeforeAutoScroll, onChangeText, scrollViewRef, value 
         style={[styles.profileInput, styles.passwordFieldInput]}
         value={value}
       />
-      <Pressable onPress={() => setIsVisible((current) => !current)} style={styles.passwordToggleButton}>
-        <Text style={styles.passwordToggleText}>{isVisible ? 'Hide' : 'View'}</Text>
+      <Pressable
+        accessibilityLabel={isVisible ? 'Hide password' : 'Show password'}
+        onPress={() => setIsVisible((current) => !current)}
+        style={styles.passwordToggleButton}
+      >
+        <PasswordToggleIcon isVisible={isVisible} />
       </Pressable>
     </View>
   );
@@ -789,6 +812,59 @@ export function EmailVerificationScreen({ errorMessage, isLandscape, message, on
               style={[styles.linkButtonSecondaryWide, secondsRemaining > 0 || submitting ? styles.linkButtonDisabled : null]}
             >
               <Text style={styles.linkButtonSecondaryText}>Resend verification code</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </KeyboardAwareFormScreen>
+    </View>
+  );
+}
+
+export function BusinessClaimReviewPendingScreen({ errorMessage, isLandscape, message, onBack, session }: BusinessClaimReviewPendingScreenProps) {
+  const businessName = session?.business_name || 'your business';
+  const reviewMessage = message || session?.claim_review_message || `DiningDealz has received your business profile creation claim for ${businessName}. We will email you after review is complete.`;
+  const reviewStatus = session?.claim_status ? session.claim_status.replace(/_/g, ' ') : 'submitted';
+  const reviewTitle = session?.claim_status === 'rejected' ? 'Claim review update' : 'Claim received';
+
+  return (
+    <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
+      <KeyboardAwareFormScreen>
+        <ScrollView
+          contentContainerStyle={[styles.profileScrollContent, styles.createProfileScrollContent]}
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <Pressable onPress={onBack} style={styles.backButton}>
+            <Text style={styles.backButtonText}>Back to login</Text>
+          </Pressable>
+
+          <View style={styles.profileCard}>
+            <Text style={styles.detailCity}>Business claim status</Text>
+            <Text style={styles.detailTitle}>{reviewTitle}</Text>
+            <Text style={styles.profileIntroText}>{reviewMessage}</Text>
+
+            {errorMessage ? (
+              <View style={styles.errorBanner}>
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.dashboardSectionCard}>
+              <Text style={styles.dashboardSectionTitle}>Review details</Text>
+              <Text style={styles.dashboardSupportText}>Business: {businessName}</Text>
+              <Text style={styles.dashboardSupportText}>Claim status: {reviewStatus}</Text>
+              <Text style={styles.dashboardSupportText}>Account email: {session?.email || 'Unavailable'}</Text>
+            </View>
+
+            <View style={styles.dashboardCalloutCard}>
+              <Text style={styles.dashboardSectionTitle}>What happens next</Text>
+              <Text style={styles.dashboardSupportText}>DiningDealz will send an approval or rejection email after manual review is complete.</Text>
+              <Text style={styles.dashboardSupportText}>Business dashboard access stays locked until the claim is approved.</Text>
+            </View>
+
+            <Pressable onPress={onBack} style={styles.linkButton}>
+              <Text style={styles.linkButtonText}>Return to login</Text>
             </Pressable>
           </View>
         </ScrollView>

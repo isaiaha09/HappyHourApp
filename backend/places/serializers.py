@@ -144,6 +144,9 @@ class AccountResponseSerializer(serializers.Serializer):
 	business_status = serializers.CharField(required=False, allow_blank=True)
 	claim_id = serializers.IntegerField(required=False, allow_null=True)
 	claim_status = serializers.CharField(required=False, allow_null=True)
+	claim_pathway = serializers.CharField(required=False, allow_null=True)
+	claim_review_pending = serializers.BooleanField(required=False)
+	claim_review_message = serializers.CharField(required=False, allow_blank=True)
 	business_name = serializers.CharField(required=False, allow_blank=True)
 	email_verified = serializers.BooleanField(required=False)
 	email_verification_sent_at = serializers.DateTimeField(required=False, allow_null=True)
@@ -279,20 +282,72 @@ class CustomerSignupSerializer(serializers.Serializer):
 	first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
 	last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
 
+	def allows_rejected_business_reregistration(self):
+		return False
+
 	def validate_username(self, value):
-		if User.objects.filter(username__iexact=value).exists():
-			raise serializers.ValidationError('That username is already in use.')
 		return value.strip()
 
 	def validate_email(self, value):
-		normalized = value.strip().lower()
-		if User.objects.filter(email__iexact=normalized).exists():
-			raise serializers.ValidationError('That email is already in use.')
-		return normalized
+		return value.strip().lower()
+
+	def _get_existing_user_by_username(self, username):
+		return User.objects.filter(username__iexact=str(username or '').strip()).first()
+
+	def _get_existing_user_by_email(self, email):
+		return User.objects.filter(email__iexact=str(email or '').strip().lower()).first()
+
+	def _can_reuse_existing_business_user(self, user):
+		if user is None or not self.allows_rejected_business_reregistration():
+			return False
+		if user.business_memberships.filter(is_active=True).exists():
+			return False
+		latest_claim = user.business_claims.order_by('-created_at').first()
+		return latest_claim is not None and latest_claim.status == BusinessClaim.Status.REJECTED
+
+	def validate(self, attrs):
+		attrs = super().validate(attrs)
+		existing_username_user = self._get_existing_user_by_username(attrs.get('username'))
+		existing_email_user = self._get_existing_user_by_email(attrs.get('email'))
+
+		if existing_username_user and existing_email_user and existing_username_user.pk != existing_email_user.pk:
+			raise serializers.ValidationError({
+				'username': ['That username is already in use.'],
+				'email': ['That email is already in use.'],
+			})
+
+		existing_user = existing_username_user or existing_email_user
+		if existing_user is None:
+			return attrs
+
+		if self._can_reuse_existing_business_user(existing_user):
+			attrs['_signup_existing_user'] = existing_user
+			return attrs
+
+		errors = {}
+		if existing_username_user is not None:
+			errors['username'] = ['That username is already in use.']
+		if existing_email_user is not None:
+			errors['email'] = ['That email is already in use.']
+		raise serializers.ValidationError(errors)
+
+	def create_or_reuse_user(self, validated_data):
+		password = validated_data.pop('password')
+		existing_user = validated_data.pop('_signup_existing_user', None)
+		if existing_user is None:
+			user = User.objects.create_user(password=password, **validated_data)
+			user._signup_reused_existing_user = False
+			return user
+
+		for field_name, value in validated_data.items():
+			setattr(existing_user, field_name, value)
+		existing_user.set_password(password)
+		existing_user.save(update_fields=['username', 'email', 'first_name', 'last_name', 'password'])
+		existing_user._signup_reused_existing_user = True
+		return existing_user
 
 	def create(self, validated_data):
-		password = validated_data.pop('password')
-		user = User.objects.create_user(password=password, **validated_data)
+		user = self.create_or_reuse_user(validated_data)
 		get_or_create_account_profile(user)
 		return user
 
@@ -312,6 +367,9 @@ class ClaimedBusinessSignupSerializer(CustomerSignupSerializer):
 	photo_references = serializers.ListField(child=serializers.CharField(max_length=500), required=False, allow_empty=True)
 	verification_documents = serializers.JSONField(required=False)
 	supporting_details = serializers.CharField(max_length=4000, required=False, allow_blank=True)
+
+	def allows_rejected_business_reregistration(self):
+		return True
 
 	def validate(self, attrs):
 		attrs = super().validate(attrs)
@@ -347,10 +405,9 @@ class ClaimedBusinessSignupSerializer(CustomerSignupSerializer):
 			'supporting_details': validated_data.pop('supporting_details', ''),
 		}
 		request = self.context.get('request')
-		password = validated_data.pop('password')
 
 		with transaction.atomic():
-			user = User.objects.create_user(password=password, **validated_data)
+			user = self.create_or_reuse_user(validated_data)
 			claim = BusinessClaim.objects.create(
 				claimant=user,
 				listing_snapshot=listing_snapshot,
@@ -384,6 +441,9 @@ class EstablishedBusinessSignupSerializer(CustomerSignupSerializer):
 	photo_references = serializers.ListField(child=serializers.CharField(max_length=500), required=False, allow_empty=True)
 	verification_documents = serializers.JSONField(required=False)
 	supporting_details = serializers.CharField(max_length=4000, required=False, allow_blank=True)
+
+	def allows_rejected_business_reregistration(self):
+		return True
 
 	def validate_business_city(self, value):
 		normalized = str(value or '').strip().lower()
@@ -442,9 +502,8 @@ class EstablishedBusinessSignupSerializer(CustomerSignupSerializer):
 			'supporting_details': validated_data.pop('supporting_details', ''),
 		}
 		request = self.context.get('request')
-		password = validated_data.pop('password')
 		with transaction.atomic():
-			user = User.objects.create_user(password=password, **validated_data)
+			user = self.create_or_reuse_user(validated_data)
 			claim = BusinessClaim.objects.create(
 				claimant=user,
 				listing_snapshot=listing_snapshot,
@@ -471,6 +530,9 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 	hours_of_operation_entries = serializers.ListField(child=serializers.CharField(max_length=500), required=False, allow_empty=True)
 	photo_references = serializers.ListField(child=serializers.CharField(max_length=500), required=False, allow_empty=True)
 	supporting_details = serializers.CharField(max_length=4000, required=False, allow_blank=True)
+
+	def allows_rejected_business_reregistration(self):
+		return True
 
 	def validate_business_city(self, value):
 		normalized = str(value or '').strip().lower()
@@ -508,9 +570,8 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 		)
 
 		request = self.context.get('request')
-		password = validated_data.pop('password')
 		with transaction.atomic():
-			user = User.objects.create_user(password=password, **validated_data)
+			user = self.create_or_reuse_user(validated_data)
 			claim = BusinessClaim.objects.create(
 				claimant=user,
 				listing_snapshot=listing_snapshot,

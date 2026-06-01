@@ -25,10 +25,22 @@ class HappyHourAdminSite(AdminSite):
             'models': [
                 'Customer Accounts',
                 'Business Accounts',
+                'Business Claims',
+            ],
+        },
+        {
+            'name': 'Memberships',
+            'app_label': 'memberships',
+            'models': [
+                'Business Memberships',
+            ],
+        },
+        {
+            'name': 'Businesses',
+            'app_label': 'businesses',
+            'models': [
                 'List of Businesses',
                 'Deleted Businesses',
-                'Business Claims',
-                'Business Memberships',
             ],
         },
         {

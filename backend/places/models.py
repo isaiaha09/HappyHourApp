@@ -173,6 +173,24 @@ class BusinessClaim(models.Model):
 		REJECTED = 'rejected', 'Rejected'
 		NEEDS_INFO = 'needs_info', 'Needs Info'
 
+	class RejectionReason(models.TextChoices):
+		BUSINESS_REGISTRATION_INVALID = 'business_registration_invalid', 'Business registration document is invalid, incomplete, or unclear'
+		HEALTH_PERMIT_INVALID = 'health_permit_invalid', 'Health permit document is invalid, incomplete, or unclear'
+		ABC_LICENSE_INVALID = 'abc_license_invalid', 'ABC license document is invalid, incomplete, or unclear'
+		PROOF_OF_AUTHORITY_INVALID = 'proof_of_authority_invalid', 'Proof of authority does not verify the claimant relationship'
+		PROOF_OF_ADDRESS_CONTROL_INVALID = 'proof_of_address_control_invalid', 'Address control document is invalid, incomplete, or unclear'
+		ADDRESS_INVALID = 'address_invalid', 'Business address is invalid or does not match the claim'
+		WORK_EMAIL_UNVERIFIABLE = 'work_email_unverifiable', 'Work email could not be verified against the business'
+		WORK_PHONE_UNVERIFIABLE = 'work_phone_unverifiable', 'Work phone could not be verified against the business'
+		WEBSITE_INFO_INSUFFICIENT = 'website_info_insufficient', 'Website information is missing, inconsistent, or too limited'
+		SOCIAL_LINKS_INSUFFICIENT = 'social_links_insufficient', 'Social media links do not provide enough business verification evidence'
+		HOURS_UNCLEAR = 'hours_unclear', 'Hours of operation are incomplete or unclear'
+		OFFERS_UNCLEAR = 'offers_unclear', 'Offer or deal descriptions are incomplete or unclear'
+		SUPPORTING_DETAILS_INSUFFICIENT = 'supporting_details_insufficient', 'Supporting details do not explain the business clearly enough'
+		PHOTOS_UNCLEAR = 'photos_unclear', 'Submitted images or photo references are unclear or not usable for review'
+		BUSINESS_IDENTITY_MISMATCH = 'business_identity_mismatch', 'Submitted information does not match the claimed business identity'
+		OTHER = 'other_issue', 'Other issue not covered above'
+
 	claimant = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='business_claims', on_delete=models.CASCADE)
 	listing_snapshot = models.ForeignKey(ListingSnapshot, related_name='business_claims', on_delete=models.CASCADE)
 	pathway = models.CharField(max_length=20, choices=Pathway.choices, default=Pathway.CLAIMED)
@@ -194,6 +212,7 @@ class BusinessClaim(models.Model):
 	supporting_details = models.TextField(blank=True)
 	verification_score = models.PositiveSmallIntegerField(default=0)
 	verification_flags = models.JSONField(default=list, blank=True)
+	rejection_reason_codes = models.JSONField(default=list, blank=True)
 	reviewer_notes = models.TextField(blank=True)
 	submitted_at = models.DateTimeField(null=True, blank=True)
 	reviewed_at = models.DateTimeField(null=True, blank=True)
@@ -212,11 +231,53 @@ class BusinessClaim(models.Model):
 		verbose_name = 'Business Claim'
 		verbose_name_plural = 'Business Claims'
 		constraints = [
-			models.UniqueConstraint(fields=['claimant', 'listing_snapshot'], name='unique_claimant_listing_snapshot_claim'),
+			models.UniqueConstraint(
+				fields=['claimant', 'listing_snapshot'],
+				condition=~models.Q(status='rejected'),
+				name='unique_active_claimant_listing_snapshot_claim',
+			),
 		]
 
 	def __str__(self):
 		return f'{self.listing_snapshot.name} claim by {self.contact_name}'
+
+	@classmethod
+	def get_rejection_reason_guidance_map(cls):
+		return {
+			cls.RejectionReason.BUSINESS_REGISTRATION_INVALID: 'business registration documents adjusted or replaced with clearer, valid copies',
+			cls.RejectionReason.HEALTH_PERMIT_INVALID: 'health permit documents adjusted or replaced with clearer, valid copies',
+			cls.RejectionReason.ABC_LICENSE_INVALID: 'ABC license documents adjusted or replaced with clearer, valid copies',
+			cls.RejectionReason.PROOF_OF_AUTHORITY_INVALID: 'proof of authority documents adjusted or replaced so the claimant relationship is clearly verified',
+			cls.RejectionReason.PROOF_OF_ADDRESS_CONTROL_INVALID: 'address control documents adjusted or replaced with clearer, valid copies',
+			cls.RejectionReason.ADDRESS_INVALID: 'the business address more accurately explained or corrected',
+			cls.RejectionReason.WORK_EMAIL_UNVERIFIABLE: 'a more clearly verifiable work email tied to the business',
+			cls.RejectionReason.WORK_PHONE_UNVERIFIABLE: 'a more clearly verifiable work phone tied to the business',
+			cls.RejectionReason.WEBSITE_INFO_INSUFFICIENT: 'website details more accurately explained or updated',
+			cls.RejectionReason.SOCIAL_LINKS_INSUFFICIENT: 'social links adjusted to point to clearer business ownership or operating evidence',
+			cls.RejectionReason.HOURS_UNCLEAR: 'hours text fields adjusted or more accurately explained',
+			cls.RejectionReason.OFFERS_UNCLEAR: 'offer text fields adjusted or more accurately explained',
+			cls.RejectionReason.SUPPORTING_DETAILS_INSUFFICIENT: 'supporting text fields more accurately explained with clearer business context',
+			cls.RejectionReason.PHOTOS_UNCLEAR: 'better images or clearer photo references',
+			cls.RejectionReason.BUSINESS_IDENTITY_MISMATCH: 'business identity details corrected so they match the claim and supporting records',
+			cls.RejectionReason.OTHER: 'the rejected information corrected based on the reviewer explanation below',
+		}
+
+	def get_rejection_reason_labels(self):
+		label_map = dict(self.RejectionReason.choices)
+		return [label_map[code] for code in self.get_normalized_rejection_reason_codes() if code in label_map]
+
+	def get_normalized_rejection_reason_codes(self):
+		valid_codes = set(self.RejectionReason.values)
+		return [code for code in list(self.rejection_reason_codes or []) if code in valid_codes]
+
+	def get_reapply_guidance_lines(self):
+		guidance_map = self.get_rejection_reason_guidance_map()
+		guidance_lines = []
+		for code in self.get_normalized_rejection_reason_codes():
+			guidance = guidance_map.get(code)
+			if guidance and guidance not in guidance_lines:
+				guidance_lines.append(guidance)
+		return guidance_lines
 
 	def _domain_from_url(self, value):
 		normalized = str(value or '').strip()
@@ -438,6 +499,7 @@ class BusinessClaim(models.Model):
 
 		now = timezone.now()
 		self.status = self.Status.APPROVED
+		self.rejection_reason_codes = []
 		self.reviewer_notes = reviewer_notes or self.reviewer_notes
 		self.reviewed_by = reviewed_by
 		self.reviewed_at = now
@@ -456,14 +518,29 @@ class BusinessClaim(models.Model):
 			},
 		)
 
+		from .services.account_profiles import send_business_claim_approved_email
+
+		send_business_claim_approved_email(self.claimant, self)
+
 		return membership
 
 	def reject(self, reviewed_by=None, reviewer_notes=''):
+		rejection_reason_codes = self.get_normalized_rejection_reason_codes()
+		rejection_notes = str(reviewer_notes or self.reviewer_notes or '').strip()
+		if not rejection_reason_codes:
+			raise ValidationError('Select at least one structured rejection reason before rejecting a business claim.')
+		if self.RejectionReason.OTHER in rejection_reason_codes and not rejection_notes:
+			raise ValidationError('Reviewer notes are required when "Other issue not covered above" is selected.')
 		self.status = self.Status.REJECTED
 		self.reviewed_by = reviewed_by
 		self.reviewed_at = timezone.now()
-		self.reviewer_notes = reviewer_notes or self.reviewer_notes
+		self.rejection_reason_codes = rejection_reason_codes
+		self.reviewer_notes = rejection_notes
 		self.save()
+
+		from .services.account_profiles import send_business_claim_rejected_email
+
+		send_business_claim_rejected_email(self.claimant, self)
 
 
 class BusinessClaimProfileEntry(models.Model):

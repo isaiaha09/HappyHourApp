@@ -6,6 +6,55 @@ from django.utils import timezone
 from places.models import AccountProfile, BusinessClaim, ProfileAuthToken, VenueType
 
 
+def get_primary_business_claim(user, claim=None):
+	if claim is not None:
+		return claim
+	return user.business_claims.select_related('listing_snapshot').order_by('-created_at').first()
+
+
+def claim_requires_creation_review_hold(claim):
+	return bool(
+		claim is not None
+		and claim.pathway in {BusinessClaim.Pathway.ESTABLISHED, BusinessClaim.Pathway.INFORMAL}
+		and claim.status in {
+			BusinessClaim.Status.DRAFT,
+			BusinessClaim.Status.SUBMITTED,
+			BusinessClaim.Status.UNDER_REVIEW,
+			BusinessClaim.Status.NEEDS_INFO,
+			BusinessClaim.Status.REJECTED,
+		}
+	)
+
+
+def get_business_access_hold_claim(user, portal, claim=None):
+	if portal != 'business':
+		return None
+	if user.business_memberships.filter(is_active=True).exists():
+		return None
+	primary_claim = get_primary_business_claim(user, claim)
+	return primary_claim if claim_requires_creation_review_hold(primary_claim) else None
+
+
+def build_claim_review_message(claim):
+	if claim is None:
+		return ''
+	business_name = claim.listing_snapshot.name
+	if claim.status == BusinessClaim.Status.REJECTED:
+		return (
+			f'DiningDealz reviewed your business profile creation claim for {business_name}. '
+			'We sent a rejection email with the reason and the submitted materials that need correction before approval.'
+		)
+	if claim.status == BusinessClaim.Status.NEEDS_INFO:
+		return (
+			f'DiningDealz needs more information to finish reviewing your business profile creation claim for {business_name}. '
+			'Check your email for the latest review status before trying again.'
+		)
+	return (
+		f'DiningDealz has received your business profile creation claim for {business_name}. '
+		'After review is complete, we will email you an approval or rejection decision.'
+	)
+
+
 def get_or_create_account_profile(user):
 	profile, created = AccountProfile.objects.get_or_create(
 		user=user,
@@ -40,6 +89,7 @@ def build_account_response(user, portal, claim=None, token=None):
 	memberships = list(user.business_memberships.select_related('claim__listing_snapshot').all())
 	active_membership = next((membership for membership in memberships if membership.is_active), None)
 	primary_claim = claim or (claims[0] if claims else None)
+	hold_claim = primary_claim if active_membership is None and claim_requires_creation_review_hold(primary_claim) and portal == 'business' else None
 	profile = get_or_create_account_profile(user)
 
 	if active_membership:
@@ -100,6 +150,9 @@ def build_account_response(user, portal, claim=None, token=None):
 		'business_status': business_status,
 		'claim_id': primary_claim.id if primary_claim else None,
 		'claim_status': primary_claim.status if primary_claim else None,
+		'claim_pathway': primary_claim.pathway if primary_claim else None,
+		'claim_review_pending': bool(hold_claim),
+		'claim_review_message': build_claim_review_message(hold_claim),
 		'business_name': active_membership.claim.listing_snapshot.name if active_membership else (primary_claim.listing_snapshot.name if primary_claim else ''),
 		'email_verified': profile.email_is_verified,
 		'email_verification_sent_at': profile.email_verification_sent_at,
@@ -110,7 +163,7 @@ def build_account_response(user, portal, claim=None, token=None):
 		'business_contact': business_contact,
 		'requires_business_location_tracking': requires_business_location_tracking,
 		'tracked_business_location': tracked_business_location,
-		'can_access_places': True,
+		'can_access_places': not bool(hold_claim),
 	}
 
 
@@ -160,6 +213,147 @@ def send_verification_email(user, profile):
 		fail_silently=False,
 	)
 	return verification_url
+
+
+def send_business_claim_received_email(user, claim):
+	if not claim_requires_creation_review_hold(claim):
+		return
+
+	business_name = claim.listing_snapshot.name
+	html_message = (
+		f'<p>Hi {escape(user.first_name or user.username)},</p>'
+		f'<p>DiningDealz has received your business profile creation claim for <strong>{escape(business_name)}</strong>.</p>'
+		'<p>Your email is now verified. Our team will review the claim and send you an approval or rejection email after review is complete.</p>'
+		'<p>You will not receive business access until the claim is approved.</p>'
+	)
+	send_mail(
+		subject='DiningDealz received your business profile claim',
+		message=(
+			f'Hi {user.first_name or user.username},\n\n'
+			f'DiningDealz has received your business profile creation claim for {business_name}.\n\n'
+			'Your email is now verified. Our team will review the claim and send you an approval or rejection email after review is complete.\n\n'
+			'You will not receive business access until the claim is approved.'
+		),
+		html_message=html_message,
+		from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@happyhourapp.local'),
+		recipient_list=[user.email],
+		fail_silently=False,
+	)
+
+
+def send_business_claim_approved_email(user, claim):
+	app_link = str(getattr(settings, 'PROFILE_APP_LINK_URL', '') or '').strip()
+	business_name = claim.listing_snapshot.name
+	app_link_html = f'<p><a href="{escape(app_link)}">Open DiningDealz</a></p>' if app_link else ''
+	app_link_text = f'\n\nOpen DiningDealz: {app_link}' if app_link else ''
+	html_message = (
+		f'<p>Hi {escape(user.first_name or user.username)},</p>'
+		f'<p>Your business profile claim for <strong>{escape(business_name)}</strong> has been approved.</p>'
+		'<p>You can now sign in to DiningDealz and manage your business profile.</p>'
+		f'{app_link_html}'
+	)
+	send_mail(
+		subject='Your DiningDealz business profile was approved',
+		message=(
+			f'Hi {user.first_name or user.username},\n\n'
+			f'Your business profile claim for {business_name} has been approved.\n\n'
+			'You can now sign in to DiningDealz and manage your business profile.'
+			f'{app_link_text}'
+		),
+		html_message=html_message,
+		from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@happyhourapp.local'),
+		recipient_list=[user.email],
+		fail_silently=False,
+	)
+
+
+def _build_claim_submission_summary_lines(claim):
+	lines = []
+	contact_fields = [
+		('Contact name', claim.contact_name),
+		('Job title', claim.job_title),
+		('Work email', claim.work_email),
+		('Work phone', claim.work_phone),
+		('Employer address', claim.employer_address),
+		('Business website', claim.business_website_url),
+		('Supporting details', claim.supporting_details),
+	]
+	for label, value in contact_fields:
+		if str(value or '').strip():
+			lines.append(f'{label}: {value}')
+
+	for document_key, document_label in (
+		('business_registration', 'Business registration entries'),
+		('health_permit', 'Health permit entries'),
+		('abc_license', 'ABC license entries'),
+		('proof_of_address_control', 'Address control entries'),
+	):
+		values = list((claim.verification_documents or {}).get(document_key, []))
+		if values:
+			lines.append(f'{document_label}: {", ".join(values)}')
+
+	for entry_kind, label in (
+		(BusinessClaim.ProfileEntryKind.SOCIAL_MEDIA_LINK, 'Social links'),
+		(BusinessClaim.ProfileEntryKind.OFFER, 'Offer entries'),
+		(BusinessClaim.ProfileEntryKind.OPERATING_HOUR, 'Hours of operation'),
+		(BusinessClaim.ProfileEntryKind.PHOTO_REFERENCE, 'Photo references'),
+	):
+		values = claim.get_profile_entry_values(entry_kind)
+		if values:
+			lines.append(f'{label}: {", ".join(values)}')
+
+	attachment_summary = []
+	for attachment in claim.attachments.order_by('attachment_kind', 'created_at'):
+		attachment_summary.append(f'{attachment.get_attachment_kind_display()}: {attachment.original_filename}')
+	if attachment_summary:
+		lines.append(f'Submitted file uploads: {"; ".join(attachment_summary)}')
+
+	return lines
+
+
+def send_business_claim_rejected_email(user, claim):
+	business_name = claim.listing_snapshot.name
+	reviewer_notes = str(claim.reviewer_notes or '').strip()
+	rejection_reason_labels = claim.get_rejection_reason_labels()
+	reapply_guidance_lines = claim.get_reapply_guidance_lines()
+	submission_summary_lines = _build_claim_submission_summary_lines(claim)
+	reasons_html = ''.join(f'<li>{escape(label)}</li>' for label in rejection_reason_labels)
+	reasons_text = '\n'.join(f'- {label}' for label in rejection_reason_labels)
+	reapply_html = ''.join(f'<li>{escape(line)}</li>' for line in reapply_guidance_lines)
+	reapply_text = '\n'.join(f'- {line}' for line in reapply_guidance_lines)
+	summary_html = ''.join(f'<li>{escape(line)}</li>' for line in submission_summary_lines)
+	summary_text = '\n'.join(f'- {line}' for line in submission_summary_lines)
+	additional_notes_html = f'<p><strong>Additional reviewer explanation:</strong> {escape(reviewer_notes)}</p>' if reviewer_notes else ''
+	additional_notes_text = f'Additional reviewer explanation: {reviewer_notes}\n\n' if reviewer_notes else ''
+	html_message = (
+		f'<p>Hi {escape(user.first_name or user.username)},</p>'
+		f'<p>Your business profile claim for <strong>{escape(business_name)}</strong> was rejected after review.</p>'
+		'<p><strong>Review reasons:</strong></p>'
+		f'<ul>{reasons_html}</ul>'
+		f'{additional_notes_html}'
+		'<p>If you wish to try again, you must go through the registration process again and resubmit with the following items corrected, adjusted, or more clearly explained:</p>'
+		f'<ul>{reapply_html}</ul>'
+		'<p>The following submitted documents and text-field entries were part of the rejected review:</p>'
+		f'<ul>{summary_html}</ul>'
+	)
+	send_mail(
+		subject='Your DiningDealz business profile was rejected',
+		message=(
+			f'Hi {user.first_name or user.username},\n\n'
+			f'Your business profile claim for {business_name} was rejected after review.\n\n'
+			'Review reasons:\n'
+			f'{reasons_text}\n\n'
+			f'{additional_notes_text}'
+			'If you wish to try again, you must go through the registration process again and resubmit with the following items corrected, adjusted, or more clearly explained:\n'
+			f'{reapply_text}\n\n'
+			'The following submitted documents and text-field entries were part of the rejected review:\n'
+			f'{summary_text}'
+		),
+		html_message=html_message,
+		from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@happyhourapp.local'),
+		recipient_list=[user.email],
+		fail_silently=False,
+	)
 
 
 def send_username_reminder_email(user):

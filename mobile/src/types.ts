@@ -88,6 +88,9 @@ export type SignupResponse = {
   business_status?: string;
   claim_id?: number | null;
   claim_status?: string | null;
+  claim_pathway?: string | null;
+  claim_review_pending?: boolean;
+  claim_review_message?: string;
   business_name?: string;
   email_verified: boolean;
   email_verification_sent_at?: string | null;

@@ -29,7 +29,7 @@ from .serializers import (
 	build_signup_request_data,
 	sync_listing_snapshot_from_place_payload,
 )
-from .services.account_profiles import build_account_response, build_email_verification_challenge, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, send_password_reset_email, send_username_reminder_email, send_verification_email
+from .services.account_profiles import build_account_response, build_email_verification_challenge, get_business_access_hold_claim, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, send_business_claim_received_email, send_password_reset_email, send_username_reminder_email, send_verification_email
 from .models import VenueType
 from .services.source_listings import get_source_deal_payloads, get_source_place_payload, get_source_place_payloads, load_source_records
 
@@ -163,6 +163,11 @@ class LoginView(generics.GenericAPIView):
 		portal = infer_portal_for_user(user, serializer.validated_data.get('portal'))
 		if serializer.validated_data.get('email_verification_required'):
 			return Response(build_email_verification_challenge(user, portal))
+		hold_claim = get_business_access_hold_claim(user, portal)
+		if hold_claim is not None:
+			payload = build_account_response(user, portal, claim=hold_claim, token=None)
+			payload['detail'] = payload.get('claim_review_message') or ''
+			return Response(payload)
 		token = get_or_create_profile_token(user)
 		return Response(build_account_response(user, portal, token=token))
 
@@ -215,6 +220,12 @@ class BusinessSignupView(generics.GenericAPIView):
 		serializer.validated_data['listing_snapshot'] = sync_listing_snapshot_from_place_payload(place_payload)
 		user = serializer.save()
 		claim = getattr(user, '_created_business_claim', None)
+		profile = get_or_create_account_profile(user)
+		if getattr(user, '_signup_reused_existing_user', False) and profile.email_is_verified:
+			send_business_claim_received_email(user, claim)
+			payload = build_account_response(user, 'business', claim=claim, token=None)
+			payload['detail'] = payload.get('claim_review_message') or ''
+			return Response(payload, status=status.HTTP_201_CREATED)
 		return Response(build_email_verification_challenge(user, 'business', claim=claim), status=status.HTTP_201_CREATED)
 
 
@@ -227,6 +238,12 @@ class ManualBusinessSignupView(generics.GenericAPIView):
 		serializer.is_valid(raise_exception=True)
 		user = serializer.save()
 		claim = getattr(user, '_created_business_claim', None)
+		profile = get_or_create_account_profile(user)
+		if getattr(user, '_signup_reused_existing_user', False) and profile.email_is_verified:
+			send_business_claim_received_email(user, claim)
+			payload = build_account_response(user, 'business', claim=claim, token=None)
+			payload['detail'] = payload.get('claim_review_message') or ''
+			return Response(payload, status=status.HTTP_201_CREATED)
 		return Response(build_email_verification_challenge(user, 'business', claim=claim), status=status.HTTP_201_CREATED)
 
 
@@ -239,6 +256,12 @@ class InformalBusinessSignupView(generics.GenericAPIView):
 		serializer.is_valid(raise_exception=True)
 		user = serializer.save()
 		claim = getattr(user, '_created_business_claim', None)
+		profile = get_or_create_account_profile(user)
+		if getattr(user, '_signup_reused_existing_user', False) and profile.email_is_verified:
+			send_business_claim_received_email(user, claim)
+			payload = build_account_response(user, 'business', claim=claim, token=None)
+			payload['detail'] = payload.get('claim_review_message') or ''
+			return Response(payload, status=status.HTTP_201_CREATED)
 		return Response(build_email_verification_challenge(user, 'business', claim=claim), status=status.HTTP_201_CREATED)
 
 
@@ -260,6 +283,12 @@ class VerifyEmailCodeView(generics.GenericAPIView):
 
 		profile.mark_email_verified()
 		portal = infer_portal_for_user(user, serializer.validated_data.get('portal'))
+		hold_claim = get_business_access_hold_claim(user, portal)
+		if hold_claim is not None:
+			send_business_claim_received_email(user, hold_claim)
+			payload = build_account_response(user, portal, claim=hold_claim, token=None)
+			payload['detail'] = payload.get('claim_review_message') or ''
+			return Response(payload)
 		token = get_or_create_profile_token(user)
 		return Response(build_account_response(user, portal, token=token))
 
@@ -408,6 +437,9 @@ class VerifyEmailView(APIView):
 				message='Request a new verification email from your HappyHourApp dashboard and try again.',
 			), status=404)
 		account_profile.mark_email_verified()
+		hold_claim = get_business_access_hold_claim(account_profile.user, infer_portal_for_user(account_profile.user, 'business'))
+		if hold_claim is not None:
+			send_business_claim_received_email(account_profile.user, hold_claim)
 		success_redirect_url = str(getattr(settings, 'PROFILE_EMAIL_VERIFICATION_SUCCESS_URL', '') or '').strip()
 		if success_redirect_url:
 			return self._redirect_to(success_redirect_url)

@@ -2640,6 +2640,10 @@ class SourceFetchCacheTests(TestCase):
 		self.assertEqual(len(session.calls), 1)
 
 
+@override_settings(
+	EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+	PROFILE_APP_LINK_URL='diningdealz://open',
+)
 class BusinessClaimTests(APITestCase):
 	def setUp(self):
 		self.user = User.objects.create_user(username='yardhouse_mgr', email='manager@example.com', password='test-pass-123')
@@ -2684,6 +2688,9 @@ class BusinessClaimTests(APITestCase):
 		self.assertEqual(membership.user, self.user)
 		self.assertEqual(membership.claim, claim)
 		self.assertTrue(membership.is_active)
+		self.assertEqual(len(mail.outbox), 1)
+		self.assertIn('approved', mail.outbox[0].subject.lower())
+		self.assertIn('diningdealz://open', mail.outbox[0].body)
 
 	def test_draft_claim_cannot_be_approved(self):
 		claim = BusinessClaim.objects.create(
@@ -2697,6 +2704,50 @@ class BusinessClaimTests(APITestCase):
 
 		with self.assertRaises(ValidationError):
 			claim.approve(reviewed_by=self.reviewer)
+
+	def test_reject_requires_reviewer_notes_and_emails_rejection_summary(self):
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=self.snapshot,
+			pathway=BusinessClaim.Pathway.ESTABLISHED,
+			contact_name='Jane Manager',
+			job_title=BusinessClaim.JobTitle.MANAGER,
+			work_email='jane.manager@yardhouse.com',
+			work_phone='805-555-0101',
+			employer_address='501 Collection Blvd',
+			verification_documents={'business_registration': ['CA filing'], 'health_permit': ['County permit'], 'abc_license': [], 'proof_of_address_control': []},
+			verification_summary='I manage the Yard House location and can verify store promotions.',
+			supporting_details='Manager submitted payroll records.',
+			status=BusinessClaim.Status.SUBMITTED,
+		)
+		BusinessClaimAttachment.objects.create(
+			claim=claim,
+			attachment_kind=BusinessClaimAttachment.AttachmentKind.PROOF_OF_AUTHORITY,
+			file=SimpleUploadedFile('authority.pdf', b'authority', content_type='application/pdf'),
+			original_filename='authority.pdf',
+			content_type='application/pdf',
+			file_size=9,
+		)
+
+		with self.assertRaises(ValidationError):
+			claim.reject(reviewed_by=self.reviewer)
+
+		claim.rejection_reason_codes = [
+			BusinessClaim.RejectionReason.PROOF_OF_AUTHORITY_INVALID,
+			BusinessClaim.RejectionReason.PHOTOS_UNCLEAR,
+		]
+		claim.reject(reviewed_by=self.reviewer, reviewer_notes='Rejected because the submitted authority document does not match the listed manager name.')
+
+		claim.refresh_from_db()
+		self.assertEqual(claim.status, BusinessClaim.Status.REJECTED)
+		self.assertEqual(len(mail.outbox), 1)
+		self.assertIn('rejected', mail.outbox[0].subject.lower())
+		self.assertIn('Proof of authority does not verify the claimant relationship', mail.outbox[0].body)
+		self.assertIn('better images or clearer photo references', mail.outbox[0].body)
+		self.assertIn('go through the registration process again', mail.outbox[0].body)
+		self.assertIn('authority.pdf', mail.outbox[0].body)
+		self.assertIn('CA filing', mail.outbox[0].body)
+		self.assertIn('does not match the listed manager name', mail.outbox[0].body)
 
 	def test_submitted_claim_requires_proof_of_authority_for_approval(self):
 		claim = BusinessClaim.objects.create(
@@ -2868,6 +2919,76 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(claim.listing_snapshot.source_name, BusinessClaim.MANUAL_SOURCE_NAME)
 		self.assertEqual(claim.listing_snapshot.address_line_1, 'Approximate live location')
 
+	@override_settings(
+		EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+		PROFILE_EMAIL_VERIFICATION_URL_BASE='http://testserver/api/profiles/verify-email',
+	)
+	def test_verified_manual_business_claim_remains_pending_until_review(self):
+		signup_response = self.client.post(
+			reverse('manual-business-signup'),
+			{
+				'username': 'pending_bistro_owner',
+				'email': 'pendingbistro@example.com',
+				'password': 'test-pass-123',
+				'first_name': 'Casey',
+				'last_name': 'Founder',
+				'business_name': 'Pending Bistro',
+				'business_city': City.VENTURA,
+				'business_venue_type': VenueType.CAFE,
+				'business_website_url': 'https://example.com/pending-bistro',
+				'contact_name': 'Casey Founder',
+				'job_title': BusinessClaim.JobTitle.OWNER,
+				'work_email': 'owner@pendingbistro.com',
+				'work_phone': '805-555-0133',
+				'employer_address': '123 Ventura Ave',
+				'address_not_applicable': False,
+				'verification_documents': json.dumps({
+					'business_registration': ['Articles of organization'],
+					'health_permit': ['Ventura County permit receipt'],
+				}),
+				'proof_of_authority_attachments': [SimpleUploadedFile('owner-proof.pdf', b'owner-proof', content_type='application/pdf')],
+				'supporting_details': 'Ready for review.',
+			},
+			format='multipart',
+		)
+
+		self.assertEqual(signup_response.status_code, 201)
+		profile = AccountProfile.objects.get(user__username='pending_bistro_owner')
+
+		verify_response = self.client.post(
+			reverse('profile-verify-email-code'),
+			{
+				'username': 'pending_bistro_owner',
+				'portal': 'business',
+				'code': profile.email_verification_code,
+			},
+			format='json',
+		)
+
+		self.assertEqual(verify_response.status_code, 200)
+		self.assertEqual(verify_response.data['auth_token'], '')
+		self.assertTrue(verify_response.data['claim_review_pending'])
+		self.assertEqual(verify_response.data['claim_pathway'], BusinessClaim.Pathway.ESTABLISHED)
+		self.assertFalse(verify_response.data['can_access_places'])
+		self.assertIn('DiningDealz has received your business profile creation claim', verify_response.data['detail'])
+		self.assertEqual(len(mail.outbox), 2)
+		self.assertIn('received your business profile claim', mail.outbox[1].subject.lower())
+
+		login_response = self.client.post(
+			reverse('profile-login'),
+			{
+				'portal': 'business',
+				'identifier': 'pending_bistro_owner',
+				'password': 'test-pass-123',
+			},
+			format='json',
+		)
+
+		self.assertEqual(login_response.status_code, 200)
+		self.assertEqual(login_response.data['auth_token'], '')
+		self.assertTrue(login_response.data['claim_review_pending'])
+		self.assertFalse(login_response.data.get('email_verification_required', False))
+
 	def test_manual_mobile_business_signup_defaults_to_live_location_placeholder(self):
 		response = self.client.post(
 			reverse('manual-business-signup'),
@@ -2902,6 +3023,158 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertTrue(claim.address_not_applicable)
 		self.assertEqual(claim.listing_snapshot.venue_type, VenueType.MOBILE)
 		self.assertEqual(claim.listing_snapshot.address_line_1, 'Approximate live location')
+
+	@override_settings(
+		EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+		PROFILE_EMAIL_VERIFICATION_URL_BASE='http://testserver/api/profiles/verify-email',
+	)
+	def test_manual_business_signup_reuses_rejected_account_with_same_email(self):
+		rejected_user = User.objects.create_user(
+			username='old_bistro_owner',
+			email='retry@example.com',
+			password='old-pass-123',
+			first_name='Old',
+			last_name='Owner',
+		)
+		AccountProfile.objects.create(user=rejected_user, email_verified_at=timezone.now())
+		rejected_snapshot = ListingSnapshot.objects.create(
+			name='Rejected Bistro',
+			city=City.VENTURA,
+			venue_type=VenueType.CAFE,
+			address_line_1='10 Main St',
+			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+		)
+		BusinessClaim.objects.create(
+			claimant=rejected_user,
+			listing_snapshot=rejected_snapshot,
+			pathway=BusinessClaim.Pathway.ESTABLISHED,
+			status=BusinessClaim.Status.REJECTED,
+			contact_name='Old Owner',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='retry@example.com',
+			work_phone='805-555-1111',
+			employer_address='10 Main St',
+			business_website_url='https://old-bistro.example.com',
+			verification_summary='Rejected attempt.',
+			rejection_reason_codes=[BusinessClaim.RejectionReason.ADDRESS_INVALID],
+		)
+
+		response = self.client.post(
+			reverse('manual-business-signup'),
+			{
+				'username': 'retry_bistro_owner',
+				'email': 'retry@example.com',
+				'password': 'new-pass-123',
+				'first_name': 'Retry',
+				'last_name': 'Owner',
+				'business_name': 'Retry Bistro',
+				'business_city': City.OXNARD,
+				'business_venue_type': VenueType.CAFE,
+				'business_website_url': 'https://retry-bistro.example.com',
+				'contact_name': 'Retry Owner',
+				'job_title': BusinessClaim.JobTitle.OWNER,
+				'work_email': 'retry@example.com',
+				'work_phone': '805-555-0133',
+				'employer_address': '55 Harbor Blvd',
+				'address_not_applicable': False,
+				'verification_documents': json.dumps({
+					'business_registration': ['Updated registration'],
+					'health_permit': ['Updated county permit'],
+					'abc_license': [],
+					'proof_of_address_control': [],
+				}),
+				'proof_of_authority_attachments': [SimpleUploadedFile('owner-proof.pdf', b'owner-proof', content_type='application/pdf')],
+				'supporting_details': 'Retry submission after rejection.',
+			},
+			format='multipart',
+		)
+
+		self.assertEqual(response.status_code, 201)
+		rejected_user.refresh_from_db()
+		self.assertEqual(rejected_user.username, 'retry_bistro_owner')
+		self.assertTrue(rejected_user.check_password('new-pass-123'))
+		self.assertEqual(BusinessClaim.objects.filter(claimant=rejected_user).count(), 2)
+		latest_claim = BusinessClaim.objects.filter(claimant=rejected_user).order_by('-created_at').first()
+		self.assertEqual(latest_claim.status, BusinessClaim.Status.SUBMITTED)
+		self.assertEqual(response.data['claim_status'], BusinessClaim.Status.SUBMITTED)
+		self.assertTrue(response.data['claim_review_pending'])
+		self.assertFalse(response.data.get('email_verification_required', False))
+		self.assertIn('has received your business profile creation claim', response.data['detail'])
+
+	@patch('places.views.get_source_place_payload')
+	def test_claimed_business_signup_allows_new_attempt_after_rejection_for_same_user(self, mock_get_source_place_payload):
+		mock_get_source_place_payload.return_value = {
+			'id': 402,
+			'name': 'Finney\'s Crafthouse',
+			'slug': 'finneys-crafthouse',
+			'city': City.VENTURA,
+			'venue_type': VenueType.RESTAURANT,
+			'address_line_1': '494 E Main St',
+			'address_line_2': '',
+			'neighborhood': 'Downtown',
+			'state': 'CA',
+			'postal_code': '93001',
+			'phone_number': '805-555-0199',
+			'website_url': 'https://example.com/finneys',
+			'locations': [],
+		}
+		rejected_user = User.objects.create_user(username='finneys_retry', email='finneys-retry@example.com', password='old-pass-123')
+		AccountProfile.objects.create(user=rejected_user)
+		snapshot = ListingSnapshot.objects.create(
+			name="Finney's Crafthouse",
+			listing_slug='finneys-crafthouse',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='494 E Main St',
+		)
+		BusinessClaim.objects.create(
+			claimant=rejected_user,
+			listing_snapshot=snapshot,
+			pathway=BusinessClaim.Pathway.CLAIMED,
+			status=BusinessClaim.Status.REJECTED,
+			contact_name='Pat Owner',
+			job_title=BusinessClaim.JobTitle.MANAGER,
+			work_email='pat@finneys.com',
+			work_phone='805-555-0100',
+			employer_address='494 E Main St, Ventura, CA 93001',
+			business_website_url='https://finneysventura.example.com',
+			verification_summary='Rejected claimed-business attempt.',
+			rejection_reason_codes=[BusinessClaim.RejectionReason.PROOF_OF_AUTHORITY_INVALID],
+		)
+
+		response = self.client.post(
+			reverse('business-signup'),
+			{
+				'username': 'finneys_retry',
+				'email': 'finneys-retry@example.com',
+				'password': 'test-pass-123',
+				'first_name': 'Pat',
+				'last_name': 'Owner',
+				'business_slug': 'finneys-crafthouse',
+				'contact_name': 'Pat Owner',
+				'job_title': BusinessClaim.JobTitle.MANAGER,
+				'work_email': 'pat@finneys.com',
+				'work_phone': '805-555-0100',
+				'employer_address': '494 E Main St, Ventura, CA 93001',
+				'address_not_applicable': False,
+				'business_website_url': 'https://finneysventura.example.com',
+				'social_media_links': json.dumps(['https://instagram.com/finneysventura']),
+				'verification_documents': json.dumps({
+					'business_registration': ['CA business license #123'],
+					'health_permit': ['Ventura County permit #A-55'],
+					'abc_license': [],
+					'proof_of_address_control': [],
+				}),
+				'proof_of_authority_attachments': [SimpleUploadedFile('manager-proof.pdf', b'proof', content_type='application/pdf')],
+				'supporting_details': 'Second attempt after rejection.',
+			},
+			format='multipart',
+		)
+
+		self.assertEqual(response.status_code, 201)
+		self.assertEqual(BusinessClaim.objects.filter(claimant=rejected_user, listing_snapshot=snapshot).count(), 2)
+		latest_claim = BusinessClaim.objects.filter(claimant=rejected_user, listing_snapshot=snapshot).order_by('-created_at').first()
+		self.assertEqual(latest_claim.status, BusinessClaim.Status.SUBMITTED)
 
 	def test_informal_business_signup_creates_informal_claim(self):
 		response = self.client.post(
@@ -3805,6 +4078,192 @@ class BusinessClaimAdminTests(TestCase):
 		self.assertContains(response, 'https://claimed-place.example.com')
 		self.assertContains(response, BusinessClaim.Pathway.ESTABLISHED)
 		self.assertContains(response, '0.0000 GB')
+		self.assertContains(response, 'Business registration document is invalid, incomplete, or unclear')
+		self.assertContains(response, 'Attempt #')
+		self.assertContains(response, 'Current attempt')
+		self.assertContains(response, 'No earlier claim attempts found.')
+
+	def test_change_view_shows_prior_rejected_attempts_for_approved_claim(self):
+		first_rejected_user = User.objects.create_user(username='prior_owner_one', email='prior-owner-one@example.com', password='test-pass-123')
+		second_rejected_user = User.objects.create_user(username='prior_owner_two', email='prior-owner-two@example.com', password='test-pass-123')
+		approved_user = User.objects.create_user(username='approved_owner', email='approved-owner@example.com', password='test-pass-123')
+
+		BusinessClaim.objects.create(
+			claimant=first_rejected_user,
+			listing_snapshot=self.snapshot,
+			pathway=BusinessClaim.Pathway.ESTABLISHED,
+			status=BusinessClaim.Status.REJECTED,
+			contact_name='Owner Name',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='owner@claimed-place.com',
+			work_phone='805-555-0101',
+			employer_address='123 Main St',
+			business_website_url='https://claimed-place.example.com',
+			verification_summary='First rejected attempt.',
+			reviewed_at=timezone.now(),
+			reviewed_by=self.admin_user,
+			rejection_reason_codes=[BusinessClaim.RejectionReason.PROOF_OF_AUTHORITY_INVALID],
+		)
+		BusinessClaim.objects.create(
+			claimant=second_rejected_user,
+			listing_snapshot=self.snapshot,
+			pathway=BusinessClaim.Pathway.ESTABLISHED,
+			status=BusinessClaim.Status.REJECTED,
+			contact_name='Owner Name',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='owner@claimed-place.com',
+			work_phone='805-555-0102',
+			employer_address='123 Main St',
+			business_website_url='https://claimed-place.example.com',
+			verification_summary='Second rejected attempt.',
+			reviewed_at=timezone.now(),
+			reviewed_by=self.admin_user,
+			rejection_reason_codes=[BusinessClaim.RejectionReason.ADDRESS_INVALID],
+		)
+		approved_claim = BusinessClaim.objects.create(
+			claimant=approved_user,
+			listing_snapshot=self.snapshot,
+			pathway=BusinessClaim.Pathway.ESTABLISHED,
+			status=BusinessClaim.Status.APPROVED,
+			contact_name='Owner Name',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='owner@claimed-place.com',
+			work_phone='805-555-0199',
+			employer_address='123 Main St',
+			business_website_url='https://claimed-place.example.com',
+			verification_summary='Approved attempt.',
+			reviewed_at=timezone.now(),
+			reviewed_by=self.admin_user,
+		)
+
+		self.client.force_login(self.admin_user)
+		response = self.client.get(reverse('happyhour_admin:places_businessclaim_change', args=[approved_claim.pk]))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(self.admin.attempt_number_display(approved_claim), 4)
+		self.assertIn('Yes', str(self.admin.current_attempt_display(approved_claim)))
+		self.assertEqual(self.admin.prior_rejection_count_display(approved_claim), 2)
+		self.assertContains(response, 'Older rejected attempts stay in the database for audit history.')
+		self.assertContains(response, 'Prior rejections')
+		self.assertContains(response, 'Rejected')
+		self.assertContains(response, 'prior_owner_one')
+		self.assertContains(response, 'prior_owner_two')
+
+	def test_changelist_can_filter_claims_with_prior_rejections(self):
+		prior_rejected_user = User.objects.create_user(username='prior_filter_owner', email='prior-filter-owner@example.com', password='test-pass-123')
+		approved_user = User.objects.create_user(username='approved_filter_owner', email='approved-filter-owner@example.com', password='test-pass-123')
+		other_snapshot = ListingSnapshot.objects.create(
+			name='Other Place',
+			city=City.OXNARD,
+			venue_type=VenueType.CAFE,
+			address_line_1='456 Side St',
+			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+		)
+		other_user = User.objects.create_user(username='isolated_owner', email='isolated-owner@example.com', password='test-pass-123')
+
+		BusinessClaim.objects.create(
+			claimant=prior_rejected_user,
+			listing_snapshot=self.snapshot,
+			pathway=BusinessClaim.Pathway.ESTABLISHED,
+			status=BusinessClaim.Status.REJECTED,
+			contact_name='Owner Name',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='owner@claimed-place.com',
+			work_phone='805-555-0105',
+			employer_address='123 Main St',
+			business_website_url='https://claimed-place.example.com',
+			verification_summary='Rejected attempt for filter coverage.',
+			reviewed_at=timezone.now(),
+			reviewed_by=self.admin_user,
+			rejection_reason_codes=[BusinessClaim.RejectionReason.ADDRESS_INVALID],
+		)
+		BusinessClaim.objects.create(
+			claimant=approved_user,
+			listing_snapshot=self.snapshot,
+			pathway=BusinessClaim.Pathway.ESTABLISHED,
+			status=BusinessClaim.Status.APPROVED,
+			contact_name='Owner Name',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='owner@claimed-place.com',
+			work_phone='805-555-0106',
+			employer_address='123 Main St',
+			business_website_url='https://claimed-place.example.com',
+			verification_summary='Approved attempt for filter coverage.',
+			reviewed_at=timezone.now(),
+			reviewed_by=self.admin_user,
+		)
+		BusinessClaim.objects.create(
+			claimant=other_user,
+			listing_snapshot=other_snapshot,
+			pathway=BusinessClaim.Pathway.ESTABLISHED,
+			status=BusinessClaim.Status.SUBMITTED,
+			contact_name='Other Owner',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='other@other-place.com',
+			work_phone='805-555-0107',
+			employer_address='456 Side St',
+			business_website_url='https://other-place.example.com',
+			verification_summary='Independent attempt with no prior rejection.',
+		)
+
+		self.client.force_login(self.admin_user)
+		response = self.client.get(reverse('happyhour_admin:places_businessclaim_changelist'), {'has_prior_rejections': 'yes'})
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'approved_filter_owner')
+		self.assertContains(response, 'claim_owner')
+		self.assertNotContains(response, 'isolated_owner')
+
+	def test_changelist_shows_attempt_number_and_current_attempt_marker(self):
+		first_rejected_user = User.objects.create_user(username='attempt_owner_one', email='attempt-one@example.com', password='test-pass-123')
+		second_user = User.objects.create_user(username='attempt_owner_two', email='attempt-two@example.com', password='test-pass-123')
+
+		BusinessClaim.objects.create(
+			claimant=first_rejected_user,
+			listing_snapshot=self.snapshot,
+			pathway=BusinessClaim.Pathway.ESTABLISHED,
+			status=BusinessClaim.Status.REJECTED,
+			contact_name='Owner Name',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='owner@claimed-place.com',
+			work_phone='805-555-0101',
+			employer_address='123 Main St',
+			business_website_url='https://claimed-place.example.com',
+			verification_summary='First rejected attempt.',
+			reviewed_at=timezone.now(),
+			reviewed_by=self.admin_user,
+			rejection_reason_codes=[BusinessClaim.RejectionReason.PROOF_OF_AUTHORITY_INVALID],
+		)
+		latest_claim = BusinessClaim.objects.create(
+			claimant=second_user,
+			listing_snapshot=self.snapshot,
+			pathway=BusinessClaim.Pathway.ESTABLISHED,
+			status=BusinessClaim.Status.SUBMITTED,
+			contact_name='Owner Name',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='owner@claimed-place.com',
+			work_phone='805-555-0102',
+			employer_address='123 Main St',
+			business_website_url='https://claimed-place.example.com',
+			verification_summary='Latest attempt.',
+		)
+
+		self.client.force_login(self.admin_user)
+		response = self.client.get(reverse('happyhour_admin:places_businessclaim_changelist'))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'Attempt #')
+		self.assertContains(response, 'Current attempt')
+		self.assertEqual(self.admin.attempt_number_display(latest_claim), 3)
+		self.assertIn('Yes', str(self.admin.current_attempt_display(latest_claim)))
+		self.assertIn('No', str(self.admin.current_attempt_display(self.claim)))
+
+	def test_delete_is_available_for_business_claims(self):
+		request = RequestFactory().get('/admin/places/businessclaim/')
+		request.user = self.admin_user
+
+		self.assertTrue(self.admin.has_delete_permission(request, self.claim))
+		self.assertIn('delete_selected', self.admin.get_actions(request))
 
 
 class HappyHourAdminSiteTests(TestCase):

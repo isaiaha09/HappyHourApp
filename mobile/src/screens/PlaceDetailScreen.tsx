@@ -31,7 +31,7 @@ export function PlaceDetailScreen({
   const selectedPlaceMapRegion = getPlacePreviewRegion(selectedPlaceLocation ?? selectedPlace);
 
   return (
-    <View style={[styles.detailScreen, isLandscape ? styles.detailScreenLandscape : null]}>
+    <View style={[styles.screen, isLandscape ? styles.screenLandscape : null]}>
       <ScrollView
         contentContainerStyle={[styles.detailScrollContent, isLandscape ? styles.detailScrollContentLandscape : null]}
         showsVerticalScrollIndicator={false}

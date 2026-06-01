@@ -1,14 +1,15 @@
 from urllib.parse import urlparse
 
+from django import forms
 from django.contrib import admin, messages
 from django.contrib.auth.admin import GroupAdmin, UserAdmin
 from django.contrib.auth.models import Group, User
 from django.core.exceptions import ValidationError
-from django.db.models import Prefetch, Q
+from django.db.models import Exists, OuterRef, Prefetch, Q
 from django.http import JsonResponse
 from django.http import HttpResponseRedirect
 from django.urls import path, reverse
-from django.utils.html import format_html
+from django.utils.html import format_html, format_html_join
 from django.utils.text import slugify
 from django.utils import timezone
 
@@ -22,6 +23,44 @@ from .services.source_listings import get_listing_source_name, load_canonical_so
 
 
 LIVE_DISCOVERY_SOURCE_NAMES = {HerePlacesImporter.source_name}
+
+
+class BusinessClaimAdminForm(forms.ModelForm):
+	rejection_reason_codes = forms.MultipleChoiceField(
+		required=False,
+		choices=BusinessClaim.RejectionReason.choices,
+		widget=forms.CheckboxSelectMultiple,
+		help_text='Select every document, field, address, or evidence issue that applies when rejecting this claim.',
+	)
+
+	class Meta:
+		model = BusinessClaim
+		fields = '__all__'
+
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		self.fields['rejection_reason_codes'].initial = self.instance.get_normalized_rejection_reason_codes() if self.instance.pk else []
+
+	def clean_rejection_reason_codes(self):
+		selected_codes = list(self.cleaned_data.get('rejection_reason_codes') or [])
+		valid_codes = set(BusinessClaim.RejectionReason.values)
+		return [code for code in selected_codes if code in valid_codes]
+
+	def clean(self):
+		cleaned_data = super().clean()
+		status_value = cleaned_data.get('status')
+		selected_codes = cleaned_data.get('rejection_reason_codes') or []
+		reviewer_notes = str(cleaned_data.get('reviewer_notes') or '').strip()
+		if status_value == BusinessClaim.Status.REJECTED:
+			if not selected_codes:
+				raise forms.ValidationError('Select at least one rejection reason before rejecting this claim.')
+			if BusinessClaim.RejectionReason.OTHER in selected_codes and not reviewer_notes:
+				raise forms.ValidationError('Add reviewer notes when you select "Other issue not covered above."')
+		return cleaned_data
+
+	def save(self, commit=True):
+		self.instance.rejection_reason_codes = self.cleaned_data.get('rejection_reason_codes') or []
+		return super().save(commit=commit)
 
 
 def _normalize_lookup_text(value):
@@ -652,12 +691,37 @@ class BusinessClaimAttachmentInline(admin.TabularInline):
 
 @admin.register(BusinessClaim, site=happyhour_admin_site)
 class BusinessClaimAdmin(admin.ModelAdmin):
+	class PriorRejectionFilter(admin.SimpleListFilter):
+		title = 'Prior rejections'
+		parameter_name = 'has_prior_rejections'
+
+		def lookups(self, request, model_admin):
+			return (
+				('yes', 'Has prior rejections'),
+				('no', 'No prior rejections'),
+			)
+
+		def queryset(self, request, queryset):
+			value = self.value()
+			if value not in {'yes', 'no'}:
+				return queryset
+
+			prior_rejections = BusinessClaim.objects.filter(
+				listing_snapshot_id=OuterRef('listing_snapshot_id'),
+				status=BusinessClaim.Status.REJECTED,
+			).exclude(pk=OuterRef('pk'))
+			queryset = queryset.annotate(has_prior_rejections=Exists(prior_rejections))
+			if value == 'yes':
+				return queryset.filter(has_prior_rejections=True)
+			return queryset.filter(has_prior_rejections=False)
+
+	form = BusinessClaimAdminForm
 	actions = ['mark_under_review', 'approve_selected_claims', 'reject_selected_claims']
 	inlines = (BusinessClaimProfileEntryInline, BusinessClaimAttachmentInline)
-	list_display = ('listing_snapshot', 'contact_name', 'claimant', 'status', 'verification_score_display', 'verification_flags_display', 'work_email', 'submitted_at', 'reviewed_at')
-	list_filter = ('status', 'listing_snapshot__city')
+	list_display = ('listing_snapshot', 'contact_name', 'claimant', 'status', 'attempt_number_display', 'current_attempt_display', 'prior_rejection_count_display', 'verification_score_display', 'verification_flags_display', 'work_email', 'submitted_at', 'reviewed_at')
+	list_filter = ('status', 'listing_snapshot__city', PriorRejectionFilter)
 	search_fields = ('listing_snapshot__name', 'contact_name', 'claimant__username', 'work_email')
-	readonly_fields = ('verification_score', 'verification_flags_display', 'submitted_at', 'reviewed_at', 'reviewed_by', 'created_at', 'updated_at')
+	readonly_fields = ('verification_score', 'verification_flags_display', 'attempt_number_display', 'current_attempt_display', 'prior_rejection_count_display', 'attempt_history_display', 'submitted_at', 'reviewed_at', 'reviewed_by', 'created_at', 'updated_at')
 	autocomplete_fields = ('claimant', 'listing_snapshot', 'reviewed_by')
 	list_select_related = ('listing_snapshot', 'claimant', 'reviewed_by')
 	list_per_page = 25
@@ -673,14 +737,46 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 			'description': 'These are the claim-level materials submitted by the business claimant for review. Uploaded files and structured profile details appear in the inline sections below.',
 		}),
 		('Admin review', {
-			'fields': ('reviewer_notes', 'reviewed_by', 'reviewed_at'),
-			'description': 'Use admin actions to mark claims under review, approve them, or reject them.',
+			'fields': ('rejection_reason_codes', 'reviewer_notes', 'reviewed_by', 'reviewed_at'),
+			'description': 'Select structured rejection reasons before rejecting a claim. Reviewer notes remain available for additional claim-specific detail.',
+		}),
+		('Attempt history', {
+			'fields': ('attempt_number_display', 'current_attempt_display', 'prior_rejection_count_display', 'attempt_history_display'),
+			'description': 'Older rejected attempts stay in the database for audit history. Approval should be treated as the current winning outcome, while prior attempts remain visible here.',
 		}),
 		('Timestamps', {
 			'fields': ('submitted_at', 'created_at', 'updated_at'),
 			'classes': ('collapse',),
 		}),
 	)
+
+	def _get_attempt_history_queryset(self, obj):
+		if not obj or not obj.pk:
+			return BusinessClaim.objects.none()
+
+		query = Q(listing_snapshot_id=obj.listing_snapshot_id)
+		listing_name = str(obj.listing_snapshot.name or '').strip()
+		work_email = str(obj.work_email or '').strip()
+		website_url = str(obj.business_website_url or obj.listing_snapshot.website_url or '').strip()
+		claimant_email = str(getattr(obj.claimant, 'email', '') or '').strip()
+
+		if listing_name and work_email:
+			query |= Q(listing_snapshot__name__iexact=listing_name, work_email__iexact=work_email)
+		if listing_name and website_url:
+			query |= Q(listing_snapshot__name__iexact=listing_name, business_website_url__iexact=website_url)
+		if listing_name and claimant_email:
+			query |= Q(listing_snapshot__name__iexact=listing_name, claimant__email__iexact=claimant_email)
+
+		return BusinessClaim.objects.select_related('claimant', 'listing_snapshot', 'reviewed_by').filter(query).exclude(pk=obj.pk).order_by('-created_at').distinct()
+
+	def _get_attempt_history_claims(self, obj):
+		return list(self._get_attempt_history_queryset(obj))
+
+	def _get_attempt_group_claims(self, obj):
+		if not obj or not obj.pk:
+			return []
+		attempts = [obj, *self._get_attempt_history_claims(obj)]
+		return sorted(attempts, key=lambda claim: (claim.created_at, claim.pk))
 
 	@admin.action(description='Mark selected claims under review')
 	def mark_under_review(self, request, queryset):
@@ -700,12 +796,29 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 
 	@admin.action(description='Reject selected claims')
 	def reject_selected_claims(self, request, queryset):
+		rejected = 0
 		for claim in queryset:
-			claim.reject(reviewed_by=request.user)
-		self.message_user(request, f'{queryset.count()} claim(s) rejected.')
+			try:
+				claim.reject(reviewed_by=request.user, reviewer_notes=claim.reviewer_notes)
+				rejected += 1
+			except ValidationError as error:
+				self.message_user(request, f'Could not reject {claim}: {error}', level='ERROR')
+		self.message_user(request, f'{rejected} claim(s) rejected.')
 
 	def save_model(self, request, obj, form, change):
 		obj.refresh_verification_state(save=False)
+		previous_status = None
+		if change:
+			previous_status = BusinessClaim.objects.only('status').get(pk=obj.pk).status
+
+		if change and obj.status == BusinessClaim.Status.APPROVED and previous_status != BusinessClaim.Status.APPROVED:
+			obj.approve(reviewed_by=request.user, reviewer_notes=obj.reviewer_notes)
+			return
+
+		if change and obj.status == BusinessClaim.Status.REJECTED and previous_status != BusinessClaim.Status.REJECTED:
+			obj.reject(reviewed_by=request.user, reviewer_notes=obj.reviewer_notes)
+			return
+
 		if obj.status == BusinessClaim.Status.UNDER_REVIEW and not obj.reviewed_by:
 			obj.reviewed_by = request.user
 		super().save_model(request, obj, form, change)
@@ -713,6 +826,51 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 	@admin.display(description='Trust score')
 	def verification_score_display(self, obj):
 		return obj.verification_score
+
+	@admin.display(description='Attempt #')
+	def attempt_number_display(self, obj):
+		for index, claim in enumerate(self._get_attempt_group_claims(obj), start=1):
+			if claim.pk == obj.pk:
+				return index
+		return 1
+
+	@admin.display(description='Current attempt')
+	def current_attempt_display(self, obj):
+		attempts = self._get_attempt_group_claims(obj)
+		if not attempts:
+			return 'Yes'
+		latest_attempt = attempts[-1]
+		if latest_attempt.pk == obj.pk:
+			return 'Yes'
+		return 'No'
+
+	@admin.display(description='Prior rejections')
+	def prior_rejection_count_display(self, obj):
+		return sum(1 for claim in self._get_attempt_history_claims(obj) if claim.status == BusinessClaim.Status.REJECTED)
+
+	@admin.display(description='Attempt history')
+	def attempt_history_display(self, obj):
+		attempts = self._get_attempt_history_claims(obj)
+		if not attempts:
+			return 'No earlier claim attempts found.'
+
+		status_labels = dict(BusinessClaim.Status.choices)
+		items = []
+		for claim in attempts:
+			change_url = reverse('happyhour_admin:places_businessclaim_change', args=[claim.pk])
+			reviewed_label = timezone.localtime(claim.reviewed_at).strftime('%b. %d, %Y, %I:%M %p') if claim.reviewed_at else 'Not reviewed yet'
+			claimant_label = claim.claimant.username if claim.claimant_id else claim.contact_name
+			items.append(
+				format_html(
+					'<li><a href="{}">{}</a>: {} for {} on {}</li>',
+					change_url,
+					claim.contact_name,
+					status_labels.get(claim.status, claim.status),
+					claimant_label,
+					reviewed_label,
+				)
+			)
+		return format_html('<ul style="margin:0; padding-left: 18px;">{}</ul>', format_html_join('', '{}', ((item,) for item in items)))
 
 	@admin.display(description='Verification flags')
 	def verification_flags_display(self, obj):

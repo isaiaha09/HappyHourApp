@@ -64,6 +64,7 @@ import { PlaceDetailScreen } from './src/screens/PlaceDetailScreen';
 import { SplashScreen } from './src/screens/SplashScreen';
 import {
   AuthPortalScreen,
+  BusinessClaimReviewPendingScreen,
   BusinessSearchScreen,
   BusinessVerificationScreen,
   ContactSupportScreen,
@@ -149,7 +150,7 @@ const cityMapRegions: Record<Exclude<CityFilterValue, 'all'>, Region> = {
 };
 const mobileBusinessVenueType = 'mobile';
 const multipleAreasBusinessCityValue = multipleAreasBusinessCityOption.value;
-type AppScreenMode = 'splash' | 'auth' | 'browse' | 'profiles' | 'settings' | 'support' | 'privacy-policy' | 'terms-of-service' | 'business-search' | 'business-claim' | 'manual-business-claim' | 'informal-business-claim' | 'email-verification';
+type AppScreenMode = 'splash' | 'auth' | 'browse' | 'profiles' | 'settings' | 'support' | 'privacy-policy' | 'terms-of-service' | 'business-search' | 'business-claim' | 'manual-business-claim' | 'informal-business-claim' | 'email-verification' | 'business-claim-review-pending';
 type OnboardingTransitionDirection = 'forward' | 'backward';
 type TransitionAxis = 'x' | 'y';
 
@@ -706,7 +707,7 @@ function AppScreen() {
     };
   }, [apiBaseUrl]);
   const availableClaimPlaces = consolidatePlacesBySlug(availableProfilePlaces);
-  const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'settings', 'support', 'privacy-policy', 'terms-of-service', 'business-search', 'business-claim', 'manual-business-claim', 'informal-business-claim', 'email-verification']);
+  const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'settings', 'support', 'privacy-policy', 'terms-of-service', 'business-search', 'business-claim', 'manual-business-claim', 'informal-business-claim', 'email-verification', 'business-claim-review-pending']);
   const profileStackTransitionScreens = new Set<AppScreenMode>(['profiles', 'settings', 'support', 'privacy-policy', 'terms-of-service']);
   const currentOnboardingScreen = onboardingScreenKeys.has(screenMode) ? screenMode : null;
   const usesOnboardingSlideTransition = currentOnboardingScreen !== null || incomingOnboardingScreen !== null;
@@ -2044,6 +2045,40 @@ function AppScreen() {
     navigateScreen('email-verification', direction);
   }
 
+  function moveToBusinessClaimReviewPending(response: SignupResponse, direction: OnboardingTransitionDirection = 'forward') {
+    dismissKeyboardForScreenTransition();
+    setPendingEmailVerification(null);
+    setEmailVerificationCode('');
+    setAuthenticatedSession(response);
+    setAuthPortal(response.portal);
+    setAuthMessage(null);
+    setProfileErrorMessage(null);
+    setProfileMessage(response.claim_review_message ?? 'DiningDealz has received your business profile creation claim.');
+    setShowLoginTwoFactorCodeField(false);
+    setLoginForm(initialLoginFormState);
+    navigateScreen('business-claim-review-pending', direction);
+  }
+
+  function handleBusinessSignupResponse(response: EmailVerificationChallengeResponse) {
+    if (response.email_verification_required) {
+      moveToEmailVerification(response);
+      return;
+    }
+
+    if (!response.auth_token && response.claim_review_pending) {
+      moveToBusinessClaimReviewPending(response);
+      return;
+    }
+
+    setAuthenticatedSession(response);
+    setPendingEmailVerification(null);
+    setAuthPortal(response.portal);
+    setAuthMessage(null);
+    setProfileErrorMessage(null);
+    setProfileMessage(response.detail ?? 'Business profile submitted successfully.');
+    navigateScreen('profiles', 'forward');
+  }
+
   async function handleLogin() {
     setLoginSubmitting(true);
     setProfileErrorMessage(null);
@@ -2056,8 +2091,12 @@ function AppScreen() {
         two_factor_code: loginForm.two_factor_code.trim(),
       };
       const response = await loginProfile(apiBaseUrl, payload);
-      if (response.email_verification_required || !response.auth_token) {
+      if (response.email_verification_required) {
         moveToEmailVerification(response);
+        return;
+      }
+      if (!response.auth_token && response.claim_review_pending) {
+        moveToBusinessClaimReviewPending(response);
         return;
       }
 
@@ -2101,6 +2140,10 @@ function AppScreen() {
         code: emailVerificationCode,
         portal: pendingEmailVerification.portal,
       });
+      if (!response.auth_token && response.claim_review_pending) {
+        moveToBusinessClaimReviewPending(response);
+        return;
+      }
       dismissKeyboardForScreenTransition();
       setPendingEmailVerification(null);
       setEmailVerificationCode('');
@@ -2241,7 +2284,7 @@ function AppScreen() {
       setBusinessAttachments(initialBusinessAttachments);
       setSelectedClaimPlace(null);
       setSelectedClaimLocationId(null);
-      moveToEmailVerification(response);
+      handleBusinessSignupResponse(response);
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
     } finally {
@@ -2288,7 +2331,7 @@ function AppScreen() {
       setBusinessAttachments(initialBusinessAttachments);
       setSelectedClaimPlace(null);
       setSelectedClaimLocationId(null);
-      moveToEmailVerification(response);
+      handleBusinessSignupResponse(response);
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
     } finally {
@@ -2326,7 +2369,7 @@ function AppScreen() {
       setBusinessAttachments(initialBusinessAttachments);
       setSelectedClaimPlace(null);
       setSelectedClaimLocationId(null);
-      moveToEmailVerification(response);
+      handleBusinessSignupResponse(response);
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
     } finally {
@@ -2478,6 +2521,14 @@ function AppScreen() {
     setProfileErrorMessage(null);
     setProfileMessage(null);
     setEmailVerificationCode('');
+    navigateScreen('auth', 'backward');
+  }
+
+  function handleBackFromBusinessClaimReviewPending() {
+    dismissKeyboardForScreenTransition();
+    setAuthenticatedSession(null);
+    setProfileErrorMessage(null);
+    setProfileMessage(null);
     navigateScreen('auth', 'backward');
   }
 
@@ -2810,6 +2861,18 @@ function AppScreen() {
               pendingVerification={pendingEmailVerification}
               submitting={profileSubmitting}
               verificationCode={emailVerificationCode}
+            />
+          </SafeAreaView>
+        );
+      case 'business-claim-review-pending':
+        return (
+          <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
+            <BusinessClaimReviewPendingScreen
+              errorMessage={profileErrorMessage}
+              isLandscape={isLandscape}
+              message={profileMessage}
+              onBack={handleBackFromBusinessClaimReviewPending}
+              session={authenticatedSession}
             />
           </SafeAreaView>
         );
