@@ -4083,7 +4083,7 @@ class BusinessClaimAdminTests(TestCase):
 		self.assertContains(response, 'Current attempt')
 		self.assertContains(response, 'No earlier claim attempts found.')
 
-	def test_change_view_shows_prior_rejected_attempts_for_same_user_only(self):
+	def test_change_view_shows_prior_attempts_for_same_account_email(self):
 		prior_rejected_claim = BusinessClaim.objects.create(
 			claimant=self.claimant,
 			listing_snapshot=self.snapshot,
@@ -4102,6 +4102,31 @@ class BusinessClaimAdminTests(TestCase):
 		)
 		BusinessClaim.objects.filter(pk=prior_rejected_claim.pk).update(created_at=self.claim.created_at - timedelta(minutes=1))
 		prior_rejected_claim.refresh_from_db()
+		other_snapshot = ListingSnapshot.objects.create(
+			name='Second Business',
+			city=City.OXNARD,
+			venue_type=VenueType.CAFE,
+			address_line_1='456 Harbor Blvd',
+			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+		)
+		cross_business_claim = BusinessClaim.objects.create(
+			claimant=self.claimant,
+			listing_snapshot=other_snapshot,
+			pathway=BusinessClaim.Pathway.ESTABLISHED,
+			status=BusinessClaim.Status.REJECTED,
+			contact_name='Owner Name',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='owner+second@claimed-place.com',
+			work_phone='805-555-0109',
+			employer_address='456 Harbor Blvd',
+			business_website_url='https://second-business.example.com',
+			verification_summary='Rejected attempt for a different business under the same account email.',
+			reviewed_at=timezone.now(),
+			reviewed_by=self.admin_user,
+			rejection_reason_codes=[BusinessClaim.RejectionReason.ADDRESS_INVALID],
+		)
+		BusinessClaim.objects.filter(pk=cross_business_claim.pk).update(created_at=self.claim.created_at - timedelta(seconds=30))
+		cross_business_claim.refresh_from_db()
 		other_user = User.objects.create_user(username='other_attempt_owner', email='other-attempt-owner@example.com', password='test-pass-123')
 		BusinessClaim.objects.create(
 			claimant=other_user,
@@ -4124,14 +4149,15 @@ class BusinessClaimAdminTests(TestCase):
 		response = self.client.get(reverse('happyhour_admin:places_businessclaim_change', args=[self.claim.pk]))
 
 		self.assertEqual(response.status_code, 200)
-		self.assertEqual(self.admin.attempt_number_display(self.claim), 2)
+		self.assertEqual(self.admin.attempt_number_display(self.claim), 3)
 		self.assertIn('Yes', str(self.admin.current_attempt_display(self.claim)))
-		self.assertEqual(self.admin.prior_rejection_count_display(self.claim), 1)
-		self.assertContains(response, 'Older rejected attempts stay in the database for audit history.')
+		self.assertEqual(self.admin.prior_rejection_count_display(self.claim), 2)
+		self.assertContains(response, 'Older attempts for the same claimant account email stay in the database for audit history.')
 		self.assertContains(response, 'Prior rejections')
 		self.assertContains(response, 'Rejected')
 		self.assertContains(response, self.claimant.username)
 		self.assertContains(response, prior_rejected_claim.contact_name)
+		self.assertContains(response, cross_business_claim.listing_snapshot.name)
 		self.assertNotContains(response, 'other_attempt_owner')
 
 	def test_changelist_can_filter_claims_with_prior_rejections(self):
@@ -4197,6 +4223,64 @@ class BusinessClaimAdminTests(TestCase):
 		self.assertContains(response, repeated_claim.claimant.username)
 		self.assertNotContains(response, 'claim_owner')
 		self.assertNotContains(response, 'isolated_owner')
+
+	def test_changelist_groups_attempts_by_account_email_across_business_names(self):
+		repeat_claim_user = User.objects.create_user(username='email_group_owner', email='email-group@example.com', password='test-pass-123')
+		first_snapshot = ListingSnapshot.objects.create(
+			name='First Business',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='111 Main St',
+			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+		)
+		second_snapshot = ListingSnapshot.objects.create(
+			name='Second Business',
+			city=City.OXNARD,
+			venue_type=VenueType.CAFE,
+			address_line_1='222 Harbor Blvd',
+			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+		)
+
+		first_claim = BusinessClaim.objects.create(
+			claimant=repeat_claim_user,
+			listing_snapshot=first_snapshot,
+			pathway=BusinessClaim.Pathway.ESTABLISHED,
+			status=BusinessClaim.Status.REJECTED,
+			contact_name='Owner Name',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='owner@first-business.com',
+			work_phone='805-555-0201',
+			employer_address='111 Main St',
+			business_website_url='https://first-business.example.com',
+			verification_summary='First rejected attempt.',
+			reviewed_at=timezone.now(),
+			reviewed_by=self.admin_user,
+			rejection_reason_codes=[BusinessClaim.RejectionReason.PROOF_OF_AUTHORITY_INVALID],
+		)
+		second_claim = BusinessClaim.objects.create(
+			claimant=repeat_claim_user,
+			listing_snapshot=second_snapshot,
+			pathway=BusinessClaim.Pathway.ESTABLISHED,
+			status=BusinessClaim.Status.SUBMITTED,
+			contact_name='Owner Name',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='owner@second-business.com',
+			work_phone='805-555-0202',
+			employer_address='222 Harbor Blvd',
+			business_website_url='https://second-business.example.com',
+			verification_summary='Second attempt under a new business name.',
+		)
+
+		self.client.force_login(self.admin_user)
+		response = self.client.get(reverse('happyhour_admin:places_businessclaim_changelist'))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(self.admin.attempt_number_display(first_claim), 1)
+		self.assertEqual(self.admin.attempt_number_display(second_claim), 2)
+		self.assertEqual(self.admin.prior_rejection_count_display(second_claim), 1)
+		self.assertIn('No', str(self.admin.current_attempt_display(first_claim)))
+		self.assertIn('Yes', str(self.admin.current_attempt_display(second_claim)))
+		self.assertContains(response, 'email-group@example.com')
 
 	def test_changelist_shows_attempt_number_and_current_attempt_marker(self):
 		repeat_claim_user = User.objects.create_user(username='attempt_owner', email='attempt-owner@example.com', password='test-pass-123')

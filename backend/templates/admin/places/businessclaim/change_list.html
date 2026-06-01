@@ -65,11 +65,9 @@
     }
 
     function getGroupKey(row) {
-      const claimantCell = row.querySelector('.field-claimant');
-      const listingCell = row.querySelector('.field-listing_snapshot');
-      const claimant = claimantCell ? claimantCell.textContent.trim() : '';
-      const listing = listingCell ? listingCell.textContent.trim() : '';
-      return claimant + '::' + listing;
+      const accountEmailCell = row.querySelector('.field-claimant_email_display');
+      const accountEmail = accountEmailCell ? accountEmailCell.textContent.trim().toLowerCase() : '';
+      return accountEmail;
     }
 
     function getAttemptLabel(count) {
@@ -118,7 +116,7 @@
       toggle.type = 'button';
       toggle.className = 'claim-attempt-toggle';
       toggle.setAttribute('aria-expanded', 'false');
-      toggle.setAttribute('aria-label', 'Show previous attempts for this claimant');
+      toggle.setAttribute('aria-label', 'Show previous attempts for this account email');
 
       arrow.className = 'claim-attempt-toggle__arrow';
       arrow.textContent = '>';
@@ -138,7 +136,7 @@
       toggle.addEventListener('click', function () {
         const nextExpanded = toggle.getAttribute('aria-expanded') !== 'true';
         toggle.setAttribute('aria-expanded', nextExpanded ? 'true' : 'false');
-        toggle.setAttribute('aria-label', nextExpanded ? 'Hide previous attempts for this claimant' : 'Show previous attempts for this claimant');
+        toggle.setAttribute('aria-label', nextExpanded ? 'Hide previous attempts for this account email' : 'Show previous attempts for this account email');
         group.leadRow.classList.toggle('claim-attempt-group-open', nextExpanded);
 
         group.historyRows.forEach(function (row) {

@@ -707,8 +707,7 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 				return queryset
 
 			prior_rejections = BusinessClaim.objects.filter(
-				listing_snapshot_id=OuterRef('listing_snapshot_id'),
-				claimant_id=OuterRef('claimant_id'),
+				claimant__email=OuterRef('claimant__email'),
 				status=BusinessClaim.Status.REJECTED,
 			).exclude(pk=OuterRef('pk'))
 			queryset = queryset.annotate(has_prior_rejections=Exists(prior_rejections))
@@ -720,7 +719,7 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 	form = BusinessClaimAdminForm
 	actions = ['mark_under_review', 'approve_selected_claims', 'reject_selected_claims']
 	inlines = (BusinessClaimProfileEntryInline, BusinessClaimAttachmentInline)
-	list_display = ('listing_snapshot', 'contact_name', 'claimant', 'status', 'attempt_number_display', 'current_attempt_display', 'prior_rejection_count_display', 'verification_score_display', 'verification_flags_display', 'work_email', 'submitted_at', 'reviewed_at')
+	list_display = ('listing_snapshot', 'contact_name', 'claimant_email_display', 'claimant', 'status', 'attempt_number_display', 'current_attempt_display', 'prior_rejection_count_display', 'verification_score_display', 'verification_flags_display', 'work_email', 'submitted_at', 'reviewed_at')
 	list_filter = ('status', 'listing_snapshot__city', PriorRejectionFilter)
 	search_fields = ('listing_snapshot__name', 'contact_name', 'claimant__username', 'work_email')
 	readonly_fields = ('verification_score', 'verification_flags_display', 'attempt_number_display', 'current_attempt_display', 'prior_rejection_count_display', 'attempt_history_display', 'submitted_at', 'reviewed_at', 'reviewed_by', 'created_at', 'updated_at')
@@ -744,7 +743,7 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 		}),
 		('Attempt history', {
 			'fields': ('attempt_number_display', 'current_attempt_display', 'prior_rejection_count_display', 'attempt_history_display'),
-			'description': 'Older rejected attempts stay in the database for audit history. Approval should be treated as the current winning outcome, while prior attempts remain visible here.',
+			'description': 'Older attempts for the same claimant account email stay in the database for audit history. Approval should be treated as the current winning outcome, while prior attempts remain visible here.',
 		}),
 		('Timestamps', {
 			'fields': ('submitted_at', 'created_at', 'updated_at'),
@@ -754,18 +753,12 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 
 	def get_queryset(self, request):
 		queryset = self.model._default_manager.get_queryset()
-		same_user_attempts = BusinessClaim.objects.filter(
-			claimant_id=OuterRef('claimant_id'),
-		).filter(
-			Q(listing_snapshot_id=OuterRef('listing_snapshot_id')) |
-			Q(
-				listing_snapshot__name=OuterRef('listing_snapshot__name'),
-				listing_snapshot__city=OuterRef('listing_snapshot__city'),
-			)
+		same_email_attempts = BusinessClaim.objects.filter(
+			claimant__email=OuterRef('claimant__email'),
 		).order_by('-created_at', '-pk')
 		queryset = queryset.annotate(
-			attempt_group_latest_created_at=Subquery(same_user_attempts.values('created_at')[:1]),
-			attempt_group_latest_pk=Subquery(same_user_attempts.values('pk')[:1]),
+			attempt_group_latest_created_at=Subquery(same_email_attempts.values('created_at')[:1]),
+			attempt_group_latest_pk=Subquery(same_email_attempts.values('pk')[:1]),
 		)
 		ordering = self.get_ordering(request)
 		if ordering:
@@ -779,22 +772,9 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 		if not obj or not obj.pk:
 			return BusinessClaim.objects.none()
 
-		query = Q(listing_snapshot_id=obj.listing_snapshot_id)
-		listing_name = str(getattr(obj.listing_snapshot, 'name', '') or '').strip()
-		listing_city = getattr(obj.listing_snapshot, 'city', '')
-		work_email = str(obj.work_email or '').strip()
-		website_url = str(obj.business_website_url or getattr(obj.listing_snapshot, 'website_url', '') or '').strip()
-
-		if listing_name and listing_city:
-			query |= Q(listing_snapshot__name__iexact=listing_name, listing_snapshot__city=listing_city)
-		elif listing_name and work_email:
-			query |= Q(listing_snapshot__name__iexact=listing_name, work_email__iexact=work_email)
-		elif listing_name and website_url:
-			query |= Q(listing_snapshot__name__iexact=listing_name, business_website_url__iexact=website_url)
-
 		return BusinessClaim.objects.select_related('claimant', 'listing_snapshot', 'reviewed_by').filter(
-			claimant_id=obj.claimant_id,
-		).filter(query).exclude(pk=obj.pk).order_by('-created_at', '-pk')
+			claimant__email=getattr(obj.claimant, 'email', ''),
+		).exclude(pk=obj.pk).order_by('-created_at', '-pk')
 
 	def _get_attempt_history_claims(self, obj):
 		return list(self._get_attempt_history_queryset(obj))
@@ -854,6 +834,10 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 	def verification_score_display(self, obj):
 		return obj.verification_score
 
+	@admin.display(description='Account email', ordering='claimant__email')
+	def claimant_email_display(self, obj):
+		return getattr(obj.claimant, 'email', '')
+
 	@admin.display(description='Attempt #')
 	def attempt_number_display(self, obj):
 		for index, claim in enumerate(self._get_attempt_group_claims(obj), start=1):
@@ -887,11 +871,13 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 			change_url = reverse('happyhour_admin:places_businessclaim_change', args=[claim.pk])
 			reviewed_label = timezone.localtime(claim.reviewed_at).strftime('%b. %d, %Y, %I:%M %p') if claim.reviewed_at else 'Not reviewed yet'
 			claimant_label = claim.claimant.username if claim.claimant_id else claim.contact_name
+			business_label = getattr(claim.listing_snapshot, 'name', '') or 'Unknown business'
 			items.append(
 				format_html(
-					'<li><a href="{}">{}</a>: {} for {} on {}</li>',
+					'<li><a href="{}">{}</a> for {}: {} for {} on {}</li>',
 					change_url,
 					claim.contact_name,
+					business_label,
 					status_labels.get(claim.status, claim.status),
 					claimant_label,
 					reviewed_label,
