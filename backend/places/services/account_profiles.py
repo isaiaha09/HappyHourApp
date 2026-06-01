@@ -65,6 +65,8 @@ def get_or_create_account_profile(user):
 	if not created and not profile.billing_portal_url:
 		profile.billing_portal_url = _default_billing_portal_url(user)
 		profile.save(update_fields=['billing_portal_url', 'updated_at'])
+	if reconcile_expired_email_change(user, profile=profile):
+		profile.refresh_from_db()
 	return profile
 
 
@@ -127,10 +129,14 @@ def build_account_response(user, portal, claim=None, token=None):
 		}
 
 	tracked_business_location = {}
+	business_location_tracking_available = False
+	business_location_tracking_enabled = False
 	requires_business_location_tracking = False
 	tracked_snapshot = active_membership.claim.listing_snapshot if active_membership else (primary_claim.listing_snapshot if primary_claim else None)
 	if tracked_snapshot is not None and (tracked_snapshot.venue_type == VenueType.MOBILE or tracked_snapshot.serves_multiple_areas):
-		requires_business_location_tracking = True
+		business_location_tracking_available = True
+		business_location_tracking_enabled = bool(profile.business_location_tracking_enabled)
+		requires_business_location_tracking = business_location_tracking_enabled
 		tracked_business_location = {
 			'latitude': tracked_snapshot.tracked_location_latitude,
 			'longitude': tracked_snapshot.tracked_location_longitude,
@@ -161,6 +167,8 @@ def build_account_response(user, portal, claim=None, token=None):
 		'billing_portal_url': profile.billing_portal_url if profile_type == 'business' else '',
 		'approved_businesses': approved_businesses,
 		'business_contact': business_contact,
+		'business_location_tracking_available': business_location_tracking_available,
+		'business_location_tracking_enabled': business_location_tracking_enabled,
 		'requires_business_location_tracking': requires_business_location_tracking,
 		'tracked_business_location': tracked_business_location,
 		'can_access_places': not bool(hold_claim),
@@ -213,6 +221,51 @@ def send_verification_email(user, profile):
 		fail_silently=False,
 	)
 	return verification_url
+
+
+def send_email_change_reverted_email(user, previous_email, attempted_email):
+	html_message = (
+		f'<p>Hi {escape(user.first_name or user.username)},</p>'
+		f'<p>Your requested DiningDealz email change to <strong>{escape(attempted_email)}</strong> was not completed within 24 hours.</p>'
+		f'<p>Your profile has been restored to your previously verified email address: <strong>{escape(previous_email)}</strong>.</p>'
+		'<p>You may log in as normal.</p>'
+	)
+	send_mail(
+		subject='Your DiningDealz email change was reverted',
+		message=(
+			f'Hi {user.first_name or user.username},\n\n'
+			f'Your requested DiningDealz email change to {attempted_email} was not completed within 24 hours.\n\n'
+			f'Your profile has been restored to your previously verified email address: {previous_email}.\n\n'
+			'You may log in as normal.'
+		),
+		html_message=html_message,
+		from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@happyhourapp.local'),
+		recipient_list=[previous_email],
+		fail_silently=False,
+	)
+
+
+def reconcile_expired_email_change(user, profile=None):
+	profile = profile or get_or_create_account_profile(user)
+	if not profile.pending_email_change_is_expired():
+		return False
+
+	previous_email = profile.previous_verified_email.strip().lower()
+	attempted_email = profile.pending_email.strip().lower() or user.email
+	if previous_email and user.email != previous_email:
+		user.email = previous_email
+		user.save(update_fields=['email'])
+
+	profile.email_verified_at = timezone.now()
+	profile.email_verification_token = ''
+	profile.clear_email_verification_code()
+	profile.email_verification_sent_at = None
+	profile.clear_pending_email_change()
+	profile.save(update_fields=['email_verified_at', 'email_verification_token', 'email_verification_code', 'email_verification_code_sent_at', 'email_verification_sent_at', 'pending_email', 'previous_verified_email', 'email_change_requested_at', 'updated_at'])
+
+	if previous_email:
+		send_email_change_reverted_email(user, previous_email, attempted_email)
+	return True
 
 
 def send_business_claim_received_email(user, claim):

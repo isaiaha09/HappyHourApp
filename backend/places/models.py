@@ -121,7 +121,7 @@ class City(models.TextChoices):
 class VenueType(models.TextChoices):
 	RESTAURANT = 'restaurant', 'Restaurant'
 	FAST_FOOD = 'fast_food', 'Fast Food'
-	MOBILE = 'mobile', 'On the Move'
+	MOBILE = 'mobile', 'Serves Multiple Locations / Service Area Business'
 	BAR = 'bar', 'Bar'
 	CAFE = 'cafe', 'Cafe'
 	SHOP = 'shop', 'Shop'
@@ -858,6 +858,10 @@ class AccountProfile(models.Model):
 	email_verification_code_sent_at = models.DateTimeField(null=True, blank=True)
 	email_verification_sent_at = models.DateTimeField(null=True, blank=True)
 	email_verified_at = models.DateTimeField(null=True, blank=True)
+	pending_email = models.EmailField(blank=True)
+	previous_verified_email = models.EmailField(blank=True)
+	email_change_requested_at = models.DateTimeField(null=True, blank=True)
+	business_location_tracking_enabled = models.BooleanField(default=True)
 	two_factor_enabled = models.BooleanField(default=False)
 	two_factor_secret = models.CharField(max_length=64, blank=True)
 	two_factor_pending_secret = models.CharField(max_length=64, blank=True)
@@ -914,6 +918,26 @@ class AccountProfile(models.Model):
 		self.email_verification_code = ''
 		self.email_verification_code_sent_at = None
 
+	def get_email_change_revert_timeout(self):
+		hours = int(getattr(settings, 'PROFILE_EMAIL_CHANGE_REVERT_HOURS', 24) or 24)
+		return timedelta(hours=max(hours, 1))
+
+	def get_email_change_revert_deadline(self):
+		if self.email_change_requested_at is None:
+			return None
+		return self.email_change_requested_at + self.get_email_change_revert_timeout()
+
+	def pending_email_change_is_expired(self):
+		deadline = self.get_email_change_revert_deadline()
+		if not self.pending_email or not self.previous_verified_email or deadline is None:
+			return False
+		return timezone.now() >= deadline
+
+	def clear_pending_email_change(self):
+		self.pending_email = ''
+		self.previous_verified_email = ''
+		self.email_change_requested_at = None
+
 	@property
 	def email_is_verified(self):
 		return self.email_verified_at is not None
@@ -922,7 +946,8 @@ class AccountProfile(models.Model):
 		self.email_verified_at = timezone.now()
 		self.email_verification_token = ''
 		self.clear_email_verification_code()
-		self.save(update_fields=['email_verified_at', 'email_verification_token', 'email_verification_code', 'email_verification_code_sent_at', 'updated_at'])
+		self.clear_pending_email_change()
+		self.save(update_fields=['email_verified_at', 'email_verification_token', 'email_verification_code', 'email_verification_code_sent_at', 'pending_email', 'previous_verified_email', 'email_change_requested_at', 'updated_at'])
 
 	def begin_two_factor_setup(self):
 		self.two_factor_pending_secret = pyotp.random_base32()

@@ -82,6 +82,7 @@ export type SignupResponse = {
   email: string;
   first_name: string;
   last_name: string;
+  detail?: string;
   auth_token: string;
   portal: 'customer' | 'business';
   profile_type: 'customer' | 'business';
@@ -113,6 +114,8 @@ export type SignupResponse = {
     employer_address?: string;
     verification_summary?: string;
   };
+  business_location_tracking_available?: boolean;
+  business_location_tracking_enabled?: boolean;
   requires_business_location_tracking?: boolean;
   tracked_business_location?: {
     latitude?: number | null;
@@ -128,6 +131,14 @@ export type EmailVerificationChallengeResponse = SignupResponse & {
   email_verification_required?: boolean;
   verification_code_expires_at?: string | null;
   verification_code_ttl_seconds?: number;
+};
+
+export type ProfileDashboardUpdateRequest = {
+  portal?: 'customer' | 'business';
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
 };
 
 export type LoginRequest = {
@@ -238,4 +249,8 @@ export type BusinessLocationUpdateRequest = {
   latitude: number;
   longitude: number;
   accuracy_meters?: number | null;
+};
+
+export type BusinessLocationTrackingPreferenceRequest = {
+  enabled: boolean;
 };

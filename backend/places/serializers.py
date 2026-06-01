@@ -159,8 +159,43 @@ class AccountResponseSerializer(serializers.Serializer):
 	business_contact = serializers.DictField(required=False)
 	can_access_places = serializers.BooleanField(required=False)
 	two_factor_pending_setup = serializers.BooleanField(required=False)
+	business_location_tracking_available = serializers.BooleanField(required=False)
+	business_location_tracking_enabled = serializers.BooleanField(required=False)
 	requires_business_location_tracking = serializers.BooleanField(required=False)
 	tracked_business_location = serializers.DictField(required=False)
+
+
+class ProfileDashboardUpdateSerializer(serializers.Serializer):
+	username = serializers.CharField(max_length=150)
+	email = serializers.EmailField()
+	first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+	last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+
+	def validate_username(self, value):
+		normalized = value.strip()
+		if not normalized:
+			raise serializers.ValidationError('Enter a username.')
+		user = self.context['request'].user
+		if User.objects.exclude(pk=user.pk).filter(username__iexact=normalized).exists():
+			raise serializers.ValidationError('That username is already in use.')
+		return normalized
+
+	def validate_email(self, value):
+		normalized = value.strip().lower()
+		user = self.context['request'].user
+		if User.objects.exclude(pk=user.pk).filter(email__iexact=normalized).exists():
+			raise serializers.ValidationError('That email address is already in use.')
+		return normalized
+
+	def validate_first_name(self, value):
+		return value.strip()
+
+	def validate_last_name(self, value):
+		return value.strip()
+
+
+class BusinessLocationTrackingPreferenceSerializer(serializers.Serializer):
+	enabled = serializers.BooleanField()
 
 
 class LoginSerializer(serializers.Serializer):
@@ -449,7 +484,7 @@ class EstablishedBusinessSignupSerializer(CustomerSignupSerializer):
 		normalized = str(value or '').strip().lower()
 		if normalized in City.values or normalized == BusinessClaim.MULTIPLE_AREAS_VALUE:
 			return normalized
-		raise serializers.ValidationError('Select a supported city or On the Move / Serves Multiple Areas.')
+		raise serializers.ValidationError('Select a supported city or Serves Multiple Locations / Service Area Business.')
 
 	def validate(self, attrs):
 		attrs = super().validate(attrs)
@@ -538,7 +573,7 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 		normalized = str(value or '').strip().lower()
 		if normalized in City.values or normalized == BusinessClaim.MULTIPLE_AREAS_VALUE:
 			return normalized
-		raise serializers.ValidationError('Select a supported city or On the Move / Serves Multiple Areas.')
+		raise serializers.ValidationError('Select a supported city or Serves Multiple Locations / Service Area Business.')
 
 	def validate(self, attrs):
 		attrs = super().validate(attrs)

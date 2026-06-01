@@ -11,7 +11,7 @@ export const venueFilters = [
   { label: 'Restaurant', value: 'restaurant' },
   { label: 'Bar', value: 'bar' },
   { label: 'Fast Food', value: 'fast_food' },
-  { label: 'On the Move', value: 'mobile' },
+  { label: 'Service-Area Business', value: 'mobile' },
   { label: 'Cafe', value: 'cafe' },
   { label: 'Shop', value: 'shop' },
   { label: 'Attraction', value: 'attraction' },
@@ -32,7 +32,7 @@ export type BrowseMode = 'list' | 'map';
 export type VenueFilterValue = (typeof venueFilters)[number]['value'];
 export type WeekdayFilterValue = (typeof weekdayFilters)[number]['value'];
 
-export const multipleAreasBusinessCityOption = { label: 'On the Move / Serves Multiple Areas', value: 'multiple_areas' } as const;
+export const multipleAreasBusinessCityOption = { label: 'Serves Multiple Locations / Service Area Business', value: 'multiple_areas' } as const;
 export const manualBusinessCityOptions = [...cityFilters.filter((filter) => filter.value !== 'all'), multipleAreasBusinessCityOption] as const;
 export const manualBusinessVenueOptions = venueFilters;
 

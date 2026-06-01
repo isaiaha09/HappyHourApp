@@ -7,7 +7,7 @@ from django.core.cache import caches
 from django.core.exceptions import ImproperlyConfigured
 from django.utils.text import slugify
 
-from places.models import BusinessMembership, City, DealType, VenueType, Weekday
+from places.models import BusinessClaim, BusinessMembership, City, DealType, VenueType, Weekday
 from places.services.importers.business_websites import BusinessWebsiteImporter
 from places.services.importers.discovered_json_places import CuratedJsonPlacesImporter, DiscoveryJsonPlacesImporter
 from places.services.importers.example_html import ExampleHtmlImporter
@@ -198,6 +198,20 @@ def _get_active_business_snapshots():
 	seen_snapshot_ids = set()
 	for membership in memberships:
 		snapshot = membership.claim.listing_snapshot
+		if snapshot.pk in seen_snapshot_ids:
+			continue
+		seen_snapshot_ids.add(snapshot.pk)
+		yield snapshot
+
+	approved_claims_without_active_membership = (
+		BusinessClaim.objects
+		.select_related('listing_snapshot')
+		.filter(status=BusinessClaim.Status.APPROVED)
+		.exclude(membership__is_active=True)
+		.order_by('-reviewed_at', '-submitted_at', '-created_at')
+	)
+	for claim in approved_claims_without_active_membership:
+		snapshot = claim.listing_snapshot
 		if snapshot.pk in seen_snapshot_ids:
 			continue
 		seen_snapshot_ids.add(snapshot.pk)

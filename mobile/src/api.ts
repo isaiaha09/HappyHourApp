@@ -3,6 +3,7 @@ import { NativeModules } from 'react-native';
 import type {
   BusinessAttachmentBuckets,
   BusinessAttachmentKind,
+  BusinessLocationTrackingPreferenceRequest,
   BusinessLocationUpdateRequest,
   BusinessSignupRequest,
   CustomerSignupRequest,
@@ -14,6 +15,7 @@ import type {
   PaginatedResponse,
   PlaceDetail,
   PlaceListItem,
+  ProfileDashboardUpdateRequest,
   ResendEmailVerificationCodeRequest,
   SignupResponse,
   TwoFactorSetupResponse,
@@ -88,6 +90,10 @@ export async function fetchProfileDashboard(baseUrl: string, authToken: string, 
   return fetchAuthedJson<SignupResponse>(baseUrl, `/profiles/me/${query}`, authToken);
 }
 
+export async function updateProfileDashboard(baseUrl: string, authToken: string, payload: ProfileDashboardUpdateRequest) {
+  return postAuthedJson<SignupResponse>(baseUrl, '/profiles/me/', authToken, payload);
+}
+
 export async function resendVerificationEmail(baseUrl: string, authToken: string) {
   return postAuthedJson<{ detail: string }>(baseUrl, '/profiles/resend-verification/', authToken, {});
 }
@@ -126,6 +132,10 @@ export async function createInformalBusinessProfile(baseUrl: string, payload: In
 
 export async function updateBusinessLocation(baseUrl: string, authToken: string, payload: BusinessLocationUpdateRequest) {
   return postAuthedJson<SignupResponse>(baseUrl, '/profiles/business-location/', authToken, payload);
+}
+
+export async function updateBusinessLocationTrackingPreference(baseUrl: string, authToken: string, payload: BusinessLocationTrackingPreferenceRequest) {
+  return postAuthedJson<SignupResponse>(baseUrl, '/profiles/business-location-preference/', authToken, payload);
 }
 
 export async function verifyEmailCode(baseUrl: string, payload: EmailVerificationCodeRequest) {

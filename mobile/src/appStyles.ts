@@ -1352,6 +1352,11 @@ export const styles = StyleSheet.create({
     marginTop: 8,
     padding: 18,
   },
+  dashboardShell: {
+    gap: 18,
+    marginTop: 8,
+    paddingBottom: 12,
+  },
   profileIntroText: {
     color: '#6c5443',
     fontSize: 14,
@@ -1584,6 +1589,9 @@ export const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
+  dashboardStatusBanner: {
+    gap: 10,
+  },
   dashboardSectionCard: {
     backgroundColor: '#fff7ef',
     borderColor: '#efd8bd',
@@ -1591,6 +1599,9 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 10,
     padding: 14,
+  },
+  dashboardSection: {
+    gap: 10,
   },
   dashboardSectionTitle: {
     color: '#402214',
@@ -1603,7 +1614,26 @@ export const styles = StyleSheet.create({
     lineHeight: 18,
   },
   dashboardDetailRow: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
     gap: 4,
+    justifyContent: 'space-between',
+  },
+  dashboardFieldGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  dashboardFieldColumn: {
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 220,
+  },
+  dashboardDetailItem: {
+    flexGrow: 1,
+    flexShrink: 1,
+    gap: 4,
+    minWidth: 160,
   },
   dashboardDetailLabel: {
     color: '#7a4d2f',
@@ -1615,6 +1645,47 @@ export const styles = StyleSheet.create({
     color: '#2d221a',
     fontSize: 15,
     lineHeight: 20,
+  },
+  dashboardInlineActions: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  dashboardInlineButton: {
+    alignSelf: 'flex-start',
+    marginTop: 0,
+    minWidth: 220,
+  },
+  settingsItemRow: {
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  settingsItemBody: {
+    gap: 8,
+    width: '100%',
+  },
+  settingsItemActions: {
+    alignItems: 'stretch',
+    gap: 10,
+    width: '100%',
+  },
+  settingsInlineButton: {
+    alignSelf: 'stretch',
+    marginTop: 0,
+    maxWidth: '100%',
+    width: '100%',
+  },
+  settingsSwitchCluster: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  settingsSwitchLabelGroup: {
+    alignItems: 'flex-start',
+    gap: 2,
   },
   dashboardCodeCard: {
     backgroundColor: '#fff3e5',

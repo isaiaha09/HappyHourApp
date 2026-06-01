@@ -1985,11 +1985,48 @@ class SourceListingIdentityTests(TestCase):
 		self.assertEqual(len(payloads), 1)
 		self.assertEqual(payloads[0]['slug'], 'scoops-truck')
 		self.assertEqual(payloads[0]['venue_type'], VenueType.MOBILE)
-		self.assertEqual(payloads[0]['venue_type_label'], 'On the Move')
+		self.assertEqual(payloads[0]['venue_type_label'], 'Serves Multiple Locations / Service Area Business')
 		self.assertEqual(payloads[0]['latitude'], 34.2789)
 		self.assertEqual(payloads[0]['longitude'], -119.2914)
 		self.assertEqual(payloads[0]['locations'][0]['address_line_1'], 'Approximate live location')
 		self.assertTrue(payloads[0]['is_verified'])
+
+	@patch('places.services.source_listings.load_source_records')
+	def test_approved_manual_business_creation_profile_counts_as_place_without_membership(self, mock_load_source_records):
+		mock_load_source_records.return_value = []
+		user = User.objects.create_user(username='manual_place_owner', email='manual-place-owner@example.com', password='test-pass-123')
+		snapshot = ListingSnapshot.objects.create(
+			name='Approved Manual Place',
+			listing_slug='approved-manual-place',
+			city=City.CAMARILLO,
+			venue_type=VenueType.CAFE,
+			address_line_1='789 Ventura Blvd',
+			state='CA',
+			postal_code='93010',
+			website_url='https://example.com/approved-manual-place',
+			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+		)
+		BusinessClaim.objects.create(
+			claimant=user,
+			listing_snapshot=snapshot,
+			pathway=BusinessClaim.Pathway.ESTABLISHED,
+			status=BusinessClaim.Status.APPROVED,
+			contact_name='Approved Owner',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='approved-manual@example.com',
+			work_phone='805-555-0199',
+			verification_summary='Approved manual business.',
+		)
+
+		payloads = get_source_place_payloads(resolve_missing_coordinates=False)
+
+		self.assertEqual(len(payloads), 1)
+		self.assertEqual(payloads[0]['slug'], 'approved-manual-place')
+		self.assertEqual(payloads[0]['name'], 'Approved Manual Place')
+		self.assertEqual(payloads[0]['venue_type'], VenueType.CAFE)
+		self.assertEqual(payloads[0]['venue_type_label'], 'Cafe')
+		self.assertTrue(payloads[0]['is_verified'])
+		self.assertEqual(payloads[0]['locations'][0]['city'], City.CAMARILLO)
 
 	@override_settings(HERE_API_KEY='', TOMTOM_API_KEY='')
 	def test_hybrid_importer_adds_osm_places_without_duplicating_curated_sources(self):
@@ -3603,9 +3640,165 @@ class ProfileDashboardApiTests(APITestCase):
 		response = self.client.get(reverse('profile-dashboard'), {'portal': 'business'}, **self.auth_headers())
 
 		self.assertEqual(response.status_code, 200)
+		self.assertTrue(response.data['business_location_tracking_available'])
+		self.assertTrue(response.data['business_location_tracking_enabled'])
 		self.assertTrue(response.data['requires_business_location_tracking'])
 		self.assertEqual(response.data['tracked_business_location']['latitude'], 34.2791)
 		self.assertEqual(response.data['tracked_business_location']['accuracy_meters'], 42.0)
+
+	def test_profile_dashboard_includes_disabled_mobile_location_tracking_preference(self):
+		self.profile.business_location_tracking_enabled = False
+		self.profile.save(update_fields=['business_location_tracking_enabled', 'updated_at'])
+		snapshot = ListingSnapshot.objects.create(
+			name='Scoops Truck',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@scoops.example.com',
+			employer_address='',
+			verification_summary='I operate the truck.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+
+		response = self.client.get(reverse('profile-dashboard'), {'portal': 'business'}, **self.auth_headers())
+
+		self.assertEqual(response.status_code, 200)
+		self.assertTrue(response.data['business_location_tracking_available'])
+		self.assertFalse(response.data['business_location_tracking_enabled'])
+		self.assertFalse(response.data['requires_business_location_tracking'])
+
+	def test_profile_dashboard_update_changes_basic_customer_details(self):
+		self.profile.email_verified_at = timezone.now()
+		self.profile.save(update_fields=['email_verified_at', 'updated_at'])
+
+		response = self.client.post(
+			reverse('profile-dashboard'),
+			{
+				'portal': 'customer',
+				'username': 'dashboard_user_renamed',
+				'email': 'dashboard@example.com',
+				'first_name': 'Updated',
+				'last_name': 'Name',
+			},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.user.refresh_from_db()
+		self.assertEqual(self.user.username, 'dashboard_user_renamed')
+		self.assertEqual(self.user.first_name, 'Updated')
+		self.assertEqual(self.user.last_name, 'Name')
+		self.assertEqual(response.data['detail'], 'Profile updated.')
+		self.assertTrue(response.data['email_verified'])
+
+	def test_profile_dashboard_update_email_requires_reverification(self):
+		self.profile.email_verified_at = timezone.now()
+		self.profile.save(update_fields=['email_verified_at', 'updated_at'])
+
+		response = self.client.post(
+			reverse('profile-dashboard'),
+			{
+				'portal': 'customer',
+				'username': 'dashboard_user',
+				'email': 'new-dashboard@example.com',
+				'first_name': 'Dash',
+				'last_name': 'Board',
+			},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.user.refresh_from_db()
+		self.profile.refresh_from_db()
+		self.assertEqual(self.user.email, 'new-dashboard@example.com')
+		self.assertEqual(self.profile.pending_email, 'new-dashboard@example.com')
+		self.assertEqual(self.profile.previous_verified_email, 'dashboard@example.com')
+		self.assertFalse(self.profile.email_is_verified)
+		self.assertFalse(response.data['email_verified'])
+		self.assertEqual(response.data['detail'], 'Profile updated. Verify your new email address to finish the email change.')
+		self.assertEqual(len(mail.outbox), 1)
+		self.assertIn('new-dashboard@example.com', mail.outbox[0].to)
+
+	def test_profile_dashboard_reverts_unverified_email_change_after_24_hours(self):
+		self.profile.email_verified_at = timezone.now()
+		self.profile.save(update_fields=['email_verified_at', 'updated_at'])
+
+		change_response = self.client.post(
+			reverse('profile-dashboard'),
+			{
+				'portal': 'customer',
+				'username': 'dashboard_user',
+				'email': 'new-dashboard@example.com',
+				'first_name': 'Dash',
+				'last_name': 'Board',
+			},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(change_response.status_code, 200)
+		self.profile.refresh_from_db()
+		self.profile.email_change_requested_at = timezone.now() - timedelta(hours=25)
+		self.profile.save(update_fields=['email_change_requested_at', 'updated_at'])
+		mail.outbox.clear()
+
+		response = self.client.get(reverse('profile-dashboard'), {'portal': 'customer'}, **self.auth_headers())
+
+		self.assertEqual(response.status_code, 200)
+		self.user.refresh_from_db()
+		self.profile.refresh_from_db()
+		self.assertEqual(self.user.email, 'dashboard@example.com')
+		self.assertTrue(self.profile.email_is_verified)
+		self.assertEqual(self.profile.pending_email, '')
+		self.assertEqual(self.profile.previous_verified_email, '')
+		self.assertEqual(len(mail.outbox), 1)
+		self.assertIn('new-dashboard@example.com', mail.outbox[0].body)
+		self.assertIn('dashboard@example.com', mail.outbox[0].to)
+
+	def test_profile_dashboard_verify_new_email_clears_pending_email_change(self):
+		self.profile.email_verified_at = timezone.now()
+		self.profile.save(update_fields=['email_verified_at', 'updated_at'])
+
+		change_response = self.client.post(
+			reverse('profile-dashboard'),
+			{
+				'portal': 'customer',
+				'username': 'dashboard_user',
+				'email': 'new-dashboard@example.com',
+				'first_name': 'Dash',
+				'last_name': 'Board',
+			},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(change_response.status_code, 200)
+		self.profile.refresh_from_db()
+
+		response = self.client.post(
+			reverse('profile-verify-email-code'),
+			{
+				'username': self.user.username,
+				'portal': 'customer',
+				'code': self.profile.email_verification_code,
+			},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.profile.refresh_from_db()
+		self.assertEqual(self.profile.pending_email, '')
+		self.assertEqual(self.profile.previous_verified_email, '')
+		self.assertIsNone(self.profile.email_change_requested_at)
 
 	def test_business_location_update_updates_mobile_snapshot(self):
 		snapshot = ListingSnapshot.objects.create(
@@ -3639,6 +3832,70 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(snapshot.tracked_location_longitude, -119.2944)
 		self.assertEqual(snapshot.tracked_location_accuracy_meters, 35.5)
 		self.assertTrue(response.data['requires_business_location_tracking'])
+
+	def test_business_location_update_rejects_when_tracking_is_disabled(self):
+		self.profile.business_location_tracking_enabled = False
+		self.profile.save(update_fields=['business_location_tracking_enabled', 'updated_at'])
+		snapshot = ListingSnapshot.objects.create(
+			name='Scoops Truck',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@scoops.example.com',
+			employer_address='',
+			verification_summary='I operate the truck.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+
+		response = self.client.post(
+			reverse('profile-business-location'),
+			{'latitude': 34.2812, 'longitude': -119.2944, 'accuracy_meters': 35.5},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 400)
+		self.assertEqual(response.data['detail'], 'Turn on location services in settings before sending live business location updates.')
+
+	def test_business_location_preference_view_updates_tracking_preference(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Scoops Truck',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@scoops.example.com',
+			employer_address='',
+			verification_summary='I operate the truck.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+
+		response = self.client.post(
+			reverse('profile-business-location-preference'),
+			{'enabled': False},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.profile.refresh_from_db()
+		self.assertFalse(self.profile.business_location_tracking_enabled)
+		self.assertTrue(response.data['business_location_tracking_available'])
+		self.assertFalse(response.data['business_location_tracking_enabled'])
+		self.assertFalse(response.data['requires_business_location_tracking'])
 
 	def test_resend_verification_email_sends_message(self):
 		response = self.client.post(reverse('profile-resend-verification'), {}, format='json', **self.auth_headers())

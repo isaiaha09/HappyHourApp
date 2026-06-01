@@ -39,6 +39,8 @@ import {
   requestUsernameReminder,
   resendVerificationCode,
   resendVerificationEmail,
+  updateProfileDashboard,
+  updateBusinessLocationTrackingPreference,
   updateBusinessLocation,
   verifyEmailCode,
 } from './src/api';
@@ -101,6 +103,7 @@ import type {
   PlaceListItem,
   PlaceLocation,
   PlaceLocationDetail,
+  ProfileDashboardUpdateRequest,
   SignupResponse,
   TwoFactorSetupResponse,
 } from './src/types';
@@ -557,7 +560,7 @@ function AppScreen() {
         }
 
         if (!permission.granted) {
-          setProfileErrorMessage('On the Move businesses must enable location access so their map pin can follow their current service area.');
+          setProfileErrorMessage('Service area businesses must enable location access so their map pin can follow their current service area.');
           return;
         }
 
@@ -2481,6 +2484,50 @@ function AppScreen() {
     }
   }
 
+  async function handleToggleBusinessLocationTracking(enabled: boolean) {
+    if (!authenticatedSession?.auth_token || authenticatedSession.portal !== 'business') {
+      return;
+    }
+
+    setDashboardSubmitting(true);
+    setProfileErrorMessage(null);
+
+    try {
+      const response = await updateBusinessLocationTrackingPreference(apiBaseUrl, authenticatedSession.auth_token, { enabled });
+      setAuthenticatedSession(response);
+      setProfileMessage(enabled
+        ? 'Business location services turned on.'
+        : 'Business location services turned off. Live pin updates have stopped.');
+    } catch (error) {
+      setProfileErrorMessage(getErrorMessage(error));
+    } finally {
+      setDashboardSubmitting(false);
+    }
+  }
+
+  async function handleSaveProfileDetails(payload: ProfileDashboardUpdateRequest) {
+    if (!authenticatedSession?.auth_token) {
+      return;
+    }
+
+    setDashboardSubmitting(true);
+    setProfileErrorMessage(null);
+
+    try {
+      const response = await updateProfileDashboard(apiBaseUrl, authenticatedSession.auth_token, payload);
+      setAuthenticatedSession(response);
+      setProfileMessage(response.detail ?? 'Profile updated.');
+      if (response.email_verified === false && payload.email !== authenticatedSession.email) {
+        setTwoFactorSetup(null);
+        setTwoFactorSetupCode('');
+      }
+    } catch (error) {
+      setProfileErrorMessage(getErrorMessage(error));
+    } finally {
+      setDashboardSubmitting(false);
+    }
+  }
+
   function handleLogout() {
     setProfileMessage(null);
     setProfileErrorMessage(null);
@@ -2692,6 +2739,7 @@ function AppScreen() {
             onConfirmTwoFactorSetup={() => void handleConfirmTwoFactorSetup()}
             onDisableTwoFactor={() => void handleDisableTwoFactor()}
             onLogout={handleLogout}
+            onToggleBusinessLocationTracking={(value) => void handleToggleBusinessLocationTracking(value)}
             onOpenContactSupport={handleOpenSupport}
             onOpenDisableAccountRequest={() => handleOpenSupportWithDraft(
               'Disable my DiningDealz account',
@@ -2727,6 +2775,7 @@ function AppScreen() {
             onOpenSettings={handleOpenSettings}
             onRefresh={() => void refreshDashboard()}
             onResendVerification={() => void handleResendVerification()}
+            onSaveProfileDetails={(payload) => void handleSaveProfileDetails(payload)}
             session={profileSession}
             submitting={dashboardSubmitting}
           />

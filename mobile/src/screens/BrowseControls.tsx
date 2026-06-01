@@ -336,7 +336,7 @@ export function BrowseControls({
           </Pressable>
         </View>
         {onOpenDashboard ? (
-          <Pressable accessibilityLabel="Back to dashboard" onPress={onOpenDashboard} style={styles.toolbarArrowButton}>
+          <Pressable accessibilityLabel="Back to Dashboard" onPress={onOpenDashboard} style={styles.toolbarArrowButton}>
             <Text style={styles.toolbarArrowButtonText}>→</Text>
           </Pressable>
         ) : null}

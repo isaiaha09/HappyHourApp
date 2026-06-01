@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import * as Clipboard from 'expo-clipboard';
-import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 
 import { styles } from '../appStyles';
-import type { SignupResponse, TwoFactorSetupResponse } from '../types';
+import type { ProfileDashboardUpdateRequest, SignupResponse, TwoFactorSetupResponse } from '../types';
 
 export type DashboardScreenProps = {
   errorMessage: string | null;
@@ -16,6 +16,7 @@ export type DashboardScreenProps = {
   onOpenSettings: () => void;
   onRefresh: () => void;
   onResendVerification: () => void;
+  onSaveProfileDetails: (payload: ProfileDashboardUpdateRequest) => void;
   session: SignupResponse;
   submitting: boolean;
 };
@@ -31,6 +32,7 @@ export type AccountSettingsScreenProps = {
   onConfirmTwoFactorSetup: () => void;
   onDisableTwoFactor: () => void;
   onLogout: () => void;
+  onToggleBusinessLocationTracking: (value: boolean) => void;
   onOpenContactSupport: () => void;
   onOpenDeleteAccountRequest: () => void;
   onOpenDisableAccountRequest: () => void;
@@ -45,9 +47,26 @@ export type AccountSettingsScreenProps = {
 
 function DashboardDetailRow({ label, value }: { label: string; value: string }) {
   return (
-    <View style={styles.dashboardDetailRow}>
+    <View style={styles.dashboardDetailItem}>
       <Text style={styles.dashboardDetailLabel}>{label}</Text>
       <Text style={styles.dashboardDetailValue}>{value}</Text>
+    </View>
+  );
+}
+
+function DashboardEditableField({
+  label,
+  onChangeText,
+  value,
+}: {
+  label: string;
+  onChangeText: (value: string) => void;
+  value: string;
+}) {
+  return (
+    <View style={styles.dashboardFieldColumn}>
+      <Text style={styles.dashboardDetailLabel}>{label}</Text>
+      <TextInput onChangeText={onChangeText} style={styles.profileInput} value={value} />
     </View>
   );
 }
@@ -157,7 +176,7 @@ function SecuritySettingsSection({
   }, [twoFactorSetup?.otpauth_url]);
 
   return (
-    <View style={styles.dashboardSectionCard}>
+    <View style={styles.dashboardSection}>
       <Text style={styles.dashboardSectionTitle}>Authentication settings</Text>
       <DashboardDetailRow label="Two-factor authentication" value={session.two_factor_enabled ? 'Enabled' : 'Disabled'} />
       {session.two_factor_enabled ? (
@@ -248,7 +267,7 @@ function SecuritySettingsSection({
   );
 }
 
-export function DashboardScreen({ errorMessage, isLandscape, loading, message, onBack, onOpenBilling, onOpenPlaces, onOpenSettings, onRefresh, onResendVerification, session, submitting }: DashboardScreenProps) {
+export function DashboardScreen({ errorMessage, isLandscape, loading, message, onBack, onOpenBilling, onOpenPlaces, onOpenSettings, onRefresh, onResendVerification, onSaveProfileDetails, session, submitting }: DashboardScreenProps) {
   const approvedBusinesses = session.approved_businesses ?? [];
   const businessContact = session.business_contact ?? {};
   const fullName = [session.first_name, session.last_name].filter(Boolean).join(' ');
@@ -256,6 +275,28 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
   const trackedBusinessLocationUpdatedAt = trackedBusinessLocation.updated_at
     ? new Date(trackedBusinessLocation.updated_at).toLocaleString()
     : null;
+  const [profileDraft, setProfileDraft] = useState<ProfileDashboardUpdateRequest>({
+    portal: session.portal,
+    username: session.username,
+    email: session.email,
+    first_name: session.first_name,
+    last_name: session.last_name,
+  });
+
+  useEffect(() => {
+    setProfileDraft({
+      portal: session.portal,
+      username: session.username,
+      email: session.email,
+      first_name: session.first_name,
+      last_name: session.last_name,
+    });
+  }, [session.email, session.first_name, session.last_name, session.portal, session.username]);
+
+  const profileDetailsChanged = profileDraft.username !== session.username
+    || profileDraft.email !== session.email
+    || profileDraft.first_name !== session.first_name
+    || profileDraft.last_name !== session.last_name;
 
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
@@ -277,7 +318,7 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
             </Pressable>
           </View>
 
-          <View style={styles.dashboardCard}>
+          <View style={styles.dashboardShell}>
             <Text style={styles.detailCity}>{session.profile_type === 'business' ? 'Business Dashboard' : 'Customer Dashboard'}</Text>
             <Text style={styles.detailTitle}>{fullName || session.username}</Text>
             <Text style={styles.profileIntroText}>Use this dashboard to manage your account, check verification status, and jump back into the main app.</Text>
@@ -302,7 +343,7 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
             ) : null}
 
             {!session.email_verified ? (
-              <View style={styles.dashboardCalloutCard}>
+              <View style={styles.dashboardStatusBanner}>
                 <Text style={styles.dashboardSectionTitle}>Email verification</Text>
                 <Text style={styles.dashboardSupportText}>Your email is not verified yet. Use the link sent to {session.email}, then refresh this dashboard.</Text>
                 <Pressable onPress={onResendVerification} style={[styles.linkButtonSecondaryWide, submitting ? styles.linkButtonDisabled : null]}>
@@ -310,58 +351,73 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
                 </Pressable>
               </View>
             ) : (
-              <View style={styles.dashboardVerifiedCard}>
+              <View style={styles.dashboardStatusBanner}>
                 <Text style={styles.dashboardVerifiedTitle}>Email verified</Text>
                 <Text style={styles.dashboardVerifiedText}>Your account is verified and ready to use across the app.</Text>
               </View>
             )}
 
-            <View style={styles.dashboardSectionCard}>
+            <View style={styles.dashboardSection}>
               <Text style={styles.dashboardSectionTitle}>Profile details</Text>
-              <DashboardDetailRow label="Username" value={session.username} />
-              <DashboardDetailRow label="Email" value={session.email} />
-              <DashboardDetailRow label="First name" value={session.first_name || 'Not provided'} />
-              <DashboardDetailRow label="Last name" value={session.last_name || 'Not provided'} />
-              <DashboardDetailRow label="Profile type" value={session.profile_type === 'business' ? 'Business' : 'Customer'} />
+              <View style={styles.dashboardFieldGrid}>
+                <DashboardEditableField label="Username" onChangeText={(value) => setProfileDraft((current) => ({ ...current, username: value }))} value={profileDraft.username} />
+                <DashboardEditableField label="Email" onChangeText={(value) => setProfileDraft((current) => ({ ...current, email: value }))} value={profileDraft.email} />
+                <DashboardEditableField label="First name" onChangeText={(value) => setProfileDraft((current) => ({ ...current, first_name: value }))} value={profileDraft.first_name} />
+                <DashboardEditableField label="Last name" onChangeText={(value) => setProfileDraft((current) => ({ ...current, last_name: value }))} value={profileDraft.last_name} />
+                <DashboardDetailRow label="Profile type" value={session.profile_type === 'business' ? 'Business' : 'Customer'} />
+              </View>
+              <View style={styles.dashboardInlineActions}>
+                <Pressable
+                  onPress={() => onSaveProfileDetails(profileDraft)}
+                  style={[styles.linkButtonSecondaryWide, styles.dashboardInlineButton, (!profileDetailsChanged || submitting) ? styles.linkButtonDisabled : null]}
+                >
+                  <Text style={styles.linkButtonSecondaryText}>{submitting ? 'Saving...' : 'Save profile details'}</Text>
+                </Pressable>
+              </View>
+              <Text style={styles.dashboardSupportText}>Changing your email sends a new verification email and marks the new address as unverified until you confirm it.</Text>
             </View>
 
             <Text style={styles.dashboardSupportText}>Authentication settings, support, privacy, terms, account requests, and logout now live behind the settings icon in the top-right corner.</Text>
 
             {session.profile_type === 'business' ? (
               <>
-                <View style={styles.dashboardSectionCard}>
+                <View style={styles.dashboardSection}>
                   <Text style={styles.dashboardSectionTitle}>Business status</Text>
-                  <DashboardDetailRow label="Status" value={session.business_status || 'Pending'} />
-                  <DashboardDetailRow label="Current business" value={session.business_name || 'No approved business yet'} />
-                  {session.claim_status ? <DashboardDetailRow label="Claim review" value={session.claim_status} /> : null}
+                  <View style={styles.dashboardFieldGrid}>
+                    <DashboardDetailRow label="Status" value={session.business_status || 'Pending'} />
+                    <DashboardDetailRow label="Current business" value={session.business_name || 'No approved business yet'} />
+                    {session.claim_status ? <DashboardDetailRow label="Claim review" value={session.claim_status} /> : null}
                   {session.requires_business_location_tracking ? (
                     <>
-                      <DashboardDetailRow label="Location tracking" value="Required for On the Move pins" />
+                    <DashboardDetailRow label="Location tracking" value="Required for service area business pins" />
                       <DashboardDetailRow label="Last pin update" value={trackedBusinessLocationUpdatedAt || 'Waiting for the first phone location update'} />
-                      <Text style={styles.dashboardSupportText}>Keep location access enabled on this device so your map pin reflects your approximate current phone location.</Text>
                     </>
                   ) : null}
+                  </View>
+                  {session.requires_business_location_tracking ? <Text style={styles.dashboardSupportText}>Keep location access enabled on this device so your map pin reflects your approximate current phone location.</Text> : null}
                 </View>
 
                 {Object.values(businessContact).some(Boolean) ? (
-                  <View style={styles.dashboardSectionCard}>
+                  <View style={styles.dashboardSection}>
                     <Text style={styles.dashboardSectionTitle}>Business contact details</Text>
-                    <DashboardDetailRow label="Contact name" value={businessContact.contact_name || 'Not provided'} />
-                    <DashboardDetailRow label="Job title" value={businessContact.job_title || 'Not provided'} />
-                    <DashboardDetailRow label="Work email" value={businessContact.work_email || 'Not provided'} />
-                    <DashboardDetailRow label="Work phone" value={businessContact.work_phone || 'Not provided'} />
-                    <DashboardDetailRow label="Employer address" value={businessContact.employer_address || 'Not provided'} />
+                    <View style={styles.dashboardFieldGrid}>
+                      <DashboardDetailRow label="Contact name" value={businessContact.contact_name || 'Not provided'} />
+                      <DashboardDetailRow label="Job title" value={businessContact.job_title || 'Not provided'} />
+                      <DashboardDetailRow label="Work email" value={businessContact.work_email || 'Not provided'} />
+                      <DashboardDetailRow label="Work phone" value={businessContact.work_phone || 'Not provided'} />
+                      <DashboardDetailRow label="Employer address" value={businessContact.employer_address || 'Not provided'} />
+                    </View>
                   </View>
                 ) : null}
 
-                <View style={styles.dashboardSectionCard}>
-                  <Text style={styles.dashboardSectionTitle}>Approved businesses</Text>
-                  {approvedBusinesses.length ? approvedBusinesses.map((business) => (
-                    <View key={business.id} style={styles.claimResultCard}>
-                      <Text style={styles.placeTitle}>{business.name}</Text>
-                      <Text style={styles.placeMeta}>{business.city_label} • {business.venue_type_label}</Text>
+                <View style={styles.dashboardSection}>
+                  <Text style={styles.dashboardSectionTitle}>Approved Business</Text>
+                  {approvedBusinesses.length ? <View style={styles.dashboardFieldGrid}>{approvedBusinesses.map((business) => (
+                    <View key={business.id} style={styles.dashboardDetailItem}>
+                      <Text style={styles.dashboardDetailValue}>{business.name}</Text>
+                      <Text style={styles.dashboardSupportText}>{business.city_label} • {business.venue_type_label}</Text>
                     </View>
-                  )) : (
+                  ))}</View> : (
                     <Text style={styles.dashboardSupportText}>Claimed or created businesses appear here after admin approval.</Text>
                   )}
                 </View>
@@ -374,15 +430,6 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
               </>
             ) : null}
 
-            <Pressable onPress={onOpenPlaces} style={styles.linkButton}>
-              <Text style={styles.linkButtonText}>Open main app features</Text>
-            </Pressable>
-
-            <View style={styles.dashboardFooterRow}>
-              <Pressable onPress={onRefresh} style={styles.secondaryToolbarButton}>
-                <Text style={styles.secondaryToolbarButtonText}>Refresh dashboard</Text>
-              </Pressable>
-            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -401,6 +448,7 @@ export function AccountSettingsScreen({
   onConfirmTwoFactorSetup,
   onDisableTwoFactor,
   onLogout,
+  onToggleBusinessLocationTracking,
   onOpenContactSupport,
   onOpenDeleteAccountRequest,
   onOpenDisableAccountRequest,
@@ -424,10 +472,10 @@ export function AccountSettingsScreen({
           showsVerticalScrollIndicator={false}
         >
           <Pressable onPress={onBack} style={styles.backButton}>
-            <Text style={styles.backButtonText}>Back to dashboard</Text>
+            <Text style={styles.backButtonText}>Back to Dashboard</Text>
           </Pressable>
 
-          <View style={styles.dashboardCard}>
+          <View style={styles.dashboardShell}>
             <Text style={styles.detailCity}>Settings</Text>
             <Text style={styles.detailTitle}>Account settings</Text>
             <Text style={styles.profileIntroText}>Manage authentication, support, legal information, account requests, and your session from one place.</Text>
@@ -457,34 +505,68 @@ export function AccountSettingsScreen({
               twoFactorSetupCode={twoFactorSetupCode}
             />
 
-            <View style={styles.dashboardSectionCard}>
-              <Text style={styles.dashboardSectionTitle}>Support</Text>
-              <Text style={styles.dashboardSupportText}>Open the dedicated support screen for account help, billing questions, business onboarding, or general issues.</Text>
-              <Pressable onPress={onOpenContactSupport} style={styles.linkButtonSecondaryWide}>
-                <Text style={styles.linkButtonSecondaryText}>Contact support</Text>
-              </Pressable>
+            {session.portal === 'business' && session.business_location_tracking_available ? (
+              <View style={styles.settingsItemRow}>
+                <View style={styles.settingsItemBody}>
+                  <Text style={styles.dashboardSectionTitle}>Business location services</Text>
+                  <Text style={styles.dashboardSupportText}>Turn live location updates on when your service area business should publish its current service area pin. Turn it off to stop sending business location updates.</Text>
+                </View>
+                <View style={styles.settingsItemActions}>
+                  <View style={styles.settingsSwitchCluster}>
+                    <View style={styles.settingsSwitchLabelGroup}>
+                      <Text style={styles.dashboardDetailLabel}>Location services</Text>
+                      <Text style={styles.dashboardSupportText}>{session.business_location_tracking_enabled ? 'On' : 'Off'}</Text>
+                    </View>
+                    <Switch
+                      disabled={submitting}
+                      onValueChange={onToggleBusinessLocationTracking}
+                      value={!!session.business_location_tracking_enabled}
+                    />
+                  </View>
+                </View>
+              </View>
+            ) : null}
+
+            <View style={styles.settingsItemRow}>
+              <View style={styles.settingsItemBody}>
+                <Text style={styles.dashboardSectionTitle}>Support</Text>
+                <Text style={styles.dashboardSupportText}>Open the dedicated support screen for account help, billing questions, business onboarding, or general issues.</Text>
+              </View>
+              <View style={styles.settingsItemActions}>
+                <Pressable onPress={onOpenContactSupport} style={[styles.linkButtonSecondaryWide, styles.settingsInlineButton]}>
+                  <Text style={styles.linkButtonSecondaryText}>Contact support</Text>
+                </Pressable>
+              </View>
             </View>
 
-            <View style={styles.dashboardSectionCard}>
-              <Text style={styles.dashboardSectionTitle}>Legal</Text>
-              <Text style={styles.dashboardSupportText}>Review the current privacy policy and terms of service inside the app.</Text>
-              <Pressable onPress={onOpenPrivacyPolicy} style={styles.linkButtonSecondaryWide}>
-                <Text style={styles.linkButtonSecondaryText}>Privacy Policy</Text>
-              </Pressable>
-              <Pressable onPress={onOpenTermsOfService} style={styles.linkButtonSecondaryWide}>
-                <Text style={styles.linkButtonSecondaryText}>Terms of Service & Agreements</Text>
-              </Pressable>
+            <View style={styles.settingsItemRow}>
+              <View style={styles.settingsItemBody}>
+                <Text style={styles.dashboardSectionTitle}>Legal</Text>
+                <Text style={styles.dashboardSupportText}>Review the current privacy policy and terms of service inside the app.</Text>
+              </View>
+              <View style={styles.settingsItemActions}>
+                <Pressable onPress={onOpenPrivacyPolicy} style={[styles.linkButtonSecondaryWide, styles.settingsInlineButton]}>
+                  <Text style={styles.linkButtonSecondaryText}>Privacy Policy</Text>
+                </Pressable>
+                <Pressable onPress={onOpenTermsOfService} style={[styles.linkButtonSecondaryWide, styles.settingsInlineButton]}>
+                  <Text style={styles.linkButtonSecondaryText}>Terms of Service & Agreements</Text>
+                </Pressable>
+              </View>
             </View>
 
-            <View style={styles.dashboardSectionCard}>
-              <Text style={styles.dashboardSectionTitle}>Account management</Text>
-              <Text style={styles.dashboardSupportText}>Disable and delete requests are currently handled by support so they can verify the account owner before acting.</Text>
-              <Pressable onPress={onOpenDisableAccountRequest} style={styles.linkButtonSecondaryWide}>
-                <Text style={styles.linkButtonSecondaryText}>Disable account</Text>
-              </Pressable>
-              <Pressable onPress={onOpenDeleteAccountRequest} style={styles.destructiveButton}>
-                <Text style={styles.destructiveButtonText}>Delete account</Text>
-              </Pressable>
+            <View style={styles.settingsItemRow}>
+              <View style={styles.settingsItemBody}>
+                <Text style={styles.dashboardSectionTitle}>Account management</Text>
+                <Text style={styles.dashboardSupportText}>Disable and delete requests are currently handled by support so they can verify the account owner before acting.</Text>
+              </View>
+              <View style={styles.settingsItemActions}>
+                <Pressable onPress={onOpenDisableAccountRequest} style={[styles.linkButtonSecondaryWide, styles.settingsInlineButton]}>
+                  <Text style={styles.linkButtonSecondaryText}>Disable account</Text>
+                </Pressable>
+                <Pressable onPress={onOpenDeleteAccountRequest} style={[styles.destructiveButton, styles.settingsInlineButton]}>
+                  <Text style={styles.destructiveButtonText}>Delete account</Text>
+                </Pressable>
+              </View>
             </View>
 
             <Pressable onPress={onLogout} style={styles.destructiveButton}>

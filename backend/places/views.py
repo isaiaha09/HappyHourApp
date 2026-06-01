@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 
 from .authentication import ProfileTokenAuthentication
 from .serializers import (
+	BusinessLocationTrackingPreferenceSerializer,
 	BusinessLocationUpdateSerializer,
 	ClaimedBusinessSignupSerializer,
 	CustomerSignupSerializer,
@@ -20,6 +21,7 @@ from .serializers import (
 	LoginSerializer,
 	PasswordResetConfirmSerializer,
 	PasswordResetRequestSerializer,
+	ProfileDashboardUpdateSerializer,
 	ManualBusinessSignupSerializer,
 	PlaceDetailSerializer,
 	PlaceListSerializer,
@@ -326,6 +328,36 @@ class ProfileDashboardView(APIView):
 		portal = infer_portal_for_user(request.user, request.query_params.get('portal'))
 		return Response(build_account_response(request.user, portal, token=request.auth))
 
+	def post(self, request):
+		portal = infer_portal_for_user(request.user, request.data.get('portal') or request.query_params.get('portal'))
+		serializer = ProfileDashboardUpdateSerializer(data=request.data, context={'request': request})
+		serializer.is_valid(raise_exception=True)
+
+		user = request.user
+		profile = get_or_create_account_profile(user)
+		previous_email = user.email
+		email_changed = serializer.validated_data['email'] != user.email
+
+		user.username = serializer.validated_data['username']
+		user.email = serializer.validated_data['email']
+		user.first_name = serializer.validated_data.get('first_name', '')
+		user.last_name = serializer.validated_data.get('last_name', '')
+		user.save(update_fields=['username', 'email', 'first_name', 'last_name'])
+
+		if email_changed:
+			profile.previous_verified_email = previous_email
+			profile.pending_email = serializer.validated_data['email']
+			profile.email_change_requested_at = timezone.now()
+			profile.email_verified_at = None
+			profile.email_verification_token = ''
+			profile.clear_email_verification_code()
+			profile.save(update_fields=['previous_verified_email', 'pending_email', 'email_change_requested_at', 'email_verified_at', 'email_verification_token', 'email_verification_code', 'email_verification_code_sent_at', 'updated_at'])
+			send_verification_email(user, profile)
+
+		response_payload = build_account_response(user, portal, token=request.auth)
+		response_payload['detail'] = 'Profile updated. Verify your new email address to finish the email change.' if email_changed else 'Profile updated.'
+		return Response(response_payload)
+
 
 class BusinessLocationUpdateView(generics.GenericAPIView):
 	serializer_class = BusinessLocationUpdateSerializer
@@ -341,13 +373,38 @@ class BusinessLocationUpdateView(generics.GenericAPIView):
 
 		snapshot = membership.claim.listing_snapshot
 		if snapshot.venue_type != VenueType.MOBILE and not snapshot.serves_multiple_areas:
-			return Response({'detail': 'Live location updates are only required for On the Move businesses.'}, status=status.HTTP_400_BAD_REQUEST)
+			return Response({'detail': 'Live location updates are only required for service area businesses.'}, status=status.HTTP_400_BAD_REQUEST)
+		if not get_or_create_account_profile(request.user).business_location_tracking_enabled:
+			return Response({'detail': 'Turn on location services in settings before sending live business location updates.'}, status=status.HTTP_400_BAD_REQUEST)
 
 		snapshot.tracked_location_latitude = serializer.validated_data['latitude']
 		snapshot.tracked_location_longitude = serializer.validated_data['longitude']
 		snapshot.tracked_location_accuracy_meters = serializer.validated_data.get('accuracy_meters')
 		snapshot.tracked_location_updated_at = timezone.now()
 		snapshot.save(update_fields=['tracked_location_latitude', 'tracked_location_longitude', 'tracked_location_accuracy_meters', 'tracked_location_updated_at', 'updated_at'])
+
+		return Response(build_account_response(request.user, 'business', token=request.auth))
+
+
+class BusinessLocationTrackingPreferenceView(generics.GenericAPIView):
+	serializer_class = BusinessLocationTrackingPreferenceSerializer
+	authentication_classes = [ProfileTokenAuthentication]
+	permission_classes = [IsAuthenticated]
+
+	def post(self, request):
+		serializer = self.get_serializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		membership = request.user.business_memberships.select_related('claim__listing_snapshot').filter(is_active=True).first()
+		if membership is None:
+			return Response({'detail': 'An approved business membership is required before changing live location settings.'}, status=status.HTTP_400_BAD_REQUEST)
+
+		snapshot = membership.claim.listing_snapshot
+		if snapshot.venue_type != VenueType.MOBILE and not snapshot.serves_multiple_areas:
+			return Response({'detail': 'Live location settings are only available for service area businesses.'}, status=status.HTTP_400_BAD_REQUEST)
+
+		profile = get_or_create_account_profile(request.user)
+		profile.business_location_tracking_enabled = serializer.validated_data['enabled']
+		profile.save(update_fields=['business_location_tracking_enabled', 'updated_at'])
 
 		return Response(build_account_response(request.user, 'business', token=request.auth))
 

@@ -913,7 +913,7 @@ export function ContactSupportScreen({ errorMessage, initialMessage = '', initia
           showsVerticalScrollIndicator={false}
         >
           <Pressable onPress={onBack} style={styles.backButton}>
-            <Text style={styles.backButtonText}>Back to dashboard</Text>
+            <Text style={styles.backButtonText}>Back to Settings</Text>
           </Pressable>
 
           <View style={styles.profileCard}>
@@ -980,7 +980,7 @@ function LegalDocumentScreen({ eyebrow, intro, isLandscape, onBack, sections, ti
           showsVerticalScrollIndicator={false}
         >
           <Pressable onPress={onBack} style={styles.backButton}>
-            <Text style={styles.backButtonText}>Back to settings</Text>
+            <Text style={styles.backButtonText}>Back to Settings</Text>
           </Pressable>
 
           <View style={styles.profileCard}>
