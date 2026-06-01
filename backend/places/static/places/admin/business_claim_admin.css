@@ -1,0 +1,30 @@
+.rejection-reasons-list {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0;
+  padding: 0;
+}
+
+.rejection-reasons-list > div {
+  margin: 0;
+}
+
+.rejection-reasons-list label {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: start;
+  column-gap: 10px;
+  width: 100%;
+  white-space: normal;
+}
+
+.rejection-reasons-list input[type="checkbox"] {
+  margin-top: 3px;
+}
+
+.rejection-reasons-list label span,
+.rejection-reasons-list label {
+  line-height: 1.45;
+}

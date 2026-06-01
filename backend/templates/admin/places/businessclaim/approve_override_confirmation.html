@@ -1,0 +1,92 @@
+{% extends "admin/base_site.html" %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+  .business-claim-approve-warning {
+    margin: 20px 0;
+    padding: 18px 20px;
+    border: 1px solid #8f6a26;
+    border-radius: 12px;
+    background: rgba(143, 106, 38, 0.16);
+  }
+
+  .business-claim-approve-warning h1 {
+    margin: 0 0 10px;
+    font-size: 1.6rem;
+  }
+
+  .business-claim-approve-warning p {
+    margin: 0 0 14px;
+  }
+
+  .business-claim-approve-warning__list {
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 14px 16px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.18);
+  }
+
+  .business-claim-approve-warning__list ul {
+    margin: 0;
+    padding-left: 18px;
+  }
+
+  .business-claim-approve-warning__list > ul > li + li {
+    margin-top: 14px;
+  }
+
+  .business-claim-approve-warning__reason-list {
+    margin-top: 8px;
+  }
+
+  .submit-row {
+    margin-top: 18px;
+  }
+
+  .submit-row .button.cancel-link {
+    display: inline-block;
+    margin-left: 8px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="business-claim-approve-warning">
+  <h1>Approve blocked business claims anyway?</h1>
+  <p>The system found verification blockers on the following claims. Review the reasons below before overriding approval.</p>
+
+  <div class="business-claim-approve-warning__list">
+    <ul>
+      {% for item in blocked_claims %}
+      <li>
+        <strong>{{ item.claim.listing_snapshot.name }}</strong>
+        {% if item.claim.claimant and item.claim.claimant.email %}
+          from {{ item.claim.claimant.email }}
+        {% endif %}
+        for {{ item.claim.contact_name }}
+        <ul class="business-claim-approve-warning__reason-list">
+          {% for blocker in item.blockers %}
+          <li>{{ blocker }}</li>
+          {% endfor %}
+        </ul>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <form method="post">
+    {% csrf_token %}
+    {% for claim in queryset %}
+    <input type="hidden" name="{{ action_checkbox_name }}" value="{{ claim.pk }}">
+    {% endfor %}
+    <input type="hidden" name="action" value="{{ action_name }}">
+    <input type="hidden" name="index" value="0">
+    <div class="submit-row">
+      <input type="submit" name="force_approve" value="Approve anyway" class="default">
+      <a href="{{ changelist_url }}" class="button cancel-link">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

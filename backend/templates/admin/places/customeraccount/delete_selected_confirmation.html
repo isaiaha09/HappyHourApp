@@ -1,0 +1,54 @@
+{% extends "admin/delete_selected_confirmation.html" %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+  .account-delete-warning {
+    margin: 0 0 20px;
+    padding: 16px 18px;
+    border: 1px solid #8f3a3a;
+    border-radius: 12px;
+    background: rgba(143, 58, 58, 0.14);
+  }
+
+  .account-delete-warning h2 {
+    margin: 0 0 8px;
+  }
+
+  .account-delete-warning p {
+    margin: 0 0 12px;
+  }
+
+  .account-delete-warning__list {
+    max-height: 260px;
+    overflow-y: auto;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.18);
+  }
+
+  .account-delete-warning__list ul {
+    margin: 0;
+    padding-left: 18px;
+  }
+
+  .account-delete-warning__list li + li {
+    margin-top: 8px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="account-delete-warning">
+  <h2>Are you sure you want to delete these customer accounts?</h2>
+  <p>Review the selected accounts below before permanently deleting them.</p>
+  <div class="account-delete-warning__list">
+    <ul>
+      {% for account in queryset %}
+      <li><strong>{{ account.username }}</strong>{% if account.email %} ({{ account.email }}){% endif %}</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{{ block.super }}
+{% endblock %}

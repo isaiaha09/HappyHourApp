@@ -6,8 +6,8 @@ from django.db import connection
 
 
 class HappyHourAdminSite(AdminSite):
-    site_header = 'HappyHour Administration'
-    site_title = 'HappyHour Admin'
+    site_header = 'DiningDealz Administration'
+    site_title = 'DiningDealz Admin'
     index_title = 'Operations Dashboard'
 
     section_groups = [

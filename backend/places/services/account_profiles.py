@@ -193,18 +193,18 @@ def send_verification_email(user, profile):
 	verification_url = f'{verification_base}/{token}/'
 	html_message = (
 		f'<p>Hi {escape(user.first_name or user.username)},</p>'
-		f'<p>Your HappyHourApp verification code is <strong>{escape(code)}</strong>.</p>'
+		f'<p>Your DiningDealz verification code is <strong>{escape(code)}</strong>.</p>'
 		'<p>Enter that code in the app within 60 seconds, or request a new one.</p>'
 		'<p>You can also verify your email by opening the link below.</p>'
 		f'<p><a href="{escape(verification_url)}">Verify your email</a></p>'
 		'<p>If you did not create this account, you can ignore this email.</p>'
 	)
 	send_mail(
-		subject='Verify your HappyHourApp email',
+		subject='Verify your DiningDealz email',
 		message=(
 			f'Hi {user.first_name or user.username},\n\n'
-			f'Your HappyHourApp verification code is {code}. Enter it in the app within 60 seconds, or request a new one.\n\n'
-			f'You can also verify your email for HappyHourApp by opening this link:\n{verification_url}\n\n'
+			f'Your DiningDealz verification code is {code}. Enter it in the app within 60 seconds, or request a new one.\n\n'
+			f'You can also verify your email for DiningDealz by opening this link:\n{verification_url}\n\n'
 			'If you did not create this account, you can ignore this email.'
 		),
 		html_message=html_message,

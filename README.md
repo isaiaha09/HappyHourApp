@@ -1,6 +1,6 @@
-# HappyHourApp
+# DiningDealz
 
-This is my first pass at building HappyHourApp, a mobile-first app for finding happy hour spots, food deals, and other discounts in Ventura, Oxnard, and Camarillo, California.
+This is my first pass at building DiningDealz, a mobile-first app for finding happy hour spots, food deals, and other discounts in Ventura, Oxnard, and Camarillo, California.
 
 I am building this project at an entry-level skill level, with some help from GitHub Copilot along the way. My goal is to learn by actually building a real app step by step instead of overcomplicating it too early.
 

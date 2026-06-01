@@ -434,7 +434,7 @@ class VerifyEmailView(APIView):
 				return self._redirect_to(failure_redirect_url)
 			return HttpResponse(self._build_html(
 				title='Verification link is invalid or expired.',
-				message='Request a new verification email from your HappyHourApp dashboard and try again.',
+				message='Request a new verification email from your DiningDealz dashboard and try again.',
 			), status=404)
 		account_profile.mark_email_verified()
 		hold_claim = get_business_access_hold_claim(account_profile.user, infer_portal_for_user(account_profile.user, 'business'))
@@ -445,7 +445,7 @@ class VerifyEmailView(APIView):
 			return self._redirect_to(success_redirect_url)
 		return HttpResponse(self._build_html(
 			title='Email verified successfully.',
-			message='You can return to HappyHourApp and refresh your profile dashboard.',
+			message='You can return to DiningDealz and refresh your profile dashboard.',
 		))
 
 	def _redirect_to(self, url):
@@ -461,12 +461,12 @@ class VerifyEmailView(APIView):
 				f'<p style="margin-top:24px;"><a href="{return_url}" '
 				'style="display:inline-block;padding:12px 18px;border-radius:999px;'
 				'background:#c65d1f;color:#fffaf4;text-decoration:none;font-weight:700;">'
-				'Return to HappyHourApp</a></p>'
+				'Return to DiningDealz</a></p>'
 			)
 		return (
 			'<!doctype html>'
 			'<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
-			'<title>HappyHourApp Email Verification</title></head>'
+			'<title>DiningDealz Email Verification</title></head>'
 			'<body style="margin:0;font-family:Arial,sans-serif;background:#f7efe2;color:#2d221a;">'
 			'<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;">'
 			'<div style="max-width:520px;width:100%;background:#fffaf4;border:1px solid #efd8bd;border-radius:24px;padding:32px;box-sizing:border-box;">'

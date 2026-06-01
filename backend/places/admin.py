@@ -8,6 +8,7 @@ from django.core.exceptions import ValidationError
 from django.db.models import Exists, OuterRef, Prefetch, Q, Subquery
 from django.http import JsonResponse
 from django.http import HttpResponseRedirect
+from django.template.response import TemplateResponse
 from django.urls import path, reverse
 from django.utils.html import format_html, format_html_join
 from django.utils.text import slugify
@@ -24,18 +25,37 @@ from .services.source_listings import get_listing_source_name, load_canonical_so
 
 LIVE_DISCOVERY_SOURCE_NAMES = {HerePlacesImporter.source_name}
 
+VERIFICATION_BLOCKER_LABELS = {
+	'missing_required_permit': 'Required permit documentation is still missing.',
+	'missing_informal_summary': 'Supporting details for the informal business are still missing.',
+	'missing_informal_presence_signal': 'The claim still needs a website, social link, or photo reference.',
+	'reused_same_file_across_required_document_slots': 'The same file was reused across multiple required document slots.',
+}
+
+
+def _format_verification_blocker(blocker_code):
+	if blocker_code in VERIFICATION_BLOCKER_LABELS:
+		return VERIFICATION_BLOCKER_LABELS[blocker_code]
+	return f'{str(blocker_code or "").replace("_", " ").capitalize()}.'
+
 
 class BusinessClaimAdminForm(forms.ModelForm):
 	rejection_reason_codes = forms.MultipleChoiceField(
+		label='Rejection Reasons',
 		required=False,
 		choices=BusinessClaim.RejectionReason.choices,
-		widget=forms.CheckboxSelectMultiple,
+		widget=forms.CheckboxSelectMultiple(attrs={'class': 'rejection-reasons-list'}),
 		help_text='Select every document, field, address, or evidence issue that applies when rejecting this claim.',
 	)
 
 	class Meta:
 		model = BusinessClaim
 		fields = '__all__'
+
+	class Media:
+		css = {
+			'all': ('places/admin/business_claim_admin.css',),
+		}
 
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
@@ -250,52 +270,27 @@ happyhour_admin_site.register(Group, GroupAdmin)
 
 @admin.register(CustomerAccount, site=happyhour_admin_site)
 class CustomerAccountAdmin(UserAdmin):
-	class AccountPathwayFilter(admin.SimpleListFilter):
-		title = 'Account pathway'
-		parameter_name = 'account_pathway'
-
-		def lookups(self, request, model_admin):
-			return (
-				('regular_customer', 'Regular customer'),
-				('business_applicant', 'Business applicant'),
-				('claim_needs_info', 'Claim needs info'),
-			)
-
-		def queryset(self, request, queryset):
-			value = self.value()
-			if value == 'regular_customer':
-				return queryset.filter(business_claims__isnull=True)
-			if value == 'business_applicant':
-				return queryset.filter(business_claims__isnull=False).exclude(business_claims__status=BusinessClaim.Status.NEEDS_INFO).distinct()
-			if value == 'claim_needs_info':
-				return queryset.filter(business_claims__status=BusinessClaim.Status.NEEDS_INFO).distinct()
-			return queryset
-
+	delete_confirmation_template = 'admin/places/customeraccount/delete_confirmation.html'
+	delete_selected_confirmation_template = 'admin/places/customeraccount/delete_selected_confirmation.html'
 	list_display = (
 		'username',
 		'email',
 		'first_name',
 		'last_name',
 		'email_verification_status',
-		'account_pathway',
-		'claim_status',
-		'claimed_businesses',
 		'is_active',
 		'date_joined',
 	)
-	list_filter = ('is_active', 'date_joined', AccountPathwayFilter, 'business_claims__status')
+	list_filter = ('is_active', 'date_joined')
 	search_fields = ('username', 'first_name', 'last_name', 'email')
 	ordering = ('-date_joined',)
-	readonly_fields = ('date_joined', 'last_login', 'account_pathway', 'claim_status', 'claimed_businesses')
+	readonly_fields = ('date_joined', 'last_login')
 	fieldsets = (
 		('Customer account', {
 			'fields': ('username', 'password'),
 		}),
 		('Profile', {
 			'fields': ('first_name', 'last_name', 'email'),
-		}),
-		('Customer or applicant status', {
-			'fields': ('account_pathway', 'claim_status', 'claimed_businesses'),
 		}),
 		('Account status', {
 			'fields': ('is_active', 'last_login', 'date_joined'),
@@ -320,40 +315,10 @@ class CustomerAccountAdmin(UserAdmin):
 		except AccountProfile.DoesNotExist:
 			return False
 
-	@admin.display(description='Account pathway')
-	def account_pathway(self, obj):
-		claims = list(obj.business_claims.all())
-		if claims:
-			return 'Business applicant'
-		return 'Regular customer'
-
-	@admin.display(description='Claim status')
-	def claim_status(self, obj):
-		claims = list(obj.business_claims.all())
-		if not claims:
-			return 'No claim'
-
-		latest_claim = claims[0]
-		status_map = {
-			BusinessClaim.Status.DRAFT: 'Draft claim',
-			BusinessClaim.Status.SUBMITTED: 'Pending claim',
-			BusinessClaim.Status.UNDER_REVIEW: 'Under review',
-			BusinessClaim.Status.NEEDS_INFO: 'Needs info',
-			BusinessClaim.Status.REJECTED: 'Rejected claim',
-			BusinessClaim.Status.APPROVED: 'Approved claim',
-		}
-		return status_map.get(latest_claim.status, latest_claim.status)
-
-	@admin.display(description='Claimed business')
-	def claimed_businesses(self, obj):
-		claims = list(obj.business_claims.all())
-		if not claims:
-			return 'No claimed business'
-		return ', '.join(sorted({claim.listing_snapshot.name for claim in claims}))
-
-
 @admin.register(BusinessAccount, site=happyhour_admin_site)
 class BusinessAccountAdmin(UserAdmin):
+	delete_confirmation_template = 'admin/places/businessaccount/delete_confirmation.html'
+	delete_selected_confirmation_template = 'admin/places/businessaccount/delete_selected_confirmation.html'
 	list_display = (
 		'username',
 		'email',
@@ -691,6 +656,9 @@ class BusinessClaimAttachmentInline(admin.TabularInline):
 
 @admin.register(BusinessClaim, site=happyhour_admin_site)
 class BusinessClaimAdmin(admin.ModelAdmin):
+	approve_override_confirmation_template = 'admin/places/businessclaim/approve_override_confirmation.html'
+	delete_confirmation_template = 'admin/places/businessclaim/delete_confirmation.html'
+	delete_selected_confirmation_template = 'admin/places/businessclaim/delete_selected_confirmation.html'
 	class PriorRejectionFilter(admin.SimpleListFilter):
 		title = 'Prior rejections'
 		parameter_name = 'has_prior_rejections'
@@ -792,6 +760,41 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 
 	@admin.action(description='Approve selected claims and create memberships')
 	def approve_selected_claims(self, request, queryset):
+		if 'force_approve' in request.POST:
+			approved = 0
+			for claim in queryset:
+				try:
+					claim.approve(reviewed_by=request.user, force=True)
+					approved += 1
+				except ValidationError as error:
+					self.message_user(request, f'Could not approve {claim}: {error}', level='ERROR')
+			self.message_user(request, f'{approved} claim(s) approved.')
+			return None
+
+		blocked_claims = []
+		for claim in queryset:
+			verdict = claim.refresh_verification_state(save=False)
+			if verdict['blockers']:
+				blocked_claims.append(
+					{
+						'claim': claim,
+						'blockers': [_format_verification_blocker(blocker) for blocker in verdict['blockers']],
+					}
+				)
+
+		if blocked_claims:
+			context = {
+				**self.admin_site.each_context(request),
+				'title': 'Confirm force approval',
+				'opts': self.model._meta,
+				'queryset': queryset,
+				'blocked_claims': blocked_claims,
+				'action_checkbox_name': admin.helpers.ACTION_CHECKBOX_NAME,
+				'action_name': 'approve_selected_claims',
+				'changelist_url': reverse('happyhour_admin:places_businessclaim_changelist'),
+			}
+			return TemplateResponse(request, self.approve_override_confirmation_template, context)
+
 		approved = 0
 		for claim in queryset:
 			try:

@@ -6,6 +6,7 @@ from io import StringIO
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.contrib.admin import helpers
 from django.contrib.admin.sites import AdminSite
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.conf import settings
@@ -3752,6 +3753,10 @@ class ProfileDashboardApiTests(APITestCase):
 
 
 class AccountProxyTests(APITestCase):
+	def setUp(self):
+		super().setUp()
+		self.admin_user = User.objects.create_superuser(username='account_proxy_admin', email='account_proxy_admin@example.com', password='test-pass-123')
+
 	def test_customer_and_business_account_proxies_split_non_staff_users(self):
 		customer = User.objects.create_user(username='regular_customer', email='customer@example.com', password='test-pass-123')
 		business_user = User.objects.create_user(username='business_owner', email='owner@example.com', password='test-pass-123')
@@ -3773,7 +3778,7 @@ class AccountProxyTests(APITestCase):
 
 		self.assertEqual(
 			list(CustomerAccount.objects.order_by('username').values_list('username', flat=True)),
-			['business_owner', 'regular_customer'],
+			['regular_customer'],
 		)
 		self.assertEqual(list(BusinessAccount.objects.values_list('username', flat=True)), [])
 
@@ -3806,8 +3811,9 @@ class AccountProxyTests(APITestCase):
 		self.assertEqual(admin_instance.business_status(approved_account), 'Approved business')
 		self.assertEqual(admin_instance.membership_status(approved_account), 'Active membership')
 
-	def test_customer_account_admin_shows_applicant_summary(self):
+	def test_customer_account_admin_excludes_business_applicants(self):
 		business_user = User.objects.create_user(username='claiming_customer', email='claiming@example.com', password='test-pass-123')
+		regular_customer = User.objects.create_user(username='true_customer', email='true_customer@example.com', password='test-pass-123')
 		snapshot = ListingSnapshot.objects.create(
 			name='Claimed Place',
 			city=City.OXNARD,
@@ -3825,11 +3831,130 @@ class AccountProxyTests(APITestCase):
 		)
 
 		admin_instance = CustomerAccountAdmin(CustomerAccount, AdminSite())
-		applicant = CustomerAccount.objects.get(username='claiming_customer')
+		queryset = admin_instance.get_queryset(self.client.request().wsgi_request)
 
-		self.assertEqual(admin_instance.account_pathway(applicant), 'Business applicant')
-		self.assertEqual(admin_instance.claim_status(applicant), 'Pending claim')
-		self.assertEqual(admin_instance.claimed_businesses(applicant), 'Claimed Place')
+		self.assertEqual(list(queryset.values_list('username', flat=True)), ['true_customer'])
+
+	def test_customer_account_delete_confirmation_shows_warning_and_scrollable_list(self):
+		customer = User.objects.create_user(username='delete_customer', email='delete_customer@example.com', password='test-pass-123')
+		self.client.force_login(self.admin_user)
+
+		response = self.client.get(reverse('happyhour_admin:places_customeraccount_delete', args=[customer.pk]))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'Are you sure you want to delete this customer account?')
+		self.assertContains(response, 'Review the account details below before permanently deleting it.')
+		self.assertContains(response, 'account-delete-warning__list')
+		self.assertContains(response, customer.username)
+		self.assertContains(response, customer.email)
+
+	def test_customer_account_bulk_delete_confirmation_lists_selected_accounts(self):
+		first_customer = User.objects.create_user(username='bulk_customer_one', email='bulk_customer_one@example.com', password='test-pass-123')
+		second_customer = User.objects.create_user(username='bulk_customer_two', email='bulk_customer_two@example.com', password='test-pass-123')
+		self.client.force_login(self.admin_user)
+
+		response = self.client.post(
+			reverse('happyhour_admin:places_customeraccount_changelist'),
+			{
+				'action': 'delete_selected',
+				helpers.ACTION_CHECKBOX_NAME: [str(first_customer.pk), str(second_customer.pk)],
+				'index': '0',
+			},
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'Are you sure you want to delete these customer accounts?')
+		self.assertContains(response, 'Review the selected accounts below before permanently deleting them.')
+		self.assertContains(response, 'account-delete-warning__list')
+		self.assertContains(response, first_customer.username)
+		self.assertContains(response, second_customer.username)
+		self.assertContains(response, first_customer.email)
+		self.assertContains(response, second_customer.email)
+
+	def test_business_account_delete_confirmation_shows_warning_and_scrollable_list(self):
+		approved_user = User.objects.create_user(username='delete_business_owner', email='delete_business_owner@example.com', password='test-pass-123')
+		snapshot = ListingSnapshot.objects.create(
+			name='Delete Business Cafe',
+			city=City.VENTURA,
+			venue_type=VenueType.CAFE,
+			address_line_1='22 Palm St',
+		)
+		approved_claim = BusinessClaim.objects.create(
+			claimant=approved_user,
+			listing_snapshot=snapshot,
+			contact_name='Delete Owner',
+			job_title='Owner',
+			work_email='owner@deletebusiness.com',
+			verification_summary='Approved verification.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(user=approved_user, claim=approved_claim, is_active=True)
+		self.client.force_login(self.admin_user)
+
+		response = self.client.get(reverse('happyhour_admin:places_businessaccount_delete', args=[approved_user.pk]))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'Are you sure you want to delete this business account?')
+		self.assertContains(response, 'Review the account details below before permanently deleting it.')
+		self.assertContains(response, 'account-delete-warning__list')
+		self.assertContains(response, approved_user.username)
+		self.assertContains(response, approved_user.email)
+		self.assertContains(response, snapshot.name)
+
+	def test_business_account_bulk_delete_confirmation_lists_selected_accounts(self):
+		first_user = User.objects.create_user(username='bulk_business_one', email='bulk_business_one@example.com', password='test-pass-123')
+		second_user = User.objects.create_user(username='bulk_business_two', email='bulk_business_two@example.com', password='test-pass-123')
+		first_snapshot = ListingSnapshot.objects.create(
+			name='Bulk Business One',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='100 Main St',
+		)
+		second_snapshot = ListingSnapshot.objects.create(
+			name='Bulk Business Two',
+			city=City.OXNARD,
+			venue_type=VenueType.CAFE,
+			address_line_1='200 Harbor Blvd',
+		)
+		first_claim = BusinessClaim.objects.create(
+			claimant=first_user,
+			listing_snapshot=first_snapshot,
+			contact_name='First Bulk Owner',
+			job_title='Owner',
+			work_email='first@bulkbusiness.com',
+			verification_summary='Approved verification.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		second_claim = BusinessClaim.objects.create(
+			claimant=second_user,
+			listing_snapshot=second_snapshot,
+			contact_name='Second Bulk Owner',
+			job_title='Owner',
+			work_email='second@bulkbusiness.com',
+			verification_summary='Approved verification.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(user=first_user, claim=first_claim, is_active=True)
+		BusinessMembership.objects.create(user=second_user, claim=second_claim, is_active=True)
+		self.client.force_login(self.admin_user)
+
+		response = self.client.post(
+			reverse('happyhour_admin:places_businessaccount_changelist'),
+			{
+				'action': 'delete_selected',
+				helpers.ACTION_CHECKBOX_NAME: [str(first_user.pk), str(second_user.pk)],
+				'index': '0',
+			},
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'Are you sure you want to delete these business accounts?')
+		self.assertContains(response, 'Review the selected accounts below before permanently deleting them.')
+		self.assertContains(response, 'account-delete-warning__list')
+		self.assertContains(response, first_user.username)
+		self.assertContains(response, second_user.username)
+		self.assertContains(response, first_snapshot.name)
+		self.assertContains(response, second_snapshot.name)
 
 
 class ListingSnapshotAdminTests(TestCase):
@@ -4148,6 +4273,8 @@ class BusinessClaimAdminTests(TestCase):
 		self.assertContains(response, BusinessClaim.Pathway.ESTABLISHED)
 		self.assertContains(response, '0.0000 GB')
 		self.assertContains(response, 'Business registration document is invalid, incomplete, or unclear')
+		self.assertContains(response, 'Rejection Reasons')
+		self.assertContains(response, 'rejection-reasons-list')
 		self.assertContains(response, 'Attempt #')
 		self.assertContains(response, 'Current attempt')
 		self.assertContains(response, 'No earlier claim attempts found.')
@@ -4409,6 +4536,97 @@ class BusinessClaimAdminTests(TestCase):
 
 		self.assertTrue(self.admin.has_delete_permission(request, self.claim))
 		self.assertIn('delete_selected', self.admin.get_actions(request))
+
+	def test_delete_confirmation_shows_warning_and_scrollable_claim_summary(self):
+		self.client.force_login(self.admin_user)
+
+		response = self.client.get(reverse('happyhour_admin:places_businessclaim_delete', args=[self.claim.pk]))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'Are you sure you want to delete this business claim?')
+		self.assertContains(response, 'Review the claim details below before permanently deleting it.')
+		self.assertContains(response, 'business-claim-delete-warning__list')
+		self.assertContains(response, self.snapshot.name)
+		self.assertContains(response, self.claim.contact_name)
+		self.assertContains(response, self.claim.claimant.email)
+
+	def test_approve_selected_claims_shows_force_approval_warning_for_blocked_claims(self):
+		self.claim.refresh_verification_state(save=True)
+		self.client.force_login(self.admin_user)
+
+		response = self.client.post(
+			reverse('happyhour_admin:places_businessclaim_changelist'),
+			{
+				'action': 'approve_selected_claims',
+				helpers.ACTION_CHECKBOX_NAME: [str(self.claim.pk)],
+				'index': '0',
+			},
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'Approve blocked business claims anyway?')
+		self.assertContains(response, 'Required permit documentation is still missing.')
+		self.assertContains(response, 'Approve anyway')
+
+	def test_approve_selected_claims_can_force_approve_after_confirmation(self):
+		self.claim.refresh_verification_state(save=True)
+		self.client.force_login(self.admin_user)
+
+		response = self.client.post(
+			reverse('happyhour_admin:places_businessclaim_changelist'),
+			{
+				'action': 'approve_selected_claims',
+				helpers.ACTION_CHECKBOX_NAME: [str(self.claim.pk)],
+				'index': '0',
+				'force_approve': '1',
+			},
+			follow=True,
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.claim.refresh_from_db()
+		self.assertEqual(self.claim.status, BusinessClaim.Status.APPROVED)
+		self.assertTrue(BusinessMembership.objects.filter(claim=self.claim, is_active=True).exists())
+
+	def test_bulk_delete_confirmation_lists_selected_claims_in_scrollable_warning(self):
+		other_claimant = User.objects.create_user(username='second_claim_owner', email='second-owner@example.com', password='test-pass-123')
+		other_snapshot = ListingSnapshot.objects.create(
+			name='Second Claimed Place',
+			city=City.OXNARD,
+			venue_type=VenueType.CAFE,
+			address_line_1='456 Harbor Blvd',
+			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+		)
+		other_claim = BusinessClaim.objects.create(
+			claimant=other_claimant,
+			listing_snapshot=other_snapshot,
+			pathway=BusinessClaim.Pathway.CLAIMED,
+			status=BusinessClaim.Status.UNDER_REVIEW,
+			contact_name='Second Owner',
+			job_title=BusinessClaim.JobTitle.MANAGER,
+			work_email='second@claimed-place.com',
+			verification_summary='Second submitted claim.',
+		)
+
+		self.client.force_login(self.admin_user)
+		response = self.client.post(
+			reverse('happyhour_admin:places_businessclaim_changelist'),
+			{
+				'action': 'delete_selected',
+				helpers.ACTION_CHECKBOX_NAME: [str(self.claim.pk), str(other_claim.pk)],
+				'index': '0',
+			},
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'Are you sure you want to delete these business claims?')
+		self.assertContains(response, 'Review the selected claims below before permanently deleting them.')
+		self.assertContains(response, 'business-claim-delete-warning__list')
+		self.assertContains(response, self.snapshot.name)
+		self.assertContains(response, other_snapshot.name)
+		self.assertContains(response, self.claim.claimant.email)
+		self.assertContains(response, other_claim.claimant.email)
+
 
 
 class HappyHourAdminSiteTests(TestCase):

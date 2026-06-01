@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "HappyHourApp",
+    "name": "DiningDealz",
     "slug": "happy-hour-app",
     "version": "1.0.0",
     "scheme": "diningdealz",
@@ -13,6 +13,9 @@
       "backgroundColor": "#080101"
     },
     "ios": {
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "DiningDealz uses your location so approved mobile or multi-area business accounts can update their live map location and service area in the app."
+      },
       "supportsTablet": true
     },
     "android": {

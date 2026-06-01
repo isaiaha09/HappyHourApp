@@ -659,12 +659,12 @@ class BusinessClaim(models.Model):
 			self.submitted_at = previous_submitted_at
 			raise
 
-	def approve(self, reviewed_by=None, reviewer_notes=''):
+	def approve(self, reviewed_by=None, reviewer_notes='', force=False):
 		if self.status == self.Status.DRAFT:
 			raise ValidationError('Draft claims must be submitted before they can be approved.')
 
 		verdict = self.refresh_verification_state(save=False)
-		if verdict['blockers']:
+		if verdict['blockers'] and not force:
 			raise ValidationError(f'Claim still has verification blockers: {", ".join(verdict["blockers"])}.')
 
 		now = timezone.now()
@@ -816,6 +816,7 @@ class CustomerAccountManager(models.Manager):
 			super()
 			.get_queryset()
 			.filter(is_staff=False, is_superuser=False)
+			.filter(business_claims__isnull=True)
 			.exclude(business_memberships__is_active=True)
 			.distinct()
 		)
