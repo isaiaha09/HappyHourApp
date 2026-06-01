@@ -5,7 +5,7 @@ from django.contrib import admin, messages
 from django.contrib.auth.admin import GroupAdmin, UserAdmin
 from django.contrib.auth.models import Group, User
 from django.core.exceptions import ValidationError
-from django.db.models import Exists, OuterRef, Prefetch, Q
+from django.db.models import Exists, OuterRef, Prefetch, Q, Subquery
 from django.http import JsonResponse
 from django.http import HttpResponseRedirect
 from django.urls import path, reverse
@@ -708,6 +708,7 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 
 			prior_rejections = BusinessClaim.objects.filter(
 				listing_snapshot_id=OuterRef('listing_snapshot_id'),
+				claimant_id=OuterRef('claimant_id'),
 				status=BusinessClaim.Status.REJECTED,
 			).exclude(pk=OuterRef('pk'))
 			queryset = queryset.annotate(has_prior_rejections=Exists(prior_rejections))
@@ -715,6 +716,7 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 				return queryset.filter(has_prior_rejections=True)
 			return queryset.filter(has_prior_rejections=False)
 
+	change_list_template = 'admin/places/businessclaim/change_list.html'
 	form = BusinessClaimAdminForm
 	actions = ['mark_under_review', 'approve_selected_claims', 'reject_selected_claims']
 	inlines = (BusinessClaimProfileEntryInline, BusinessClaimAttachmentInline)
@@ -750,24 +752,49 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 		}),
 	)
 
+	def get_queryset(self, request):
+		queryset = self.model._default_manager.get_queryset()
+		same_user_attempts = BusinessClaim.objects.filter(
+			claimant_id=OuterRef('claimant_id'),
+		).filter(
+			Q(listing_snapshot_id=OuterRef('listing_snapshot_id')) |
+			Q(
+				listing_snapshot__name=OuterRef('listing_snapshot__name'),
+				listing_snapshot__city=OuterRef('listing_snapshot__city'),
+			)
+		).order_by('-created_at', '-pk')
+		queryset = queryset.annotate(
+			attempt_group_latest_created_at=Subquery(same_user_attempts.values('created_at')[:1]),
+			attempt_group_latest_pk=Subquery(same_user_attempts.values('pk')[:1]),
+		)
+		ordering = self.get_ordering(request)
+		if ordering:
+			queryset = queryset.order_by(*ordering)
+		return queryset
+
+	def get_ordering(self, request):
+		return ('-attempt_group_latest_created_at', '-attempt_group_latest_pk', '-created_at', '-pk')
+
 	def _get_attempt_history_queryset(self, obj):
 		if not obj or not obj.pk:
 			return BusinessClaim.objects.none()
 
 		query = Q(listing_snapshot_id=obj.listing_snapshot_id)
-		listing_name = str(obj.listing_snapshot.name or '').strip()
+		listing_name = str(getattr(obj.listing_snapshot, 'name', '') or '').strip()
+		listing_city = getattr(obj.listing_snapshot, 'city', '')
 		work_email = str(obj.work_email or '').strip()
-		website_url = str(obj.business_website_url or obj.listing_snapshot.website_url or '').strip()
-		claimant_email = str(getattr(obj.claimant, 'email', '') or '').strip()
+		website_url = str(obj.business_website_url or getattr(obj.listing_snapshot, 'website_url', '') or '').strip()
 
-		if listing_name and work_email:
+		if listing_name and listing_city:
+			query |= Q(listing_snapshot__name__iexact=listing_name, listing_snapshot__city=listing_city)
+		elif listing_name and work_email:
 			query |= Q(listing_snapshot__name__iexact=listing_name, work_email__iexact=work_email)
-		if listing_name and website_url:
+		elif listing_name and website_url:
 			query |= Q(listing_snapshot__name__iexact=listing_name, business_website_url__iexact=website_url)
-		if listing_name and claimant_email:
-			query |= Q(listing_snapshot__name__iexact=listing_name, claimant__email__iexact=claimant_email)
 
-		return BusinessClaim.objects.select_related('claimant', 'listing_snapshot', 'reviewed_by').filter(query).exclude(pk=obj.pk).order_by('-created_at').distinct()
+		return BusinessClaim.objects.select_related('claimant', 'listing_snapshot', 'reviewed_by').filter(
+			claimant_id=obj.claimant_id,
+		).filter(query).exclude(pk=obj.pk).order_by('-created_at', '-pk')
 
 	def _get_attempt_history_claims(self, obj):
 		return list(self._get_attempt_history_queryset(obj))

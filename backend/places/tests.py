@@ -4083,75 +4083,59 @@ class BusinessClaimAdminTests(TestCase):
 		self.assertContains(response, 'Current attempt')
 		self.assertContains(response, 'No earlier claim attempts found.')
 
-	def test_change_view_shows_prior_rejected_attempts_for_approved_claim(self):
-		first_rejected_user = User.objects.create_user(username='prior_owner_one', email='prior-owner-one@example.com', password='test-pass-123')
-		second_rejected_user = User.objects.create_user(username='prior_owner_two', email='prior-owner-two@example.com', password='test-pass-123')
-		approved_user = User.objects.create_user(username='approved_owner', email='approved-owner@example.com', password='test-pass-123')
-
-		BusinessClaim.objects.create(
-			claimant=first_rejected_user,
+	def test_change_view_shows_prior_rejected_attempts_for_same_user_only(self):
+		prior_rejected_claim = BusinessClaim.objects.create(
+			claimant=self.claimant,
 			listing_snapshot=self.snapshot,
 			pathway=BusinessClaim.Pathway.ESTABLISHED,
 			status=BusinessClaim.Status.REJECTED,
 			contact_name='Owner Name',
 			job_title=BusinessClaim.JobTitle.OWNER,
-			work_email='owner@claimed-place.com',
+			work_email='owner+rejected@claimed-place.com',
 			work_phone='805-555-0101',
 			employer_address='123 Main St',
 			business_website_url='https://claimed-place.example.com',
-			verification_summary='First rejected attempt.',
+			verification_summary='Earlier rejected attempt.',
 			reviewed_at=timezone.now(),
 			reviewed_by=self.admin_user,
 			rejection_reason_codes=[BusinessClaim.RejectionReason.PROOF_OF_AUTHORITY_INVALID],
 		)
+		BusinessClaim.objects.filter(pk=prior_rejected_claim.pk).update(created_at=self.claim.created_at - timedelta(minutes=1))
+		prior_rejected_claim.refresh_from_db()
+		other_user = User.objects.create_user(username='other_attempt_owner', email='other-attempt-owner@example.com', password='test-pass-123')
 		BusinessClaim.objects.create(
-			claimant=second_rejected_user,
+			claimant=other_user,
 			listing_snapshot=self.snapshot,
 			pathway=BusinessClaim.Pathway.ESTABLISHED,
 			status=BusinessClaim.Status.REJECTED,
-			contact_name='Owner Name',
+			contact_name='Other Owner',
 			job_title=BusinessClaim.JobTitle.OWNER,
-			work_email='owner@claimed-place.com',
+			work_email='other-owner@claimed-place.com',
 			work_phone='805-555-0102',
 			employer_address='123 Main St',
 			business_website_url='https://claimed-place.example.com',
-			verification_summary='Second rejected attempt.',
+			verification_summary='Other user rejected attempt.',
 			reviewed_at=timezone.now(),
 			reviewed_by=self.admin_user,
 			rejection_reason_codes=[BusinessClaim.RejectionReason.ADDRESS_INVALID],
 		)
-		approved_claim = BusinessClaim.objects.create(
-			claimant=approved_user,
-			listing_snapshot=self.snapshot,
-			pathway=BusinessClaim.Pathway.ESTABLISHED,
-			status=BusinessClaim.Status.APPROVED,
-			contact_name='Owner Name',
-			job_title=BusinessClaim.JobTitle.OWNER,
-			work_email='owner@claimed-place.com',
-			work_phone='805-555-0199',
-			employer_address='123 Main St',
-			business_website_url='https://claimed-place.example.com',
-			verification_summary='Approved attempt.',
-			reviewed_at=timezone.now(),
-			reviewed_by=self.admin_user,
-		)
 
 		self.client.force_login(self.admin_user)
-		response = self.client.get(reverse('happyhour_admin:places_businessclaim_change', args=[approved_claim.pk]))
+		response = self.client.get(reverse('happyhour_admin:places_businessclaim_change', args=[self.claim.pk]))
 
 		self.assertEqual(response.status_code, 200)
-		self.assertEqual(self.admin.attempt_number_display(approved_claim), 4)
-		self.assertIn('Yes', str(self.admin.current_attempt_display(approved_claim)))
-		self.assertEqual(self.admin.prior_rejection_count_display(approved_claim), 2)
+		self.assertEqual(self.admin.attempt_number_display(self.claim), 2)
+		self.assertIn('Yes', str(self.admin.current_attempt_display(self.claim)))
+		self.assertEqual(self.admin.prior_rejection_count_display(self.claim), 1)
 		self.assertContains(response, 'Older rejected attempts stay in the database for audit history.')
 		self.assertContains(response, 'Prior rejections')
 		self.assertContains(response, 'Rejected')
-		self.assertContains(response, 'prior_owner_one')
-		self.assertContains(response, 'prior_owner_two')
+		self.assertContains(response, self.claimant.username)
+		self.assertContains(response, prior_rejected_claim.contact_name)
+		self.assertNotContains(response, 'other_attempt_owner')
 
 	def test_changelist_can_filter_claims_with_prior_rejections(self):
-		prior_rejected_user = User.objects.create_user(username='prior_filter_owner', email='prior-filter-owner@example.com', password='test-pass-123')
-		approved_user = User.objects.create_user(username='approved_filter_owner', email='approved-filter-owner@example.com', password='test-pass-123')
+		repeat_claim_user = User.objects.create_user(username='prior_filter_owner', email='prior-filter-owner@example.com', password='test-pass-123')
 		other_snapshot = ListingSnapshot.objects.create(
 			name='Other Place',
 			city=City.OXNARD,
@@ -4162,7 +4146,7 @@ class BusinessClaimAdminTests(TestCase):
 		other_user = User.objects.create_user(username='isolated_owner', email='isolated-owner@example.com', password='test-pass-123')
 
 		BusinessClaim.objects.create(
-			claimant=prior_rejected_user,
+			claimant=repeat_claim_user,
 			listing_snapshot=self.snapshot,
 			pathway=BusinessClaim.Pathway.ESTABLISHED,
 			status=BusinessClaim.Status.REJECTED,
@@ -4177,8 +4161,8 @@ class BusinessClaimAdminTests(TestCase):
 			reviewed_by=self.admin_user,
 			rejection_reason_codes=[BusinessClaim.RejectionReason.ADDRESS_INVALID],
 		)
-		BusinessClaim.objects.create(
-			claimant=approved_user,
+		repeated_claim = BusinessClaim.objects.create(
+			claimant=repeat_claim_user,
 			listing_snapshot=self.snapshot,
 			pathway=BusinessClaim.Pathway.ESTABLISHED,
 			status=BusinessClaim.Status.APPROVED,
@@ -4210,17 +4194,23 @@ class BusinessClaimAdminTests(TestCase):
 		response = self.client.get(reverse('happyhour_admin:places_businessclaim_changelist'), {'has_prior_rejections': 'yes'})
 
 		self.assertEqual(response.status_code, 200)
-		self.assertContains(response, 'approved_filter_owner')
-		self.assertContains(response, 'claim_owner')
+		self.assertContains(response, repeated_claim.claimant.username)
+		self.assertNotContains(response, 'claim_owner')
 		self.assertNotContains(response, 'isolated_owner')
 
 	def test_changelist_shows_attempt_number_and_current_attempt_marker(self):
-		first_rejected_user = User.objects.create_user(username='attempt_owner_one', email='attempt-one@example.com', password='test-pass-123')
-		second_user = User.objects.create_user(username='attempt_owner_two', email='attempt-two@example.com', password='test-pass-123')
+		repeat_claim_user = User.objects.create_user(username='attempt_owner', email='attempt-owner@example.com', password='test-pass-123')
+		attempt_snapshot = ListingSnapshot.objects.create(
+			name='Attempt Place',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='456 Attempt St',
+			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+		)
 
-		BusinessClaim.objects.create(
-			claimant=first_rejected_user,
-			listing_snapshot=self.snapshot,
+		first_attempt = BusinessClaim.objects.create(
+			claimant=repeat_claim_user,
+			listing_snapshot=attempt_snapshot,
 			pathway=BusinessClaim.Pathway.ESTABLISHED,
 			status=BusinessClaim.Status.REJECTED,
 			contact_name='Owner Name',
@@ -4235,8 +4225,8 @@ class BusinessClaimAdminTests(TestCase):
 			rejection_reason_codes=[BusinessClaim.RejectionReason.PROOF_OF_AUTHORITY_INVALID],
 		)
 		latest_claim = BusinessClaim.objects.create(
-			claimant=second_user,
-			listing_snapshot=self.snapshot,
+			claimant=repeat_claim_user,
+			listing_snapshot=attempt_snapshot,
 			pathway=BusinessClaim.Pathway.ESTABLISHED,
 			status=BusinessClaim.Status.SUBMITTED,
 			contact_name='Owner Name',
@@ -4254,9 +4244,11 @@ class BusinessClaimAdminTests(TestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertContains(response, 'Attempt #')
 		self.assertContains(response, 'Current attempt')
-		self.assertEqual(self.admin.attempt_number_display(latest_claim), 3)
+		self.assertContains(response, 'claim-attempt-toggle')
+		self.assertEqual(self.admin.attempt_number_display(first_attempt), 1)
+		self.assertEqual(self.admin.attempt_number_display(latest_claim), 2)
 		self.assertIn('Yes', str(self.admin.current_attempt_display(latest_claim)))
-		self.assertIn('No', str(self.admin.current_attempt_display(self.claim)))
+		self.assertIn('No', str(self.admin.current_attempt_display(first_attempt)))
 
 	def test_delete_is_available_for_business_claims(self):
 		request = RequestFactory().get('/admin/places/businessclaim/')

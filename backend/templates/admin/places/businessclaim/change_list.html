@@ -1,0 +1,151 @@
+{% extends "admin/change_list.html" %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+  .claim-attempt-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-right: 0.5rem;
+    padding: 0.15rem 0.45rem;
+    border: 1px solid #4a4a4a;
+    border-radius: 999px;
+    background: #1d1d1d;
+    color: #f5f5f5;
+    cursor: pointer;
+    font-size: 0.75rem;
+    line-height: 1.2;
+    vertical-align: middle;
+  }
+
+  .claim-attempt-toggle:hover,
+  .claim-attempt-toggle:focus {
+    border-color: #79aec8;
+    color: #79aec8;
+    outline: none;
+  }
+
+  .claim-attempt-toggle__arrow {
+    display: inline-block;
+    width: 0.8rem;
+    text-align: center;
+    transition: transform 0.15s ease;
+  }
+
+  .claim-attempt-toggle[aria-expanded="true"] .claim-attempt-toggle__arrow {
+    transform: rotate(90deg);
+  }
+
+  .claim-attempt-history-row td,
+  .claim-attempt-history-row th {
+    background: #1f1f1f;
+  }
+
+  .claim-attempt-group-open td,
+  .claim-attempt-group-open th {
+    border-bottom-color: #3d3d3d;
+  }
+</style>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const resultTable = document.getElementById('result_list');
+    const resultBody = resultTable ? resultTable.querySelector('tbody') : null;
+
+    if (!resultBody) {
+      return;
+    }
+
+    const rows = Array.from(resultBody.querySelectorAll('tr')).filter(function (row) {
+      return row.querySelector('.field-listing_snapshot') && row.querySelector('.field-claimant');
+    });
+
+    if (!rows.length) {
+      return;
+    }
+
+    function getGroupKey(row) {
+      const claimantCell = row.querySelector('.field-claimant');
+      const listingCell = row.querySelector('.field-listing_snapshot');
+      const claimant = claimantCell ? claimantCell.textContent.trim() : '';
+      const listing = listingCell ? listingCell.textContent.trim() : '';
+      return claimant + '::' + listing;
+    }
+
+    function getAttemptLabel(count) {
+      return count === 1 ? '1 previous attempt' : count + ' previous attempts';
+    }
+
+    const groups = [];
+    let currentGroup = null;
+
+    rows.forEach(function (row) {
+      const key = getGroupKey(row);
+      if (!key) {
+        currentGroup = null;
+        return;
+      }
+
+      if (!currentGroup || currentGroup.key !== key) {
+        currentGroup = {
+          key: key,
+          leadRow: row,
+          historyRows: []
+        };
+        groups.push(currentGroup);
+        return;
+      }
+
+      currentGroup.historyRows.push(row);
+    });
+
+    groups.forEach(function (group) {
+      const currentAttemptCell = group.leadRow.querySelector('.field-current_attempt_display');
+      const listingCell = group.leadRow.querySelector('.field-listing_snapshot');
+
+      if (!group.historyRows.length || !currentAttemptCell || !listingCell) {
+        return;
+      }
+
+      if (currentAttemptCell.textContent.trim() !== 'Yes') {
+        return;
+      }
+
+      const toggle = document.createElement('button');
+      const label = document.createElement('span');
+      const arrow = document.createElement('span');
+
+      toggle.type = 'button';
+      toggle.className = 'claim-attempt-toggle';
+      toggle.setAttribute('aria-expanded', 'false');
+      toggle.setAttribute('aria-label', 'Show previous attempts for this claimant');
+
+      arrow.className = 'claim-attempt-toggle__arrow';
+      arrow.textContent = '>';
+
+      label.className = 'claim-attempt-toggle__label';
+      label.textContent = getAttemptLabel(group.historyRows.length);
+
+      toggle.appendChild(arrow);
+      toggle.appendChild(label);
+      listingCell.prepend(toggle);
+
+      group.historyRows.forEach(function (row) {
+        row.hidden = true;
+        row.classList.add('claim-attempt-history-row');
+      });
+
+      toggle.addEventListener('click', function () {
+        const nextExpanded = toggle.getAttribute('aria-expanded') !== 'true';
+        toggle.setAttribute('aria-expanded', nextExpanded ? 'true' : 'false');
+        toggle.setAttribute('aria-label', nextExpanded ? 'Hide previous attempts for this claimant' : 'Show previous attempts for this claimant');
+        group.leadRow.classList.toggle('claim-attempt-group-open', nextExpanded);
+
+        group.historyRows.forEach(function (row) {
+          row.hidden = !nextExpanded;
+        });
+      });
+    });
+  });
+</script>
+{% endblock %}
