@@ -1,4 +1,6 @@
 from datetime import timedelta
+import hashlib
+import io
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -8,8 +10,106 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
+from pypdf import PdfReader
 import pyotp
 import secrets
+
+try:
+	from PIL import Image, ImageOps
+except ImportError:  # pragma: no cover - optional dependency during partial installs
+	Image = None
+	ImageOps = None
+
+try:
+	import pytesseract
+	from pytesseract import TesseractNotFoundError
+except ImportError:  # pragma: no cover - optional dependency during partial installs
+	pytesseract = None
+	TesseractNotFoundError = RuntimeError
+
+
+GENERIC_EMAIL_DOMAINS = {'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com'}
+
+DOCUMENT_KIND_EXPECTED_KEYWORDS = {
+	'business_registration': {
+		'business registration', 'registration', 'license', 'articles', 'incorporation', 'organization', 'llc', 'corporation', 'secretary of state', 'ein', 'tax id', 'seller permit',
+	},
+	'health_permit': {
+		'health permit', 'health', 'permit', 'food facility', 'county', 'public health', 'environmental health', 'sanitation',
+	},
+	'abc_license': {
+		'abc', 'alcohol', 'beverage', 'liquor', 'license', 'type 41', 'type 47',
+	},
+	'proof_of_address_control': {
+		'utility bill', 'lease', 'statement', 'service address', 'billing address', 'property tax', 'rental', 'address',
+	},
+	'proof_of_authority': {
+		'authority', 'authorization', 'owner', 'manager', 'member', 'officer', 'payroll', 'operating agreement', 'employment', 'business card',
+	},
+}
+
+DOCUMENT_KIND_SUSPICIOUS_KEYWORDS = {
+	'baseball', 'basketball', 'football', 'soccer', 'softball', 'transcript', 'resume', 'curriculum vitae', 'cv', 'grade report', 'diploma', 'student record',
+}
+
+
+def _normalize_validation_text(value):
+	return ' '.join(str(value or '').replace('_', ' ').replace('-', ' ').lower().split())
+
+
+def _keyword_hits(text, keywords):
+	normalized = _normalize_validation_text(text)
+	return sorted(keyword for keyword in keywords if keyword in normalized)
+
+
+def _extract_printable_text_fallback(file_bytes):
+	if not file_bytes:
+		return ''
+	preview = file_bytes[:200000]
+	printable_count = sum(1 for byte in preview if byte in {9, 10, 13} or 32 <= byte <= 126)
+	if not preview or (printable_count / len(preview)) < 0.7:
+		return ''
+	return preview.decode('utf-8', errors='ignore')
+
+
+def _extract_text_from_pdf_bytes(file_bytes):
+	if not file_bytes:
+		return ''
+	if not file_bytes.lstrip().startswith(b'%PDF'):
+		return _extract_printable_text_fallback(file_bytes)
+	try:
+		reader = PdfReader(io.BytesIO(file_bytes))
+	except Exception:
+		return _extract_printable_text_fallback(file_bytes)
+	text_chunks = []
+	for page in reader.pages:
+		try:
+			text_chunks.append(page.extract_text() or '')
+		except Exception:
+			continue
+	return '\n'.join(chunk for chunk in text_chunks if chunk).strip()
+
+
+def _extract_text_from_image_bytes(file_bytes):
+	if not file_bytes or Image is None or pytesseract is None:
+		return ''
+	try:
+		image = Image.open(io.BytesIO(file_bytes))
+		if ImageOps is not None:
+			image = ImageOps.grayscale(image)
+		return str(pytesseract.image_to_string(image) or '').strip()
+	except (OSError, TesseractNotFoundError):
+		return ''
+
+
+def _extract_attachment_validation_text(file_bytes, filename='', content_type=''):
+	normalized_name = str(filename or '').strip().lower()
+	normalized_type = str(content_type or '').strip().lower()
+	if normalized_type == 'application/pdf' or normalized_name.endswith('.pdf'):
+		return _extract_text_from_pdf_bytes(file_bytes)
+	if normalized_type.startswith('image/') or normalized_name.endswith(('.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tif', '.tiff')):
+		return _extract_text_from_image_bytes(file_bytes)
+	return _extract_printable_text_fallback(file_bytes)
 
 
 class City(models.TextChoices):
@@ -307,6 +407,71 @@ class BusinessClaim(models.Model):
 			return bool(self.abc_license_documents or self.has_attachment_kind(BusinessClaimAttachment.AttachmentKind.ABC_LICENSE))
 		return True
 
+	def get_required_attachment_kinds_for_validation(self):
+		kinds = [
+			BusinessClaimAttachment.AttachmentKind.BUSINESS_REGISTRATION,
+			BusinessClaimAttachment.AttachmentKind.PROOF_OF_AUTHORITY,
+		]
+		if self.listing_snapshot.venue_type in {VenueType.RESTAURANT, VenueType.FAST_FOOD, VenueType.CAFE}:
+			kinds.append(BusinessClaimAttachment.AttachmentKind.HEALTH_PERMIT)
+		elif self.listing_snapshot.venue_type == VenueType.BAR:
+			kinds.append(BusinessClaimAttachment.AttachmentKind.ABC_LICENSE)
+		return kinds
+
+	def evaluate_document_evidence(self):
+		if self.pathway not in {self.Pathway.CLAIMED, self.Pathway.ESTABLISHED} or not self.pk:
+			return {'penalty': 0, 'flags': [], 'blockers': []}
+
+		required_kinds = self.get_required_attachment_kinds_for_validation()
+		attachments = list(self.attachments.filter(attachment_kind__in=required_kinds))
+		if not attachments:
+			return {'penalty': 0, 'flags': [], 'blockers': []}
+
+		penalty = 0
+		flags = []
+		blockers = []
+		analysis_by_kind = {kind: [] for kind in required_kinds}
+		digest_to_kinds = {}
+
+		for attachment in attachments:
+			analysis = attachment.get_document_validation_analysis()
+			analysis_by_kind.setdefault(attachment.attachment_kind, []).append(analysis)
+			digest = analysis.get('digest', '')
+			if digest:
+				digest_to_kinds.setdefault(digest, set()).add(attachment.attachment_kind)
+
+		duplicate_required_digests = [
+			kinds for kinds in digest_to_kinds.values()
+			if len(kinds) > 1
+		]
+		if duplicate_required_digests:
+			flags.append('reused_same_file_across_required_document_slots')
+			blockers.append('reused_same_file_across_required_document_slots')
+			penalty += 30
+
+		for attachment_kind, analyses in analysis_by_kind.items():
+			if not analyses:
+				continue
+			has_expected_match = any(analysis['expected_hits'] for analysis in analyses)
+			has_suspicious_match = any(analysis['suspicious_hits'] for analysis in analyses)
+			if not has_expected_match:
+				if has_suspicious_match:
+					flags.append(f'{attachment_kind}_document_content_mismatch')
+					blockers.append(f'{attachment_kind}_document_content_mismatch')
+					penalty += 25
+				else:
+					flags.append(f'{attachment_kind}_document_low_confidence')
+					penalty += 10
+			elif has_suspicious_match:
+				flags.append(f'{attachment_kind}_document_contains_unrelated_terms')
+				penalty += 10
+
+		return {
+			'penalty': penalty,
+			'flags': sorted(set(flags)),
+			'blockers': sorted(set(blockers)),
+		}
+
 	def evaluate_verification(self):
 		score = 0
 		flags = []
@@ -382,7 +547,12 @@ class BusinessClaim(models.Model):
 			elif self.listing_snapshot.venue_type in {VenueType.RESTAURANT, VenueType.FAST_FOOD, VenueType.CAFE, VenueType.BAR}:
 				flags.append('informal_permit_missing')
 
-		if work_email_domain and work_email_domain in {'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com'}:
+		document_verdict = self.evaluate_document_evidence()
+		score = max(0, score - document_verdict['penalty'])
+		flags.extend(document_verdict['flags'])
+		blockers.extend(document_verdict['blockers'])
+
+		if work_email_domain and work_email_domain in GENERIC_EMAIL_DOMAINS:
 			flags.append('generic_work_email_domain')
 			score = max(0, score - 10)
 
@@ -592,6 +762,28 @@ class BusinessClaimAttachment(models.Model):
 
 	def __str__(self):
 		return f'{self.claim_id} {self.attachment_kind} {self.original_filename}'
+
+	def read_file_bytes(self):
+		if not self.file or not self.file.name:
+			return b''
+		with self.file.storage.open(self.file.name, 'rb') as stored_file:
+			return stored_file.read()
+
+	def get_document_validation_analysis(self):
+		file_bytes = self.read_file_bytes()
+		document_text = _extract_attachment_validation_text(file_bytes, filename=self.original_filename, content_type=self.content_type)
+		fallback_text = '' if document_text else _extract_printable_text_fallback(file_bytes)
+		combined_text = ' '.join(
+			part for part in [self.original_filename, document_text, fallback_text]
+			if str(part or '').strip()
+		)
+		expected_keywords = DOCUMENT_KIND_EXPECTED_KEYWORDS.get(self.attachment_kind, set())
+		return {
+			'digest': hashlib.sha256(file_bytes).hexdigest() if file_bytes else '',
+			'expected_hits': _keyword_hits(combined_text, expected_keywords),
+			'suspicious_hits': _keyword_hits(combined_text, DOCUMENT_KIND_SUSPICIOUS_KEYWORDS),
+			'document_text': document_text,
+		}
 
 
 class BusinessMembership(models.Model):

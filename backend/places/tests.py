@@ -2765,6 +2765,75 @@ class BusinessClaimTests(APITestCase):
 		with self.assertRaises(ValidationError):
 			claim.approve(reviewed_by=self.reviewer)
 
+	def test_duplicate_reused_documents_reduce_score_and_block_approval(self):
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=self.snapshot,
+			pathway=BusinessClaim.Pathway.ESTABLISHED,
+			contact_name='Jane Manager',
+			job_title=BusinessClaim.JobTitle.MANAGER,
+			work_email='jane.manager@gmail.com',
+			work_phone='805-555-0101',
+			employer_address='501 Collection Blvd',
+			verification_summary='I manage the Yard House location and can verify store promotions.',
+			status=BusinessClaim.Status.SUBMITTED,
+		)
+		reused_bytes = b'resume transcript baseball highlights and school awards'
+		for attachment_kind in [
+			BusinessClaimAttachment.AttachmentKind.BUSINESS_REGISTRATION,
+			BusinessClaimAttachment.AttachmentKind.HEALTH_PERMIT,
+			BusinessClaimAttachment.AttachmentKind.PROOF_OF_AUTHORITY,
+		]:
+			BusinessClaimAttachment.objects.create(
+				claim=claim,
+				attachment_kind=attachment_kind,
+				file=SimpleUploadedFile('resume.pdf', reused_bytes, content_type='application/pdf'),
+				original_filename='resume.pdf',
+				content_type='application/pdf',
+				file_size=len(reused_bytes),
+			)
+
+		verdict = claim.evaluate_verification()
+
+		self.assertLess(verdict['score'], 40)
+		self.assertIn('reused_same_file_across_required_document_slots', verdict['flags'])
+		self.assertIn('business_registration_document_content_mismatch', verdict['flags'])
+		self.assertIn('proof_of_authority_document_content_mismatch', verdict['flags'])
+		self.assertIn('reused_same_file_across_required_document_slots', verdict['blockers'])
+
+		with self.assertRaises(ValidationError):
+			claim.approve(reviewed_by=self.reviewer)
+
+	@patch('places.models._extract_text_from_image_bytes', return_value='manager authorization payroll record')
+	def test_image_ocr_text_can_support_document_scoring(self, mock_extract_text_from_image_bytes):
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=self.snapshot,
+			pathway=BusinessClaim.Pathway.ESTABLISHED,
+			contact_name='Jane Manager',
+			job_title=BusinessClaim.JobTitle.MANAGER,
+			work_email='jane.manager@yardhouse.com',
+			work_phone='805-555-0101',
+			employer_address='501 Collection Blvd',
+			verification_documents={'business_registration': ['CA filing'], 'health_permit': ['County permit'], 'abc_license': [], 'proof_of_address_control': []},
+			verification_summary='I manage the Yard House location and can verify store promotions.',
+			status=BusinessClaim.Status.SUBMITTED,
+		)
+		BusinessClaimAttachment.objects.create(
+			claim=claim,
+			attachment_kind=BusinessClaimAttachment.AttachmentKind.PROOF_OF_AUTHORITY,
+			file=SimpleUploadedFile('scan.png', b'fake-image-bytes', content_type='image/png'),
+			original_filename='scan.png',
+			content_type='image/png',
+			file_size=16,
+		)
+
+		verdict = claim.evaluate_verification()
+
+		self.assertGreaterEqual(verdict['score'], 65)
+		self.assertNotIn('proof_of_authority_document_low_confidence', verdict['flags'])
+		mock_extract_text_from_image_bytes.assert_called()
+
 
 class ProfileSignupApiTests(APITestCase):
 	@override_settings(

@@ -164,6 +164,31 @@ These parts are not built yet:
 - site-specific extraction rules for every business website I want to support reliably
 - a finalized production cache strategy for source fetches and geocoding
 
+## Render Deployment Note
+
+The backend can be hosted on Render, but the current OCR setup has an important limitation on Render's standard non-Docker Python runtime.
+
+- The Python package `pytesseract` is included in `backend/requirements.txt`, but it only talks to the external Tesseract binary.
+- Standard Render services should be treated as managed runtimes without normal OS-level package installation during build.
+- Because of that, this repo does not assume a standard Render deploy can install Tesseract with `apt-get` or a similar system package command.
+
+What this means in practice:
+
+- business-claim document scoring still works on Render without crashing
+- PDF text extraction still works through `pypdf`
+- duplicate-file detection and filename/text heuristics still work
+- image OCR for scanned or photo-based uploads falls back gracefully if the Tesseract binary is unavailable
+
+So if the backend is deployed to a standard Render service without a Tesseract-capable runtime, claim verification becomes partially OCR-assisted instead of fully OCR-assisted.
+
+If a future Render deployment needs full image OCR, the backend runtime will need access to the `tesseract` executable. The remaining options are:
+
+- switch the backend to a Docker-based Render deployment and install Tesseract there
+- bundle a compiled Linux Tesseract binary with the app and point `pytesseract` to it
+- move image OCR to an external OCR service
+
+Until then, the current code safely degrades instead of breaking uploads or claim review.
+
 ## Current Focus
 
 The current focus is tightening the existing mobile + backend loop instead of starting from scratch.
