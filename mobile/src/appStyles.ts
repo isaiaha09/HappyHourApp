@@ -1774,6 +1774,19 @@ export const styles = StyleSheet.create({
     gap: 4,
     minWidth: 160,
   },
+  dashboardFavoriteBusinessCard: {
+    backgroundColor: '#fff7ef',
+    borderColor: '#efd8bd',
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 12,
+  },
+  dashboardFavoriteBusinessAction: {
+    color: '#9e5b49',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 4,
+  },
   dashboardDetailLabel: {
     color: '#7a4d2f',
     fontSize: 12,

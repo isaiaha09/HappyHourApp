@@ -6,6 +6,7 @@ import { buildGoogleReviewsUrl, formatPlaceAddress, getPlacePreviewRegion, openM
 import type { Deal, HappyHourWindow, OperatingHourWindow, PlaceDetail, PlaceLocationDetail } from '../types';
 
 export type PlaceDetailScreenProps = {
+  backButtonLabel?: string;
   detailLoading: boolean;
   errorMessage: string | null;
   favoriteHelperText: string | null;
@@ -23,6 +24,7 @@ export type PlaceDetailScreenProps = {
 };
 
 export function PlaceDetailScreen({
+  backButtonLabel = 'Back to Places',
   detailLoading,
   errorMessage,
   favoriteHelperText,
@@ -47,7 +49,7 @@ export function PlaceDetailScreen({
         showsVerticalScrollIndicator={false}
       >
         <Pressable onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>Back to places</Text>
+          <Text style={styles.backButtonText}>{backButtonLabel}</Text>
         </Pressable>
 
         {detailLoading && !selectedPlace ? (

@@ -1953,6 +1953,29 @@ function AppScreen() {
     animateNextLayout();
     Keyboard.dismiss();
     setSelectedPlaceSlug(null);
+
+    if (screenMode === 'profiles') {
+      setProfileEntryOffset(0);
+      profileSceneTransition.stopAnimation();
+      profileSceneTransition.setValue(0);
+      requestAnimationFrame(() => {
+        Animated.timing(profileSceneTransition, {
+          duration: 220,
+          toValue: 1,
+          useNativeDriver: true,
+        }).start();
+      });
+    }
+  }
+
+  function handleOpenFavoriteBusiness(slug: string) {
+    animateNextLayout();
+    Keyboard.dismiss();
+    setErrorMessage(null);
+    setSelectedMapPlaceKey(null);
+    setSelectedLocationId(null);
+    setSelectedPlace(null);
+    setSelectedPlaceSlug(slug);
   }
 
   async function handleToggleFavoriteBusiness() {
@@ -2957,6 +2980,7 @@ function AppScreen() {
             message={profileMessage}
             onBack={handleBackFromProfiles}
             onOpenBilling={handleOpenBilling}
+            onOpenFavoriteBusiness={handleOpenFavoriteBusiness}
             onOpenPlaces={handleContinueToApp}
             onOpenSettings={handleOpenSettings}
             onRefresh={() => void refreshDashboard()}
@@ -3053,7 +3077,7 @@ function AppScreen() {
         ? browseProfileOutgoingStyle
         : browseProfileIncomingStyle
       : showingProfile
-        ? null
+        ? profileSceneTransitionStyle
         : { opacity: 0, transform: [{ translateX: width }] };
     const browseLayerStyle = transitionActive
       ? browseProfileTransitionFrom === 'browse'
@@ -3283,6 +3307,7 @@ function AppScreen() {
                       clearAutoFitMapRegionTimer();
                     }
 
+                        
                     if (details.isGesture) {
                       const shouldSnapToBounds = !shouldUseNativeMapBoundaries && shouldSnapRegionToBounds(normalizedRegion);
                       const nextControlledRegion = shouldSnapToBounds ? boundedRegion : normalizedRegion;
@@ -3723,6 +3748,30 @@ function AppScreen() {
         renderAuthenticatedMainShell()
       ) : !authenticatedSession && !selectedPlaceSlug && (screenMode === 'browse' || usesGuestBrowseSlideTransition || (screenMode === 'splash' && !incomingOnboardingScreen)) ? (
         renderGuestMainShell()
+      ) : selectedPlaceSlug ? (
+        <View style={styles.fullScreenRoot}>
+        <Animated.View style={[styles.screenTransitionLayerAbsolute, screenTransitionStyle]}>
+        <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
+        <PlaceDetailScreen
+          backButtonLabel={screenMode === 'profiles' ? 'Back to Profile' : 'Back to Places'}
+          detailLoading={detailLoading}
+          errorMessage={errorMessage}
+          favoriteHelperText={favoriteHelperText}
+          favoriteSubmitting={favoriteSubmitting}
+          isLandscape={isLandscape}
+          isFavorited={selectedPlaceIsFavorited}
+          onBack={handleBackToBrowse}
+          onSelectLocation={setSelectedLocationId}
+          onToggleFavorite={() => void handleToggleFavoriteBusiness()}
+          showFavoriteControl={showFavoriteControl}
+          selectedPlace={selectedPlace}
+          selectedPlaceDeals={selectedPlaceDeals}
+          selectedPlaceLocation={selectedPlaceLocation}
+          selectedPlaceOperatingHours={selectedPlaceOperatingHours}
+        />
+        </SafeAreaView>
+        </Animated.View>
+        </View>
       ) : usesOnboardingSlideTransition && currentOnboardingScreen ? (
         <View style={styles.onboardingTransitionRoot}>
           <Animated.View
@@ -3741,29 +3790,6 @@ function AppScreen() {
               {renderOnboardingScreen(incomingOnboardingScreen)}
             </Animated.View>
           ) : null}
-        </View>
-      ) : selectedPlaceSlug ? (
-        <View style={styles.fullScreenRoot}>
-        <Animated.View style={[styles.screenTransitionLayerAbsolute, screenTransitionStyle]}>
-        <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
-        <PlaceDetailScreen
-          detailLoading={detailLoading}
-          errorMessage={errorMessage}
-          favoriteHelperText={favoriteHelperText}
-          favoriteSubmitting={favoriteSubmitting}
-          isLandscape={isLandscape}
-          isFavorited={selectedPlaceIsFavorited}
-          onBack={handleBackToBrowse}
-          onSelectLocation={setSelectedLocationId}
-          onToggleFavorite={() => void handleToggleFavoriteBusiness()}
-          showFavoriteControl={showFavoriteControl}
-          selectedPlace={selectedPlace}
-          selectedPlaceDeals={selectedPlaceDeals}
-          selectedPlaceLocation={selectedPlaceLocation}
-          selectedPlaceOperatingHours={selectedPlaceOperatingHours}
-        />
-        </SafeAreaView>
-        </Animated.View>
         </View>
       ) : (
         renderBrowseScreen()

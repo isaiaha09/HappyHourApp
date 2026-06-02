@@ -3,6 +3,7 @@ import * as Clipboard from 'expo-clipboard';
 import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 
 import { styles } from '../appStyles';
+import { normalizeSearchText } from '../placeHelpers';
 import type { ProfileDashboardUpdateRequest, SignupResponse, TwoFactorSetupResponse } from '../types';
 
 export type DashboardScreenProps = {
@@ -12,6 +13,7 @@ export type DashboardScreenProps = {
   message: string | null;
   onBack: () => void;
   onOpenBilling: () => void;
+  onOpenFavoriteBusiness: (slug: string) => void;
   onOpenPlaces: () => void;
   onOpenSettings: () => void;
   onRefresh: () => void;
@@ -267,7 +269,7 @@ function SecuritySettingsSection({
   );
 }
 
-export function DashboardScreen({ errorMessage, isLandscape, loading, message, onBack, onOpenBilling, onOpenPlaces, onOpenSettings, onRefresh, onResendVerification, onSaveProfileDetails, session, submitting }: DashboardScreenProps) {
+export function DashboardScreen({ errorMessage, isLandscape, loading, message, onBack, onOpenBilling, onOpenFavoriteBusiness, onOpenPlaces, onOpenSettings, onRefresh, onResendVerification, onSaveProfileDetails, session, submitting }: DashboardScreenProps) {
   const approvedBusinesses = session.approved_businesses ?? [];
   const favoriteBusinesses = session.favorite_businesses ?? [];
   const businessContact = session.business_contact ?? {};
@@ -276,6 +278,7 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
   const trackedBusinessLocationUpdatedAt = trackedBusinessLocation.updated_at
     ? new Date(trackedBusinessLocation.updated_at).toLocaleString()
     : null;
+  const [favoriteSearchQuery, setFavoriteSearchQuery] = useState('');
   const [profileDraft, setProfileDraft] = useState<ProfileDashboardUpdateRequest>({
     portal: session.portal,
     username: session.username,
@@ -298,6 +301,25 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
     || profileDraft.email !== session.email
     || profileDraft.first_name !== session.first_name
     || profileDraft.last_name !== session.last_name;
+  const normalizedFavoriteSearchQuery = normalizeSearchText(favoriteSearchQuery);
+  const filteredFavoriteBusinesses = favoriteBusinesses.filter((business) => {
+    if (!normalizedFavoriteSearchQuery.length) {
+      return true;
+    }
+
+    const searchableText = normalizeSearchText([
+      business.name,
+      business.city_label,
+      business.venue_type_label,
+      business.address_line_1,
+    ].filter(Boolean).join(' '));
+
+    return searchableText.includes(normalizedFavoriteSearchQuery);
+  });
+
+  useEffect(() => {
+    setFavoriteSearchQuery('');
+  }, [session.favorite_businesses]);
 
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
@@ -383,18 +405,31 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
             {session.profile_type !== 'business' ? (
               <View style={styles.dashboardSection}>
                 <Text style={styles.dashboardSectionTitle}>Favorite businesses</Text>
+                {favoriteBusinesses.length > 1 ? (
+                  <TextInput
+                    onChangeText={setFavoriteSearchQuery}
+                    placeholder="Search favorite businesses"
+                    placeholderTextColor="#9a7f6c"
+                    style={styles.profileInput}
+                    value={favoriteSearchQuery}
+                  />
+                ) : null}
                 {favoriteBusinesses.length ? (
                   <View style={styles.dashboardFieldGrid}>
-                    {favoriteBusinesses.map((business) => (
-                      <View key={business.slug} style={styles.dashboardDetailItem}>
+                    {filteredFavoriteBusinesses.map((business) => (
+                      <Pressable key={business.slug} onPress={() => onOpenFavoriteBusiness(business.slug)} style={[styles.dashboardDetailItem, styles.dashboardFavoriteBusinessCard]}>
                         <Text style={styles.dashboardDetailValue}>{business.name}</Text>
                         <Text style={styles.dashboardSupportText}>{business.city_label} • {business.venue_type_label}</Text>
                         <Text style={styles.dashboardSupportText}>{business.address_line_1}</Text>
-                      </View>
+                        <Text style={styles.dashboardFavoriteBusinessAction}>Open business profile</Text>
+                      </Pressable>
                     ))}
                   </View>
+                ) : null}
+                {favoriteBusinesses.length && !filteredFavoriteBusinesses.length ? (
+                  <Text style={styles.dashboardSupportText}>No favorite businesses matched that search.</Text>
                 ) : (
-                  <Text style={styles.dashboardSupportText}>Star businesses from place details to keep a list of favorites here.</Text>
+                  !favoriteBusinesses.length ? <Text style={styles.dashboardSupportText}>Star businesses from place details to keep a list of favorites here.</Text> : null
                 )}
               </View>
             ) : null}
