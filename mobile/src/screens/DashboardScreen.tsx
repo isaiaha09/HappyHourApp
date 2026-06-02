@@ -269,6 +269,7 @@ function SecuritySettingsSection({
 
 export function DashboardScreen({ errorMessage, isLandscape, loading, message, onBack, onOpenBilling, onOpenPlaces, onOpenSettings, onRefresh, onResendVerification, onSaveProfileDetails, session, submitting }: DashboardScreenProps) {
   const approvedBusinesses = session.approved_businesses ?? [];
+  const favoriteBusinesses = session.favorite_businesses ?? [];
   const businessContact = session.business_contact ?? {};
   const fullName = [session.first_name, session.last_name].filter(Boolean).join(' ');
   const trackedBusinessLocation = session.tracked_business_location ?? {};
@@ -378,6 +379,25 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
             </View>
 
             <Text style={styles.dashboardSupportText}>Authentication settings, support, privacy, terms, account requests, and logout now live behind the settings icon in the top-right corner.</Text>
+
+            {session.profile_type !== 'business' ? (
+              <View style={styles.dashboardSection}>
+                <Text style={styles.dashboardSectionTitle}>Favorite businesses</Text>
+                {favoriteBusinesses.length ? (
+                  <View style={styles.dashboardFieldGrid}>
+                    {favoriteBusinesses.map((business) => (
+                      <View key={business.slug} style={styles.dashboardDetailItem}>
+                        <Text style={styles.dashboardDetailValue}>{business.name}</Text>
+                        <Text style={styles.dashboardSupportText}>{business.city_label} • {business.venue_type_label}</Text>
+                        <Text style={styles.dashboardSupportText}>{business.address_line_1}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={styles.dashboardSupportText}>Star businesses from place details to keep a list of favorites here.</Text>
+                )}
+              </View>
+            ) : null}
 
             {session.profile_type === 'business' ? (
               <>

@@ -11,6 +11,7 @@ import {
   Keyboard,
   LayoutAnimation,
   Linking,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -39,6 +40,7 @@ import {
   requestUsernameReminder,
   resendVerificationCode,
   resendVerificationEmail,
+  toggleFavoriteBusiness,
   updateProfileDashboard,
   updateBusinessLocationTrackingPreference,
   updateBusinessLocation,
@@ -429,6 +431,9 @@ function AppScreen() {
   const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null);
   const [listLoading, setListLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [favoriteSubmitting, setFavoriteSubmitting] = useState(false);
+  const [guestBrowseModeLocked, setGuestBrowseModeLocked] = useState(false);
+  const [showGuestFavoritePrompt, setShowGuestFavoritePrompt] = useState(false);
   const [mapRegion, setMapRegion] = useState<Region>(() => initialMapRegionRef.current);
   const mapRegionRef = useRef(mapRegion);
   const [reloadCount, setReloadCount] = useState(0);
@@ -468,6 +473,8 @@ function AppScreen() {
   const [incomingOnboardingScreen, setIncomingOnboardingScreen] = useState<AppScreenMode | null>(null);
   const [browseProfileTransitionFrom, setBrowseProfileTransitionFrom] = useState<'profiles' | 'browse' | null>(null);
   const [incomingBrowseProfileScreen, setIncomingBrowseProfileScreen] = useState<'profiles' | 'browse' | null>(null);
+  const [guestBrowseTransitionFrom, setGuestBrowseTransitionFrom] = useState<'splash' | 'browse' | null>(null);
+  const [incomingGuestBrowseScreen, setIncomingGuestBrowseScreen] = useState<'splash' | 'browse' | null>(null);
   const [showLoginSuccessTransition, setShowLoginSuccessTransition] = useState(false);
   const [showLogoutTransition, setShowLogoutTransition] = useState(false);
   const [authIntroPending, setAuthIntroPending] = useState(false);
@@ -525,6 +532,16 @@ function AppScreen() {
   const selectedPlaceLocation = getSelectedPlaceLocation(selectedPlace, selectedLocationId, selectedCity);
   const selectedPlaceDeals = selectedPlaceLocation?.deals ?? selectedPlace?.deals ?? [];
   const selectedPlaceOperatingHours = selectedPlaceLocation?.operating_hours ?? selectedPlace?.operating_hours ?? [];
+  const guestMapOnlyMode = guestBrowseModeLocked && !authenticatedSession;
+  const selectedPlaceIsFavorited = !!(selectedPlace && authenticatedSession?.favorite_businesses?.some((business) => business.slug === selectedPlace.slug));
+  const showFavoriteControl = !authenticatedSession || authenticatedSession.portal === 'customer';
+  const favoriteHelperText = !showFavoriteControl
+    ? null
+    : !authenticatedSession
+      ? 'Star this business to keep tabs on it later. Guest stars require a free customer account.'
+      : selectedPlaceIsFavorited
+        ? 'This business is saved to your favorites and will appear on your dashboard.'
+        : 'Save this business to your favorites so it appears on your dashboard.';
 
   useEffect(() => {
     mapRegionRef.current = mapRegion;
@@ -532,6 +549,19 @@ function AppScreen() {
 
   useEffect(() => {
     authenticatedSessionRef.current = authenticatedSession;
+  }, [authenticatedSession]);
+
+  useEffect(() => {
+    if (guestMapOnlyMode && browseMode !== 'map') {
+      handleBrowseModeChange('map');
+    }
+  }, [browseMode, guestMapOnlyMode]);
+
+  useEffect(() => {
+    if (authenticatedSession) {
+      setGuestBrowseModeLocked(false);
+      setShowGuestFavoritePrompt(false);
+    }
   }, [authenticatedSession]);
 
   useEffect(() => {
@@ -722,6 +752,10 @@ function AppScreen() {
     && incomingBrowseProfileScreen !== null
     && browseProfileTransitionFrom !== incomingBrowseProfileScreen;
   const profileToBrowseTransition = browseProfileTransitionFrom === 'profiles' && incomingBrowseProfileScreen === 'browse';
+  const usesGuestBrowseSlideTransition = guestBrowseTransitionFrom !== null
+    && incomingGuestBrowseScreen !== null
+    && guestBrowseTransitionFrom !== incomingGuestBrowseScreen;
+  const guestToBrowseTransition = guestBrowseTransitionFrom === 'splash' && incomingGuestBrowseScreen === 'browse';
   const onboardingSlideOffset = onboardingIncomingOffset || (onboardingTransitionDirection === 'forward' ? width : -width);
   const incomingScreenTransitionStyle = {
     opacity: onboardingTransitionAxis === 'y'
@@ -779,6 +813,30 @@ function AppScreen() {
         translateX: screenTransition.interpolate({
           inputRange: [0, 1],
           outputRange: [profileToBrowseTransition ? -width : width, 0],
+        }),
+      },
+    ],
+  };
+  const guestBrowseOutgoingStyle = {
+    transform: [
+      {
+        translateX: screenTransition.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, guestToBrowseTransition ? width : -width],
+        }),
+      },
+    ],
+  };
+  const guestBrowseIncomingStyle = {
+    opacity: screenTransition.interpolate({
+      inputRange: [0, 0.12, 1],
+      outputRange: [0.96, 0.98, 1],
+    }),
+    transform: [
+      {
+        translateX: screenTransition.interpolate({
+          inputRange: [0, 1],
+          outputRange: [guestToBrowseTransition ? -width : width, 0],
         }),
       },
     ],
@@ -1159,6 +1217,59 @@ function AppScreen() {
         setBrowseProfileTransitionFrom(null);
         setIncomingBrowseProfileScreen(null);
         screenTransition.setValue(1);
+      });
+    });
+  }
+
+  function navigateGuestBrowseTransition(nextScreen: 'splash' | 'browse', onComplete?: () => void) {
+    if (screenMode === nextScreen) {
+      onComplete?.();
+      return;
+    }
+
+    const currentGuestBrowseScreen = screenMode === 'splash' ? 'splash' : 'browse';
+
+    if (onboardingTransitionFrameRef.current !== null) {
+      cancelAnimationFrame(onboardingTransitionFrameRef.current);
+      onboardingTransitionFrameRef.current = null;
+    }
+
+    screenTransition.stopAnimation();
+    profileSceneTransition.stopAnimation();
+    browseSceneTransition.stopAnimation();
+    profileSceneTransition.setValue(1);
+    browseSceneTransition.setValue(1);
+    setProfileEntryOffset(0);
+    setBrowseEntryOffset(0);
+    setBrowseProfileTransitionFrom(null);
+    setIncomingBrowseProfileScreen(null);
+    setIncomingOnboardingScreen(null);
+    setGuestBrowseTransitionFrom(currentGuestBrowseScreen);
+    setIncomingGuestBrowseScreen(null);
+    screenTransition.setValue(0);
+    setIncomingGuestBrowseScreen(nextScreen);
+    onboardingTransitionFrameRef.current = requestAnimationFrame(() => {
+      onboardingTransitionFrameRef.current = null;
+      Animated.timing(screenTransition, {
+        duration: onboardingTransitionDuration,
+        toValue: 1,
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (!finished) {
+          setGuestBrowseTransitionFrom(null);
+          setIncomingGuestBrowseScreen(null);
+          return;
+        }
+
+        setScreenMode(nextScreen);
+        profileSceneTransition.setValue(1);
+        browseSceneTransition.setValue(1);
+        setProfileEntryOffset(0);
+        setBrowseEntryOffset(0);
+        setGuestBrowseTransitionFrom(null);
+        setIncomingGuestBrowseScreen(null);
+        screenTransition.setValue(1);
+        onComplete?.();
       });
     });
   }
@@ -1767,6 +1878,10 @@ function AppScreen() {
   }
 
   function handleBrowseModeChange(mode: BrowseMode) {
+    if (guestMapOnlyMode && mode !== 'map') {
+      return;
+    }
+
     if (mode === browseMode) {
       return;
     }
@@ -1840,8 +1955,45 @@ function AppScreen() {
     setSelectedPlaceSlug(null);
   }
 
+  async function handleToggleFavoriteBusiness() {
+    if (!selectedPlace) {
+      return;
+    }
+
+    if (!authenticatedSession?.auth_token) {
+      setShowGuestFavoritePrompt(true);
+      return;
+    }
+
+    if (authenticatedSession.portal !== 'customer') {
+      setErrorMessage('Only customer accounts can favorite businesses.');
+      setProfileErrorMessage(null);
+      return;
+    }
+
+    setFavoriteSubmitting(true);
+    setErrorMessage(null);
+    setProfileErrorMessage(null);
+
+    try {
+      const response = await toggleFavoriteBusiness(apiBaseUrl, authenticatedSession.auth_token, {
+        slug: selectedPlace.slug,
+        favorited: !selectedPlaceIsFavorited,
+        portal: authenticatedSession.portal,
+      });
+      setAuthenticatedSession(response);
+      setProfileMessage(response.detail ?? null);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setFavoriteSubmitting(false);
+    }
+  }
+
   function handleOpenProfiles() {
     dismissKeyboardForScreenTransition();
+    setGuestBrowseModeLocked(false);
+    setShowGuestFavoritePrompt(false);
     setProfileErrorMessage(null);
     setPendingEmailVerification(null);
     setEmailVerificationCode('');
@@ -1858,6 +2010,8 @@ function AppScreen() {
 
   function handleOpenAuthFromLanding(portal: AuthPortal) {
     dismissKeyboardForScreenTransition();
+    setGuestBrowseModeLocked(false);
+    setShowGuestFavoritePrompt(false);
     setAuthPortal(portal);
     setAuthMessage(null);
     setProfileErrorMessage(null);
@@ -1872,12 +2026,27 @@ function AppScreen() {
 
   function handleBackToLanding() {
     dismissKeyboardForScreenTransition();
+    setShowGuestFavoritePrompt(false);
     setAuthMessage(null);
     setProfileErrorMessage(null);
     setShouldAutoFocusLoginField(false);
     setShowLoginTwoFactorCodeField(false);
     setLoginForm(initialLoginFormState);
     navigateScreen('splash', 'backward');
+  }
+
+  function handleExitGuestMap() {
+    dismissKeyboardForScreenTransition();
+    navigateGuestBrowseTransition('splash', () => {
+      setShowGuestFavoritePrompt(false);
+      setBrowseFiltersExpanded(false);
+      setSelectedMapPlaceKey(null);
+      setDisplayedMapPreviewPlace(null);
+      setSelectedPlaceSlug(null);
+      setSelectedLocationId(null);
+      setGuestBrowseModeLocked(false);
+      handleBrowseModeChange('list');
+    });
   }
 
   function handleContinueToApp() {
@@ -1891,6 +2060,23 @@ function AppScreen() {
 
     setBrowseEntryOffset(-width);
     navigateScreen('browse', 'forward');
+  }
+
+  function handleOpenMapFromSplash() {
+    setGuestBrowseModeLocked(true);
+    handleBrowseModeChange('map');
+    navigateGuestBrowseTransition('browse');
+  }
+
+  function handleDismissGuestFavoritePrompt() {
+    setShowGuestFavoritePrompt(false);
+  }
+
+  function handleCreateCustomerAccountFromGuestFavorite() {
+    setShowGuestFavoritePrompt(false);
+    setSelectedPlaceSlug(null);
+    setSelectedLocationId(null);
+    handleOpenProfiles();
   }
 
   function handleBackFromProfiles() {
@@ -2819,6 +3005,46 @@ function AppScreen() {
     );
   }
 
+  function renderGuestMainShell() {
+    const transitionActive = usesGuestBrowseSlideTransition;
+    const showingSplash = screenMode === 'splash';
+    const splashLayerStyle = transitionActive
+      ? guestBrowseTransitionFrom === 'splash'
+        ? guestBrowseOutgoingStyle
+        : guestBrowseIncomingStyle
+      : showingSplash
+        ? null
+        : { opacity: 0, transform: [{ translateX: width }] };
+    const browseLayerStyle = transitionActive
+      ? guestBrowseTransitionFrom === 'browse'
+        ? guestBrowseOutgoingStyle
+        : guestBrowseIncomingStyle
+      : showingSplash
+        ? { opacity: 0, transform: [{ translateX: -width }] }
+        : null;
+
+    return (
+      <View style={[styles.fullScreenRoot, transitionActive ? styles.transitionClipRoot : null]}>
+        <Animated.View
+          pointerEvents={showingSplash && !transitionActive ? 'auto' : 'none'}
+          style={[styles.screenTransitionLayerAbsolute, splashLayerStyle]}
+        >
+          {renderOnboardingScreen('splash')}
+        </Animated.View>
+        <Animated.View
+          pointerEvents={!showingSplash && !transitionActive ? 'auto' : 'none'}
+          style={[styles.screenTransitionLayerAbsolute, browseLayerStyle]}
+        >
+          {renderBrowseScreen({
+            suppressBrowseSceneTransitionStyle: true,
+            suppressScreenTransitionStyle: true,
+            suppressTransitionOverlay: true,
+          })}
+        </Animated.View>
+      </View>
+    );
+  }
+
   function renderAuthenticatedMainShell() {
     const transitionActive = usesBrowseProfileSlideTransition;
     const showingProfile = ['profiles', 'settings', 'support', 'privacy-policy', 'terms-of-service'].includes(screenMode);
@@ -2864,7 +3090,7 @@ function AppScreen() {
       case 'splash':
         return (
           <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
-            <SplashScreen onCreateAccount={handleOpenProfiles} onSelectPortal={handleOpenAuthFromLanding} />
+            <SplashScreen onCreateAccount={handleOpenProfiles} onOpenMap={handleOpenMapFromSplash} onSelectPortal={handleOpenAuthFromLanding} />
           </SafeAreaView>
         );
       case 'auth':
@@ -3170,6 +3396,7 @@ function AppScreen() {
                   confirmedDealsOnly={confirmedDealsOnly}
                   filtersExpanded={browseFiltersExpanded}
                   isDarkMapMode={darkMapMode}
+                  listModeEnabled={!guestMapOnlyMode}
                   onChangeSearchQuery={handleChangeSearchQuery}
                   onClearSearchQuery={handleClearSearchQuery}
                   onBrowseModeChange={handleBrowseModeChange}
@@ -3413,6 +3640,30 @@ function AppScreen() {
                   >
                     <Text style={styles.floatingDashboardButtonText}>Back to Dashboard</Text>
                   </Pressable>
+                ) : guestMapOnlyMode && browseMode === 'map' ? (
+                  <Pressable
+                    accessibilityLabel="Exit guest map"
+                    onPress={handleExitGuestMap}
+                    style={[
+                      styles.floatingDashboardButton,
+                      styles.floatingDashboardButtonMap,
+                      styles.floatingGuestExitButton,
+                      { bottom: floatingDashboardButtonOffset, right: 18 },
+                    ]}
+                  >
+                    <View style={{ alignItems: 'center', flexDirection: 'row', height: 28, justifyContent: 'center', width: 28 }}>
+                      <View style={{ backgroundColor: '#17110c', borderRadius: 2, height: 22, transform: [{ skewY: '-12deg' }], width: 8 }} />
+                      <View style={{ height: 24, marginLeft: 3, position: 'relative', width: 8 }}>
+                        <View style={{ backgroundColor: '#17110c', height: 3, position: 'absolute', right: 0, top: 0, width: 8 }} />
+                        <View style={{ backgroundColor: '#17110c', height: 18, position: 'absolute', right: 0, top: 3, width: 3 }} />
+                        <View style={{ backgroundColor: '#17110c', bottom: 0, height: 3, position: 'absolute', right: 0, width: 8 }} />
+                      </View>
+                      <View style={{ alignItems: 'center', flexDirection: 'row', marginLeft: 2 }}>
+                        <View style={{ backgroundColor: '#17110c', height: 4, width: 7 }} />
+                        <View style={{ borderBottomColor: 'transparent', borderBottomWidth: 5, borderLeftColor: '#17110c', borderLeftWidth: 8, borderTopColor: 'transparent', borderTopWidth: 5 }} />
+                      </View>
+                    </View>
+                  </Pressable>
                 ) : null}
               </View>
             </SafeAreaView>
@@ -3470,6 +3721,8 @@ function AppScreen() {
         </View>
       ) : authenticatedSession && !selectedPlaceSlug && !usesProfileStackSlideTransition && (['profiles', 'settings', 'support', 'privacy-policy', 'terms-of-service', 'browse'].includes(screenMode) || usesBrowseProfileSlideTransition) ? (
         renderAuthenticatedMainShell()
+      ) : !authenticatedSession && !selectedPlaceSlug && (screenMode === 'browse' || usesGuestBrowseSlideTransition || (screenMode === 'splash' && !incomingOnboardingScreen)) ? (
+        renderGuestMainShell()
       ) : usesOnboardingSlideTransition && currentOnboardingScreen ? (
         <View style={styles.onboardingTransitionRoot}>
           <Animated.View
@@ -3496,9 +3749,14 @@ function AppScreen() {
         <PlaceDetailScreen
           detailLoading={detailLoading}
           errorMessage={errorMessage}
+          favoriteHelperText={favoriteHelperText}
+          favoriteSubmitting={favoriteSubmitting}
           isLandscape={isLandscape}
+          isFavorited={selectedPlaceIsFavorited}
           onBack={handleBackToBrowse}
           onSelectLocation={setSelectedLocationId}
+          onToggleFavorite={() => void handleToggleFavoriteBusiness()}
+          showFavoriteControl={showFavoriteControl}
           selectedPlace={selectedPlace}
           selectedPlaceDeals={selectedPlaceDeals}
           selectedPlaceLocation={selectedPlaceLocation}
@@ -3510,6 +3768,29 @@ function AppScreen() {
       ) : (
         renderBrowseScreen()
       )}
+      <Modal
+        animationType="fade"
+        onRequestClose={handleDismissGuestFavoritePrompt}
+        transparent
+        visible={showGuestFavoritePrompt}
+      >
+        <View style={styles.guestFavoriteModalBackdrop}>
+          <View style={styles.guestFavoriteModalCard}>
+            <Text style={styles.guestFavoriteModalTitle}>Create a free customer account to save favorites</Text>
+            <Text style={styles.guestFavoriteModalText}>
+              If you want to keep tabs on your favorite businesses and receive notifications later, create a free customer account first.
+            </Text>
+            <View style={styles.guestFavoriteModalActions}>
+              <Pressable onPress={handleDismissGuestFavoritePrompt} style={styles.guestFavoriteModalSecondaryButton}>
+                <Text style={styles.guestFavoriteModalSecondaryText}>Maybe later</Text>
+              </Pressable>
+              <Pressable onPress={handleCreateCustomerAccountFromGuestFavorite} style={styles.guestFavoriteModalPrimaryButton}>
+                <Text style={styles.guestFavoriteModalPrimaryText}>Create free customer account</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }

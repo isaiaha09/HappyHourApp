@@ -12,6 +12,7 @@ type BrandHeroProps = {
 
 type SplashScreenProps = {
   onCreateAccount: () => void;
+  onOpenMap: () => void;
   onSelectPortal: (portal: AuthPortal) => void;
 };
 
@@ -104,7 +105,7 @@ export function BrandHero({ animateSlogan = false }: BrandHeroProps) {
   );
 }
 
-export function SplashScreen({ onCreateAccount, onSelectPortal }: SplashScreenProps) {
+export function SplashScreen({ onCreateAccount, onOpenMap, onSelectPortal }: SplashScreenProps) {
   return (
     <View style={styles.splashScreen}>
       <BrandHero animateSlogan />
@@ -119,6 +120,9 @@ export function SplashScreen({ onCreateAccount, onSelectPortal }: SplashScreenPr
         </View>
         <Pressable onPress={onCreateAccount} style={styles.splashCreateAccountLink}>
           <Text style={styles.splashCreateAccountText}>Don&apos;t have an account? Create a free account here.</Text>
+        </Pressable>
+        <Pressable onPress={onOpenMap} style={styles.splashOpenMapButton}>
+          <Text style={styles.splashOpenMapButtonText}>Open Map as Guest</Text>
         </Pressable>
       </View>
     </View>

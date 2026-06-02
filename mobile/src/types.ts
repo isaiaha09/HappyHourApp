@@ -106,6 +106,16 @@ export type SignupResponse = {
     venue_type: string;
     venue_type_label: string;
   }>;
+  favorite_businesses?: Array<{
+    slug: string;
+    name: string;
+    city: string;
+    city_label: string;
+    venue_type: string;
+    venue_type_label: string;
+    address_line_1: string;
+    website_url: string;
+  }>;
   business_contact?: {
     contact_name?: string;
     job_title?: string;
@@ -139,6 +149,12 @@ export type ProfileDashboardUpdateRequest = {
   email: string;
   first_name: string;
   last_name: string;
+};
+
+export type FavoriteBusinessToggleRequest = {
+  slug: string;
+  favorited: boolean;
+  portal?: 'customer' | 'business';
 };
 
 export type LoginRequest = {

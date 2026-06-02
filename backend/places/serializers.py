@@ -156,6 +156,7 @@ class AccountResponseSerializer(serializers.Serializer):
 	two_factor_enabled = serializers.BooleanField(required=False)
 	billing_portal_url = serializers.CharField(required=False, allow_blank=True)
 	approved_businesses = serializers.ListField(child=serializers.DictField(), required=False)
+	favorite_businesses = serializers.ListField(child=serializers.DictField(), required=False)
 	business_contact = serializers.DictField(required=False)
 	can_access_places = serializers.BooleanField(required=False)
 	two_factor_pending_setup = serializers.BooleanField(required=False)
@@ -196,6 +197,18 @@ class ProfileDashboardUpdateSerializer(serializers.Serializer):
 
 class BusinessLocationTrackingPreferenceSerializer(serializers.Serializer):
 	enabled = serializers.BooleanField()
+
+
+class FavoriteBusinessToggleSerializer(serializers.Serializer):
+	slug = serializers.SlugField(max_length=170)
+	favorited = serializers.BooleanField()
+	portal = serializers.ChoiceField(choices=['customer', 'business'], required=False, allow_blank=True)
+
+	def validate_slug(self, value):
+		normalized = value.strip()
+		if not normalized:
+			raise serializers.ValidationError('Select a business to favorite.')
+		return normalized
 
 
 class LoginSerializer(serializers.Serializer):

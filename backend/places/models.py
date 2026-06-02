@@ -996,6 +996,29 @@ class AccountProfile(models.Model):
 		self.save(update_fields=['password_reset_token', 'password_reset_sent_at', 'updated_at'])
 
 
+class FavoriteBusiness(models.Model):
+	user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='favorite_businesses', on_delete=models.CASCADE)
+	listing_slug = models.SlugField(max_length=170)
+	name = models.CharField(max_length=150)
+	city = models.CharField(max_length=20, blank=True)
+	city_label = models.CharField(max_length=40, blank=True)
+	venue_type = models.CharField(max_length=20, blank=True)
+	venue_type_label = models.CharField(max_length=60, blank=True)
+	address_line_1 = models.CharField(max_length=255, blank=True)
+	website_url = models.URLField(blank=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ['name', 'city_label', '-created_at']
+		constraints = [
+			models.UniqueConstraint(fields=['user', 'listing_slug'], name='unique_favorite_business_per_user'),
+		]
+
+	def __str__(self):
+		return f'{self.name} favorite for {self.user.username}'
+
+
 class ProfileAuthToken(models.Model):
 	user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='profile_auth_tokens', on_delete=models.CASCADE)
 	key = models.CharField(max_length=64, unique=True)

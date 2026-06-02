@@ -21,6 +21,7 @@ export type BrowseControlsProps = {
   overlay?: boolean;
   filtersExpanded: boolean;
   isDarkMapMode?: boolean;
+  listModeEnabled?: boolean;
   onChangeSearchQuery: (value: string) => void;
   onClearSearchQuery: () => void;
   onBrowseModeChange: (mode: BrowseMode) => void;
@@ -50,6 +51,7 @@ export function BrowseControls({
   overlay = false,
   filtersExpanded,
   isDarkMapMode = false,
+  listModeEnabled = true,
   onChangeSearchQuery,
   onClearSearchQuery,
   onBrowseModeChange,
@@ -231,40 +233,46 @@ export function BrowseControls({
         ]}
       >
         <View style={[styles.toolbarActionsRow, !onOpenDashboard ? styles.toolbarActionsRowFill : styles.toolbarActionsRowWithDashboard]}>
-          <View
-            style={[
-              styles.modeSwitcherTrack,
-              overlay ? styles.modeSwitcherTrackOverlay : null,
-              { width: modeSwitchTrackWidth },
-            ]}
-          >
-            <Animated.View
+          {listModeEnabled ? (
+            <View
               style={[
-                styles.modeSwitcherThumb,
-                {
-                  width: modeSwitchThumbWidth,
-                  transform: [{
-                    translateX: modeSwitchTranslateProgress.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0, modeSwitchThumbWidth],
-                    }),
-                  }],
-                },
+                styles.modeSwitcherTrack,
+                overlay ? styles.modeSwitcherTrackOverlay : null,
+                { width: modeSwitchTrackWidth },
               ]}
-            />
-            <Pressable
-              onPress={() => onBrowseModeChange('list')}
-              style={[styles.modeSwitchOption, { width: modeSwitchThumbWidth }]}
             >
-              <Animated.Text style={[styles.modeSwitchOptionText, { color: listLabelColor }]}>List</Animated.Text>
-            </Pressable>
-            <Pressable
-              onPress={() => onBrowseModeChange('map')}
-              style={[styles.modeSwitchOption, { width: modeSwitchThumbWidth }]}
-            >
-              <Animated.Text style={[styles.modeSwitchOptionText, { color: mapLabelColor }]}>Map</Animated.Text>
-            </Pressable>
-          </View>
+              <Animated.View
+                style={[
+                  styles.modeSwitcherThumb,
+                  {
+                    width: modeSwitchThumbWidth,
+                    transform: [{
+                      translateX: modeSwitchTranslateProgress.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0, modeSwitchThumbWidth],
+                      }),
+                    }],
+                  },
+                ]}
+              />
+              <Pressable
+                onPress={() => onBrowseModeChange('list')}
+                style={[styles.modeSwitchOption, { width: modeSwitchThumbWidth }]}
+              >
+                <Animated.Text style={[styles.modeSwitchOptionText, { color: listLabelColor }]}>List</Animated.Text>
+              </Pressable>
+              <Pressable
+                onPress={() => onBrowseModeChange('map')}
+                style={[styles.modeSwitchOption, { width: modeSwitchThumbWidth }]}
+              >
+                <Animated.Text style={[styles.modeSwitchOptionText, { color: mapLabelColor }]}>Map</Animated.Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.secondaryToolbarButton}>
+              <Text style={styles.secondaryToolbarButtonText}>Guest Map</Text>
+            </View>
+          )}
           {onToggleMapTheme ? (
             <Pressable
               accessibilityLabel={isDarkMapMode ? 'Switch to light map' : 'Switch to dark map'}

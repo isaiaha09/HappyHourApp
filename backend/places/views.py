@@ -17,6 +17,7 @@ from .serializers import (
 	CustomerSignupSerializer,
 	DealSerializer,
 	EmailVerificationCodeSerializer,
+	FavoriteBusinessToggleSerializer,
 	InformalBusinessSignupSerializer,
 	LoginSerializer,
 	PasswordResetConfirmSerializer,
@@ -32,7 +33,7 @@ from .serializers import (
 	sync_listing_snapshot_from_place_payload,
 )
 from .services.account_profiles import build_account_response, build_email_verification_challenge, get_business_access_hold_claim, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, send_business_claim_received_email, send_password_reset_email, send_username_reminder_email, send_verification_email
-from .models import VenueType
+from .models import FavoriteBusiness, VenueType
 from .services.source_listings import get_source_deal_payloads, get_source_place_payload, get_source_place_payloads, load_source_records
 
 
@@ -419,6 +420,44 @@ class ResendVerificationEmailView(APIView):
 			return Response({'detail': 'Email is already verified.'})
 		send_verification_email(request.user, profile)
 		return Response({'detail': 'Verification email sent.'})
+
+
+class FavoriteBusinessView(APIView):
+	authentication_classes = [ProfileTokenAuthentication]
+	permission_classes = [IsAuthenticated]
+
+	def post(self, request):
+		serializer = FavoriteBusinessToggleSerializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		portal = infer_portal_for_user(request.user, serializer.validated_data.get('portal'))
+		if portal != 'customer':
+			return Response({'detail': 'Only customer accounts can favorite businesses.'}, status=status.HTTP_403_FORBIDDEN)
+		place_payload = get_source_place_payload(serializer.validated_data['slug'])
+		if place_payload is None:
+			return Response({'detail': 'That business could not be found.'}, status=status.HTTP_404_NOT_FOUND)
+
+		if serializer.validated_data['favorited']:
+			FavoriteBusiness.objects.update_or_create(
+				user=request.user,
+				listing_slug=place_payload['slug'],
+				defaults={
+					'name': place_payload.get('name', ''),
+					'city': place_payload.get('city', ''),
+					'city_label': place_payload.get('city_label', ''),
+					'venue_type': place_payload.get('venue_type', ''),
+					'venue_type_label': place_payload.get('venue_type_label', ''),
+					'address_line_1': place_payload.get('address_line_1', ''),
+					'website_url': place_payload.get('website_url', ''),
+				},
+			)
+			detail = 'Business favorited.'
+		else:
+			FavoriteBusiness.objects.filter(user=request.user, listing_slug=place_payload['slug']).delete()
+			detail = 'Business removed from favorites.'
+
+		response_payload = build_account_response(request.user, portal, token=request.auth)
+		response_payload['detail'] = detail
+		return Response(response_payload)
 
 
 class ToggleTwoFactorView(APIView):

@@ -9,6 +9,7 @@ import type {
   CustomerSignupRequest,
   EmailVerificationChallengeResponse,
   EmailVerificationCodeRequest,
+  FavoriteBusinessToggleRequest,
   InformalBusinessSignupRequest,
   LoginRequest,
   ManualBusinessSignupRequest,
@@ -92,6 +93,10 @@ export async function fetchProfileDashboard(baseUrl: string, authToken: string, 
 
 export async function updateProfileDashboard(baseUrl: string, authToken: string, payload: ProfileDashboardUpdateRequest) {
   return postAuthedJson<SignupResponse>(baseUrl, '/profiles/me/', authToken, payload);
+}
+
+export async function toggleFavoriteBusiness(baseUrl: string, authToken: string, payload: FavoriteBusinessToggleRequest) {
+  return postAuthedJson<SignupResponse>(baseUrl, '/profiles/favorites/', authToken, payload);
 }
 
 export async function resendVerificationEmail(baseUrl: string, authToken: string) {

@@ -24,7 +24,7 @@ import pyotp
 
 from .admin import BusinessAccountAdmin, BusinessClaimAdmin, CustomerAccountAdmin, DeletedBusinessAdmin, ListingSnapshotAdmin, ProviderUsageWindowAdmin
 from .admin_site import happyhour_admin_site
-from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessMembership, City, CustomerAccount, DealType, DeletedBusiness, ListingSnapshot, ProfileAuthToken, ProviderUsageWindow, VenueType, Weekday
+from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessMembership, City, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, ListingSnapshot, ProfileAuthToken, ProviderUsageWindow, VenueType, Weekday
 from .services.importers.base import BaseHtmlImporter
 from .services.importers.business_websites import BusinessWebsiteImporter
 from .services.importers.discovered_json_places import CuratedJsonPlacesImporter, DiscoveryJsonPlacesImporter, load_discovery_json_records, write_discovery_json_records
@@ -3580,6 +3580,17 @@ class ProfileDashboardApiTests(APITestCase):
 		)
 		self.profile = AccountProfile.objects.create(user=self.user, billing_portal_url='https://example.com/billing')
 		self.token = ProfileAuthToken.objects.create(user=self.user)
+		self.favorite_place_payload = {
+			'id': 998,
+			'name': 'Favorite Tacos',
+			'slug': 'favorite-tacos-ventura',
+			'city': City.VENTURA,
+			'city_label': 'Ventura',
+			'venue_type': VenueType.RESTAURANT,
+			'venue_type_label': 'Restaurant',
+			'address_line_1': '123 Main St',
+			'website_url': 'https://example.com/favorite-tacos',
+		}
 
 	def auth_headers(self):
 		return {'HTTP_AUTHORIZATION': f'Token {self.token.key}'}
@@ -3727,6 +3738,98 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(response.data['detail'], 'Profile updated. Verify your new email address to finish the email change.')
 		self.assertEqual(len(mail.outbox), 1)
 		self.assertIn('new-dashboard@example.com', mail.outbox[0].to)
+
+	def test_profile_dashboard_includes_favorite_businesses(self):
+		FavoriteBusiness.objects.create(
+			user=self.user,
+			listing_slug='favorite-tacos-ventura',
+			name='Favorite Tacos',
+			city=City.VENTURA,
+			city_label='Ventura',
+			venue_type=VenueType.RESTAURANT,
+			venue_type_label='Restaurant',
+			address_line_1='123 Main St',
+			website_url='https://example.com/favorite-tacos',
+		)
+
+		response = self.client.get(reverse('profile-dashboard'), {'portal': 'customer'}, **self.auth_headers())
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(len(response.data['favorite_businesses']), 1)
+		self.assertEqual(response.data['favorite_businesses'][0]['slug'], 'favorite-tacos-ventura')
+
+	@patch('places.views.get_source_place_payload')
+	def test_profile_favorites_endpoint_adds_favorite_business(self, mock_get_source_place_payload):
+		mock_get_source_place_payload.return_value = self.favorite_place_payload
+
+		response = self.client.post(
+			reverse('profile-favorites'),
+			{'slug': 'favorite-tacos-ventura', 'favorited': True, 'portal': 'customer'},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertTrue(FavoriteBusiness.objects.filter(user=self.user, listing_slug='favorite-tacos-ventura').exists())
+		self.assertEqual(response.data['detail'], 'Business favorited.')
+		self.assertEqual(len(response.data['favorite_businesses']), 1)
+
+	def test_profile_favorites_endpoint_rejects_business_portal(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Approved Spot',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='55 Main St',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@approvedspot.com',
+			work_phone='805-555-0200',
+			employer_address='55 Main St, Ventura, CA 93001',
+			verification_summary='I own the business.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+
+		response = self.client.post(
+			reverse('profile-favorites'),
+			{'slug': 'favorite-tacos-ventura', 'favorited': True, 'portal': 'business'},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 403)
+		self.assertEqual(response.data['detail'], 'Only customer accounts can favorite businesses.')
+		self.assertFalse(FavoriteBusiness.objects.filter(user=self.user, listing_slug='favorite-tacos-ventura').exists())
+
+	@patch('places.views.get_source_place_payload')
+	def test_profile_favorites_endpoint_removes_favorite_business(self, mock_get_source_place_payload):
+		mock_get_source_place_payload.return_value = self.favorite_place_payload
+		FavoriteBusiness.objects.create(
+			user=self.user,
+			listing_slug='favorite-tacos-ventura',
+			name='Favorite Tacos',
+			city=City.VENTURA,
+			city_label='Ventura',
+			venue_type=VenueType.RESTAURANT,
+			venue_type_label='Restaurant',
+			address_line_1='123 Main St',
+			website_url='https://example.com/favorite-tacos',
+		)
+
+		response = self.client.post(
+			reverse('profile-favorites'),
+			{'slug': 'favorite-tacos-ventura', 'favorited': False, 'portal': 'customer'},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertFalse(FavoriteBusiness.objects.filter(user=self.user, listing_slug='favorite-tacos-ventura').exists())
+		self.assertEqual(response.data['detail'], 'Business removed from favorites.')
 
 	def test_profile_dashboard_reverts_unverified_email_change_after_24_hours(self):
 		self.profile.email_verified_at = timezone.now()

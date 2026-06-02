@@ -3,7 +3,7 @@ from django.core.mail import send_mail
 from django.utils.html import escape
 from django.utils import timezone
 
-from places.models import AccountProfile, BusinessClaim, ProfileAuthToken, VenueType
+from places.models import AccountProfile, BusinessClaim, FavoriteBusiness, ProfileAuthToken, VenueType
 
 
 def get_primary_business_claim(user, claim=None):
@@ -117,6 +117,20 @@ def build_account_response(user, portal, claim=None, token=None):
 		if membership.is_active
 	]
 
+	favorite_businesses = [
+		{
+			'slug': favorite.listing_slug,
+			'name': favorite.name,
+			'city': favorite.city,
+			'city_label': favorite.city_label,
+			'venue_type': favorite.venue_type,
+			'venue_type_label': favorite.venue_type_label,
+			'address_line_1': favorite.address_line_1,
+			'website_url': favorite.website_url,
+		}
+		for favorite in FavoriteBusiness.objects.filter(user=user).order_by('name', 'city_label', '-created_at')
+	]
+
 	business_contact = {}
 	if primary_claim is not None:
 		business_contact = {
@@ -166,6 +180,7 @@ def build_account_response(user, portal, claim=None, token=None):
 		'two_factor_pending_setup': bool(profile.two_factor_pending_secret and not profile.two_factor_enabled),
 		'billing_portal_url': profile.billing_portal_url if profile_type == 'business' else '',
 		'approved_businesses': approved_businesses,
+		'favorite_businesses': favorite_businesses,
 		'business_contact': business_contact,
 		'business_location_tracking_available': business_location_tracking_available,
 		'business_location_tracking_enabled': business_location_tracking_enabled,

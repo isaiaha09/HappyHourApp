@@ -8,9 +8,14 @@ import type { Deal, HappyHourWindow, OperatingHourWindow, PlaceDetail, PlaceLoca
 export type PlaceDetailScreenProps = {
   detailLoading: boolean;
   errorMessage: string | null;
+  favoriteHelperText: string | null;
+  favoriteSubmitting: boolean;
   isLandscape: boolean;
+  isFavorited: boolean;
   onBack: () => void;
   onSelectLocation: (locationId: number) => void;
+  onToggleFavorite: () => void;
+  showFavoriteControl: boolean;
   selectedPlace: PlaceDetail | null;
   selectedPlaceDeals: Deal[];
   selectedPlaceLocation: PlaceDetail | PlaceLocationDetail | null;
@@ -20,9 +25,14 @@ export type PlaceDetailScreenProps = {
 export function PlaceDetailScreen({
   detailLoading,
   errorMessage,
+  favoriteHelperText,
+  favoriteSubmitting,
   isLandscape,
+  isFavorited,
   onBack,
   onSelectLocation,
+  onToggleFavorite,
+  showFavoriteControl,
   selectedPlace,
   selectedPlaceDeals,
   selectedPlaceLocation,
@@ -48,9 +58,29 @@ export function PlaceDetailScreen({
 
         {selectedPlace ? (
           <View style={[styles.detailCard, isLandscape ? styles.detailCardLandscape : null]}>
-            <Text style={styles.detailCity}>{selectedPlaceLocation?.city_label ?? selectedPlace.city_label}</Text>
-            <Text style={styles.detailTitle}>{selectedPlace.name}</Text>
-            <Text style={styles.detailMeta}>{selectedPlace.venue_type_label}</Text>
+            <View style={styles.detailHeaderRow}>
+              <View style={styles.detailHeaderCopy}>
+                <Text style={styles.detailCity}>{selectedPlaceLocation?.city_label ?? selectedPlace.city_label}</Text>
+                <Text style={styles.detailTitle}>{selectedPlace.name}</Text>
+                <Text style={styles.detailMeta}>{selectedPlace.venue_type_label}</Text>
+              </View>
+              {showFavoriteControl ? (
+                <Pressable
+                  accessibilityLabel={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+                  onPress={onToggleFavorite}
+                  style={[
+                    styles.favoriteStarButton,
+                    isFavorited ? styles.favoriteStarButtonActive : null,
+                    favoriteSubmitting ? styles.linkButtonDisabled : null,
+                  ]}
+                >
+                  <Text style={[styles.favoriteStarIcon, isFavorited ? styles.favoriteStarIconActive : null]}>
+                    {isFavorited ? '★' : '☆'}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+            {showFavoriteControl && favoriteHelperText ? <Text style={styles.dashboardSupportText}>{favoriteHelperText}</Text> : null}
             {selectedPlace.locations.length ? (
               <>
                 <Text style={[styles.sectionTitle, styles.locationsSectionTitle]}>
