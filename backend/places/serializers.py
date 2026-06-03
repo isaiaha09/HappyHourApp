@@ -258,6 +258,17 @@ class FavoriteBusinessToggleSerializer(serializers.Serializer):
 		return normalized
 
 
+class DeleteAccountSerializer(serializers.Serializer):
+	password = serializers.CharField(write_only=True, style={'input_type': 'password'})
+
+	def validate_password(self, value):
+		request = self.context.get('request')
+		user = getattr(request, 'user', None)
+		if user is None or not getattr(user, 'is_authenticated', False) or not user.check_password(value):
+			raise serializers.ValidationError('Incorrect password.')
+		return value
+
+
 class LoginSerializer(serializers.Serializer):
 	portal = serializers.ChoiceField(choices=['customer', 'business'])
 	identifier = serializers.CharField(max_length=150)

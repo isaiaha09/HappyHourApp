@@ -4417,6 +4417,45 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(self.profile.password_reset_token, '')
 		self.assertEqual(self.user.profile_auth_tokens.count(), 0)
 
+	def test_delete_account_removes_user_and_related_profile_records(self):
+		FavoriteBusiness.objects.create(
+			user=self.user,
+			listing_slug='805-tacos-ventura',
+			name='805 Tacos',
+			city=City.VENTURA,
+			city_label='Ventura',
+			venue_type=VenueType.RESTAURANT,
+			venue_type_label='Restaurant',
+			address_line_1='123 Main St',
+			website_url='https://example.com/805-tacos',
+		)
+
+		response = self.client.post(
+			reverse('profile-delete-account'),
+			{'password': 'test-pass-123'},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data['detail'], 'Account permanently deleted.')
+		self.assertFalse(User.objects.filter(pk=self.user.pk).exists())
+		self.assertFalse(AccountProfile.objects.filter(pk=self.profile.pk).exists())
+		self.assertEqual(ProfileAuthToken.objects.filter(user_id=self.user.pk).count(), 0)
+		self.assertEqual(FavoriteBusiness.objects.filter(user_id=self.user.pk).count(), 0)
+
+	def test_delete_account_rejects_incorrect_password(self):
+		response = self.client.post(
+			reverse('profile-delete-account'),
+			{'password': 'wrong-pass'},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 400)
+		self.assertEqual(response.data['password'][0], 'Incorrect password.')
+		self.assertTrue(User.objects.filter(pk=self.user.pk).exists())
+
 	def test_two_factor_setup_confirm_and_disable_round_trip(self):
 		setup_response = self.client.post(reverse('profile-toggle-two-factor'), {}, format='json', **self.auth_headers())
 

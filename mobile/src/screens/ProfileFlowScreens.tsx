@@ -533,9 +533,11 @@ export function AuthPortalScreen({ authMessage, autoFocusIdentifier, errorMessag
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
         >
-          <Pressable onPress={onBackToLanding} style={styles.backButton}>
-            <Text style={styles.backButtonText}>Back</Text>
-          </Pressable>
+          <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
+            <Pressable onPress={onBackToLanding} style={styles.backButton}>
+              <Text style={styles.backButtonText}>Back</Text>
+            </Pressable>
+          </View>
 
           <View style={styles.authFormStack}>
             <Text style={styles.detailCity}>{loginPortal === 'customer' ? 'Customer Login' : 'Business Login'}</Text>
@@ -649,9 +651,11 @@ export function CreateProfileScreen({ errorMessage, form, isLandscape, message, 
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
         >
-          <Pressable onPress={onBack} style={styles.backButton}>
-            <Text style={styles.backButtonText}>Back to login</Text>
-          </Pressable>
+          <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
+            <Pressable onPress={onBack} style={styles.backButton}>
+              <Text style={styles.backButtonText}>Back to login</Text>
+            </Pressable>
+          </View>
 
           <View style={styles.profileCard}>
             <Text style={styles.detailCity}>Create Profile</Text>
@@ -748,9 +752,11 @@ export function EmailVerificationScreen({ errorMessage, isLandscape, message, on
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
         >
-          <Pressable onPress={onBack} style={styles.backButton}>
-            <Text style={styles.backButtonText}>Back to login</Text>
-          </Pressable>
+          <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
+            <Pressable onPress={onBack} style={styles.backButton}>
+              <Text style={styles.backButtonText}>Back to login</Text>
+            </Pressable>
+          </View>
 
           <View style={styles.profileCard}>
             <Text style={styles.detailCity}>Email Verification</Text>
@@ -836,9 +842,11 @@ export function BusinessClaimReviewPendingScreen({ errorMessage, isLandscape, me
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Pressable onPress={onBack} style={styles.backButton}>
-            <Text style={styles.backButtonText}>Back to login</Text>
-          </Pressable>
+          <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
+            <Pressable onPress={onBack} style={styles.backButton}>
+              <Text style={styles.backButtonText}>Back to login</Text>
+            </Pressable>
+          </View>
 
           <View style={styles.profileCard}>
             <Text style={styles.detailCity}>Business claim status</Text>
@@ -913,9 +921,11 @@ export function ContactSupportScreen({ errorMessage, initialMessage = '', initia
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
         >
-          <Pressable onPress={onBack} style={styles.backButton}>
-            <Text style={styles.backButtonText}>Back to Settings</Text>
-          </Pressable>
+          <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
+            <Pressable onPress={onBack} style={styles.backButton}>
+              <Text style={styles.backButtonText}>Back to Settings</Text>
+            </Pressable>
+          </View>
 
           <View style={styles.profileCard}>
             <Text style={styles.detailCity}>Contact Support</Text>
@@ -980,9 +990,11 @@ function LegalDocumentScreen({ eyebrow, intro, isLandscape, onBack, sections, ti
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Pressable onPress={onBack} style={styles.backButton}>
-            <Text style={styles.backButtonText}>Back to Settings</Text>
-          </Pressable>
+          <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
+            <Pressable onPress={onBack} style={styles.backButton}>
+              <Text style={styles.backButtonText}>Back to Settings</Text>
+            </Pressable>
+          </View>
 
           <View style={styles.profileCard}>
             <Text style={styles.detailCity}>{eyebrow}</Text>
@@ -1077,9 +1089,11 @@ export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces,
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
         >
-          <Pressable onPress={onBack} style={styles.backButton}>
-            <Text style={styles.backButtonText}>Back to create profile</Text>
-          </Pressable>
+          <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
+            <Pressable onPress={onBack} style={styles.backButton}>
+              <Text style={styles.backButtonText}>Back to create profile</Text>
+            </Pressable>
+          </View>
 
           <View style={styles.profileCard}>
             <Text style={styles.detailCity}>Claim a Business</Text>
@@ -1470,9 +1484,11 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
         >
-          <Pressable onPress={onBack} style={styles.backButton}>
-            <Text style={styles.backButtonText}>Back</Text>
-          </Pressable>
+          <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
+            <Pressable onPress={onBack} style={styles.backButton}>
+              <Text style={styles.backButtonText}>Back</Text>
+            </Pressable>
+          </View>
 
           <View style={styles.profileCard}>
             <Text style={styles.detailCity}>Verification</Text>

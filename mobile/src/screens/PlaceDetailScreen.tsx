@@ -57,9 +57,11 @@ export function PlaceDetailScreen({
         contentContainerStyle={[styles.detailScrollContent, isLandscape ? styles.detailScrollContentLandscape : null]}
         showsVerticalScrollIndicator={false}
       >
-        <Pressable onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>{backButtonLabel}</Text>
-        </Pressable>
+        <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
+          <Pressable onPress={onBack} style={styles.backButton}>
+            <Text style={styles.backButtonText}>{backButtonLabel}</Text>
+          </Pressable>
+        </View>
 
         {detailLoading && !selectedPlace ? (
           <View style={styles.centerState}>

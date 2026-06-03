@@ -123,6 +123,10 @@ export async function disableTwoFactor(baseUrl: string, authToken: string, code:
   return postAuthedJson<SignupResponse>(baseUrl, '/profiles/two-factor/disable/', authToken, { code, portal });
 }
 
+export async function deleteProfileAccount(baseUrl: string, authToken: string, password: string) {
+  return postAuthedJson<{ detail: string }>(baseUrl, '/profiles/delete-account/', authToken, { password });
+}
+
 export async function createBusinessProfile(baseUrl: string, payload: BusinessSignupRequest, authToken?: string) {
   return postMultipartJson<EmailVerificationChallengeResponse>(baseUrl, '/profiles/business-signup/', buildBusinessSignupFormData(payload), authToken);
 }

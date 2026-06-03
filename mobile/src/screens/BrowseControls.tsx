@@ -29,6 +29,7 @@ export type BrowseControlsProps = {
   onReload: () => void;
   onSelectAllVenueTypes: () => void;
   onSelectCity: (city: CityFilterValue) => void;
+  onToggleSearchPanelLift?: () => void;
   onToggleConfirmedDealsOnly: () => void;
   onToggleDealDay: (day: WeekdayFilterValue) => void;
   onToggleFilters: () => void;
@@ -37,6 +38,7 @@ export type BrowseControlsProps = {
   onToggleVenueType: (venueType: VenueFilterValue) => void;
   onToggleVerifiedBusinessesOnly: () => void;
   resultCount: number;
+  searchPanelLifted?: boolean;
   searchQuery: string;
   selectedDealDays: WeekdayFilterValue[];
   selectedCity: CityFilterValue;
@@ -59,6 +61,7 @@ export function BrowseControls({
   onReload,
   onSelectAllVenueTypes,
   onSelectCity,
+  onToggleSearchPanelLift,
   onToggleConfirmedDealsOnly,
   onToggleDealDay,
   onToggleFilters,
@@ -67,6 +70,7 @@ export function BrowseControls({
   onToggleVenueType,
   onToggleVerifiedBusinessesOnly,
   resultCount,
+  searchPanelLifted = false,
   searchQuery,
   selectedDealDays,
   selectedCity,
@@ -82,6 +86,7 @@ export function BrowseControls({
     compactLandscapeControls ? Math.min(height * 0.42, 260) : Math.min(height * 0.5, 420),
     compactLandscapeControls ? 180 : 220,
   );
+  const collapsedSearchBodyMaxHeight = filtersPanelMaxHeight + (compactLandscapeControls ? 112 : 148);
   const landscapeControlsWidth = compactLandscapeControls
     ? Math.min(width - 32, overlay ? 560 : 620)
     : null;
@@ -94,6 +99,7 @@ export function BrowseControls({
   const modeSwitchColorProgress = useRef(new Animated.Value(browseMode === 'map' ? 1 : 0)).current;
   const filtersPanelProgress = useRef(new Animated.Value(filtersExpanded ? 1 : 0)).current;
   const mapThemeToggleProgress = useRef(new Animated.Value(isDarkMapMode ? 1 : 0)).current;
+  const searchPanelLiftProgress = useRef(new Animated.Value(searchPanelLifted ? 1 : 0)).current;
   const listLabelColor = modeSwitchColorProgress.interpolate({
     inputRange: [0, 1],
     outputRange: ['#f4fffe', '#5d4637'],
@@ -158,6 +164,30 @@ export function BrowseControls({
     inputRange: [0, 1],
     outputRange: ['50deg', '0deg'],
   });
+  const searchPanelBodyOpacity = searchPanelLiftProgress.interpolate({
+    inputRange: [0, 0.12, 1],
+    outputRange: [1, 0.5, 0],
+  });
+  const searchPanelBodyTranslateY = searchPanelLiftProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -10],
+  });
+  const searchPanelBodyMaxHeight = searchPanelLiftProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [collapsedSearchBodyMaxHeight, 0],
+  });
+  const searchPanelChevronLeftRotate = searchPanelLiftProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['-45deg', '45deg'],
+  });
+  const searchPanelChevronRightRotate = searchPanelLiftProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['45deg', '-45deg'],
+  });
+  const searchPanelChevronArmOffset = searchPanelLiftProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-1, 1],
+  });
 
   useEffect(() => {
     Animated.timing(modeSwitchTranslateProgress, {
@@ -193,6 +223,15 @@ export function BrowseControls({
     }).start();
   }, [isDarkMapMode, mapThemeToggleProgress]);
 
+  useEffect(() => {
+    Animated.timing(searchPanelLiftProgress, {
+      duration: 280,
+      easing: Easing.out(Easing.cubic),
+      toValue: searchPanelLifted ? 1 : 0,
+      useNativeDriver: false,
+    }).start();
+  }, [searchPanelLiftProgress, searchPanelLifted]);
+
   return (
     <View
       style={[
@@ -206,6 +245,7 @@ export function BrowseControls({
           style={[
             styles.searchInputShell,
             overlay ? styles.searchInputShellOverlay : null,
+            overlay ? styles.searchInputShellCurtain : null,
             compactLandscapeControls ? styles.searchInputShellLandscape : null,
           ]}
         >
@@ -224,163 +264,171 @@ export function BrowseControls({
           ) : null}
         </View>
       </View>
-
-      <View
-        style={[
-          styles.toolbarRow,
-          compactLandscapeControls ? styles.toolbarRowLandscape : null,
-          !onOpenDashboard ? styles.toolbarRowLeading : null,
-        ]}
+      <Animated.View
+        pointerEvents={searchPanelLifted ? 'none' : 'auto'}
+        style={{
+          maxHeight: searchPanelBodyMaxHeight,
+          opacity: searchPanelBodyOpacity,
+          overflow: 'hidden',
+          transform: [{ translateY: searchPanelBodyTranslateY }],
+        }}
       >
-        <View style={[styles.toolbarActionsRow, !onOpenDashboard ? styles.toolbarActionsRowFill : styles.toolbarActionsRowWithDashboard]}>
-          {listModeEnabled ? (
-            <View
-              style={[
-                styles.modeSwitcherTrack,
-                overlay ? styles.modeSwitcherTrackOverlay : null,
-                { width: modeSwitchTrackWidth },
-              ]}
-            >
-              <Animated.View
+        <View
+          style={[
+            styles.toolbarRow,
+            compactLandscapeControls ? styles.toolbarRowLandscape : null,
+            !onOpenDashboard ? styles.toolbarRowLeading : null,
+          ]}
+        >
+          <View style={[styles.toolbarActionsRow, !onOpenDashboard ? styles.toolbarActionsRowFill : styles.toolbarActionsRowWithDashboard]}>
+            {listModeEnabled ? (
+              <View
                 style={[
-                  styles.modeSwitcherThumb,
-                  {
-                    width: modeSwitchThumbWidth,
-                    transform: [{
-                      translateX: modeSwitchTranslateProgress.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0, modeSwitchThumbWidth],
-                      }),
-                    }],
-                  },
+                  styles.modeSwitcherTrack,
+                  overlay ? styles.modeSwitcherTrackOverlay : null,
+                  { width: modeSwitchTrackWidth },
                 ]}
-              />
-              <Pressable
-                onPress={() => onBrowseModeChange('list')}
-                style={[styles.modeSwitchOption, { width: modeSwitchThumbWidth }]}
               >
-                <Animated.Text style={[styles.modeSwitchOptionText, { color: listLabelColor }]}>List</Animated.Text>
-              </Pressable>
+                <Animated.View
+                  style={[
+                    styles.modeSwitcherThumb,
+                    {
+                      width: modeSwitchThumbWidth,
+                      transform: [{
+                        translateX: modeSwitchTranslateProgress.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, modeSwitchThumbWidth],
+                        }),
+                      }],
+                    },
+                  ]}
+                />
+                <Pressable
+                  onPress={() => onBrowseModeChange('list')}
+                  style={[styles.modeSwitchOption, { width: modeSwitchThumbWidth }]}
+                >
+                  <Animated.Text style={[styles.modeSwitchOptionText, { color: listLabelColor }]}>List</Animated.Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => onBrowseModeChange('map')}
+                  style={[styles.modeSwitchOption, { width: modeSwitchThumbWidth }]}
+                >
+                  <Animated.Text style={[styles.modeSwitchOptionText, { color: mapLabelColor }]}>Map</Animated.Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={styles.secondaryToolbarButton}>
+                <Text style={styles.secondaryToolbarButtonText}>Guest Map</Text>
+              </View>
+            )}
+            {onToggleMapTheme ? (
               <Pressable
-                onPress={() => onBrowseModeChange('map')}
-                style={[styles.modeSwitchOption, { width: modeSwitchThumbWidth }]}
+                accessibilityLabel={isDarkMapMode ? 'Switch to light map' : 'Switch to dark map'}
+                onPress={onToggleMapTheme}
+                style={styles.mapThemeToggleButton}
               >
-                <Animated.Text style={[styles.modeSwitchOptionText, { color: mapLabelColor }]}>Map</Animated.Text>
+                <Animated.View
+                  style={[
+                    styles.mapThemeToggleButtonFill,
+                    {
+                      backgroundColor: mapThemeToggleBackgroundColor,
+                      borderColor: mapThemeToggleBorderColor,
+                    },
+                  ]}
+                >
+                  <Animated.Text
+                    style={[
+                      styles.mapThemeToggleButtonText,
+                      styles.mapThemeToggleButtonTextLayer,
+                      {
+                        opacity: mapThemeToggleSunOpacity,
+                        transform: [{ scale: mapThemeToggleSunScale }, { rotate: mapThemeToggleSunRotate }],
+                      },
+                    ]}
+                  >
+                    ☀
+                  </Animated.Text>
+                  <Animated.Text
+                    style={[
+                      styles.mapThemeToggleButtonText,
+                      styles.mapThemeToggleButtonTextActive,
+                      styles.mapThemeToggleButtonTextLayer,
+                      {
+                        opacity: mapThemeToggleMoonOpacity,
+                        transform: [{ scale: mapThemeToggleMoonScale }, { rotate: mapThemeToggleMoonRotate }],
+                      },
+                    ]}
+                  >
+                    ☾
+                  </Animated.Text>
+                </Animated.View>
               </Pressable>
-            </View>
-          ) : (
-            <View style={styles.secondaryToolbarButton}>
-              <Text style={styles.secondaryToolbarButtonText}>Guest Map</Text>
-            </View>
-          )}
-          {onToggleMapTheme ? (
+            ) : null}
+            <Pressable accessibilityLabel="Refresh places" onPress={onReload} style={styles.reloadButton}>
+              <Text style={styles.reloadButtonText}>↻</Text>
+            </Pressable>
             <Pressable
-              accessibilityLabel={isDarkMapMode ? 'Switch to light map' : 'Switch to dark map'}
-              onPress={onToggleMapTheme}
-              style={styles.mapThemeToggleButton}
+              onPress={onToggleFilters}
+              style={styles.filtersToggleButtonPressable}
             >
               <Animated.View
                 style={[
-                  styles.mapThemeToggleButtonFill,
+                  styles.filtersToggleButton,
+                  styles.filtersToggleButtonInline,
+                  compactLandscapeControls ? styles.filtersToggleButtonLandscape : null,
                   {
-                    backgroundColor: mapThemeToggleBackgroundColor,
-                    borderColor: mapThemeToggleBorderColor,
+                    backgroundColor: filtersToggleBackgroundColor,
+                    borderColor: filtersToggleBorderColor,
                   },
                 ]}
               >
                 <Animated.Text
-                  style={[
-                    styles.mapThemeToggleButtonText,
-                    styles.mapThemeToggleButtonTextLayer,
-                    {
-                      opacity: mapThemeToggleSunOpacity,
-                      transform: [{ scale: mapThemeToggleSunScale }, { rotate: mapThemeToggleSunRotate }],
-                    },
-                  ]}
+                  numberOfLines={1}
+                  style={[styles.filtersToggleText, styles.filtersToggleTextInline, { color: filtersToggleTextColor }]}
                 >
-                  ☀
-                </Animated.Text>
-                <Animated.Text
-                  style={[
-                    styles.mapThemeToggleButtonText,
-                    styles.mapThemeToggleButtonTextActive,
-                    styles.mapThemeToggleButtonTextLayer,
-                    {
-                      opacity: mapThemeToggleMoonOpacity,
-                      transform: [{ scale: mapThemeToggleMoonScale }, { rotate: mapThemeToggleMoonRotate }],
-                    },
-                  ]}
-                >
-                  ☾
+                  {filtersExpanded ? 'Hide filters' : 'Filters'}
                 </Animated.Text>
               </Animated.View>
             </Pressable>
+          </View>
+          {onOpenDashboard ? (
+            <Pressable accessibilityLabel="Back to Dashboard" onPress={onOpenDashboard} style={styles.toolbarArrowButton}>
+              <Text style={styles.toolbarArrowButtonText}>→</Text>
+            </Pressable>
           ) : null}
-          <Pressable accessibilityLabel="Refresh places" onPress={onReload} style={styles.reloadButton}>
-            <Text style={styles.reloadButtonText}>↻</Text>
-          </Pressable>
-          <Pressable
-            onPress={onToggleFilters}
-            style={styles.filtersToggleButtonPressable}
-          >
-            <Animated.View
-              style={[
-                styles.filtersToggleButton,
-                styles.filtersToggleButtonInline,
-                compactLandscapeControls ? styles.filtersToggleButtonLandscape : null,
-                {
-                  backgroundColor: filtersToggleBackgroundColor,
-                  borderColor: filtersToggleBorderColor,
-                },
-              ]}
-            >
-              <Animated.Text
-                numberOfLines={1}
-                style={[styles.filtersToggleText, styles.filtersToggleTextInline, { color: filtersToggleTextColor }]}
-              >
-                {filtersExpanded ? 'Hide filters' : 'Filters'}
-              </Animated.Text>
-            </Animated.View>
-          </Pressable>
         </View>
-        {onOpenDashboard ? (
-          <Pressable accessibilityLabel="Back to Dashboard" onPress={onOpenDashboard} style={styles.toolbarArrowButton}>
-            <Text style={styles.toolbarArrowButtonText}>→</Text>
-          </Pressable>
-        ) : null}
-      </View>
 
-      <View style={[styles.browseStatsRow, compactLandscapeControls ? styles.browseStatsRowLandscape : null]}>
-        <Text style={styles.browseStatsText}>{resultCount} {resultCount === 1 ? 'place' : 'places'}</Text>
-        <Text numberOfLines={1} style={styles.browseStatsSubtleText}>
-          {getBrowseSummaryLabel(selectedCity, selectedVenueTypes, normalizedSearchQuery, {
-            confirmedDealsOnly,
-            selectedDealDays,
-            selectedOperatingDays,
-            verifiedBusinessesOnly,
-          })}
-        </Text>
-      </View>
+        <View style={[styles.browseStatsRow, compactLandscapeControls ? styles.browseStatsRowLandscape : null]}>
+          <Text style={styles.browseStatsText}>{resultCount} {resultCount === 1 ? 'place' : 'places'}</Text>
+          <Text numberOfLines={1} style={styles.browseStatsSubtleText}>
+            {getBrowseSummaryLabel(selectedCity, selectedVenueTypes, normalizedSearchQuery, {
+              confirmedDealsOnly,
+              selectedDealDays,
+              selectedOperatingDays,
+              verifiedBusinessesOnly,
+            })}
+          </Text>
+        </View>
 
-      <Animated.View
-        pointerEvents={filtersExpanded ? 'auto' : 'none'}
-        style={[
-          styles.filtersPanel,
-          compactLandscapeControls ? styles.filtersPanelLandscape : null,
-          {
-            maxHeight: filtersPanelAnimatedMaxHeight,
-            opacity: filtersPanelOpacity,
-            overflow: 'hidden',
-            transform: [{ translateY: filtersPanelTranslateY }],
-          },
-        ]}
-      >
-        <View style={{ maxHeight: filtersPanelMaxHeight }}>
-          <ScrollView
-            contentContainerStyle={styles.filtersPanelScrollContent}
-            nestedScrollEnabled
-            showsVerticalScrollIndicator
-          >
+        <Animated.View
+          pointerEvents={filtersExpanded ? 'auto' : 'none'}
+          style={[
+            styles.filtersPanel,
+            compactLandscapeControls ? styles.filtersPanelLandscape : null,
+            {
+              maxHeight: filtersPanelAnimatedMaxHeight,
+              opacity: filtersPanelOpacity,
+              overflow: 'hidden',
+              transform: [{ translateY: filtersPanelTranslateY }],
+            },
+          ]}
+        >
+          <View style={{ maxHeight: filtersPanelMaxHeight }}>
+            <ScrollView
+              contentContainerStyle={styles.filtersPanelScrollContent}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator
+            >
             <View style={styles.browseSectionHeaderRow}>
               <Text style={styles.browseSectionTitle}>City</Text>
               <Text style={styles.browseSectionMeta}>Quick scope</Text>
@@ -490,9 +538,45 @@ export function BrowseControls({
                 );
               })}
             </View>
-          </ScrollView>
-        </View>
+            </ScrollView>
+          </View>
+        </Animated.View>
       </Animated.View>
+      {overlay && onToggleSearchPanelLift ? (
+        <Pressable
+          accessibilityLabel={searchPanelLifted ? 'Show search filters' : 'Hide search filters'}
+          hitSlop={10}
+          onPress={onToggleSearchPanelLift}
+          style={styles.searchCurtainToggleInline}
+        >
+          <View style={styles.mapResultsChevronIcon}>
+            <Animated.View
+              style={[
+                styles.mapResultsChevronLine,
+                styles.mapResultsChevronLineLeft,
+                {
+                  transform: [
+                    { translateY: searchPanelChevronArmOffset },
+                    { rotate: searchPanelChevronLeftRotate },
+                  ],
+                },
+              ]}
+            />
+            <Animated.View
+              style={[
+                styles.mapResultsChevronLine,
+                styles.mapResultsChevronLineRight,
+                {
+                  transform: [
+                    { translateY: searchPanelChevronArmOffset },
+                    { rotate: searchPanelChevronRightRotate },
+                  ],
+                },
+              ]}
+            />
+          </View>
+        </Pressable>
+      ) : null}
     </View>
   );
 }

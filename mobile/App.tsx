@@ -30,6 +30,7 @@ import {
   createCustomerProfile,
   createInformalBusinessProfile,
   createManualBusinessProfile,
+  deleteProfileAccount,
   disableTwoFactor,
   fetchProfileDashboard,
   fetchPlaceDetail,
@@ -159,6 +160,9 @@ type AppScreenMode = 'splash' | 'auth' | 'browse' | 'profiles' | 'business-profi
 type OnboardingTransitionDirection = 'forward' | 'backward';
 type TransitionAxis = 'x' | 'y';
 type ClaimReturnDestination = 'business-search' | 'browse-map' | 'profiles';
+type MainShellScreen = 'browse' | 'profiles' | 'business-profile-editor' | 'settings' | 'support' | 'privacy-policy' | 'terms-of-service';
+type MainShellBottomNavItem = 'map' | 'profile' | 'more';
+type ShellFadeScope = 'browse' | 'profile';
 type CustomerBusinessClaimNotice = {
   businessName: string;
   locationLabel: string;
@@ -401,6 +405,7 @@ function AppScreen() {
   const mapResultsExpandedProgress = useRef(new Animated.Value(1)).current;
   const mapPreviewOpacity = useRef(new Animated.Value(0)).current;
   const mapThemeFade = useRef(new Animated.Value(0)).current;
+  const bottomMoreSheetProgress = useRef(new Animated.Value(0)).current;
   const [apiBaseUrl, setApiBaseUrl] = useState(initialApiBaseUrl);
   const [screenMode, setScreenMode] = useState<AppScreenMode>('splash');
   const [onboardingTransitionDirection, setOnboardingTransitionDirection] = useState<OnboardingTransitionDirection>('forward');
@@ -418,6 +423,7 @@ function AppScreen() {
   const [authenticatedSession, setAuthenticatedSession] = useState<SignupResponse | null>(null);
   const [browseMode, setBrowseMode] = useState<BrowseMode>('list');
   const [browseFiltersExpanded, setBrowseFiltersExpanded] = useState(false);
+  const [mapSearchPanelLifted, setMapSearchPanelLifted] = useState(false);
   const [darkMapMode, setDarkMapMode] = useState(false);
   const [displayedDarkMapMode, setDisplayedDarkMapMode] = useState(false);
   const [transitioningMapTheme, setTransitioningMapTheme] = useState<boolean | null>(null);
@@ -440,6 +446,7 @@ function AppScreen() {
   const [guestBrowseModeLocked, setGuestBrowseModeLocked] = useState(false);
   const [showGuestFavoritePrompt, setShowGuestFavoritePrompt] = useState(false);
   const [showGuestBusinessClaimPrompt, setShowGuestBusinessClaimPrompt] = useState(false);
+  const [showGuestBottomNavPrompt, setShowGuestBottomNavPrompt] = useState(false);
   const [showCustomerBusinessClaimPrompt, setShowCustomerBusinessClaimPrompt] = useState(false);
   const [customerBusinessClaimNotice, setCustomerBusinessClaimNotice] = useState<CustomerBusinessClaimNotice | null>(null);
   const [claimReturnDestination, setClaimReturnDestination] = useState<ClaimReturnDestination>('business-search');
@@ -473,6 +480,9 @@ function AppScreen() {
   const [emailVerificationCode, setEmailVerificationCode] = useState('');
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [dashboardSubmitting, setDashboardSubmitting] = useState(false);
+  const [deleteAccountPassword, setDeleteAccountPassword] = useState('');
+  const [bottomMoreSheetVisible, setBottomMoreSheetVisible] = useState(false);
+  const [shellFadeScope, setShellFadeScope] = useState<ShellFadeScope | null>(null);
   const [profilePlaces, setProfilePlaces] = useState<PlaceListItem[]>([]);
   const [profilePlacesLoading, setProfilePlacesLoading] = useState(false);
   const [businessSearchQuery, setBusinessSearchQuery] = useState('');
@@ -695,8 +705,9 @@ function AppScreen() {
 
   const mapSearchResultPool = normalizedSearchQuery.length ? displayedMapPlaces : [];
   const mapSearchResultsKey = mapSearchResultPool.map((place) => place.markerKey).join('|');
-  const mapOverlayBottomPadding = Math.max(insets.bottom + 12, 20);
-  const floatingDashboardButtonOffset = Math.max(insets.bottom + 16, 24);
+  const bottomNavHeight = Math.max(insets.bottom + 76, 90);
+  const mapOverlayBottomPadding = bottomNavHeight + 18;
+  const floatingDashboardButtonOffset = bottomNavHeight + 16;
   const mapResultsCardMaxHeight = Math.max(
     width > height
       ? Math.min(height * 0.5, keyboardHeight > 0 ? 300 : 360)
@@ -712,6 +723,75 @@ function AppScreen() {
 
     clearTimeout(showMoreMapResultsTimeoutRef.current);
     showMoreMapResultsTimeoutRef.current = null;
+  }
+
+  function animateShellFade(scope: ShellFadeScope) {
+    const targetTransition = scope === 'browse' ? browseSceneTransition : profileSceneTransition;
+
+    setShellFadeScope(scope);
+    if (scope === 'browse') {
+      setBrowseEntryOffset(0);
+    } else {
+      setProfileEntryOffset(0);
+    }
+
+    targetTransition.stopAnimation();
+    targetTransition.setValue(0);
+    requestAnimationFrame(() => {
+      Animated.timing(targetTransition, {
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        toValue: 1,
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (!finished) {
+          return;
+        }
+
+        setShellFadeScope((current) => (current === scope ? null : current));
+      });
+    });
+  }
+
+  function openBottomMoreSheet() {
+    setBottomMoreSheetVisible(true);
+    bottomMoreSheetProgress.stopAnimation();
+    bottomMoreSheetProgress.setValue(0);
+    requestAnimationFrame(() => {
+      Animated.timing(bottomMoreSheetProgress, {
+        duration: 240,
+        easing: Easing.out(Easing.cubic),
+        toValue: 1,
+        useNativeDriver: true,
+      }).start();
+    });
+  }
+
+  function closeBottomMoreSheet(afterClose?: () => void) {
+    bottomMoreSheetProgress.stopAnimation();
+    bottomMoreSheetProgress.setValue(0);
+    setBottomMoreSheetVisible(false);
+    afterClose?.();
+  }
+
+  function fadeIntoMainShellScreen(nextScreen: MainShellScreen) {
+    const scope: ShellFadeScope = nextScreen === 'browse' ? 'browse' : 'profile';
+    const navigate = () => {
+      setScreenMode(nextScreen);
+      animateShellFade(scope);
+    };
+
+    dismissKeyboardForScreenTransition();
+    setProfileErrorMessage(null);
+    setProfileMessage(null);
+    setSelectedPlaceSlug(null);
+
+    if (bottomMoreSheetVisible) {
+      closeBottomMoreSheet(navigate);
+      return;
+    }
+
+    navigate();
   }
 
   function clearAutoFitMapRegionTimer() {
@@ -737,6 +817,16 @@ function AppScreen() {
     clearAutoFitMapRegionTimer();
     clearMapMarkersTrackViewChangesTimer();
   }, []);
+
+  useEffect(() => {
+    if (!bottomMoreSheetVisible || authenticatedSession) {
+      return;
+    }
+
+    setBottomMoreSheetVisible(false);
+    bottomMoreSheetProgress.stopAnimation();
+    bottomMoreSheetProgress.setValue(0);
+  }, [authenticatedSession, bottomMoreSheetProgress, bottomMoreSheetVisible]);
 
   useEffect(() => {
     async function handleInitialUrl() {
@@ -1915,6 +2005,10 @@ function AppScreen() {
     setBrowseFiltersExpanded((current) => !current);
   }
 
+  function handleToggleMapSearchPanelLift() {
+    setMapSearchPanelLifted((current) => !current);
+  }
+
   function handleChangeSearchQuery(value: string) {
     if (!normalizeSearchText(value).length) {
       if (!searchQuery.length) {
@@ -2251,6 +2345,24 @@ function AppScreen() {
     setShowGuestFavoritePrompt(false);
   }
 
+  function handleDismissGuestBottomNavPrompt() {
+    setShowGuestBottomNavPrompt(false);
+  }
+
+  function handleCreateCustomerAccountFromGuestBottomNav() {
+    setShowGuestBottomNavPrompt(false);
+    setSelectedPlaceSlug(null);
+    setSelectedLocationId(null);
+    handleOpenProfiles();
+  }
+
+  function handleCreateBusinessAccountFromGuestBottomNav() {
+    setShowGuestBottomNavPrompt(false);
+    setSelectedPlaceSlug(null);
+    setSelectedLocationId(null);
+    handleOpenBusinessSearch();
+  }
+
   function handleCreateCustomerAccountFromGuestFavorite() {
     setShowGuestFavoritePrompt(false);
     setSelectedPlaceSlug(null);
@@ -2304,6 +2416,95 @@ function AppScreen() {
     dismissKeyboardForScreenTransition();
     setProfileErrorMessage(null);
     navigateScreen('terms-of-service', 'forward');
+  }
+
+  function handleBottomNavOpenMap() {
+    if (!authenticatedSession) {
+      return;
+    }
+
+    if (screenMode === 'browse') {
+      if (bottomMoreSheetVisible) {
+        closeBottomMoreSheet();
+      }
+
+      if (browseMode !== 'map') {
+        handleBrowseModeChange('map');
+      }
+
+      return;
+    }
+
+    setBrowseMode('map');
+    fadeIntoMainShellScreen('browse');
+  }
+
+  function handleBottomNavOpenProfile() {
+    if (!authenticatedSession) {
+      setShowGuestBottomNavPrompt(true);
+      return;
+    }
+
+    if (screenMode === 'profiles') {
+      if (bottomMoreSheetVisible) {
+        closeBottomMoreSheet();
+      }
+
+      return;
+    }
+
+    fadeIntoMainShellScreen('profiles');
+  }
+
+  function handleBottomNavOpenMore() {
+    if (!authenticatedSession) {
+      setShowGuestBottomNavPrompt(true);
+      return;
+    }
+
+    if (bottomMoreSheetVisible) {
+      closeBottomMoreSheet();
+      return;
+    }
+
+    openBottomMoreSheet();
+  }
+
+  function handleBottomMenuOpenSettings() {
+    if (screenMode === 'settings') {
+      closeBottomMoreSheet();
+      return;
+    }
+
+    fadeIntoMainShellScreen('settings');
+  }
+
+  function handleBottomMenuOpenSupport() {
+    setSupportDraftContext(null);
+    if (screenMode === 'support') {
+      closeBottomMoreSheet();
+      return;
+    }
+
+    fadeIntoMainShellScreen('support');
+  }
+
+  function handleBottomMenuOpenTerms() {
+    if (screenMode === 'terms-of-service') {
+      closeBottomMoreSheet();
+      return;
+    }
+
+    fadeIntoMainShellScreen('terms-of-service');
+  }
+
+  function handleBottomMenuOpenPrivacy() {
+    if (screenMode === 'privacy-policy') {
+      closeBottomMoreSheet();
+      return;
+    }
+
+    fadeIntoMainShellScreen('privacy-policy');
   }
 
   function handleBackToSettings() {
@@ -2929,11 +3130,51 @@ function AppScreen() {
     }
   }
 
+  function handleDeleteAccount() {
+    if (!authenticatedSession?.auth_token || dashboardSubmitting) {
+      return;
+    }
+
+    if (!deleteAccountPassword) {
+      setProfileErrorMessage('Enter your current password to delete your account.');
+      return;
+    }
+
+    void confirmDeleteAccount();
+  }
+
+  async function confirmDeleteAccount() {
+    if (!authenticatedSession?.auth_token) {
+      return;
+    }
+
+    setDashboardSubmitting(true);
+    setProfileErrorMessage(null);
+
+    try {
+      const response = await deleteProfileAccount(apiBaseUrl, authenticatedSession.auth_token, deleteAccountPassword);
+      setProfileMessage(null);
+      setProfileErrorMessage(null);
+      setAuthMessage(response.detail || 'Your account has been permanently deleted.');
+      setShouldAutoFocusLoginField(false);
+      setDeleteAccountPassword('');
+      setTwoFactorSetup(null);
+      setTwoFactorSetupCode('');
+      setTwoFactorDisableCode('');
+      startLogoutTransition();
+    } catch (error) {
+      setProfileErrorMessage(getErrorMessage(error));
+    } finally {
+      setDashboardSubmitting(false);
+    }
+  }
+
   function handleLogout() {
     setProfileMessage(null);
     setProfileErrorMessage(null);
     setAuthMessage('You have been signed out.');
     setShouldAutoFocusLoginField(false);
+    setDeleteAccountPassword('');
     setTwoFactorSetup(null);
     setTwoFactorSetupCode('');
     setTwoFactorDisableCode('');
@@ -3156,28 +3397,23 @@ function AppScreen() {
       return (
         <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
           <AccountSettingsScreen
+            deleteAccountPassword={deleteAccountPassword}
             errorMessage={profileErrorMessage}
             isLandscape={isLandscape}
             message={profileMessage}
             onBack={handleBackFromSettings}
             onBeginTwoFactorSetup={() => void handleBeginTwoFactorSetup()}
+            onChangeDeleteAccountPassword={setDeleteAccountPassword}
             onChangeTwoFactorDisableCode={setTwoFactorDisableCode}
             onChangeTwoFactorSetupCode={setTwoFactorSetupCode}
             onConfirmTwoFactorSetup={() => void handleConfirmTwoFactorSetup()}
             onDisableTwoFactor={() => void handleDisableTwoFactor()}
+            onDeleteAccount={handleDeleteAccount}
             onLogout={handleLogout}
             onToggleBusinessLocationTracking={(value) => void handleToggleBusinessLocationTracking(value)}
             onOpenContactSupport={handleOpenSupport}
-            onOpenDisableAccountRequest={() => handleOpenSupportWithDraft(
-              'Disable my DiningDealz account',
-              'Please disable my DiningDealz account. I understand this request is processed by the support team after account-owner verification.',
-            )}
             onOpenPrivacyPolicy={handleOpenPrivacyPolicy}
             onOpenTermsOfService={handleOpenTermsOfService}
-            onOpenDeleteAccountRequest={() => handleOpenSupportWithDraft(
-              'Delete my DiningDealz account',
-              'Please permanently delete my DiningDealz account and associated profile data. I understand this request is processed by the support team after account-owner verification.',
-            )}
             session={profileSession}
             submitting={dashboardSubmitting}
             twoFactorDisableCode={twoFactorDisableCode}
@@ -3266,6 +3502,73 @@ function AppScreen() {
     );
   }
 
+  function renderBottomNavIcon(icon: MainShellBottomNavItem, active: boolean) {
+    switch (icon) {
+      case 'map':
+        return (
+          <View style={styles.bottomNavMapIcon}>
+            <View style={[styles.bottomNavMapPanel, active ? styles.bottomNavMapPanelActive : null]} />
+            <View style={[styles.bottomNavMapPanel, styles.bottomNavMapPanelMiddle, active ? styles.bottomNavMapPanelActive : null]} />
+            <View style={[styles.bottomNavMapPanel, active ? styles.bottomNavMapPanelActive : null]} />
+          </View>
+        );
+      case 'profile':
+        return (
+          <View style={styles.bottomNavProfileIcon}>
+            <View style={[styles.bottomNavProfileHead, active ? styles.bottomNavIconFillActive : null]} />
+            <View style={[styles.bottomNavProfileBody, active ? styles.bottomNavIconStrokeActive : null]} />
+          </View>
+        );
+      case 'more':
+        return (
+          <View style={styles.bottomNavMoreIcon}>
+            <View style={[styles.bottomNavMoreLine, active ? styles.bottomNavIconStrokeActive : null]} />
+            <View style={[styles.bottomNavMoreLine, active ? styles.bottomNavIconStrokeActive : null]} />
+            <View style={[styles.bottomNavMoreLine, active ? styles.bottomNavIconStrokeActive : null]} />
+          </View>
+        );
+      default:
+        return null;
+    }
+  }
+
+  function renderBottomNav(options: { guest: boolean }) {
+    let activeItem: MainShellBottomNavItem = 'map';
+    if (!options.guest) {
+      if (['settings', 'support', 'privacy-policy', 'terms-of-service'].includes(screenMode)) {
+        activeItem = 'more';
+      } else if (screenMode !== 'browse') {
+        activeItem = 'profile';
+      }
+    }
+
+    return (
+      <View pointerEvents="box-none" style={styles.bottomNavOverlay}>
+        <View style={[styles.bottomNavShell, { paddingBottom: Math.max(insets.bottom + 10, 14) }]}>
+          <View pointerEvents="none" style={styles.bottomNavGlassHighlight} />
+          <Pressable accessibilityLabel="Open map" onPress={handleBottomNavOpenMap} style={styles.bottomNavItem}>
+            <View style={[styles.bottomNavItemIconWrap, activeItem === 'map' ? styles.bottomNavItemIconWrapActive : null]}>
+              {renderBottomNavIcon('map', activeItem === 'map')}
+            </View>
+            <Text style={[styles.bottomNavItemLabel, activeItem === 'map' ? styles.bottomNavItemLabelActive : null]}>Map</Text>
+          </Pressable>
+          <Pressable accessibilityLabel="Open profile" onPress={handleBottomNavOpenProfile} style={styles.bottomNavItem}>
+            <View style={[styles.bottomNavItemIconWrap, activeItem === 'profile' ? styles.bottomNavItemIconWrapActive : null]}>
+              {renderBottomNavIcon('profile', activeItem === 'profile')}
+            </View>
+            <Text style={[styles.bottomNavItemLabel, activeItem === 'profile' ? styles.bottomNavItemLabelActive : null]}>Profile</Text>
+          </Pressable>
+          <Pressable accessibilityLabel="Open more menu" onPress={handleBottomNavOpenMore} style={styles.bottomNavItem}>
+            <View style={[styles.bottomNavItemIconWrap, activeItem === 'more' || bottomMoreSheetVisible ? styles.bottomNavItemIconWrapActive : null]}>
+              {renderBottomNavIcon('more', activeItem === 'more' || bottomMoreSheetVisible)}
+            </View>
+            <Text style={[styles.bottomNavItemLabel, activeItem === 'more' || bottomMoreSheetVisible ? styles.bottomNavItemLabelActive : null]}>More</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
   function renderGuestMainShell() {
     const transitionActive = usesGuestBrowseSlideTransition;
     const showingSplash = screenMode === 'splash';
@@ -3294,7 +3597,11 @@ function AppScreen() {
         </Animated.View>
         <Animated.View
           pointerEvents={!showingSplash && !transitionActive ? 'auto' : 'none'}
-          style={[styles.screenTransitionLayerAbsolute, browseLayerStyle]}
+          style={[
+            styles.screenTransitionLayerAbsolute,
+            !transitionActive && !showingSplash && shellFadeScope === 'browse' ? browseSceneTransitionStyle : null,
+            browseLayerStyle,
+          ]}
         >
           {renderBrowseScreen({
             suppressBrowseSceneTransitionStyle: true,
@@ -3302,6 +3609,7 @@ function AppScreen() {
             suppressTransitionOverlay: true,
           })}
         </Animated.View>
+        {!showingSplash && guestMapOnlyMode ? renderBottomNav({ guest: true }) : null}
       </View>
     );
   }
@@ -3334,7 +3642,11 @@ function AppScreen() {
         </Animated.View>
         <Animated.View
           pointerEvents={!showingProfile && !transitionActive ? 'auto' : 'none'}
-          style={[styles.screenTransitionLayerAbsolute, browseLayerStyle]}
+          style={[
+            styles.screenTransitionLayerAbsolute,
+            !transitionActive && !showingProfile && shellFadeScope === 'browse' ? browseSceneTransitionStyle : null,
+            browseLayerStyle,
+          ]}
         >
           {renderBrowseScreen({
             suppressBrowseSceneTransitionStyle: true,
@@ -3342,6 +3654,7 @@ function AppScreen() {
             suppressTransitionOverlay: true,
           })}
         </Animated.View>
+        {renderBottomNav({ guest: false })}
       </View>
     );
   }
@@ -3659,6 +3972,7 @@ function AppScreen() {
                 <BrowseControls
                   browseMode={browseMode}
                   confirmedDealsOnly={confirmedDealsOnly}
+                  overlay={browseMode === 'map'}
                   filtersExpanded={browseFiltersExpanded}
                   isDarkMapMode={darkMapMode}
                   listModeEnabled={!guestMapOnlyMode}
@@ -3669,6 +3983,7 @@ function AppScreen() {
                   onReload={handleRefreshPlaces}
                   onSelectAllVenueTypes={handleSelectAllVenueTypes}
                   onSelectCity={setSelectedCity}
+                  onToggleSearchPanelLift={browseMode === 'map' ? handleToggleMapSearchPanelLift : undefined}
                   onToggleConfirmedDealsOnly={handleToggleConfirmedDealsOnly}
                   onToggleDealDay={handleToggleDealDay}
                   onToggleFilters={handleToggleBrowseFilters}
@@ -3677,6 +3992,7 @@ function AppScreen() {
                   onToggleVenueType={handleToggleVenueType}
                   onToggleVerifiedBusinessesOnly={handleToggleVerifiedBusinessesOnly}
                   resultCount={browseResultCount}
+                  searchPanelLifted={browseMode === 'map' ? mapSearchPanelLifted : false}
                   searchQuery={searchQuery}
                   selectedDealDays={selectedDealDays}
                   selectedCity={selectedCity}
@@ -3686,7 +4002,15 @@ function AppScreen() {
                 />
 
                 <View style={styles.browseContentStage}>
-                  <Animated.View pointerEvents={browseMode === 'map' ? 'box-none' : 'none'} style={[styles.browseContentFill, styles.mapOverlayContentLayer, browseModeTransitionStyle]}>
+                  <Animated.View
+                    pointerEvents={browseMode === 'map' ? 'box-none' : 'none'}
+                    style={[
+                      styles.browseContentFill,
+                      styles.mapOverlayContentLayer,
+                      browseModeTransitionStyle,
+                      { paddingBottom: mapOverlayBottomPadding },
+                    ]}
+                  >
                     {listLoading ? (
                       <View style={styles.mapLoadingOverlay}>
                         <ActivityIndicator color="#c65d1f" size="large" />
@@ -3896,14 +4220,16 @@ function AppScreen() {
 
                 {authenticatedSession && browseMode === 'map' ? (
                   <Pressable
-                    onPress={handleOpenProfiles}
+                    accessibilityLabel="Back to dashboard"
+                    onPress={handleBottomNavOpenProfile}
                     style={[
                       styles.floatingDashboardButton,
                       styles.floatingDashboardButtonMap,
-                      { bottom: floatingDashboardButtonOffset, right: 18 },
+                      styles.floatingMapNavActionButton,
+                      { bottom: floatingDashboardButtonOffset, right: 14 },
                     ]}
                   >
-                    <Text style={styles.floatingDashboardButtonText}>Back to Dashboard</Text>
+                    <Text style={styles.floatingMapNavActionArrow}>←</Text>
                   </Pressable>
                 ) : guestMapOnlyMode && browseMode === 'map' ? (
                   <Pressable
@@ -3913,7 +4239,7 @@ function AppScreen() {
                       styles.floatingDashboardButton,
                       styles.floatingDashboardButtonMap,
                       styles.floatingGuestExitButton,
-                      { bottom: floatingDashboardButtonOffset, right: 18 },
+                      { bottom: floatingDashboardButtonOffset, right: 14 },
                     ]}
                   >
                     <View style={{ alignItems: 'center', flexDirection: 'row', height: 28, justifyContent: 'center', width: 28 }}>
@@ -4036,6 +4362,74 @@ function AppScreen() {
       ) : (
         renderBrowseScreen()
       )}
+      <Modal
+        animationType="none"
+        onRequestClose={() => closeBottomMoreSheet()}
+        transparent
+        visible={bottomMoreSheetVisible}
+      >
+        <View style={styles.bottomSheetBackdrop}>
+          <Pressable onPress={() => closeBottomMoreSheet()} style={styles.bottomSheetBackdropPressable} />
+          <Animated.View
+            style={[
+              styles.bottomSheetCard,
+              {
+                opacity: bottomMoreSheetProgress,
+                transform: [{
+                  translateY: bottomMoreSheetProgress.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [42, 0],
+                  }),
+                }],
+              },
+            ]}
+          >
+            <View style={styles.bottomSheetHandle} />
+            <Text style={styles.bottomSheetTitle}>More</Text>
+            <Pressable onPress={handleBottomMenuOpenSettings} style={styles.bottomSheetActionButton}>
+              <Text style={styles.bottomSheetActionText}>Settings</Text>
+            </Pressable>
+            <Pressable onPress={handleBottomMenuOpenSupport} style={styles.bottomSheetActionButton}>
+              <Text style={styles.bottomSheetActionText}>Contact Support</Text>
+            </Pressable>
+            <Pressable onPress={handleBottomMenuOpenTerms} style={styles.bottomSheetActionButton}>
+              <Text style={styles.bottomSheetActionText}>Terms of Service and Agreements</Text>
+            </Pressable>
+            <Pressable onPress={handleBottomMenuOpenPrivacy} style={styles.bottomSheetActionButton}>
+              <Text style={styles.bottomSheetActionText}>Privacy Policy</Text>
+            </Pressable>
+            <Pressable onPress={() => closeBottomMoreSheet(() => handleLogout())} style={[styles.bottomSheetActionButton, styles.bottomSheetActionButtonDestructive]}>
+              <Text style={[styles.bottomSheetActionText, styles.bottomSheetActionTextDestructive]}>Log out</Text>
+            </Pressable>
+          </Animated.View>
+        </View>
+      </Modal>
+      <Modal
+        animationType="fade"
+        onRequestClose={handleDismissGuestBottomNavPrompt}
+        transparent
+        visible={showGuestBottomNavPrompt}
+      >
+        <View style={styles.guestFavoriteModalBackdrop}>
+          <View style={styles.guestFavoriteModalCard}>
+            <Pressable accessibilityLabel="Close account prompt" onPress={handleDismissGuestBottomNavPrompt} style={styles.guestBottomNavCloseButton}>
+              <Text style={styles.guestBottomNavCloseButtonText}>X</Text>
+            </Pressable>
+            <Text style={styles.guestFavoriteModalTitle}>An account is required to open this area</Text>
+            <Text style={styles.guestFavoriteModalText}>
+              Keep exploring the map as a guest, or create a free account now to open profile and menu features.
+            </Text>
+            <View style={styles.guestFavoriteModalActions}>
+              <Pressable onPress={handleCreateCustomerAccountFromGuestBottomNav} style={styles.guestFavoriteModalPrimaryButton}>
+                <Text style={styles.guestFavoriteModalPrimaryText}>Customer</Text>
+              </Pressable>
+              <Pressable onPress={handleCreateBusinessAccountFromGuestBottomNav} style={styles.guestFavoriteModalSecondaryButton}>
+                <Text style={styles.guestFavoriteModalSecondaryText}>Business</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
       <Modal
         animationType="fade"
         onRequestClose={handleDismissGuestFavoritePrompt}

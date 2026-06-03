@@ -26,6 +26,7 @@ export type DashboardScreenProps = {
 };
 
 export type AccountSettingsScreenProps = {
+  deleteAccountPassword: string;
   errorMessage: string | null;
   isLandscape: boolean;
   message: string | null;
@@ -34,12 +35,12 @@ export type AccountSettingsScreenProps = {
   onChangeTwoFactorDisableCode: (value: string) => void;
   onChangeTwoFactorSetupCode: (value: string) => void;
   onConfirmTwoFactorSetup: () => void;
+  onChangeDeleteAccountPassword: (value: string) => void;
   onDisableTwoFactor: () => void;
   onLogout: () => void;
   onToggleBusinessLocationTracking: (value: boolean) => void;
   onOpenContactSupport: () => void;
-  onOpenDeleteAccountRequest: () => void;
-  onOpenDisableAccountRequest: () => void;
+  onDeleteAccount: () => void;
   onOpenPrivacyPolicy: () => void;
   onOpenTermsOfService: () => void;
   session: SignupResponse;
@@ -391,13 +392,15 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.dashboardHeaderRow}>
-            <Pressable onPress={onBack} style={styles.backButton}>
-              <Text style={styles.backButtonText}>Open Map</Text>
-            </Pressable>
-            <Pressable accessibilityLabel="Open settings" onPress={onOpenSettings} style={styles.settingsIconButton}>
-              <SettingsGearIcon />
-            </Pressable>
+          <View style={styles.screenHeaderBar}>
+            <View style={styles.dashboardHeaderRow}>
+              <Pressable onPress={onBack} style={styles.backButton}>
+                <Text style={styles.backButtonText}>Open Map</Text>
+              </Pressable>
+              <Pressable accessibilityLabel="Open settings" onPress={onOpenSettings} style={styles.settingsIconButton}>
+                <SettingsGearIcon />
+              </Pressable>
+            </View>
           </View>
 
           <View style={styles.dashboardShell}>
@@ -628,9 +631,11 @@ export function BusinessProfileEditorScreen({
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Pressable onPress={onBack} style={styles.backButton}>
-            <Text style={styles.backButtonText}>Back to Profile</Text>
-          </Pressable>
+          <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
+            <Pressable onPress={onBack} style={styles.backButton}>
+              <Text style={styles.backButtonText}>Back to Profile</Text>
+            </Pressable>
+          </View>
 
           <View style={styles.dashboardShell}>
             <Text style={styles.detailCity}>Edit Business Profile</Text>
@@ -686,11 +691,13 @@ export function BusinessProfileEditorScreen({
 }
 
 export function AccountSettingsScreen({
+  deleteAccountPassword,
   errorMessage,
   isLandscape,
   message,
   onBack,
   onBeginTwoFactorSetup,
+  onChangeDeleteAccountPassword,
   onChangeTwoFactorDisableCode,
   onChangeTwoFactorSetupCode,
   onConfirmTwoFactorSetup,
@@ -698,8 +705,7 @@ export function AccountSettingsScreen({
   onLogout,
   onToggleBusinessLocationTracking,
   onOpenContactSupport,
-  onOpenDeleteAccountRequest,
-  onOpenDisableAccountRequest,
+  onDeleteAccount,
   onOpenPrivacyPolicy,
   onOpenTermsOfService,
   session,
@@ -719,9 +725,11 @@ export function AccountSettingsScreen({
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Pressable onPress={onBack} style={styles.backButton}>
-            <Text style={styles.backButtonText}>Back to Dashboard</Text>
-          </Pressable>
+          <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
+            <Pressable onPress={onBack} style={styles.backButton}>
+              <Text style={styles.backButtonText}>Back to Dashboard</Text>
+            </Pressable>
+          </View>
 
           <View style={styles.dashboardShell}>
             <Text style={styles.detailCity}>Settings</Text>
@@ -805,14 +813,20 @@ export function AccountSettingsScreen({
             <View style={styles.settingsItemRow}>
               <View style={styles.settingsItemBody}>
                 <Text style={styles.dashboardSectionTitle}>Account management</Text>
-                <Text style={styles.dashboardSupportText}>Disable and delete requests are currently handled by support so they can verify the account owner before acting.</Text>
+                <Text style={styles.dashboardSupportText}>Permanently delete your DiningDealz account and associated profile data from inside the app.</Text>
+                <Text style={styles.profileFieldLabel}>Current password</Text>
+                <TextInput
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  onChangeText={onChangeDeleteAccountPassword}
+                  secureTextEntry
+                  style={styles.profileInput}
+                  value={deleteAccountPassword}
+                />
               </View>
               <View style={styles.settingsItemActions}>
-                <Pressable onPress={onOpenDisableAccountRequest} style={[styles.linkButtonSecondaryWide, styles.settingsInlineButton]}>
-                  <Text style={styles.linkButtonSecondaryText}>Disable account</Text>
-                </Pressable>
-                <Pressable onPress={onOpenDeleteAccountRequest} style={[styles.destructiveButton, styles.settingsInlineButton]}>
-                  <Text style={styles.destructiveButtonText}>Delete account</Text>
+                <Pressable onPress={onDeleteAccount} style={[styles.destructiveButton, styles.settingsInlineButton, submitting ? styles.linkButtonDisabled : null]}>
+                  <Text style={styles.destructiveButtonText}>{submitting ? 'Deleting account...' : 'Delete account'}</Text>
                 </Pressable>
               </View>
             </View>

@@ -15,6 +15,7 @@ from .serializers import (
 	BusinessLocationUpdateSerializer,
 	ClaimedBusinessSignupSerializer,
 	CustomerSignupSerializer,
+	DeleteAccountSerializer,
 	DealSerializer,
 	EmailVerificationCodeSerializer,
 	FavoriteBusinessToggleSerializer,
@@ -515,6 +516,19 @@ class FavoriteBusinessView(APIView):
 		response_payload = build_account_response(request.user, portal, token=request.auth)
 		response_payload['detail'] = detail
 		return Response(response_payload)
+
+
+class DeleteAccountView(generics.GenericAPIView):
+	serializer_class = DeleteAccountSerializer
+	authentication_classes = [ProfileTokenAuthentication]
+	permission_classes = [IsAuthenticated]
+
+	def post(self, request):
+		serializer = self.get_serializer(data=request.data, context={'request': request})
+		serializer.is_valid(raise_exception=True)
+		user = request.user
+		user.delete()
+		return Response({'detail': 'Account permanently deleted.'})
 
 
 class ToggleTwoFactorView(APIView):
