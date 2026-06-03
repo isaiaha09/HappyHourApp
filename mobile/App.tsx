@@ -62,7 +62,7 @@ import {
   weekdayFilters,
   type WeekdayFilterValue,
 } from './src/browseConfig';
-import { AccountSettingsScreen, DashboardScreen } from './src/screens/DashboardScreen';
+import { AccountSettingsScreen, BusinessProfileEditorScreen, DashboardScreen } from './src/screens/DashboardScreen';
 import { BrowseControls } from './src/screens/BrowseControls';
 import { PlaceDetailScreen } from './src/screens/PlaceDetailScreen';
 import { SplashScreen } from './src/screens/SplashScreen';
@@ -155,7 +155,7 @@ const cityMapRegions: Record<Exclude<CityFilterValue, 'all'>, Region> = {
 };
 const mobileBusinessVenueType = 'mobile';
 const multipleAreasBusinessCityValue = multipleAreasBusinessCityOption.value;
-type AppScreenMode = 'splash' | 'auth' | 'browse' | 'profiles' | 'settings' | 'support' | 'privacy-policy' | 'terms-of-service' | 'business-search' | 'business-claim' | 'manual-business-claim' | 'informal-business-claim' | 'email-verification' | 'business-claim-review-pending';
+type AppScreenMode = 'splash' | 'auth' | 'browse' | 'profiles' | 'business-profile-editor' | 'settings' | 'support' | 'privacy-policy' | 'terms-of-service' | 'business-search' | 'business-claim' | 'manual-business-claim' | 'informal-business-claim' | 'email-verification' | 'business-claim-review-pending';
 type OnboardingTransitionDirection = 'forward' | 'backward';
 type TransitionAxis = 'x' | 'y';
 type ClaimReturnDestination = 'business-search' | 'browse-map' | 'profiles';
@@ -545,6 +545,11 @@ function AppScreen() {
   const selectedPlaceIsFavorited = !!(selectedPlace && authenticatedSession?.favorite_businesses?.some((business) => business.slug === selectedPlace.slug));
   const showFavoriteControl = !authenticatedSession || authenticatedSession.portal === 'customer';
   const showClaimBusinessControl = !!selectedPlace && !selectedPlace.is_claimed && (!authenticatedSession || authenticatedSession.portal === 'customer');
+  const selectedPlaceIsOwnedByAuthenticatedBusiness = !!(
+    selectedPlace
+    && authenticatedSession?.profile_type === 'business'
+    && authenticatedSession.approved_businesses?.some((business) => business.slug === selectedPlace.slug)
+  );
   const favoriteHelperText = !showFavoriteControl
     ? null
     : !authenticatedSession
@@ -751,8 +756,8 @@ function AppScreen() {
     };
   }, [apiBaseUrl]);
   const availableClaimPlaces = consolidatePlacesBySlug(availableProfilePlaces);
-  const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'settings', 'support', 'privacy-policy', 'terms-of-service', 'business-search', 'business-claim', 'manual-business-claim', 'informal-business-claim', 'email-verification', 'business-claim-review-pending']);
-  const profileStackTransitionScreens = new Set<AppScreenMode>(['profiles', 'settings', 'support', 'privacy-policy', 'terms-of-service']);
+  const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service', 'business-search', 'business-claim', 'manual-business-claim', 'informal-business-claim', 'email-verification', 'business-claim-review-pending']);
+  const profileStackTransitionScreens = new Set<AppScreenMode>(['profiles', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service']);
   const currentOnboardingScreen = onboardingScreenKeys.has(screenMode) ? screenMode : null;
   const usesOnboardingSlideTransition = currentOnboardingScreen !== null || incomingOnboardingScreen !== null;
   const usesProfileStackSlideTransition = currentOnboardingScreen !== null
@@ -1965,7 +1970,7 @@ function AppScreen() {
     Keyboard.dismiss();
     setSelectedPlaceSlug(null);
 
-    if (screenMode === 'profiles') {
+    if (screenMode === 'profiles' || screenMode === 'business-profile-editor') {
       setProfileEntryOffset(0);
       profileSceneTransition.stopAnimation();
       profileSceneTransition.setValue(0);
@@ -1977,6 +1982,22 @@ function AppScreen() {
         }).start();
       });
     }
+  }
+
+  function fadeIntoProfileScreen(nextScreen: 'profiles' | 'business-profile-editor') {
+    dismissKeyboardForScreenTransition();
+    setSelectedPlaceSlug(null);
+    setProfileEntryOffset(0);
+    setScreenMode(nextScreen);
+    profileSceneTransition.stopAnimation();
+    profileSceneTransition.setValue(0);
+    requestAnimationFrame(() => {
+      Animated.timing(profileSceneTransition, {
+        duration: 220,
+        toValue: 1,
+        useNativeDriver: true,
+      }).start();
+    });
   }
 
   function resetDirectClaimState() {
@@ -2067,6 +2088,34 @@ function AppScreen() {
     setSelectedLocationId(null);
     setSelectedPlace(null);
     setSelectedPlaceSlug(slug);
+  }
+
+  function handleOpenBusinessProfileEditor() {
+    if (!selectedPlaceIsOwnedByAuthenticatedBusiness) {
+      return;
+    }
+
+    fadeIntoProfileScreen('business-profile-editor');
+  }
+
+  function handleBackFromBusinessProfileEditor() {
+    fadeIntoProfileScreen('profiles');
+  }
+
+  function handleViewApprovedBusinessInMap() {
+    const approvedBusinessSlug = authenticatedSession?.approved_businesses?.[0]?.slug;
+    if (!approvedBusinessSlug) {
+      return;
+    }
+
+    animateNextLayout();
+    Keyboard.dismiss();
+    setErrorMessage(null);
+    setSelectedMapPlaceKey(null);
+    setSelectedLocationId(null);
+    setSelectedPlace(null);
+    setScreenMode('browse');
+    setSelectedPlaceSlug(approvedBusinessSlug);
   }
 
   async function handleToggleFavoriteBusiness() {
@@ -3129,6 +3178,23 @@ function AppScreen() {
       );
     }
 
+    if (targetScreen === 'business-profile-editor' && profileSession?.profile_type === 'business') {
+      return (
+        <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
+          <BusinessProfileEditorScreen
+            errorMessage={profileErrorMessage}
+            isLandscape={isLandscape}
+            message={profileMessage}
+            onBack={handleBackFromBusinessProfileEditor}
+            onSaveProfileDetails={(payload) => void handleSaveProfileDetails(payload)}
+            onViewInMap={handleViewApprovedBusinessInMap}
+            session={profileSession}
+            submitting={dashboardSubmitting}
+          />
+        </SafeAreaView>
+      );
+    }
+
     return (
       <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
         {profileSession ? (
@@ -3139,6 +3205,7 @@ function AppScreen() {
             message={profileMessage}
             onBack={handleBackFromProfiles}
             onOpenBilling={handleOpenBilling}
+            onOpenApprovedBusiness={handleOpenFavoriteBusiness}
             onOpenFavoriteBusiness={handleOpenFavoriteBusiness}
             onOpenPlaces={handleContinueToApp}
             onOpenSettings={handleOpenSettings}
@@ -3230,7 +3297,7 @@ function AppScreen() {
 
   function renderAuthenticatedMainShell() {
     const transitionActive = usesBrowseProfileSlideTransition;
-    const showingProfile = ['profiles', 'settings', 'support', 'privacy-policy', 'terms-of-service'].includes(screenMode);
+    const showingProfile = ['profiles', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service'].includes(screenMode);
     const profileLayerStyle = transitionActive
       ? browseProfileTransitionFrom === 'profiles'
         ? browseProfileOutgoingStyle
@@ -3297,6 +3364,8 @@ function AppScreen() {
         );
       case 'profiles':
         return renderProfilesScreen(profileSessionOverride, 'profiles');
+      case 'business-profile-editor':
+        return renderProfilesScreen(profileSessionOverride, 'business-profile-editor');
       case 'settings':
         return renderProfilesScreen(profileSessionOverride, 'settings');
       case 'support':
@@ -3904,7 +3973,7 @@ function AppScreen() {
             {renderOnboardingScreen('auth')}
           </Animated.View>
         </View>
-      ) : authenticatedSession && !selectedPlaceSlug && !usesProfileStackSlideTransition && (['profiles', 'settings', 'support', 'privacy-policy', 'terms-of-service', 'browse'].includes(screenMode) || usesBrowseProfileSlideTransition) ? (
+      ) : authenticatedSession && !selectedPlaceSlug && !usesProfileStackSlideTransition && (['profiles', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service', 'browse'].includes(screenMode) || usesBrowseProfileSlideTransition) ? (
         renderAuthenticatedMainShell()
       ) : !authenticatedSession && !selectedPlaceSlug && (screenMode === 'browse' || usesGuestBrowseSlideTransition || (screenMode === 'splash' && !incomingOnboardingScreen)) ? (
         renderGuestMainShell()
@@ -3913,7 +3982,7 @@ function AppScreen() {
         <Animated.View style={[styles.screenTransitionLayerAbsolute, screenTransitionStyle]}>
         <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
         <PlaceDetailScreen
-          backButtonLabel={screenMode === 'profiles' ? 'Back to Profile' : 'Back to Places'}
+          backButtonLabel={screenMode === 'profiles' || screenMode === 'business-profile-editor' ? 'Back to Profile' : 'Back to Places'}
           detailLoading={detailLoading}
           errorMessage={errorMessage}
           favoriteHelperText={favoriteHelperText}
@@ -3922,9 +3991,11 @@ function AppScreen() {
           isFavorited={selectedPlaceIsFavorited}
           onBack={handleBackToBrowse}
           onClaimBusiness={handleOpenBusinessClaimFromPlaceDetail}
+          onEditBusinessProfile={handleOpenBusinessProfileEditor}
           onSelectLocation={setSelectedLocationId}
           onToggleFavorite={() => void handleToggleFavoriteBusiness()}
           showClaimBusinessControl={showClaimBusinessControl}
+          showEditBusinessProfileControl={selectedPlaceIsOwnedByAuthenticatedBusiness}
           showFavoriteControl={showFavoriteControl}
           selectedPlace={selectedPlace}
           selectedPlaceDeals={selectedPlaceDeals}
@@ -4221,7 +4292,7 @@ function getFilteredPlaces(
       const matchesDeals = !filters.confirmedDealsOnly || place.has_deals || place.deal_count > 0;
       const matchesOperatingDays = !filters.selectedOperatingDays.length || hasAnyMatchingWeekday(place.operating_weekdays, filters.selectedOperatingDays);
       const matchesDealDays = !filters.selectedDealDays.length || hasAnyMatchingWeekday(place.deal_weekdays, filters.selectedDealDays);
-      const matchesVerified = !filters.verifiedBusinessesOnly || place.is_verified;
+      const matchesVerified = !filters.verifiedBusinessesOnly || place.is_verified || place.is_claimed;
 
       return matchesCity && matchesVenueType && matchesSearch && matchesDeals && matchesOperatingDays && matchesDealDays && matchesVerified;
     })

@@ -447,7 +447,7 @@ export function BrowseControls({
                 onPress={onToggleVerifiedBusinessesOnly}
                 style={[chipStyle, verifiedBusinessesOnly ? chipActiveStyle : null]}
               >
-                <Text style={[chipTextStyle, verifiedBusinessesOnly ? chipTextActiveStyle : null]}>Verified Businesses</Text>
+                <Text style={[chipTextStyle, verifiedBusinessesOnly ? chipTextActiveStyle : null]}>Claimed / Verified Businesses</Text>
               </Pressable>
             </View>
 

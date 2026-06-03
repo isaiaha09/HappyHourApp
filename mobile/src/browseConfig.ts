@@ -88,7 +88,7 @@ export function getBrowseSummaryLabel(
   }
 
   if (options.verifiedBusinessesOnly) {
-    summaryParts.push('Verified');
+    summaryParts.push('Claimed / Verified');
   }
 
   return summaryParts.length ? summaryParts.join(' • ') : 'All Cities • All Venue Types';

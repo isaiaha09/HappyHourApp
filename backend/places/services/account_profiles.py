@@ -126,6 +126,7 @@ def build_account_response(user, portal, claim=None, token=None):
 	approved_businesses = [
 		{
 			'id': membership.claim.listing_snapshot.id,
+			'slug': membership.claim.listing_snapshot.listing_slug,
 			'name': membership.claim.listing_snapshot.name,
 			'city': membership.claim.listing_snapshot.city,
 			'city_label': membership.claim.listing_snapshot.get_city_display() if membership.claim.listing_snapshot.city else '',

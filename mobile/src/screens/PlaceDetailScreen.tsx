@@ -7,8 +7,10 @@ import type { Deal, HappyHourWindow, OperatingHourWindow, PlaceDetail, PlaceLoca
 
 export type PlaceDetailScreenProps = {
   backButtonLabel?: string;
+  onEditBusinessProfile?: () => void;
   onClaimBusiness?: () => void;
   showClaimBusinessControl?: boolean;
+  showEditBusinessProfileControl?: boolean;
   detailLoading: boolean;
   errorMessage: string | null;
   favoriteHelperText: string | null;
@@ -27,8 +29,10 @@ export type PlaceDetailScreenProps = {
 
 export function PlaceDetailScreen({
   backButtonLabel = 'Back to Places',
+  onEditBusinessProfile,
   onClaimBusiness,
   showClaimBusinessControl = false,
+  showEditBusinessProfileControl = false,
   detailLoading,
   errorMessage,
   favoriteHelperText,
@@ -45,6 +49,7 @@ export function PlaceDetailScreen({
   selectedPlaceOperatingHours,
 }: PlaceDetailScreenProps) {
   const selectedPlaceMapRegion = getPlacePreviewRegion(selectedPlaceLocation ?? selectedPlace);
+  const showVerifiedBadge = !!selectedPlace && (selectedPlace.is_claimed || selectedPlace.is_verified);
 
   return (
     <View style={[styles.screen, isLandscape ? styles.screenLandscape : null]}>
@@ -70,21 +75,28 @@ export function PlaceDetailScreen({
                 <Text style={styles.detailTitle}>{selectedPlace.name}</Text>
                 <Text style={styles.detailMeta}>{selectedPlace.venue_type_label}</Text>
               </View>
-              {showFavoriteControl ? (
-                <Pressable
-                  accessibilityLabel={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
-                  onPress={onToggleFavorite}
-                  style={[
-                    styles.favoriteStarButton,
-                    isFavorited ? styles.favoriteStarButtonActive : null,
-                    favoriteSubmitting ? styles.linkButtonDisabled : null,
-                  ]}
-                >
-                  <Text style={[styles.favoriteStarIcon, isFavorited ? styles.favoriteStarIconActive : null]}>
-                    {isFavorited ? '★' : '☆'}
-                  </Text>
-                </Pressable>
-              ) : null}
+              <View style={styles.detailHeaderActions}>
+                {showVerifiedBadge ? (
+                  <View accessibilityLabel="Claimed or verified business" style={styles.verifiedStatusBadge}>
+                    <Text style={styles.verifiedStatusBadgeIcon}>✓</Text>
+                  </View>
+                ) : null}
+                {showFavoriteControl ? (
+                  <Pressable
+                    accessibilityLabel={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+                    onPress={onToggleFavorite}
+                    style={[
+                      styles.favoriteStarButton,
+                      isFavorited ? styles.favoriteStarButtonActive : null,
+                      favoriteSubmitting ? styles.linkButtonDisabled : null,
+                    ]}
+                  >
+                    <Text style={[styles.favoriteStarIcon, isFavorited ? styles.favoriteStarIconActive : null]}>
+                      {isFavorited ? '★' : '☆'}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
             {showFavoriteControl && favoriteHelperText ? <Text style={styles.dashboardSupportText}>{favoriteHelperText}</Text> : null}
             {selectedPlace.locations.length ? (
@@ -178,6 +190,12 @@ export function PlaceDetailScreen({
               </Pressable>
             ) : null}
 
+            {showEditBusinessProfileControl && onEditBusinessProfile ? (
+              <Pressable onPress={onEditBusinessProfile} style={styles.linkButtonSecondaryWide}>
+                <Text style={styles.linkButtonSecondaryText}>Edit Business Profile</Text>
+              </Pressable>
+            ) : null}
+
             {selectedPlaceOperatingHours.length ? (
               <>
                 <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>Hours of Operations</Text>
@@ -194,7 +212,7 @@ export function PlaceDetailScreen({
 
             {selectedPlace.hours_of_operation_entries?.length ? (
               <>
-                <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>Owner Updates To Hours</Text>
+                <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>Additional Hours Information</Text>
                 <View style={styles.hourList}>
                   {selectedPlace.hours_of_operation_entries.map((entry) => (
                     <View key={entry} style={styles.hourGroupCard}>
@@ -235,7 +253,7 @@ export function PlaceDetailScreen({
 
             {selectedPlace.offer_entries?.length ? (
               <>
-                <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>Owner-Provided Deals And Specials</Text>
+                <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>More Deals and Specials</Text>
                 <View style={styles.hourList}>
                   {selectedPlace.offer_entries.map((entry) => (
                     <View key={entry} style={styles.hourGroupCard}>
@@ -248,7 +266,7 @@ export function PlaceDetailScreen({
 
             {selectedPlace.supporting_details ? (
               <>
-                <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>More From The Business</Text>
+                <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>Business Details</Text>
                 <Text style={styles.detailMeta}>{selectedPlace.supporting_details}</Text>
               </>
             ) : null}

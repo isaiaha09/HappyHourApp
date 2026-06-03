@@ -1039,6 +1039,12 @@ export const styles = StyleSheet.create({
     gap: 12,
     justifyContent: 'space-between',
   },
+  detailHeaderActions: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
   detailHeaderCopy: {
     flex: 1,
     minWidth: 0,
@@ -1084,6 +1090,23 @@ export const styles = StyleSheet.create({
   },
   favoriteStarIconActive: {
     color: '#d08b00',
+  },
+  verifiedStatusBadge: {
+    alignItems: 'center',
+    backgroundColor: '#e7f7ef',
+    borderColor: '#3f8f62',
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 48,
+    justifyContent: 'center',
+    width: 48,
+  },
+  verifiedStatusBadgeIcon: {
+    color: '#23734a',
+    fontSize: 24,
+    fontWeight: '900',
+    lineHeight: 26,
+    textAlign: 'center',
   },
   detailAddress: {
     color: '#7c6252',

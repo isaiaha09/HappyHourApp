@@ -3924,6 +3924,7 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(response.data['business_status'], 'approved')
 		self.assertEqual(response.data['billing_portal_url'], 'https://example.com/billing')
 		self.assertEqual(len(response.data['approved_businesses']), 1)
+		self.assertEqual(response.data['approved_businesses'][0]['slug'], snapshot.listing_slug)
 		self.assertEqual(response.data['approved_businesses'][0]['name'], 'Approved Spot')
 		self.assertEqual(response.data['business_contact']['work_email'], 'owner@approvedspot.com')
 		self.assertEqual(response.data['approved_businesses'][0]['address_line_1'], '55 Main St')

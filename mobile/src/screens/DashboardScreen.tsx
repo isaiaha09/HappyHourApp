@@ -13,6 +13,7 @@ export type DashboardScreenProps = {
   message: string | null;
   onBack: () => void;
   onOpenBilling: () => void;
+  onOpenApprovedBusiness: (slug: string) => void;
   onOpenFavoriteBusiness: (slug: string) => void;
   onOpenPlaces: () => void;
   onOpenSettings: () => void;
@@ -313,10 +314,9 @@ function SecuritySettingsSection({
   );
 }
 
-export function DashboardScreen({ errorMessage, isLandscape, loading, message, onBack, onOpenBilling, onOpenFavoriteBusiness, onOpenPlaces, onOpenSettings, onRefresh, onResendVerification, onSaveProfileDetails, session, submitting }: DashboardScreenProps) {
+export function DashboardScreen({ errorMessage, isLandscape, loading, message, onBack, onOpenBilling, onOpenApprovedBusiness, onOpenFavoriteBusiness, onOpenPlaces, onOpenSettings, onRefresh, onResendVerification, onSaveProfileDetails, session, submitting }: DashboardScreenProps) {
   const approvedBusinesses = session.approved_businesses ?? [];
   const favoriteBusinesses = session.favorite_businesses ?? [];
-  const businessContact = session.business_contact ?? {};
   const fullName = [session.first_name, session.last_name].filter(Boolean).join(' ');
   const trackedBusinessLocation = session.tracked_business_location ?? {};
   const trackedBusinessLocationUpdatedAt = trackedBusinessLocation.updated_at
@@ -332,20 +332,7 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
   const profileDetailsChanged = profileDraft.username !== session.username
     || profileDraft.email !== session.email
     || profileDraft.first_name !== session.first_name
-    || profileDraft.last_name !== session.last_name
-    || (session.profile_type === 'business' && (
-      (profileDraft.contact_name ?? '') !== (businessContact.contact_name ?? '')
-      || (profileDraft.job_title ?? '') !== (businessContact.job_title ?? '')
-      || (profileDraft.work_email ?? '') !== (businessContact.work_email ?? '')
-      || (profileDraft.work_phone ?? '') !== (businessContact.work_phone ?? '')
-      || (profileDraft.employer_address ?? '') !== (businessContact.employer_address ?? '')
-      || (profileDraft.business_website_url ?? '') !== (businessContact.business_website_url ?? '')
-      || (profileDraft.social_media_links_text ?? '') !== joinDraftEntries(businessContact.social_media_links)
-      || (profileDraft.offer_entries_text ?? '') !== joinDraftEntries(businessContact.offer_entries)
-      || (profileDraft.hours_of_operation_entries_text ?? '') !== joinDraftEntries(businessContact.hours_of_operation_entries)
-      || (profileDraft.photo_references_text ?? '') !== joinDraftEntries(businessContact.photo_references)
-      || (profileDraft.supporting_details ?? '') !== (businessContact.supporting_details ?? '')
-    ));
+    || profileDraft.last_name !== session.last_name;
   const normalizedFavoriteSearchQuery = normalizeSearchText(favoriteSearchQuery);
   const filteredFavoriteBusinesses = favoriteBusinesses.filter((business) => {
     if (!normalizedFavoriteSearchQuery.length) {
@@ -525,39 +512,26 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
 
                 <View style={styles.dashboardSection}>
                   <Text style={styles.dashboardSectionTitle}>Business profile details</Text>
-                  <View style={styles.dashboardFieldGrid}>
-                    <DashboardEditableField label="Contact name" onChangeText={(value) => setProfileDraft((current) => ({ ...current, contact_name: value }))} value={profileDraft.contact_name ?? ''} />
-                    <DashboardEditableField label="Job title" onChangeText={(value) => setProfileDraft((current) => ({ ...current, job_title: value }))} value={profileDraft.job_title ?? ''} />
-                    <DashboardEditableField label="Work email" onChangeText={(value) => setProfileDraft((current) => ({ ...current, work_email: value }))} value={profileDraft.work_email ?? ''} />
-                    <DashboardEditableField label="Work phone" onChangeText={(value) => setProfileDraft((current) => ({ ...current, work_phone: value }))} value={profileDraft.work_phone ?? ''} />
-                    <DashboardEditableField label="Employer address" onChangeText={(value) => setProfileDraft((current) => ({ ...current, employer_address: value }))} value={profileDraft.employer_address ?? ''} />
-                    <DashboardEditableField label="Business website" onChangeText={(value) => setProfileDraft((current) => ({ ...current, business_website_url: value }))} value={profileDraft.business_website_url ?? ''} />
-                  </View>
-                  <DashboardMultilineField label="Social media links" onChangeText={(value) => setProfileDraft((current) => ({ ...current, social_media_links_text: value }))} value={profileDraft.social_media_links_text ?? ''} />
-                  <DashboardMultilineField label="Deals and specials" onChangeText={(value) => setProfileDraft((current) => ({ ...current, offer_entries_text: value }))} value={profileDraft.offer_entries_text ?? ''} />
-                  <DashboardMultilineField label="Hours of operation" onChangeText={(value) => setProfileDraft((current) => ({ ...current, hours_of_operation_entries_text: value }))} value={profileDraft.hours_of_operation_entries_text ?? ''} />
-                  <DashboardMultilineField label="Photo references" onChangeText={(value) => setProfileDraft((current) => ({ ...current, photo_references_text: value }))} value={profileDraft.photo_references_text ?? ''} />
-                  <DashboardMultilineField label="Supporting details" onChangeText={(value) => setProfileDraft((current) => ({ ...current, supporting_details: value }))} value={profileDraft.supporting_details ?? ''} />
-                  <View style={styles.dashboardInlineActions}>
-                    <Pressable
-                      onPress={() => onSaveProfileDetails(buildSavePayload())}
-                      style={[styles.linkButtonSecondaryWide, styles.dashboardInlineButton, (!profileDetailsChanged || submitting) ? styles.linkButtonDisabled : null]}
-                    >
-                      <Text style={styles.linkButtonSecondaryText}>{submitting ? 'Saving...' : 'Save business profile'}</Text>
-                    </Pressable>
-                  </View>
-                  <Text style={styles.dashboardSupportText}>Use one line per social link, deal, hour range, or photo reference to keep the approved business profile current after admin approval.</Text>
+                  <Text style={styles.dashboardSupportText}>Open your public business profile to edit the public-facing business details on a dedicated screen and preview how the profile looks on the map.</Text>
+                  {approvedBusinesses[0]?.slug ? (
+                    <View style={styles.dashboardInlineActions}>
+                      <Pressable onPress={() => onOpenApprovedBusiness(approvedBusinesses[0].slug)} style={[styles.linkButtonSecondaryWide, styles.dashboardInlineButton]}>
+                        <Text style={styles.linkButtonSecondaryText}>Open public business profile</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
                 </View>
 
                 <View style={styles.dashboardSection}>
                   <Text style={styles.dashboardSectionTitle}>Approved Business</Text>
                   {approvedBusinesses.length ? <View style={styles.dashboardFieldGrid}>{approvedBusinesses.map((business) => (
-                    <View key={business.id} style={styles.dashboardDetailItem}>
+                    <Pressable key={business.id} onPress={() => onOpenApprovedBusiness(business.slug)} style={[styles.dashboardDetailItem, styles.dashboardFavoriteBusinessCard]}>
                       <Text style={styles.dashboardDetailValue}>{business.name}</Text>
                       <Text style={styles.dashboardSupportText}>{business.city_label} • {business.venue_type_label}</Text>
                       {business.address_line_1 ? <Text style={styles.dashboardSupportText}>{business.address_line_1}</Text> : null}
                       {business.website_url ? <Text style={styles.dashboardSupportText}>{business.website_url}</Text> : null}
-                    </View>
+                      <Text style={styles.dashboardFavoriteBusinessAction}>Open business profile</Text>
+                    </Pressable>
                   ))}</View> : (
                     <Text style={styles.dashboardSupportText}>Claimed or created businesses appear here after admin approval.</Text>
                   )}
@@ -571,6 +545,136 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
               </>
             ) : null}
 
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
+  );
+}
+
+export type BusinessProfileEditorScreenProps = {
+  errorMessage: string | null;
+  isLandscape: boolean;
+  message: string | null;
+  onBack: () => void;
+  onSaveProfileDetails: (payload: ProfileDashboardUpdateRequest) => void;
+  onViewInMap: () => void;
+  session: SignupResponse;
+  submitting: boolean;
+};
+
+export function BusinessProfileEditorScreen({
+  errorMessage,
+  isLandscape,
+  message,
+  onBack,
+  onSaveProfileDetails,
+  onViewInMap,
+  session,
+  submitting,
+}: BusinessProfileEditorScreenProps) {
+  const businessContact = session.business_contact ?? {};
+  const approvedBusiness = session.approved_businesses?.[0] ?? null;
+  const [profileDraft, setProfileDraft] = useState<ProfileDashboardUpdateRequest>(() => buildDashboardDraft(session));
+
+  useEffect(() => {
+    setProfileDraft(buildDashboardDraft(session));
+  }, [session]);
+
+  const profileDetailsChanged = (profileDraft.contact_name ?? '') !== (businessContact.contact_name ?? '')
+    || (profileDraft.job_title ?? '') !== (businessContact.job_title ?? '')
+    || (profileDraft.work_email ?? '') !== (businessContact.work_email ?? '')
+    || (profileDraft.work_phone ?? '') !== (businessContact.work_phone ?? '')
+    || (profileDraft.employer_address ?? '') !== (businessContact.employer_address ?? '')
+    || (profileDraft.business_website_url ?? '') !== (businessContact.business_website_url ?? '')
+    || (profileDraft.social_media_links_text ?? '') !== joinDraftEntries(businessContact.social_media_links)
+    || (profileDraft.offer_entries_text ?? '') !== joinDraftEntries(businessContact.offer_entries)
+    || (profileDraft.hours_of_operation_entries_text ?? '') !== joinDraftEntries(businessContact.hours_of_operation_entries)
+    || (profileDraft.photo_references_text ?? '') !== joinDraftEntries(businessContact.photo_references)
+    || (profileDraft.supporting_details ?? '') !== (businessContact.supporting_details ?? '');
+
+  function buildSavePayload(): ProfileDashboardUpdateRequest {
+    return {
+      portal: session.portal,
+      username: session.username,
+      email: session.email,
+      first_name: session.first_name,
+      last_name: session.last_name,
+      contact_name: profileDraft.contact_name ?? '',
+      job_title: profileDraft.job_title ?? '',
+      work_email: profileDraft.work_email ?? '',
+      work_phone: profileDraft.work_phone ?? '',
+      employer_address: profileDraft.employer_address ?? '',
+      business_website_url: profileDraft.business_website_url ?? '',
+      social_media_links_text: profileDraft.social_media_links_text ?? '',
+      offer_entries_text: profileDraft.offer_entries_text ?? '',
+      hours_of_operation_entries_text: profileDraft.hours_of_operation_entries_text ?? '',
+      photo_references_text: profileDraft.photo_references_text ?? '',
+      supporting_details: profileDraft.supporting_details ?? '',
+    };
+  }
+
+  return (
+    <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardAvoidingFill}
+      >
+        <ScrollView
+          contentContainerStyle={styles.dashboardScrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <Pressable onPress={onBack} style={styles.backButton}>
+            <Text style={styles.backButtonText}>Back to Profile</Text>
+          </Pressable>
+
+          <View style={styles.dashboardShell}>
+            <Text style={styles.detailCity}>Edit Business Profile</Text>
+            <Text style={styles.detailTitle}>{approvedBusiness?.name ?? session.business_name ?? 'Business Profile'}</Text>
+            {approvedBusiness?.address_line_1 ? <Text style={styles.detailMeta}>{approvedBusiness.address_line_1}</Text> : null}
+            <Text style={styles.profileIntroText}>Update the public-facing details for your approved business profile. Address and phone stay synced from the business source listing when that source is available.</Text>
+
+            {message ? (
+              <View style={styles.profileSuccessBanner}>
+                <Text style={styles.profileSuccessText}>{message}</Text>
+              </View>
+            ) : null}
+
+            {errorMessage ? (
+              <View style={styles.errorBanner}>
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.dashboardSection}>
+              <Text style={styles.dashboardSectionTitle}>Business profile details</Text>
+              <View style={styles.dashboardFieldGrid}>
+                <DashboardEditableField label="Contact name" onChangeText={(value) => setProfileDraft((current) => ({ ...current, contact_name: value }))} value={profileDraft.contact_name ?? ''} />
+                <DashboardEditableField label="Job title" onChangeText={(value) => setProfileDraft((current) => ({ ...current, job_title: value }))} value={profileDraft.job_title ?? ''} />
+                <DashboardEditableField label="Work email" onChangeText={(value) => setProfileDraft((current) => ({ ...current, work_email: value }))} value={profileDraft.work_email ?? ''} />
+                <DashboardEditableField label="Work phone" onChangeText={(value) => setProfileDraft((current) => ({ ...current, work_phone: value }))} value={profileDraft.work_phone ?? ''} />
+                <DashboardEditableField label="Employer address" onChangeText={(value) => setProfileDraft((current) => ({ ...current, employer_address: value }))} value={profileDraft.employer_address ?? ''} />
+                <DashboardEditableField label="Business website" onChangeText={(value) => setProfileDraft((current) => ({ ...current, business_website_url: value }))} value={profileDraft.business_website_url ?? ''} />
+              </View>
+              <DashboardMultilineField label="Social media links" onChangeText={(value) => setProfileDraft((current) => ({ ...current, social_media_links_text: value }))} value={profileDraft.social_media_links_text ?? ''} />
+              <DashboardMultilineField label="Deals and specials" onChangeText={(value) => setProfileDraft((current) => ({ ...current, offer_entries_text: value }))} value={profileDraft.offer_entries_text ?? ''} />
+              <DashboardMultilineField label="Additional hours information" onChangeText={(value) => setProfileDraft((current) => ({ ...current, hours_of_operation_entries_text: value }))} value={profileDraft.hours_of_operation_entries_text ?? ''} />
+              <DashboardMultilineField label="Photo references" onChangeText={(value) => setProfileDraft((current) => ({ ...current, photo_references_text: value }))} value={profileDraft.photo_references_text ?? ''} />
+              <DashboardMultilineField label="Business details" onChangeText={(value) => setProfileDraft((current) => ({ ...current, supporting_details: value }))} value={profileDraft.supporting_details ?? ''} />
+              <View style={styles.dashboardInlineActions}>
+                <Pressable
+                  onPress={() => onSaveProfileDetails(buildSavePayload())}
+                  style={[styles.linkButtonSecondaryWide, styles.dashboardInlineButton, (!profileDetailsChanged || submitting) ? styles.linkButtonDisabled : null]}
+                >
+                  <Text style={styles.linkButtonSecondaryText}>{submitting ? 'Saving...' : 'Save Business Profile'}</Text>
+                </Pressable>
+                <Pressable onPress={onViewInMap} style={[styles.linkButtonSecondaryWide, styles.dashboardInlineButton]}>
+                  <Text style={styles.linkButtonSecondaryText}>View in Map</Text>
+                </Pressable>
+              </View>
+              <Text style={styles.dashboardSupportText}>Use one line per social link, deal, hour range, or photo reference to keep the public business profile current.</Text>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
