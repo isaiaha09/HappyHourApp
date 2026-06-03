@@ -2501,11 +2501,20 @@ function AppScreen() {
     openBottomMoreSheet();
   }
 
+  function clearSelectedPlaceRoute() {
+    setSelectedPlaceSlug(null);
+    setSelectedPlace(null);
+    setSelectedLocationId(null);
+    setSelectedMapPlaceKey(null);
+  }
+
   function handleBottomMenuOpenSettings() {
     if (screenMode === 'settings') {
       closeBottomMoreSheet();
       return;
     }
+
+    clearSelectedPlaceRoute();
 
     if (screenMode === 'browse') {
       closeBottomMoreSheet(() => navigateBrowseProfileTransition('profiles', 'settings'));
@@ -2522,6 +2531,8 @@ function AppScreen() {
       return;
     }
 
+    clearSelectedPlaceRoute();
+
     if (screenMode === 'browse') {
       closeBottomMoreSheet(() => navigateBrowseProfileTransition('profiles', 'support'));
       return;
@@ -2536,6 +2547,8 @@ function AppScreen() {
       return;
     }
 
+    clearSelectedPlaceRoute();
+
     if (screenMode === 'browse') {
       closeBottomMoreSheet(() => navigateBrowseProfileTransition('profiles', 'terms-of-service'));
       return;
@@ -2549,6 +2562,8 @@ function AppScreen() {
       closeBottomMoreSheet();
       return;
     }
+
+    clearSelectedPlaceRoute();
 
     if (screenMode === 'browse') {
       closeBottomMoreSheet(() => navigateBrowseProfileTransition('profiles', 'privacy-policy'));
