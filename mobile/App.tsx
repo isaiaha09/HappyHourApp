@@ -2480,7 +2480,7 @@ function AppScreen() {
     setSelectedMapPlaceKey(null);
 
     if (['business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service'].includes(screenMode)) {
-      fadeIntoMainShellScreen('profiles');
+      navigateScreen('profiles', 'backward');
       return;
     }
 
@@ -2512,7 +2512,7 @@ function AppScreen() {
       return;
     }
 
-    fadeIntoMainShellScreen('settings');
+    closeBottomMoreSheet(() => navigateScreen('settings', 'forward'));
   }
 
   function handleBottomMenuOpenSupport() {
@@ -2527,7 +2527,7 @@ function AppScreen() {
       return;
     }
 
-    fadeIntoMainShellScreen('support');
+    closeBottomMoreSheet(() => navigateScreen('support', 'forward'));
   }
 
   function handleBottomMenuOpenTerms() {
@@ -2541,7 +2541,7 @@ function AppScreen() {
       return;
     }
 
-    fadeIntoMainShellScreen('terms-of-service');
+    closeBottomMoreSheet(() => navigateScreen('terms-of-service', 'forward'));
   }
 
   function handleBottomMenuOpenPrivacy() {
@@ -2555,7 +2555,7 @@ function AppScreen() {
       return;
     }
 
-    fadeIntoMainShellScreen('privacy-policy');
+    closeBottomMoreSheet(() => navigateScreen('privacy-policy', 'forward'));
   }
 
   function handleBackToSettings() {
@@ -3667,25 +3667,48 @@ function AppScreen() {
   }
 
   function renderAuthenticatedMainShell() {
-    const transitionActive = usesBrowseProfileSlideTransition;
+    const profileStackTransitionActive = usesProfileStackSlideTransition
+      && currentOnboardingScreen !== null
+      && incomingOnboardingScreen !== null
+      && profileStackTransitionScreens.has(currentOnboardingScreen)
+      && profileStackTransitionScreens.has(incomingOnboardingScreen);
+    const transitionActive = usesBrowseProfileSlideTransition || profileStackTransitionActive;
     const showingProfile = ['profiles', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service'].includes(screenMode);
     const incomingProfileScreen = transitionActive && incomingBrowseProfileScreen === 'profiles'
       ? incomingBrowseProfileTargetScreen ?? 'profiles'
       : undefined;
-    const profileLayerStyle = transitionActive
+    const profileLayerStyle = usesBrowseProfileSlideTransition
       ? browseProfileTransitionFrom === 'profiles'
         ? browseProfileOutgoingStyle
         : browseProfileIncomingStyle
       : showingProfile
         ? profileSceneTransitionStyle
         : { opacity: 0, transform: [{ translateX: width }] };
-    const browseLayerStyle = transitionActive
+    const browseLayerStyle = usesBrowseProfileSlideTransition
       ? browseProfileTransitionFrom === 'browse'
         ? browseProfileOutgoingStyle
         : browseProfileIncomingStyle
       : showingProfile
         ? { opacity: 0, transform: [{ translateX: -width }] }
         : null;
+    const profileLayerContent = profileStackTransitionActive ? (
+      <View style={[styles.fullScreenRoot, styles.transitionClipRoot]}>
+        <Animated.View
+          pointerEvents={incomingOnboardingScreen ? 'none' : 'auto'}
+          style={[
+            incomingOnboardingScreen ? styles.screenTransitionLayerAbsolute : styles.screenTransitionLayer,
+            currentOnboardingTransitionStyle,
+          ]}
+        >
+          {renderProfilesScreen(undefined, currentOnboardingScreen)}
+        </Animated.View>
+        {incomingOnboardingScreen ? (
+          <Animated.View style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, incomingScreenTransitionStyle]}>
+            {renderProfilesScreen(undefined, incomingOnboardingScreen)}
+          </Animated.View>
+        ) : null}
+      </View>
+    ) : renderProfilesScreen(undefined, incomingProfileScreen);
 
     return (
       <View style={[styles.fullScreenRoot, transitionActive ? styles.transitionClipRoot : null]}>
@@ -3693,7 +3716,7 @@ function AppScreen() {
           pointerEvents={showingProfile && !transitionActive ? 'auto' : 'none'}
           style={[styles.screenTransitionLayerAbsolute, profileLayerStyle]}
         >
-          {renderProfilesScreen(undefined, incomingProfileScreen)}
+          {profileLayerContent}
         </Animated.View>
         <Animated.View
           pointerEvents={!showingProfile && !transitionActive ? 'auto' : 'none'}
@@ -4373,7 +4396,7 @@ function AppScreen() {
             {renderOnboardingScreen('auth')}
           </Animated.View>
         </View>
-      ) : authenticatedSession && !selectedPlaceSlug && !usesProfileStackSlideTransition && (['profiles', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service', 'browse'].includes(screenMode) || usesBrowseProfileSlideTransition) ? (
+      ) : authenticatedSession && !selectedPlaceSlug && (['profiles', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service', 'browse'].includes(screenMode) || usesBrowseProfileSlideTransition || usesProfileStackSlideTransition) ? (
         renderAuthenticatedMainShell()
       ) : !authenticatedSession && !selectedPlaceSlug && (screenMode === 'browse' || usesGuestBrowseSlideTransition || (screenMode === 'splash' && !incomingOnboardingScreen)) ? (
         renderGuestMainShell()
