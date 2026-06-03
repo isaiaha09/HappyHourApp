@@ -3506,8 +3506,6 @@ function AppScreen() {
         {shouldShowBrowseOverlay ? (
           <Animated.View style={[styles.screenTransitionLayerAbsolute, browseProfileIncomingStyle]}>
             {renderBrowseScreen({
-              guestBottomNav: false,
-              includeBottomNav: true,
               suppressBrowseSceneTransitionStyle: true,
               suppressScreenTransitionStyle: true,
               suppressTransitionOverlay: true,
@@ -3667,13 +3665,12 @@ function AppScreen() {
         >
           {renderBrowseScreen({
             guestBottomNav: false,
-            includeBottomNav: true,
             suppressBrowseSceneTransitionStyle: true,
             suppressScreenTransitionStyle: true,
             suppressTransitionOverlay: true,
           })}
         </Animated.View>
-        {showingProfile ? renderBottomNav({ guest: false }) : null}
+        {renderBottomNav({ guest: false })}
       </View>
     );
   }
