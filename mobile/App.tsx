@@ -2435,8 +2435,18 @@ function AppScreen() {
       return;
     }
 
+    setBrowseFiltersExpanded(false);
+    setSelectedPlaceSlug(null);
+    setSelectedPlace(null);
+    setSelectedLocationId(null);
+    setSelectedMapPlaceKey(null);
     setBrowseMode('map');
-    fadeIntoMainShellScreen('browse');
+    browseModeFadePendingRef.current = false;
+    pendingListRevealRef.current = false;
+    setListRevealEnabled(false);
+    browseModeTransition.stopAnimation();
+    browseModeTransition.setValue(1);
+    navigateBrowseProfileTransition('browse');
   }
 
   function handleBottomNavOpenProfile() {
@@ -2453,7 +2463,11 @@ function AppScreen() {
       return;
     }
 
-    fadeIntoMainShellScreen('profiles');
+    setSelectedPlaceSlug(null);
+    setSelectedPlace(null);
+    setSelectedLocationId(null);
+    setSelectedMapPlaceKey(null);
+    navigateBrowseProfileTransition('profiles');
   }
 
   function handleBottomNavOpenMore() {
@@ -3492,6 +3506,8 @@ function AppScreen() {
         {shouldShowBrowseOverlay ? (
           <Animated.View style={[styles.screenTransitionLayerAbsolute, browseProfileIncomingStyle]}>
             {renderBrowseScreen({
+              guestBottomNav: false,
+              includeBottomNav: true,
               suppressBrowseSceneTransitionStyle: true,
               suppressScreenTransitionStyle: true,
               suppressTransitionOverlay: true,
@@ -3604,12 +3620,13 @@ function AppScreen() {
           ]}
         >
           {renderBrowseScreen({
+            guestBottomNav: true,
+            includeBottomNav: true,
             suppressBrowseSceneTransitionStyle: true,
             suppressScreenTransitionStyle: true,
             suppressTransitionOverlay: true,
           })}
         </Animated.View>
-        {!showingSplash && guestMapOnlyMode ? renderBottomNav({ guest: true }) : null}
       </View>
     );
   }
@@ -3649,12 +3666,14 @@ function AppScreen() {
           ]}
         >
           {renderBrowseScreen({
+            guestBottomNav: false,
+            includeBottomNav: true,
             suppressBrowseSceneTransitionStyle: true,
             suppressScreenTransitionStyle: true,
             suppressTransitionOverlay: true,
           })}
         </Animated.View>
-        {renderBottomNav({ guest: false })}
+        {showingProfile ? renderBottomNav({ guest: false }) : null}
       </View>
     );
   }
@@ -3813,7 +3832,13 @@ function AppScreen() {
     }
   }
 
-  function renderBrowseScreen(options?: { suppressScreenTransitionStyle?: boolean; suppressBrowseSceneTransitionStyle?: boolean; suppressTransitionOverlay?: boolean }) {
+  function renderBrowseScreen(options?: {
+    guestBottomNav?: boolean;
+    includeBottomNav?: boolean;
+    suppressScreenTransitionStyle?: boolean;
+    suppressBrowseSceneTransitionStyle?: boolean;
+    suppressTransitionOverlay?: boolean;
+  }) {
     const shouldShowProfileOverlay = !options?.suppressTransitionOverlay
       && usesBrowseProfileSlideTransition
       && browseProfileTransitionFrom === 'browse'
@@ -4229,7 +4254,7 @@ function AppScreen() {
                       { bottom: floatingDashboardButtonOffset, right: 14 },
                     ]}
                   >
-                    <Text style={styles.floatingMapNavActionArrow}>←</Text>
+                    <Text style={styles.floatingMapNavActionArrow}>→</Text>
                   </Pressable>
                 ) : guestMapOnlyMode && browseMode === 'map' ? (
                   <Pressable
@@ -4256,6 +4281,7 @@ function AppScreen() {
                     </View>
                   </Pressable>
                 ) : null}
+                {options?.includeBottomNav ? renderBottomNav({ guest: options.guestBottomNav ?? false }) : null}
               </View>
             </SafeAreaView>
           </View>
