@@ -245,7 +245,7 @@ export const styles = StyleSheet.create({
   },
   bottomNavShell: {
     alignItems: 'center',
-    backgroundColor: '#402214',
+    backgroundColor: '#844d3d',
     borderTopColor: '#5a3927',
     borderTopWidth: 1,
     flexDirection: 'row',

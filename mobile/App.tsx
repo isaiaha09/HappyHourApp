@@ -492,6 +492,7 @@ function AppScreen() {
   const [incomingOnboardingScreen, setIncomingOnboardingScreen] = useState<AppScreenMode | null>(null);
   const [browseProfileTransitionFrom, setBrowseProfileTransitionFrom] = useState<'profiles' | 'browse' | null>(null);
   const [incomingBrowseProfileScreen, setIncomingBrowseProfileScreen] = useState<'profiles' | 'browse' | null>(null);
+  const [incomingBrowseProfileTargetScreen, setIncomingBrowseProfileTargetScreen] = useState<AppScreenMode | null>(null);
   const [guestBrowseTransitionFrom, setGuestBrowseTransitionFrom] = useState<'splash' | 'browse' | null>(null);
   const [incomingGuestBrowseScreen, setIncomingGuestBrowseScreen] = useState<'splash' | 'browse' | null>(null);
   const [showLoginSuccessTransition, setShowLoginSuccessTransition] = useState(false);
@@ -1252,6 +1253,7 @@ function AppScreen() {
     if (!shouldAnimateOnboarding) {
       setBrowseProfileTransitionFrom(null);
       setIncomingBrowseProfileScreen(null);
+      setIncomingBrowseProfileTargetScreen(null);
       setIncomingOnboardingScreen(null);
       screenTransition.setValue(1);
       setScreenMode(nextScreen);
@@ -1278,8 +1280,10 @@ function AppScreen() {
     });
   }
 
-  function navigateBrowseProfileTransition(nextScreen: 'profiles' | 'browse') {
-    if (screenMode === nextScreen) {
+  function navigateBrowseProfileTransition(nextScreen: 'profiles' | 'browse', finalScreenMode?: AppScreenMode) {
+    const resolvedScreenMode = finalScreenMode ?? nextScreen;
+
+    if (screenMode === resolvedScreenMode) {
       return;
     }
 
@@ -1301,9 +1305,11 @@ function AppScreen() {
     setBrowseEntryOffset(0);
     setBrowseProfileTransitionFrom(currentBrowseProfileScreen);
     setIncomingBrowseProfileScreen(null);
+    setIncomingBrowseProfileTargetScreen(null);
     setIncomingOnboardingScreen(null);
     screenTransition.setValue(0);
     setIncomingBrowseProfileScreen(nextScreen);
+    setIncomingBrowseProfileTargetScreen(nextScreen === 'profiles' ? resolvedScreenMode : null);
     onboardingTransitionFrameRef.current = requestAnimationFrame(() => {
       onboardingTransitionFrameRef.current = null;
       Animated.timing(screenTransition, {
@@ -1314,16 +1320,18 @@ function AppScreen() {
         if (!finished) {
           setBrowseProfileTransitionFrom(null);
           setIncomingBrowseProfileScreen(null);
+          setIncomingBrowseProfileTargetScreen(null);
           return;
         }
 
-        setScreenMode(nextScreen);
+        setScreenMode(resolvedScreenMode);
         profileSceneTransition.setValue(1);
         browseSceneTransition.setValue(1);
         setProfileEntryOffset(0);
         setBrowseEntryOffset(0);
         setBrowseProfileTransitionFrom(null);
         setIncomingBrowseProfileScreen(null);
+        setIncomingBrowseProfileTargetScreen(null);
         screenTransition.setValue(1);
       });
     });
@@ -1351,6 +1359,7 @@ function AppScreen() {
     setBrowseEntryOffset(0);
     setBrowseProfileTransitionFrom(null);
     setIncomingBrowseProfileScreen(null);
+    setIncomingBrowseProfileTargetScreen(null);
     setIncomingOnboardingScreen(null);
     setGuestBrowseTransitionFrom(currentGuestBrowseScreen);
     setIncomingGuestBrowseScreen(null);
@@ -2469,6 +2478,12 @@ function AppScreen() {
     setSelectedPlace(null);
     setSelectedLocationId(null);
     setSelectedMapPlaceKey(null);
+
+    if (['business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service'].includes(screenMode)) {
+      fadeIntoMainShellScreen('profiles');
+      return;
+    }
+
     navigateBrowseProfileTransition('profiles');
   }
 
@@ -2492,6 +2507,11 @@ function AppScreen() {
       return;
     }
 
+    if (screenMode === 'browse') {
+      closeBottomMoreSheet(() => navigateBrowseProfileTransition('profiles', 'settings'));
+      return;
+    }
+
     fadeIntoMainShellScreen('settings');
   }
 
@@ -2499,6 +2519,11 @@ function AppScreen() {
     setSupportDraftContext(null);
     if (screenMode === 'support') {
       closeBottomMoreSheet();
+      return;
+    }
+
+    if (screenMode === 'browse') {
+      closeBottomMoreSheet(() => navigateBrowseProfileTransition('profiles', 'support'));
       return;
     }
 
@@ -2511,12 +2536,22 @@ function AppScreen() {
       return;
     }
 
+    if (screenMode === 'browse') {
+      closeBottomMoreSheet(() => navigateBrowseProfileTransition('profiles', 'terms-of-service'));
+      return;
+    }
+
     fadeIntoMainShellScreen('terms-of-service');
   }
 
   function handleBottomMenuOpenPrivacy() {
     if (screenMode === 'privacy-policy') {
       closeBottomMoreSheet();
+      return;
+    }
+
+    if (screenMode === 'browse') {
+      closeBottomMoreSheet(() => navigateBrowseProfileTransition('profiles', 'privacy-policy'));
       return;
     }
 
@@ -3634,6 +3669,9 @@ function AppScreen() {
   function renderAuthenticatedMainShell() {
     const transitionActive = usesBrowseProfileSlideTransition;
     const showingProfile = ['profiles', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service'].includes(screenMode);
+    const incomingProfileScreen = transitionActive && incomingBrowseProfileScreen === 'profiles'
+      ? incomingBrowseProfileTargetScreen ?? 'profiles'
+      : undefined;
     const profileLayerStyle = transitionActive
       ? browseProfileTransitionFrom === 'profiles'
         ? browseProfileOutgoingStyle
@@ -3655,7 +3693,7 @@ function AppScreen() {
           pointerEvents={showingProfile && !transitionActive ? 'auto' : 'none'}
           style={[styles.screenTransitionLayerAbsolute, profileLayerStyle]}
         >
-          {renderProfilesScreen()}
+          {renderProfilesScreen(undefined, incomingProfileScreen)}
         </Animated.View>
         <Animated.View
           pointerEvents={!showingProfile && !transitionActive ? 'auto' : 'none'}
