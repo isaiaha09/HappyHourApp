@@ -3769,9 +3769,20 @@ class ProfileSignupApiTests(APITestCase):
 	def test_login_rejects_business_account_on_customer_portal(self):
 		user = User.objects.create_user(username='business_portal_only', email='business-portal@example.com', password='test-pass-123')
 		AccountProfile.objects.create(user=user, email_verified_at=timezone.now())
+		snapshot = ListingSnapshot.objects.create(
+			name='Portal Only Business',
+			city=City.OXNARD,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='101 Harbor Blvd',
+		)
 		claim = BusinessClaim.objects.create(
-			user=user,
-			business_name='Portal Only Business',
+			claimant=user,
+			listing_snapshot=snapshot,
+			contact_name='Portal Only Owner',
+			job_title='Owner',
+			work_email='owner@portal-only-business.com',
+			employer_address='101 Harbor Blvd',
+			verification_summary='Approved owner for portal access testing.',
 			status=BusinessClaim.Status.APPROVED,
 		)
 		BusinessMembership.objects.create(user=user, claim=claim, is_active=True)

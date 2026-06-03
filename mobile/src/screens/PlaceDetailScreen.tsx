@@ -8,6 +8,7 @@ import type { Deal, HappyHourWindow, OperatingHourWindow, PlaceDetail, PlaceLoca
 
 export type PlaceDetailScreenProps = {
   backButtonLabel?: string;
+  distanceLabel?: string | null;
   onEditBusinessProfile?: () => void;
   onClaimBusiness?: () => void;
   showClaimBusinessControl?: boolean;
@@ -30,6 +31,7 @@ export type PlaceDetailScreenProps = {
 
 export function PlaceDetailScreen({
   backButtonLabel = 'Back to Places',
+  distanceLabel = null,
   onEditBusinessProfile,
   onClaimBusiness,
   showClaimBusinessControl = false,
@@ -82,6 +84,7 @@ export function PlaceDetailScreen({
                 <Text style={styles.detailCity}>{selectedPlaceLocation?.city_label ?? selectedPlace.city_label}</Text>
                 <Text style={styles.detailTitle}>{selectedPlace.name}</Text>
                 <Text style={styles.detailMeta}>{selectedPlace.venue_type_label}</Text>
+                {distanceLabel ? <Text style={styles.detailMeta}>{distanceLabel}</Text> : null}
               </View>
               <View style={styles.detailHeaderActions}>
                 {showVerifiedBadge ? (

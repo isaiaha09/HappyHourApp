@@ -168,6 +168,11 @@ type CustomerBusinessClaimNotice = {
   locationLabel: string;
 };
 
+type UserCoordinates = {
+  latitude: number;
+  longitude: number;
+};
+
 type MappedPlace = PlaceListItem & {
   latitude: number;
   longitude: number;
@@ -502,10 +507,12 @@ function AppScreen() {
   const [startupImagesReady, setStartupImagesReady] = useState(false);
   const [profileEntryOffset, setProfileEntryOffset] = useState(0);
   const [browseEntryOffset, setBrowseEntryOffset] = useState(0);
+  const [userCoordinates, setUserCoordinates] = useState<UserCoordinates | null>(null);
   const [renderedMappedPlaces, setRenderedMappedPlaces] = useState<MappedPlace[]>([]);
   const [renderedMappedPlaceKey, setRenderedMappedPlaceKey] = useState('');
   const authenticatedSessionRef = useRef<SignupResponse | null>(null);
   const businessLocationWatcherRef = useRef<Location.LocationSubscription | null>(null);
+  const userLocationWatcherRef = useRef<Location.LocationSubscription | null>(null);
   const businessLocationLastReportedRef = useRef<string>('');
   const claimPrefillRequestRef = useRef(0);
   const claimPrefillLoadedKeyRef = useRef('');
@@ -520,6 +527,7 @@ function AppScreen() {
     && browseMode === 'map'
     && (browseProfileTransitionFrom === 'browse' || incomingBrowseProfileScreen === 'browse');
   const showMapBrowse = (screenMode === 'browse' && !selectedPlaceSlug && browseMode === 'map') || showTransitionMapBrowse;
+  const shouldTrackUserLocation = screenMode === 'browse' || selectedPlaceSlug !== null;
   const translucentStatusBar = (screenMode === 'browse' && !selectedPlaceSlug && browseMode === 'map')
     || (browseProfileTransitionFrom === 'profiles'
       && incomingBrowseProfileScreen === 'browse'
@@ -552,6 +560,7 @@ function AppScreen() {
   const selectedPlaceLocation = getSelectedPlaceLocation(selectedPlace, selectedLocationId, selectedCity);
   const selectedPlaceDeals = selectedPlaceLocation?.deals ?? selectedPlace?.deals ?? [];
   const selectedPlaceOperatingHours = selectedPlaceLocation?.operating_hours ?? selectedPlace?.operating_hours ?? [];
+  const selectedPlaceDistanceLabel = getDistanceAwayLabel(userCoordinates, selectedPlaceLocation ?? selectedPlace);
   const guestMapOnlyMode = guestBrowseModeLocked && !authenticatedSession;
   const selectedPlaceIsFavorited = !!(selectedPlace && authenticatedSession?.favorite_businesses?.some((business) => business.slug === selectedPlace.slug));
   const showFavoriteControl = !authenticatedSession || authenticatedSession.portal === 'customer';
@@ -576,6 +585,99 @@ function AppScreen() {
   useEffect(() => {
     authenticatedSessionRef.current = authenticatedSession;
   }, [authenticatedSession]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function startUserLocationTracking() {
+      if (!shouldTrackUserLocation) {
+        userLocationWatcherRef.current?.remove();
+        userLocationWatcherRef.current = null;
+        return;
+      }
+
+      if (userLocationWatcherRef.current) {
+        return;
+      }
+
+      try {
+        const currentPermission = await Location.getForegroundPermissionsAsync();
+        if (cancelled) {
+          return;
+        }
+
+        const permission = currentPermission.granted
+          ? currentPermission
+          : currentPermission.canAskAgain
+            ? await Location.requestForegroundPermissionsAsync()
+            : currentPermission;
+
+        if (cancelled) {
+          return;
+        }
+
+        if (!permission.granted) {
+          setUserCoordinates(null);
+          return;
+        }
+
+        const updateCoordinates = (coords: { latitude: number; longitude: number }) => {
+          setUserCoordinates((current) => {
+            if (
+              current
+              && Math.abs(current.latitude - coords.latitude) < 0.0001
+              && Math.abs(current.longitude - coords.longitude) < 0.0001
+            ) {
+              return current;
+            }
+
+            return {
+              latitude: coords.latitude,
+              longitude: coords.longitude,
+            };
+          });
+        };
+
+        const initialPosition = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        if (cancelled) {
+          return;
+        }
+        updateCoordinates(initialPosition.coords);
+
+        const watcher = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.Balanced,
+            distanceInterval: 100,
+            timeInterval: 60000,
+          },
+          (position) => {
+            updateCoordinates(position.coords);
+          },
+        );
+
+        if (cancelled) {
+          watcher.remove();
+          return;
+        }
+
+        userLocationWatcherRef.current = watcher;
+      } catch {
+        if (!cancelled) {
+          setUserCoordinates(null);
+        }
+      }
+    }
+
+    void startUserLocationTracking();
+
+    return () => {
+      cancelled = true;
+      userLocationWatcherRef.current?.remove();
+      userLocationWatcherRef.current = null;
+    };
+  }, [shouldTrackUserLocation]);
 
   useEffect(() => {
     if (guestMapOnlyMode && browseMode !== 'map') {
@@ -4298,6 +4400,7 @@ function AppScreen() {
                         renderItem={({ item, index }) => (
                           <AnimatedListPlaceCard
                             browseListColumns={browseListColumns}
+                            distanceLabel={getDistanceAwayLabel(userCoordinates, item)}
                             item={item}
                             listRevealEnabled={listRevealEnabled}
                             revealIndex={index}
@@ -4434,6 +4537,7 @@ function AppScreen() {
               showClaimBusinessControl={showClaimBusinessControl}
               showEditBusinessProfileControl={selectedPlaceIsOwnedByAuthenticatedBusiness}
               showFavoriteControl={showFavoriteControl}
+              distanceLabel={selectedPlaceDistanceLabel}
               selectedPlace={selectedPlace}
               selectedPlaceDeals={selectedPlaceDeals}
               selectedPlaceLocation={selectedPlaceLocation}
@@ -4629,6 +4733,7 @@ function AppScreen() {
 
 function AnimatedListPlaceCard({
   browseListColumns,
+  distanceLabel,
   item,
   listRevealEnabled,
   onPress,
@@ -4636,6 +4741,7 @@ function AnimatedListPlaceCard({
   revealToken,
 }: {
   browseListColumns: number;
+  distanceLabel: string | null;
   item: BrowsePlace;
   listRevealEnabled: boolean;
   onPress: () => void;
@@ -4682,6 +4788,7 @@ function AnimatedListPlaceCard({
         <Text style={styles.placeCity}>{getPlaceCardEyebrow(item)}</Text>
         <Text style={styles.placeTitle}>{item.name}</Text>
         <Text style={styles.placeMeta}>{item.venue_type_label}</Text>
+        {distanceLabel ? <Text style={styles.placeMeta}>{distanceLabel}</Text> : null}
         <Text style={styles.placeAddress}>{getPlaceCardAddress(item)}</Text>
       </Pressable>
     </Animated.View>
@@ -4720,6 +4827,52 @@ function getErrorMessage(error: unknown) {
   }
 
   return 'Something went wrong while talking to the backend.';
+}
+
+function getDistanceAwayLabel(
+  userCoordinates: UserCoordinates | null,
+  location: Pick<PlaceLocation, 'latitude' | 'longitude'> | null,
+) {
+  if (!userCoordinates || !location || location.latitude === null || location.longitude === null) {
+    return null;
+  }
+
+  const miles = getDistanceInMiles(userCoordinates.latitude, userCoordinates.longitude, location.latitude, location.longitude);
+  if (!Number.isFinite(miles)) {
+    return null;
+  }
+
+  if (miles < 0.15) {
+    return 'Nearby';
+  }
+
+  const roundedMiles = miles < 10 ? Math.round(miles * 10) / 10 : Math.round(miles);
+  const mileLabel = roundedMiles === 1 ? 'mile' : 'miles';
+  return `${roundedMiles} ${mileLabel} away`;
+}
+
+function getDistanceInMiles(
+  originLatitude: number,
+  originLongitude: number,
+  destinationLatitude: number,
+  destinationLongitude: number,
+) {
+  const earthRadiusMiles = 3958.8;
+  const latitudeDeltaRadians = toRadians(destinationLatitude - originLatitude);
+  const longitudeDeltaRadians = toRadians(destinationLongitude - originLongitude);
+  const originLatitudeRadians = toRadians(originLatitude);
+  const destinationLatitudeRadians = toRadians(destinationLatitude);
+
+  const a = Math.sin(latitudeDeltaRadians / 2) ** 2
+    + Math.cos(originLatitudeRadians)
+      * Math.cos(destinationLatitudeRadians)
+      * Math.sin(longitudeDeltaRadians / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusMiles * c;
+}
+
+function toRadians(value: number) {
+  return value * (Math.PI / 180);
 }
 
 function getSelectedPlaceLocation(
