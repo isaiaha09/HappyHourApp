@@ -1283,7 +1283,9 @@ function AppScreen() {
       return;
     }
 
-    const currentBrowseProfileScreen = screenMode === 'profiles' ? 'profiles' : 'browse';
+    const currentBrowseProfileScreen = ['profiles', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service'].includes(screenMode)
+      ? 'profiles'
+      : 'browse';
 
     if (onboardingTransitionFrameRef.current !== null) {
       cancelAnimationFrame(onboardingTransitionFrameRef.current);
