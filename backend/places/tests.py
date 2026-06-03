@@ -3766,6 +3766,32 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertTrue(response.data['auth_token'])
 
+	def test_login_rejects_business_account_on_customer_portal(self):
+		user = User.objects.create_user(username='business_portal_only', email='business-portal@example.com', password='test-pass-123')
+		AccountProfile.objects.create(user=user, email_verified_at=timezone.now())
+		claim = BusinessClaim.objects.create(
+			user=user,
+			business_name='Portal Only Business',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(user=user, claim=claim, is_active=True)
+
+		response = self.client.post(
+			reverse('profile-login'),
+			{
+				'portal': 'customer',
+				'identifier': 'business_portal_only',
+				'password': 'test-pass-123',
+			},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, 400)
+		self.assertEqual(
+			response.data['non_field_errors'][0],
+			'Business accounts must sign in through the business account portal.',
+		)
+
 	def test_login_rejects_email_identifier(self):
 		user = User.objects.create_user(username='email_login_user', email='email-login@example.com', password='test-pass-123')
 

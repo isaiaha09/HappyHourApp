@@ -4402,7 +4402,7 @@ function AppScreen() {
         renderGuestMainShell()
       ) : selectedPlaceSlug ? (
         <View style={styles.fullScreenRoot}>
-          <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
+          <SafeAreaView edges={['left', 'right', 'bottom']} style={styles.safeArea}>
             <PlaceDetailScreen
               backButtonLabel={screenMode === 'profiles' || screenMode === 'business-profile-editor' ? 'Back to Profile' : 'Back to Places'}
               detailLoading={detailLoading}
@@ -4425,6 +4425,7 @@ function AppScreen() {
               selectedPlaceOperatingHours={selectedPlaceOperatingHours}
             />
           </SafeAreaView>
+          {authenticatedSession ? renderBottomNav({ guest: false }) : null}
         </View>
       ) : usesOnboardingSlideTransition && currentOnboardingScreen ? (
         <View style={styles.onboardingTransitionRoot}>

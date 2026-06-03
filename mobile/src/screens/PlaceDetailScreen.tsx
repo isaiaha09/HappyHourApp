@@ -1,4 +1,5 @@
 import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
 
 import { styles } from '../appStyles';
@@ -48,16 +49,21 @@ export function PlaceDetailScreen({
   selectedPlaceLocation,
   selectedPlaceOperatingHours,
 }: PlaceDetailScreenProps) {
+  const insets = useSafeAreaInsets();
   const selectedPlaceMapRegion = getPlacePreviewRegion(selectedPlaceLocation ?? selectedPlace);
   const showVerifiedBadge = !!selectedPlace && (selectedPlace.is_claimed || selectedPlace.is_verified);
 
   return (
-    <View style={[styles.screen, isLandscape ? styles.screenLandscape : null]}>
+    <View style={[styles.detailScreenRoot, isLandscape ? styles.detailScreenLandscape : null]}>
       <ScrollView
-        contentContainerStyle={[styles.detailScrollContent, isLandscape ? styles.detailScrollContentLandscape : null]}
+        contentContainerStyle={[
+          styles.detailScrollContent,
+          isLandscape ? styles.detailScrollContentLandscape : null,
+          { paddingBottom: Math.max(insets.bottom + 118, 132) },
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
+        <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle, { paddingTop: Math.max(insets.top + 14, 40) }]}>
           <Pressable onPress={onBack} style={styles.backButton}>
             <Text style={styles.backButtonText}>{backButtonLabel}</Text>
           </Pressable>

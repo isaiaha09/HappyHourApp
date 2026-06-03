@@ -285,6 +285,9 @@ class LoginSerializer(serializers.Serializer):
 		if authenticated_user is None:
 			raise serializers.ValidationError('Incorrect password.')
 
+		if attrs['portal'] == 'customer' and has_active_business_membership(authenticated_user):
+			raise serializers.ValidationError('Business accounts must sign in through the business account portal.')
+
 		if attrs['portal'] == 'business':
 			if has_active_business_membership(authenticated_user):
 				pass
