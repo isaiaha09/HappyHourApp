@@ -14,6 +14,7 @@ export type DashboardScreenProps = {
   onBack: () => void;
   onOpenBilling: () => void;
   onOpenApprovedBusiness: (slug: string) => void;
+  onOpenBusinessProfileEditor: () => void;
   onOpenFavoriteBusiness: (slug: string) => void;
   onOpenPlaces: () => void;
   onOpenSettings: () => void;
@@ -314,7 +315,7 @@ function SecuritySettingsSection({
   );
 }
 
-export function DashboardScreen({ errorMessage, isLandscape, loading, message, onBack, onOpenBilling, onOpenApprovedBusiness, onOpenFavoriteBusiness, onOpenPlaces, onOpenSettings, onRefresh, onResendVerification, onSaveProfileDetails, session, submitting }: DashboardScreenProps) {
+export function DashboardScreen({ errorMessage, isLandscape, loading, message, onBack, onOpenBilling, onOpenApprovedBusiness, onOpenBusinessProfileEditor, onOpenFavoriteBusiness, onOpenPlaces, onOpenSettings, onRefresh, onResendVerification, onSaveProfileDetails, session, submitting }: DashboardScreenProps) {
   const approvedBusinesses = session.approved_businesses ?? [];
   const favoriteBusinesses = session.favorite_businesses ?? [];
   const fullName = [session.first_name, session.last_name].filter(Boolean).join(' ');
@@ -518,6 +519,9 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
                       <Pressable onPress={() => onOpenApprovedBusiness(approvedBusinesses[0].slug)} style={[styles.linkButtonSecondaryWide, styles.dashboardInlineButton]}>
                         <Text style={styles.linkButtonSecondaryText}>Open public business profile</Text>
                       </Pressable>
+                      <Pressable onPress={onOpenBusinessProfileEditor} style={[styles.linkButtonSecondaryWide, styles.dashboardInlineButton]}>
+                        <Text style={styles.linkButtonSecondaryText}>Edit Business Profile</Text>
+                      </Pressable>
                     </View>
                   ) : null}
                 </View>
@@ -525,13 +529,12 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
                 <View style={styles.dashboardSection}>
                   <Text style={styles.dashboardSectionTitle}>Approved Business</Text>
                   {approvedBusinesses.length ? <View style={styles.dashboardFieldGrid}>{approvedBusinesses.map((business) => (
-                    <Pressable key={business.id} onPress={() => onOpenApprovedBusiness(business.slug)} style={[styles.dashboardDetailItem, styles.dashboardFavoriteBusinessCard]}>
+                    <View key={business.id} style={[styles.dashboardDetailItem, styles.dashboardFavoriteBusinessCard]}>
                       <Text style={styles.dashboardDetailValue}>{business.name}</Text>
                       <Text style={styles.dashboardSupportText}>{business.city_label} • {business.venue_type_label}</Text>
                       {business.address_line_1 ? <Text style={styles.dashboardSupportText}>{business.address_line_1}</Text> : null}
                       {business.website_url ? <Text style={styles.dashboardSupportText}>{business.website_url}</Text> : null}
-                      <Text style={styles.dashboardFavoriteBusinessAction}>Open business profile</Text>
-                    </Pressable>
+                    </View>
                   ))}</View> : (
                     <Text style={styles.dashboardSupportText}>Claimed or created businesses appear here after admin approval.</Text>
                   )}

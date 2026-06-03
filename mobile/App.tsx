@@ -1839,14 +1839,14 @@ function AppScreen() {
   }
 
   function handleSelectPlace(place: { slug: string; locationId?: number }) {
+    dismissKeyboardForScreenTransition();
     animateNextLayout();
-    startTransition(() => {
-      setBrowseFiltersExpanded(false);
-      setSelectedMapPlaceKey(null);
-      setSelectedPlaceSlug(place.slug);
-      setSelectedPlace(null);
-      setSelectedLocationId(place.locationId ?? null);
-    });
+    setDetailLoading(true);
+    setBrowseFiltersExpanded(false);
+    setSelectedMapPlaceKey(null);
+    setSelectedPlace(null);
+    setSelectedLocationId(place.locationId ?? null);
+    setSelectedPlaceSlug(place.slug);
   }
 
   function handleToggleVenueType(venueType: VenueFilterValue) {
@@ -2084,10 +2084,19 @@ function AppScreen() {
     animateNextLayout();
     Keyboard.dismiss();
     setErrorMessage(null);
+    setDetailLoading(true);
     setSelectedMapPlaceKey(null);
     setSelectedLocationId(null);
     setSelectedPlace(null);
     setSelectedPlaceSlug(slug);
+  }
+
+  function handleOpenBusinessProfileEditorFromDashboard() {
+    if (!authenticatedSession?.approved_businesses?.length) {
+      return;
+    }
+
+    fadeIntoProfileScreen('business-profile-editor');
   }
 
   function handleOpenBusinessProfileEditor() {
@@ -2111,6 +2120,7 @@ function AppScreen() {
     animateNextLayout();
     Keyboard.dismiss();
     setErrorMessage(null);
+    setDetailLoading(true);
     setSelectedMapPlaceKey(null);
     setSelectedLocationId(null);
     setSelectedPlace(null);
@@ -3206,6 +3216,7 @@ function AppScreen() {
             onBack={handleBackFromProfiles}
             onOpenBilling={handleOpenBilling}
             onOpenApprovedBusiness={handleOpenFavoriteBusiness}
+            onOpenBusinessProfileEditor={handleOpenBusinessProfileEditorFromDashboard}
             onOpenFavoriteBusiness={handleOpenFavoriteBusiness}
             onOpenPlaces={handleContinueToApp}
             onOpenSettings={handleOpenSettings}
@@ -3979,31 +3990,29 @@ function AppScreen() {
         renderGuestMainShell()
       ) : selectedPlaceSlug ? (
         <View style={styles.fullScreenRoot}>
-        <Animated.View style={[styles.screenTransitionLayerAbsolute, screenTransitionStyle]}>
-        <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
-        <PlaceDetailScreen
-          backButtonLabel={screenMode === 'profiles' || screenMode === 'business-profile-editor' ? 'Back to Profile' : 'Back to Places'}
-          detailLoading={detailLoading}
-          errorMessage={errorMessage}
-          favoriteHelperText={favoriteHelperText}
-          favoriteSubmitting={favoriteSubmitting}
-          isLandscape={isLandscape}
-          isFavorited={selectedPlaceIsFavorited}
-          onBack={handleBackToBrowse}
-          onClaimBusiness={handleOpenBusinessClaimFromPlaceDetail}
-          onEditBusinessProfile={handleOpenBusinessProfileEditor}
-          onSelectLocation={setSelectedLocationId}
-          onToggleFavorite={() => void handleToggleFavoriteBusiness()}
-          showClaimBusinessControl={showClaimBusinessControl}
-          showEditBusinessProfileControl={selectedPlaceIsOwnedByAuthenticatedBusiness}
-          showFavoriteControl={showFavoriteControl}
-          selectedPlace={selectedPlace}
-          selectedPlaceDeals={selectedPlaceDeals}
-          selectedPlaceLocation={selectedPlaceLocation}
-          selectedPlaceOperatingHours={selectedPlaceOperatingHours}
-        />
-        </SafeAreaView>
-        </Animated.View>
+          <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
+            <PlaceDetailScreen
+              backButtonLabel={screenMode === 'profiles' || screenMode === 'business-profile-editor' ? 'Back to Profile' : 'Back to Places'}
+              detailLoading={detailLoading}
+              errorMessage={errorMessage}
+              favoriteHelperText={favoriteHelperText}
+              favoriteSubmitting={favoriteSubmitting}
+              isLandscape={isLandscape}
+              isFavorited={selectedPlaceIsFavorited}
+              onBack={handleBackToBrowse}
+              onClaimBusiness={handleOpenBusinessClaimFromPlaceDetail}
+              onEditBusinessProfile={handleOpenBusinessProfileEditor}
+              onSelectLocation={setSelectedLocationId}
+              onToggleFavorite={() => void handleToggleFavoriteBusiness()}
+              showClaimBusinessControl={showClaimBusinessControl}
+              showEditBusinessProfileControl={selectedPlaceIsOwnedByAuthenticatedBusiness}
+              showFavoriteControl={showFavoriteControl}
+              selectedPlace={selectedPlace}
+              selectedPlaceDeals={selectedPlaceDeals}
+              selectedPlaceLocation={selectedPlaceLocation}
+              selectedPlaceOperatingHours={selectedPlaceOperatingHours}
+            />
+          </SafeAreaView>
         </View>
       ) : usesOnboardingSlideTransition && currentOnboardingScreen ? (
         <View style={styles.onboardingTransitionRoot}>
