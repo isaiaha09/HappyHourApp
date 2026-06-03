@@ -515,6 +515,11 @@ export const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
   },
+  dashboardMultilineInput: {
+    minHeight: 112,
+    paddingTop: 12,
+    textAlignVertical: 'top',
+  },
   mapAppTitle: {
     color: '#2d221a',
     fontSize: 24,

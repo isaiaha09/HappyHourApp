@@ -1,4 +1,5 @@
 import json
+from urllib.parse import urlparse
 
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth import authenticate
@@ -9,7 +10,7 @@ from django.utils.text import slugify
 from rest_framework import serializers
 
 from .models import BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, City, ListingSnapshot, VenueType
-from .services.account_profiles import build_account_response, get_or_create_account_profile
+from .services.account_profiles import build_account_response, get_or_create_account_profile, has_active_business_membership
 
 
 BUSINESS_DOCUMENT_KEYS = (
@@ -100,6 +101,15 @@ def _normalize_document_map(value):
 	}
 
 
+def _normalize_url_identity(value):
+	parsed = urlparse(str(value or '').strip())
+	netloc = str(parsed.netloc or '').strip().lower().removeprefix('www.')
+	path = str(parsed.path or '').strip().rstrip('/').lower()
+	if not netloc and not path:
+		return ''
+	return f'{netloc}{path}'
+
+
 def _create_claim_attachments(claim, request):
 	if request is None:
 		return
@@ -129,6 +139,11 @@ def _create_claim_profile_entries(claim, validated_data):
 			)
 	if entry_rows:
 		BusinessClaimProfileEntry.objects.bulk_create(entry_rows)
+
+
+def _replace_claim_profile_entries(claim, validated_data):
+	claim.profile_entries.filter(entry_kind__in=PROFILE_ENTRY_FIELD_KIND_MAP.values()).delete()
+	_create_claim_profile_entries(claim, validated_data)
 
 
 class AccountResponseSerializer(serializers.Serializer):
@@ -171,6 +186,17 @@ class ProfileDashboardUpdateSerializer(serializers.Serializer):
 	email = serializers.EmailField()
 	first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
 	last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+	contact_name = serializers.CharField(max_length=120, required=False)
+	job_title = serializers.CharField(max_length=120, required=False, allow_blank=True)
+	work_email = serializers.EmailField(required=False)
+	work_phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
+	employer_address = serializers.CharField(max_length=255, required=False, allow_blank=True)
+	business_website_url = serializers.URLField(required=False, allow_blank=True)
+	social_media_links_text = serializers.CharField(required=False, allow_blank=True)
+	offer_entries_text = serializers.CharField(required=False, allow_blank=True)
+	hours_of_operation_entries_text = serializers.CharField(required=False, allow_blank=True)
+	photo_references_text = serializers.CharField(required=False, allow_blank=True)
+	supporting_details = serializers.CharField(max_length=4000, required=False, allow_blank=True)
 
 	def validate_username(self, value):
 		normalized = value.strip()
@@ -192,6 +218,27 @@ class ProfileDashboardUpdateSerializer(serializers.Serializer):
 		return value.strip()
 
 	def validate_last_name(self, value):
+		return value.strip()
+
+	def validate_contact_name(self, value):
+		return value.strip()
+
+	def validate_job_title(self, value):
+		return value.strip()
+
+	def validate_work_email(self, value):
+		return value.strip().lower()
+
+	def validate_work_phone(self, value):
+		return value.strip()
+
+	def validate_employer_address(self, value):
+		return value.strip()
+
+	def validate_business_website_url(self, value):
+		return value.strip()
+
+	def validate_supporting_details(self, value):
 		return value.strip()
 
 
@@ -227,10 +274,13 @@ class LoginSerializer(serializers.Serializer):
 		if authenticated_user is None:
 			raise serializers.ValidationError('Incorrect password.')
 
-		if attrs['portal'] == 'business' and not (
-			authenticated_user.business_claims.exists() or authenticated_user.business_memberships.exists()
-		):
-			raise serializers.ValidationError('That account does not have a business profile or claim yet.')
+		if attrs['portal'] == 'business':
+			if has_active_business_membership(authenticated_user):
+				pass
+			elif authenticated_user.business_claims.exists() or authenticated_user.business_memberships.exists():
+				raise serializers.ValidationError('Your business claim must be approved by an admin before you can sign in to the business portal.')
+			else:
+				raise serializers.ValidationError('That account does not have an approved business profile yet.')
 
 		profile = get_or_create_account_profile(authenticated_user)
 		if not profile.email_is_verified:
@@ -353,6 +403,15 @@ class CustomerSignupSerializer(serializers.Serializer):
 		latest_claim = user.business_claims.order_by('-created_at').first()
 		return latest_claim is not None and latest_claim.status == BusinessClaim.Status.REJECTED
 
+	def _can_upgrade_authenticated_existing_user(self, user):
+		request = self.context.get('request')
+		request_user = getattr(request, 'user', None)
+		if user is None or request_user is None or not getattr(request_user, 'is_authenticated', False):
+			return False
+		if request_user.pk != user.pk:
+			return False
+		return not user.business_memberships.filter(is_active=True).exists()
+
 	def validate(self, attrs):
 		attrs = super().validate(attrs)
 		existing_username_user = self._get_existing_user_by_username(attrs.get('username'))
@@ -366,6 +425,10 @@ class CustomerSignupSerializer(serializers.Serializer):
 
 		existing_user = existing_username_user or existing_email_user
 		if existing_user is None:
+			return attrs
+
+		if self._can_upgrade_authenticated_existing_user(existing_user):
+			attrs['_signup_existing_user'] = existing_user
 			return attrs
 
 		if self._can_reuse_existing_business_user(existing_user):
@@ -668,6 +731,9 @@ def sync_listing_snapshot_from_place_payload(payload):
 	primary_location = (payload.get('locations') or [payload])[0]
 	city = str(primary_location.get('city') or payload.get('city') or '').strip().lower()
 	venue_type = str(primary_location.get('venue_type') or payload.get('venue_type') or '').strip().lower()
+	listing_slug = str(payload.get('slug', '') or '').strip()
+	website_url = primary_location.get('website_url', '') or payload.get('website_url', '')
+	address_line_1 = primary_location.get('address_line_1', '') or payload.get('address_line_1', '')
 
 	defaults = {
 		'name': payload.get('name', ''),
@@ -679,15 +745,54 @@ def sync_listing_snapshot_from_place_payload(payload):
 		'state': primary_location.get('state', '') or payload.get('state', '') or 'CA',
 		'postal_code': primary_location.get('postal_code', '') or payload.get('postal_code', ''),
 		'phone_number': primary_location.get('phone_number', '') or payload.get('phone_number', ''),
-		'website_url': primary_location.get('website_url', '') or payload.get('website_url', ''),
+		'website_url': website_url,
 		'source_name': 'business_websites',
-		'source_url': primary_location.get('website_url', '') or payload.get('website_url', ''),
-		'external_id': payload.get('slug', ''),
-		'listing_slug': payload.get('slug', ''),
+		'source_url': website_url,
+		'external_id': listing_slug,
+		'listing_slug': listing_slug,
 	}
 
+	snapshot = None
+	if listing_slug:
+		snapshot = ListingSnapshot.objects.filter(listing_slug=listing_slug).order_by('-updated_at', '-captured_at').first()
+
+	if snapshot is None:
+		candidate_queryset = ListingSnapshot.objects.filter(name__iexact=defaults['name'])
+		if defaults['city']:
+			candidate_queryset = candidate_queryset.filter(city=defaults['city'])
+		website_identity = _normalize_url_identity(website_url)
+		for candidate in candidate_queryset.order_by('-updated_at', '-captured_at'):
+			if website_identity and _normalize_url_identity(candidate.website_url) == website_identity:
+				snapshot = candidate
+				break
+			if address_line_1 and str(candidate.address_line_1 or '').strip().lower() == str(address_line_1).strip().lower():
+				snapshot = candidate
+				break
+
+	if snapshot is not None:
+		for field_name, value in defaults.items():
+			setattr(snapshot, field_name, value)
+		snapshot.save(update_fields=[
+			'name',
+			'city',
+			'venue_type',
+			'address_line_1',
+			'address_line_2',
+			'neighborhood',
+			'state',
+			'postal_code',
+			'phone_number',
+			'website_url',
+			'source_name',
+			'source_url',
+			'external_id',
+			'listing_slug',
+			'updated_at',
+		])
+		return snapshot
+
 	snapshot, _ = ListingSnapshot.objects.update_or_create(
-		listing_slug=payload.get('slug', ''),
+		listing_slug=listing_slug,
 		defaults=defaults,
 	)
 	return snapshot
@@ -759,6 +864,12 @@ class PlaceListSerializer(serializers.Serializer):
 	id = serializers.IntegerField()
 	name = serializers.CharField()
 	slug = serializers.CharField()
+	is_claimed = serializers.BooleanField(required=False, default=False)
+	social_media_links = serializers.ListField(child=serializers.CharField(), required=False, default=list)
+	offer_entries = serializers.ListField(child=serializers.CharField(), required=False, default=list)
+	hours_of_operation_entries = serializers.ListField(child=serializers.CharField(), required=False, default=list)
+	photo_references = serializers.ListField(child=serializers.CharField(), required=False, default=list)
+	supporting_details = serializers.CharField(required=False, allow_blank=True, default='')
 	city = serializers.CharField()
 	city_label = serializers.CharField()
 	venue_type = serializers.CharField()

@@ -29,6 +29,8 @@ from .serializers import (
 	ResendEmailVerificationCodeSerializer,
 	TwoFactorCodeSerializer,
 	UsernameReminderSerializer,
+	_replace_claim_profile_entries,
+	_normalize_string_list,
 	build_signup_request_data,
 	sync_listing_snapshot_from_place_payload,
 )
@@ -210,6 +212,8 @@ class PasswordResetRequestView(generics.GenericAPIView):
 class BusinessSignupView(generics.GenericAPIView):
 	serializer_class = ClaimedBusinessSignupSerializer
 	parser_classes = [MultiPartParser, FormParser, JSONParser]
+	authentication_classes = [ProfileTokenAuthentication]
+	permission_classes = []
 
 	def post(self, request):
 		payload = build_signup_request_data(request.data)
@@ -224,9 +228,10 @@ class BusinessSignupView(generics.GenericAPIView):
 		user = serializer.save()
 		claim = getattr(user, '_created_business_claim', None)
 		profile = get_or_create_account_profile(user)
+		response_token = request.auth if getattr(request.user, 'is_authenticated', False) and request.user.pk == user.pk else None
 		if getattr(user, '_signup_reused_existing_user', False) and profile.email_is_verified:
 			send_business_claim_received_email(user, claim)
-			payload = build_account_response(user, 'business', claim=claim, token=None)
+			payload = build_account_response(user, 'business', claim=claim, token=response_token)
 			payload['detail'] = payload.get('claim_review_message') or ''
 			return Response(payload, status=status.HTTP_201_CREATED)
 		return Response(build_email_verification_challenge(user, 'business', claim=claim), status=status.HTTP_201_CREATED)
@@ -354,6 +359,58 @@ class ProfileDashboardView(APIView):
 			profile.clear_email_verification_code()
 			profile.save(update_fields=['previous_verified_email', 'pending_email', 'email_change_requested_at', 'email_verified_at', 'email_verification_token', 'email_verification_code', 'email_verification_code_sent_at', 'updated_at'])
 			send_verification_email(user, profile)
+
+		business_field_names = {
+			'contact_name',
+			'job_title',
+			'work_email',
+			'work_phone',
+			'employer_address',
+			'business_website_url',
+			'social_media_links_text',
+			'offer_entries_text',
+			'hours_of_operation_entries_text',
+			'photo_references_text',
+			'supporting_details',
+		}
+		has_business_updates = any(field_name in serializer.validated_data for field_name in business_field_names)
+		if has_business_updates:
+			membership = user.business_memberships.select_related('claim__listing_snapshot').filter(is_active=True).first()
+			if membership is None:
+				return Response({'detail': 'An approved business membership is required before editing the business profile.'}, status=status.HTTP_400_BAD_REQUEST)
+
+			claim = membership.claim
+			snapshot = claim.listing_snapshot
+			claim_update_fields = ['updated_at']
+			snapshot_update_fields = []
+			profile_entry_payload = {}
+
+			for field_name in ('contact_name', 'job_title', 'work_email', 'work_phone', 'employer_address', 'supporting_details'):
+				if field_name in serializer.validated_data:
+					setattr(claim, field_name, serializer.validated_data[field_name])
+					claim_update_fields.append(field_name)
+
+			if 'business_website_url' in serializer.validated_data:
+				claim.business_website_url = serializer.validated_data['business_website_url']
+				claim_update_fields.append('business_website_url')
+
+			for request_field_name, claim_field_name in (
+				('social_media_links_text', 'social_media_links'),
+				('offer_entries_text', 'offer_entries'),
+				('hours_of_operation_entries_text', 'hours_of_operation_entries'),
+				('photo_references_text', 'photo_references'),
+			):
+				if request_field_name in serializer.validated_data:
+					normalized_entries = _normalize_string_list(serializer.validated_data[request_field_name])
+					setattr(claim, claim_field_name, normalized_entries)
+					claim_update_fields.append(claim_field_name)
+					profile_entry_payload[claim_field_name] = normalized_entries
+
+			claim.save(update_fields=list(dict.fromkeys(claim_update_fields)))
+			if profile_entry_payload:
+				_replace_claim_profile_entries(claim, profile_entry_payload)
+			if snapshot_update_fields:
+				snapshot.save(update_fields=list(dict.fromkeys(snapshot_update_fields)))
 
 		response_payload = build_account_response(user, portal, token=request.auth)
 		response_payload['detail'] = 'Profile updated. Verify your new email address to finish the email change.' if email_changed else 'Profile updated.'

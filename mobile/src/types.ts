@@ -61,6 +61,12 @@ export type PlaceLocationDetail = PlaceLocation & {
 };
 
 export type PlaceListItem = PlaceLocation & {
+  is_claimed: boolean;
+  social_media_links?: string[];
+  offer_entries?: string[];
+  hours_of_operation_entries?: string[];
+  photo_references?: string[];
+  supporting_details?: string;
   locations: PlaceLocation[];
 };
 
@@ -105,6 +111,8 @@ export type SignupResponse = {
     city_label: string;
     venue_type: string;
     venue_type_label: string;
+    address_line_1?: string;
+    website_url?: string;
   }>;
   favorite_businesses?: Array<{
     slug: string;
@@ -122,6 +130,12 @@ export type SignupResponse = {
     work_email?: string;
     work_phone?: string;
     employer_address?: string;
+    business_website_url?: string;
+    social_media_links?: string[];
+    offer_entries?: string[];
+    hours_of_operation_entries?: string[];
+    photo_references?: string[];
+    supporting_details?: string;
     verification_summary?: string;
   };
   business_location_tracking_available?: boolean;
@@ -149,6 +163,17 @@ export type ProfileDashboardUpdateRequest = {
   email: string;
   first_name: string;
   last_name: string;
+  contact_name?: string;
+  job_title?: string;
+  work_email?: string;
+  work_phone?: string;
+  employer_address?: string;
+  business_website_url?: string;
+  social_media_links_text?: string;
+  offer_entries_text?: string;
+  hours_of_operation_entries_text?: string;
+  photo_references_text?: string;
+  supporting_details?: string;
 };
 
 export type FavoriteBusinessToggleRequest = {

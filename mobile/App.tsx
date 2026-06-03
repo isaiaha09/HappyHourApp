@@ -158,6 +158,11 @@ const multipleAreasBusinessCityValue = multipleAreasBusinessCityOption.value;
 type AppScreenMode = 'splash' | 'auth' | 'browse' | 'profiles' | 'settings' | 'support' | 'privacy-policy' | 'terms-of-service' | 'business-search' | 'business-claim' | 'manual-business-claim' | 'informal-business-claim' | 'email-verification' | 'business-claim-review-pending';
 type OnboardingTransitionDirection = 'forward' | 'backward';
 type TransitionAxis = 'x' | 'y';
+type ClaimReturnDestination = 'business-search' | 'browse-map' | 'profiles';
+type CustomerBusinessClaimNotice = {
+  businessName: string;
+  locationLabel: string;
+};
 
 type MappedPlace = PlaceListItem & {
   latitude: number;
@@ -434,6 +439,10 @@ function AppScreen() {
   const [favoriteSubmitting, setFavoriteSubmitting] = useState(false);
   const [guestBrowseModeLocked, setGuestBrowseModeLocked] = useState(false);
   const [showGuestFavoritePrompt, setShowGuestFavoritePrompt] = useState(false);
+  const [showGuestBusinessClaimPrompt, setShowGuestBusinessClaimPrompt] = useState(false);
+  const [showCustomerBusinessClaimPrompt, setShowCustomerBusinessClaimPrompt] = useState(false);
+  const [customerBusinessClaimNotice, setCustomerBusinessClaimNotice] = useState<CustomerBusinessClaimNotice | null>(null);
+  const [claimReturnDestination, setClaimReturnDestination] = useState<ClaimReturnDestination>('business-search');
   const [mapRegion, setMapRegion] = useState<Region>(() => initialMapRegionRef.current);
   const mapRegionRef = useRef(mapRegion);
   const [reloadCount, setReloadCount] = useState(0);
@@ -535,6 +544,7 @@ function AppScreen() {
   const guestMapOnlyMode = guestBrowseModeLocked && !authenticatedSession;
   const selectedPlaceIsFavorited = !!(selectedPlace && authenticatedSession?.favorite_businesses?.some((business) => business.slug === selectedPlace.slug));
   const showFavoriteControl = !authenticatedSession || authenticatedSession.portal === 'customer';
+  const showClaimBusinessControl = !!selectedPlace && !selectedPlace.is_claimed && (!authenticatedSession || authenticatedSession.portal === 'customer');
   const favoriteHelperText = !showFavoriteControl
     ? null
     : !authenticatedSession
@@ -561,6 +571,7 @@ function AppScreen() {
     if (authenticatedSession) {
       setGuestBrowseModeLocked(false);
       setShowGuestFavoritePrompt(false);
+      setShowGuestBusinessClaimPrompt(false);
     }
   }, [authenticatedSession]);
 
@@ -1968,6 +1979,86 @@ function AppScreen() {
     }
   }
 
+  function resetDirectClaimState() {
+    claimPrefillRequestRef.current += 1;
+    claimPrefillLoadedKeyRef.current = '';
+    setBusinessAttachments(initialBusinessAttachments);
+    setSelectedClaimPlace(null);
+    setSelectedClaimLocationId(null);
+    setProfileForm(initialProfileFormState);
+    setClaimReturnDestination('business-search');
+  }
+
+  function startClaimFlowFromSelectedPlace(returnDestination: ClaimReturnDestination) {
+    if (!selectedPlace) {
+      return;
+    }
+
+    dismissKeyboardForScreenTransition();
+    const selectedClaimLocation = getPlaceLocations(selectedPlace).find((location) => location.id === selectedLocationId) ?? getPlaceLocations(selectedPlace)[0] ?? selectedPlace;
+    const customerSession = authenticatedSession?.portal === 'customer' ? authenticatedSession : null;
+
+    claimPrefillLoadedKeyRef.current = '';
+    setProfileErrorMessage(null);
+    setProfileMessage(null);
+    setClaimReturnDestination(returnDestination);
+    setSelectedClaimPlace(selectedPlace);
+    setSelectedClaimLocationId(selectedClaimLocation.id);
+    setBusinessAttachments(initialBusinessAttachments);
+    setProfileForm({
+      ...resetBusinessVerificationFields(initialProfileFormState),
+      username: customerSession?.username ?? '',
+      email: customerSession?.email ?? '',
+      first_name: customerSession?.first_name ?? '',
+      last_name: customerSession?.last_name ?? '',
+      business_slug: selectedPlace.slug,
+      business_name: selectedPlace.name,
+      business_city: selectedClaimLocation.city,
+      business_venue_type: selectedPlace.venue_type,
+      business_website_url: selectedClaimLocation.website_url || selectedPlace.website_url,
+      address_not_applicable: false,
+    });
+    setSelectedPlaceSlug(null);
+    navigateScreen('business-claim', 'forward');
+  }
+
+  function handleOpenBusinessClaimFromPlaceDetail() {
+    if (!selectedPlace || selectedPlace.is_claimed) {
+      return;
+    }
+
+    if (!authenticatedSession) {
+      setShowGuestBusinessClaimPrompt(true);
+      return;
+    }
+
+    if (authenticatedSession.portal === 'customer') {
+      setShowCustomerBusinessClaimPrompt(true);
+    }
+  }
+
+  function handleDismissGuestBusinessClaimPrompt() {
+    setShowGuestBusinessClaimPrompt(false);
+  }
+
+  function handleDismissCustomerBusinessClaimPrompt() {
+    setShowCustomerBusinessClaimPrompt(false);
+  }
+
+  function handleCreateBusinessAccountFromGuestClaim() {
+    setShowGuestBusinessClaimPrompt(false);
+    startClaimFlowFromSelectedPlace('browse-map');
+  }
+
+  function handleProceedWithCustomerBusinessClaim() {
+    setShowCustomerBusinessClaimPrompt(false);
+    startClaimFlowFromSelectedPlace('profiles');
+  }
+
+  function handleDismissCustomerBusinessClaimNotice() {
+    setCustomerBusinessClaimNotice(null);
+  }
+
   function handleOpenFavoriteBusiness(slug: string) {
     animateNextLayout();
     Keyboard.dismiss();
@@ -2017,6 +2108,8 @@ function AppScreen() {
     dismissKeyboardForScreenTransition();
     setGuestBrowseModeLocked(false);
     setShowGuestFavoritePrompt(false);
+    setShowGuestBusinessClaimPrompt(false);
+    setShowCustomerBusinessClaimPrompt(false);
     setProfileErrorMessage(null);
     setPendingEmailVerification(null);
     setEmailVerificationCode('');
@@ -2050,6 +2143,8 @@ function AppScreen() {
   function handleBackToLanding() {
     dismissKeyboardForScreenTransition();
     setShowGuestFavoritePrompt(false);
+    setShowGuestBusinessClaimPrompt(false);
+    setShowCustomerBusinessClaimPrompt(false);
     setAuthMessage(null);
     setProfileErrorMessage(null);
     setShouldAutoFocusLoginField(false);
@@ -2062,6 +2157,8 @@ function AppScreen() {
     dismissKeyboardForScreenTransition();
     navigateGuestBrowseTransition('splash', () => {
       setShowGuestFavoritePrompt(false);
+      setShowGuestBusinessClaimPrompt(false);
+      setShowCustomerBusinessClaimPrompt(false);
       setBrowseFiltersExpanded(false);
       setSelectedMapPlaceKey(null);
       setDisplayedMapPreviewPlace(null);
@@ -2271,6 +2368,29 @@ function AppScreen() {
     navigateScreen('business-claim-review-pending', direction);
   }
 
+  async function handleCustomerBusinessClaimSubmitted(notice: CustomerBusinessClaimNotice) {
+    dismissKeyboardForScreenTransition();
+    setPendingEmailVerification(null);
+    setEmailVerificationCode('');
+    setAuthPortal('customer');
+    setAuthMessage(null);
+    setProfileErrorMessage(null);
+    setProfileMessage(null);
+
+    const customerAuthToken = authenticatedSession?.auth_token;
+    if (customerAuthToken) {
+      try {
+        const customerSession = await fetchProfileDashboard(apiBaseUrl, customerAuthToken, 'customer');
+        setAuthenticatedSession(customerSession);
+      } catch (error) {
+        setProfileErrorMessage(getErrorMessage(error));
+      }
+    }
+
+    setCustomerBusinessClaimNotice(notice);
+    navigateScreen('profiles', 'backward');
+  }
+
   function handleBusinessSignupResponse(response: EmailVerificationChallengeResponse) {
     if (response.email_verification_required) {
       moveToEmailVerification(response);
@@ -2472,6 +2592,12 @@ function AppScreen() {
     setProfileErrorMessage(null);
     setProfileMessage(null);
 
+    const shouldReturnToCustomerDashboard = claimReturnDestination === 'profiles' && authenticatedSession?.portal === 'customer';
+    const submittedClaimNotice = shouldReturnToCustomerDashboard ? {
+      businessName: selectedClaimPlace?.name ?? profileForm.business_name,
+      locationLabel: selectedClaimLocation ? formatPlaceAddress(selectedClaimLocation) : (selectedClaimPlace ? formatPlaceAddress(selectedClaimPlace) : profileForm.employer_address || profileForm.business_city),
+    } : null;
+
     try {
       const payload: BusinessSignupRequest = {
         username: profileForm.username,
@@ -2491,11 +2617,18 @@ function AppScreen() {
         verification_documents: buildVerificationDocuments(),
         supporting_details: profileForm.supporting_details,
       };
-      const response = await createBusinessProfile(apiBaseUrl, payload);
+      const response = await createBusinessProfile(apiBaseUrl, payload, authenticatedSession?.auth_token);
       setProfileForm(initialProfileFormState);
       setBusinessAttachments(initialBusinessAttachments);
       setSelectedClaimPlace(null);
       setSelectedClaimLocationId(null);
+      setClaimReturnDestination('business-search');
+
+      if (submittedClaimNotice) {
+        await handleCustomerBusinessClaimSubmitted(submittedClaimNotice);
+        return;
+      }
+
       handleBusinessSignupResponse(response);
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
@@ -2763,6 +2896,7 @@ function AppScreen() {
     setProfileErrorMessage(null);
     setBusinessSearchQuery('');
     setSelectedClaimLocationId(null);
+    setClaimReturnDestination('business-search');
     navigateScreen('business-search', 'forward');
   }
 
@@ -2793,6 +2927,30 @@ function AppScreen() {
     claimPrefillRequestRef.current += 1;
     claimPrefillLoadedKeyRef.current = '';
     setProfileErrorMessage(null);
+
+    if (claimReturnDestination === 'browse-map') {
+      resetDirectClaimState();
+      handleBrowseModeChange('map');
+      setScreenMode('browse');
+      return;
+    }
+
+    if (claimReturnDestination === 'profiles') {
+      resetDirectClaimState();
+      setScreenMode('profiles');
+      setProfileEntryOffset(0);
+      profileSceneTransition.stopAnimation();
+      profileSceneTransition.setValue(0);
+      requestAnimationFrame(() => {
+        Animated.timing(profileSceneTransition, {
+          duration: 220,
+          toValue: 1,
+          useNativeDriver: true,
+        }).start();
+      });
+      return;
+    }
+
     navigateScreen('business-search', 'backward');
   }
 
@@ -2824,6 +2982,7 @@ function AppScreen() {
     dismissKeyboardForScreenTransition();
     const selectedLocation = getPlaceLocations(place).find((location) => location.id === locationId) ?? getPlaceLocations(place)[0] ?? place;
     claimPrefillLoadedKeyRef.current = '';
+    setClaimReturnDestination('business-search');
     setSelectedClaimPlace(place);
     setSelectedClaimLocationId(selectedLocation.id);
     setBusinessAttachments(initialBusinessAttachments);
@@ -3200,6 +3359,7 @@ function AppScreen() {
               errorMessage={profileErrorMessage}
               form={profileForm}
               isLandscape={isLandscape}
+              lockAccountIdentityFields={claimReturnDestination === 'profiles' && authenticatedSession?.portal === 'customer'}
               mode="claimed"
               onAddAttachments={handleAddBusinessAttachments}
               onBack={handleBackToBusinessSearch}
@@ -3761,8 +3921,10 @@ function AppScreen() {
           isLandscape={isLandscape}
           isFavorited={selectedPlaceIsFavorited}
           onBack={handleBackToBrowse}
+          onClaimBusiness={handleOpenBusinessClaimFromPlaceDetail}
           onSelectLocation={setSelectedLocationId}
           onToggleFavorite={() => void handleToggleFavoriteBusiness()}
+          showClaimBusinessControl={showClaimBusinessControl}
           showFavoriteControl={showFavoriteControl}
           selectedPlace={selectedPlace}
           selectedPlaceDeals={selectedPlaceDeals}
@@ -3812,6 +3974,74 @@ function AppScreen() {
               </Pressable>
               <Pressable onPress={handleCreateCustomerAccountFromGuestFavorite} style={styles.guestFavoriteModalPrimaryButton}>
                 <Text style={styles.guestFavoriteModalPrimaryText}>Create free customer account</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      <Modal
+        animationType="fade"
+        onRequestClose={handleDismissGuestBusinessClaimPrompt}
+        transparent
+        visible={showGuestBusinessClaimPrompt}
+      >
+        <View style={styles.guestFavoriteModalBackdrop}>
+          <View style={styles.guestFavoriteModalCard}>
+            <Text style={styles.guestFavoriteModalTitle}>Create a free business account to claim this business</Text>
+            <Text style={styles.guestFavoriteModalText}>
+              Create a free business account to start the verification process for this business profile and submit your ownership or manager claim.
+            </Text>
+            <View style={styles.guestFavoriteModalActions}>
+              <Pressable onPress={handleDismissGuestBusinessClaimPrompt} style={styles.guestFavoriteModalSecondaryButton}>
+                <Text style={styles.guestFavoriteModalSecondaryText}>Maybe later</Text>
+              </Pressable>
+              <Pressable onPress={handleCreateBusinessAccountFromGuestClaim} style={styles.guestFavoriteModalPrimaryButton}>
+                <Text style={styles.guestFavoriteModalPrimaryText}>Create free business account</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      <Modal
+        animationType="fade"
+        onRequestClose={handleDismissCustomerBusinessClaimPrompt}
+        transparent
+        visible={showCustomerBusinessClaimPrompt}
+      >
+        <View style={styles.guestFavoriteModalBackdrop}>
+          <View style={styles.guestFavoriteModalCard}>
+            <Text style={styles.guestFavoriteModalTitle}>Convert your customer account into a business account?</Text>
+            <Text style={styles.guestFavoriteModalText}>
+              Proceeding will use your current customer account for this business claim so you can verify that you own or manage this business.
+            </Text>
+            <View style={styles.guestFavoriteModalActions}>
+              <Pressable onPress={handleDismissCustomerBusinessClaimPrompt} style={styles.guestFavoriteModalSecondaryButton}>
+                <Text style={styles.guestFavoriteModalSecondaryText}>Cancel</Text>
+              </Pressable>
+              <Pressable onPress={handleProceedWithCustomerBusinessClaim} style={styles.guestFavoriteModalPrimaryButton}>
+                <Text style={styles.guestFavoriteModalPrimaryText}>Proceed</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      <Modal
+        animationType="fade"
+        onRequestClose={handleDismissCustomerBusinessClaimNotice}
+        transparent
+        visible={customerBusinessClaimNotice !== null}
+      >
+        <View style={styles.guestFavoriteModalBackdrop}>
+          <View style={styles.guestFavoriteModalCard}>
+            <Text style={styles.guestFavoriteModalTitle}>Business claim submitted</Text>
+            <Text style={styles.guestFavoriteModalText}>
+              {customerBusinessClaimNotice
+                ? `You just submitted a business claim for ${customerBusinessClaimNotice.businessName} at ${customerBusinessClaimNotice.locationLabel}. DiningDealz will send you a confirmation email that we received your claim, followed by another email with the next update on your review.`
+                : ''}
+            </Text>
+            <View style={styles.guestFavoriteModalActions}>
+              <Pressable onPress={handleDismissCustomerBusinessClaimNotice} style={styles.guestFavoriteModalPrimaryButton}>
+                <Text style={styles.guestFavoriteModalPrimaryText}>Close</Text>
               </Pressable>
             </View>
           </View>

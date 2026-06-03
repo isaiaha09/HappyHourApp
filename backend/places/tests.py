@@ -35,7 +35,7 @@ from .services.importers.tomtom_places import TomTomPlacesImporter
 from .services.provider_quota import consume_provider_transaction, get_provider_usage_statuses, select_discovery_provider
 from .services.importers.yelp_places import YelpFusionPlacesImporter
 from .services.importers.types import ImportedDeal, ImportedHappyHour, ImportedOperatingHour, ImportedPlace
-from .services.source_listings import _build_deal_identity_key, _build_place_payload, get_source_place_payloads
+from .services.source_listings import _build_deal_identity_key, _build_place_payload, get_source_place_payload, get_source_place_payloads
 
 
 User = get_user_model()
@@ -1714,10 +1714,112 @@ class SourceListingIdentityTests(TestCase):
 
 		self.assertEqual(len(payloads), 1)
 		self.assertEqual(payloads[0]['slug'], 'lure-fish-house')
-		self.assertEqual(payloads[0]['name'], 'Lure Fish House')
-		self.assertEqual(len(payloads[0]['locations']), 2)
-		self.assertEqual({location['city'] for location in payloads[0]['locations']}, {City.VENTURA, City.CAMARILLO})
-		self.assertEqual(payloads[0]['locations'][0]['image_urls'], ['https://example.com/lure-camarillo-1.jpg'])
+
+	@patch('places.services.source_listings._get_place_coordinates')
+	@patch('places.services.source_listings.load_source_records')
+	def test_place_payload_marks_claimed_businesses(self, mock_load_source_records, mock_get_place_coordinates):
+		mock_get_place_coordinates.return_value = (34.2783, -119.2931)
+		mock_load_source_records.return_value = [
+			ImportedPlace(
+				name='Claimed Cafe',
+				profile_name='Claimed Cafe',
+				profile_slug='claimed-cafe',
+				city=City.VENTURA,
+				venue_type=VenueType.CAFE,
+				address_line_1='123 Main St',
+				state='CA',
+				postal_code='93001',
+				source_name='business_websites',
+				source_url='https://example.com/claimed-cafe',
+			),
+		]
+		snapshot = ListingSnapshot.objects.create(
+			name='Claimed Cafe',
+			listing_slug='claimed-cafe',
+			city=City.VENTURA,
+			venue_type=VenueType.CAFE,
+			address_line_1='123 Main St',
+		)
+		BusinessClaim.objects.create(
+			claimant=User.objects.create_user(username='claimed_owner', email='claimed-owner@example.com', password='test-pass-123'),
+			listing_snapshot=snapshot,
+			pathway=BusinessClaim.Pathway.CLAIMED,
+			status=BusinessClaim.Status.SUBMITTED,
+			contact_name='Claimed Owner',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='claimed-owner@example.com',
+			work_phone='805-555-0100',
+			employer_address='123 Main St',
+			verification_summary='Submitted claimed business verification.',
+		)
+
+		payload = get_source_place_payload('claimed-cafe')
+
+		self.assertIsNotNone(payload)
+		self.assertTrue(payload['is_claimed'])
+
+	@patch('places.services.source_listings._get_place_coordinates')
+	@patch('places.services.source_listings.load_source_records')
+	def test_public_place_payload_prefers_approved_claim_overrides_after_snapshot_refresh(self, mock_load_source_records, mock_get_place_coordinates):
+		mock_get_place_coordinates.return_value = (34.2001, -119.1806)
+		mock_load_source_records.return_value = [
+			ImportedPlace(
+				name='Yard House',
+				profile_name='Yard House',
+				profile_slug='yard-house',
+				city=City.OXNARD,
+				venue_type=VenueType.BAR,
+				address_line_1='501 Collection Blvd Ste # 4130',
+				state='CA',
+				postal_code='93036',
+				website_url='https://imported.example.com/yard-house',
+				source_name='business_websites',
+				source_url='https://imported.example.com/yard-house',
+			),
+		]
+		owner = User.objects.create_user(username='yard_owner', email='yard-owner@example.com', password='test-pass-123')
+		snapshot = ListingSnapshot.objects.create(
+			name='Yard House',
+			listing_slug='yard-house',
+			city=City.OXNARD,
+			venue_type=VenueType.BAR,
+			address_line_1='501 Collection Blvd Ste # 4130',
+			website_url='https://imported.example.com/yard-house',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=owner,
+			listing_snapshot=snapshot,
+			pathway=BusinessClaim.Pathway.CLAIMED,
+			status=BusinessClaim.Status.APPROVED,
+			contact_name='Owner Name',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='owner@yardhouse.example.com',
+			work_phone='805-555-0100',
+			employer_address='501 Collection Blvd Ste # 4130',
+			business_website_url='https://owner.example.com/yard-house',
+			social_media_links=['https://instagram.com/yardhouseoxnard'],
+			offer_entries=['Late night appetizers half off'],
+			hours_of_operation_entries=['Sun-Thu 11am-11pm'],
+			photo_references=['https://images.example.com/yard-house-front.jpg'],
+			supporting_details='Owner-managed specials and updates.',
+			verification_summary='Approved claimed business verification.',
+		)
+		BusinessMembership.objects.create(claim=claim, user=owner, is_active=True)
+
+		snapshot.website_url = 'https://imported.example.com/yard-house-refreshed'
+		snapshot.save(update_fields=['website_url', 'updated_at'])
+
+		payload = get_source_place_payload('yard-house')
+
+		self.assertIsNotNone(payload)
+		self.assertEqual(payload['website_url'], 'https://owner.example.com/yard-house')
+		self.assertEqual(payload['locations'][0]['website_url'], 'https://owner.example.com/yard-house')
+		self.assertEqual(payload['social_media_links'], ['https://instagram.com/yardhouseoxnard'])
+		self.assertEqual(payload['offer_entries'], ['Late night appetizers half off'])
+		self.assertEqual(payload['hours_of_operation_entries'], ['Sun-Thu 11am-11pm'])
+		self.assertEqual(payload['photo_references'], ['https://images.example.com/yard-house-front.jpg'])
+		self.assertEqual(payload['supporting_details'], 'Owner-managed specials and updates.')
+		self.assertIn('https://images.example.com/yard-house-front.jpg', payload['image_urls'])
 
 	@patch('places.services.source_listings._get_place_coordinates')
 	@patch('places.services.source_listings.load_source_records')
@@ -2905,6 +3007,8 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertIsNotNone(profile.email_verification_sent_at)
 		self.assertTrue(profile.email_verification_code)
 		self.assertEqual(len(mail.outbox), 1)
+		self.assertIn('DiningDealz', mail.outbox[0].subject)
+		self.assertIn('DiningDealz', mail.outbox[0].from_email)
 		self.assertIn(profile.email_verification_code, mail.outbox[0].body)
 		self.assertIn('/api/profiles/verify-email/', mail.outbox[0].body)
 
@@ -2986,6 +3090,69 @@ class ProfileSignupApiTests(APITestCase):
 			claim.get_profile_entry_values(BusinessClaim.ProfileEntryKind.SOCIAL_MEDIA_LINK),
 			['https://instagram.com/finneysventura'],
 		)
+
+	@patch('places.views.get_source_place_payload')
+	def test_claimed_business_signup_reuses_matching_existing_snapshot_even_when_slug_changes(self, mock_get_source_place_payload):
+		legacy_snapshot = ListingSnapshot.objects.create(
+			name='Yard House',
+			city=City.OXNARD,
+			venue_type=VenueType.BAR,
+			address_line_1='501 Collection Blvd Ste # 4130',
+			website_url='https://www.yardhouse.com/locations/ca/oxnard/oxnard-the-collection-at-riverpark/8349',
+			source_name='business_websites',
+			external_id='www-yardhouse-com-locations-ca-oxnard-oxnard-the-collection-at-riverpark-8349-8081baa57994',
+			listing_slug='yard-house-oxnard',
+		)
+		mock_get_source_place_payload.return_value = {
+			'id': 585,
+			'name': 'Yard House',
+			'slug': 'yard-house',
+			'city': City.OXNARD,
+			'venue_type': VenueType.BAR,
+			'address_line_1': '501 Collection Blvd Ste # 4130',
+			'address_line_2': '',
+			'neighborhood': '',
+			'state': 'CA',
+			'postal_code': '93036',
+			'phone_number': '805-555-0101',
+			'website_url': 'https://www.yardhouse.com/locations/ca/oxnard/oxnard-the-collection-at-riverpark/8349',
+			'locations': [],
+		}
+
+		response = self.client.post(
+			reverse('business-signup'),
+			{
+				'username': 'yard_house_owner',
+				'email': 'owner@yardhouse.example.com',
+				'password': 'test-pass-123',
+				'first_name': 'Yard',
+				'last_name': 'Owner',
+				'business_slug': 'yard-house',
+				'contact_name': 'Yard Owner',
+				'job_title': BusinessClaim.JobTitle.MANAGER,
+				'work_email': 'manager@yardhouse.example.com',
+				'work_phone': '805-555-0100',
+				'employer_address': '501 Collection Blvd Ste # 4130',
+				'address_not_applicable': False,
+				'business_website_url': 'https://www.yardhouse.com/locations/ca/oxnard/oxnard-the-collection-at-riverpark/8349',
+				'verification_documents': json.dumps({
+					'business_registration': ['CA business license #123'],
+					'health_permit': ['Ventura County permit #A-55'],
+					'abc_license': ['ABC type 47'],
+					'proof_of_address_control': [],
+				}),
+				'proof_of_authority_attachments': [SimpleUploadedFile('manager-proof.pdf', b'proof', content_type='application/pdf')],
+				'supporting_details': 'Legacy imported snapshot should be reused.',
+			},
+			format='multipart',
+		)
+
+		self.assertEqual(response.status_code, 201)
+		claim = BusinessClaim.objects.select_related('listing_snapshot').get(claimant__username='yard_house_owner')
+		legacy_snapshot.refresh_from_db()
+		self.assertEqual(claim.listing_snapshot_id, legacy_snapshot.id)
+		self.assertEqual(legacy_snapshot.listing_slug, 'yard-house')
+		self.assertEqual(ListingSnapshot.objects.filter(name='Yard House').count(), 1)
 
 	def test_manual_business_signup_supports_address_not_applicable(self):
 		response = self.client.post(
@@ -3091,10 +3258,76 @@ class ProfileSignupApiTests(APITestCase):
 			format='json',
 		)
 
-		self.assertEqual(login_response.status_code, 200)
-		self.assertEqual(login_response.data['auth_token'], '')
-		self.assertTrue(login_response.data['claim_review_pending'])
-		self.assertFalse(login_response.data.get('email_verification_required', False))
+		self.assertEqual(login_response.status_code, 400)
+		self.assertEqual(
+			login_response.data['non_field_errors'][0],
+			'Your business claim must be approved by an admin before you can sign in to the business portal.',
+		)
+
+	@patch('places.views.get_source_place_payload')
+	def test_verified_claimed_business_remains_pending_until_review(self, mock_get_source_place_payload):
+		mock_get_source_place_payload.return_value = {
+			'id': 402,
+			'name': 'Finney\'s Crafthouse',
+			'slug': 'finneys-crafthouse',
+			'city': City.VENTURA,
+			'venue_type': VenueType.RESTAURANT,
+			'address_line_1': '494 E Main St',
+			'address_line_2': '',
+			'neighborhood': 'Downtown',
+			'state': 'CA',
+			'postal_code': '93001',
+			'phone_number': '805-555-0199',
+			'website_url': 'https://example.com/finneys',
+			'locations': [],
+		}
+
+		signup_response = self.client.post(
+			reverse('business-signup'),
+			{
+				'username': 'claimed_pending_owner',
+				'email': 'claimed-pending@example.com',
+				'password': 'test-pass-123',
+				'first_name': 'Pat',
+				'last_name': 'Claimant',
+				'business_slug': 'finneys-crafthouse',
+				'contact_name': 'Pat Claimant',
+				'job_title': BusinessClaim.JobTitle.MANAGER,
+				'work_email': 'pat@finneys.com',
+				'work_phone': '805-555-0100',
+				'employer_address': '494 E Main St, Ventura, CA 93001',
+				'address_not_applicable': False,
+				'verification_documents': json.dumps({
+					'business_registration': ['CA business license #123'],
+					'health_permit': ['Ventura County permit #A-55'],
+					'abc_license': [],
+					'proof_of_address_control': [],
+				}),
+				'proof_of_authority_attachments': [SimpleUploadedFile('manager-proof.pdf', b'proof', content_type='application/pdf')],
+				'supporting_details': 'Available to provide payroll and licensing records upon request.',
+			},
+			format='multipart',
+		)
+
+		self.assertEqual(signup_response.status_code, 201)
+		profile = AccountProfile.objects.get(user__username='claimed_pending_owner')
+
+		verify_response = self.client.post(
+			reverse('profile-verify-email-code'),
+			{
+				'username': 'claimed_pending_owner',
+				'portal': 'business',
+				'code': profile.email_verification_code,
+			},
+			format='json',
+		)
+
+		self.assertEqual(verify_response.status_code, 200)
+		self.assertEqual(verify_response.data['auth_token'], '')
+		self.assertTrue(verify_response.data['claim_review_pending'])
+		self.assertEqual(verify_response.data['claim_pathway'], BusinessClaim.Pathway.CLAIMED)
+		self.assertFalse(verify_response.data['can_access_places'])
+		self.assertIn('DiningDealz has received your business profile creation claim', verify_response.data['detail'])
 
 	def test_manual_mobile_business_signup_defaults_to_live_location_placeholder(self):
 		response = self.client.post(
@@ -3207,6 +3440,73 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertTrue(response.data['claim_review_pending'])
 		self.assertFalse(response.data.get('email_verification_required', False))
 		self.assertIn('has received your business profile creation claim', response.data['detail'])
+
+	@patch('places.views.get_source_place_payload')
+	def test_claimed_business_signup_reuses_authenticated_customer_account(self, mock_get_source_place_payload):
+		mock_get_source_place_payload.return_value = {
+			'id': 402,
+			'name': 'Finney\'s Crafthouse',
+			'slug': 'finneys-crafthouse',
+			'city': City.VENTURA,
+			'venue_type': VenueType.RESTAURANT,
+			'address_line_1': '494 E Main St',
+			'address_line_2': '',
+			'neighborhood': 'Downtown',
+			'state': 'CA',
+			'postal_code': '93001',
+			'phone_number': '805-555-0199',
+			'website_url': 'https://example.com/finneys',
+			'locations': [],
+		}
+		user = User.objects.create_user(
+			username='customer_to_business',
+			email='customer@example.com',
+			password='old-pass-123',
+			first_name='Casey',
+			last_name='Customer',
+		)
+		AccountProfile.objects.create(user=user, email_verified_at=timezone.now())
+		token = ProfileAuthToken.objects.create(user=user)
+
+		response = self.client.post(
+			reverse('business-signup'),
+			{
+				'username': 'customer_to_business',
+				'email': 'customer@example.com',
+				'password': 'new-pass-123',
+				'first_name': 'Casey',
+				'last_name': 'Customer',
+				'business_slug': 'finneys-crafthouse',
+				'contact_name': 'Casey Customer',
+				'job_title': BusinessClaim.JobTitle.MANAGER,
+				'work_email': 'casey@finneys.com',
+				'work_phone': '805-555-0100',
+				'employer_address': '494 E Main St, Ventura, CA 93001',
+				'address_not_applicable': False,
+				'business_website_url': 'https://finneysventura.example.com',
+				'social_media_links': json.dumps(['https://instagram.com/finneysventura']),
+				'verification_documents': json.dumps({
+					'business_registration': ['CA business license #123'],
+					'health_permit': ['Ventura County permit #A-55'],
+					'abc_license': [],
+					'proof_of_address_control': [],
+				}),
+				'proof_of_authority_attachments': [SimpleUploadedFile('manager-proof.pdf', b'proof', content_type='application/pdf')],
+				'supporting_details': 'Customer account converting to business claim.',
+			},
+			format='multipart',
+			HTTP_AUTHORIZATION=f'Token {token.key}',
+		)
+
+		self.assertEqual(response.status_code, 201)
+		self.assertEqual(response.data['auth_token'], token.key)
+		self.assertEqual(response.data['claim_status'], BusinessClaim.Status.SUBMITTED)
+		self.assertEqual(len(mail.outbox), 1)
+		self.assertIn('customer@example.com', mail.outbox[0].to)
+		self.assertIn('received your business profile claim', mail.outbox[0].subject.lower())
+		user.refresh_from_db()
+		self.assertTrue(user.check_password('new-pass-123'))
+		self.assertEqual(BusinessClaim.objects.filter(claimant=user).count(), 1)
 
 	@patch('places.views.get_source_place_payload')
 	def test_claimed_business_signup_allows_new_attempt_after_rejection_for_same_user(self, mock_get_source_place_payload):
@@ -3394,7 +3694,7 @@ class ProfileSignupApiTests(APITestCase):
 					],
 				)
 
-	def test_business_portal_login_returns_claim_status(self):
+	def test_business_portal_login_rejects_unapproved_claim(self):
 		user = User.objects.create_user(username='pending_owner', email='pending@example.com', password='test-pass-123')
 		snapshot = ListingSnapshot.objects.create(
 			name='Pending Place',
@@ -3423,9 +3723,11 @@ class ProfileSignupApiTests(APITestCase):
 			format='json',
 		)
 
-		self.assertEqual(response.status_code, 200)
-		self.assertEqual(response.data['portal'], 'business')
-		self.assertEqual(response.data['claim_status'], BusinessClaim.Status.SUBMITTED)
+		self.assertEqual(response.status_code, 400)
+		self.assertEqual(
+			response.data['non_field_errors'][0],
+			'Your business claim must be approved by an admin before you can sign in to the business portal.',
+		)
 
 	def test_login_requires_authenticator_code_when_two_factor_is_enabled(self):
 		user = User.objects.create_user(username='secure_customer', email='secure@example.com', password='test-pass-123')
@@ -3624,6 +3926,71 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(len(response.data['approved_businesses']), 1)
 		self.assertEqual(response.data['approved_businesses'][0]['name'], 'Approved Spot')
 		self.assertEqual(response.data['business_contact']['work_email'], 'owner@approvedspot.com')
+		self.assertEqual(response.data['approved_businesses'][0]['address_line_1'], '55 Main St')
+		self.assertEqual(response.data['business_contact']['offer_entries'], [])
+
+	def test_profile_dashboard_update_allows_approved_business_profile_edits(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Approved Spot',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='55 Main St',
+			website_url='https://approved.example.com/old',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@approvedspot.com',
+			work_phone='805-555-0200',
+			employer_address='55 Main St, Ventura, CA 93001',
+			business_website_url='https://approved.example.com/old',
+			verification_summary='I own the business.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+
+		response = self.client.post(
+			reverse('profile-dashboard'),
+			{
+				'portal': 'business',
+				'username': 'dashboard_user',
+				'email': 'dashboard@example.com',
+				'first_name': 'Dash',
+				'last_name': 'Board',
+				'contact_name': 'Casey Manager',
+				'job_title': 'General Manager',
+				'work_email': 'manager@approvedspot.com',
+				'work_phone': '805-555-0211',
+				'employer_address': '57 Main St, Ventura, CA 93001',
+				'business_website_url': 'https://approved.example.com/new',
+				'social_media_links_text': 'https://instagram.com/approvedspot\nhttps://facebook.com/approvedspot',
+				'offer_entries_text': 'Happy hour tacos $5\nHalf off appetizers',
+				'hours_of_operation_entries_text': 'Mon-Fri 3pm-6pm\nSat-Sun 11am-10pm',
+				'photo_references_text': 'https://cdn.example.com/approvedspot/front.jpg',
+				'supporting_details': 'Updated from the approved business dashboard.',
+			},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 200)
+		claim.refresh_from_db()
+		snapshot.refresh_from_db()
+		self.assertEqual(claim.contact_name, 'Casey Manager')
+		self.assertEqual(claim.work_email, 'manager@approvedspot.com')
+		self.assertEqual(claim.offer_entries, ['Happy hour tacos $5', 'Half off appetizers'])
+		self.assertEqual(claim.hours_of_operation_entries, ['Mon-Fri 3pm-6pm', 'Sat-Sun 11am-10pm'])
+		self.assertEqual(claim.photo_references, ['https://cdn.example.com/approvedspot/front.jpg'])
+		self.assertEqual(claim.supporting_details, 'Updated from the approved business dashboard.')
+		self.assertEqual(snapshot.website_url, 'https://approved.example.com/old')
+		self.assertEqual(
+			claim.get_profile_entry_values(BusinessClaim.ProfileEntryKind.OFFER),
+			['Happy hour tacos $5', 'Half off appetizers'],
+		)
+		self.assertEqual(response.data['business_contact']['business_website_url'], 'https://approved.example.com/new')
+		self.assertEqual(response.data['business_contact']['social_media_links'], ['https://instagram.com/approvedspot', 'https://facebook.com/approvedspot'])
 
 	def test_profile_dashboard_includes_mobile_location_tracking_status(self):
 		snapshot = ListingSnapshot.objects.create(
@@ -4008,6 +4375,7 @@ class ProfileDashboardApiTests(APITestCase):
 		self.profile.refresh_from_db()
 		self.assertIsNotNone(self.profile.email_verification_sent_at)
 		self.assertEqual(len(mail.outbox), 1)
+		self.assertIn('DiningDealz', mail.outbox[0].from_email)
 		self.assertIn(self.profile.email_verification_token, mail.outbox[0].body)
 		self.assertIn('text/html', mail.outbox[0].alternatives[0][1])
 

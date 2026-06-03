@@ -204,6 +204,7 @@ export type BusinessVerificationScreenProps = {
   errorMessage: string | null;
   form: ProfileFormState;
   isLandscape: boolean;
+  lockAccountIdentityFields?: boolean;
   mode: 'claimed' | 'manual' | 'informal';
   onAddAttachments: (kind: BusinessAttachmentKind) => void;
   onBack: () => void;
@@ -1140,7 +1141,7 @@ export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces,
   );
 }
 
-export function BusinessVerificationScreen({ attachments, errorMessage, form, isLandscape, mode, onAddAttachments, onBack, onChangeField, onRemoveAttachment, onToggleAddressNotApplicable, onSubmit, selectedLocation, selectedPlace, submitting }: BusinessVerificationScreenProps) {
+export function BusinessVerificationScreen({ attachments, errorMessage, form, isLandscape, lockAccountIdentityFields = false, mode, onAddAttachments, onBack, onChangeField, onRemoveAttachment, onToggleAddressNotApplicable, onSubmit, selectedLocation, selectedPlace, submitting }: BusinessVerificationScreenProps) {
   const isClaimed = mode === 'claimed';
   const isEstablished = mode === 'manual';
   const isInformal = mode === 'informal';
@@ -1539,11 +1540,15 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
                 </>
               ) : null}
 
+              {lockAccountIdentityFields ? (
+                <Text style={styles.profileSupportText}>Your username, email, and name are locked because this claim is attached to your existing customer account.</Text>
+              ) : null}
+
               <Text style={styles.profileFieldLabel}>Username</Text>
-              <AutoScrollTextInput autoCapitalize="none" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('username', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.username} />
+              <AutoScrollTextInput autoCapitalize="none" editable={!lockAccountIdentityFields} onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('username', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.username} />
 
               <Text style={styles.profileFieldLabel}>Email</Text>
-              <AutoScrollTextInput autoCapitalize="none" keyboardType="email-address" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('email', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.email} />
+              <AutoScrollTextInput autoCapitalize="none" editable={!lockAccountIdentityFields} keyboardType="email-address" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('email', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.email} />
 
               <Text style={styles.profileFieldLabel}>Password</Text>
               <PasswordField onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('password', value)} scrollViewRef={scrollViewRef} value={form.password} />
@@ -1552,10 +1557,10 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
               <PasswordField onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('confirm_password', value)} scrollViewRef={scrollViewRef} value={form.confirm_password} />
 
               <Text style={styles.profileFieldLabel}>First name</Text>
-              <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('first_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.first_name} />
+              <AutoScrollTextInput editable={!lockAccountIdentityFields} onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('first_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.first_name} />
 
               <Text style={styles.profileFieldLabel}>Last name</Text>
-              <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('last_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.last_name} />
+              <AutoScrollTextInput editable={!lockAccountIdentityFields} onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('last_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.last_name} />
 
               {!isInformal ? (
                 <>

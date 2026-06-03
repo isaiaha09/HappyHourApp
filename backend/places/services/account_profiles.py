@@ -2,14 +2,29 @@ from django.conf import settings
 from django.core.mail import send_mail
 from django.utils.html import escape
 from django.utils import timezone
+from email.utils import formataddr, parseaddr
 
 from places.models import AccountProfile, BusinessClaim, FavoriteBusiness, ProfileAuthToken, VenueType
+
+
+def _get_branded_from_email():
+	configured_from_email = str(getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@diningdealz.local') or '').strip()
+	name, address = parseaddr(configured_from_email)
+	if address:
+		if name:
+			return configured_from_email
+		return formataddr(('DiningDealz', address))
+	return formataddr(('DiningDealz', 'noreply@diningdealz.local'))
 
 
 def get_primary_business_claim(user, claim=None):
 	if claim is not None:
 		return claim
 	return user.business_claims.select_related('listing_snapshot').order_by('-created_at').first()
+
+
+def has_active_business_membership(user):
+	return user.business_memberships.filter(is_active=True).exists()
 
 
 def claim_requires_creation_review_hold(claim):
@@ -29,10 +44,14 @@ def claim_requires_creation_review_hold(claim):
 def get_business_access_hold_claim(user, portal, claim=None):
 	if portal != 'business':
 		return None
-	if user.business_memberships.filter(is_active=True).exists():
+	if has_active_business_membership(user):
 		return None
 	primary_claim = get_primary_business_claim(user, claim)
-	return primary_claim if claim_requires_creation_review_hold(primary_claim) else None
+	if primary_claim is None:
+		return None
+	if primary_claim.status == BusinessClaim.Status.APPROVED:
+		return None
+	return primary_claim
 
 
 def build_claim_review_message(claim):
@@ -81,7 +100,7 @@ def infer_portal_for_user(user, requested_portal=''):
 	normalized = str(requested_portal or '').strip().lower()
 	if normalized in {'customer', 'business'}:
 		return normalized
-	if user.business_claims.exists() or user.business_memberships.exists():
+	if has_active_business_membership(user):
 		return 'business'
 	return 'customer'
 
@@ -91,7 +110,7 @@ def build_account_response(user, portal, claim=None, token=None):
 	memberships = list(user.business_memberships.select_related('claim__listing_snapshot').all())
 	active_membership = next((membership for membership in memberships if membership.is_active), None)
 	primary_claim = claim or (claims[0] if claims else None)
-	hold_claim = primary_claim if active_membership is None and claim_requires_creation_review_hold(primary_claim) and portal == 'business' else None
+	hold_claim = get_business_access_hold_claim(user, portal, claim=primary_claim)
 	profile = get_or_create_account_profile(user)
 
 	if active_membership:
@@ -112,6 +131,8 @@ def build_account_response(user, portal, claim=None, token=None):
 			'city_label': membership.claim.listing_snapshot.get_city_display() if membership.claim.listing_snapshot.city else '',
 			'venue_type': membership.claim.listing_snapshot.venue_type,
 			'venue_type_label': membership.claim.listing_snapshot.get_venue_type_display() if membership.claim.listing_snapshot.venue_type else '',
+			'address_line_1': membership.claim.listing_snapshot.address_line_1,
+			'website_url': membership.claim.business_website_url or membership.claim.listing_snapshot.website_url,
 		}
 		for membership in memberships
 		if membership.is_active
@@ -139,6 +160,12 @@ def build_account_response(user, portal, claim=None, token=None):
 			'work_email': primary_claim.work_email,
 			'work_phone': primary_claim.work_phone,
 			'employer_address': primary_claim.employer_address,
+			'business_website_url': primary_claim.business_website_url,
+			'social_media_links': primary_claim.social_media_links,
+			'offer_entries': primary_claim.offer_entries,
+			'hours_of_operation_entries': primary_claim.hours_of_operation_entries,
+			'photo_references': primary_claim.photo_references,
+			'supporting_details': primary_claim.supporting_details,
 			'verification_summary': primary_claim.verification_summary,
 		}
 
@@ -231,7 +258,7 @@ def send_verification_email(user, profile):
 			'If you did not create this account, you can ignore this email.'
 		),
 		html_message=html_message,
-		from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@happyhourapp.local'),
+		from_email=_get_branded_from_email(),
 		recipient_list=[user.email],
 		fail_silently=False,
 	)
@@ -254,7 +281,7 @@ def send_email_change_reverted_email(user, previous_email, attempted_email):
 			'You may log in as normal.'
 		),
 		html_message=html_message,
-		from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@happyhourapp.local'),
+		from_email=_get_branded_from_email(),
 		recipient_list=[previous_email],
 		fail_silently=False,
 	)
@@ -284,7 +311,13 @@ def reconcile_expired_email_change(user, profile=None):
 
 
 def send_business_claim_received_email(user, claim):
-	if not claim_requires_creation_review_hold(claim):
+	if claim is None or claim.status not in {
+		BusinessClaim.Status.DRAFT,
+		BusinessClaim.Status.SUBMITTED,
+		BusinessClaim.Status.UNDER_REVIEW,
+		BusinessClaim.Status.NEEDS_INFO,
+		BusinessClaim.Status.REJECTED,
+	}:
 		return
 
 	business_name = claim.listing_snapshot.name
@@ -303,7 +336,7 @@ def send_business_claim_received_email(user, claim):
 			'You will not receive business access until the claim is approved.'
 		),
 		html_message=html_message,
-		from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@happyhourapp.local'),
+		from_email=_get_branded_from_email(),
 		recipient_list=[user.email],
 		fail_silently=False,
 	)
@@ -329,7 +362,7 @@ def send_business_claim_approved_email(user, claim):
 			f'{app_link_text}'
 		),
 		html_message=html_message,
-		from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@happyhourapp.local'),
+		from_email=_get_branded_from_email(),
 		recipient_list=[user.email],
 		fail_silently=False,
 	)
@@ -418,7 +451,7 @@ def send_business_claim_rejected_email(user, claim):
 			f'{summary_text}'
 		),
 		html_message=html_message,
-		from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@happyhourapp.local'),
+		from_email=_get_branded_from_email(),
 		recipient_list=[user.email],
 		fail_silently=False,
 	)
@@ -440,7 +473,7 @@ def send_username_reminder_email(user):
 			'If you did not request this reminder, you can ignore this email.'
 		),
 		html_message=html_message,
-		from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@happyhourapp.local'),
+		from_email=_get_branded_from_email(),
 		recipient_list=[user.email],
 		fail_silently=False,
 	)
@@ -467,7 +500,7 @@ def send_password_reset_email(user, profile):
 			'If you did not request a password reset, you can ignore this email.'
 		),
 		html_message=html_message,
-		from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@happyhourapp.local'),
+		from_email=_get_branded_from_email(),
 		recipient_list=[user.email],
 		fail_silently=False,
 	)

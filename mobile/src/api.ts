@@ -123,8 +123,8 @@ export async function disableTwoFactor(baseUrl: string, authToken: string, code:
   return postAuthedJson<SignupResponse>(baseUrl, '/profiles/two-factor/disable/', authToken, { code, portal });
 }
 
-export async function createBusinessProfile(baseUrl: string, payload: BusinessSignupRequest) {
-  return postMultipartJson<EmailVerificationChallengeResponse>(baseUrl, '/profiles/business-signup/', buildBusinessSignupFormData(payload));
+export async function createBusinessProfile(baseUrl: string, payload: BusinessSignupRequest, authToken?: string) {
+  return postMultipartJson<EmailVerificationChallengeResponse>(baseUrl, '/profiles/business-signup/', buildBusinessSignupFormData(payload), authToken);
 }
 
 export async function createManualBusinessProfile(baseUrl: string, payload: ManualBusinessSignupRequest) {
@@ -186,11 +186,12 @@ async function postJson<T>(baseUrl: string, path: string, payload: object): Prom
   return response.json() as Promise<T>;
 }
 
-async function postMultipartJson<T>(baseUrl: string, path: string, payload: FormData): Promise<T> {
+async function postMultipartJson<T>(baseUrl: string, path: string, payload: FormData, authToken?: string): Promise<T> {
   const response = await fetch(buildApiUrl(baseUrl, path), {
     method: 'POST',
     headers: {
       Accept: 'application/json',
+      ...(authToken ? { Authorization: `Token ${authToken}` } : {}),
     },
     body: payload,
   });

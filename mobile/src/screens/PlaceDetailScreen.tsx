@@ -7,6 +7,8 @@ import type { Deal, HappyHourWindow, OperatingHourWindow, PlaceDetail, PlaceLoca
 
 export type PlaceDetailScreenProps = {
   backButtonLabel?: string;
+  onClaimBusiness?: () => void;
+  showClaimBusinessControl?: boolean;
   detailLoading: boolean;
   errorMessage: string | null;
   favoriteHelperText: string | null;
@@ -25,6 +27,8 @@ export type PlaceDetailScreenProps = {
 
 export function PlaceDetailScreen({
   backButtonLabel = 'Back to Places',
+  onClaimBusiness,
+  showClaimBusinessControl = false,
   detailLoading,
   errorMessage,
   favoriteHelperText,
@@ -148,12 +152,31 @@ export function PlaceDetailScreen({
               </Pressable>
             ) : null}
 
+            {selectedPlace.social_media_links?.length ? (
+              <>
+                <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>Social Media</Text>
+                <View style={styles.hourList}>
+                  {selectedPlace.social_media_links.map((link) => (
+                    <Pressable key={link} onPress={() => void Linking.openURL(link)} style={styles.linkButtonSecondaryWide}>
+                      <Text style={styles.linkButtonSecondaryText}>{link}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            ) : null}
+
             <Pressable
               onPress={() => void Linking.openURL(buildGoogleReviewsUrl(selectedPlaceLocation ?? selectedPlace))}
               style={styles.linkButtonSecondary}
             >
               <Text style={styles.linkButtonSecondaryText}>View Google Reviews</Text>
             </Pressable>
+
+            {showClaimBusinessControl && onClaimBusiness ? (
+              <Pressable onPress={onClaimBusiness} style={styles.linkButtonSecondaryWide}>
+                <Text style={styles.linkButtonSecondaryText}>Do you own or manage this business? Claim this Business!</Text>
+              </Pressable>
+            ) : null}
 
             {selectedPlaceOperatingHours.length ? (
               <>
@@ -163,6 +186,19 @@ export function PlaceDetailScreen({
                     <View key={group.id} style={styles.hourGroupCard}>
                       <Text style={styles.hourGroupDays}>{group.dayLabel}</Text>
                       <Text style={styles.hourRow}>{group.timeLabel}</Text>
+                    </View>
+                  ))}
+                </View>
+              </>
+            ) : null}
+
+            {selectedPlace.hours_of_operation_entries?.length ? (
+              <>
+                <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>Owner Updates To Hours</Text>
+                <View style={styles.hourList}>
+                  {selectedPlace.hours_of_operation_entries.map((entry) => (
+                    <View key={entry} style={styles.hourGroupCard}>
+                      <Text style={styles.hourRow}>{entry}</Text>
                     </View>
                   ))}
                 </View>
@@ -196,6 +232,26 @@ export function PlaceDetailScreen({
             ) : (
               <Text style={styles.emptyStateText}>No active deals were returned for this place yet.</Text>
             )}
+
+            {selectedPlace.offer_entries?.length ? (
+              <>
+                <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>Owner-Provided Deals And Specials</Text>
+                <View style={styles.hourList}>
+                  {selectedPlace.offer_entries.map((entry) => (
+                    <View key={entry} style={styles.hourGroupCard}>
+                      <Text style={styles.hourRow}>{entry}</Text>
+                    </View>
+                  ))}
+                </View>
+              </>
+            ) : null}
+
+            {selectedPlace.supporting_details ? (
+              <>
+                <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>More From The Business</Text>
+                <Text style={styles.detailMeta}>{selectedPlace.supporting_details}</Text>
+              </>
+            ) : null}
           </View>
         ) : null}
       </ScrollView>
