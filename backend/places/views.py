@@ -14,6 +14,7 @@ from .serializers import (
 	BusinessLocationTrackingPreferenceSerializer,
 	BusinessLocationUpdateSerializer,
 	ClaimedBusinessSignupSerializer,
+	ContactSupportSerializer,
 	CustomerSignupSerializer,
 	DeleteAccountSerializer,
 	DealSerializer,
@@ -35,7 +36,7 @@ from .serializers import (
 	build_signup_request_data,
 	sync_listing_snapshot_from_place_payload,
 )
-from .services.account_profiles import build_account_response, build_email_verification_challenge, get_business_access_hold_claim, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, send_business_claim_received_email, send_password_reset_email, send_username_reminder_email, send_verification_email
+from .services.account_profiles import build_account_response, build_email_verification_challenge, get_business_access_hold_claim, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, send_business_claim_received_email, send_password_reset_email, send_support_contact_email, send_username_reminder_email, send_verification_email
 from .models import FavoriteBusiness, VenueType
 from .services.source_listings import get_source_deal_payloads, get_source_place_payload, get_source_place_payloads, load_source_records
 
@@ -516,6 +517,23 @@ class FavoriteBusinessView(APIView):
 		response_payload = build_account_response(request.user, portal, token=request.auth)
 		response_payload['detail'] = detail
 		return Response(response_payload)
+
+
+class ContactSupportView(generics.GenericAPIView):
+	serializer_class = ContactSupportSerializer
+	authentication_classes = [ProfileTokenAuthentication]
+	permission_classes = [IsAuthenticated]
+
+	def post(self, request):
+		serializer = self.get_serializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		send_support_contact_email(
+			request.user,
+			message=serializer.validated_data['message'],
+			portal=serializer.validated_data.get('portal'),
+			subject=serializer.validated_data.get('subject', ''),
+		)
+		return Response({'detail': 'Your message has been sent to DiningDealz support.'})
 
 
 class DeleteAccountView(generics.GenericAPIView):

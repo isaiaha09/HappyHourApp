@@ -4163,6 +4163,40 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(len(response.data['favorite_businesses']), 1)
 		self.assertEqual(response.data['favorite_businesses'][0]['slug'], 'favorite-tacos-ventura')
 
+	def test_profile_contact_support_sends_email_with_account_context(self):
+		response = self.client.post(
+			reverse('profile-contact-support'),
+			{
+				'portal': 'customer',
+				'subject': 'Map issue',
+				'message': 'The business pin is missing from my map view.',
+			},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data['detail'], 'Your message has been sent to DiningDealz support.')
+		self.assertEqual(len(mail.outbox), 1)
+		self.assertIn('DiningDealz support: Map issue', mail.outbox[0].subject)
+		self.assertIn('Name: Dash Board', mail.outbox[0].body)
+		self.assertIn('Username: dashboard_user', mail.outbox[0].body)
+		self.assertIn('Email: dashboard@example.com', mail.outbox[0].body)
+		self.assertIn('Account type: Customer', mail.outbox[0].body)
+		self.assertIn('The business pin is missing from my map view.', mail.outbox[0].body)
+
+	def test_profile_contact_support_requires_authentication(self):
+		response = self.client.post(
+			reverse('profile-contact-support'),
+			{
+				'subject': 'Map issue',
+				'message': 'Help.',
+			},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, 403)
+
 	@patch('places.views.get_source_place_payload')
 	def test_profile_favorites_endpoint_adds_favorite_business(self, mock_get_source_place_payload):
 		mock_get_source_place_payload.return_value = self.favorite_place_payload

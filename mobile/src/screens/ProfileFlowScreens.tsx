@@ -243,8 +243,11 @@ export type ContactSupportScreenProps = {
   initialMessage?: string;
   initialSubject?: string;
   isLandscape: boolean;
+  message: string | null;
   onBack: () => void;
+  onSubmit: (subject: string, message: string) => void;
   session: SignupResponse;
+  submitting: boolean;
 };
 
 type LegalDocumentScreenProps = {
@@ -882,11 +885,10 @@ export function BusinessClaimReviewPendingScreen({ errorMessage, isLandscape, me
   );
 }
 
-export function ContactSupportScreen({ errorMessage, initialMessage = '', initialSubject = 'DiningDealz support request', isLandscape, onBack, session }: ContactSupportScreenProps) {
+export function ContactSupportScreen({ errorMessage, initialMessage = '', initialSubject = 'DiningDealz support request', isLandscape, message: successMessage, onBack, onSubmit, session, submitting }: ContactSupportScreenProps) {
   const { handleFieldFocus, handleScroll, scrollViewRef } = useAutoScrollForm();
   const [subject, setSubject] = useState(initialSubject);
   const [message, setMessage] = useState(initialMessage);
-  const displayName = [session.first_name, session.last_name].filter(Boolean).join(' ') || session.username;
 
   useEffect(() => {
     setSubject(initialSubject);
@@ -895,19 +897,6 @@ export function ContactSupportScreen({ errorMessage, initialMessage = '', initia
   useEffect(() => {
     setMessage(initialMessage);
   }, [initialMessage]);
-
-  async function handleOpenEmailDraft() {
-    const body = [
-      `Name: ${displayName}`,
-      `Username: ${session.username}`,
-      `Email: ${session.email}`,
-      `Account type: ${session.profile_type}`,
-      '',
-      message.trim(),
-    ].join('\n');
-    const mailtoUrl = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject.trim() || 'DiningDealz support request')}&body=${encodeURIComponent(body)}`;
-    await Linking.openURL(mailtoUrl);
-  }
 
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
@@ -930,7 +919,13 @@ export function ContactSupportScreen({ errorMessage, initialMessage = '', initia
           <View style={styles.profileCard}>
             <Text style={styles.detailCity}>Contact Support</Text>
             <Text style={styles.detailTitle}>Reach the DiningDealz support team</Text>
-            <Text style={styles.profileIntroText}>Use this page to prepare a support email with your account details already included, so Apple review and real users both have a clear contact path inside the app.</Text>
+            <Text style={styles.profileIntroText}>Send a support message directly from the app. Your name, username, email, and account type will be attached automatically.</Text>
+
+            {successMessage ? (
+              <View style={styles.profileSuccessBanner}>
+                <Text style={styles.profileSuccessText}>{successMessage}</Text>
+              </View>
+            ) : null}
 
             {errorMessage ? (
               <View style={styles.errorBanner}>
@@ -968,11 +963,11 @@ export function ContactSupportScreen({ errorMessage, initialMessage = '', initia
                 value={message}
               />
 
-              <Text style={styles.profileSupportText}>Your name, username, email, and account type will be added to the email draft automatically.</Text>
+              <Text style={styles.profileSupportText}>Your name, username, email, and account type will be included automatically when this message is sent.</Text>
             </View>
 
-            <Pressable onPress={() => void handleOpenEmailDraft()} style={styles.linkButton}>
-              <Text style={styles.linkButtonText}>Open support email draft</Text>
+            <Pressable onPress={() => onSubmit(subject, message)} style={[styles.linkButton, submitting ? styles.linkButtonDisabled : null]}>
+              <Text style={styles.linkButtonText}>{submitting ? 'Sending...' : 'Send message'}</Text>
             </Pressable>
           </View>
         </ScrollView>

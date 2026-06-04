@@ -17,6 +17,25 @@ def _get_branded_from_email():
 	return formataddr(('DiningDealz', 'noreply@diningdealz.local'))
 
 
+def _get_support_contact_email():
+	configured_support_email = str(getattr(settings, 'SUPPORT_CONTACT_EMAIL', '') or '').strip()
+	_, support_address = parseaddr(configured_support_email)
+	if support_address:
+		return support_address
+
+	configured_server_email = str(getattr(settings, 'SERVER_EMAIL', '') or '').strip()
+	_, server_address = parseaddr(configured_server_email)
+	if server_address:
+		return server_address
+
+	configured_from_email = str(getattr(settings, 'DEFAULT_FROM_EMAIL', '') or '').strip()
+	_, from_address = parseaddr(configured_from_email)
+	if from_address:
+		return from_address
+
+	return 'support@diningdealz.local'
+
+
 def get_primary_business_claim(user, claim=None):
 	if claim is not None:
 		return claim
@@ -506,6 +525,43 @@ def send_password_reset_email(user, profile):
 		fail_silently=False,
 	)
 	return reset_url
+
+
+def send_support_contact_email(user, message, portal=None, subject=''):
+	resolved_portal = infer_portal_for_user(user, portal)
+	display_name = (f'{user.first_name} {user.last_name}').strip() or user.username
+	normalized_subject = str(subject or '').strip() or 'DiningDealz support request'
+	account_type_label = 'Business' if resolved_portal == 'business' else 'Customer'
+	normalized_message = str(message or '').strip()
+	body_lines = [
+		'New in-app DiningDealz support request',
+		'',
+		f'Name: {display_name}',
+		f'Username: {user.username}',
+		f'Email: {user.email}',
+		f'Account type: {account_type_label}',
+		'',
+		'Message:',
+		normalized_message,
+	]
+	html_message = (
+		'<p>New in-app DiningDealz support request</p>'
+		'<ul>'
+		f'<li><strong>Name:</strong> {escape(display_name)}</li>'
+		f'<li><strong>Username:</strong> {escape(user.username)}</li>'
+		f'<li><strong>Email:</strong> {escape(user.email)}</li>'
+		f'<li><strong>Account type:</strong> {escape(account_type_label)}</li>'
+		'</ul>'
+		f'<p><strong>Message:</strong></p><p>{escape(normalized_message).replace(chr(10), "<br />")}</p>'
+	)
+	send_mail(
+		subject=f'DiningDealz support: {normalized_subject}',
+		message='\n'.join(body_lines),
+		html_message=html_message,
+		from_email=_get_branded_from_email(),
+		recipient_list=[_get_support_contact_email()],
+		fail_silently=False,
+	)
 
 
 def _default_billing_portal_url(user):

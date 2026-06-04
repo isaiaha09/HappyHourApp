@@ -41,6 +41,7 @@ import {
   requestUsernameReminder,
   resendVerificationCode,
   resendVerificationEmail,
+  submitSupportRequest,
   toggleFavoriteBusiness,
   updateProfileDashboard,
   updateBusinessLocationTrackingPreference,
@@ -2503,7 +2504,32 @@ function AppScreen() {
   function handleBackFromSupport() {
     dismissKeyboardForScreenTransition();
     setProfileErrorMessage(null);
+    setProfileMessage(null);
     navigateScreen('settings', 'backward');
+  }
+
+  async function handleSubmitSupportRequest(subject: string, message: string) {
+    if (!authenticatedSession?.auth_token) {
+      setProfileErrorMessage('Sign in again before sending a support message.');
+      return;
+    }
+
+    setProfileSubmitting(true);
+    setProfileErrorMessage(null);
+    setProfileMessage(null);
+
+    try {
+      const response = await submitSupportRequest(apiBaseUrl, authenticatedSession.auth_token, {
+        portal: authenticatedSession.portal,
+        subject,
+        message,
+      });
+      setProfileMessage(response.detail);
+    } catch (error) {
+      setProfileErrorMessage(getErrorMessage(error));
+    } finally {
+      setProfileSubmitting(false);
+    }
   }
 
   function handleOpenSettings() {
@@ -3538,8 +3564,11 @@ function AppScreen() {
             initialMessage={supportDraftContext?.message}
             initialSubject={supportDraftContext?.subject}
             isLandscape={isLandscape}
+            message={profileMessage}
             onBack={handleBackFromSupport}
+            onSubmit={(subject, message) => void handleSubmitSupportRequest(subject, message)}
             session={profileSession}
+            submitting={profileSubmitting}
           />
         </SafeAreaView>
       );

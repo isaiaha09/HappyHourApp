@@ -19,6 +19,7 @@ import type {
   ProfileDashboardUpdateRequest,
   ResendEmailVerificationCodeRequest,
   SignupResponse,
+  SupportContactRequest,
   TwoFactorSetupResponse,
 } from './types';
 
@@ -93,6 +94,10 @@ export async function fetchProfileDashboard(baseUrl: string, authToken: string, 
 
 export async function updateProfileDashboard(baseUrl: string, authToken: string, payload: ProfileDashboardUpdateRequest) {
   return postAuthedJson<SignupResponse>(baseUrl, '/profiles/me/', authToken, payload);
+}
+
+export async function submitSupportRequest(baseUrl: string, authToken: string, payload: SupportContactRequest) {
+  return postAuthedJson<{ detail: string }>(baseUrl, '/profiles/contact-support/', authToken, payload);
 }
 
 export async function toggleFavoriteBusiness(baseUrl: string, authToken: string, payload: FavoriteBusinessToggleRequest) {

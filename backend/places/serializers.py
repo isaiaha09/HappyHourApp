@@ -246,6 +246,21 @@ class BusinessLocationTrackingPreferenceSerializer(serializers.Serializer):
 	enabled = serializers.BooleanField()
 
 
+class ContactSupportSerializer(serializers.Serializer):
+	subject = serializers.CharField(max_length=160, required=False, allow_blank=True)
+	message = serializers.CharField(max_length=4000)
+	portal = serializers.ChoiceField(choices=['customer', 'business'], required=False, allow_blank=True)
+
+	def validate_subject(self, value):
+		return value.strip()
+
+	def validate_message(self, value):
+		normalized = value.strip()
+		if not normalized:
+			raise serializers.ValidationError('Enter a message for support.')
+		return normalized
+
+
 class FavoriteBusinessToggleSerializer(serializers.Serializer):
 	slug = serializers.SlugField(max_length=170)
 	favorited = serializers.BooleanField()

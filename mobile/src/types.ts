@@ -177,6 +177,12 @@ export type ProfileDashboardUpdateRequest = {
   supporting_details?: string;
 };
 
+export type SupportContactRequest = {
+  portal?: 'customer' | 'business';
+  subject?: string;
+  message: string;
+};
+
 export type FavoriteBusinessToggleRequest = {
   slug: string;
   favorited: boolean;
