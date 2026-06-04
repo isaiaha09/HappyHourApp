@@ -126,7 +126,21 @@ type QrMatrix = {
 };
 
 function SettingsGearIcon() {
-  return <Text style={styles.settingsIconGlyph}>⚙</Text>;
+  return (
+    <View style={styles.settingsGearIcon}>
+      <View style={[styles.settingsGearTooth, styles.settingsGearToothTop]} />
+      <View style={[styles.settingsGearTooth, styles.settingsGearToothTopRight]} />
+      <View style={[styles.settingsGearTooth, styles.settingsGearToothRight]} />
+      <View style={[styles.settingsGearTooth, styles.settingsGearToothBottomRight]} />
+      <View style={[styles.settingsGearTooth, styles.settingsGearToothBottom]} />
+      <View style={[styles.settingsGearTooth, styles.settingsGearToothBottomLeft]} />
+      <View style={[styles.settingsGearTooth, styles.settingsGearToothLeft]} />
+      <View style={[styles.settingsGearTooth, styles.settingsGearToothTopLeft]} />
+      <View style={styles.settingsGearOuterRing}>
+        <View style={styles.settingsGearInnerHole} />
+      </View>
+    </View>
+  );
 }
 
 function SecuritySettingsSection({

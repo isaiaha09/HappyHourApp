@@ -283,11 +283,34 @@ function flattenApiError(value: unknown): string {
 
   if (value && typeof value === 'object') {
     return Object.entries(value as Record<string, unknown>)
-      .map(([key, entry]) => `${key}: ${flattenApiError(entry)}`)
+      .map(([key, entry]) => formatApiErrorEntry(key, entry))
+      .filter(Boolean)
       .join(' ');
   }
 
   return typeof value === 'string' ? value : 'Unable to complete the request.';
+}
+
+function formatApiErrorEntry(key: string, entry: unknown) {
+  const message = flattenApiError(entry).trim();
+  if (!message) {
+    return '';
+  }
+
+  if (key === 'non_field_errors' || key === 'detail') {
+    return message;
+  }
+
+  return `${formatApiErrorLabel(key)}: ${message}`;
+}
+
+function formatApiErrorLabel(key: string) {
+  const normalizedKey = key.replace(/_/g, ' ').trim();
+  if (!normalizedKey) {
+    return 'Error';
+  }
+
+  return normalizedKey.charAt(0).toUpperCase() + normalizedKey.slice(1);
 }
 
 function getMetroHost() {
