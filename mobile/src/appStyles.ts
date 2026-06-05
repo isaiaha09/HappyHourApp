@@ -1312,6 +1312,49 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingTop: 10,
   },
+  photoLightboxOverlay: {
+    backgroundColor: 'rgba(17, 12, 8, 0.96)',
+    flex: 1,
+  },
+  photoLightboxHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingBottom: 10,
+  },
+  photoLightboxCounter: {
+    color: '#fff7ef',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  photoLightboxCloseButton: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 247, 239, 0.14)',
+    borderColor: 'rgba(255, 247, 239, 0.28)',
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 40,
+    justifyContent: 'center',
+    width: 40,
+  },
+  photoLightboxCloseButtonText: {
+    color: '#fff7ef',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  photoLightboxSlide: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 18,
+  },
+  photoLightboxImage: {
+    flex: 1,
+    maxHeight: '100%',
+    width: '100%',
+  },
   favoriteStarButton: {
     alignItems: 'center',
     backgroundColor: '#fff7ef',
@@ -2347,11 +2390,22 @@ export const styles = StyleSheet.create({
   attachmentPickerButton: {
     marginTop: 0,
   },
+  attachmentGalleryLabelRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'space-between',
+    marginTop: 12,
+  },
   attachmentGalleryLabel: {
     color: '#5f4b3d',
     fontSize: 13,
     fontWeight: '700',
-    marginTop: 12,
+  },
+  attachmentGalleryCount: {
+    color: '#7d614f',
+    fontSize: 12,
+    fontWeight: '700',
   },
   attachmentSupportText: {
     marginTop: 4,

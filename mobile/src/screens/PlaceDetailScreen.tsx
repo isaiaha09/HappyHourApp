@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { Image, Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
 
 import { styles } from '../appStyles';
+import { PhotoLightbox } from '../components/PhotoLightbox';
 import { buildGoogleReviewsUrl, dedupeImageUrls, formatPlaceAddress, getPlacePreviewRegion, openMapsAddress } from '../placeHelpers';
 import type { Deal, HappyHourWindow, OperatingHourWindow, PlaceDetail, PlaceLocationDetail } from '../types';
 
@@ -52,12 +54,19 @@ export function PlaceDetailScreen({
   selectedPlaceOperatingHours,
 }: PlaceDetailScreenProps) {
   const insets = useSafeAreaInsets();
+  const [photoLightboxVisible, setPhotoLightboxVisible] = useState(false);
+  const [photoLightboxIndex, setPhotoLightboxIndex] = useState(0);
   const selectedPlaceMapRegion = getPlacePreviewRegion(selectedPlaceLocation ?? selectedPlace);
   const showVerifiedBadge = !!selectedPlace && (selectedPlace.is_claimed || selectedPlace.is_verified);
   const selectedPlaceImageUrls = dedupeImageUrls([
     ...(selectedPlaceLocation?.image_urls ?? []),
     ...(selectedPlace?.image_urls ?? []),
   ]);
+
+  function handleOpenPhotoLightbox(index: number) {
+    setPhotoLightboxIndex(index);
+    setPhotoLightboxVisible(true);
+  }
 
   return (
     <View style={[styles.detailScreenRoot, isLandscape ? styles.detailScreenLandscape : null]}>
@@ -155,10 +164,10 @@ export function PlaceDetailScreen({
                   showsHorizontalScrollIndicator={false}
                   style={styles.photoGalleryScroll}
                 >
-                  {selectedPlaceImageUrls.map((imageUrl) => (
-                    <View key={imageUrl} style={styles.photoGalleryCard}>
+                  {selectedPlaceImageUrls.map((imageUrl, index) => (
+                    <Pressable key={imageUrl} onPress={() => handleOpenPhotoLightbox(index)} style={styles.photoGalleryCard}>
                       <Image resizeMode="cover" source={{ uri: imageUrl }} style={styles.photoGalleryImage} />
-                    </View>
+                    </Pressable>
                   ))}
                 </ScrollView>
               </>
@@ -306,6 +315,12 @@ export function PlaceDetailScreen({
           </View>
         ) : null}
       </ScrollView>
+      <PhotoLightbox
+        imageUrls={selectedPlaceImageUrls}
+        initialIndex={photoLightboxIndex}
+        onClose={() => setPhotoLightboxVisible(false)}
+        visible={photoLightboxVisible}
+      />
       {errorMessage ? (
         <View style={styles.errorBanner}>
           <Text style={styles.errorText}>{errorMessage}</Text>

@@ -692,11 +692,11 @@ export function BusinessProfileEditorScreen({
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        allowsEditing: false,
-        allowsMultipleSelection: true,
+        allowsEditing: true,
+        allowsMultipleSelection: false,
+        aspect: [4, 3],
         mediaTypes: ['images'],
         quality: 0.9,
-        selectionLimit: remainingPhotoSlots,
       });
 
       if (result.canceled) {
@@ -704,7 +704,7 @@ export function BusinessProfileEditorScreen({
       }
 
       const nextAttachments = result.assets
-        .slice(0, remainingPhotoSlots)
+        .slice(0, 1)
         .map(normalizeSelectedPhotoAsset);
       setSelectedPhotoUploads((current) => mergeSelectedPhotoUploads(current, nextAttachments));
     } catch {
@@ -773,10 +773,13 @@ export function BusinessProfileEditorScreen({
                 <Pressable onPress={() => void handleSelectProfilePhotos()} style={[styles.linkButtonSecondary, styles.attachmentPickerButton, remainingPhotoSlots === 0 ? styles.linkButtonDisabled : null]}>
                   <Text style={styles.linkButtonSecondaryText}>Select from Photo Library</Text>
                 </Pressable>
-                <Text style={[styles.dashboardSupportText, styles.attachmentSupportText]}>Choose photos from the device photo library only. Selected photos upload when you save this business profile. Max 8 photos total.</Text>
+                <Text style={[styles.dashboardSupportText, styles.attachmentSupportText]}>Choose photos from the device photo library only. You can crop each photo before saving. Max 8 photos total.</Text>
                 {currentPhotoUrls.length ? (
                   <>
-                    <Text style={styles.attachmentGalleryLabel}>Current public photos</Text>
+                    <View style={styles.attachmentGalleryLabelRow}>
+                      <Text style={styles.attachmentGalleryLabel}>Current public photos</Text>
+                      <Text style={styles.attachmentGalleryCount}>{`${currentPhotoUrls.length} / 8`}</Text>
+                    </View>
                     <ScrollView
                       contentContainerStyle={styles.photoGalleryRow}
                       horizontal

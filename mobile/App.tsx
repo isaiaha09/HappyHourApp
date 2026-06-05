@@ -67,6 +67,7 @@ import {
 } from './src/browseConfig';
 import { AccountSettingsScreen, BusinessProfileEditorScreen, DashboardScreen } from './src/screens/DashboardScreen';
 import { BrowseControls } from './src/screens/BrowseControls';
+import { PhotoLightbox } from './src/components/PhotoLightbox';
 import { PlaceDetailScreen } from './src/screens/PlaceDetailScreen';
 import { SplashScreen } from './src/screens/SplashScreen';
 import {
@@ -509,6 +510,8 @@ function AppScreen() {
   const [startupImagesReady, setStartupImagesReady] = useState(false);
   const [profileEntryOffset, setProfileEntryOffset] = useState(0);
   const [browseEntryOffset, setBrowseEntryOffset] = useState(0);
+  const [mapPreviewPhotoLightboxVisible, setMapPreviewPhotoLightboxVisible] = useState(false);
+  const [mapPreviewPhotoLightboxIndex, setMapPreviewPhotoLightboxIndex] = useState(0);
   const [userCoordinates, setUserCoordinates] = useState<UserCoordinates | null>(null);
   const [renderedMappedPlaces, setRenderedMappedPlaces] = useState<MappedPlace[]>([]);
   const [renderedMappedPlaceKey, setRenderedMappedPlaceKey] = useState('');
@@ -1573,6 +1576,11 @@ function AppScreen() {
     if (startupImageLoadCountRef.current >= startupImageSources.length) {
       setStartupImagesReady(true);
     }
+  }
+
+  function handleOpenMapPreviewPhotoLightbox(index: number) {
+    setMapPreviewPhotoLightboxIndex(index);
+    setMapPreviewPhotoLightboxVisible(true);
   }
 
   useEffect(() => {
@@ -4286,12 +4294,13 @@ function AppScreen() {
                             pagingEnabled
                             showsHorizontalScrollIndicator={false}
                           >
-                            {displayedMapPreviewImageUrls.map((imageUrl) => (
-                              <Image
-                                key={imageUrl}
-                                source={{ uri: imageUrl }}
-                                style={[styles.mapPreviewImage, isLandscape ? styles.mapPreviewImageLandscape : null]}
-                              />
+                            {displayedMapPreviewImageUrls.map((imageUrl, index) => (
+                              <Pressable key={imageUrl} onPress={() => handleOpenMapPreviewPhotoLightbox(index)}>
+                                <Image
+                                  source={{ uri: imageUrl }}
+                                  style={[styles.mapPreviewImage, isLandscape ? styles.mapPreviewImageLandscape : null]}
+                                />
+                              </Pressable>
                             ))}
                           </ScrollView>
                         ) : (
@@ -4759,6 +4768,12 @@ function AppScreen() {
           </View>
         </View>
       </Modal>
+      <PhotoLightbox
+        imageUrls={displayedMapPreviewImageUrls}
+        initialIndex={mapPreviewPhotoLightboxIndex}
+        onClose={() => setMapPreviewPhotoLightboxVisible(false)}
+        visible={mapPreviewPhotoLightboxVisible}
+      />
     </>
   );
 }
