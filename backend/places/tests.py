@@ -3190,10 +3190,12 @@ class ProfileSignupApiTests(APITestCase):
 							'abc_license': [],
 							'proof_of_address_control': [],
 						}),
+						'proof_of_authority_attachments': [SimpleUploadedFile('manager-proof.pdf', b'proof', content_type='application/pdf')],
 						'profile_photo_uploads': [
 							SimpleUploadedFile('front.jpg', b'front-photo', content_type='image/jpeg'),
 							SimpleUploadedFile('inside.png', b'inside-photo', content_type='image/png'),
 						],
+						'supporting_details': 'Available to provide payroll and licensing records upon request.',
 					},
 					format='multipart',
 				)
@@ -3873,9 +3875,11 @@ class ProfileSignupApiTests(APITestCase):
 							'abc_license': [],
 							'proof_of_address_control': [],
 						}),
+						'proof_of_authority_attachments': [SimpleUploadedFile('owner-proof.pdf', b'owner-proof', content_type='application/pdf')],
 						'profile_photo_uploads': [
 							SimpleUploadedFile('patio.jpg', b'patio-photo', content_type='image/jpeg'),
 						],
+						'supporting_details': 'Happy to provide incorporation documents during review.',
 					},
 					format='multipart',
 				)
