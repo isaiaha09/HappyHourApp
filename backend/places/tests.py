@@ -3092,6 +3092,64 @@ class ProfileSignupApiTests(APITestCase):
 		)
 
 	@patch('places.views.get_source_place_payload')
+	def test_claimed_business_signup_accepts_long_offer_entries(self, mock_get_source_place_payload):
+		mock_get_source_place_payload.return_value = {
+			'id': 1,
+			'slug': 'finneys-crafthouse',
+			'name': 'Finney\'s Crafthouse',
+			'city': City.VENTURA,
+			'venue_type': VenueType.RESTAURANT,
+			'address_line_1': '494 E Main St',
+			'address_line_2': '',
+			'neighborhood': 'Downtown',
+			'state': 'CA',
+			'postal_code': '93001',
+			'phone_number': '805-555-0199',
+			'website_url': 'https://example.com/finneys',
+			'locations': [],
+		}
+
+		long_offer_entry = ' | '.join([
+			'Late Night Feast',
+			'$25 for two',
+			'A long imported description ' + ('with extra detail ' * 25).strip(),
+			'Terms: valid Sunday through Thursday after 9pm except holidays',
+			'Happy hour: Sun-Thu 9:00 PM - 11:30 PM',
+		])
+
+		response = self.client.post(
+			reverse('business-signup'),
+			{
+				'username': 'finneys_long_offer_owner',
+				'email': 'long-offer@example.com',
+				'password': 'test-pass-123',
+				'first_name': 'Pat',
+				'last_name': 'Owner',
+				'business_slug': 'finneys-crafthouse',
+				'contact_name': 'Pat Owner',
+				'job_title': BusinessClaim.JobTitle.MANAGER,
+				'work_email': 'pat@finneys.com',
+				'work_phone': '805-555-0100',
+				'employer_address': '494 E Main St, Ventura, CA 93001',
+				'address_not_applicable': False,
+				'offer_entries': json.dumps([long_offer_entry]),
+				'verification_documents': json.dumps({
+					'business_registration': ['CA business license #123'],
+					'health_permit': ['Ventura County permit #A-55'],
+					'abc_license': [],
+					'proof_of_address_control': [],
+				}),
+				'proof_of_authority_attachments': [SimpleUploadedFile('manager-proof.pdf', b'proof', content_type='application/pdf')],
+				'supporting_details': 'Imported deal copy should not block claim submission.',
+			},
+			format='multipart',
+		)
+
+		self.assertEqual(response.status_code, 201)
+		claim = BusinessClaim.objects.get(claimant__username='finneys_long_offer_owner')
+		self.assertEqual(claim.offer_entries, [long_offer_entry])
+
+	@patch('places.views.get_source_place_payload')
 	def test_claimed_business_signup_accepts_uploaded_business_photos(self, mock_get_source_place_payload):
 		mock_get_source_place_payload.return_value = {
 			'id': 1,
