@@ -1797,7 +1797,16 @@ class SourceListingIdentityTests(TestCase):
 			work_phone='805-555-0100',
 			employer_address='501 Collection Blvd Ste # 4130',
 			business_website_url='https://owner.example.com/yard-house',
-			social_media_links=['https://instagram.com/yardhouseoxnard'],
+			social_profiles={
+				'website': {
+					'url': 'https://owner.example.com/yard-house',
+					'username': 'owner.example.com',
+				},
+				'instagram': {
+					'url': 'https://instagram.com/yardhouseoxnard',
+					'username': 'yardhouseoxnard',
+				},
+			},
 			offer_entries=['Late night appetizers half off'],
 			hours_of_operation_entries=['Sun-Thu 11am-11pm'],
 			photo_references=['https://images.example.com/yard-house-front.jpg'],
@@ -1814,6 +1823,19 @@ class SourceListingIdentityTests(TestCase):
 		self.assertIsNotNone(payload)
 		self.assertEqual(payload['website_url'], 'https://owner.example.com/yard-house')
 		self.assertEqual(payload['locations'][0]['website_url'], 'https://owner.example.com/yard-house')
+		self.assertEqual(
+			payload['social_profiles'],
+			{
+				'website': {
+					'url': 'https://owner.example.com/yard-house',
+					'username': 'owner.example.com',
+				},
+				'instagram': {
+					'url': 'https://instagram.com/yardhouseoxnard',
+					'username': 'yardhouseoxnard',
+				},
+			},
+		)
 		self.assertEqual(payload['social_media_links'], ['https://instagram.com/yardhouseoxnard'])
 		self.assertEqual(payload['offer_entries'], ['Late night appetizers half off'])
 		self.assertEqual(payload['hours_of_operation_entries'], ['Sun-Thu 11am-11pm'])
@@ -3061,7 +3083,16 @@ class ProfileSignupApiTests(APITestCase):
 				'employer_address': '494 E Main St, Ventura, CA 93001',
 				'address_not_applicable': False,
 				'business_website_url': 'https://finneysventura.example.com',
-				'social_media_links': json.dumps(['https://instagram.com/finneysventura']),
+				'social_profiles': json.dumps({
+					'website': {
+						'url': 'https://finneysventura.example.com',
+						'username': 'finneysventura.example.com',
+					},
+					'instagram': {
+						'url': 'https://instagram.com/finneysventura',
+						'username': 'finneysventura',
+					},
+				}),
 				'verification_documents': json.dumps({
 					'business_registration': ['CA business license #123'],
 					'health_permit': ['Ventura County permit #A-55'],
@@ -3084,6 +3115,19 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(claim.employer_address, '494 E Main St, Ventura, CA 93001')
 		self.assertEqual(claim.pathway, BusinessClaim.Pathway.CLAIMED)
 		self.assertEqual(claim.business_website_url, 'https://finneysventura.example.com')
+		self.assertEqual(
+			claim.social_profiles,
+			{
+				'website': {
+					'url': 'https://finneysventura.example.com',
+					'username': 'finneysventura.example.com',
+				},
+				'instagram': {
+					'url': 'https://instagram.com/finneysventura',
+					'username': 'finneysventura',
+				},
+			},
+		)
 		self.assertGreaterEqual(claim.verification_score, 60)
 		self.assertIn(BusinessClaimAttachment.AttachmentKind.PROOF_OF_AUTHORITY, list(claim.attachments.values_list('attachment_kind', flat=True)))
 		self.assertEqual(
@@ -4148,6 +4192,16 @@ class ProfileDashboardApiTests(APITestCase):
 			work_email='owner@approvedspot.com',
 			work_phone='805-555-0200',
 			employer_address='55 Main St, Ventura, CA 93001',
+			social_profiles={
+				'website': {
+					'url': 'https://approved.example.com/old',
+					'username': 'approved.example.com',
+				},
+				'instagram': {
+					'url': 'https://instagram.com/approvedspot',
+					'username': 'approvedspot',
+				},
+			},
 			verification_summary='I own the business.',
 			status=BusinessClaim.Status.APPROVED,
 		)
@@ -4165,6 +4219,19 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(response.data['business_contact']['work_email'], 'owner@approvedspot.com')
 		self.assertEqual(response.data['approved_businesses'][0]['address_line_1'], '55 Main St')
 		self.assertEqual(response.data['business_contact']['offer_entries'], [])
+		self.assertEqual(
+			response.data['business_contact']['social_profiles'],
+			{
+				'website': {
+					'url': 'https://approved.example.com/old',
+					'username': 'approved.example.com',
+				},
+				'instagram': {
+					'url': 'https://instagram.com/approvedspot',
+					'username': 'approvedspot',
+				},
+			},
+		)
 
 	def test_profile_dashboard_update_allows_approved_business_profile_edits(self):
 		snapshot = ListingSnapshot.objects.create(
@@ -4202,7 +4269,20 @@ class ProfileDashboardApiTests(APITestCase):
 				'work_phone': '805-555-0211',
 				'employer_address': '57 Main St, Ventura, CA 93001',
 				'business_website_url': 'https://approved.example.com/new',
-				'social_media_links_text': 'https://instagram.com/approvedspot\nhttps://facebook.com/approvedspot',
+				'social_profiles': {
+					'website': {
+						'url': 'https://approved.example.com/new',
+						'username': 'approved.example.com',
+					},
+					'instagram': {
+						'url': 'https://instagram.com/approvedspot',
+						'username': 'approvedspot',
+					},
+					'facebook': {
+						'url': 'https://facebook.com/approvedspot',
+						'username': 'approvedspot',
+					},
+				},
 				'offer_entries_text': 'Happy hour tacos $5\nHalf off appetizers',
 				'hours_of_operation_entries_text': 'Mon-Fri 3pm-6pm\nSat-Sun 11am-10pm',
 				'photo_references_text': 'https://cdn.example.com/approvedspot/front.jpg',
@@ -4220,6 +4300,23 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(claim.offer_entries, ['Happy hour tacos $5', 'Half off appetizers'])
 		self.assertEqual(claim.hours_of_operation_entries, ['Mon-Fri 3pm-6pm', 'Sat-Sun 11am-10pm'])
 		self.assertEqual(claim.photo_references, ['https://cdn.example.com/approvedspot/front.jpg'])
+		self.assertEqual(
+			claim.social_profiles,
+			{
+				'website': {
+					'url': 'https://approved.example.com/new',
+					'username': 'approved.example.com',
+				},
+				'instagram': {
+					'url': 'https://instagram.com/approvedspot',
+					'username': 'approvedspot',
+				},
+				'facebook': {
+					'url': 'https://facebook.com/approvedspot',
+					'username': 'approvedspot',
+				},
+			},
+		)
 		self.assertEqual(claim.supporting_details, 'Updated from the approved business dashboard.')
 		self.assertEqual(snapshot.website_url, 'https://approved.example.com/old')
 		self.assertEqual(
@@ -4227,6 +4324,23 @@ class ProfileDashboardApiTests(APITestCase):
 			['Happy hour tacos $5', 'Half off appetizers'],
 		)
 		self.assertEqual(response.data['business_contact']['business_website_url'], 'https://approved.example.com/new')
+		self.assertEqual(
+			response.data['business_contact']['social_profiles'],
+			{
+				'website': {
+					'url': 'https://approved.example.com/new',
+					'username': 'approved.example.com',
+				},
+				'instagram': {
+					'url': 'https://instagram.com/approvedspot',
+					'username': 'approvedspot',
+				},
+				'facebook': {
+					'url': 'https://facebook.com/approvedspot',
+					'username': 'approvedspot',
+				},
+			},
+		)
 		self.assertEqual(response.data['business_contact']['social_media_links'], ['https://instagram.com/approvedspot', 'https://facebook.com/approvedspot'])
 
 	def test_profile_dashboard_update_accepts_business_profile_photo_uploads(self):

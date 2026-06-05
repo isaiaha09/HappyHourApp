@@ -56,12 +56,22 @@ export type PlaceLocation = {
   is_verified: boolean;
 };
 
+export type SocialPlatform = 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'website';
+
+export type SocialProfile = {
+  url: string;
+  username: string;
+};
+
+export type SocialProfiles = Partial<Record<SocialPlatform, SocialProfile>>;
+
 export type PlaceLocationDetail = PlaceLocation & {
   deals: Deal[];
 };
 
 export type PlaceListItem = PlaceLocation & {
   is_claimed: boolean;
+  social_profiles?: SocialProfiles;
   social_media_links?: string[];
   offer_entries?: string[];
   hours_of_operation_entries?: string[];
@@ -132,6 +142,7 @@ export type SignupResponse = {
     work_phone?: string;
     employer_address?: string;
     business_website_url?: string;
+    social_profiles?: SocialProfiles;
     social_media_links?: string[];
     offer_entries?: string[];
     hours_of_operation_entries?: string[];
@@ -170,6 +181,7 @@ export type ProfileDashboardUpdateRequest = {
   work_phone?: string;
   employer_address?: string;
   business_website_url?: string;
+  social_profiles?: SocialProfiles;
   social_media_links_text?: string;
   offer_entries_text?: string;
   hours_of_operation_entries_text?: string;
@@ -250,6 +262,7 @@ export type BusinessAttachmentBuckets = Record<BusinessAttachmentKind, BusinessA
 
 type SharedBusinessDetails = {
   business_website_url: string;
+  social_profiles?: SocialProfiles;
   social_media_links: string[];
   offer_entries: string[];
   hours_of_operation_entries: string[];

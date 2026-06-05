@@ -4,6 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 
 import { styles } from '../appStyles';
+import { SOCIAL_PLATFORM_LABELS, buildSocialProfilesFromInputs, getSocialProfilePreview, getSocialProfileValidationMessage, socialProfilesToInputs } from '../socialProfiles';
 import { dedupeImageUrls, normalizeSearchText } from '../placeHelpers';
 import type { BusinessAttachmentDraft, ProfileDashboardUpdateRequest, SignupResponse, TwoFactorSetupResponse } from '../types';
 
@@ -98,8 +99,16 @@ function joinDraftEntries(values?: string[]) {
   return (values ?? []).join('\n');
 }
 
-function buildDashboardDraft(session: SignupResponse): ProfileDashboardUpdateRequest {
+type BusinessProfileDraft = ProfileDashboardUpdateRequest & {
+  instagram_profile?: string;
+  facebook_profile?: string;
+  tiktok_profile?: string;
+  youtube_profile?: string;
+};
+
+function buildDashboardDraft(session: SignupResponse): BusinessProfileDraft {
   const businessContact = session.business_contact ?? {};
+  const socialInputs = socialProfilesToInputs(businessContact.social_profiles, businessContact.business_website_url ?? '');
 
   return {
     portal: session.portal,
@@ -112,8 +121,11 @@ function buildDashboardDraft(session: SignupResponse): ProfileDashboardUpdateReq
     work_email: businessContact.work_email ?? '',
     work_phone: businessContact.work_phone ?? '',
     employer_address: businessContact.employer_address ?? '',
-    business_website_url: businessContact.business_website_url ?? '',
-    social_media_links_text: joinDraftEntries(businessContact.social_media_links),
+    business_website_url: socialInputs.website,
+    instagram_profile: socialInputs.instagram,
+    facebook_profile: socialInputs.facebook,
+    tiktok_profile: socialInputs.tiktok,
+    youtube_profile: socialInputs.youtube,
     offer_entries_text: joinDraftEntries(businessContact.offer_entries),
     hours_of_operation_entries_text: joinDraftEntries(businessContact.hours_of_operation_entries),
     photo_references_text: joinDraftEntries(businessContact.photo_references),
@@ -634,11 +646,19 @@ export function BusinessProfileEditorScreen({
 }: BusinessProfileEditorScreenProps) {
   const businessContact = session.business_contact ?? {};
   const approvedBusiness = session.approved_businesses?.[0] ?? null;
-  const [profileDraft, setProfileDraft] = useState<ProfileDashboardUpdateRequest>(() => buildDashboardDraft(session));
+  const [profileDraft, setProfileDraft] = useState<BusinessProfileDraft>(() => buildDashboardDraft(session));
   const [currentPhotoUrls, setCurrentPhotoUrls] = useState<string[]>(() => getDisplayablePhotoUrls(businessContact.photo_references));
   const [selectedPhotoUploads, setSelectedPhotoUploads] = useState<BusinessAttachmentDraft[]>([]);
   const existingPhotoUrls = getDisplayablePhotoUrls(businessContact.photo_references);
   const remainingPhotoSlots = Math.max(0, 8 - currentPhotoUrls.length - selectedPhotoUploads.length);
+  const existingSocialInputs = socialProfilesToInputs(businessContact.social_profiles, businessContact.business_website_url ?? '');
+  const socialFieldErrors = {
+    website: getSocialProfileValidationMessage('website', profileDraft.business_website_url ?? ''),
+    instagram: getSocialProfileValidationMessage('instagram', profileDraft.instagram_profile ?? ''),
+    facebook: getSocialProfileValidationMessage('facebook', profileDraft.facebook_profile ?? ''),
+    tiktok: getSocialProfileValidationMessage('tiktok', profileDraft.tiktok_profile ?? ''),
+    youtube: getSocialProfileValidationMessage('youtube', profileDraft.youtube_profile ?? ''),
+  };
 
   useEffect(() => {
     setProfileDraft(buildDashboardDraft(session));
@@ -651,8 +671,11 @@ export function BusinessProfileEditorScreen({
     || (profileDraft.work_email ?? '') !== (businessContact.work_email ?? '')
     || (profileDraft.work_phone ?? '') !== (businessContact.work_phone ?? '')
     || (profileDraft.employer_address ?? '') !== (businessContact.employer_address ?? '')
-    || (profileDraft.business_website_url ?? '') !== (businessContact.business_website_url ?? '')
-    || (profileDraft.social_media_links_text ?? '') !== joinDraftEntries(businessContact.social_media_links)
+    || (profileDraft.business_website_url ?? '') !== existingSocialInputs.website
+    || (profileDraft.instagram_profile ?? '') !== existingSocialInputs.instagram
+    || (profileDraft.facebook_profile ?? '') !== existingSocialInputs.facebook
+    || (profileDraft.tiktok_profile ?? '') !== existingSocialInputs.tiktok
+    || (profileDraft.youtube_profile ?? '') !== existingSocialInputs.youtube
     || (profileDraft.offer_entries_text ?? '') !== joinDraftEntries(businessContact.offer_entries)
     || (profileDraft.hours_of_operation_entries_text ?? '') !== joinDraftEntries(businessContact.hours_of_operation_entries)
     || joinDraftEntries(currentPhotoUrls) !== joinDraftEntries(existingPhotoUrls)
@@ -660,6 +683,14 @@ export function BusinessProfileEditorScreen({
     || selectedPhotoUploads.length > 0;
 
   function buildSavePayload(): ProfileDashboardUpdateRequest {
+    const socialProfiles = buildSocialProfilesFromInputs({
+      instagram: profileDraft.instagram_profile ?? '',
+      facebook: profileDraft.facebook_profile ?? '',
+      tiktok: profileDraft.tiktok_profile ?? '',
+      youtube: profileDraft.youtube_profile ?? '',
+      website: profileDraft.business_website_url ?? '',
+    });
+
     return {
       portal: session.portal,
       username: session.username,
@@ -672,12 +703,42 @@ export function BusinessProfileEditorScreen({
       work_phone: profileDraft.work_phone ?? '',
       employer_address: profileDraft.employer_address ?? '',
       business_website_url: profileDraft.business_website_url ?? '',
-      social_media_links_text: profileDraft.social_media_links_text ?? '',
+      social_profiles: socialProfiles,
       offer_entries_text: profileDraft.offer_entries_text ?? '',
       hours_of_operation_entries_text: profileDraft.hours_of_operation_entries_text ?? '',
       photo_references_text: currentPhotoUrls.join('\n'),
       supporting_details: profileDraft.supporting_details ?? '',
     };
+  }
+
+  function renderSocialProfileField(platform: 'instagram' | 'facebook' | 'tiktok' | 'youtube', field: keyof BusinessProfileDraft, placeholder: string) {
+    const fieldValue = String(profileDraft[field] ?? '');
+    const fieldError = socialFieldErrors[platform];
+    const preview = getSocialProfilePreview(platform, fieldValue);
+
+    return (
+      <View key={field} style={styles.dashboardFieldColumn}>
+        <Text style={styles.dashboardDetailLabel}>{SOCIAL_PLATFORM_LABELS[platform]}</Text>
+        <TextInput
+          autoCapitalize="none"
+          onChangeText={(value) => setProfileDraft((current) => ({ ...current, [field]: value }))}
+          placeholder={placeholder}
+          placeholderTextColor="#9a7f6c"
+          style={styles.profileInput}
+          value={fieldValue}
+        />
+        {fieldError ? <Text style={styles.structuredEntryErrorText}>{fieldError}</Text> : null}
+        {!fieldError && preview ? <Text style={styles.dashboardSupportText}>{`Displays as ${preview}`}</Text> : null}
+      </View>
+    );
+  }
+
+  function handleSaveBusinessProfile() {
+    if (Object.values(socialFieldErrors).some(Boolean)) {
+      return;
+    }
+
+    onSaveProfileDetails(buildSavePayload(), selectedPhotoUploads);
   }
 
   async function handleSelectProfilePhotos() {
@@ -765,7 +826,16 @@ export function BusinessProfileEditorScreen({
                 <DashboardEditableField label="Employer address" onChangeText={(value) => setProfileDraft((current) => ({ ...current, employer_address: value }))} value={profileDraft.employer_address ?? ''} />
                 <DashboardEditableField label="Business website" onChangeText={(value) => setProfileDraft((current) => ({ ...current, business_website_url: value }))} value={profileDraft.business_website_url ?? ''} />
               </View>
-              <DashboardMultilineField label="Social media links" onChangeText={(value) => setProfileDraft((current) => ({ ...current, social_media_links_text: value }))} value={profileDraft.social_media_links_text ?? ''} />
+              {socialFieldErrors.website ? <Text style={styles.structuredEntryErrorText}>{socialFieldErrors.website}</Text> : null}
+              {!socialFieldErrors.website && getSocialProfilePreview('website', profileDraft.business_website_url ?? '') ? (
+                <Text style={styles.dashboardSupportText}>{`Website displays as ${getSocialProfilePreview('website', profileDraft.business_website_url ?? '')}`}</Text>
+              ) : null}
+              <View style={styles.dashboardFieldGrid}>
+                {renderSocialProfileField('instagram', 'instagram_profile', 'instagram.com/yourbusiness or yourbusiness')}
+                {renderSocialProfileField('facebook', 'facebook_profile', 'facebook.com/yourbusiness or yourbusiness')}
+                {renderSocialProfileField('tiktok', 'tiktok_profile', 'tiktok.com/@yourbusiness or @yourbusiness')}
+                {renderSocialProfileField('youtube', 'youtube_profile', 'youtube.com/@yourbusiness or @yourbusiness')}
+              </View>
               <DashboardMultilineField label="Deals and specials" onChangeText={(value) => setProfileDraft((current) => ({ ...current, offer_entries_text: value }))} value={profileDraft.offer_entries_text ?? ''} />
               <DashboardMultilineField label="Additional hours information" onChangeText={(value) => setProfileDraft((current) => ({ ...current, hours_of_operation_entries_text: value }))} value={profileDraft.hours_of_operation_entries_text ?? ''} />
               <View style={styles.attachmentSection}>
@@ -825,7 +895,7 @@ export function BusinessProfileEditorScreen({
               <DashboardMultilineField label="Business details" onChangeText={(value) => setProfileDraft((current) => ({ ...current, supporting_details: value }))} value={profileDraft.supporting_details ?? ''} />
               <View style={styles.dashboardInlineActions}>
                 <Pressable
-                  onPress={() => onSaveProfileDetails(buildSavePayload(), selectedPhotoUploads)}
+                  onPress={handleSaveBusinessProfile}
                   style={[styles.linkButtonSecondaryWide, styles.dashboardInlineButton, (!profileDetailsChanged || submitting) ? styles.linkButtonDisabled : null]}
                 >
                   <Text style={styles.linkButtonSecondaryText}>{submitting ? 'Saving...' : 'Save Business Profile'}</Text>
@@ -834,7 +904,7 @@ export function BusinessProfileEditorScreen({
                   <Text style={styles.linkButtonSecondaryText}>View in Map</Text>
                 </Pressable>
               </View>
-              <Text style={styles.dashboardSupportText}>Use one line per social link, deal, hour range, or photo reference to keep the public business profile current.</Text>
+              <Text style={styles.dashboardSupportText}>Paste profile URLs or usernames for each platform. DiningDealz stores the full link and the extracted handle separately for public display.</Text>
             </View>
           </View>
         </ScrollView>

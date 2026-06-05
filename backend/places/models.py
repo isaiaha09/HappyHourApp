@@ -303,6 +303,7 @@ class BusinessClaim(models.Model):
 	address_not_applicable = models.BooleanField(default=False)
 	serves_multiple_areas = models.BooleanField(default=False)
 	business_website_url = models.URLField(blank=True)
+	social_profiles = models.JSONField(default=dict, blank=True)
 	social_media_links = models.JSONField(default=list, blank=True)
 	offer_entries = models.JSONField(default=list, blank=True)
 	hours_of_operation_entries = models.JSONField(default=list, blank=True)

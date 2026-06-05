@@ -5,7 +5,9 @@ import MapView, { Marker } from 'react-native-maps';
 
 import { styles } from '../appStyles';
 import { PhotoLightbox } from '../components/PhotoLightbox';
+import { SocialButton } from '../components/SocialButton';
 import { buildGoogleReviewsUrl, dedupeImageUrls, formatPlaceAddress, getPlacePreviewRegion, openMapsAddress } from '../placeHelpers';
+import { getSocialProfilesForDisplay } from '../socialProfiles';
 import type { Deal, HappyHourWindow, OperatingHourWindow, PlaceDetail, PlaceLocationDetail } from '../types';
 
 export type PlaceDetailScreenProps = {
@@ -62,6 +64,8 @@ export function PlaceDetailScreen({
     ...(selectedPlaceLocation?.image_urls ?? []),
     ...(selectedPlace?.image_urls ?? []),
   ]);
+  const socialButtons = selectedPlace ? getSocialProfilesForDisplay(selectedPlace.social_profiles) : [];
+  const hasWebsiteSocialButton = socialButtons.some((profile) => profile.platform === 'website');
 
   function handleOpenPhotoLightbox(index: number) {
     setPhotoLightboxIndex(index);
@@ -200,20 +204,23 @@ export function PlaceDetailScreen({
               </Pressable>
             ) : null}
 
-            {(selectedPlaceLocation?.website_url ?? selectedPlace.website_url) ? (
+            {(selectedPlaceLocation?.website_url ?? selectedPlace.website_url) && !hasWebsiteSocialButton ? (
               <Pressable onPress={() => void Linking.openURL(selectedPlaceLocation?.website_url ?? selectedPlace.website_url)} style={styles.linkButton}>
                 <Text style={styles.linkButtonText}>Open website</Text>
               </Pressable>
             ) : null}
 
-            {selectedPlace.social_media_links?.length ? (
+            {socialButtons.length ? (
               <>
                 <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>Social Media</Text>
-                <View style={styles.hourList}>
-                  {selectedPlace.social_media_links.map((link) => (
-                    <Pressable key={link} onPress={() => void Linking.openURL(link)} style={styles.linkButtonSecondaryWide}>
-                      <Text style={styles.linkButtonSecondaryText}>{link}</Text>
-                    </Pressable>
+                <View style={styles.socialButtonsList}>
+                  {socialButtons.map((profile) => (
+                    <SocialButton
+                      key={`${profile.platform}:${profile.url}`}
+                      onPress={() => void Linking.openURL(profile.url)}
+                      platform={profile.platform}
+                      username={profile.username}
+                    />
                   ))}
                 </View>
               </>

@@ -28,6 +28,7 @@ import { styles } from '../appStyles';
 import type { AuthPortal, LoginFormState, ProfileFormState } from '../appFlowTypes';
 import { manualBusinessCityOptions, manualBusinessVenueOptions } from '../browseConfig';
 import { dedupeImageUrls, formatPlaceAddress, getPlaceLocations, normalizeSearchText } from '../placeHelpers';
+import { SOCIAL_PLATFORM_LABELS, getSocialProfilePreview, getSocialProfileValidationMessage } from '../socialProfiles';
 import type { BusinessAttachmentBuckets, BusinessAttachmentDraft, BusinessAttachmentKind, EmailVerificationChallengeResponse, PlaceListItem, PlaceLocation, SignupResponse } from '../types';
 
 const SUPPORT_EMAIL = 'support@diningdealz.com';
@@ -41,7 +42,7 @@ type CompactDropdownProps = {
   onToggle: () => void;
 };
 
-type StructuredListField = 'social_media_links_text' | 'offer_entries_text' | 'hours_of_operation_entries_text';
+type StructuredListField = 'offer_entries_text' | 'hours_of_operation_entries_text';
 
 type AttachmentPreviewState =
   | { kind: 'image'; name: string; uri: string }
@@ -55,6 +56,17 @@ function LoadingButtonLabel({ color, label, loading, textStyle }: { color: strin
     </View>
   );
 }
+
+const businessSocialFieldDefinitions: Array<{
+  field: keyof ProfileFormState;
+  platform: 'instagram' | 'facebook' | 'tiktok' | 'youtube';
+  placeholder: string;
+}> = [
+  { field: 'instagram_profile', platform: 'instagram', placeholder: 'instagram.com/yourbusiness or yourbusiness' },
+  { field: 'facebook_profile', platform: 'facebook', placeholder: 'facebook.com/yourbusiness or yourbusiness' },
+  { field: 'tiktok_profile', platform: 'tiktok', placeholder: 'tiktok.com/@yourbusiness or @yourbusiness' },
+  { field: 'youtube_profile', platform: 'youtube', placeholder: 'youtube.com/@yourbusiness or @yourbusiness' },
+];
 
 function getAttachmentPreviewKind(mimeType: string | null, fileName: string) {
   const normalizedMimeType = String(mimeType || '').trim().toLowerCase();
@@ -1194,7 +1206,6 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
   const requiresAbcLicense = form.business_venue_type === 'bar';
   const [openDropdown, setOpenDropdown] = useState<'city' | 'venue' | 'job' | null>(null);
   const [entryDrafts, setEntryDrafts] = useState<Record<StructuredListField, string>>({
-    social_media_links_text: '',
     offer_entries_text: '',
     hours_of_operation_entries_text: '',
   });
@@ -1229,10 +1240,13 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
     { label: 'Owner', value: 'owner' },
     { label: 'Manager', value: 'manager' },
   ] as const;
-  const socialLinkEntries = form.social_media_links_text
-    .split(/\r?\n/)
-    .map((entry) => entry.trim())
-    .filter(Boolean);
+  const socialFieldErrors = {
+    website: getSocialProfileValidationMessage('website', form.business_website_url),
+    instagram: getSocialProfileValidationMessage('instagram', form.instagram_profile),
+    facebook: getSocialProfileValidationMessage('facebook', form.facebook_profile),
+    tiktok: getSocialProfileValidationMessage('tiktok', form.tiktok_profile),
+    youtube: getSocialProfileValidationMessage('youtube', form.youtube_profile),
+  };
 
   function parseStructuredEntries(value: string) {
     return value
@@ -1244,36 +1258,6 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
   function handleSelectDropdownValue(field: 'business_city' | 'business_venue_type', value: string) {
     onChangeField(field, value);
     setOpenDropdown(null);
-  }
-
-  function normalizeSocialLink(value: string) {
-    if (!value) {
-      return null;
-    }
-
-    if (/^https?:\/\//i.test(value)) {
-      return value;
-    }
-
-    if (/^[\w.-]+\.[a-z]{2,}(?:[/?#].*)?$/i.test(value)) {
-      return `https://${value}`;
-    }
-
-    return null;
-  }
-
-  async function handleOpenSocialLink(value: string) {
-    const normalizedLink = normalizeSocialLink(value);
-    if (!normalizedLink) {
-      return;
-    }
-
-    const supported = await Linking.canOpenURL(normalizedLink);
-    if (!supported) {
-      return;
-    }
-
-    await Linking.openURL(normalizedLink);
   }
 
   async function openAttachmentExternally(uri: string, mimeType: string | null, attachmentName: string) {
@@ -1370,10 +1354,6 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
       return 'Enter a value before adding it.';
     }
 
-    if (field === 'social_media_links_text' && !normalizeSocialLink(normalizedValue)) {
-      return 'Enter a full social profile URL such as https://instagram.com/yourbusiness.';
-    }
-
     if (field === 'hours_of_operation_entries_text' && !/[a-z]{3}/i.test(normalizedValue)) {
       return 'Use a readable schedule like Mon-Fri 3:00 PM - 6:00 PM.';
     }
@@ -1383,6 +1363,39 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
 
   function setStructuredFieldEntries(field: StructuredListField, entries: string[]) {
     onChangeField(field, entries.join('\n'));
+  }
+
+  function renderSocialProfileField(field: keyof ProfileFormState, platform: 'instagram' | 'facebook' | 'tiktok' | 'youtube') {
+    const fieldValue = String(form[field] ?? '');
+    const fieldError = socialFieldErrors[platform];
+    const preview = getSocialProfilePreview(platform, fieldValue);
+    const placeholder = businessSocialFieldDefinitions.find((definition) => definition.field === field)?.placeholder;
+
+    return (
+      <View key={field} style={styles.dashboardFieldColumn}>
+        <Text style={styles.profileFieldLabel}>{SOCIAL_PLATFORM_LABELS[platform]}</Text>
+        <AutoScrollTextInput
+          autoCapitalize="none"
+          onBeforeAutoScroll={handleFieldFocus}
+          onChangeText={(value) => onChangeField(field, value)}
+          placeholder={placeholder}
+          placeholderTextColor="#9a7f6c"
+          scrollViewRef={scrollViewRef}
+          style={styles.profileInput}
+          value={fieldValue}
+        />
+        {fieldError ? <Text style={styles.structuredEntryErrorText}>{fieldError}</Text> : null}
+        {!fieldError && preview ? <Text style={styles.profileSupportText}>{`Displays as ${preview}`}</Text> : null}
+      </View>
+    );
+  }
+
+  function handleSubmitVerification() {
+    if (Object.values(socialFieldErrors).some(Boolean)) {
+      return;
+    }
+
+    onSubmit();
   }
 
   function handleChangeStructuredDraft(field: StructuredListField, value: string) {
@@ -1580,15 +1593,6 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
                     <Text style={styles.profileSupportText}>It is highly recommend for smaller businesses and vendors that do not have a dedicated business address to turn on location services for DiningDealz after account is verified so you have can a business pin on the map.</Text>
                   ) : null}
 
-                  <Text style={styles.profileFieldLabel}>{isInformal ? 'Website URL (optional)' : 'Website URL'}</Text>
-                  <AutoScrollTextInput autoCapitalize="none" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('business_website_url', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.business_website_url} />
-                </>
-              ) : null}
-
-              {isClaimed ? (
-                <>
-                  <Text style={styles.profileFieldLabel}>Website URL (optional)</Text>
-                  <AutoScrollTextInput autoCapitalize="none" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('business_website_url', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.business_website_url} />
                 </>
               ) : null}
 
@@ -1649,29 +1653,26 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
                 </>
               ) : null}
 
-              {renderStructuredEntryField('social_media_links_text', 'Social media links', {
-                placeholder: 'https://instagram.com/yourbusiness',
-                support: 'Add each social profile as its own entry so the business profile can reuse them cleanly.',
-                addLabel: 'Add link',
-              })}
-              {socialLinkEntries.length ? (
-                <View style={styles.socialPreviewList}>
-                  {socialLinkEntries.map((entry) => {
-                    const normalizedLink = normalizeSocialLink(entry);
-                    return (
-                      <Pressable
-                        key={entry}
-                        disabled={!normalizedLink}
-                        onPress={() => void handleOpenSocialLink(entry)}
-                        style={[styles.socialPreviewCard, !normalizedLink ? styles.socialPreviewCardDisabled : null]}
-                      >
-                        <Text numberOfLines={1} style={styles.socialPreviewLink}>{entry}</Text>
-                        <Text style={styles.socialPreviewAction}>{normalizedLink ? 'Open link' : 'Invalid link format'}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              ) : null}
+              <View style={styles.profileFormSection}>
+                <Text style={styles.profileFieldLabel}>Website</Text>
+                <AutoScrollTextInput
+                  autoCapitalize="none"
+                  onBeforeAutoScroll={handleFieldFocus}
+                  onChangeText={(value) => onChangeField('business_website_url', value)}
+                  placeholder="yourbusiness.com"
+                  placeholderTextColor="#9a7f6c"
+                  scrollViewRef={scrollViewRef}
+                  style={styles.profileInput}
+                  value={form.business_website_url}
+                />
+                {socialFieldErrors.website ? <Text style={styles.structuredEntryErrorText}>{socialFieldErrors.website}</Text> : null}
+                {!socialFieldErrors.website && getSocialProfilePreview('website', form.business_website_url) ? (
+                  <Text style={styles.profileSupportText}>{`Displays as ${getSocialProfilePreview('website', form.business_website_url)}`}</Text>
+                ) : (
+                  <Text style={styles.profileSupportText}>Paste a full website URL or domain. The public profile shows the site domain instead of the raw link.</Text>
+                )}
+                {businessSocialFieldDefinitions.map((definition) => renderSocialProfileField(definition.field, definition.platform))}
+              </View>
 
               {isClaimed ? renderMultilineField(
                 'offer_entries_text',
@@ -1802,7 +1803,7 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
               ) : null}
             </View>
 
-            <Pressable onPress={() => void onSubmit()} style={[styles.linkButton, submitting ? styles.linkButtonDisabled : null]}>
+            <Pressable onPress={() => void handleSubmitVerification()} style={[styles.linkButton, submitting ? styles.linkButtonDisabled : null]}>
               <LoadingButtonLabel color="#effffd" label={submitLabel} loading={submitting} textStyle={styles.linkButtonText} />
             </Pressable>
           </View>

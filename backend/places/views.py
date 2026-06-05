@@ -42,6 +42,7 @@ from .serializers import (
 )
 from .services.account_profiles import build_account_response, build_email_verification_challenge, get_business_access_hold_claim, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, send_business_claim_received_email, send_password_reset_email, send_support_contact_email, send_username_reminder_email, send_verification_email
 from .models import FavoriteBusiness, VenueType
+from .services.social_profiles import build_social_media_links, get_business_website_url
 from .services.source_listings import get_source_deal_payloads, get_source_place_payload, get_source_place_payloads, load_source_records
 
 
@@ -420,6 +421,7 @@ class ProfileDashboardView(APIView):
 			'work_phone',
 			'employer_address',
 			'business_website_url',
+			'social_profiles',
 			'social_media_links_text',
 			'offer_entries_text',
 			'hours_of_operation_entries_text',
@@ -447,12 +449,17 @@ class ProfileDashboardView(APIView):
 					setattr(claim, field_name, serializer.validated_data[field_name])
 					claim_update_fields.append(field_name)
 
-			if 'business_website_url' in serializer.validated_data:
-				claim.business_website_url = serializer.validated_data['business_website_url']
-				claim_update_fields.append('business_website_url')
+			if any(field_name in serializer.validated_data for field_name in ('business_website_url', 'social_profiles', 'social_media_links_text')):
+				claim.social_profiles = serializer.validated_data.get('social_profiles', {})
+				claim.social_media_links = build_social_media_links(claim.social_profiles)
+				claim.business_website_url = get_business_website_url(
+					claim.social_profiles,
+					fallback=serializer.validated_data.get('business_website_url', claim.business_website_url),
+				)
+				claim_update_fields.extend(['social_profiles', 'social_media_links', 'business_website_url'])
+				profile_entry_payload['social_media_links'] = claim.social_media_links
 
 			for request_field_name, claim_field_name in (
-				('social_media_links_text', 'social_media_links'),
 				('offer_entries_text', 'offer_entries'),
 				('hours_of_operation_entries_text', 'hours_of_operation_entries'),
 				('photo_references_text', 'photo_references'),

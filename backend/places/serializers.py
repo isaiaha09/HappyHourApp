@@ -11,6 +11,7 @@ from rest_framework import serializers
 
 from .models import BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, City, ListingSnapshot, VenueType
 from .services.account_profiles import build_account_response, get_or_create_account_profile, has_active_business_membership
+from .services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
 
 
 BUSINESS_DOCUMENT_KEYS = (
@@ -45,7 +46,25 @@ LIST_JSON_FIELD_NAMES = (
 
 DICT_JSON_FIELD_NAMES = (
 	'verification_documents',
+	'social_profiles',
 )
+
+
+def _normalize_social_profile_payload(raw_profiles=None, business_website_url='', social_media_links=None):
+	try:
+		normalized_social_profiles = normalize_social_profiles(
+			raw_profiles,
+			fallback_website_url=business_website_url,
+			fallback_social_links=social_media_links,
+		)
+	except ValueError as error:
+		raise serializers.ValidationError({'social_profiles': [str(error)]})
+
+	return (
+		normalized_social_profiles,
+		get_business_website_url(normalized_social_profiles, fallback=business_website_url),
+		build_social_media_links(normalized_social_profiles),
+	)
 
 
 def build_signup_request_data(data):
@@ -192,6 +211,7 @@ class ProfileDashboardUpdateSerializer(serializers.Serializer):
 	work_phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
 	employer_address = serializers.CharField(max_length=255, required=False, allow_blank=True)
 	business_website_url = serializers.URLField(required=False, allow_blank=True)
+	social_profiles = serializers.JSONField(required=False)
 	social_media_links_text = serializers.CharField(required=False, allow_blank=True)
 	offer_entries_text = serializers.CharField(required=False, allow_blank=True)
 	hours_of_operation_entries_text = serializers.CharField(required=False, allow_blank=True)
@@ -240,6 +260,20 @@ class ProfileDashboardUpdateSerializer(serializers.Serializer):
 
 	def validate_supporting_details(self, value):
 		return value.strip()
+
+	def validate(self, attrs):
+		attrs = super().validate(attrs)
+		if any(field_name in attrs for field_name in ('social_profiles', 'social_media_links_text', 'business_website_url')):
+			legacy_social_links = _normalize_string_list(attrs.get('social_media_links_text', '')) if 'social_media_links_text' in attrs else []
+			normalized_social_profiles, normalized_website_url, normalized_social_links = _normalize_social_profile_payload(
+				attrs.get('social_profiles', {}),
+				business_website_url=attrs.get('business_website_url', ''),
+				social_media_links=legacy_social_links,
+			)
+			attrs['social_profiles'] = normalized_social_profiles
+			attrs['business_website_url'] = normalized_website_url
+			attrs['social_media_links_text'] = '\n'.join(normalized_social_links)
+		return attrs
 
 
 class BusinessLocationTrackingPreferenceSerializer(serializers.Serializer):
@@ -307,7 +341,7 @@ class LoginSerializer(serializers.Serializer):
 			if has_active_business_membership(authenticated_user):
 				pass
 			elif authenticated_user.business_claims.exists() or authenticated_user.business_memberships.exists():
-				raise serializers.ValidationError('Your business claim must be approved by an admin before you can sign in to the business portal.')
+				raise serializers.ValidationError('Your business claim submission has not been approved yet. You will be notified once it is approved.')
 			else:
 				raise serializers.ValidationError('That account does not have an approved business profile yet.')
 
@@ -501,6 +535,7 @@ class ClaimedBusinessSignupSerializer(CustomerSignupSerializer):
 	employer_address = serializers.CharField(max_length=255)
 	address_not_applicable = serializers.BooleanField(default=False)
 	business_website_url = serializers.URLField(required=False, allow_blank=True)
+	social_profiles = serializers.JSONField(required=False)
 	social_media_links = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
 	offer_entries = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
 	hours_of_operation_entries = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
@@ -516,6 +551,11 @@ class ClaimedBusinessSignupSerializer(CustomerSignupSerializer):
 		if attrs.get('address_not_applicable'):
 			raise serializers.ValidationError({'address_not_applicable': ['Address Not Applicable is only available when you create a new business profile.']})
 		attrs['social_media_links'] = _normalize_string_list(attrs.get('social_media_links', []))
+		attrs['social_profiles'], attrs['business_website_url'], attrs['social_media_links'] = _normalize_social_profile_payload(
+			attrs.get('social_profiles', {}),
+			business_website_url=attrs.get('business_website_url', ''),
+			social_media_links=attrs['social_media_links'],
+		)
 		attrs['offer_entries'] = _normalize_string_list(attrs.get('offer_entries', []))
 		attrs['hours_of_operation_entries'] = _normalize_string_list(attrs.get('hours_of_operation_entries', []))
 		attrs['photo_references'] = _normalize_string_list(attrs.get('photo_references', []))
@@ -536,6 +576,7 @@ class ClaimedBusinessSignupSerializer(CustomerSignupSerializer):
 			'employer_address': validated_data.pop('employer_address'),
 			'address_not_applicable': validated_data.pop('address_not_applicable', False),
 			'business_website_url': listing_snapshot.website_url,
+			'social_profiles': validated_data.pop('social_profiles', {}),
 			'social_media_links': validated_data.pop('social_media_links', []),
 			'offer_entries': validated_data.pop('offer_entries', []),
 			'hours_of_operation_entries': validated_data.pop('hours_of_operation_entries', []),
@@ -575,6 +616,7 @@ class EstablishedBusinessSignupSerializer(CustomerSignupSerializer):
 	work_phone = serializers.CharField(max_length=20)
 	employer_address = serializers.CharField(max_length=255, required=False, allow_blank=True)
 	address_not_applicable = serializers.BooleanField(default=False)
+	social_profiles = serializers.JSONField(required=False)
 	social_media_links = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
 	offer_entries = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
 	hours_of_operation_entries = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
@@ -602,6 +644,11 @@ class EstablishedBusinessSignupSerializer(CustomerSignupSerializer):
 		if not attrs.get('address_not_applicable') and not attrs.get('employer_address'):
 			raise serializers.ValidationError({'employer_address': ['Employer address is required unless you mark Address Not Applicable.']})
 		attrs['social_media_links'] = _normalize_string_list(attrs.get('social_media_links', []))
+		attrs['social_profiles'], attrs['business_website_url'], attrs['social_media_links'] = _normalize_social_profile_payload(
+			attrs.get('social_profiles', {}),
+			business_website_url=attrs.get('business_website_url', ''),
+			social_media_links=attrs['social_media_links'],
+		)
 		attrs['offer_entries'] = _normalize_string_list(attrs.get('offer_entries', []))
 		attrs['hours_of_operation_entries'] = _normalize_string_list(attrs.get('hours_of_operation_entries', []))
 		attrs['photo_references'] = _normalize_string_list(attrs.get('photo_references', []))
@@ -633,6 +680,7 @@ class EstablishedBusinessSignupSerializer(CustomerSignupSerializer):
 			'address_not_applicable': validated_data.pop('address_not_applicable', False),
 			'serves_multiple_areas': serves_multiple_areas,
 			'business_website_url': listing_snapshot.website_url,
+			'social_profiles': validated_data.pop('social_profiles', {}),
 			'social_media_links': validated_data.pop('social_media_links', []),
 			'offer_entries': validated_data.pop('offer_entries', []),
 			'hours_of_operation_entries': validated_data.pop('hours_of_operation_entries', []),
@@ -665,6 +713,7 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 	business_city = serializers.CharField(max_length=40)
 	business_venue_type = serializers.ChoiceField(choices=VenueType.choices)
 	business_website_url = serializers.URLField(required=False, allow_blank=True)
+	social_profiles = serializers.JSONField(required=False)
 	social_media_links = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
 	offer_entries = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
 	hours_of_operation_entries = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
@@ -686,6 +735,11 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 		if attrs['serves_multiple_areas']:
 			attrs['business_city'] = ''
 		attrs['social_media_links'] = _normalize_string_list(attrs.get('social_media_links', []))
+		attrs['social_profiles'], attrs['business_website_url'], attrs['social_media_links'] = _normalize_social_profile_payload(
+			attrs.get('social_profiles', {}),
+			business_website_url=attrs.get('business_website_url', ''),
+			social_media_links=attrs['social_media_links'],
+		)
 		attrs['offer_entries'] = _normalize_string_list(attrs.get('offer_entries', []))
 		attrs['hours_of_operation_entries'] = _normalize_string_list(attrs.get('hours_of_operation_entries', []))
 		attrs['photo_references'] = _normalize_string_list(attrs.get('photo_references', []))
@@ -694,6 +748,7 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 	def create(self, validated_data):
 		serves_multiple_areas = validated_data.pop('serves_multiple_areas', False)
 		social_media_links = validated_data.pop('social_media_links', [])
+		social_profiles = validated_data.pop('social_profiles', {})
 		offer_entries = validated_data.pop('offer_entries', [])
 		hours_of_operation_entries = validated_data.pop('hours_of_operation_entries', [])
 		photo_references = validated_data.pop('photo_references', [])
@@ -722,6 +777,7 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 				address_not_applicable=serves_multiple_areas,
 				serves_multiple_areas=serves_multiple_areas,
 				business_website_url=listing_snapshot.website_url,
+				social_profiles=social_profiles,
 				social_media_links=social_media_links,
 				offer_entries=offer_entries,
 				hours_of_operation_entries=hours_of_operation_entries,
@@ -894,6 +950,7 @@ class PlaceListSerializer(serializers.Serializer):
 	name = serializers.CharField()
 	slug = serializers.CharField()
 	is_claimed = serializers.BooleanField(required=False, default=False)
+	social_profiles = serializers.DictField(required=False, default=dict)
 	social_media_links = serializers.ListField(child=serializers.CharField(), required=False, default=list)
 	offer_entries = serializers.ListField(child=serializers.CharField(), required=False, default=list)
 	hours_of_operation_entries = serializers.ListField(child=serializers.CharField(), required=False, default=list)

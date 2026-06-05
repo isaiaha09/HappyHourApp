@@ -5,6 +5,7 @@ from django.utils import timezone
 from email.utils import formataddr, parseaddr
 
 from places.models import AccountProfile, BusinessClaim, FavoriteBusiness, ProfileAuthToken, VenueType
+from places.services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
 
 
 def _get_branded_from_email():
@@ -175,14 +176,20 @@ def build_account_response(user, portal, claim=None, token=None):
 	business_contact = {}
 	if primary_claim is not None:
 		editable_photo_references = _get_editable_business_photo_references(primary_claim)
+		normalized_social_profiles = normalize_social_profiles(
+			primary_claim.social_profiles,
+			fallback_website_url=primary_claim.business_website_url,
+			fallback_social_links=primary_claim.social_media_links,
+		)
 		business_contact = {
 			'contact_name': primary_claim.contact_name,
 			'job_title': primary_claim.job_title,
 			'work_email': primary_claim.work_email,
 			'work_phone': primary_claim.work_phone,
 			'employer_address': primary_claim.employer_address,
-			'business_website_url': primary_claim.business_website_url,
-			'social_media_links': primary_claim.social_media_links,
+			'business_website_url': get_business_website_url(normalized_social_profiles, fallback=primary_claim.business_website_url),
+			'social_profiles': normalized_social_profiles,
+			'social_media_links': build_social_media_links(normalized_social_profiles),
 			'offer_entries': primary_claim.offer_entries,
 			'hours_of_operation_entries': primary_claim.hours_of_operation_entries,
 			'photo_references': editable_photo_references,

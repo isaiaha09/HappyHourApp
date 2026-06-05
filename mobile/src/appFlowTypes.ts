@@ -12,6 +12,10 @@ export type ProfileFormState = {
   business_city: string;
   business_venue_type: string;
   business_website_url: string;
+  instagram_profile: string;
+  facebook_profile: string;
+  tiktok_profile: string;
+  youtube_profile: string;
   contact_name: string;
   job_title: string;
   work_email: string;

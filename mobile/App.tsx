@@ -71,6 +71,7 @@ import { BrowseControls } from './src/screens/BrowseControls';
 import { PhotoLightbox } from './src/components/PhotoLightbox';
 import { PlaceDetailScreen } from './src/screens/PlaceDetailScreen';
 import { SplashScreen } from './src/screens/SplashScreen';
+import { buildSocialProfilesFromInputs, socialProfilesToInputs } from './src/socialProfiles';
 import {
   AuthPortalScreen,
   BusinessClaimReviewPendingScreen,
@@ -205,6 +206,10 @@ const initialProfileFormState: ProfileFormState = {
   business_city: '',
   business_venue_type: '',
   business_website_url: '',
+  instagram_profile: '',
+  facebook_profile: '',
+  tiktok_profile: '',
+  youtube_profile: '',
   contact_name: '',
   job_title: '',
   work_email: '',
@@ -306,12 +311,17 @@ function buildClaimPrefill(detail: PlaceDetail, locationId: number | null) {
   const operatingHours = selectedLocation.operating_hours.length ? selectedLocation.operating_hours : detail.operating_hours;
   const deals = selectedLocation.deals.length ? selectedLocation.deals : detail.deals;
   const imageReferences = dedupeImageUrls([...selectedLocation.image_urls, ...detail.image_urls]);
+  const socialInputs = socialProfilesToInputs(detail.social_profiles, selectedLocation.website_url || detail.website_url);
 
   return {
     locationId: selectedLocation.id,
     business_city: selectedLocation.city,
     business_venue_type: selectedLocation.venue_type,
     business_website_url: selectedLocation.website_url || detail.website_url,
+    instagram_profile: socialInputs.instagram,
+    facebook_profile: socialInputs.facebook,
+    tiktok_profile: socialInputs.tiktok,
+    youtube_profile: socialInputs.youtube,
     offer_entries_text: joinUniqueEntries(deals.map(formatDealEntry)).join('\n'),
     hours_of_operation_entries_text: joinUniqueEntries(operatingHours.map(formatOperatingHourEntry)).join('\n'),
     photo_references_text: imageReferences.join('\n'),
@@ -328,9 +338,21 @@ function buildVerificationDocuments(): BusinessVerificationDocuments {
 }
 
 function buildSharedBusinessDetails(form: ProfileFormState) {
+  const socialProfiles = buildSocialProfilesFromInputs({
+    instagram: form.instagram_profile,
+    facebook: form.facebook_profile,
+    tiktok: form.tiktok_profile,
+    youtube: form.youtube_profile,
+    website: form.business_website_url,
+  });
+
   return {
     business_website_url: form.business_website_url.trim(),
-    social_media_links: splitMultilineEntries(form.social_media_links_text),
+    social_profiles: socialProfiles,
+    social_media_links: Object.entries(socialProfiles)
+      .filter(([platform]) => platform !== 'website')
+      .map(([, profile]) => profile?.url ?? '')
+      .filter(Boolean),
     offer_entries: splitMultilineEntries(form.offer_entries_text),
     hours_of_operation_entries: splitMultilineEntries(form.hours_of_operation_entries_text),
     photo_references: splitMultilineEntries(form.photo_references_text),
@@ -375,6 +397,10 @@ function resetBusinessVerificationFields(current: ProfileFormState): ProfileForm
     business_city: '',
     business_venue_type: '',
     business_website_url: '',
+    instagram_profile: '',
+    facebook_profile: '',
+    tiktok_profile: '',
+    youtube_profile: '',
     contact_name: '',
     job_title: '',
     work_email: '',
@@ -1930,6 +1956,10 @@ function AppScreen() {
               business_city: current.business_city || prefill.business_city,
               business_venue_type: current.business_venue_type || prefill.business_venue_type,
               business_website_url: current.business_website_url || prefill.business_website_url,
+              instagram_profile: current.instagram_profile || prefill.instagram_profile,
+              facebook_profile: current.facebook_profile || prefill.facebook_profile,
+              tiktok_profile: current.tiktok_profile || prefill.tiktok_profile,
+              youtube_profile: current.youtube_profile || prefill.youtube_profile,
               offer_entries_text: current.offer_entries_text.trim() ? current.offer_entries_text : prefill.offer_entries_text,
               hours_of_operation_entries_text: current.hours_of_operation_entries_text.trim() ? current.hours_of_operation_entries_text : prefill.hours_of_operation_entries_text,
               photo_references_text: current.photo_references_text.trim() ? current.photo_references_text : prefill.photo_references_text,

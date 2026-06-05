@@ -16,6 +16,7 @@ from places.services.importers.openstreetmap_places import HybridPlacesImporter,
 from places.services.importers.tomtom_places import TomTomPlacesImporter
 from places.services.importers.types import ImportedPlace
 from places.services.importers.yelp_places import YelpFusionPlacesImporter
+from places.services.social_profiles import build_social_media_links, normalize_social_profiles
 
 
 RUNTIME_IMPORTER_REGISTRY = {
@@ -242,8 +243,14 @@ def _claim_photo_urls(claim):
 
 
 def _build_claim_override_payload(claim):
+	normalized_social_profiles = normalize_social_profiles(
+		claim.social_profiles,
+		fallback_website_url=claim.business_website_url,
+		fallback_social_links=claim.social_media_links,
+	)
 	return {
-		'social_media_links': list(claim.social_media_links or []),
+		'social_profiles': normalized_social_profiles,
+		'social_media_links': build_social_media_links(normalized_social_profiles),
 		'offer_entries': list(claim.offer_entries or []),
 		'hours_of_operation_entries': list(claim.hours_of_operation_entries or []),
 		'photo_references': list(claim.photo_references or []),
@@ -333,6 +340,7 @@ def _merge_claimed_snapshot_payload(existing_payload, snapshot_payload):
 		'image_urls': owner_image_urls,
 		'is_verified': True,
 		'locations': merged_locations or existing_payload.get('locations', []),
+		'social_profiles': snapshot_payload.get('social_profiles', {}),
 		'social_media_links': snapshot_payload.get('social_media_links', []),
 		'offer_entries': snapshot_payload.get('offer_entries', []),
 		'hours_of_operation_entries': snapshot_payload.get('hours_of_operation_entries', []),

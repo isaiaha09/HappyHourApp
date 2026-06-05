@@ -110,7 +110,7 @@ export async function updateProfileDashboardWithUploads(
       return;
     }
 
-    formData.append(key, String(value));
+    appendMultipartValue(formData, key, value);
   });
 
   photoUploads.forEach((photoUpload) => {
@@ -280,12 +280,7 @@ function buildBusinessSignupFormData(payload: BusinessSignupRequest | ManualBusi
       return;
     }
 
-    if (Array.isArray(value) || typeof value === 'object') {
-      formData.append(key, JSON.stringify(value));
-      return;
-    }
-
-    formData.append(key, String(value));
+    appendMultipartValue(formData, key, value);
   });
 
   appendBusinessAttachments(formData, attachments);
@@ -431,4 +426,13 @@ async function postAuthedMultipartJson<T>(baseUrl: string, path: string, authTok
   }
 
   return response.json() as Promise<T>;
+}
+
+function appendMultipartValue(formData: FormData, key: string, value: unknown) {
+  if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
+    formData.append(key, JSON.stringify(value));
+    return;
+  }
+
+  formData.append(key, String(value));
 }
