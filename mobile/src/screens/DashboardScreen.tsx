@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import * as Clipboard from 'expo-clipboard';
-import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 
 import { styles } from '../appStyles';
-import { normalizeSearchText } from '../placeHelpers';
-import type { ProfileDashboardUpdateRequest, SignupResponse, TwoFactorSetupResponse } from '../types';
+import { dedupeImageUrls, normalizeSearchText } from '../placeHelpers';
+import type { BusinessAttachmentDraft, ProfileDashboardUpdateRequest, SignupResponse, TwoFactorSetupResponse } from '../types';
 
 export type DashboardScreenProps = {
   errorMessage: string | null;
@@ -20,7 +21,7 @@ export type DashboardScreenProps = {
   onOpenSettings: () => void;
   onRefresh: () => void;
   onResendVerification: () => void;
-  onSaveProfileDetails: (payload: ProfileDashboardUpdateRequest) => void;
+  onSaveProfileDetails: (payload: ProfileDashboardUpdateRequest, photoUploads?: BusinessAttachmentDraft[]) => void;
   session: SignupResponse;
   submitting: boolean;
 };
@@ -577,11 +578,49 @@ export type BusinessProfileEditorScreenProps = {
   isLandscape: boolean;
   message: string | null;
   onBack: () => void;
-  onSaveProfileDetails: (payload: ProfileDashboardUpdateRequest) => void;
+  onSaveProfileDetails: (payload: ProfileDashboardUpdateRequest, photoUploads?: BusinessAttachmentDraft[]) => void;
   onViewInMap: () => void;
   session: SignupResponse;
   submitting: boolean;
 };
+
+function normalizeSelectedPhotoAsset(asset: ImagePicker.ImagePickerAsset): BusinessAttachmentDraft {
+  return {
+    id: `${asset.assetId ?? asset.uri}::${asset.fileName ?? 'business-photo'}::${asset.fileSize ?? 0}`,
+    name: asset.fileName ?? `business-photo-${Date.now()}.jpg`,
+    uri: asset.uri,
+    mimeType: asset.mimeType ?? 'image/jpeg',
+    size: asset.fileSize ?? null,
+  };
+}
+
+function mergeSelectedPhotoUploads(current: BusinessAttachmentDraft[], next: BusinessAttachmentDraft[]) {
+  const merged = [...current];
+  next.forEach((attachment) => {
+    if (!merged.some((existing) => existing.id === attachment.id)) {
+      merged.push(attachment);
+    }
+  });
+  return merged;
+}
+
+function formatAttachmentSize(size: number | null) {
+  if (!size || size <= 0) {
+    return 'Ready to upload';
+  }
+
+  if (size >= 1024 * 1024) {
+    return `${Math.round((size / (1024 * 1024)) * 10) / 10} MB`;
+  }
+
+  return `${Math.max(1, Math.round(size / 1024))} KB`;
+}
+
+function getDisplayablePhotoUrls(references?: string[]) {
+  return dedupeImageUrls(
+    (references ?? []).filter((reference) => /^https?:\/\//i.test(String(reference || '').trim())),
+  );
+}
 
 export function BusinessProfileEditorScreen({
   errorMessage,
@@ -596,9 +635,15 @@ export function BusinessProfileEditorScreen({
   const businessContact = session.business_contact ?? {};
   const approvedBusiness = session.approved_businesses?.[0] ?? null;
   const [profileDraft, setProfileDraft] = useState<ProfileDashboardUpdateRequest>(() => buildDashboardDraft(session));
+  const [currentPhotoUrls, setCurrentPhotoUrls] = useState<string[]>(() => getDisplayablePhotoUrls(businessContact.photo_references));
+  const [selectedPhotoUploads, setSelectedPhotoUploads] = useState<BusinessAttachmentDraft[]>([]);
+  const existingPhotoUrls = getDisplayablePhotoUrls(businessContact.photo_references);
+  const remainingPhotoSlots = Math.max(0, 8 - currentPhotoUrls.length - selectedPhotoUploads.length);
 
   useEffect(() => {
     setProfileDraft(buildDashboardDraft(session));
+    setCurrentPhotoUrls(getDisplayablePhotoUrls(session.business_contact?.photo_references));
+    setSelectedPhotoUploads([]);
   }, [session]);
 
   const profileDetailsChanged = (profileDraft.contact_name ?? '') !== (businessContact.contact_name ?? '')
@@ -610,8 +655,9 @@ export function BusinessProfileEditorScreen({
     || (profileDraft.social_media_links_text ?? '') !== joinDraftEntries(businessContact.social_media_links)
     || (profileDraft.offer_entries_text ?? '') !== joinDraftEntries(businessContact.offer_entries)
     || (profileDraft.hours_of_operation_entries_text ?? '') !== joinDraftEntries(businessContact.hours_of_operation_entries)
-    || (profileDraft.photo_references_text ?? '') !== joinDraftEntries(businessContact.photo_references)
-    || (profileDraft.supporting_details ?? '') !== (businessContact.supporting_details ?? '');
+    || joinDraftEntries(currentPhotoUrls) !== joinDraftEntries(existingPhotoUrls)
+    || (profileDraft.supporting_details ?? '') !== (businessContact.supporting_details ?? '')
+    || selectedPhotoUploads.length > 0;
 
   function buildSavePayload(): ProfileDashboardUpdateRequest {
     return {
@@ -629,9 +675,49 @@ export function BusinessProfileEditorScreen({
       social_media_links_text: profileDraft.social_media_links_text ?? '',
       offer_entries_text: profileDraft.offer_entries_text ?? '',
       hours_of_operation_entries_text: profileDraft.hours_of_operation_entries_text ?? '',
-      photo_references_text: profileDraft.photo_references_text ?? '',
+      photo_references_text: currentPhotoUrls.join('\n'),
       supporting_details: profileDraft.supporting_details ?? '',
     };
+  }
+
+  async function handleSelectProfilePhotos() {
+    try {
+      if (remainingPhotoSlots <= 0) {
+        return;
+      }
+
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        allowsEditing: false,
+        allowsMultipleSelection: true,
+        mediaTypes: ['images'],
+        quality: 0.9,
+        selectionLimit: remainingPhotoSlots,
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      const nextAttachments = result.assets
+        .slice(0, remainingPhotoSlots)
+        .map(normalizeSelectedPhotoAsset);
+      setSelectedPhotoUploads((current) => mergeSelectedPhotoUploads(current, nextAttachments));
+    } catch {
+      // The parent screen already renders submission errors; picker failures can stay silent here.
+    }
+  }
+
+  function handleRemoveCurrentPhoto(photoUrl: string) {
+    setCurrentPhotoUrls((current) => current.filter((url) => url !== photoUrl));
+  }
+
+  function handleRemoveSelectedPhotoUpload(attachmentId: string) {
+    setSelectedPhotoUploads((current) => current.filter((attachment) => attachment.id !== attachmentId));
   }
 
   return (
@@ -682,11 +768,61 @@ export function BusinessProfileEditorScreen({
               <DashboardMultilineField label="Social media links" onChangeText={(value) => setProfileDraft((current) => ({ ...current, social_media_links_text: value }))} value={profileDraft.social_media_links_text ?? ''} />
               <DashboardMultilineField label="Deals and specials" onChangeText={(value) => setProfileDraft((current) => ({ ...current, offer_entries_text: value }))} value={profileDraft.offer_entries_text ?? ''} />
               <DashboardMultilineField label="Additional hours information" onChangeText={(value) => setProfileDraft((current) => ({ ...current, hours_of_operation_entries_text: value }))} value={profileDraft.hours_of_operation_entries_text ?? ''} />
-              <DashboardMultilineField label="Photo references" onChangeText={(value) => setProfileDraft((current) => ({ ...current, photo_references_text: value }))} value={profileDraft.photo_references_text ?? ''} />
+              <View style={styles.attachmentSection}>
+                <Text style={styles.dashboardDetailLabel}>Business photos</Text>
+                <Pressable onPress={() => void handleSelectProfilePhotos()} style={[styles.linkButtonSecondary, styles.attachmentPickerButton, remainingPhotoSlots === 0 ? styles.linkButtonDisabled : null]}>
+                  <Text style={styles.linkButtonSecondaryText}>Select from Photo Library</Text>
+                </Pressable>
+                <Text style={[styles.dashboardSupportText, styles.attachmentSupportText]}>Choose photos from the device photo library only. Selected photos upload when you save this business profile. Max 8 photos total.</Text>
+                {currentPhotoUrls.length ? (
+                  <>
+                    <Text style={styles.attachmentGalleryLabel}>Current public photos</Text>
+                    <ScrollView
+                      contentContainerStyle={styles.photoGalleryRow}
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.photoGalleryScroll}
+                    >
+                      {currentPhotoUrls.map((photoUrl) => (
+                        <View key={photoUrl} style={styles.photoGalleryCard}>
+                          <Image resizeMode="cover" source={{ uri: photoUrl }} style={styles.photoGalleryImage} />
+                          <Pressable onPress={() => handleRemoveCurrentPhoto(photoUrl)} style={styles.photoGalleryDismissButton}>
+                            <Text style={styles.photoGalleryDismissButtonText}>X</Text>
+                          </Pressable>
+                        </View>
+                      ))}
+                    </ScrollView>
+                  </>
+                ) : null}
+                {selectedPhotoUploads.length ? (
+                  <>
+                    <Text style={styles.attachmentGalleryLabel}>Selected photos</Text>
+                    <ScrollView
+                      contentContainerStyle={styles.photoGalleryRow}
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.photoGalleryScroll}
+                    >
+                      {selectedPhotoUploads.map((attachment) => (
+                        <View key={attachment.id} style={styles.photoGalleryCard}>
+                          <Image resizeMode="cover" source={{ uri: attachment.uri }} style={styles.photoGalleryImage} />
+                          <Pressable onPress={() => handleRemoveSelectedPhotoUpload(attachment.id)} style={styles.photoGalleryDismissButton}>
+                            <Text style={styles.photoGalleryDismissButtonText}>X</Text>
+                          </Pressable>
+                          <View style={styles.photoGalleryMeta}>
+                            <Text numberOfLines={1} style={styles.attachmentName}>{attachment.name}</Text>
+                            <Text style={styles.attachmentDetail}>{formatAttachmentSize(attachment.size)}</Text>
+                          </View>
+                        </View>
+                      ))}
+                    </ScrollView>
+                  </>
+                ) : null}
+              </View>
               <DashboardMultilineField label="Business details" onChangeText={(value) => setProfileDraft((current) => ({ ...current, supporting_details: value }))} value={profileDraft.supporting_details ?? ''} />
               <View style={styles.dashboardInlineActions}>
                 <Pressable
-                  onPress={() => onSaveProfileDetails(buildSavePayload())}
+                  onPress={() => onSaveProfileDetails(buildSavePayload(), selectedPhotoUploads)}
                   style={[styles.linkButtonSecondaryWide, styles.dashboardInlineButton, (!profileDetailsChanged || submitting) ? styles.linkButtonDisabled : null]}
                 >
                   <Text style={styles.linkButtonSecondaryText}>{submitting ? 'Saving...' : 'Save Business Profile'}</Text>

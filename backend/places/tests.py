@@ -4030,6 +4030,52 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(response.data['business_contact']['business_website_url'], 'https://approved.example.com/new')
 		self.assertEqual(response.data['business_contact']['social_media_links'], ['https://instagram.com/approvedspot', 'https://facebook.com/approvedspot'])
 
+	def test_profile_dashboard_update_accepts_business_profile_photo_uploads(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Approved Spot',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='55 Main St',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@approvedspot.com',
+			work_phone='805-555-0200',
+			employer_address='55 Main St, Ventura, CA 93001',
+			verification_summary='I own the business.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+
+		with TemporaryDirectory() as temp_dir:
+			with override_settings(MEDIA_ROOT=Path(temp_dir)):
+				response = self.client.post(
+					reverse('profile-dashboard'),
+					{
+						'portal': 'business',
+						'username': 'dashboard_user',
+						'email': 'dashboard@example.com',
+						'first_name': 'Dash',
+						'last_name': 'Board',
+						'contact_name': 'Dash Board',
+						'work_email': 'owner@approvedspot.com',
+						'photo_references_text': 'https://cdn.example.com/approvedspot/front.jpg',
+						'profile_photo_uploads': [SimpleUploadedFile('dining-room.png', b'fake-image-bytes', content_type='image/png')],
+					},
+					format='multipart',
+					**self.auth_headers(),
+				)
+
+		self.assertEqual(response.status_code, 200)
+		claim.refresh_from_db()
+		self.assertEqual(len(claim.photo_references), 2)
+		self.assertEqual(claim.photo_references[0], 'https://cdn.example.com/approvedspot/front.jpg')
+		self.assertTrue(claim.photo_references[1].startswith('http://testserver/media/business-profile-photos/'))
+		self.assertIn(claim.photo_references[1], response.data['business_contact']['photo_references'])
+
 	def test_profile_dashboard_includes_mobile_location_tracking_status(self):
 		snapshot = ListingSnapshot.objects.create(
 			name='Scoops Truck',

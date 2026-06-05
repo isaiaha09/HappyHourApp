@@ -489,13 +489,13 @@ export function BrowseControls({
                 onPress={onToggleConfirmedDealsOnly}
                 style={[chipStyle, confirmedDealsOnly ? chipActiveStyle : null]}
               >
-                <Text style={[chipTextStyle, confirmedDealsOnly ? chipTextActiveStyle : null]}>Confirmed Happy Hour/Deals</Text>
+                <Text style={[chipTextStyle, confirmedDealsOnly ? chipTextActiveStyle : null]}>Confirmed Happy Hours & Deals</Text>
               </Pressable>
               <Pressable
                 onPress={onToggleVerifiedBusinessesOnly}
                 style={[chipStyle, verifiedBusinessesOnly ? chipActiveStyle : null]}
               >
-                <Text style={[chipTextStyle, verifiedBusinessesOnly ? chipTextActiveStyle : null]}>Claimed / Verified Businesses</Text>
+                <Text style={[chipTextStyle, verifiedBusinessesOnly ? chipTextActiveStyle : null]}>Claimed & Verified Businesses</Text>
               </Pressable>
             </View>
 

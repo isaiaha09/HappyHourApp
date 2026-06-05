@@ -1,6 +1,7 @@
 import { NativeModules } from 'react-native';
 
 import type {
+  BusinessAttachmentDraft,
   BusinessAttachmentBuckets,
   BusinessAttachmentKind,
   BusinessLocationTrackingPreferenceRequest,
@@ -94,6 +95,33 @@ export async function fetchProfileDashboard(baseUrl: string, authToken: string, 
 
 export async function updateProfileDashboard(baseUrl: string, authToken: string, payload: ProfileDashboardUpdateRequest) {
   return postAuthedJson<SignupResponse>(baseUrl, '/profiles/me/', authToken, payload);
+}
+
+export async function updateProfileDashboardWithUploads(
+  baseUrl: string,
+  authToken: string,
+  payload: ProfileDashboardUpdateRequest,
+  photoUploads: BusinessAttachmentDraft[],
+) {
+  const formData = new FormData();
+
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value === undefined || value === null) {
+      return;
+    }
+
+    formData.append(key, String(value));
+  });
+
+  photoUploads.forEach((photoUpload) => {
+    formData.append('profile_photo_uploads', {
+      uri: photoUpload.uri,
+      name: photoUpload.name,
+      type: photoUpload.mimeType ?? 'image/jpeg',
+    } as any);
+  });
+
+  return postAuthedMultipartJson<SignupResponse>(baseUrl, '/profiles/me/', authToken, formData);
 }
 
 export async function submitSupportRequest(baseUrl: string, authToken: string, payload: SupportContactRequest) {
@@ -356,6 +384,27 @@ async function postAuthedJson<T>(baseUrl: string, path: string, authToken: strin
       Authorization: `Token ${authToken}`,
     },
     body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorPayload = await response.json().catch(() => null);
+    const message = errorPayload && typeof errorPayload === 'object'
+      ? flattenApiError(errorPayload)
+      : `Backend request failed with status ${response.status}.`;
+    throw new Error(message);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+async function postAuthedMultipartJson<T>(baseUrl: string, path: string, authToken: string, payload: FormData): Promise<T> {
+  const response = await fetch(buildApiUrl(baseUrl, path), {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Token ${authToken}`,
+    },
+    body: payload,
   });
 
   if (!response.ok) {

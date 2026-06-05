@@ -44,6 +44,7 @@ import {
   submitSupportRequest,
   toggleFavoriteBusiness,
   updateProfileDashboard,
+  updateProfileDashboardWithUploads,
   updateBusinessLocationTrackingPreference,
   updateBusinessLocation,
   verifyEmailCode,
@@ -3301,7 +3302,7 @@ function AppScreen() {
     }
   }
 
-  async function handleSaveProfileDetails(payload: ProfileDashboardUpdateRequest) {
+  async function handleSaveProfileDetails(payload: ProfileDashboardUpdateRequest, photoUploads: BusinessAttachmentDraft[] = []) {
     if (!authenticatedSession?.auth_token) {
       return;
     }
@@ -3310,7 +3311,9 @@ function AppScreen() {
     setProfileErrorMessage(null);
 
     try {
-      const response = await updateProfileDashboard(apiBaseUrl, authenticatedSession.auth_token, payload);
+      const response = photoUploads.length
+        ? await updateProfileDashboardWithUploads(apiBaseUrl, authenticatedSession.auth_token, payload, photoUploads)
+        : await updateProfileDashboard(apiBaseUrl, authenticatedSession.auth_token, payload);
       setAuthenticatedSession(response);
       setProfileMessage(response.detail ?? 'Profile updated.');
       if (response.email_verified === false && payload.email !== authenticatedSession.email) {
@@ -3629,7 +3632,7 @@ function AppScreen() {
             isLandscape={isLandscape}
             message={profileMessage}
             onBack={handleBackFromBusinessProfileEditor}
-            onSaveProfileDetails={(payload) => void handleSaveProfileDetails(payload)}
+            onSaveProfileDetails={(payload, photoUploads) => void handleSaveProfileDetails(payload, photoUploads)}
             onViewInMap={handleViewApprovedBusinessInMap}
             session={profileSession}
             submitting={dashboardSubmitting}
@@ -4976,10 +4979,11 @@ function getFilteredPlaces(
       const matchesCity = filters.selectedCity === 'all' || placeCities.has(filters.selectedCity);
       const matchesVenueType = filters.selectedVenueTypes.includes(place.venue_type as VenueFilterValue);
       const matchesSearch = filters.searchQuery.length === 0 || score > 0;
-      const matchesDeals = !filters.confirmedDealsOnly || place.has_deals || place.deal_count > 0;
+      const hasConfirmedDeals = place.deal_count > 0 || getPlaceLocations(place).some((location) => location.deal_count > 0);
+      const matchesDeals = !filters.confirmedDealsOnly || hasConfirmedDeals;
       const matchesOperatingDays = !filters.selectedOperatingDays.length || hasAnyMatchingWeekday(place.operating_weekdays, filters.selectedOperatingDays);
       const matchesDealDays = !filters.selectedDealDays.length || hasAnyMatchingWeekday(place.deal_weekdays, filters.selectedDealDays);
-      const matchesVerified = !filters.verifiedBusinessesOnly || place.is_verified || place.is_claimed;
+      const matchesVerified = !filters.verifiedBusinessesOnly || place.is_claimed;
 
       return matchesCity && matchesVenueType && matchesSearch && matchesDeals && matchesOperatingDays && matchesDealDays && matchesVerified;
     })

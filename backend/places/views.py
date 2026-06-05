@@ -1,6 +1,8 @@
-from django.contrib.auth.models import User
 from django.conf import settings
+from django.contrib.auth.models import User
+from django.core.files.storage import default_storage
 from django.http import Http404, HttpResponse
+from django.utils.text import slugify
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework import generics, status
 from django.utils import timezone
@@ -8,6 +10,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from pathlib import Path
+from uuid import uuid4
 
 from .authentication import ProfileTokenAuthentication
 from .serializers import (
@@ -45,6 +49,28 @@ class SourcePlacePagination(PageNumberPagination):
 	page_size = 100
 	page_size_query_param = 'page_size'
 	max_page_size = 500
+
+
+SUPPORTED_PROFILE_PHOTO_SUFFIXES = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.heic', '.heif'}
+
+
+def _save_uploaded_profile_photo_urls(request, claim):
+	photo_urls = []
+	for uploaded_file in request.FILES.getlist('profile_photo_uploads'):
+		content_type = str(getattr(uploaded_file, 'content_type', '') or '').strip().lower()
+		file_suffix = Path(getattr(uploaded_file, 'name', '') or '').suffix.lower()
+		if not (content_type.startswith('image/') or file_suffix in SUPPORTED_PROFILE_PHOTO_SUFFIXES):
+			raise ValueError('Only image uploads from your photo library are supported.')
+
+		filename_root = Path(getattr(uploaded_file, 'name', '') or 'business-photo').stem or 'business-photo'
+		safe_name = slugify(filename_root) or 'business-photo'
+		saved_name = default_storage.save(
+			f'business-profile-photos/{claim.id}/{uuid4().hex}-{safe_name}{file_suffix}',
+			uploaded_file,
+		)
+		photo_urls.append(request.build_absolute_uri(default_storage.url(saved_name)))
+
+	return photo_urls
 
 
 class HealthCheckView(APIView):
@@ -383,6 +409,10 @@ class ProfileDashboardView(APIView):
 
 			claim = membership.claim
 			snapshot = claim.listing_snapshot
+			try:
+				uploaded_photo_urls = _save_uploaded_profile_photo_urls(request, claim)
+			except ValueError as error:
+				return Response({'detail': str(error)}, status=status.HTTP_400_BAD_REQUEST)
 			claim_update_fields = ['updated_at']
 			snapshot_update_fields = []
 			profile_entry_payload = {}
@@ -407,6 +437,11 @@ class ProfileDashboardView(APIView):
 					setattr(claim, claim_field_name, normalized_entries)
 					claim_update_fields.append(claim_field_name)
 					profile_entry_payload[claim_field_name] = normalized_entries
+
+			if uploaded_photo_urls:
+				claim.photo_references = list(dict.fromkeys([*list(claim.photo_references or []), *uploaded_photo_urls]))
+				claim_update_fields.append('photo_references')
+				profile_entry_payload['photo_references'] = claim.photo_references
 
 			claim.save(update_fields=list(dict.fromkeys(claim_update_fields)))
 			if profile_entry_payload:

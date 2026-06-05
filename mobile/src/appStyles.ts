@@ -382,7 +382,7 @@ export const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 1,
     gap: 12,
-    padding: 16,
+    padding: 14,
   },
   mapTopPanelLandscape: {
     alignSelf: 'center',
@@ -697,7 +697,7 @@ export const styles = StyleSheet.create({
     backgroundColor: '#f8efe3',
   },
   searchInputShellCurtain: {
-    minHeight: 48,
+    minHeight: 52,
   },
   searchCurtainToggleInline: {
     alignItems: 'center',
@@ -1266,6 +1266,51 @@ export const styles = StyleSheet.create({
     color: '#5f4b3d',
     fontSize: 14,
     marginTop: 6,
+  },
+  photoGalleryScroll: {
+    marginTop: 10,
+  },
+  photoGalleryRow: {
+    gap: 10,
+    paddingRight: 4,
+  },
+  photoGalleryCard: {
+    backgroundColor: '#fff7ef',
+    borderColor: '#efd8bd',
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: 'hidden',
+    position: 'relative',
+    width: 176,
+  },
+  photoGalleryImage: {
+    backgroundColor: '#ecdac7',
+    height: 132,
+    width: '100%',
+  },
+  photoGalleryDismissButton: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(64, 34, 20, 0.86)',
+    borderRadius: 999,
+    height: 28,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 8,
+    top: 8,
+    width: 28,
+    zIndex: 1,
+  },
+  photoGalleryDismissButtonText: {
+    color: '#fff7ef',
+    fontSize: 12,
+    fontWeight: '800',
+    lineHeight: 14,
+    textAlign: 'center',
+  },
+  photoGalleryMeta: {
+    gap: 2,
+    paddingHorizontal: 10,
+    paddingTop: 10,
   },
   favoriteStarButton: {
     alignItems: 'center',
@@ -2301,6 +2346,12 @@ export const styles = StyleSheet.create({
   },
   attachmentPickerButton: {
     marginTop: 0,
+  },
+  attachmentGalleryLabel: {
+    color: '#5f4b3d',
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 12,
   },
   attachmentSupportText: {
     marginTop: 4,

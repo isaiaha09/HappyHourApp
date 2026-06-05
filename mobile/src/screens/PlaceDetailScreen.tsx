@@ -1,9 +1,9 @@
-import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
+import { Image, Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
 
 import { styles } from '../appStyles';
-import { buildGoogleReviewsUrl, formatPlaceAddress, getPlacePreviewRegion, openMapsAddress } from '../placeHelpers';
+import { buildGoogleReviewsUrl, dedupeImageUrls, formatPlaceAddress, getPlacePreviewRegion, openMapsAddress } from '../placeHelpers';
 import type { Deal, HappyHourWindow, OperatingHourWindow, PlaceDetail, PlaceLocationDetail } from '../types';
 
 export type PlaceDetailScreenProps = {
@@ -54,6 +54,10 @@ export function PlaceDetailScreen({
   const insets = useSafeAreaInsets();
   const selectedPlaceMapRegion = getPlacePreviewRegion(selectedPlaceLocation ?? selectedPlace);
   const showVerifiedBadge = !!selectedPlace && (selectedPlace.is_claimed || selectedPlace.is_verified);
+  const selectedPlaceImageUrls = dedupeImageUrls([
+    ...(selectedPlaceLocation?.image_urls ?? []),
+    ...(selectedPlace?.image_urls ?? []),
+  ]);
 
   return (
     <View style={[styles.detailScreenRoot, isLandscape ? styles.detailScreenLandscape : null]}>
@@ -65,7 +69,7 @@ export function PlaceDetailScreen({
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle, { paddingTop: Math.max(insets.top + 14, 40) }]}>
+        <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
           <Pressable onPress={onBack} style={styles.backButton}>
             <Text style={styles.backButtonText}>{backButtonLabel}</Text>
           </Pressable>
@@ -140,6 +144,24 @@ export function PlaceDetailScreen({
 
             {(selectedPlaceLocation?.phone_number ?? selectedPlace.phone_number) ? (
               <Text selectable style={styles.detailMeta}>Phone: {selectedPlaceLocation?.phone_number ?? selectedPlace.phone_number}</Text>
+            ) : null}
+
+            {selectedPlaceImageUrls.length ? (
+              <>
+                <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>Photos</Text>
+                <ScrollView
+                  contentContainerStyle={styles.photoGalleryRow}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.photoGalleryScroll}
+                >
+                  {selectedPlaceImageUrls.map((imageUrl) => (
+                    <View key={imageUrl} style={styles.photoGalleryCard}>
+                      <Image resizeMode="cover" source={{ uri: imageUrl }} style={styles.photoGalleryImage} />
+                    </View>
+                  ))}
+                </ScrollView>
+              </>
             ) : null}
 
             {selectedPlaceMapRegion ? (
