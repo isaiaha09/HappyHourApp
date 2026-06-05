@@ -174,6 +174,7 @@ def build_account_response(user, portal, claim=None, token=None):
 
 	business_contact = {}
 	if primary_claim is not None:
+		editable_photo_references = _get_editable_business_photo_references(primary_claim)
 		business_contact = {
 			'contact_name': primary_claim.contact_name,
 			'job_title': primary_claim.job_title,
@@ -184,7 +185,7 @@ def build_account_response(user, portal, claim=None, token=None):
 			'social_media_links': primary_claim.social_media_links,
 			'offer_entries': primary_claim.offer_entries,
 			'hours_of_operation_entries': primary_claim.hours_of_operation_entries,
-			'photo_references': primary_claim.photo_references,
+			'photo_references': editable_photo_references,
 			'supporting_details': primary_claim.supporting_details,
 			'verification_summary': primary_claim.verification_summary,
 		}
@@ -252,6 +253,22 @@ def build_email_verification_challenge(user, portal, claim=None, force_resend=Fa
 		'verification_code_ttl_seconds': profile.get_email_verification_code_ttl_seconds(),
 	})
 	return payload
+
+
+def _get_editable_business_photo_references(claim):
+	if claim.photo_gallery_overridden:
+		return list(claim.photo_references or [])
+
+	from .source_listings import get_source_place_payload
+
+	payload = get_source_place_payload(claim.listing_snapshot.listing_slug)
+	if not payload:
+		return list(claim.photo_references or [])
+
+	return list(dict.fromkeys([
+		*payload.get('image_urls', []),
+		*list(claim.photo_references or []),
+	]))
 
 
 def send_verification_email(user, profile):

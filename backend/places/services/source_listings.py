@@ -247,6 +247,7 @@ def _build_claim_override_payload(claim):
 		'offer_entries': list(claim.offer_entries or []),
 		'hours_of_operation_entries': list(claim.hours_of_operation_entries or []),
 		'photo_references': list(claim.photo_references or []),
+		'photo_gallery_overridden': bool(claim.photo_gallery_overridden),
 		'supporting_details': str(claim.supporting_details or '').strip(),
 	}
 
@@ -299,7 +300,11 @@ def _merge_claimed_snapshot_payload(existing_payload, snapshot_payload):
 	merged_payload = dict(existing_payload)
 	is_live_location_business = snapshot_payload.get('venue_type') == VenueType.MOBILE
 	owner_website_url = snapshot_payload.get('website_url') or existing_payload.get('website_url', '')
-	owner_image_urls = list(dict.fromkeys([*existing_payload.get('image_urls', []), *snapshot_payload.get('image_urls', [])]))
+	owner_controls_photo_gallery = bool(snapshot_payload.get('photo_gallery_overridden'))
+	owner_image_urls = list(dict.fromkeys(
+		snapshot_payload.get('image_urls', []) if owner_controls_photo_gallery
+		else [*existing_payload.get('image_urls', []), *snapshot_payload.get('image_urls', [])]
+	))
 	merged_locations = []
 	location_source = snapshot_payload.get('locations', []) if is_live_location_business else existing_payload.get('locations', [])
 	for location in location_source:

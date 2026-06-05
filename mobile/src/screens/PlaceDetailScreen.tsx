@@ -57,7 +57,7 @@ export function PlaceDetailScreen({
   const [photoLightboxVisible, setPhotoLightboxVisible] = useState(false);
   const [photoLightboxIndex, setPhotoLightboxIndex] = useState(0);
   const selectedPlaceMapRegion = getPlacePreviewRegion(selectedPlaceLocation ?? selectedPlace);
-  const showVerifiedBadge = !!selectedPlace && (selectedPlace.is_claimed || selectedPlace.is_verified);
+  const showVerifiedBadge = !!selectedPlace?.is_claimed;
   const selectedPlaceImageUrls = dedupeImageUrls([
     ...(selectedPlaceLocation?.image_urls ?? []),
     ...(selectedPlace?.image_urls ?? []),
@@ -101,7 +101,7 @@ export function PlaceDetailScreen({
               </View>
               <View style={styles.detailHeaderActions}>
                 {showVerifiedBadge ? (
-                  <View accessibilityLabel="Claimed or verified business" style={styles.verifiedStatusBadge}>
+                  <View accessibilityLabel="Claimed business" style={styles.verifiedStatusBadge}>
                     <Text style={styles.verifiedStatusBadgeIcon}>✓</Text>
                   </View>
                 ) : null}

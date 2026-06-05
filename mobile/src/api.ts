@@ -273,7 +273,7 @@ function buildApiUrl(baseUrl: string, path: string) {
 
 function buildBusinessSignupFormData(payload: BusinessSignupRequest | ManualBusinessSignupRequest | InformalBusinessSignupRequest) {
   const formData = new FormData();
-  const { attachments, ...rest } = payload;
+  const { attachments, photo_uploads, ...rest } = payload;
 
   Object.entries(rest).forEach(([key, value]) => {
     if (value === undefined || value === null) {
@@ -289,6 +289,7 @@ function buildBusinessSignupFormData(payload: BusinessSignupRequest | ManualBusi
   });
 
   appendBusinessAttachments(formData, attachments);
+  appendBusinessPhotoUploads(formData, photo_uploads);
   return formData;
 }
 
@@ -306,6 +307,20 @@ function appendBusinessAttachments(formData: FormData, attachments?: BusinessAtt
         type: file.mimeType ?? 'application/octet-stream',
       } as any);
     });
+  });
+}
+
+function appendBusinessPhotoUploads(formData: FormData, photoUploads?: BusinessAttachmentDraft[]) {
+  if (!photoUploads?.length) {
+    return;
+  }
+
+  photoUploads.forEach((photoUpload) => {
+    formData.append('profile_photo_uploads', {
+      uri: photoUpload.uri,
+      name: photoUpload.name,
+      type: photoUpload.mimeType ?? 'image/jpeg',
+    } as any);
   });
 }
 

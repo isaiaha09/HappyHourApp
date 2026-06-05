@@ -27,8 +27,8 @@ import { WebView } from 'react-native-webview';
 import { styles } from '../appStyles';
 import type { AuthPortal, LoginFormState, ProfileFormState } from '../appFlowTypes';
 import { manualBusinessCityOptions, manualBusinessVenueOptions } from '../browseConfig';
-import { formatPlaceAddress, getPlaceLocations, normalizeSearchText } from '../placeHelpers';
-import type { BusinessAttachmentBuckets, BusinessAttachmentKind, EmailVerificationChallengeResponse, PlaceListItem, PlaceLocation, SignupResponse } from '../types';
+import { dedupeImageUrls, formatPlaceAddress, getPlaceLocations, normalizeSearchText } from '../placeHelpers';
+import type { BusinessAttachmentBuckets, BusinessAttachmentDraft, BusinessAttachmentKind, EmailVerificationChallengeResponse, PlaceListItem, PlaceLocation, SignupResponse } from '../types';
 
 const SUPPORT_EMAIL = 'support@diningdealz.com';
 
@@ -41,7 +41,7 @@ type CompactDropdownProps = {
   onToggle: () => void;
 };
 
-type StructuredListField = 'social_media_links_text' | 'offer_entries_text' | 'hours_of_operation_entries_text' | 'photo_references_text';
+type StructuredListField = 'social_media_links_text' | 'offer_entries_text' | 'hours_of_operation_entries_text';
 
 type AttachmentPreviewState =
   | { kind: 'image'; name: string; uri: string }
@@ -207,15 +207,31 @@ export type BusinessVerificationScreenProps = {
   lockAccountIdentityFields?: boolean;
   mode: 'claimed' | 'manual' | 'informal';
   onAddAttachments: (kind: BusinessAttachmentKind) => void;
+  onAddPhotoUploads: () => void;
   onBack: () => void;
   onChangeField: (field: keyof ProfileFormState, value: string) => void;
+  onRemoveCurrentPhoto: (photoUrl: string) => void;
   onRemoveAttachment: (kind: BusinessAttachmentKind, attachmentId: string) => void;
+  onRemovePhotoUpload: (attachmentId: string) => void;
   onToggleAddressNotApplicable: (value: boolean) => void;
   onSubmit: () => void;
+  photoUploads: BusinessAttachmentDraft[];
   selectedLocation: PlaceLocation | null;
   selectedPlace: PlaceListItem | null;
   submitting: boolean;
 };
+
+function formatAttachmentSize(size: number | null) {
+  if (!size || size <= 0) {
+    return 'Ready to upload';
+  }
+
+  if (size >= 1024 * 1024) {
+    return `${Math.round((size / (1024 * 1024)) * 10) / 10} MB`;
+  }
+
+  return `${Math.max(1, Math.round(size / 1024))} KB`;
+}
 
 export type EmailVerificationScreenProps = {
   errorMessage: string | null;
@@ -1150,7 +1166,7 @@ export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces,
   );
 }
 
-export function BusinessVerificationScreen({ attachments, errorMessage, form, isLandscape, lockAccountIdentityFields = false, mode, onAddAttachments, onBack, onChangeField, onRemoveAttachment, onToggleAddressNotApplicable, onSubmit, selectedLocation, selectedPlace, submitting }: BusinessVerificationScreenProps) {
+export function BusinessVerificationScreen({ attachments, errorMessage, form, isLandscape, lockAccountIdentityFields = false, mode, onAddAttachments, onAddPhotoUploads, onBack, onChangeField, onRemoveAttachment, onRemoveCurrentPhoto, onRemovePhotoUpload, onToggleAddressNotApplicable, onSubmit, photoUploads, selectedLocation, selectedPlace, submitting }: BusinessVerificationScreenProps) {
   const isClaimed = mode === 'claimed';
   const isEstablished = mode === 'manual';
   const isInformal = mode === 'informal';
@@ -1162,12 +1178,18 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
     social_media_links_text: '',
     offer_entries_text: '',
     hours_of_operation_entries_text: '',
-    photo_references_text: '',
   });
   const [entryErrors, setEntryErrors] = useState<Partial<Record<StructuredListField, string>>>({});
   const [attachmentPreview, setAttachmentPreview] = useState<AttachmentPreviewState | null>(null);
   const [attachmentPreviewLoading, setAttachmentPreviewLoading] = useState(false);
   const { handleFieldFocus, handleScroll, scrollViewRef } = useAutoScrollForm();
+  const currentPhotoUrls = dedupeImageUrls(
+    form.photo_references_text
+      .split(/\r?\n/)
+      .map((entry) => entry.trim())
+      .filter((entry) => /^https?:\/\//i.test(entry)),
+  );
+  const remainingPhotoSlots = Math.max(0, 8 - currentPhotoUrls.length - photoUploads.length);
 
   const verificationTitle = isClaimed
     ? 'Verify this business claim'
@@ -1660,19 +1682,67 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
                 addLabel: 'Add hours',
               })}
 
-              {isClaimed ? renderMultilineField(
-                'photo_references_text',
-                'Photo links or references (optional)',
-                form.photo_references_text,
-                {
-                  placeholder: 'https://example.com/storefront.jpg',
-                  support: 'Existing media references will prefill here when available, and you can edit them before submitting.',
-                },
-              ) : renderStructuredEntryField('photo_references_text', 'Photo links or references (optional)', {
-                placeholder: 'https://example.com/storefront.jpg',
-                support: 'Add each photo reference separately so the system can treat them as individual media items.',
-                addLabel: 'Add photo',
-              })}
+              <View style={styles.attachmentSection}>
+                <Text style={styles.profileFieldLabel}>Business photos</Text>
+                <Pressable
+                  disabled={remainingPhotoSlots <= 0}
+                  onPress={onAddPhotoUploads}
+                  style={[styles.linkButtonSecondary, styles.attachmentPickerButton, remainingPhotoSlots <= 0 ? styles.linkButtonDisabled : null]}
+                >
+                  <Text style={styles.linkButtonSecondaryText}>
+                    {currentPhotoUrls.length || photoUploads.length ? 'Add more photos from Photo Library' : 'Select photos from Photo Library'}
+                  </Text>
+                </Pressable>
+                <Text style={[styles.profileSupportText, styles.attachmentSupportText]}>
+                  {isClaimed
+                    ? 'Existing business photos prefill here when available. You can remove them or add up to 8 total photos from the photo library.'
+                    : 'Upload up to 8 business photos from the photo library. Camera capture is not used here.'}
+                </Text>
+                {currentPhotoUrls.length ? (
+                  <>
+                    <Text style={styles.attachmentGalleryLabel}>Current public photos</Text>
+                    <ScrollView
+                      contentContainerStyle={styles.photoGalleryRow}
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.photoGalleryScroll}
+                    >
+                      {currentPhotoUrls.map((photoUrl) => (
+                        <View key={photoUrl} style={styles.photoGalleryCard}>
+                          <Image resizeMode="cover" source={{ uri: photoUrl }} style={styles.photoGalleryImage} />
+                          <Pressable onPress={() => onRemoveCurrentPhoto(photoUrl)} style={styles.photoGalleryDismissButton}>
+                            <Text style={styles.photoGalleryDismissButtonText}>X</Text>
+                          </Pressable>
+                        </View>
+                      ))}
+                    </ScrollView>
+                  </>
+                ) : null}
+                {photoUploads.length ? (
+                  <>
+                    <Text style={styles.attachmentGalleryLabel}>Selected photos</Text>
+                    <ScrollView
+                      contentContainerStyle={styles.photoGalleryRow}
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.photoGalleryScroll}
+                    >
+                      {photoUploads.map((attachment) => (
+                        <View key={attachment.id} style={styles.photoGalleryCard}>
+                          <Image resizeMode="cover" source={{ uri: attachment.uri }} style={styles.photoGalleryImage} />
+                          <Pressable onPress={() => onRemovePhotoUpload(attachment.id)} style={styles.photoGalleryDismissButton}>
+                            <Text style={styles.photoGalleryDismissButtonText}>X</Text>
+                          </Pressable>
+                          <View style={styles.photoGalleryMeta}>
+                            <Text numberOfLines={1} style={styles.attachmentName}>{attachment.name}</Text>
+                            <Text style={styles.attachmentDetail}>{formatAttachmentSize(attachment.size)}</Text>
+                          </View>
+                        </View>
+                      ))}
+                    </ScrollView>
+                  </>
+                ) : null}
+              </View>
 
               {!isInformal ? (
                 <>

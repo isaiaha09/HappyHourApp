@@ -254,6 +254,7 @@ type SharedBusinessDetails = {
   offer_entries: string[];
   hours_of_operation_entries: string[];
   photo_references: string[];
+  photo_uploads?: BusinessAttachmentDraft[];
 };
 
 export type BusinessSignupRequest = CustomerSignupRequest & SharedBusinessDetails & {

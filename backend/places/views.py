@@ -73,6 +73,28 @@ def _save_uploaded_profile_photo_urls(request, claim):
 	return photo_urls
 
 
+def _append_uploaded_profile_photos_to_claim(request, claim):
+	if request is None or claim is None:
+		return
+
+	uploaded_photo_urls = _save_uploaded_profile_photo_urls(request, claim)
+	if not uploaded_photo_urls:
+		return
+
+	claim.photo_references = _normalize_string_list([*claim.photo_references, *uploaded_photo_urls])
+	claim.photo_gallery_overridden = True
+	claim.save(update_fields=['photo_references', 'photo_gallery_overridden', 'updated_at'])
+	_replace_claim_profile_entries(
+		claim,
+		{
+			'social_media_links': claim.social_media_links,
+			'offer_entries': claim.offer_entries,
+			'hours_of_operation_entries': claim.hours_of_operation_entries,
+			'photo_references': claim.photo_references,
+		},
+	)
+
+
 class HealthCheckView(APIView):
 	def get(self, request):
 		return Response({'status': 'ok', 'service': 'happyhour-backend'})
@@ -255,6 +277,7 @@ class BusinessSignupView(generics.GenericAPIView):
 		serializer.validated_data['listing_snapshot'] = sync_listing_snapshot_from_place_payload(place_payload)
 		user = serializer.save()
 		claim = getattr(user, '_created_business_claim', None)
+		_append_uploaded_profile_photos_to_claim(request, claim)
 		profile = get_or_create_account_profile(user)
 		response_token = request.auth if getattr(request.user, 'is_authenticated', False) and request.user.pk == user.pk else None
 		if getattr(user, '_signup_reused_existing_user', False) and profile.email_is_verified:
@@ -274,6 +297,7 @@ class ManualBusinessSignupView(generics.GenericAPIView):
 		serializer.is_valid(raise_exception=True)
 		user = serializer.save()
 		claim = getattr(user, '_created_business_claim', None)
+		_append_uploaded_profile_photos_to_claim(request, claim)
 		profile = get_or_create_account_profile(user)
 		if getattr(user, '_signup_reused_existing_user', False) and profile.email_is_verified:
 			send_business_claim_received_email(user, claim)
@@ -292,6 +316,7 @@ class InformalBusinessSignupView(generics.GenericAPIView):
 		serializer.is_valid(raise_exception=True)
 		user = serializer.save()
 		claim = getattr(user, '_created_business_claim', None)
+		_append_uploaded_profile_photos_to_claim(request, claim)
 		profile = get_or_create_account_profile(user)
 		if getattr(user, '_signup_reused_existing_user', False) and profile.email_is_verified:
 			send_business_claim_received_email(user, claim)
@@ -437,10 +462,15 @@ class ProfileDashboardView(APIView):
 					setattr(claim, claim_field_name, normalized_entries)
 					claim_update_fields.append(claim_field_name)
 					profile_entry_payload[claim_field_name] = normalized_entries
+					if claim_field_name == 'photo_references':
+						claim.photo_gallery_overridden = True
+						claim_update_fields.append('photo_gallery_overridden')
 
 			if uploaded_photo_urls:
 				claim.photo_references = list(dict.fromkeys([*list(claim.photo_references or []), *uploaded_photo_urls]))
 				claim_update_fields.append('photo_references')
+				claim.photo_gallery_overridden = True
+				claim_update_fields.append('photo_gallery_overridden')
 				profile_entry_payload['photo_references'] = claim.photo_references
 
 			claim.save(update_fields=list(dict.fromkeys(claim_update_fields)))

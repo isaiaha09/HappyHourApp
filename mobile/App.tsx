@@ -1,6 +1,7 @@
 import { startTransition, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import {
   ActivityIndicator,
@@ -346,6 +347,16 @@ function normalizeBusinessAttachment(asset: DocumentPicker.DocumentPickerAsset):
   };
 }
 
+function normalizeBusinessPhotoUpload(asset: ImagePicker.ImagePickerAsset): BusinessAttachmentDraft {
+  return {
+    id: `${asset.assetId ?? asset.uri}::${asset.fileName ?? 'business-photo'}::${asset.fileSize ?? 0}`,
+    name: asset.fileName ?? `business-photo-${Date.now()}.jpg`,
+    uri: asset.uri,
+    mimeType: asset.mimeType ?? 'image/jpeg',
+    size: asset.fileSize ?? null,
+  };
+}
+
 function mergeBusinessAttachments(current: BusinessAttachmentDraft[], next: BusinessAttachmentDraft[]) {
   const merged = [...current];
   next.forEach((attachment) => {
@@ -480,6 +491,7 @@ function AppScreen() {
   const pendingListRevealRef = useRef(false);
   const [profileForm, setProfileForm] = useState<ProfileFormState>(initialProfileFormState);
   const [businessAttachments, setBusinessAttachments] = useState<BusinessAttachmentBuckets>(initialBusinessAttachments);
+  const [businessPhotoUploads, setBusinessPhotoUploads] = useState<BusinessAttachmentDraft[]>([]);
   const [profileSubmitting, setProfileSubmitting] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [profileErrorMessage, setProfileErrorMessage] = useState<string | null>(null);
@@ -2221,6 +2233,7 @@ function AppScreen() {
     claimPrefillRequestRef.current += 1;
     claimPrefillLoadedKeyRef.current = '';
     setBusinessAttachments(initialBusinessAttachments);
+    setBusinessPhotoUploads([]);
     setSelectedClaimPlace(null);
     setSelectedClaimLocationId(null);
     setProfileForm(initialProfileFormState);
@@ -2243,6 +2256,7 @@ function AppScreen() {
     setSelectedClaimPlace(selectedPlace);
     setSelectedClaimLocationId(selectedClaimLocation.id);
     setBusinessAttachments(initialBusinessAttachments);
+    setBusinessPhotoUploads([]);
     setProfileForm({
       ...resetBusinessVerificationFields(initialProfileFormState),
       username: customerSession?.username ?? '',
@@ -2789,6 +2803,53 @@ function AppScreen() {
     }));
   }
 
+  async function handleAddBusinessPhotoUploads() {
+    try {
+      const currentPhotoUrls = dedupeImageUrls(splitMultilineEntries(profileForm.photo_references_text));
+      const remainingSlots = Math.max(0, 8 - currentPhotoUrls.length - businessPhotoUploads.length);
+
+      if (remainingSlots <= 0) {
+        setProfileErrorMessage('You can upload up to 8 business photos. Remove one first if you want to replace it.');
+        return;
+      }
+
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setProfileErrorMessage('Photo library access is required to upload business photos.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        allowsEditing: true,
+        allowsMultipleSelection: false,
+        aspect: [4, 3],
+        mediaTypes: ['images'],
+        quality: 0.9,
+      });
+
+      if (result.canceled || !result.assets.length) {
+        return;
+      }
+
+      const nextUploads = result.assets.slice(0, remainingSlots).map(normalizeBusinessPhotoUpload);
+      setBusinessPhotoUploads((current) => mergeBusinessAttachments(current, nextUploads));
+      setProfileErrorMessage(null);
+    } catch (error) {
+      setProfileErrorMessage(getErrorMessage(error));
+    }
+  }
+
+  function handleRemoveCurrentBusinessPhoto(photoUrl: string) {
+    setProfileForm((current) => ({
+      ...current,
+      photo_references_text: dedupeImageUrls(splitMultilineEntries(current.photo_references_text).filter((entry) => entry !== photoUrl)).join('\n'),
+    }));
+  }
+
+  function handleRemoveBusinessPhotoUpload(attachmentId: string) {
+    setBusinessPhotoUploads((current) => current.filter((attachment) => attachment.id !== attachmentId));
+  }
+
   function handleSelectBusinessSlug(slug: string) {
     const selectedPlace = availableProfilePlaces.find((place) => place.slug === slug) ?? null;
     setSelectedClaimPlace(selectedPlace);
@@ -3069,6 +3130,7 @@ function AppScreen() {
         first_name: profileForm.first_name,
         last_name: profileForm.last_name,
         attachments: businessAttachments,
+        photo_uploads: businessPhotoUploads,
         ...buildSharedBusinessDetails(profileForm),
         business_slug: profileForm.business_slug,
         contact_name: profileForm.contact_name,
@@ -3083,6 +3145,7 @@ function AppScreen() {
       const response = await createBusinessProfile(apiBaseUrl, payload, authenticatedSession?.auth_token);
       setProfileForm(initialProfileFormState);
       setBusinessAttachments(initialBusinessAttachments);
+      setBusinessPhotoUploads([]);
       setSelectedClaimPlace(null);
       setSelectedClaimLocationId(null);
       setClaimReturnDestination('business-search');
@@ -3121,6 +3184,7 @@ function AppScreen() {
         first_name: profileForm.first_name,
         last_name: profileForm.last_name,
         attachments: businessAttachments,
+        photo_uploads: businessPhotoUploads,
         ...buildSharedBusinessDetails(profileForm),
         business_name: profileForm.business_name,
         business_city: profileForm.business_city,
@@ -3137,6 +3201,7 @@ function AppScreen() {
       const response = await createManualBusinessProfile(apiBaseUrl, payload);
       setProfileForm(initialProfileFormState);
       setBusinessAttachments(initialBusinessAttachments);
+      setBusinessPhotoUploads([]);
       setSelectedClaimPlace(null);
       setSelectedClaimLocationId(null);
       handleBusinessSignupResponse(response);
@@ -3166,6 +3231,7 @@ function AppScreen() {
         first_name: profileForm.first_name,
         last_name: profileForm.last_name,
         attachments: businessAttachments,
+        photo_uploads: businessPhotoUploads,
         ...buildSharedBusinessDetails(profileForm),
         business_name: profileForm.business_name,
         business_city: profileForm.business_city,
@@ -3175,6 +3241,7 @@ function AppScreen() {
       const response = await createInformalBusinessProfile(apiBaseUrl, payload);
       setProfileForm(initialProfileFormState);
       setBusinessAttachments(initialBusinessAttachments);
+      setBusinessPhotoUploads([]);
       setSelectedClaimPlace(null);
       setSelectedClaimLocationId(null);
       handleBusinessSignupResponse(response);
@@ -3467,6 +3534,7 @@ function AppScreen() {
     setSelectedClaimPlace(null);
     setSelectedClaimLocationId(null);
     setBusinessAttachments(initialBusinessAttachments);
+    setBusinessPhotoUploads([]);
     setProfileForm((current) => resetBusinessVerificationFields(current));
     navigateScreen('manual-business-claim', 'forward');
   }
@@ -3479,6 +3547,7 @@ function AppScreen() {
     setSelectedClaimPlace(null);
     setSelectedClaimLocationId(null);
     setBusinessAttachments(initialBusinessAttachments);
+    setBusinessPhotoUploads([]);
     setProfileForm((current) => resetBusinessVerificationFields(current));
     navigateScreen('informal-business-claim', 'forward');
   }
@@ -3491,6 +3560,7 @@ function AppScreen() {
     setSelectedClaimPlace(place);
     setSelectedClaimLocationId(selectedLocation.id);
     setBusinessAttachments(initialBusinessAttachments);
+    setBusinessPhotoUploads([]);
     setProfileForm((current) => ({
       ...resetBusinessVerificationFields(current),
       business_slug: place.slug,
@@ -3991,11 +4061,15 @@ function AppScreen() {
               lockAccountIdentityFields={claimReturnDestination === 'profiles' && authenticatedSession?.portal === 'customer'}
               mode="claimed"
               onAddAttachments={handleAddBusinessAttachments}
+              onAddPhotoUploads={handleAddBusinessPhotoUploads}
               onBack={handleBackToBusinessSearch}
               onChangeField={handleChangeProfileField}
+              onRemoveCurrentPhoto={handleRemoveCurrentBusinessPhoto}
               onRemoveAttachment={handleRemoveBusinessAttachment}
+              onRemovePhotoUpload={handleRemoveBusinessPhotoUpload}
               onToggleAddressNotApplicable={(value) => handleChangeProfileToggle('address_not_applicable', value)}
               onSubmit={handleSubmitClaimedBusinessProfile}
+              photoUploads={businessPhotoUploads}
               selectedLocation={selectedClaimLocation}
               selectedPlace={selectedClaimPlace}
               submitting={profileSubmitting}
@@ -4012,11 +4086,15 @@ function AppScreen() {
               isLandscape={isLandscape}
               mode="manual"
               onAddAttachments={handleAddBusinessAttachments}
+              onAddPhotoUploads={handleAddBusinessPhotoUploads}
               onBack={handleBackToBusinessSearch}
               onChangeField={handleChangeProfileField}
+              onRemoveCurrentPhoto={handleRemoveCurrentBusinessPhoto}
               onRemoveAttachment={handleRemoveBusinessAttachment}
+              onRemovePhotoUpload={handleRemoveBusinessPhotoUpload}
               onToggleAddressNotApplicable={(value) => handleChangeProfileToggle('address_not_applicable', value)}
               onSubmit={handleSubmitManualBusinessProfile}
+              photoUploads={businessPhotoUploads}
               selectedLocation={null}
               selectedPlace={null}
               submitting={profileSubmitting}
@@ -4033,11 +4111,15 @@ function AppScreen() {
               isLandscape={isLandscape}
               mode="informal"
               onAddAttachments={handleAddBusinessAttachments}
+              onAddPhotoUploads={handleAddBusinessPhotoUploads}
               onBack={handleBackToBusinessSearch}
               onChangeField={handleChangeProfileField}
+              onRemoveCurrentPhoto={handleRemoveCurrentBusinessPhoto}
               onRemoveAttachment={handleRemoveBusinessAttachment}
+              onRemovePhotoUpload={handleRemoveBusinessPhotoUpload}
               onToggleAddressNotApplicable={(value) => handleChangeProfileToggle('address_not_applicable', value)}
               onSubmit={handleSubmitInformalBusinessProfile}
+              photoUploads={businessPhotoUploads}
               selectedLocation={null}
               selectedPlace={null}
               submitting={profileSubmitting}

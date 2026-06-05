@@ -3092,6 +3092,65 @@ class ProfileSignupApiTests(APITestCase):
 		)
 
 	@patch('places.views.get_source_place_payload')
+	def test_claimed_business_signup_accepts_uploaded_business_photos(self, mock_get_source_place_payload):
+		mock_get_source_place_payload.return_value = {
+			'id': 1,
+			'slug': 'finneys-crafthouse',
+			'name': 'Finney\'s Crafthouse',
+			'city': City.VENTURA,
+			'venue_type': VenueType.RESTAURANT,
+			'address_line_1': '494 E Main St',
+			'address_line_2': '',
+			'neighborhood': 'Downtown',
+			'state': 'CA',
+			'postal_code': '93001',
+			'phone_number': '805-555-0199',
+			'website_url': 'https://example.com/finneys',
+			'locations': [],
+		}
+
+		with TemporaryDirectory() as temp_dir:
+			with override_settings(MEDIA_ROOT=Path(temp_dir)):
+				response = self.client.post(
+					reverse('business-signup'),
+					{
+						'username': 'photo_claim_owner',
+						'email': 'photo-claim@example.com',
+						'password': 'test-pass-123',
+						'first_name': 'Pat',
+						'last_name': 'Owner',
+						'business_slug': 'finneys-crafthouse',
+						'contact_name': 'Pat Owner',
+						'job_title': BusinessClaim.JobTitle.MANAGER,
+						'work_email': 'pat@finneys.com',
+						'work_phone': '805-555-0100',
+						'employer_address': '494 E Main St, Ventura, CA 93001',
+						'address_not_applicable': False,
+						'verification_documents': json.dumps({
+							'business_registration': ['CA business license #123'],
+							'health_permit': ['Ventura County permit #A-55'],
+							'abc_license': [],
+							'proof_of_address_control': [],
+						}),
+						'profile_photo_uploads': [
+							SimpleUploadedFile('front.jpg', b'front-photo', content_type='image/jpeg'),
+							SimpleUploadedFile('inside.png', b'inside-photo', content_type='image/png'),
+						],
+					},
+					format='multipart',
+				)
+
+		self.assertEqual(response.status_code, 201)
+		claim = BusinessClaim.objects.get(claimant__username='photo_claim_owner')
+		self.assertEqual(len(claim.photo_references), 2)
+		self.assertTrue(claim.photo_gallery_overridden)
+		self.assertTrue(all('/business-profile-photos/' in photo_url for photo_url in claim.photo_references))
+		self.assertEqual(
+			claim.get_profile_entry_values(BusinessClaim.ProfileEntryKind.PHOTO_REFERENCE),
+			claim.photo_references,
+		)
+
+	@patch('places.views.get_source_place_payload')
 	def test_claimed_business_signup_reuses_matching_existing_snapshot_even_when_slug_changes(self, mock_get_source_place_payload):
 		legacy_snapshot = ListingSnapshot.objects.create(
 			name='Yard House',
@@ -3615,6 +3674,41 @@ class ProfileSignupApiTests(APITestCase):
 			['2 tacos for $5'],
 		)
 
+	def test_informal_business_signup_accepts_uploaded_business_photos(self):
+		with TemporaryDirectory() as temp_dir:
+			with override_settings(MEDIA_ROOT=Path(temp_dir)):
+				response = self.client.post(
+					reverse('informal-business-signup'),
+					{
+						'username': 'vendor_with_photos',
+						'email': 'vendor-photos@example.com',
+						'password': 'test-pass-123',
+						'first_name': 'Riley',
+						'last_name': 'Vendor',
+						'business_name': 'Riley Snacks',
+						'business_city': BusinessClaim.MULTIPLE_AREAS_VALUE,
+						'business_venue_type': VenueType.FAST_FOOD,
+						'business_website_url': '',
+						'social_media_links': json.dumps(['https://instagram.com/rileysnacks']),
+						'offer_entries': json.dumps(['2 tacos for $5']),
+						'hours_of_operation_entries': json.dumps(['Fri-Sun 6pm-11pm']),
+						'profile_photo_uploads': [
+							SimpleUploadedFile('cart.jpg', b'cart-photo', content_type='image/jpeg'),
+						],
+						'supporting_details': 'I operate this snack stand at weekend events and night markets.',
+					},
+					format='multipart',
+				)
+
+		self.assertEqual(response.status_code, 201)
+		claim = BusinessClaim.objects.get(claimant__username='vendor_with_photos')
+		self.assertEqual(len(claim.photo_references), 1)
+		self.assertTrue(claim.photo_gallery_overridden)
+		self.assertEqual(
+			claim.get_profile_entry_values(BusinessClaim.ProfileEntryKind.PHOTO_REFERENCE),
+			claim.photo_references,
+		)
+
 	def test_informal_business_signup_requires_presence_signal_and_summary(self):
 		response = self.client.post(
 			reverse('informal-business-signup'),
@@ -3693,6 +3787,49 @@ class ProfileSignupApiTests(APITestCase):
 						BusinessClaimAttachment.AttachmentKind.SOCIAL_MEDIA,
 					],
 				)
+
+	def test_manual_business_signup_accepts_uploaded_business_photos(self):
+		with TemporaryDirectory() as temp_dir:
+			with override_settings(MEDIA_ROOT=Path(temp_dir)):
+				response = self.client.post(
+					reverse('manual-business-signup'),
+					{
+						'username': 'manual_photo_owner',
+						'email': 'manual-photo@example.com',
+						'password': 'test-pass-123',
+						'first_name': 'Casey',
+						'last_name': 'Founder',
+						'business_name': 'Corner Bistro',
+						'business_city': City.VENTURA,
+						'business_venue_type': VenueType.CAFE,
+						'business_website_url': 'https://example.com/corner-bistro',
+						'contact_name': 'Casey Founder',
+						'job_title': BusinessClaim.JobTitle.OWNER,
+						'work_email': 'owner@cornerbistro.com',
+						'work_phone': '805-555-0133',
+						'employer_address': '123 Ventura Ave',
+						'address_not_applicable': False,
+						'verification_documents': json.dumps({
+							'business_registration': ['Articles of organization filed with CA Secretary of State'],
+							'health_permit': ['Ventura County temporary permit receipt'],
+							'abc_license': [],
+							'proof_of_address_control': [],
+						}),
+						'profile_photo_uploads': [
+							SimpleUploadedFile('patio.jpg', b'patio-photo', content_type='image/jpeg'),
+						],
+					},
+					format='multipart',
+				)
+
+		self.assertEqual(response.status_code, 201)
+		claim = BusinessClaim.objects.get(claimant__username='manual_photo_owner')
+		self.assertEqual(len(claim.photo_references), 1)
+		self.assertTrue(claim.photo_gallery_overridden)
+		self.assertEqual(
+			claim.get_profile_entry_values(BusinessClaim.ProfileEntryKind.PHOTO_REFERENCE),
+			claim.photo_references,
+		)
 
 	def test_business_portal_login_rejects_unapproved_claim(self):
 		user = User.objects.create_user(username='pending_owner', email='pending@example.com', password='test-pass-123')
@@ -4074,7 +4211,74 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(len(claim.photo_references), 2)
 		self.assertEqual(claim.photo_references[0], 'https://cdn.example.com/approvedspot/front.jpg')
 		self.assertTrue(claim.photo_references[1].startswith('http://testserver/media/business-profile-photos/'))
+		self.assertTrue(claim.photo_gallery_overridden)
 		self.assertIn(claim.photo_references[1], response.data['business_contact']['photo_references'])
+
+	@patch('places.services.source_listings.load_source_records')
+	def test_profile_dashboard_returns_inherited_source_images_until_owner_overrides_gallery(self, mock_load_source_records):
+		mock_load_source_records.return_value = [
+			ImportedPlace(
+				name='Approved Spot',
+				profile_name='Approved Spot',
+				profile_slug='approved-spot',
+				city=City.VENTURA,
+				venue_type=VenueType.RESTAURANT,
+				address_line_1='55 Main St',
+				website_url='https://approved.example.com',
+				image_urls=['https://images.example.com/approvedspot/front.jpg', 'https://images.example.com/approvedspot/patio.jpg'],
+			)
+		]
+		snapshot = ListingSnapshot.objects.create(
+			name='Approved Spot',
+			listing_slug='approved-spot',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='55 Main St',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@approvedspot.com',
+			work_phone='805-555-0200',
+			employer_address='55 Main St, Ventura, CA 93001',
+			verification_summary='I own the business.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+
+		response = self.client.get(reverse('profile-dashboard'), {'portal': 'business'}, **self.auth_headers())
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(
+			response.data['business_contact']['photo_references'],
+			['https://images.example.com/approvedspot/front.jpg', 'https://images.example.com/approvedspot/patio.jpg'],
+		)
+
+		update_response = self.client.post(
+			reverse('profile-dashboard'),
+			{
+				'portal': 'business',
+				'username': 'dashboard_user',
+				'email': 'dashboard@example.com',
+				'first_name': 'Dash',
+				'last_name': 'Board',
+				'contact_name': 'Dash Board',
+				'work_email': 'owner@approvedspot.com',
+				'photo_references_text': 'https://images.example.com/approvedspot/patio.jpg',
+			},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(update_response.status_code, 200)
+		claim.refresh_from_db()
+		self.assertTrue(claim.photo_gallery_overridden)
+		self.assertEqual(claim.photo_references, ['https://images.example.com/approvedspot/patio.jpg'])
+
+		payload = get_source_place_payload('approved-spot')
+		self.assertEqual(payload['image_urls'], ['https://images.example.com/approvedspot/patio.jpg'])
 
 	def test_profile_dashboard_includes_mobile_location_tracking_status(self):
 		snapshot = ListingSnapshot.objects.create(

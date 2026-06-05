@@ -307,6 +307,7 @@ class BusinessClaim(models.Model):
 	offer_entries = models.JSONField(default=list, blank=True)
 	hours_of_operation_entries = models.JSONField(default=list, blank=True)
 	photo_references = models.JSONField(default=list, blank=True)
+	photo_gallery_overridden = models.BooleanField(default=False)
 	verification_documents = models.JSONField(default=dict, blank=True)
 	verification_summary = models.TextField(blank=True)
 	supporting_details = models.TextField(blank=True)
