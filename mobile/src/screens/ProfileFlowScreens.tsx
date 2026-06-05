@@ -47,6 +47,15 @@ type AttachmentPreviewState =
   | { kind: 'image'; name: string; uri: string }
   | { kind: 'pdf'; name: string; html: string };
 
+function LoadingButtonLabel({ color, label, loading, textStyle }: { color: string; label: string; loading: boolean; textStyle: any }) {
+  return (
+    <View style={styles.loadingButtonContent}>
+      {loading ? <ActivityIndicator color={color} size="small" /> : null}
+      <Text style={textStyle}>{label}</Text>
+    </View>
+  );
+}
+
 function getAttachmentPreviewKind(mimeType: string | null, fileName: string) {
   const normalizedMimeType = String(mimeType || '').trim().toLowerCase();
   const normalizedFileName = String(fileName || '').trim().toLowerCase();
@@ -598,7 +607,12 @@ export function AuthPortalScreen({ authMessage, autoFocusIdentifier, errorMessag
             ) : null}
 
             <Pressable onPress={() => void onSubmit()} style={[styles.linkButton, submitting ? styles.linkButtonDisabled : null]}>
-              <Text style={styles.linkButtonText}>{submitting ? 'Logging in...' : loginPortal === 'customer' ? 'Log in as Customer' : 'Log in as Business'}</Text>
+              <LoadingButtonLabel
+                color="#effffd"
+                label={loginPortal === 'customer' ? 'Log in as Customer' : 'Log in as Business'}
+                loading={submitting}
+                textStyle={styles.linkButtonText}
+              />
             </Pressable>
 
             <View style={styles.authRecoveryRow}>
@@ -640,7 +654,12 @@ export function AuthPortalScreen({ authMessage, autoFocusIdentifier, errorMessag
                 </Text>
                 <View style={styles.authRecoveryPanelActions}>
                   <Pressable onPress={handleSubmitRecovery} style={[styles.linkButtonSecondaryWide, submitting ? styles.linkButtonDisabled : null]}>
-                    <Text style={styles.linkButtonSecondaryText}>{submitting ? 'Sending...' : recoveryMode === 'username' ? 'Email my username' : 'Send password reset link'}</Text>
+                    <LoadingButtonLabel
+                      color="#9e5b49"
+                      label={recoveryMode === 'username' ? 'Email my username' : 'Send password reset link'}
+                      loading={submitting}
+                      textStyle={styles.linkButtonSecondaryText}
+                    />
                   </Pressable>
                   <Pressable onPress={handleCloseRecovery} style={styles.authRecoveryDismissButton}>
                     <Text style={styles.authRecoveryDismissText}>Cancel</Text>
@@ -714,7 +733,7 @@ export function CreateProfileScreen({ errorMessage, form, isLandscape, message, 
             </View>
 
             <Pressable onPress={() => void onSubmit()} style={[styles.linkButton, submitting ? styles.linkButtonDisabled : null]}>
-              <Text style={styles.linkButtonText}>{submitting ? 'Submitting...' : 'Create customer profile'}</Text>
+              <LoadingButtonLabel color="#effffd" label="Create customer profile" loading={submitting} textStyle={styles.linkButtonText} />
             </Pressable>
 
             <Pressable onPress={onOpenBusinessClaim} style={styles.linkButtonSecondaryWide}>
@@ -829,7 +848,7 @@ export function EmailVerificationScreen({ errorMessage, isLandscape, message, on
             </View>
 
             <Pressable onPress={() => void onSubmit()} style={[styles.linkButton, submitting ? styles.linkButtonDisabled : null]}>
-              <Text style={styles.linkButtonText}>{submitting ? 'Verifying...' : 'Verify email and continue'}</Text>
+              <LoadingButtonLabel color="#effffd" label="Verify email and continue" loading={submitting} textStyle={styles.linkButtonText} />
             </Pressable>
 
             <Pressable
@@ -983,7 +1002,7 @@ export function ContactSupportScreen({ errorMessage, initialMessage = '', initia
             </View>
 
             <Pressable onPress={() => onSubmit(subject, message)} style={[styles.linkButton, submitting ? styles.linkButtonDisabled : null]}>
-              <Text style={styles.linkButtonText}>{submitting ? 'Sending...' : 'Send message'}</Text>
+              <LoadingButtonLabel color="#effffd" label="Send message" loading={submitting} textStyle={styles.linkButtonText} />
             </Pressable>
           </View>
         </ScrollView>
@@ -1784,7 +1803,7 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
             </View>
 
             <Pressable onPress={() => void onSubmit()} style={[styles.linkButton, submitting ? styles.linkButtonDisabled : null]}>
-              <Text style={styles.linkButtonText}>{submitting ? 'Submitting...' : submitLabel}</Text>
+              <LoadingButtonLabel color="#effffd" label={submitLabel} loading={submitting} textStyle={styles.linkButtonText} />
             </Pressable>
           </View>
         </ScrollView>

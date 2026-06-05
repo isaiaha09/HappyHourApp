@@ -1483,6 +1483,12 @@ export const styles = StyleSheet.create({
     color: '#effffd',
     fontWeight: '700',
   },
+  loadingButtonContent: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'center',
+  },
   linkButtonSecondary: {
     alignSelf: 'flex-start',
     backgroundColor: '#fff7ef',
