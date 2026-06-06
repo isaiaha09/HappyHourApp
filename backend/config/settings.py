@@ -225,6 +225,54 @@ USE_TZ = True
 STATIC_URL = 'static/'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_STORAGE_BACKEND = get_env('MEDIA_STORAGE_BACKEND', ENV_VALUES, 'local').strip().lower()
+SUPABASE_STORAGE_BUCKET = get_env('SUPABASE_STORAGE_BUCKET', ENV_VALUES, '')
+SUPABASE_STORAGE_ENDPOINT = get_env('SUPABASE_STORAGE_ENDPOINT', ENV_VALUES, '')
+SUPABASE_STORAGE_REGION = get_env('SUPABASE_STORAGE_REGION', ENV_VALUES, 'us-east-1')
+SUPABASE_STORAGE_ACCESS_KEY = get_env('SUPABASE_STORAGE_ACCESS_KEY', ENV_VALUES, '')
+SUPABASE_STORAGE_SECRET_KEY = get_env('SUPABASE_STORAGE_SECRET_KEY', ENV_VALUES, '')
+SUPABASE_STORAGE_PUBLIC_URL_BASE = get_env('SUPABASE_STORAGE_PUBLIC_URL_BASE', ENV_VALUES, '').rstrip('/')
+
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+    },
+}
+MEDIA_PUBLIC_BASE_URL = MEDIA_URL
+
+if MEDIA_STORAGE_BACKEND == 'supabase':
+    missing_supabase_settings = [
+        setting_name
+        for setting_name, setting_value in (
+            ('SUPABASE_STORAGE_BUCKET', SUPABASE_STORAGE_BUCKET),
+            ('SUPABASE_STORAGE_ENDPOINT', SUPABASE_STORAGE_ENDPOINT),
+            ('SUPABASE_STORAGE_ACCESS_KEY', SUPABASE_STORAGE_ACCESS_KEY),
+            ('SUPABASE_STORAGE_SECRET_KEY', SUPABASE_STORAGE_SECRET_KEY),
+            ('SUPABASE_STORAGE_PUBLIC_URL_BASE', SUPABASE_STORAGE_PUBLIC_URL_BASE),
+        )
+        if not setting_value
+    ]
+    if missing_supabase_settings:
+        missing_list = ', '.join(missing_supabase_settings)
+        raise ValueError(f'Supabase media storage is enabled but missing: {missing_list}')
+
+    STORAGES['default'] = {
+        'BACKEND': 'config.storage.SupabaseMediaStorage',
+        'OPTIONS': {
+            'bucket_name': SUPABASE_STORAGE_BUCKET,
+            'access_key': SUPABASE_STORAGE_ACCESS_KEY,
+            'secret_key': SUPABASE_STORAGE_SECRET_KEY,
+            'endpoint_url': SUPABASE_STORAGE_ENDPOINT,
+            'region_name': SUPABASE_STORAGE_REGION,
+            'default_acl': 'public-read',
+            'querystring_auth': False,
+            'file_overwrite': False,
+        },
+    }
+    MEDIA_PUBLIC_BASE_URL = SUPABASE_STORAGE_PUBLIC_URL_BASE
 
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True

@@ -189,6 +189,92 @@ If a future Render deployment needs full image OCR, the backend runtime will nee
 
 Until then, the current code safely degrades instead of breaking uploads or claim review.
 
+## Media Storage
+
+Business claim attachments and uploaded business profile photos now go through Django's `default_storage`, so media can be switched from local disk to Supabase Storage without changing claim/profile code paths.
+
+For local development, no extra setup is required and uploads still use `backend/media`.
+
+### Supabase Bucket Setup
+
+Create one Supabase Storage bucket for app-managed uploads.
+
+Recommended bucket settings:
+
+- Bucket name: `business-media`
+- Public bucket: `Yes`
+- File size limit: set this to whatever max upload size you want enforced at the storage layer
+- Allowed MIME types: optional, but if you want to restrict it, include common image and document types your app accepts such as `image/jpeg`, `image/png`, `image/webp`, `image/heic`, `application/pdf`
+
+Why public: this backend currently stores public URLs for uploaded business profile photos and serves attachment/profile-photo URLs directly from storage.
+
+In Supabase, the bucket should end up with public object URLs in this format:
+
+```text
+https://<your-project-ref>.supabase.co/storage/v1/object/public/business-media/<path-inside-bucket>
+```
+
+### Exact Backend Env Vars
+
+To switch media uploads to Supabase Storage, set these backend environment variables exactly like this:
+
+- `MEDIA_STORAGE_BACKEND=supabase`
+- `SUPABASE_STORAGE_BUCKET=business-media`
+- `SUPABASE_STORAGE_ENDPOINT=https://<your-project-ref>.supabase.co/storage/v1/s3`
+- `SUPABASE_STORAGE_ACCESS_KEY=<your-supabase-s3-access-key>`
+- `SUPABASE_STORAGE_SECRET_KEY=<your-supabase-s3-secret-key>`
+- `SUPABASE_STORAGE_PUBLIC_URL_BASE=https://<your-project-ref>.supabase.co/storage/v1/object/public/business-media`
+- optional: `SUPABASE_STORAGE_REGION` (defaults to `us-east-1`)
+
+If you want to set the optional region explicitly, use:
+
+- `SUPABASE_STORAGE_REGION=us-east-1`
+
+### What Each Value Means
+
+- `SUPABASE_STORAGE_BUCKET`: the exact Supabase bucket name
+- `SUPABASE_STORAGE_ENDPOINT`: the S3-compatible Supabase storage endpoint, not the public object URL
+- `SUPABASE_STORAGE_ACCESS_KEY`: the S3 access key from Supabase
+- `SUPABASE_STORAGE_SECRET_KEY`: the S3 secret key from Supabase
+- `SUPABASE_STORAGE_PUBLIC_URL_BASE`: the public base URL for objects inside that bucket
+
+### Example Render Env Block
+
+```text
+MEDIA_STORAGE_BACKEND=supabase
+SUPABASE_STORAGE_BUCKET=business-media
+SUPABASE_STORAGE_ENDPOINT=https://abcd1234.supabase.co/storage/v1/s3
+SUPABASE_STORAGE_ACCESS_KEY=your-s3-access-key
+SUPABASE_STORAGE_SECRET_KEY=your-s3-secret-key
+SUPABASE_STORAGE_PUBLIC_URL_BASE=https://abcd1234.supabase.co/storage/v1/object/public/business-media
+SUPABASE_STORAGE_REGION=us-east-1
+```
+
+### Delete Behavior
+
+Once Supabase is configured and enabled, app-managed uploads stored under these paths:
+
+- `business-claim-attachments/...`
+- `business-profile-photos/...`
+
+will be deleted from storage when:
+
+- the related `BusinessClaimAttachment` record is deleted
+- a `BusinessClaim` is deleted from admin or elsewhere in the backend
+- uploaded profile photos are removed from a business profile and no longer referenced
+
+This cleanup does not apply to external image URLs that were never uploaded by the backend.
+
+The backend also now cleans up app-managed media when claim attachments are deleted, when uploaded profile photos are removed from a claim, and when an entire claim is deleted.
+
+To remove old local orphaned media files that were left behind by earlier test accounts, run this from `backend`:
+
+```powershell
+venv\Scripts\python.exe manage.py cleanup_orphaned_media --delete
+```
+
+Run it without `--delete` first for a dry run.
+
 ## Current Focus
 
 The current focus is tightening the existing mobile + backend loop instead of starting from scratch.

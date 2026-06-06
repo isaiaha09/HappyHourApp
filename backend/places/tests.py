@@ -12,6 +12,8 @@ from django.contrib.messages.storage.fallback import FallbackStorage
 from django.conf import settings
 from django.core.cache import caches
 from django.core import mail
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.core.exceptions import ValidationError
@@ -6027,6 +6029,85 @@ class BusinessClaimAdminTests(TestCase):
 		self.assertContains(response, self.claim.claimant.email)
 		self.assertContains(response, other_claim.claimant.email)
 
+
+
+class MediaStorageCleanupTests(TestCase):
+	def setUp(self):
+		self.claimant = User.objects.create_user(username='media_cleanup_owner', email='media-cleanup@example.com', password='test-pass-123')
+		self.snapshot = ListingSnapshot.objects.create(
+			name='Media Cleanup Bistro',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='123 Main St',
+		)
+
+	def create_claim(self, **overrides):
+		claim_data = {
+			'claimant': self.claimant,
+			'listing_snapshot': self.snapshot,
+			'pathway': BusinessClaim.Pathway.CLAIMED,
+			'status': BusinessClaim.Status.SUBMITTED,
+			'contact_name': 'Owner Name',
+			'job_title': BusinessClaim.JobTitle.OWNER,
+			'work_email': 'owner@cleanup.example.com',
+			'work_phone': '805-555-0100',
+			'employer_address': '123 Main St',
+			'verification_summary': 'Testing media cleanup.',
+		}
+		claim_data.update(overrides)
+		return BusinessClaim.objects.create(**claim_data)
+
+	def test_deleting_claim_removes_uploaded_profile_photos_and_attachments(self):
+		with TemporaryDirectory() as temp_dir:
+			with override_settings(MEDIA_ROOT=Path(temp_dir)):
+				photo_name = default_storage.save('business-profile-photos/cleanup/front.jpg', ContentFile(b'front-photo'))
+				photo_path = Path(default_storage.path(photo_name))
+				claim = self.create_claim(photo_references=[f'http://testserver/media/{photo_name}'], photo_gallery_overridden=True)
+				attachment = BusinessClaimAttachment.objects.create(
+					claim=claim,
+					attachment_kind=BusinessClaimAttachment.AttachmentKind.PROOF_OF_AUTHORITY,
+					file=SimpleUploadedFile('authority.pdf', b'authority-file', content_type='application/pdf'),
+					original_filename='authority.pdf',
+					content_type='application/pdf',
+					file_size=14,
+				)
+				attachment_path = Path(attachment.file.path)
+
+				self.assertTrue(photo_path.exists())
+				self.assertTrue(attachment_path.exists())
+
+				claim.delete()
+
+				self.assertFalse(photo_path.exists())
+				self.assertFalse(attachment_path.exists())
+
+	def test_updating_claim_photo_references_deletes_removed_uploaded_files(self):
+		with TemporaryDirectory() as temp_dir:
+			with override_settings(MEDIA_ROOT=Path(temp_dir)):
+				photo_name = default_storage.save('business-profile-photos/cleanup/remove-me.jpg', ContentFile(b'remove-me'))
+				photo_path = Path(default_storage.path(photo_name))
+				claim = self.create_claim(photo_references=[f'http://testserver/media/{photo_name}'], photo_gallery_overridden=True)
+
+				self.assertTrue(photo_path.exists())
+
+				claim.photo_references = ['https://images.example.com/keep-external.jpg']
+				claim.save(update_fields=['photo_references', 'updated_at'])
+
+				self.assertFalse(photo_path.exists())
+
+	def test_cleanup_orphaned_media_command_deletes_unreferenced_local_files(self):
+		with TemporaryDirectory() as temp_dir:
+			with override_settings(MEDIA_ROOT=Path(temp_dir)):
+				active_name = default_storage.save('business-profile-photos/cleanup/active.jpg', ContentFile(b'active-photo'))
+				orphan_name = default_storage.save('business-profile-photos/cleanup/orphan.jpg', ContentFile(b'orphan-photo'))
+				self.create_claim(photo_references=[f'http://testserver/media/{active_name}'], photo_gallery_overridden=True)
+
+				stdout = StringIO()
+				call_command('cleanup_orphaned_media', '--delete', stdout=stdout)
+
+				self.assertTrue(Path(default_storage.path(active_name)).exists())
+				self.assertFalse(Path(default_storage.path(orphan_name)).exists())
+				self.assertIn('Deleted 1 orphaned file(s).', stdout.getvalue())
 
 
 class HappyHourAdminSiteTests(TestCase):
