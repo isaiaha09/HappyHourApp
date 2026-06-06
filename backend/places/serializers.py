@@ -857,7 +857,7 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 				offer_entries=offer_entries,
 				hours_of_operation_entries=hours_of_operation_entries,
 				photo_references=photo_references,
-				verification_summary='Submitted through the informal business and vendor flow.',
+				verification_summary='Submitted through the small startup and vendor flow.',
 				supporting_details=supporting_details,
 			)
 			_create_claim_profile_entries(
@@ -1025,6 +1025,7 @@ class PlaceListSerializer(serializers.Serializer):
 	name = serializers.CharField()
 	slug = serializers.CharField()
 	is_claimed = serializers.BooleanField(required=False, default=False)
+	is_informal = serializers.BooleanField(required=False, default=False)
 	social_profiles = serializers.DictField(required=False, default=dict)
 	deal_overrides = serializers.ListField(child=serializers.DictField(), required=False, allow_null=True)
 	operating_hour_overrides = serializers.ListField(child=serializers.DictField(), required=False, allow_null=True)

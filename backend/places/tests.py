@@ -1759,6 +1759,40 @@ class SourceListingIdentityTests(TestCase):
 
 		self.assertIsNotNone(payload)
 		self.assertTrue(payload['is_claimed'])
+		self.assertFalse(payload['is_informal'])
+
+	@patch('places.services.source_listings._get_place_coordinates')
+	@patch('places.services.source_listings.load_source_records')
+	def test_place_payload_marks_approved_informal_businesses(self, mock_load_source_records, mock_get_place_coordinates):
+		mock_get_place_coordinates.return_value = (34.2783, -119.2931)
+		mock_load_source_records.return_value = []
+		owner = User.objects.create_user(username='informal_owner', email='informal-owner@example.com', password='test-pass-123')
+		snapshot = ListingSnapshot.objects.create(
+			name='Tuesday Taco Cart',
+			listing_slug='tuesday-taco-cart',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=owner,
+			listing_snapshot=snapshot,
+			pathway=BusinessClaim.Pathway.INFORMAL,
+			status=BusinessClaim.Status.APPROVED,
+			contact_name='Taco Owner',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='informal-owner@example.com',
+			work_phone='805-555-0155',
+			employer_address='Ventura, CA',
+			verification_summary='Approved informal vendor claim.',
+		)
+		BusinessMembership.objects.create(claim=claim, user=owner, is_active=True)
+
+		payload = get_source_place_payload('tuesday-taco-cart')
+
+		self.assertIsNotNone(payload)
+		self.assertTrue(payload['is_claimed'])
+		self.assertTrue(payload['is_informal'])
 
 	@patch('places.services.source_listings._get_place_coordinates')
 	@patch('places.services.source_listings.load_source_records')
@@ -3956,7 +3990,7 @@ class ProfileSignupApiTests(APITestCase):
 		)
 
 		self.assertEqual(response.status_code, 400)
-		self.assertIn('Informal businesses need at least one social link, website, or photo reference before submission.', str(response.data))
+		self.assertIn('Small startups and vendors need at least one social link, website, or photo reference before submission.', str(response.data))
 
 	def test_manual_business_signup_accepts_multiple_social_and_verification_attachments(self):
 		with TemporaryDirectory() as temp_dir:

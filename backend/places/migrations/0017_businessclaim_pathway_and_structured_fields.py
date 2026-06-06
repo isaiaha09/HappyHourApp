@@ -26,7 +26,7 @@ class Migration(migrations.Migration):
 		migrations.AddField(
 			model_name='businessclaim',
 			name='pathway',
-			field=models.CharField(choices=[('claimed', 'Claimed Business'), ('established', 'Create Business Profile'), ('informal', 'Informal Business or Vendor')], default='claimed', max_length=20),
+			field=models.CharField(choices=[('claimed', 'Claimed Business'), ('established', 'Create Business Profile'), ('informal', 'Small Startup or Vendor')], default='claimed', max_length=20),
 		),
 		migrations.AddField(
 			model_name='businessclaim',

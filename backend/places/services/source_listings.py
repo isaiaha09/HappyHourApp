@@ -73,6 +73,7 @@ def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_
 		if payload is None:
 			continue
 		payload['is_claimed'] = payload['slug'] in claimed_listing_slugs
+		payload['is_informal'] = False
 		payloads_by_slug[payload['slug']] = payload
 
 	for claim in _get_active_business_claims():
@@ -255,6 +256,7 @@ def _build_claim_override_payload(claim):
 		fallback_social_links=claim.social_media_links,
 	)
 	return {
+		'is_informal': claim.pathway == BusinessClaim.Pathway.INFORMAL,
 		'social_profiles': normalized_social_profiles,
 		'social_media_links': build_social_media_links(normalized_social_profiles),
 		'deal_overrides': claim.deal_overrides,
@@ -335,6 +337,7 @@ def _merge_claimed_snapshot_payload(existing_payload, snapshot_payload):
 		'city': snapshot_payload['city'],
 		'city_label': snapshot_payload['city_label'],
 		'is_claimed': True,
+		'is_informal': bool(snapshot_payload.get('is_informal')),
 		'venue_type': snapshot_payload['venue_type'],
 		'venue_type_label': snapshot_payload['venue_type_label'],
 		'address_line_1': snapshot_payload['address_line_1'] if is_live_location_business else existing_payload['address_line_1'],

@@ -53,6 +53,7 @@ export function getVenueMarkerStyle(venueType: string) {
 
 type BrowseSummaryOptions = {
   confirmedDealsOnly?: boolean;
+  informalBusinessesOnly?: boolean;
   selectedDealDays?: WeekdayFilterValue[];
   selectedOperatingDays?: WeekdayFilterValue[];
   verifiedBusinessesOnly?: boolean;
@@ -77,6 +78,10 @@ export function getBrowseSummaryLabel(
 
   if (options.confirmedDealsOnly) {
     summaryParts.push('Deals only');
+  }
+
+  if (options.informalBusinessesOnly) {
+    summaryParts.push('Small Startups & Vendors');
   }
 
   if ((options.selectedOperatingDays ?? []).length) {

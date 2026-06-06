@@ -27,7 +27,7 @@ LIVE_DISCOVERY_SOURCE_NAMES = {HerePlacesImporter.source_name}
 
 VERIFICATION_BLOCKER_LABELS = {
 	'missing_required_permit': 'Required permit documentation is still missing.',
-	'missing_informal_summary': 'Supporting details for the informal business are still missing.',
+	'missing_informal_summary': 'Supporting details for the small startup or vendor are still missing.',
 	'missing_informal_presence_signal': 'The claim still needs a website, social link, or photo reference.',
 	'reused_same_file_across_required_document_slots': 'The same file was reused across multiple required document slots.',
 }

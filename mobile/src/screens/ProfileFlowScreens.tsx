@@ -1187,7 +1187,7 @@ export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces,
             </Pressable>
 
             <Pressable onPress={onChooseInformalBusiness} style={styles.authLinkButton}>
-              <Text style={styles.authLinkText}>For Informal Businesses and Vendors, create your profile here.</Text>
+              <Text style={styles.authLinkText}>For Small Startups & Vendors, create your profile here.</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -1218,17 +1218,17 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
   const verificationTitle = isClaimed
     ? 'Verify this business claim'
     : isInformal
-      ? 'Set up an informal business or vendor profile'
+      ? 'Set up a small startup or vendor profile'
       : 'Create a business profile';
   const verificationIntro = isClaimed
     ? 'Claimed businesses need ownership or manager verification details before they move into review.'
     : isInformal
-      ? 'Use this path for smaller vendors, pop-ups, and informal businesses that still need a clean profile on DiningDealz.'
+      ? 'Use this path for small startups, vendors, and pop-ups that still need a clean profile on DiningDealz.'
       : 'Use this path for established businesses that are not on DiningDealz yet and need full verification review.';
   const submitLabel = isClaimed
     ? 'Submit business claim'
     : isInformal
-      ? 'Create informal business profile'
+      ? 'Create small startup or vendor profile'
       : 'Create business profile';
   const jobTitleOptions = [
     { label: 'Owner', value: 'owner' },
@@ -1491,7 +1491,7 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
                   />
 
                   {servesMultipleAreas ? (
-                    <Text style={styles.profileSupportText}>It is highly recommend for smaller businesses and vendors that do not have a dedicated business address to turn on location services for DiningDealz after account is verified so you have can a business pin on the map.</Text>
+                    <Text style={styles.profileSupportText}>It is highly recommend for small startups and vendors that do not have a dedicated business address to turn on location services for DiningDealz after account is verified so you have can a business pin on the map.</Text>
                   ) : null}
 
                 </>
@@ -1689,7 +1689,7 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
                 form.supporting_details,
                 {
                   placeholder: 'Briefly explain how you operate, where customers can find you, and anything that helps verify the business.',
-                  support: 'Keep this short. Informal businesses need a quick summary plus at least one social link, website, or photo reference before submission.',
+                  support: 'Keep this short. Small startups and vendors need a quick summary plus at least one social link, website, or photo reference before submission.',
                 },
               ) : null}
             </View>

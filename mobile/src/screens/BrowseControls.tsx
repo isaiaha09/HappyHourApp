@@ -20,6 +20,7 @@ export type BrowseControlsProps = {
   confirmedDealsOnly: boolean;
   overlay?: boolean;
   filtersExpanded: boolean;
+  informalBusinessesOnly: boolean;
   isDarkMapMode?: boolean;
   listModeEnabled?: boolean;
   onChangeSearchQuery: (value: string) => void;
@@ -33,6 +34,7 @@ export type BrowseControlsProps = {
   onToggleConfirmedDealsOnly: () => void;
   onToggleDealDay: (day: WeekdayFilterValue) => void;
   onToggleFilters: () => void;
+  onToggleInformalBusinessesOnly: () => void;
   onToggleMapTheme?: () => void;
   onToggleOperatingDay: (day: WeekdayFilterValue) => void;
   onToggleVenueType: (venueType: VenueFilterValue) => void;
@@ -52,6 +54,7 @@ export function BrowseControls({
   confirmedDealsOnly,
   overlay = false,
   filtersExpanded,
+  informalBusinessesOnly,
   isDarkMapMode = false,
   listModeEnabled = true,
   onChangeSearchQuery,
@@ -65,6 +68,7 @@ export function BrowseControls({
   onToggleConfirmedDealsOnly,
   onToggleDealDay,
   onToggleFilters,
+  onToggleInformalBusinessesOnly,
   onToggleMapTheme,
   onToggleOperatingDay,
   onToggleVenueType,
@@ -403,6 +407,7 @@ export function BrowseControls({
           <Text numberOfLines={1} style={styles.browseStatsSubtleText}>
             {getBrowseSummaryLabel(selectedCity, selectedVenueTypes, normalizedSearchQuery, {
               confirmedDealsOnly,
+              informalBusinessesOnly,
               selectedDealDays,
               selectedOperatingDays,
               verifiedBusinessesOnly,
@@ -490,6 +495,12 @@ export function BrowseControls({
                 style={[chipStyle, confirmedDealsOnly ? chipActiveStyle : null]}
               >
                 <Text style={[chipTextStyle, confirmedDealsOnly ? chipTextActiveStyle : null]}>Confirmed Happy Hours & Deals</Text>
+              </Pressable>
+              <Pressable
+                onPress={onToggleInformalBusinessesOnly}
+                style={[chipStyle, informalBusinessesOnly ? chipActiveStyle : null]}
+              >
+                <Text style={[chipTextStyle, informalBusinessesOnly ? chipTextActiveStyle : null]}>Small Startups & Vendors</Text>
               </Pressable>
               <Pressable
                 onPress={onToggleVerifiedBusinessesOnly}

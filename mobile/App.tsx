@@ -458,6 +458,7 @@ function AppScreen() {
   const [confirmedDealsOnly, setConfirmedDealsOnly] = useState(false);
   const [selectedOperatingDays, setSelectedOperatingDays] = useState<WeekdayFilterValue[]>([]);
   const [selectedDealDays, setSelectedDealDays] = useState<WeekdayFilterValue[]>([]);
+  const [informalBusinessesOnly, setInformalBusinessesOnly] = useState(false);
   const [verifiedBusinessesOnly, setVerifiedBusinessesOnly] = useState(false);
   const [places, setPlaces] = useState<PlaceListItem[]>([]);
   const [selectedPlaceSlug, setSelectedPlaceSlug] = useState<string | null>(null);
@@ -559,6 +560,7 @@ function AppScreen() {
 
   const filteredPlaces = getFilteredPlaces(places, {
     confirmedDealsOnly,
+    informalBusinessesOnly,
     searchQuery: normalizedSearchQuery,
     selectedCity,
     selectedDealDays,
@@ -2114,6 +2116,11 @@ function AppScreen() {
     setSelectedDealDays((current) => toggleWeekdaySelection(current, day));
   }
 
+  function handleToggleInformalBusinessesOnly() {
+    animateNextLayout();
+    setInformalBusinessesOnly((current) => !current);
+  }
+
   function handleToggleVerifiedBusinessesOnly() {
     animateNextLayout();
     setVerifiedBusinessesOnly((current) => !current);
@@ -2171,6 +2178,7 @@ function AppScreen() {
     animateNextLayout();
     const clearedFilteredPlaces = getFilteredPlaces(places, {
       confirmedDealsOnly,
+      informalBusinessesOnly,
       searchQuery: '',
       selectedCity,
       selectedDealDays,
@@ -4309,6 +4317,7 @@ function AppScreen() {
                   confirmedDealsOnly={confirmedDealsOnly}
                   overlay={browseMode === 'map'}
                   filtersExpanded={browseFiltersExpanded}
+                  informalBusinessesOnly={informalBusinessesOnly}
                   isDarkMapMode={darkMapMode}
                   listModeEnabled={!guestMapOnlyMode}
                   onChangeSearchQuery={handleChangeSearchQuery}
@@ -4322,6 +4331,7 @@ function AppScreen() {
                   onToggleConfirmedDealsOnly={handleToggleConfirmedDealsOnly}
                   onToggleDealDay={handleToggleDealDay}
                   onToggleFilters={handleToggleBrowseFilters}
+                  onToggleInformalBusinessesOnly={handleToggleInformalBusinessesOnly}
                   onToggleMapTheme={browseMode === 'map' ? handleToggleMapTheme : undefined}
                   onToggleOperatingDay={handleToggleOperatingDay}
                   onToggleVenueType={handleToggleVenueType}
@@ -5068,6 +5078,7 @@ function getFilteredPlaces(
   places: PlaceListItem[],
   filters: {
     confirmedDealsOnly: boolean;
+    informalBusinessesOnly: boolean;
     searchQuery: string;
     selectedCity: CityFilterValue;
     selectedDealDays: WeekdayFilterValue[];
@@ -5089,11 +5100,12 @@ function getFilteredPlaces(
       const matchesSearch = filters.searchQuery.length === 0 || score > 0;
       const hasConfirmedDeals = place.deal_count > 0 || getPlaceLocations(place).some((location) => location.deal_count > 0);
       const matchesDeals = !filters.confirmedDealsOnly || hasConfirmedDeals;
+      const matchesInformal = !filters.informalBusinessesOnly || !!place.is_informal;
       const matchesOperatingDays = !filters.selectedOperatingDays.length || hasAnyMatchingWeekday(place.operating_weekdays, filters.selectedOperatingDays);
       const matchesDealDays = !filters.selectedDealDays.length || hasAnyMatchingWeekday(place.deal_weekdays, filters.selectedDealDays);
       const matchesVerified = !filters.verifiedBusinessesOnly || place.is_claimed;
 
-      return matchesCity && matchesVenueType && matchesSearch && matchesDeals && matchesOperatingDays && matchesDealDays && matchesVerified;
+      return matchesCity && matchesVenueType && matchesSearch && matchesDeals && matchesInformal && matchesOperatingDays && matchesDealDays && matchesVerified;
     })
     .sort((first, second) => {
       if (filters.searchQuery.length === 0) {

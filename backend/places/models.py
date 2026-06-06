@@ -259,7 +259,7 @@ class BusinessClaim(models.Model):
 	class Pathway(models.TextChoices):
 		CLAIMED = 'claimed', 'Claimed Business'
 		ESTABLISHED = 'established', 'Create Business Profile'
-		INFORMAL = 'informal', 'Informal Business or Vendor'
+		INFORMAL = 'informal', 'Small Startup or Vendor'
 
 	class JobTitle(models.TextChoices):
 		OWNER = 'owner', 'Owner'
@@ -621,7 +621,7 @@ class BusinessClaim(models.Model):
 					or self._has_profile_entry_kind(self.ProfileEntryKind.PHOTO_REFERENCE)
 				)
 				if not has_visible_presence:
-					raise ValidationError('Informal businesses need at least one social link, website, or photo reference before submission.')
+					raise ValidationError('Small startups and vendors need at least one social link, website, or photo reference before submission.')
 			if self.serves_multiple_areas:
 				self.address_not_applicable = True
 			if not is_manual_submission and self.address_not_applicable:

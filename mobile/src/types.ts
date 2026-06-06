@@ -96,6 +96,7 @@ export type PlaceLocationDetail = PlaceLocation & {
 
 export type PlaceListItem = PlaceLocation & {
   is_claimed: boolean;
+  is_informal?: boolean;
   social_profiles?: SocialProfiles;
   deal_overrides?: BusinessDealOverride[] | null;
   operating_hour_overrides?: BusinessOperatingHourOverride[] | null;
