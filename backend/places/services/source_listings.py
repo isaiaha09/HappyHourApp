@@ -8,6 +8,12 @@ from django.core.exceptions import ImproperlyConfigured
 from django.utils.text import slugify
 
 from places.models import BusinessClaim, BusinessMembership, City, DealType, VenueType, Weekday
+from places.services.business_profile_overrides import (
+	build_deal_payloads,
+	build_deal_weekdays,
+	build_operating_hour_payloads,
+	build_operating_weekdays,
+)
 from places.services.importers.business_websites import BusinessWebsiteImporter
 from places.services.importers.discovered_json_places import CuratedJsonPlacesImporter, DiscoveryJsonPlacesImporter
 from places.services.importers.example_html import ExampleHtmlImporter
@@ -251,6 +257,8 @@ def _build_claim_override_payload(claim):
 	return {
 		'social_profiles': normalized_social_profiles,
 		'social_media_links': build_social_media_links(normalized_social_profiles),
+		'deal_overrides': claim.deal_overrides,
+		'operating_hour_overrides': claim.operating_hour_overrides,
 		'offer_entries': list(claim.offer_entries or []),
 		'hours_of_operation_entries': list(claim.hours_of_operation_entries or []),
 		'photo_references': list(claim.photo_references or []),
@@ -286,6 +294,7 @@ def _build_snapshot_place_payload(claim, resolve_missing_coordinates=True):
 	payload = _build_place_payload(place_record, resolve_missing_coordinates=should_resolve_coordinates)
 	if payload is not None:
 		payload.update(_build_claim_override_payload(claim))
+		_apply_claim_structured_overrides(payload, claim, payload_namespace=snapshot.listing_slug or f'claim-{claim.pk}')
 		photo_urls = _claim_photo_urls(claim)
 		if photo_urls:
 			payload['image_urls'] = list(dict.fromkeys([*payload.get('image_urls', []), *photo_urls]))
@@ -341,13 +350,45 @@ def _merge_claimed_snapshot_payload(existing_payload, snapshot_payload):
 		'is_verified': True,
 		'locations': merged_locations or existing_payload.get('locations', []),
 		'social_profiles': snapshot_payload.get('social_profiles', {}),
+		'deal_overrides': snapshot_payload.get('deal_overrides'),
+		'operating_hour_overrides': snapshot_payload.get('operating_hour_overrides'),
 		'social_media_links': snapshot_payload.get('social_media_links', []),
 		'offer_entries': snapshot_payload.get('offer_entries', []),
 		'hours_of_operation_entries': snapshot_payload.get('hours_of_operation_entries', []),
 		'photo_references': snapshot_payload.get('photo_references', []),
 		'supporting_details': snapshot_payload.get('supporting_details', ''),
 	})
+	_apply_claim_structured_overrides(merged_payload, None, payload_namespace=snapshot_payload.get('slug', existing_payload.get('slug', 'claimed-business')), source_payload=snapshot_payload)
 	return merged_payload
+
+
+def _apply_claim_structured_overrides(payload, claim=None, payload_namespace='', source_payload=None):
+	resolved_source_payload = source_payload or {}
+	deal_overrides = resolved_source_payload.get('deal_overrides') if source_payload is not None else getattr(claim, 'deal_overrides', None)
+	operating_hour_overrides = resolved_source_payload.get('operating_hour_overrides') if source_payload is not None else getattr(claim, 'operating_hour_overrides', None)
+
+	if operating_hour_overrides is not None:
+		operating_hours = build_operating_hour_payloads(operating_hour_overrides, payload_namespace)
+		payload['operating_hours'] = operating_hours
+		payload['hours_of_operation_entries'] = []
+		payload['operating_weekdays'] = build_operating_weekdays(operating_hour_overrides)
+		for location in payload.get('locations', []):
+			location['operating_hours'] = operating_hours
+			location['operating_weekdays'] = payload['operating_weekdays']
+
+	if deal_overrides is not None:
+		deal_payloads = build_deal_payloads(deal_overrides, payload_namespace)
+		deal_weekdays = build_deal_weekdays(deal_overrides)
+		payload['deals'] = deal_payloads
+		payload['offer_entries'] = []
+		payload['has_deals'] = bool(deal_payloads)
+		payload['deal_count'] = len(deal_payloads)
+		payload['deal_weekdays'] = deal_weekdays
+		for location in payload.get('locations', []):
+			location['deals'] = deal_payloads
+			location['has_deals'] = bool(deal_payloads)
+			location['deal_count'] = len(deal_payloads)
+			location['deal_weekdays'] = deal_weekdays
 
 
 def _dedupe_profile_locations(place_records):

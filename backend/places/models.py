@@ -305,6 +305,8 @@ class BusinessClaim(models.Model):
 	business_website_url = models.URLField(blank=True)
 	social_profiles = models.JSONField(default=dict, blank=True)
 	social_media_links = models.JSONField(default=list, blank=True)
+	deal_overrides = models.JSONField(default=None, null=True, blank=True)
+	operating_hour_overrides = models.JSONField(default=None, null=True, blank=True)
 	offer_entries = models.JSONField(default=list, blank=True)
 	hours_of_operation_entries = models.JSONField(default=list, blank=True)
 	photo_references = models.JSONField(default=list, blank=True)

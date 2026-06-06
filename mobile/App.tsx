@@ -72,6 +72,7 @@ import { PhotoLightbox } from './src/components/PhotoLightbox';
 import { PlaceDetailScreen } from './src/screens/PlaceDetailScreen';
 import { SplashScreen } from './src/screens/SplashScreen';
 import { buildSocialProfilesFromInputs, socialProfilesToInputs } from './src/socialProfiles';
+import { buildDealOverridesFromDeals, buildNormalizedDealOverrides, buildNormalizedOperatingHourOverrides, buildOperatingHourOverridesFromWindows } from './src/businessProfileOverrides';
 import {
   AuthPortalScreen,
   BusinessClaimReviewPendingScreen,
@@ -98,6 +99,7 @@ import type {
   BusinessAttachmentDraft,
   BusinessAttachmentKind,
   BusinessVerificationDocuments,
+  BusinessDealOverride,
   BusinessSignupRequest,
   CustomerSignupRequest,
   Deal,
@@ -107,6 +109,7 @@ import type {
   LoginRequest,
   ManualBusinessSignupRequest,
   OperatingHourWindow,
+  BusinessOperatingHourOverride,
   PlaceDetail,
   PlaceListItem,
   PlaceLocation,
@@ -217,6 +220,8 @@ const initialProfileFormState: ProfileFormState = {
   employer_address: '',
   address_not_applicable: false,
   social_media_links_text: '',
+  deal_overrides: [],
+  operating_hour_overrides: [],
   offer_entries_text: '',
   hours_of_operation_entries_text: '',
   photo_references_text: '',
@@ -275,37 +280,6 @@ function joinUniqueEntries(entries: string[]) {
   return uniqueEntries;
 }
 
-function formatOperatingHourEntry(window: OperatingHourWindow) {
-  return `${window.weekday_label}: ${formatPrefillTime(window.open_time)} - ${formatPrefillTime(window.close_time)}`;
-}
-
-function formatHappyHourWindowEntry(window: HappyHourWindow) {
-  if (window.all_day) {
-    return `${window.weekday_label}: all day`;
-  }
-
-  return `${window.weekday_label}: ${formatPrefillTime(window.start_time)} - ${formatPrefillTime(window.end_time)}`;
-}
-
-function formatDealEntry(deal: Deal) {
-  const sections = [deal.title.trim()];
-
-  if (deal.price_text.trim()) {
-    sections.push(deal.price_text.trim());
-  }
-  if (deal.description.trim()) {
-    sections.push(deal.description.trim());
-  }
-  if (deal.terms.trim()) {
-    sections.push(`Terms: ${deal.terms.trim()}`);
-  }
-  if (deal.happy_hours.length) {
-    sections.push(`Happy hour: ${deal.happy_hours.map(formatHappyHourWindowEntry).join(', ')}`);
-  }
-
-  return sections.join(' | ');
-}
-
 function buildClaimPrefill(detail: PlaceDetail, locationId: number | null) {
   const selectedLocation = detail.locations.find((location) => location.id === locationId) ?? detail.locations[0] ?? detail;
   const operatingHours = selectedLocation.operating_hours.length ? selectedLocation.operating_hours : detail.operating_hours;
@@ -322,8 +296,10 @@ function buildClaimPrefill(detail: PlaceDetail, locationId: number | null) {
     facebook_profile: socialInputs.facebook,
     tiktok_profile: socialInputs.tiktok,
     youtube_profile: socialInputs.youtube,
-    offer_entries_text: joinUniqueEntries(deals.map(formatDealEntry)).join('\n'),
-    hours_of_operation_entries_text: joinUniqueEntries(operatingHours.map(formatOperatingHourEntry)).join('\n'),
+    deal_overrides: buildDealOverridesFromDeals(deals),
+    operating_hour_overrides: buildOperatingHourOverridesFromWindows(operatingHours),
+    offer_entries_text: '',
+    hours_of_operation_entries_text: '',
     photo_references_text: imageReferences.join('\n'),
   };
 }
@@ -349,6 +325,8 @@ function buildSharedBusinessDetails(form: ProfileFormState) {
   return {
     business_website_url: form.business_website_url.trim(),
     social_profiles: socialProfiles,
+    deal_overrides: buildNormalizedDealOverrides(form.deal_overrides),
+    operating_hour_overrides: buildNormalizedOperatingHourOverrides(form.operating_hour_overrides),
     social_media_links: Object.entries(socialProfiles)
       .filter(([platform]) => platform !== 'website')
       .map(([, profile]) => profile?.url ?? '')
@@ -408,6 +386,8 @@ function resetBusinessVerificationFields(current: ProfileFormState): ProfileForm
     employer_address: '',
     address_not_applicable: false,
     social_media_links_text: '',
+    deal_overrides: [],
+    operating_hour_overrides: [],
     offer_entries_text: '',
     hours_of_operation_entries_text: '',
     photo_references_text: '',
@@ -1960,8 +1940,8 @@ function AppScreen() {
               facebook_profile: current.facebook_profile || prefill.facebook_profile,
               tiktok_profile: current.tiktok_profile || prefill.tiktok_profile,
               youtube_profile: current.youtube_profile || prefill.youtube_profile,
-              offer_entries_text: current.offer_entries_text.trim() ? current.offer_entries_text : prefill.offer_entries_text,
-              hours_of_operation_entries_text: current.hours_of_operation_entries_text.trim() ? current.hours_of_operation_entries_text : prefill.hours_of_operation_entries_text,
+              deal_overrides: current.deal_overrides.length ? current.deal_overrides : prefill.deal_overrides,
+              operating_hour_overrides: current.operating_hour_overrides.length ? current.operating_hour_overrides : prefill.operating_hour_overrides,
               photo_references_text: current.photo_references_text.trim() ? current.photo_references_text : prefill.photo_references_text,
             };
           });
@@ -2784,13 +2764,14 @@ function AppScreen() {
     setLoginForm((current) => ({ ...current, two_factor_code: '' }));
   }
 
-  function handleChangeProfileField(field: keyof ProfileFormState, value: string) {
+  function handleChangeProfileField(field: keyof ProfileFormState, value: ProfileFormState[keyof ProfileFormState]) {
     setProfileForm((current) => {
       if (field === 'business_city') {
-        const servesMultipleAreas = value === multipleAreasBusinessCityValue;
+        const nextCityValue = String(value);
+        const servesMultipleAreas = nextCityValue === multipleAreasBusinessCityValue;
         return {
           ...current,
-          business_city: value,
+          business_city: nextCityValue,
           address_not_applicable: servesMultipleAreas,
           employer_address: servesMultipleAreas ? '' : current.employer_address,
         };

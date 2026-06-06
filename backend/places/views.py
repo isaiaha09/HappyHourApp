@@ -422,6 +422,8 @@ class ProfileDashboardView(APIView):
 			'employer_address',
 			'business_website_url',
 			'social_profiles',
+			'deal_overrides',
+			'operating_hour_overrides',
 			'social_media_links_text',
 			'offer_entries_text',
 			'hours_of_operation_entries_text',
@@ -458,6 +460,14 @@ class ProfileDashboardView(APIView):
 				)
 				claim_update_fields.extend(['social_profiles', 'social_media_links', 'business_website_url'])
 				profile_entry_payload['social_media_links'] = claim.social_media_links
+
+			if 'deal_overrides' in serializer.validated_data:
+				claim.deal_overrides = serializer.validated_data.get('deal_overrides', [])
+				claim_update_fields.append('deal_overrides')
+
+			if 'operating_hour_overrides' in serializer.validated_data:
+				claim.operating_hour_overrides = serializer.validated_data.get('operating_hour_overrides', [])
+				claim_update_fields.append('operating_hour_overrides')
 
 			for request_field_name, claim_field_name in (
 				('offer_entries_text', 'offer_entries'),

@@ -5,6 +5,7 @@ from django.utils import timezone
 from email.utils import formataddr, parseaddr
 
 from places.models import AccountProfile, BusinessClaim, FavoriteBusiness, ProfileAuthToken, VenueType
+from places.services.business_profile_overrides import build_deal_payloads, build_operating_hour_payloads
 from places.services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
 
 
@@ -175,6 +176,10 @@ def build_account_response(user, portal, claim=None, token=None):
 
 	business_contact = {}
 	if primary_claim is not None:
+		current_place_payload = None
+		if primary_claim.listing_snapshot.listing_slug:
+			from places.services.source_listings import get_source_place_payload
+			current_place_payload = get_source_place_payload(primary_claim.listing_snapshot.listing_slug)
 		editable_photo_references = _get_editable_business_photo_references(primary_claim)
 		normalized_social_profiles = normalize_social_profiles(
 			primary_claim.social_profiles,
@@ -190,6 +195,10 @@ def build_account_response(user, portal, claim=None, token=None):
 			'business_website_url': get_business_website_url(normalized_social_profiles, fallback=primary_claim.business_website_url),
 			'social_profiles': normalized_social_profiles,
 			'social_media_links': build_social_media_links(normalized_social_profiles),
+			'deal_overrides': primary_claim.deal_overrides,
+			'operating_hour_overrides': primary_claim.operating_hour_overrides,
+			'deals': current_place_payload['deals'] if current_place_payload else build_deal_payloads(primary_claim.deal_overrides or [], primary_claim.listing_snapshot.listing_slug or f'claim-{primary_claim.pk}'),
+			'operating_hours': current_place_payload['operating_hours'] if current_place_payload else build_operating_hour_payloads(primary_claim.operating_hour_overrides or [], primary_claim.listing_snapshot.listing_slug or f'claim-{primary_claim.pk}'),
 			'offer_entries': primary_claim.offer_entries,
 			'hours_of_operation_entries': primary_claim.hours_of_operation_entries,
 			'photo_references': editable_photo_references,

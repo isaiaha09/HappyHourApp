@@ -4,6 +4,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 
 import { styles } from '../appStyles';
+import { buildDealOverridesFromDeals, buildNormalizedDealOverrides, buildNormalizedOperatingHourOverrides, buildOperatingHourOverridesFromWindows } from '../businessProfileOverrides';
+import { BusinessDealsEditor, BusinessHoursEditor } from '../components/BusinessProfileStructuredEditors';
 import { SOCIAL_PLATFORM_LABELS, buildSocialProfilesFromInputs, getSocialProfilePreview, getSocialProfileValidationMessage, socialProfilesToInputs } from '../socialProfiles';
 import { dedupeImageUrls, normalizeSearchText } from '../placeHelpers';
 import type { BusinessAttachmentDraft, ProfileDashboardUpdateRequest, SignupResponse, TwoFactorSetupResponse } from '../types';
@@ -126,6 +128,8 @@ function buildDashboardDraft(session: SignupResponse): BusinessProfileDraft {
     facebook_profile: socialInputs.facebook,
     tiktok_profile: socialInputs.tiktok,
     youtube_profile: socialInputs.youtube,
+    deal_overrides: businessContact.deal_overrides ?? buildDealOverridesFromDeals(businessContact.deals ?? []),
+    operating_hour_overrides: businessContact.operating_hour_overrides ?? buildOperatingHourOverridesFromWindows(businessContact.operating_hours ?? []),
     offer_entries_text: joinDraftEntries(businessContact.offer_entries),
     hours_of_operation_entries_text: joinDraftEntries(businessContact.hours_of_operation_entries),
     photo_references_text: joinDraftEntries(businessContact.photo_references),
@@ -676,8 +680,8 @@ export function BusinessProfileEditorScreen({
     || (profileDraft.facebook_profile ?? '') !== existingSocialInputs.facebook
     || (profileDraft.tiktok_profile ?? '') !== existingSocialInputs.tiktok
     || (profileDraft.youtube_profile ?? '') !== existingSocialInputs.youtube
-    || (profileDraft.offer_entries_text ?? '') !== joinDraftEntries(businessContact.offer_entries)
-    || (profileDraft.hours_of_operation_entries_text ?? '') !== joinDraftEntries(businessContact.hours_of_operation_entries)
+    || JSON.stringify(buildNormalizedDealOverrides(profileDraft.deal_overrides ?? [])) !== JSON.stringify(buildNormalizedDealOverrides(businessContact.deal_overrides ?? buildDealOverridesFromDeals(businessContact.deals ?? [])))
+    || JSON.stringify(buildNormalizedOperatingHourOverrides(profileDraft.operating_hour_overrides ?? [])) !== JSON.stringify(buildNormalizedOperatingHourOverrides(businessContact.operating_hour_overrides ?? buildOperatingHourOverridesFromWindows(businessContact.operating_hours ?? [])))
     || joinDraftEntries(currentPhotoUrls) !== joinDraftEntries(existingPhotoUrls)
     || (profileDraft.supporting_details ?? '') !== (businessContact.supporting_details ?? '')
     || selectedPhotoUploads.length > 0;
@@ -703,6 +707,8 @@ export function BusinessProfileEditorScreen({
       work_phone: profileDraft.work_phone ?? '',
       employer_address: profileDraft.employer_address ?? '',
       business_website_url: profileDraft.business_website_url ?? '',
+      deal_overrides: buildNormalizedDealOverrides(profileDraft.deal_overrides ?? []),
+      operating_hour_overrides: buildNormalizedOperatingHourOverrides(profileDraft.operating_hour_overrides ?? []),
       social_profiles: socialProfiles,
       offer_entries_text: profileDraft.offer_entries_text ?? '',
       hours_of_operation_entries_text: profileDraft.hours_of_operation_entries_text ?? '',
@@ -836,8 +842,18 @@ export function BusinessProfileEditorScreen({
                 {renderSocialProfileField('tiktok', 'tiktok_profile', 'tiktok.com/@yourbusiness or @yourbusiness')}
                 {renderSocialProfileField('youtube', 'youtube_profile', 'youtube.com/@yourbusiness or @yourbusiness')}
               </View>
-              <DashboardMultilineField label="Deals and specials" onChangeText={(value) => setProfileDraft((current) => ({ ...current, offer_entries_text: value }))} value={profileDraft.offer_entries_text ?? ''} />
-              <DashboardMultilineField label="Additional hours information" onChangeText={(value) => setProfileDraft((current) => ({ ...current, hours_of_operation_entries_text: value }))} value={profileDraft.hours_of_operation_entries_text ?? ''} />
+              <BusinessDealsEditor
+                label="Deals and specials"
+                onChange={(value) => setProfileDraft((current) => ({ ...current, deal_overrides: value }))}
+                supportText="Edit the same deal cards your customers see, including title, price, description, and active day/time windows."
+                value={profileDraft.deal_overrides ?? []}
+              />
+              <BusinessHoursEditor
+                label="Hours of operation"
+                onChange={(value) => setProfileDraft((current) => ({ ...current, operating_hour_overrides: value }))}
+                supportText="Edit the public operating hours directly by day so the grouped cards stay in sync with the profile."
+                value={profileDraft.operating_hour_overrides ?? []}
+              />
               <View style={styles.attachmentSection}>
                 <Text style={styles.dashboardDetailLabel}>Business photos</Text>
                 <Pressable onPress={() => void handleSelectProfilePhotos()} style={[styles.linkButtonSecondary, styles.attachmentPickerButton, remainingPhotoSlots === 0 ? styles.linkButtonDisabled : null]}>

@@ -259,7 +259,7 @@ export function PlaceDetailScreen({
               </>
             ) : null}
 
-            {selectedPlace.hours_of_operation_entries?.length ? (
+            {selectedPlace.hours_of_operation_entries?.length && !selectedPlace.operating_hour_overrides ? (
               <>
                 <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>Additional Hours Information</Text>
                 <View style={styles.hourList}>
@@ -300,7 +300,7 @@ export function PlaceDetailScreen({
               <Text style={styles.emptyStateText}>No active deals were returned for this place yet.</Text>
             )}
 
-            {selectedPlace.offer_entries?.length ? (
+            {selectedPlace.offer_entries?.length && !selectedPlace.deal_overrides ? (
               <>
                 <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>More Deals and Specials</Text>
                 <View style={styles.hourList}>

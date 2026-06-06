@@ -1543,6 +1543,73 @@ export const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
   },
+  structuredEditorSection: {
+    gap: 10,
+    marginTop: 8,
+  },
+  structuredEditorCard: {
+    backgroundColor: '#fffaf4',
+    borderColor: '#e6cfbb',
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 10,
+    marginTop: 8,
+    padding: 12,
+  },
+  structuredNestedCard: {
+    backgroundColor: '#fff4e8',
+    borderColor: '#edd5bc',
+    borderRadius: 14,
+    borderWidth: 1,
+    gap: 8,
+    marginTop: 10,
+    padding: 10,
+  },
+  structuredWeekdayRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  structuredDealTypeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  structuredWeekdayChip: {
+    borderColor: '#d6b291',
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  structuredWeekdayChipActive: {
+    backgroundColor: '#9e5b49',
+    borderColor: '#9e5b49',
+  },
+  structuredWeekdayChipText: {
+    color: '#9e5b49',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  structuredWeekdayChipTextActive: {
+    color: '#fffaf4',
+  },
+  structuredTimeRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  structuredTimeInput: {
+    flex: 1,
+  },
+  structuredRemoveButton: {
+    alignSelf: 'flex-start',
+    paddingVertical: 4,
+  },
+  structuredRemoveButtonText: {
+    color: '#9e5b49',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   dealCard: {
     backgroundColor: '#fff3e5',
     borderRadius: 18,

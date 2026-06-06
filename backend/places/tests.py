@@ -1845,6 +1845,73 @@ class SourceListingIdentityTests(TestCase):
 
 	@patch('places.services.source_listings._get_place_coordinates')
 	@patch('places.services.source_listings.load_source_records')
+	def test_public_place_payload_replaces_pulled_deals_and_hours_with_structured_claim_overrides(self, mock_load_source_records, mock_get_place_coordinates):
+		mock_get_place_coordinates.return_value = (34.2001, -119.1806)
+		mock_load_source_records.return_value = [
+			ImportedPlace(
+				name='Yard House',
+				profile_name='Yard House',
+				profile_slug='yard-house',
+				city=City.OXNARD,
+				venue_type=VenueType.BAR,
+				address_line_1='501 Collection Blvd Ste # 4130',
+				state='CA',
+				postal_code='93036',
+				website_url='https://imported.example.com/yard-house',
+				source_name='business_websites',
+				source_url='https://imported.example.com/yard-house',
+				operating_hours=[ImportedOperatingHour(weekday=Weekday.MONDAY, open_time='11:00', close_time='23:00')],
+				deals=[ImportedDeal(title='Imported Happy Hour', deal_type=DealType.HAPPY_HOUR, happy_hours=[ImportedHappyHour(weekday=Weekday.MONDAY, start_time='15:00', end_time='18:00')])],
+			),
+		]
+		owner = User.objects.create_user(username='yard_override_owner', email='yard-override-owner@example.com', password='test-pass-123')
+		snapshot = ListingSnapshot.objects.create(
+			name='Yard House',
+			listing_slug='yard-house',
+			city=City.OXNARD,
+			venue_type=VenueType.BAR,
+			address_line_1='501 Collection Blvd Ste # 4130',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=owner,
+			listing_snapshot=snapshot,
+			pathway=BusinessClaim.Pathway.CLAIMED,
+			status=BusinessClaim.Status.APPROVED,
+			contact_name='Owner Name',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='owner@yardhouse.example.com',
+			work_phone='805-555-0100',
+			employer_address='501 Collection Blvd Ste # 4130',
+			deal_overrides=[{
+				'title': 'Owner Happy Hour',
+				'description': '$2 off cocktails and appetizers',
+				'deal_type': DealType.HAPPY_HOUR,
+				'price_text': '$2 Off',
+				'terms': 'Dine-in only',
+				'happy_hours': [{'weekday': Weekday.FRIDAY, 'start_time': '16:00', 'end_time': '19:00', 'all_day': False}],
+			}],
+			operating_hour_overrides=[{'weekday': Weekday.FRIDAY, 'open_time': '10:00', 'close_time': '22:00'}],
+			verification_summary='Approved claimed business verification.',
+		)
+		BusinessMembership.objects.create(claim=claim, user=owner, is_active=True)
+
+		payload = get_source_place_payload('yard-house')
+
+		self.assertEqual(len(payload['deals']), 1)
+		self.assertEqual(payload['deals'][0]['title'], 'Owner Happy Hour')
+		self.assertEqual(payload['deals'][0]['happy_hours'][0]['weekday'], Weekday.FRIDAY)
+		self.assertEqual(payload['operating_hours'], [{
+			'id': payload['operating_hours'][0]['id'],
+			'weekday': Weekday.FRIDAY,
+			'weekday_label': 'Friday',
+			'open_time': '10:00',
+			'close_time': '22:00',
+		}])
+		self.assertEqual(payload['offer_entries'], [])
+		self.assertEqual(payload['hours_of_operation_entries'], [])
+
+	@patch('places.services.source_listings._get_place_coordinates')
+	@patch('places.services.source_listings.load_source_records')
 	def test_place_payload_merges_matching_profiles_across_sources(self, mock_load_source_records, mock_get_place_coordinates):
 		mock_load_source_records.return_value = [
 			ImportedPlace(
@@ -3136,6 +3203,63 @@ class ProfileSignupApiTests(APITestCase):
 		)
 
 	@patch('places.views.get_source_place_payload')
+	def test_business_signup_stores_structured_deal_and_hour_overrides(self, mock_get_source_place_payload):
+		mock_get_source_place_payload.return_value = {
+			'id': 402,
+			'name': 'Finney\'s Crafthouse',
+			'slug': 'finneys-crafthouse',
+			'city': City.VENTURA,
+			'venue_type': VenueType.RESTAURANT,
+			'address_line_1': '494 E Main St',
+			'address_line_2': '',
+			'neighborhood': 'Downtown',
+			'state': 'CA',
+			'postal_code': '93001',
+			'phone_number': '805-555-0199',
+			'website_url': 'https://example.com/finneys',
+			'locations': [],
+		}
+
+		response = self.client.post(
+			reverse('business-signup'),
+			{
+				'username': 'finneys_override_owner',
+				'email': 'override-owner@example.com',
+				'password': 'test-pass-123',
+				'first_name': 'Pat',
+				'last_name': 'Owner',
+				'business_slug': 'finneys-crafthouse',
+				'contact_name': 'Pat Owner',
+				'job_title': BusinessClaim.JobTitle.MANAGER,
+				'work_email': 'pat@finneys.com',
+				'work_phone': '805-555-0100',
+				'employer_address': '494 E Main St, Ventura, CA 93001',
+				'verification_documents': json.dumps({
+					'business_registration': ['CA business license #123'],
+					'health_permit': ['Ventura County permit #A-55'],
+				}),
+				'deal_overrides': json.dumps([{
+					'title': 'Owner Happy Hour',
+					'description': '$2 off cocktails',
+					'deal_type': DealType.HAPPY_HOUR,
+					'price_text': '$2 Off',
+					'terms': 'Dine-in only',
+					'happy_hours': [{'weekday': Weekday.FRIDAY, 'start_time': '16:00', 'end_time': '19:00', 'all_day': False}],
+				}]),
+				'operating_hour_overrides': json.dumps([{'weekday': Weekday.FRIDAY, 'open_time': '10:00', 'close_time': '22:00'}]),
+				'proof_of_authority_attachments': [SimpleUploadedFile('manager-proof.pdf', b'proof', content_type='application/pdf')],
+				'supporting_details': 'Updated by owner.',
+			},
+			format='multipart',
+		)
+
+		self.assertEqual(response.status_code, 201)
+		claim = BusinessClaim.objects.get(claimant__username='finneys_override_owner')
+		self.assertEqual(claim.deal_overrides[0]['title'], 'Owner Happy Hour')
+		self.assertEqual(claim.operating_hour_overrides[0]['weekday'], Weekday.FRIDAY)
+		self.assertIn('Owner Happy Hour', claim.offer_entries[0])
+
+	@patch('places.views.get_source_place_payload')
 	def test_claimed_business_signup_accepts_long_offer_entries(self, mock_get_source_place_payload):
 		mock_get_source_place_payload.return_value = {
 			'id': 1,
@@ -4192,6 +4316,15 @@ class ProfileDashboardApiTests(APITestCase):
 			work_email='owner@approvedspot.com',
 			work_phone='805-555-0200',
 			employer_address='55 Main St, Ventura, CA 93001',
+			deal_overrides=[{
+				'title': 'Dashboard Happy Hour',
+				'description': '$3 off cocktails',
+				'deal_type': DealType.HAPPY_HOUR,
+				'price_text': '$3 Off',
+				'terms': 'Dine-in only',
+				'happy_hours': [{'weekday': Weekday.THURSDAY, 'start_time': '15:00', 'end_time': '18:00', 'all_day': False}],
+			}],
+			operating_hour_overrides=[{'weekday': Weekday.THURSDAY, 'open_time': '11:00', 'close_time': '22:00'}],
 			social_profiles={
 				'website': {
 					'url': 'https://approved.example.com/old',
@@ -4219,6 +4352,8 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(response.data['business_contact']['work_email'], 'owner@approvedspot.com')
 		self.assertEqual(response.data['approved_businesses'][0]['address_line_1'], '55 Main St')
 		self.assertEqual(response.data['business_contact']['offer_entries'], [])
+		self.assertEqual(response.data['business_contact']['deals'][0]['title'], 'Dashboard Happy Hour')
+		self.assertEqual(response.data['business_contact']['operating_hours'][0]['weekday'], Weekday.THURSDAY)
 		self.assertEqual(
 			response.data['business_contact']['social_profiles'],
 			{

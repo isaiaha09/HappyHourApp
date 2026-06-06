@@ -11,6 +11,14 @@ from rest_framework import serializers
 
 from .models import BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, City, ListingSnapshot, VenueType
 from .services.account_profiles import build_account_response, get_or_create_account_profile, has_active_business_membership
+from .services.business_profile_overrides import (
+	build_deal_payloads,
+	build_operating_hour_payloads,
+	normalize_deal_overrides,
+	normalize_operating_hour_overrides,
+	summarize_deal_overrides,
+	summarize_operating_hour_overrides,
+)
 from .services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
 
 
@@ -42,6 +50,8 @@ LIST_JSON_FIELD_NAMES = (
 	'offer_entries',
 	'hours_of_operation_entries',
 	'photo_references',
+	'deal_overrides',
+	'operating_hour_overrides',
 )
 
 DICT_JSON_FIELD_NAMES = (
@@ -64,6 +74,25 @@ def _normalize_social_profile_payload(raw_profiles=None, business_website_url=''
 		normalized_social_profiles,
 		get_business_website_url(normalized_social_profiles, fallback=business_website_url),
 		build_social_media_links(normalized_social_profiles),
+	)
+
+
+def _normalize_business_profile_override_payload(raw_deal_overrides=None, raw_operating_hour_overrides=None):
+	try:
+		normalized_deal_overrides = normalize_deal_overrides(raw_deal_overrides)
+	except ValueError as error:
+		raise serializers.ValidationError({'deal_overrides': [str(error)]})
+
+	try:
+		normalized_operating_hour_overrides = normalize_operating_hour_overrides(raw_operating_hour_overrides)
+	except ValueError as error:
+		raise serializers.ValidationError({'operating_hour_overrides': [str(error)]})
+
+	return (
+		normalized_deal_overrides,
+		normalized_operating_hour_overrides,
+		summarize_deal_overrides(normalized_deal_overrides),
+		summarize_operating_hour_overrides(normalized_operating_hour_overrides),
 	)
 
 
@@ -212,6 +241,8 @@ class ProfileDashboardUpdateSerializer(serializers.Serializer):
 	employer_address = serializers.CharField(max_length=255, required=False, allow_blank=True)
 	business_website_url = serializers.URLField(required=False, allow_blank=True)
 	social_profiles = serializers.JSONField(required=False)
+	deal_overrides = serializers.JSONField(required=False)
+	operating_hour_overrides = serializers.JSONField(required=False)
 	social_media_links_text = serializers.CharField(required=False, allow_blank=True)
 	offer_entries_text = serializers.CharField(required=False, allow_blank=True)
 	hours_of_operation_entries_text = serializers.CharField(required=False, allow_blank=True)
@@ -273,6 +304,18 @@ class ProfileDashboardUpdateSerializer(serializers.Serializer):
 			attrs['social_profiles'] = normalized_social_profiles
 			attrs['business_website_url'] = normalized_website_url
 			attrs['social_media_links_text'] = '\n'.join(normalized_social_links)
+		if 'deal_overrides' in attrs or 'operating_hour_overrides' in attrs:
+			(
+				attrs['deal_overrides'],
+				attrs['operating_hour_overrides'],
+				normalized_offer_entries,
+				normalized_hour_entries,
+			) = _normalize_business_profile_override_payload(
+				attrs.get('deal_overrides', []),
+				attrs.get('operating_hour_overrides', []),
+			)
+			attrs['offer_entries_text'] = '\n'.join(normalized_offer_entries)
+			attrs['hours_of_operation_entries_text'] = '\n'.join(normalized_hour_entries)
 		return attrs
 
 
@@ -341,7 +384,7 @@ class LoginSerializer(serializers.Serializer):
 			if has_active_business_membership(authenticated_user):
 				pass
 			elif authenticated_user.business_claims.exists() or authenticated_user.business_memberships.exists():
-				raise serializers.ValidationError('Your business claim submission has not been approved yet. You will be notified once it is approved.')
+				raise serializers.ValidationError('Your business claim must be approved by an admin before you can sign in to the business portal.')
 			else:
 				raise serializers.ValidationError('That account does not have an approved business profile yet.')
 
@@ -536,6 +579,8 @@ class ClaimedBusinessSignupSerializer(CustomerSignupSerializer):
 	address_not_applicable = serializers.BooleanField(default=False)
 	business_website_url = serializers.URLField(required=False, allow_blank=True)
 	social_profiles = serializers.JSONField(required=False)
+	deal_overrides = serializers.JSONField(required=False)
+	operating_hour_overrides = serializers.JSONField(required=False)
 	social_media_links = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
 	offer_entries = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
 	hours_of_operation_entries = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
@@ -556,8 +601,14 @@ class ClaimedBusinessSignupSerializer(CustomerSignupSerializer):
 			business_website_url=attrs.get('business_website_url', ''),
 			social_media_links=attrs['social_media_links'],
 		)
-		attrs['offer_entries'] = _normalize_string_list(attrs.get('offer_entries', []))
-		attrs['hours_of_operation_entries'] = _normalize_string_list(attrs.get('hours_of_operation_entries', []))
+		if 'deal_overrides' in attrs or 'operating_hour_overrides' in attrs:
+			attrs['deal_overrides'], attrs['operating_hour_overrides'], attrs['offer_entries'], attrs['hours_of_operation_entries'] = _normalize_business_profile_override_payload(
+				attrs.get('deal_overrides', []),
+				attrs.get('operating_hour_overrides', []),
+			)
+		else:
+			attrs['offer_entries'] = _normalize_string_list(attrs.get('offer_entries', []))
+			attrs['hours_of_operation_entries'] = _normalize_string_list(attrs.get('hours_of_operation_entries', []))
 		attrs['photo_references'] = _normalize_string_list(attrs.get('photo_references', []))
 		attrs['verification_documents'] = _normalize_document_map(attrs.get('verification_documents', {}))
 		return attrs
@@ -578,6 +629,8 @@ class ClaimedBusinessSignupSerializer(CustomerSignupSerializer):
 			'business_website_url': listing_snapshot.website_url,
 			'social_profiles': validated_data.pop('social_profiles', {}),
 			'social_media_links': validated_data.pop('social_media_links', []),
+			'deal_overrides': validated_data.pop('deal_overrides', None),
+			'operating_hour_overrides': validated_data.pop('operating_hour_overrides', None),
 			'offer_entries': validated_data.pop('offer_entries', []),
 			'hours_of_operation_entries': validated_data.pop('hours_of_operation_entries', []),
 			'photo_references': validated_data.pop('photo_references', []),
@@ -617,6 +670,8 @@ class EstablishedBusinessSignupSerializer(CustomerSignupSerializer):
 	employer_address = serializers.CharField(max_length=255, required=False, allow_blank=True)
 	address_not_applicable = serializers.BooleanField(default=False)
 	social_profiles = serializers.JSONField(required=False)
+	deal_overrides = serializers.JSONField(required=False)
+	operating_hour_overrides = serializers.JSONField(required=False)
 	social_media_links = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
 	offer_entries = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
 	hours_of_operation_entries = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
@@ -649,8 +704,14 @@ class EstablishedBusinessSignupSerializer(CustomerSignupSerializer):
 			business_website_url=attrs.get('business_website_url', ''),
 			social_media_links=attrs['social_media_links'],
 		)
-		attrs['offer_entries'] = _normalize_string_list(attrs.get('offer_entries', []))
-		attrs['hours_of_operation_entries'] = _normalize_string_list(attrs.get('hours_of_operation_entries', []))
+		if 'deal_overrides' in attrs or 'operating_hour_overrides' in attrs:
+			attrs['deal_overrides'], attrs['operating_hour_overrides'], attrs['offer_entries'], attrs['hours_of_operation_entries'] = _normalize_business_profile_override_payload(
+				attrs.get('deal_overrides', []),
+				attrs.get('operating_hour_overrides', []),
+			)
+		else:
+			attrs['offer_entries'] = _normalize_string_list(attrs.get('offer_entries', []))
+			attrs['hours_of_operation_entries'] = _normalize_string_list(attrs.get('hours_of_operation_entries', []))
 		attrs['photo_references'] = _normalize_string_list(attrs.get('photo_references', []))
 		attrs['verification_documents'] = _normalize_document_map(attrs.get('verification_documents', {}))
 		return attrs
@@ -682,6 +743,8 @@ class EstablishedBusinessSignupSerializer(CustomerSignupSerializer):
 			'business_website_url': listing_snapshot.website_url,
 			'social_profiles': validated_data.pop('social_profiles', {}),
 			'social_media_links': validated_data.pop('social_media_links', []),
+			'deal_overrides': validated_data.pop('deal_overrides', None),
+			'operating_hour_overrides': validated_data.pop('operating_hour_overrides', None),
 			'offer_entries': validated_data.pop('offer_entries', []),
 			'hours_of_operation_entries': validated_data.pop('hours_of_operation_entries', []),
 			'photo_references': validated_data.pop('photo_references', []),
@@ -714,6 +777,8 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 	business_venue_type = serializers.ChoiceField(choices=VenueType.choices)
 	business_website_url = serializers.URLField(required=False, allow_blank=True)
 	social_profiles = serializers.JSONField(required=False)
+	deal_overrides = serializers.JSONField(required=False)
+	operating_hour_overrides = serializers.JSONField(required=False)
 	social_media_links = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
 	offer_entries = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
 	hours_of_operation_entries = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
@@ -740,8 +805,14 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 			business_website_url=attrs.get('business_website_url', ''),
 			social_media_links=attrs['social_media_links'],
 		)
-		attrs['offer_entries'] = _normalize_string_list(attrs.get('offer_entries', []))
-		attrs['hours_of_operation_entries'] = _normalize_string_list(attrs.get('hours_of_operation_entries', []))
+		if 'deal_overrides' in attrs or 'operating_hour_overrides' in attrs:
+			attrs['deal_overrides'], attrs['operating_hour_overrides'], attrs['offer_entries'], attrs['hours_of_operation_entries'] = _normalize_business_profile_override_payload(
+				attrs.get('deal_overrides', []),
+				attrs.get('operating_hour_overrides', []),
+			)
+		else:
+			attrs['offer_entries'] = _normalize_string_list(attrs.get('offer_entries', []))
+			attrs['hours_of_operation_entries'] = _normalize_string_list(attrs.get('hours_of_operation_entries', []))
 		attrs['photo_references'] = _normalize_string_list(attrs.get('photo_references', []))
 		return attrs
 
@@ -749,6 +820,8 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 		serves_multiple_areas = validated_data.pop('serves_multiple_areas', False)
 		social_media_links = validated_data.pop('social_media_links', [])
 		social_profiles = validated_data.pop('social_profiles', {})
+		deal_overrides = validated_data.pop('deal_overrides', None)
+		operating_hour_overrides = validated_data.pop('operating_hour_overrides', None)
 		offer_entries = validated_data.pop('offer_entries', [])
 		hours_of_operation_entries = validated_data.pop('hours_of_operation_entries', [])
 		photo_references = validated_data.pop('photo_references', [])
@@ -779,6 +852,8 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 				business_website_url=listing_snapshot.website_url,
 				social_profiles=social_profiles,
 				social_media_links=social_media_links,
+				deal_overrides=deal_overrides,
+				operating_hour_overrides=operating_hour_overrides,
 				offer_entries=offer_entries,
 				hours_of_operation_entries=hours_of_operation_entries,
 				photo_references=photo_references,
@@ -951,6 +1026,8 @@ class PlaceListSerializer(serializers.Serializer):
 	slug = serializers.CharField()
 	is_claimed = serializers.BooleanField(required=False, default=False)
 	social_profiles = serializers.DictField(required=False, default=dict)
+	deal_overrides = serializers.ListField(child=serializers.DictField(), required=False, allow_null=True)
+	operating_hour_overrides = serializers.ListField(child=serializers.DictField(), required=False, allow_null=True)
 	social_media_links = serializers.ListField(child=serializers.CharField(), required=False, default=list)
 	offer_entries = serializers.ListField(child=serializers.CharField(), required=False, default=list)
 	hours_of_operation_entries = serializers.ListField(child=serializers.CharField(), required=False, default=list)

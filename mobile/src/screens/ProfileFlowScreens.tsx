@@ -26,6 +26,7 @@ import { WebView } from 'react-native-webview';
 
 import { styles } from '../appStyles';
 import type { AuthPortal, LoginFormState, ProfileFormState } from '../appFlowTypes';
+import { BusinessDealsEditor, BusinessHoursEditor } from '../components/BusinessProfileStructuredEditors';
 import { manualBusinessCityOptions, manualBusinessVenueOptions } from '../browseConfig';
 import { dedupeImageUrls, formatPlaceAddress, getPlaceLocations, normalizeSearchText } from '../placeHelpers';
 import { SOCIAL_PLATFORM_LABELS, getSocialProfilePreview, getSocialProfileValidationMessage } from '../socialProfiles';
@@ -41,8 +42,6 @@ type CompactDropdownProps = {
   selectedValue: string;
   onToggle: () => void;
 };
-
-type StructuredListField = 'offer_entries_text' | 'hours_of_operation_entries_text';
 
 type AttachmentPreviewState =
   | { kind: 'image'; name: string; uri: string }
@@ -201,7 +200,7 @@ export type CreateProfileScreenProps = {
   isLandscape: boolean;
   message: string | null;
   onBack: () => void;
-  onChangeField: (field: keyof ProfileFormState, value: string) => void;
+  onChangeField: (field: keyof ProfileFormState, value: ProfileFormState[keyof ProfileFormState]) => void;
   onOpenBusinessClaim: () => void;
   onSubmit: () => void;
   submitting: boolean;
@@ -230,7 +229,7 @@ export type BusinessVerificationScreenProps = {
   onAddAttachments: (kind: BusinessAttachmentKind) => void;
   onAddPhotoUploads: () => void;
   onBack: () => void;
-  onChangeField: (field: keyof ProfileFormState, value: string) => void;
+  onChangeField: (field: keyof ProfileFormState, value: ProfileFormState[keyof ProfileFormState]) => void;
   onRemoveCurrentPhoto: (photoUrl: string) => void;
   onRemoveAttachment: (kind: BusinessAttachmentKind, attachmentId: string) => void;
   onRemovePhotoUpload: (attachmentId: string) => void;
@@ -1205,11 +1204,6 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
   const requiresHealthPermit = ['restaurant', 'fast_food', 'cafe'].includes(form.business_venue_type);
   const requiresAbcLicense = form.business_venue_type === 'bar';
   const [openDropdown, setOpenDropdown] = useState<'city' | 'venue' | 'job' | null>(null);
-  const [entryDrafts, setEntryDrafts] = useState<Record<StructuredListField, string>>({
-    offer_entries_text: '',
-    hours_of_operation_entries_text: '',
-  });
-  const [entryErrors, setEntryErrors] = useState<Partial<Record<StructuredListField, string>>>({});
   const [attachmentPreview, setAttachmentPreview] = useState<AttachmentPreviewState | null>(null);
   const [attachmentPreviewLoading, setAttachmentPreviewLoading] = useState(false);
   const { handleFieldFocus, handleScroll, scrollViewRef } = useAutoScrollForm();
@@ -1247,13 +1241,6 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
     tiktok: getSocialProfileValidationMessage('tiktok', form.tiktok_profile),
     youtube: getSocialProfileValidationMessage('youtube', form.youtube_profile),
   };
-
-  function parseStructuredEntries(value: string) {
-    return value
-      .split(/\r?\n/)
-      .map((entry) => entry.trim())
-      .filter(Boolean);
-  }
 
   function handleSelectDropdownValue(field: 'business_city' | 'business_venue_type', value: string) {
     onChangeField(field, value);
@@ -1348,23 +1335,6 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
     );
   }
 
-  function validateStructuredEntry(field: StructuredListField, value: string) {
-    const normalizedValue = value.trim();
-    if (!normalizedValue) {
-      return 'Enter a value before adding it.';
-    }
-
-    if (field === 'hours_of_operation_entries_text' && !/[a-z]{3}/i.test(normalizedValue)) {
-      return 'Use a readable schedule like Mon-Fri 3:00 PM - 6:00 PM.';
-    }
-
-    return null;
-  }
-
-  function setStructuredFieldEntries(field: StructuredListField, entries: string[]) {
-    onChangeField(field, entries.join('\n'));
-  }
-
   function renderSocialProfileField(field: keyof ProfileFormState, platform: 'instagram' | 'facebook' | 'tiktok' | 'youtube') {
     const fieldValue = String(form[field] ?? '');
     const fieldError = socialFieldErrors[platform];
@@ -1396,75 +1366,6 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
     }
 
     onSubmit();
-  }
-
-  function handleChangeStructuredDraft(field: StructuredListField, value: string) {
-    setEntryDrafts((current) => ({ ...current, [field]: value }));
-    setEntryErrors((current) => ({ ...current, [field]: undefined }));
-  }
-
-  function handleAddStructuredEntry(field: StructuredListField) {
-    const draftValue = entryDrafts[field].trim();
-    const validationError = validateStructuredEntry(field, draftValue);
-    if (validationError) {
-      setEntryErrors((current) => ({ ...current, [field]: validationError }));
-      return;
-    }
-
-    const currentEntries = parseStructuredEntries(form[field]);
-    if (currentEntries.includes(draftValue)) {
-      setEntryErrors((current) => ({ ...current, [field]: 'That item is already added.' }));
-      return;
-    }
-
-    setStructuredFieldEntries(field, [...currentEntries, draftValue]);
-    setEntryDrafts((current) => ({ ...current, [field]: '' }));
-    setEntryErrors((current) => ({ ...current, [field]: undefined }));
-  }
-
-  function handleRemoveStructuredEntry(field: StructuredListField, entryToRemove: string) {
-    setStructuredFieldEntries(
-      field,
-      parseStructuredEntries(form[field]).filter((entry) => entry !== entryToRemove),
-    );
-  }
-
-  function renderStructuredEntryField(field: StructuredListField, label: string, options?: { placeholder?: string; support?: string; addLabel?: string }) {
-    const entries = parseStructuredEntries(form[field]);
-
-    return (
-      <View style={styles.structuredEntrySection}>
-        <Text style={styles.profileFieldLabel}>{label}</Text>
-        <View style={styles.structuredEntryInputRow}>
-          <AutoScrollTextInput
-            onBeforeAutoScroll={handleFieldFocus}
-            onChangeText={(value) => handleChangeStructuredDraft(field, value)}
-            placeholder={options?.placeholder}
-            placeholderTextColor="#9a7f6c"
-            scrollViewRef={scrollViewRef}
-            style={[styles.profileInput, styles.structuredEntryInput]}
-            value={entryDrafts[field]}
-          />
-          <Pressable onPress={() => handleAddStructuredEntry(field)} style={styles.structuredEntryAddButton}>
-            <Text style={styles.structuredEntryAddButtonText}>{options?.addLabel ?? 'Add'}</Text>
-          </Pressable>
-        </View>
-        {options?.support ? <Text style={styles.profileSupportText}>{options.support}</Text> : null}
-        {entryErrors[field] ? <Text style={styles.structuredEntryErrorText}>{entryErrors[field]}</Text> : null}
-        {entries.length ? (
-          <View style={styles.structuredEntryList}>
-            {entries.map((entry) => (
-              <View key={`${field}:${entry}`} style={styles.structuredEntryCard}>
-                <Text style={styles.structuredEntryText}>{entry}</Text>
-                <Pressable onPress={() => handleRemoveStructuredEntry(field, entry)} style={styles.structuredEntryRemoveButton}>
-                  <Text style={styles.structuredEntryRemoveButtonText}>Remove</Text>
-                </Pressable>
-              </View>
-            ))}
-          </View>
-        ) : null}
-      </View>
-    );
   }
 
   function renderAttachmentPicker(kind: BusinessAttachmentKind, label: string, support?: string) {
@@ -1674,33 +1575,23 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
                 {businessSocialFieldDefinitions.map((definition) => renderSocialProfileField(definition.field, definition.platform))}
               </View>
 
-              {isClaimed ? renderMultilineField(
-                'offer_entries_text',
-                'Deals, discounts, or specials (optional)',
-                form.offer_entries_text,
-                {
-                  placeholder: 'Taco Tuesday: 2 tacos for $5',
-                  support: 'Existing business deals will prefill here when available, and you can edit each line before submitting.',
-                },
-              ) : renderStructuredEntryField('offer_entries_text', 'Deals, discounts, or specials (optional)', {
-                placeholder: 'Taco Tuesday: 2 tacos for $5',
-                support: 'Add each offer separately so it can be listed individually on the business profile.',
-                addLabel: 'Add offer',
-              })}
+              <BusinessDealsEditor
+                label="Deals, discounts, or specials"
+                onChange={(value) => onChangeField('deal_overrides', value)}
+                supportText={isClaimed
+                  ? 'Existing public deals prefill here when available. Edit the actual deal cards instead of adding plain text that only appears in a separate section.'
+                  : 'Build each deal the way it will appear on the business profile, including its day and time windows.'}
+                value={form.deal_overrides}
+              />
 
-              {isClaimed ? renderMultilineField(
-                'hours_of_operation_entries_text',
-                'Hours of operation (optional)',
-                form.hours_of_operation_entries_text,
-                {
-                  placeholder: 'Mon-Fri 3:00 PM - 6:00 PM',
-                  support: 'Existing operating hours will prefill here when available, and you can edit the schedule lines before submitting.',
-                },
-              ) : renderStructuredEntryField('hours_of_operation_entries_text', 'Hours of operation (optional)', {
-                placeholder: 'Mon-Fri 3:00 PM - 6:00 PM',
-                support: 'Add each schedule line separately using a readable day and time format.',
-                addLabel: 'Add hours',
-              })}
+              <BusinessHoursEditor
+                label="Hours of operation"
+                onChange={(value) => onChangeField('operating_hour_overrides', value)}
+                supportText={isClaimed
+                  ? 'Existing public hours prefill here when available. Update the displayed schedule directly instead of adding extra text below it.'
+                  : 'Add business hours by day so the public profile can render the same grouped schedule cards shown to users.'}
+                value={form.operating_hour_overrides}
+              />
 
               <View style={styles.attachmentSection}>
                 <Text style={styles.profileFieldLabel}>Business photos</Text>

@@ -1,3 +1,5 @@
+import type { BusinessDealOverride, BusinessOperatingHourOverride } from './types';
+
 export type AuthPortal = 'customer' | 'business';
 
 export type ProfileFormState = {
@@ -23,6 +25,8 @@ export type ProfileFormState = {
   employer_address: string;
   address_not_applicable: boolean;
   social_media_links_text: string;
+  deal_overrides: BusinessDealOverride[];
+  operating_hour_overrides: BusinessOperatingHourOverride[];
   offer_entries_text: string;
   hours_of_operation_entries_text: string;
   photo_references_text: string;

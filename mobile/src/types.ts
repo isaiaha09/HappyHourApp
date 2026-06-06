@@ -29,6 +29,31 @@ export type Deal = {
   happy_hours: HappyHourWindow[];
 };
 
+export type BusinessDealHappyHourOverride = {
+  id?: string;
+  weekday: number;
+  start_time: string;
+  end_time: string;
+  all_day: boolean;
+};
+
+export type BusinessOperatingHourOverride = {
+  id?: string;
+  weekday: number;
+  open_time: string;
+  close_time: string;
+};
+
+export type BusinessDealOverride = {
+  id?: string;
+  title: string;
+  description: string;
+  deal_type: string;
+  price_text: string;
+  terms: string;
+  happy_hours: BusinessDealHappyHourOverride[];
+};
+
 export type PlaceLocation = {
   id: number;
   name: string;
@@ -72,6 +97,8 @@ export type PlaceLocationDetail = PlaceLocation & {
 export type PlaceListItem = PlaceLocation & {
   is_claimed: boolean;
   social_profiles?: SocialProfiles;
+  deal_overrides?: BusinessDealOverride[] | null;
+  operating_hour_overrides?: BusinessOperatingHourOverride[] | null;
   social_media_links?: string[];
   offer_entries?: string[];
   hours_of_operation_entries?: string[];
@@ -143,6 +170,10 @@ export type SignupResponse = {
     employer_address?: string;
     business_website_url?: string;
     social_profiles?: SocialProfiles;
+    deal_overrides?: BusinessDealOverride[] | null;
+    operating_hour_overrides?: BusinessOperatingHourOverride[] | null;
+    deals?: Deal[];
+    operating_hours?: OperatingHourWindow[];
     social_media_links?: string[];
     offer_entries?: string[];
     hours_of_operation_entries?: string[];
@@ -182,6 +213,8 @@ export type ProfileDashboardUpdateRequest = {
   employer_address?: string;
   business_website_url?: string;
   social_profiles?: SocialProfiles;
+  deal_overrides?: BusinessDealOverride[];
+  operating_hour_overrides?: BusinessOperatingHourOverride[];
   social_media_links_text?: string;
   offer_entries_text?: string;
   hours_of_operation_entries_text?: string;
@@ -263,6 +296,8 @@ export type BusinessAttachmentBuckets = Record<BusinessAttachmentKind, BusinessA
 type SharedBusinessDetails = {
   business_website_url: string;
   social_profiles?: SocialProfiles;
+  deal_overrides?: BusinessDealOverride[];
+  operating_hour_overrides?: BusinessOperatingHourOverride[];
   social_media_links: string[];
   offer_entries: string[];
   hours_of_operation_entries: string[];
