@@ -2458,6 +2458,12 @@ function AppScreen() {
     setShouldAutoFocusLoginField(false);
     setShowLoginTwoFactorCodeField(false);
     setLoginForm(initialLoginFormState);
+
+    if (onboardingTransitionFrameRef.current !== null) {
+      cancelAnimationFrame(onboardingTransitionFrameRef.current);
+      onboardingTransitionFrameRef.current = null;
+    }
+
     navigateScreen('splash', 'backward');
   }
 

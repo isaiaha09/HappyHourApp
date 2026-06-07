@@ -1701,23 +1701,44 @@ export const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   splashScreen: {
-    alignItems: 'center',
     flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 28,
-    paddingTop: 48,
-    paddingBottom: 22,
     backgroundColor: '#f6ead8',
   },
-  splashHero: {
-    alignItems: 'center',
-    gap: 10,
+  splashHeaderBar: {
+    marginBottom: 0,
+    minHeight: 96,
+    paddingBottom: 10,
+    paddingTop: 34,
+    zIndex: 3,
   },
-  splashLogoShell: {
+  splashHeaderBackButton: {
+    minHeight: 44,
+    marginTop: 8,
+    marginLeft: 10,
+    
+    
+  },
+  splashHeaderCenterSlot: {
+    width: 88,
+  },
+  splashHeaderRightSpacer: {
+    width: 108,
+  },
+  splashBody: {
+    alignItems: 'center',
+    flex: 1,
+    paddingHorizontal: 28,
+    paddingTop: 10,
+    paddingBottom: 22,
+  },
+  splashFloatingLogo: {
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
-    position: 'relative',
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 18,
+    zIndex: 5,
   },
   splashLogoImage: {
     height: 196,
@@ -1726,6 +1747,11 @@ export const styles = StyleSheet.create({
   splashLogoRevealMask: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#f6ead8',
+  },
+  splashSloganBlock: {
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 28,
   },
   splashSloganRow: {
     alignItems: 'center',
@@ -1743,7 +1769,7 @@ export const styles = StyleSheet.create({
   splashActionGroup: {
     alignSelf: 'stretch',
     gap: 14,
-    marginTop: 86,
+    marginTop: 'auto',
     maxWidth: 420,
     paddingHorizontal: 4,
     width: '100%',
@@ -1782,26 +1808,6 @@ export const styles = StyleSheet.create({
     fontWeight: '800',
     textAlign: 'center',
     textDecorationLine: 'underline',
-  },
-  splashOpenMapButton: {
-    alignItems: 'center',
-    alignSelf: 'center',
-    backgroundColor: '#fff7ef',
-    borderColor: '#ddc4a7',
-    borderRadius: 16,
-    borderWidth: 1,
-    minHeight: 50,
-    justifyContent: 'center',
-    maxWidth: 280,
-    paddingHorizontal: 22,
-    paddingVertical: 12,
-    width: '100%',
-  },
-  splashOpenMapButtonText: {
-    color: '#5d4637',
-    fontSize: 15,
-    fontWeight: '800',
-    textAlign: 'center',
   },
   authScreen: {
     flex: 1,
