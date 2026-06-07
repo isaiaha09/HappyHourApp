@@ -702,7 +702,7 @@ export function CreateProfileScreen({ errorMessage, form, isLandscape, message, 
         >
           <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
             <Pressable onPress={onBack} style={styles.backButton}>
-              <Text style={styles.backButtonText}>Back to login</Text>
+              <Text style={styles.backButtonText}>Back</Text>
             </Pressable>
           </View>
 

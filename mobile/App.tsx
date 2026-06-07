@@ -517,6 +517,7 @@ function AppScreen() {
   const [selectedClaimLocationId, setSelectedClaimLocationId] = useState<number | null>(null);
   const [logoutTransitionSession, setLogoutTransitionSession] = useState<SignupResponse | null>(null);
   const [incomingOnboardingScreen, setIncomingOnboardingScreen] = useState<AppScreenMode | null>(null);
+  const [returningToSplashScreen, setReturningToSplashScreen] = useState<AppScreenMode | null>(null);
   const [browseProfileTransitionFrom, setBrowseProfileTransitionFrom] = useState<'profiles' | 'browse' | null>(null);
   const [incomingBrowseProfileScreen, setIncomingBrowseProfileScreen] = useState<'profiles' | 'browse' | null>(null);
   const [incomingBrowseProfileTargetScreen, setIncomingBrowseProfileTargetScreen] = useState<AppScreenMode | null>(null);
@@ -1075,6 +1076,16 @@ function AppScreen() {
       },
     ],
   };
+  const splashReturnOutgoingStyle = {
+    transform: [
+      {
+        translateX: screenTransition.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, width],
+        }),
+      },
+    ],
+  };
   const screenTransitionStyle = {
     opacity: screenTransition,
     transform: [
@@ -1363,6 +1374,11 @@ function AppScreen() {
     transitionOverride?: { axis: TransitionAxis; incomingOffset: number },
   ) {
     const currentScreen = screenMode;
+    const shouldAnimateSplashReturn = nextScreen === 'splash'
+      && !authenticatedSession
+      && !selectedPlaceSlug
+      && onboardingScreenKeys.has(currentScreen)
+      && currentScreen !== 'splash';
     const shouldAnimateOnboarding = onboardingScreenKeys.has(currentScreen)
       && onboardingScreenKeys.has(nextScreen)
       && currentScreen !== nextScreen;
@@ -1377,17 +1393,48 @@ function AppScreen() {
       onboardingTransitionFrameRef.current = null;
     }
 
+    if (shouldAnimateSplashReturn) {
+      setBrowseProfileTransitionFrom(null);
+      setIncomingBrowseProfileScreen(null);
+      setIncomingBrowseProfileTargetScreen(null);
+      setIncomingOnboardingScreen(null);
+      setGuestBrowseTransitionFrom(null);
+      setIncomingGuestBrowseScreen(null);
+      setReturningToSplashScreen(currentScreen);
+      screenTransition.setValue(0);
+      onboardingTransitionFrameRef.current = requestAnimationFrame(() => {
+        onboardingTransitionFrameRef.current = null;
+        Animated.timing(screenTransition, {
+          duration: onboardingTransitionDuration,
+          toValue: 1,
+          useNativeDriver: true,
+        }).start(({ finished }) => {
+          if (!finished) {
+            setReturningToSplashScreen(null);
+            return;
+          }
+
+          setReturningToSplashScreen(null);
+          setScreenMode('splash');
+          screenTransition.setValue(1);
+        });
+      });
+      return;
+    }
+
     if (!shouldAnimateOnboarding) {
       setBrowseProfileTransitionFrom(null);
       setIncomingBrowseProfileScreen(null);
       setIncomingBrowseProfileTargetScreen(null);
       setIncomingOnboardingScreen(null);
+      setReturningToSplashScreen(null);
       screenTransition.setValue(1);
       setScreenMode(nextScreen);
       return;
     }
 
     screenTransition.setValue(0);
+    setReturningToSplashScreen(null);
     setIncomingOnboardingScreen(nextScreen);
     onboardingTransitionFrameRef.current = requestAnimationFrame(() => {
       onboardingTransitionFrameRef.current = null;
@@ -1434,6 +1481,7 @@ function AppScreen() {
     setIncomingBrowseProfileScreen(null);
     setIncomingBrowseProfileTargetScreen(null);
     setIncomingOnboardingScreen(null);
+    setReturningToSplashScreen(null);
     screenTransition.setValue(0);
     setIncomingBrowseProfileScreen(nextScreen);
     setIncomingBrowseProfileTargetScreen(nextScreen === 'profiles' ? resolvedScreenMode : null);
@@ -1488,6 +1536,7 @@ function AppScreen() {
     setIncomingBrowseProfileScreen(null);
     setIncomingBrowseProfileTargetScreen(null);
     setIncomingOnboardingScreen(null);
+    setReturningToSplashScreen(null);
     setGuestBrowseTransitionFrom(currentGuestBrowseScreen);
     setIncomingGuestBrowseScreen(null);
     screenTransition.setValue(0);
@@ -3873,36 +3922,45 @@ function AppScreen() {
   }
 
   function renderGuestMainShell() {
-    const transitionActive = usesGuestBrowseSlideTransition;
-    const showingSplash = screenMode === 'splash';
-    const splashLayerStyle = transitionActive
+    const browseTransitionActive = usesGuestBrowseSlideTransition;
+    const currentOverlayScreen = currentOnboardingScreen && currentOnboardingScreen !== 'splash'
+      ? currentOnboardingScreen
+      : null;
+    const overlayScreen = returningToSplashScreen ?? currentOverlayScreen;
+    const showingBrowse = screenMode === 'browse';
+    const splashLayerStyle = browseTransitionActive
       ? guestBrowseTransitionFrom === 'splash'
         ? guestBrowseOutgoingStyle
         : guestBrowseIncomingStyle
-      : showingSplash
-        ? null
-        : { opacity: 0, transform: [{ translateX: width }] };
-    const browseLayerStyle = transitionActive
+      : showingBrowse
+        ? { opacity: 0, transform: [{ translateX: width }] }
+        : null;
+    const browseLayerStyle = browseTransitionActive
       ? guestBrowseTransitionFrom === 'browse'
         ? guestBrowseOutgoingStyle
         : guestBrowseIncomingStyle
-      : showingSplash
-        ? { opacity: 0, transform: [{ translateX: -width }] }
+      : showingBrowse
+        ? null
+        : { opacity: 0, transform: [{ translateX: -width }] };
+    const currentOverlayStyle = returningToSplashScreen
+      ? splashReturnOutgoingStyle
+      : incomingOnboardingScreen && currentOverlayScreen
+        ? currentOnboardingTransitionStyle
         : null;
 
     return (
-      <View style={[styles.fullScreenRoot, transitionActive ? styles.transitionClipRoot : null]}>
+      <View style={[styles.fullScreenRoot, (browseTransitionActive || incomingOnboardingScreen || returningToSplashScreen) ? styles.transitionClipRoot : null]}>
         <Animated.View
-          pointerEvents={showingSplash && !transitionActive ? 'auto' : 'none'}
+          pointerEvents={!showingBrowse && !browseTransitionActive && !overlayScreen && !incomingOnboardingScreen ? 'auto' : 'none'}
           style={[styles.screenTransitionLayerAbsolute, splashLayerStyle]}
         >
           {renderOnboardingScreen('splash')}
         </Animated.View>
         <Animated.View
-          pointerEvents={!showingSplash && !transitionActive ? 'auto' : 'none'}
+          pointerEvents={showingBrowse && !browseTransitionActive ? 'auto' : 'none'}
           style={[
             styles.screenTransitionLayerAbsolute,
-            !transitionActive && !showingSplash && shellFadeScope === 'browse' ? browseSceneTransitionStyle : null,
+            !browseTransitionActive && showingBrowse && shellFadeScope === 'browse' ? browseSceneTransitionStyle : null,
             browseLayerStyle,
           ]}
         >
@@ -3914,6 +3972,23 @@ function AppScreen() {
             suppressTransitionOverlay: true,
           })}
         </Animated.View>
+        {overlayScreen ? (
+          <Animated.View
+            pointerEvents={incomingOnboardingScreen || returningToSplashScreen ? 'none' : 'auto'}
+            style={[
+              styles.screenTransitionLayerAbsolute,
+              authIntroStyle && overlayScreen === 'auth' && !incomingOnboardingScreen && !returningToSplashScreen ? authIntroStyle : null,
+              currentOverlayStyle,
+            ]}
+          >
+            {renderOnboardingScreen(overlayScreen)}
+          </Animated.View>
+        ) : null}
+        {incomingOnboardingScreen && incomingOnboardingScreen !== 'splash' ? (
+          <Animated.View style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, incomingScreenTransitionStyle]}>
+            {renderOnboardingScreen(incomingOnboardingScreen)}
+          </Animated.View>
+        ) : null}
       </View>
     );
   }
@@ -4666,7 +4741,7 @@ function AppScreen() {
         </View>
       ) : authenticatedSession && !selectedPlaceSlug && (['profiles', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service', 'browse'].includes(screenMode) || usesBrowseProfileSlideTransition || usesProfileStackSlideTransition) ? (
         renderAuthenticatedMainShell()
-      ) : !authenticatedSession && !selectedPlaceSlug && (screenMode === 'browse' || usesGuestBrowseSlideTransition || (screenMode === 'splash' && !incomingOnboardingScreen)) ? (
+      ) : !authenticatedSession && !selectedPlaceSlug && (screenMode === 'browse' || currentOnboardingScreen !== null || usesGuestBrowseSlideTransition || incomingOnboardingScreen !== null || returningToSplashScreen !== null) ? (
         renderGuestMainShell()
       ) : selectedPlaceSlug ? (
         <View style={styles.fullScreenRoot}>
