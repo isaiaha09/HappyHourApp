@@ -17,11 +17,15 @@ type SplashScreenProps = {
 export function SplashScreen({ onCreateAccount, onOpenMap, onSelectPortal }: SplashScreenProps) {
   const { height } = useWindowDimensions();
   const timeline = useRef(new Animated.Value(splashIntroState === 'unplayed' ? 0 : 1)).current;
+  const logoEntranceOpacity = useRef(new Animated.Value(splashIntroState === 'unplayed' ? 0 : 1)).current;
+  const logoEntranceScale = useRef(new Animated.Value(splashIntroState === 'unplayed' ? 0.72 : 1)).current;
   const hasStartedAnimationRef = useRef(false);
 
   useEffect(() => {
     if (splashIntroState !== 'unplayed') {
       hasStartedAnimationRef.current = true;
+      logoEntranceOpacity.setValue(1);
+      logoEntranceScale.setValue(1);
       return;
     }
 
@@ -32,20 +36,36 @@ export function SplashScreen({ onCreateAccount, onOpenMap, onSelectPortal }: Spl
     hasStartedAnimationRef.current = true;
     splashIntroState = 'playing';
     timeline.setValue(0);
-    Animated.sequence([
-      Animated.timing(timeline, {
-        duration: 200,
-        easing: Easing.out(Easing.cubic),
-        toValue: 0.16,
-        useNativeDriver: true,
-      }),
-      Animated.delay(0),
-      Animated.timing(timeline, {
-        duration: 3600,
-        easing: Easing.inOut(Easing.cubic),
+    logoEntranceOpacity.setValue(0);
+    logoEntranceScale.setValue(0.72);
+    Animated.parallel([
+      Animated.timing(logoEntranceOpacity, {
+        duration: 900,
+        easing: Easing.out(Easing.quad),
         toValue: 1,
         useNativeDriver: true,
       }),
+      Animated.timing(logoEntranceScale, {
+        duration: 900,
+        easing: Easing.out(Easing.cubic),
+        toValue: 1,
+        useNativeDriver: true,
+      }),
+      Animated.sequence([
+        Animated.timing(timeline, {
+          duration: 420,
+          easing: Easing.out(Easing.cubic),
+          toValue: 0.16,
+          useNativeDriver: true,
+        }),
+        Animated.delay(0),
+        Animated.timing(timeline, {
+          duration: 3600,
+          easing: Easing.inOut(Easing.cubic),
+          toValue: 1,
+          useNativeDriver: true,
+        }),
+      ]),
     ]).start(({ finished }) => {
       if (finished) {
         splashIntroState = 'played';
@@ -54,18 +74,13 @@ export function SplashScreen({ onCreateAccount, onOpenMap, onSelectPortal }: Spl
 
       splashIntroState = 'playing';
     });
-  }, [timeline]);
+  }, [logoEntranceOpacity, logoEntranceScale, timeline]);
 
   const logoTravelStart = Math.max(height * 0.24, 150);
   const logoFinalTop = -31.5;
 
   const headerOpacity = timeline.interpolate({
     inputRange: [0.34, 0.48, 1],
-    outputRange: [0, 1, 1],
-    extrapolate: 'clamp',
-  });
-  const logoOpacity = timeline.interpolate({
-    inputRange: [0, 0.16, 1],
     outputRange: [0, 1, 1],
     extrapolate: 'clamp',
   });
@@ -80,39 +95,39 @@ export function SplashScreen({ onCreateAccount, onOpenMap, onSelectPortal }: Spl
     extrapolate: 'clamp',
   });
   const sloganBlockOpacity = timeline.interpolate({
-    inputRange: [0.62, 0.74, 1],
+    inputRange: [0.5, 0.75, 1],
     outputRange: [0, 1, 1],
     extrapolate: 'clamp',
   });
   const sloganBlockTranslateY = timeline.interpolate({
-    inputRange: [0.62, 0.74, 1],
-    outputRange: [16, 0, 0],
+    inputRange: [0.5, 0.75, 1],
+    outputRange: [0, 0, 0],
     extrapolate: 'clamp',
   });
   const sloganOpacities = [
     timeline.interpolate({
-      inputRange: [0.66, 0.76, 1],
+      inputRange: [0.56, 0.7, 1],
       outputRange: [0, 1, 1],
       extrapolate: 'clamp',
     }),
     timeline.interpolate({
-      inputRange: [0.74, 0.84, 1],
+      inputRange: [0.7, 0.84, 1],
       outputRange: [0, 1, 1],
       extrapolate: 'clamp',
     }),
     timeline.interpolate({
-      inputRange: [0.82, 0.92, 1],
+      inputRange: [0.84, 0.98, 1],
       outputRange: [0, 1, 1],
       extrapolate: 'clamp',
     }),
   ] as const;
   const actionOpacity = timeline.interpolate({
-    inputRange: [0.72, 0.84, 1],
+    inputRange: [0.9, 0.98, 1],
     outputRange: [0, 1, 1],
     extrapolate: 'clamp',
   });
   const actionTranslateY = timeline.interpolate({
-    inputRange: [0.72, 0.84, 1],
+    inputRange: [0.9, 0.98, 1],
     outputRange: [18, 0, 0],
     extrapolate: 'clamp',
   });
@@ -142,9 +157,9 @@ export function SplashScreen({ onCreateAccount, onOpenMap, onSelectPortal }: Spl
         style={[
           styles.splashFloatingLogo,
           {
-            opacity: logoOpacity,
+            opacity: logoEntranceOpacity,
             top: logoFinalTop,
-            transform: [{ translateY: logoTranslateY }, { scale: logoScale }],
+            transform: [{ translateY: logoTranslateY }, { scale: logoScale }, { scale: logoEntranceScale }],
           },
         ]}
       >
