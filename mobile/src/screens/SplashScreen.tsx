@@ -15,7 +15,8 @@ type SplashScreenProps = {
 
 export function SplashScreen({ onCreateAccount, onOpenMap, onSelectPortal }: SplashScreenProps) {
   const { height } = useWindowDimensions();
-  const [signInModalVisible, setSignInModalVisible] = useState(false);
+  const [signInModalMounted, setSignInModalMounted] = useState(false);
+  const signInModalOpacity = useRef(new Animated.Value(0)).current;
   const timeline = useRef(new Animated.Value(splashIntroState === 'unplayed' ? 0 : 1)).current;
   const logoEntranceOpacity = useRef(new Animated.Value(splashIntroState === 'unplayed' ? 0 : 1)).current;
   const logoEntranceScale = useRef(new Animated.Value(splashIntroState === 'unplayed' ? 0.5 : 1)).current;
@@ -133,20 +134,42 @@ export function SplashScreen({ onCreateAccount, onOpenMap, onSelectPortal }: Spl
   });
 
   function handleOpenSignInModal() {
-    setSignInModalVisible(true);
+    setSignInModalMounted(true);
+    signInModalOpacity.stopAnimation();
+    signInModalOpacity.setValue(0);
+    Animated.timing(signInModalOpacity, {
+      duration: 180,
+      easing: Easing.out(Easing.cubic),
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
   }
 
   function handleCloseSignInModal() {
-    setSignInModalVisible(false);
+    signInModalOpacity.stopAnimation();
+    Animated.timing(signInModalOpacity, {
+      duration: 160,
+      easing: Easing.out(Easing.cubic),
+      toValue: 0,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) {
+        setSignInModalMounted(false);
+      }
+    });
   }
 
   function handleSelectSignInPortal(portal: AuthPortal) {
-    setSignInModalVisible(false);
+    signInModalOpacity.stopAnimation();
+    signInModalOpacity.setValue(0);
+    setSignInModalMounted(false);
     onSelectPortal(portal);
   }
 
   function handleSelectCreateAccount() {
-    setSignInModalVisible(false);
+    signInModalOpacity.stopAnimation();
+    signInModalOpacity.setValue(0);
+    setSignInModalMounted(false);
     onCreateAccount();
   }
 
@@ -236,33 +259,33 @@ export function SplashScreen({ onCreateAccount, onOpenMap, onSelectPortal }: Spl
         </Animated.View>
       </View>
 
-      {signInModalVisible ? (
-        <View pointerEvents="box-none" style={styles.splashSignInOverlay}>
+      {signInModalMounted ? (
+        <Animated.View pointerEvents="box-none" style={[styles.splashSignInOverlay, { opacity: signInModalOpacity }]}>
           <Pressable onPress={handleCloseSignInModal} style={styles.splashSignInModalBackdropPressable} />
           <View style={styles.splashSignInModalCardWrap}>
             <View style={styles.splashSignInModalCard}>
-            <View style={styles.splashSignInModalHeader}>
-              <View style={styles.splashSignInModalHeaderSpacer} />
-              <Pressable onPress={handleCloseSignInModal} style={styles.splashSignInModalCloseButton}>
-                <Text style={styles.splashSignInModalCloseButtonText}>X</Text>
-              </Pressable>
-            </View>
-            <Text style={styles.splashSignInModalTitle}>Choose your login screen</Text>
-            <Text style={styles.splashSignInModalText}>Select where you want to sign in, or create a free account to get started.</Text>
-            <View style={styles.splashSignInModalActions}>
-              <Pressable onPress={() => handleSelectSignInPortal('customer')} style={styles.splashSignInPrimaryButton}>
-                <Text style={styles.splashSignInPrimaryButtonText}>Customer</Text>
-              </Pressable>
-              <Pressable onPress={() => handleSelectSignInPortal('business')} style={styles.splashSignInSecondaryButton}>
-                <Text style={styles.splashSignInSecondaryButtonText}>Business</Text>
-              </Pressable>
-              <Pressable onPress={handleSelectCreateAccount} style={styles.splashSignInTertiaryButton}>
-                <Text style={styles.splashSignInTertiaryButtonText}>Create Free Account</Text>
-              </Pressable>
-            </View>
+              <View style={styles.splashSignInModalHeader}>
+                <View style={styles.splashSignInModalHeaderSpacer} />
+                <Pressable onPress={handleCloseSignInModal} style={styles.splashSignInModalCloseButton}>
+                  <Text style={styles.splashSignInModalCloseButtonText}>X</Text>
+                </Pressable>
+              </View>
+              <Text style={styles.splashSignInModalTitle}>Choose your login screen</Text>
+              <Text style={styles.splashSignInModalText}>Select where you want to sign in, or create a free account to get started.</Text>
+              <View style={styles.splashSignInModalActions}>
+                <Pressable onPress={() => handleSelectSignInPortal('customer')} style={styles.splashSignInPrimaryButton}>
+                  <Text style={styles.splashSignInPrimaryButtonText}>Customer</Text>
+                </Pressable>
+                <Pressable onPress={() => handleSelectSignInPortal('business')} style={styles.splashSignInSecondaryButton}>
+                  <Text style={styles.splashSignInSecondaryButtonText}>Business</Text>
+                </Pressable>
+                <Pressable onPress={handleSelectCreateAccount} style={styles.splashSignInTertiaryButton}>
+                  <Text style={styles.splashSignInTertiaryButtonText}>Create Free Account</Text>
+                </Pressable>
+              </View>
             </View>
           </View>
-        </View>
+        </Animated.View>
       ) : null}
     </View>
   );
