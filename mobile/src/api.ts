@@ -10,6 +10,9 @@ import type {
   CustomerSignupRequest,
   EmailVerificationChallengeResponse,
   EmailVerificationCodeRequest,
+  FeedEngagementRequest,
+  FeedItem,
+  FeedImpressionRequest,
   FavoriteBusinessToggleRequest,
   InformalBusinessSignupRequest,
   LoginRequest,
@@ -78,6 +81,38 @@ export async function fetchPlaces(baseUrl: string, city: string, hasDeals?: bool
 
 export async function fetchPlaceDetail(baseUrl: string, slug: string) {
   return fetchJson<PlaceDetail>(baseUrl, `/places/${encodeURIComponent(slug)}/`);
+}
+
+export async function fetchHomeFeed(
+  baseUrl: string,
+  options: {
+    page?: number;
+    pageSize?: number;
+    city?: string;
+    types?: string[];
+  } = {},
+) {
+  const queryParams = new URLSearchParams();
+  queryParams.set('page', String(options.page ?? 1));
+  queryParams.set('page_size', String(options.pageSize ?? 12));
+
+  if (options.city && options.city !== 'all') {
+    queryParams.set('city', options.city);
+  }
+
+  if (options.types?.length) {
+    queryParams.set('types', options.types.join(','));
+  }
+
+  return fetchPagedJson<FeedItem>(baseUrl, `/feed/?${queryParams.toString()}`);
+}
+
+export async function recordFeedImpression(baseUrl: string, payload: FeedImpressionRequest) {
+  return postJson<{ id: number }>(baseUrl, '/feed/impressions/', payload);
+}
+
+export async function recordFeedEngagement(baseUrl: string, payload: FeedEngagementRequest) {
+  return postJson<{ id: number }>(baseUrl, '/feed/engagements/', payload);
 }
 
 export async function createCustomerProfile(baseUrl: string, payload: CustomerSignupRequest) {
@@ -265,6 +300,20 @@ async function fetchAllPaginatedJson<T>(baseUrl: string, path: string): Promise<
   }
 
   return items;
+}
+
+async function fetchPagedJson<T>(baseUrl: string, path: string): Promise<PaginatedResponse<T>> {
+  const response = await fetch(buildApiUrl(baseUrl, path), {
+    headers: {
+      Accept: 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Backend request failed with status ${response.status}.`);
+  }
+
+  return response.json() as Promise<PaginatedResponse<T>>;
 }
 
 function buildApiUrl(baseUrl: string, path: string) {

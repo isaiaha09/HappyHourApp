@@ -4106,7 +4106,7 @@ function AppScreen() {
       case 'splash':
         return (
           <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
-            <SplashScreen onCreateAccount={handleOpenProfiles} onOpenMap={handleOpenMapFromSplash} onSelectPortal={handleOpenAuthFromLanding} />
+            <SplashScreen apiBaseUrl={apiBaseUrl} onCreateAccount={handleOpenProfiles} onOpenMap={handleOpenMapFromSplash} onSelectPortal={handleOpenAuthFromLanding} />
           </SafeAreaView>
         );
       case 'auth':

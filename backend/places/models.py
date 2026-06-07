@@ -1023,6 +1023,158 @@ class FavoriteBusiness(models.Model):
 		return f'{self.name} favorite for {self.user.username}'
 
 
+class BusinessPost(models.Model):
+	class ContentType(models.TextChoices):
+		SPECIAL = 'special', 'Business Special'
+		ANNOUNCEMENT = 'announcement', 'Announcement'
+		EVENT = 'event', 'Event'
+		BLOG = 'blog', 'Blog Post'
+
+	class Status(models.TextChoices):
+		DRAFT = 'draft', 'Draft'
+		PUBLISHED = 'published', 'Published'
+		ARCHIVED = 'archived', 'Archived'
+
+	membership = models.ForeignKey(BusinessMembership, related_name='posts', on_delete=models.CASCADE)
+	listing_snapshot = models.ForeignKey(ListingSnapshot, related_name='posts', on_delete=models.CASCADE)
+	content_type = models.CharField(max_length=20, choices=ContentType.choices)
+	status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+	title = models.CharField(max_length=160)
+	slug = models.SlugField(max_length=190)
+	summary = models.CharField(max_length=280, blank=True)
+	body = models.TextField(blank=True)
+	hero_image_url = models.URLField(blank=True)
+	cta_label = models.CharField(max_length=40, blank=True)
+	cta_url = models.URLField(blank=True)
+	starts_at = models.DateTimeField(null=True, blank=True)
+	ends_at = models.DateTimeField(null=True, blank=True)
+	published_at = models.DateTimeField(null=True, blank=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ['-published_at', '-created_at']
+		constraints = [
+			models.UniqueConstraint(fields=['membership', 'slug'], name='unique_business_post_slug_per_membership'),
+		]
+
+	def __str__(self):
+		return f'{self.title} ({self.get_content_type_display()})'
+
+	def save(self, *args, **kwargs):
+		self.listing_snapshot = self.membership.claim.listing_snapshot
+		if not self.slug:
+			base_slug = slugify(self.title) or slugify(f'{self.get_content_type_display()}-{self.membership.claim.listing_snapshot.name}') or 'post'
+			self.slug = base_slug
+		if self.status == self.Status.PUBLISHED and self.published_at is None:
+			self.published_at = timezone.now()
+		super().save(*args, **kwargs)
+
+
+class SponsoredCampaign(models.Model):
+	class Status(models.TextChoices):
+		DRAFT = 'draft', 'Draft'
+		ACTIVE = 'active', 'Active'
+		PAUSED = 'paused', 'Paused'
+		COMPLETED = 'completed', 'Completed'
+		CANCELLED = 'cancelled', 'Cancelled'
+
+	class BillingModel(models.TextChoices):
+		WEEKLY_SUBSCRIPTION = 'weekly_subscription', 'Weekly Subscription'
+		HYBRID = 'hybrid', 'Hybrid'
+
+	membership = models.ForeignKey(BusinessMembership, related_name='sponsored_campaigns', on_delete=models.CASCADE)
+	post = models.ForeignKey(BusinessPost, related_name='sponsored_campaigns', on_delete=models.CASCADE)
+	name = models.CharField(max_length=120)
+	status = models.CharField(max_length=24, choices=Status.choices, default=Status.DRAFT)
+	billing_model = models.CharField(max_length=24, choices=BillingModel.choices, default=BillingModel.WEEKLY_SUBSCRIPTION)
+	weekly_price_cents = models.PositiveIntegerField(default=1500)
+	weekly_impression_quota = models.PositiveIntegerField(default=500)
+	target_cities = models.JSONField(default=list, blank=True)
+	target_venue_types = models.JSONField(default=list, blank=True)
+	starts_at = models.DateTimeField()
+	ends_at = models.DateTimeField(null=True, blank=True)
+	last_served_at = models.DateTimeField(null=True, blank=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ['status', 'starts_at', 'pk']
+
+	def __str__(self):
+		return self.name
+
+	def save(self, *args, **kwargs):
+		if self.post.membership_id != self.membership_id:
+			raise ValidationError('Sponsored campaigns can only promote posts from the same business membership.')
+		super().save(*args, **kwargs)
+
+	def is_active_now(self, reference_time=None):
+		reference = reference_time or timezone.now()
+		if self.status != self.Status.ACTIVE:
+			return False
+		if self.starts_at and self.starts_at > reference:
+			return False
+		if self.ends_at and self.ends_at < reference:
+			return False
+		return True
+
+
+class FeedImpression(models.Model):
+	class PlacementType(models.TextChoices):
+		ORGANIC = 'organic', 'Organic'
+		SPONSORED = 'sponsored', 'Sponsored'
+
+	post = models.ForeignKey(BusinessPost, related_name='feed_impressions', on_delete=models.CASCADE)
+	campaign = models.ForeignKey(SponsoredCampaign, related_name='impressions', null=True, blank=True, on_delete=models.CASCADE)
+	placement_type = models.CharField(max_length=20, choices=PlacementType.choices)
+	feed_item_id = models.CharField(max_length=80)
+	session_key = models.CharField(max_length=64, blank=True)
+	request_id = models.CharField(max_length=64, blank=True)
+	page_number = models.PositiveIntegerField(default=1)
+	position = models.PositiveIntegerField(default=0)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ['-created_at']
+		indexes = [
+			models.Index(fields=['campaign', 'created_at']),
+			models.Index(fields=['post', 'created_at']),
+		]
+
+	def __str__(self):
+		return f'{self.feed_item_id} impression'
+
+
+class FeedEngagement(models.Model):
+	class EventType(models.TextChoices):
+		CLICK = 'click', 'Click'
+		OPEN = 'open', 'Open'
+		SAVE = 'save', 'Save'
+		SHARE = 'share', 'Share'
+
+	post = models.ForeignKey(BusinessPost, related_name='feed_engagements', on_delete=models.CASCADE)
+	campaign = models.ForeignKey(SponsoredCampaign, related_name='engagements', null=True, blank=True, on_delete=models.CASCADE)
+	impression = models.ForeignKey(FeedImpression, related_name='engagements', null=True, blank=True, on_delete=models.SET_NULL)
+	event_type = models.CharField(max_length=20, choices=EventType.choices)
+	feed_item_id = models.CharField(max_length=80)
+	session_key = models.CharField(max_length=64, blank=True)
+	destination_url = models.URLField(blank=True)
+	page_number = models.PositiveIntegerField(default=1)
+	position = models.PositiveIntegerField(default=0)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ['-created_at']
+		indexes = [
+			models.Index(fields=['campaign', 'event_type', 'created_at']),
+			models.Index(fields=['post', 'event_type', 'created_at']),
+		]
+
+	def __str__(self):
+		return f'{self.feed_item_id} {self.event_type}'
+
+
 class ProfileAuthToken(models.Model):
 	user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='profile_auth_tokens', on_delete=models.CASCADE)
 	key = models.CharField(max_length=64, unique=True)

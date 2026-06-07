@@ -9,7 +9,7 @@ from django.db import transaction
 from django.utils.text import slugify
 from rest_framework import serializers
 
-from .models import BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, City, ListingSnapshot, VenueType
+from .models import BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessPost, City, FeedEngagement, FeedImpression, ListingSnapshot, SponsoredCampaign, VenueType
 from .services.account_profiles import build_account_response, get_or_create_account_profile, has_active_business_membership
 from .services.business_profile_overrides import (
 	build_deal_payloads,
@@ -987,6 +987,67 @@ class DealSerializer(serializers.Serializer):
 	starts_on = serializers.CharField(allow_null=True)
 	ends_on = serializers.CharField(allow_null=True)
 	happy_hours = HappyHourSerializer(many=True)
+
+
+class FeedItemSerializer(serializers.Serializer):
+	id = serializers.CharField()
+	item_type = serializers.CharField()
+	is_sponsored = serializers.BooleanField()
+	post_id = serializers.IntegerField()
+	campaign_id = serializers.IntegerField(required=False, allow_null=True)
+	business_name = serializers.CharField()
+	business_slug = serializers.CharField()
+	city = serializers.CharField(allow_blank=True)
+	city_label = serializers.CharField(allow_blank=True)
+	venue_type = serializers.CharField(allow_blank=True)
+	venue_type_label = serializers.CharField(allow_blank=True)
+	title = serializers.CharField()
+	summary = serializers.CharField(allow_blank=True)
+	body = serializers.CharField(allow_blank=True)
+	hero_image_url = serializers.CharField(allow_blank=True)
+	cta_label = serializers.CharField(allow_blank=True)
+	cta_url = serializers.CharField(allow_blank=True)
+	published_at = serializers.DateTimeField(allow_null=True)
+	starts_at = serializers.DateTimeField(allow_null=True)
+	ends_at = serializers.DateTimeField(allow_null=True)
+	sponsor_label = serializers.CharField(allow_blank=True)
+
+
+class FeedImpressionWriteSerializer(serializers.ModelSerializer):
+	class Meta:
+		model = FeedImpression
+		fields = ['feed_item_id', 'post', 'campaign', 'placement_type', 'session_key', 'request_id', 'page_number', 'position']
+
+	def validate(self, attrs):
+		campaign = attrs.get('campaign')
+		post = attrs.get('post')
+		placement_type = attrs.get('placement_type')
+		if campaign is not None and campaign.post_id != post.id:
+			raise serializers.ValidationError('Campaign and post must refer to the same promoted content.')
+		if placement_type == FeedImpression.PlacementType.SPONSORED and campaign is None:
+			raise serializers.ValidationError('Sponsored impressions require a campaign.')
+		if placement_type == FeedImpression.PlacementType.ORGANIC and campaign is not None:
+			raise serializers.ValidationError('Organic impressions cannot attach a campaign.')
+		return attrs
+
+
+class FeedEngagementWriteSerializer(serializers.ModelSerializer):
+	class Meta:
+		model = FeedEngagement
+		fields = ['feed_item_id', 'post', 'campaign', 'impression', 'event_type', 'session_key', 'destination_url', 'page_number', 'position']
+
+	def validate(self, attrs):
+		campaign = attrs.get('campaign')
+		post = attrs.get('post')
+		impression = attrs.get('impression')
+		if campaign is not None and campaign.post_id != post.id:
+			raise serializers.ValidationError('Campaign and post must refer to the same promoted content.')
+		if impression is not None:
+			if impression.post_id != post.id:
+				raise serializers.ValidationError('Impression and post must refer to the same content.')
+			if campaign is not None and impression.campaign_id != campaign.id:
+				raise serializers.ValidationError('Impression and campaign must refer to the same promoted content.')
+		return attrs
 
 
 class PlaceLocationSerializer(serializers.Serializer):

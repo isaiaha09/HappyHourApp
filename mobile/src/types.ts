@@ -120,6 +120,55 @@ export type PaginatedResponse<T> = {
   results: T[];
 };
 
+export type FeedItemType = 'special' | 'announcement' | 'event' | 'blog' | 'sponsored';
+
+export type FeedItem = {
+  id: string;
+  item_type: FeedItemType;
+  is_sponsored: boolean;
+  post_id: number;
+  campaign_id: number | null;
+  business_name: string;
+  business_slug: string;
+  city: string;
+  city_label: string;
+  venue_type: string;
+  venue_type_label: string;
+  title: string;
+  summary: string;
+  body: string;
+  hero_image_url: string;
+  cta_label: string;
+  cta_url: string;
+  published_at: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  sponsor_label: string;
+};
+
+export type FeedImpressionRequest = {
+  feed_item_id: string;
+  post: number;
+  campaign?: number | null;
+  placement_type: 'organic' | 'sponsored';
+  session_key?: string;
+  request_id?: string;
+  page_number: number;
+  position: number;
+};
+
+export type FeedEngagementRequest = {
+  feed_item_id: string;
+  post: number;
+  campaign?: number | null;
+  impression?: number | null;
+  event_type: 'click' | 'open' | 'save' | 'share';
+  session_key?: string;
+  destination_url?: string;
+  page_number: number;
+  position: number;
+};
+
 export type SignupResponse = {
   id: number;
   username: string;

@@ -3,18 +3,22 @@ import { Animated, Easing, Image, Pressable, Text, useWindowDimensions, View } f
 
 import { styles } from '../appStyles';
 import type { AuthPortal } from '../appFlowTypes';
+import { venueFilters } from '../browseConfig';
+import { HomeFeedScreen } from './HomeFeedScreen';
 
 const sloganWords = ['Discover.', 'Eat.', 'Save.'] as const;
 let splashIntroState: 'unplayed' | 'playing' | 'played' = 'unplayed';
 
 type SplashScreenProps = {
+  apiBaseUrl: string;
   onCreateAccount: () => void;
   onOpenMap: () => void;
   onSelectPortal: (portal: AuthPortal) => void;
 };
 
-export function SplashScreen({ onCreateAccount, onOpenMap, onSelectPortal }: SplashScreenProps) {
-  const { height } = useWindowDimensions();
+export function SplashScreen({ apiBaseUrl, onCreateAccount, onOpenMap, onSelectPortal }: SplashScreenProps) {
+  const { height, width } = useWindowDimensions();
+  const isLandscape = width > height;
   const [signInModalMounted, setSignInModalMounted] = useState(false);
   const signInModalOpacity = useRef(new Animated.Value(0)).current;
   const timeline = useRef(new Animated.Value(splashIntroState === 'unplayed' ? 0 : 1)).current;
@@ -122,6 +126,16 @@ export function SplashScreen({ onCreateAccount, onOpenMap, onSelectPortal }: Spl
       extrapolate: 'clamp',
     }),
   ] as const;
+  const feedOpacity = timeline.interpolate({
+    inputRange: [0.82, 0.94, 1],
+    outputRange: [0, 1, 1],
+    extrapolate: 'clamp',
+  });
+  const feedTranslateY = timeline.interpolate({
+    inputRange: [0.82, 0.94, 1],
+    outputRange: [18, 0, 0],
+    extrapolate: 'clamp',
+  });
   const actionOpacity = timeline.interpolate({
     inputRange: [0.9, 0.98, 1],
     outputRange: [0, 1, 1],
@@ -215,48 +229,66 @@ export function SplashScreen({ onCreateAccount, onOpenMap, onSelectPortal }: Spl
       </Animated.View>
 
       <View style={styles.splashBody}>
-        <Animated.View
-          style={[
-            styles.splashSloganBlock,
-            {
-              opacity: sloganBlockOpacity,
-              transform: [{ translateY: sloganBlockTranslateY }],
-            },
-          ]}
-        >
-          <View style={styles.splashSloganRow}>
-            {sloganWords.map((word, index) => (
-              <Animated.Text
-                key={word}
-                style={[styles.splashSloganWord, { opacity: sloganOpacities[index] }]}
+        <HomeFeedScreen
+          apiBaseUrl={apiBaseUrl}
+          feedAnimatedStyle={{
+            opacity: feedOpacity,
+            transform: [{ translateY: feedTranslateY }],
+          }}
+          footerContent={(
+            <Animated.View
+              style={[
+                styles.splashActionGroup,
+                {
+                  opacity: actionOpacity,
+                  transform: [{ translateY: actionTranslateY }],
+                },
+              ]}
+            >
+              <View style={styles.modeRow}>
+                <Pressable onPress={() => onSelectPortal('customer')} style={styles.splashPortalButton}>
+                  <Text style={styles.splashPortalButtonText}>Customer</Text>
+                </Pressable>
+                <Pressable onPress={() => onSelectPortal('business')} style={styles.splashPortalButton}>
+                  <Text style={styles.splashPortalButtonText}>Business</Text>
+                </Pressable>
+              </View>
+              <Pressable onPress={onCreateAccount} style={styles.splashCreateAccountLink}>
+                <Text style={styles.splashCreateAccountText}>Don&apos;t have an account? Create a free account here.</Text>
+              </Pressable>
+            </Animated.View>
+          )}
+          headerContent={(
+            <View style={styles.splashScrollHeaderContent}>
+              <View style={styles.splashScrollHeroSpacer} />
+              <Animated.View
+                style={[
+                  styles.splashSloganBlock,
+                  {
+                    opacity: sloganBlockOpacity,
+                    transform: [{ translateY: sloganBlockTranslateY }],
+                  },
+                ]}
               >
-                {word}
-              </Animated.Text>
-            ))}
-          </View>
-        </Animated.View>
-
-        <Animated.View
-          style={[
-            styles.splashActionGroup,
-            {
-              opacity: actionOpacity,
-              transform: [{ translateY: actionTranslateY }],
-            },
-          ]}
-        >
-          <View style={styles.modeRow}>
-            <Pressable onPress={() => onSelectPortal('customer')} style={styles.splashPortalButton}>
-              <Text style={styles.splashPortalButtonText}>Customer</Text>
-            </Pressable>
-            <Pressable onPress={() => onSelectPortal('business')} style={styles.splashPortalButton}>
-              <Text style={styles.splashPortalButtonText}>Business</Text>
-            </Pressable>
-          </View>
-          <Pressable onPress={onCreateAccount} style={styles.splashCreateAccountLink}>
-            <Text style={styles.splashCreateAccountText}>Don&apos;t have an account? Create a free account here.</Text>
-          </Pressable>
-        </Animated.View>
+                <View style={styles.splashSloganRow}>
+                  {sloganWords.map((word, index) => (
+                    <Animated.Text
+                      key={word}
+                      style={[styles.splashSloganWord, { opacity: sloganOpacities[index] }]}
+                    >
+                      {word}
+                    </Animated.Text>
+                  ))}
+                </View>
+              </Animated.View>
+            </View>
+          )}
+          isLandscape={isLandscape}
+          reloadToken={0}
+          searchQuery=""
+          selectedCity="all"
+          selectedVenueTypes={venueFilters.map((filter) => filter.value)}
+        />
       </View>
 
       {signInModalMounted ? (

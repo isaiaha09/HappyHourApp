@@ -23,6 +23,9 @@ from .serializers import (
 	DeleteAccountSerializer,
 	DealSerializer,
 	EmailVerificationCodeSerializer,
+	FeedEngagementWriteSerializer,
+	FeedImpressionWriteSerializer,
+	FeedItemSerializer,
 	FavoriteBusinessToggleSerializer,
 	InformalBusinessSignupSerializer,
 	LoginSerializer,
@@ -41,7 +44,8 @@ from .serializers import (
 	sync_listing_snapshot_from_place_payload,
 )
 from .services.account_profiles import build_account_response, build_email_verification_challenge, get_business_access_hold_claim, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, send_business_claim_received_email, send_password_reset_email, send_support_contact_email, send_username_reminder_email, send_verification_email
-from .models import FavoriteBusiness, VenueType
+from .models import FavoriteBusiness, FeedImpression, VenueType
+from .services.home_feed import get_feed_interval, get_feed_queryset, get_organic_page_size, get_ranked_campaigns, get_requested_feed_page_size, mix_feed_items, record_campaign_served
 from .services.social_profiles import build_social_media_links, get_business_website_url
 from .services.source_listings import get_source_deal_payloads, get_source_place_payload, get_source_place_payloads, load_source_records
 
@@ -50,6 +54,12 @@ class SourcePlacePagination(PageNumberPagination):
 	page_size = 100
 	page_size_query_param = 'page_size'
 	max_page_size = 500
+
+
+class HomeFeedPagination(PageNumberPagination):
+	page_size = 12
+	page_size_query_param = 'page_size'
+	max_page_size = 30
 
 
 SUPPORTED_PROFILE_PHOTO_SUFFIXES = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.heic', '.heif'}
@@ -197,6 +207,63 @@ class DealListView(generics.GenericAPIView):
 
 		serializer = self.get_serializer(payloads, many=True)
 		return Response(serializer.data)
+
+
+class HomeFeedView(generics.GenericAPIView):
+	serializer_class = FeedItemSerializer
+	pagination_class = HomeFeedPagination
+
+	def get(self, request):
+		page_number = self._parse_page_number(request.query_params.get('page'))
+		requested_page_size = get_requested_feed_page_size(request.query_params.get('page_size'))
+		interval = get_feed_interval(page_number)
+		organic_page_size = get_organic_page_size(requested_page_size, interval)
+		city = str(request.query_params.get('city') or '').strip().lower() or None
+		venue_type = str(request.query_params.get('venue_type') or '').strip().lower() or None
+		content_types = self._parse_content_types(request.query_params.get('types'))
+
+		paginator = self.paginator
+		paginator.page_size = organic_page_size
+		queryset = get_feed_queryset(city=city, content_types=content_types)
+		page = self.paginate_queryset(queryset)
+		campaigns = get_ranked_campaigns(city=city, venue_type=venue_type)
+		feed_items = mix_feed_items(posts=page or [], campaigns=campaigns, page_number=page_number, mixed_page_size=requested_page_size)
+		serializer = self.get_serializer(feed_items, many=True)
+		return self.get_paginated_response(serializer.data)
+
+	def _parse_page_number(self, value):
+		try:
+			page_number = int(value) if value is not None else 1
+		except (TypeError, ValueError):
+			return 1
+		return max(page_number, 1)
+
+	def _parse_content_types(self, value):
+		if not value:
+			return []
+		return [item.strip().lower() for item in str(value).split(',') if item.strip()]
+
+
+class FeedImpressionView(generics.GenericAPIView):
+	serializer_class = FeedImpressionWriteSerializer
+
+	def post(self, request):
+		serializer = self.get_serializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		impression = serializer.save()
+		if impression.campaign_id:
+			record_campaign_served(impression.campaign)
+		return Response({'id': impression.id}, status=status.HTTP_201_CREATED)
+
+
+class FeedEngagementView(generics.GenericAPIView):
+	serializer_class = FeedEngagementWriteSerializer
+
+	def post(self, request):
+		serializer = self.get_serializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		engagement = serializer.save()
+		return Response({'id': engagement.id}, status=status.HTTP_201_CREATED)
 
 
 class CustomerSignupView(generics.GenericAPIView):

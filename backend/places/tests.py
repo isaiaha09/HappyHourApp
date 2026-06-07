@@ -26,7 +26,7 @@ import pyotp
 
 from .admin import BusinessAccountAdmin, BusinessClaimAdmin, CustomerAccountAdmin, DeletedBusinessAdmin, ListingSnapshotAdmin, ProviderUsageWindowAdmin
 from .admin_site import happyhour_admin_site
-from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessMembership, City, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, ListingSnapshot, ProfileAuthToken, ProviderUsageWindow, VenueType, Weekday
+from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessMembership, BusinessPost, City, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, FeedEngagement, FeedImpression, ListingSnapshot, ProfileAuthToken, ProviderUsageWindow, SponsoredCampaign, VenueType, Weekday
 from .services.importers.base import BaseHtmlImporter
 from .services.importers.business_websites import BusinessWebsiteImporter
 from .services.importers.discovered_json_places import CuratedJsonPlacesImporter, DiscoveryJsonPlacesImporter, load_discovery_json_records, write_discovery_json_records
@@ -273,6 +273,114 @@ class PlaceApiTests(APITestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response.json()['count'], 1)
 		self.assertEqual(response.json()['results'][0]['title'], 'Taco Tuesday')
+
+
+class HomeFeedApiTests(APITestCase):
+	def setUp(self):
+		self.user = User.objects.create_user(username='feed-owner', email='feed@example.com', password='secret12345')
+		self.snapshot = ListingSnapshot.objects.create(
+			name='805 Tacos',
+			listing_slug='805-tacos-ventura',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='123 Main St',
+		)
+		self.claim = BusinessClaim.objects.create(
+			listing_snapshot=self.snapshot,
+			claimant=self.user,
+			contact_name='Owner',
+			status=BusinessClaim.Status.APPROVED,
+			pathway=BusinessClaim.Pathway.CLAIMED,
+		)
+		self.membership = BusinessMembership.objects.create(user=self.user, claim=self.claim, is_active=True)
+		self.posts = [
+			BusinessPost.objects.create(
+				membership=self.membership,
+				listing_snapshot=self.snapshot,
+				content_type=content_type,
+				status=BusinessPost.Status.PUBLISHED,
+				title=title,
+				summary=f'{title} summary',
+				published_at=timezone.now() - timedelta(hours=index),
+			)
+			for index, (content_type, title) in enumerate([
+				(BusinessPost.ContentType.SPECIAL, 'Late Night Special'),
+				(BusinessPost.ContentType.ANNOUNCEMENT, 'Kitchen Remodel Done'),
+				(BusinessPost.ContentType.EVENT, 'Live Music Friday'),
+				(BusinessPost.ContentType.BLOG, 'Chef Story'),
+				(BusinessPost.ContentType.SPECIAL, 'Weekend Combo'),
+			])
+		]
+		self.campaign = SponsoredCampaign.objects.create(
+			membership=self.membership,
+			post=self.posts[0],
+			name='Weekly Spotlight',
+			status=SponsoredCampaign.Status.ACTIVE,
+			weekly_impression_quota=10,
+			starts_at=timezone.now() - timedelta(days=1),
+		)
+
+	def test_home_feed_mixes_sponsored_posts(self):
+		response = self.client.get(reverse('home-feed'), {'page_size': '6'})
+
+		self.assertEqual(response.status_code, 200)
+		payload = response.json()
+		self.assertGreaterEqual(len(payload['results']), 5)
+		self.assertTrue(any(item['item_type'] == 'sponsored' for item in payload['results']))
+		self.assertEqual(payload['results'][0]['item_type'], BusinessPost.ContentType.SPECIAL)
+
+	def test_home_feed_respects_weekly_campaign_quota(self):
+		for index in range(10):
+			FeedImpression.objects.create(
+				post=self.posts[0],
+				campaign=self.campaign,
+				placement_type=FeedImpression.PlacementType.SPONSORED,
+				feed_item_id=f'campaign-{self.campaign.pk}',
+				position=index,
+			)
+
+		response = self.client.get(reverse('home-feed'), {'page_size': '6'})
+
+		self.assertEqual(response.status_code, 200)
+		self.assertFalse(any(item['item_type'] == 'sponsored' for item in response.json()['results']))
+
+	def test_feed_impression_endpoint_records_served_campaign(self):
+		response = self.client.post(reverse('feed-impressions'), {
+			'feed_item_id': f'campaign-{self.campaign.pk}',
+			'post': self.posts[0].pk,
+			'campaign': self.campaign.pk,
+			'placement_type': FeedImpression.PlacementType.SPONSORED,
+			'page_number': 1,
+			'position': 4,
+		}, format='json')
+
+		self.assertEqual(response.status_code, 201)
+		self.campaign.refresh_from_db()
+		self.assertIsNotNone(self.campaign.last_served_at)
+		self.assertEqual(FeedImpression.objects.count(), 1)
+
+	def test_feed_engagement_endpoint_records_click(self):
+		impression = FeedImpression.objects.create(
+			post=self.posts[0],
+			campaign=self.campaign,
+			placement_type=FeedImpression.PlacementType.SPONSORED,
+			feed_item_id=f'campaign-{self.campaign.pk}',
+		)
+
+		response = self.client.post(reverse('feed-engagements'), {
+			'feed_item_id': f'campaign-{self.campaign.pk}',
+			'post': self.posts[0].pk,
+			'campaign': self.campaign.pk,
+			'impression': impression.pk,
+			'event_type': FeedEngagement.EventType.CLICK,
+			'destination_url': 'https://example.com/late-night-special',
+			'page_number': 1,
+			'position': 4,
+		}, format='json')
+
+		self.assertEqual(response.status_code, 201)
+		self.assertEqual(FeedEngagement.objects.count(), 1)
+		self.assertEqual(FeedEngagement.objects.first().event_type, FeedEngagement.EventType.CLICK)
 
 
 class SeedPhase2CommandTests(APITestCase):
