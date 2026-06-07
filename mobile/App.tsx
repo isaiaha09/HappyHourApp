@@ -612,6 +612,15 @@ function AppScreen() {
     authenticatedSessionRef.current = authenticatedSession;
   }, [authenticatedSession]);
 
+  function setAuthenticatedSessionIfCurrentToken(expectedAuthToken: string, session: SignupResponse) {
+    if (authenticatedSessionRef.current?.auth_token !== expectedAuthToken) {
+      return false;
+    }
+
+    setAuthenticatedSession(session);
+    return true;
+  }
+
   useEffect(() => {
     let cancelled = false;
 
@@ -768,7 +777,7 @@ function AppScreen() {
               accuracy_meters: coords.accuracy ?? null,
             });
             if (!cancelled) {
-              setAuthenticatedSession(response);
+              setAuthenticatedSessionIfCurrentToken(currentSession.auth_token, response);
             }
           } catch (error) {
             if (!cancelled) {
@@ -1217,8 +1226,9 @@ function AppScreen() {
       if (currentSession?.auth_token) {
         try {
           const response = await fetchProfileDashboard(apiBaseUrl, currentSession.auth_token, currentSession.portal);
-          setAuthenticatedSession(response);
-          setScreenMode('profiles');
+          if (setAuthenticatedSessionIfCurrentToken(currentSession.auth_token, response)) {
+            setScreenMode('profiles');
+          }
         } catch (error) {
           setProfileErrorMessage(getErrorMessage(error));
         }
@@ -1609,7 +1619,22 @@ function AppScreen() {
     }
 
     screenTransition.stopAnimation();
+  bottomMoreSheetProgress.stopAnimation();
+  bottomMoreSheetProgress.setValue(0);
+  setBottomMoreSheetVisible(false);
+  setShellFadeScope(null);
     setIncomingOnboardingScreen(null);
+  setReturningToSplashScreen(null);
+  setBrowseProfileTransitionFrom(null);
+  setIncomingBrowseProfileScreen(null);
+  setIncomingBrowseProfileTargetScreen(null);
+  setGuestBrowseTransitionFrom(null);
+  setIncomingGuestBrowseScreen(null);
+  setSelectedPlaceSlug(null);
+  setSelectedPlace(null);
+  setSelectedLocationId(null);
+  setSelectedMapPlaceKey(null);
+  setDisplayedMapPreviewPlace(null);
     setLogoutTransitionSession(authenticatedSession);
     setAuthenticatedSession(null);
     setPendingEmailVerification(null);
@@ -2979,7 +3004,7 @@ function AppScreen() {
     if (customerAuthToken) {
       try {
         const customerSession = await fetchProfileDashboard(apiBaseUrl, customerAuthToken, 'customer');
-        setAuthenticatedSession(customerSession);
+        setAuthenticatedSessionIfCurrentToken(customerAuthToken, customerSession);
       } catch (error) {
         setProfileErrorMessage(getErrorMessage(error));
       }
@@ -3331,14 +3356,17 @@ function AppScreen() {
       return;
     }
 
+    const currentAuthToken = authenticatedSession.auth_token;
+    const currentPortal = authenticatedSession.portal;
+
     if (showSpinner) {
       setDashboardLoading(true);
     }
     setProfileErrorMessage(null);
 
     try {
-      const response = await fetchProfileDashboard(apiBaseUrl, authenticatedSession.auth_token, authenticatedSession.portal);
-      setAuthenticatedSession(response);
+      const response = await fetchProfileDashboard(apiBaseUrl, currentAuthToken, currentPortal);
+      setAuthenticatedSessionIfCurrentToken(currentAuthToken, response);
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
     } finally {
@@ -3392,12 +3420,14 @@ function AppScreen() {
       return;
     }
 
+    const currentAuthToken = authenticatedSession.auth_token;
+
     setDashboardSubmitting(true);
     setProfileErrorMessage(null);
 
     try {
-      const response = await confirmTwoFactorSetup(apiBaseUrl, authenticatedSession.auth_token, twoFactorSetupCode, authenticatedSession.portal);
-      setAuthenticatedSession(response);
+      const response = await confirmTwoFactorSetup(apiBaseUrl, currentAuthToken, twoFactorSetupCode, authenticatedSession.portal);
+      setAuthenticatedSessionIfCurrentToken(currentAuthToken, response);
       setTwoFactorSetup(null);
       setTwoFactorSetupCode('');
       setProfileMessage('Authenticator-based 2FA enabled. Use your authenticator code every time you sign in.');
@@ -3413,12 +3443,14 @@ function AppScreen() {
       return;
     }
 
+    const currentAuthToken = authenticatedSession.auth_token;
+
     setDashboardSubmitting(true);
     setProfileErrorMessage(null);
 
     try {
-      const response = await disableTwoFactor(apiBaseUrl, authenticatedSession.auth_token, twoFactorDisableCode, authenticatedSession.portal);
-      setAuthenticatedSession(response);
+      const response = await disableTwoFactor(apiBaseUrl, currentAuthToken, twoFactorDisableCode, authenticatedSession.portal);
+      setAuthenticatedSessionIfCurrentToken(currentAuthToken, response);
       setTwoFactorDisableCode('');
       setTwoFactorSetup(null);
       setTwoFactorSetupCode('');
@@ -3435,12 +3467,14 @@ function AppScreen() {
       return;
     }
 
+    const currentAuthToken = authenticatedSession.auth_token;
+
     setDashboardSubmitting(true);
     setProfileErrorMessage(null);
 
     try {
-      const response = await updateBusinessLocationTrackingPreference(apiBaseUrl, authenticatedSession.auth_token, { enabled });
-      setAuthenticatedSession(response);
+      const response = await updateBusinessLocationTrackingPreference(apiBaseUrl, currentAuthToken, { enabled });
+      setAuthenticatedSessionIfCurrentToken(currentAuthToken, response);
       setProfileMessage(enabled
         ? 'Business location services turned on.'
         : 'Business location services turned off. Live pin updates have stopped.');
@@ -3456,14 +3490,16 @@ function AppScreen() {
       return;
     }
 
+    const currentAuthToken = authenticatedSession.auth_token;
+
     setDashboardSubmitting(true);
     setProfileErrorMessage(null);
 
     try {
       const response = photoUploads.length
-        ? await updateProfileDashboardWithUploads(apiBaseUrl, authenticatedSession.auth_token, payload, photoUploads)
-        : await updateProfileDashboard(apiBaseUrl, authenticatedSession.auth_token, payload);
-      setAuthenticatedSession(response);
+        ? await updateProfileDashboardWithUploads(apiBaseUrl, currentAuthToken, payload, photoUploads)
+        : await updateProfileDashboard(apiBaseUrl, currentAuthToken, payload);
+      setAuthenticatedSessionIfCurrentToken(currentAuthToken, response);
       setProfileMessage(response.detail ?? 'Profile updated.');
       if (response.email_verified === false && payload.email !== authenticatedSession.email) {
         setTwoFactorSetup(null);
