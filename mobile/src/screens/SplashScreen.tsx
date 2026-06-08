@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Image, Pressable, Text, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { styles } from '../appStyles';
 import type { AuthPortal } from '../appFlowTypes';
@@ -18,6 +19,7 @@ type SplashScreenProps = {
 
 export function SplashScreen({ apiBaseUrl, onCreateAccount, onOpenMap, onSelectPortal }: SplashScreenProps) {
   const { height, width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const isLandscape = width > height;
   const [signInModalMounted, setSignInModalMounted] = useState(false);
   const signInModalOpacity = useRef(new Animated.Value(0)).current;
@@ -146,6 +148,35 @@ export function SplashScreen({ apiBaseUrl, onCreateAccount, onOpenMap, onSelectP
     outputRange: [18, 0, 0],
     extrapolate: 'clamp',
   });
+  const homeBottomNavHeight = Math.max(insets.bottom + 76, 90);
+
+  function renderHomeBottomNavIcon(icon: 'customer' | 'signup' | 'business', active: boolean) {
+    switch (icon) {
+      case 'customer':
+        return (
+          <View style={styles.bottomNavProfileIcon}>
+            <View style={[styles.bottomNavProfileHead, active ? styles.bottomNavIconFillActive : null]} />
+            <View style={[styles.bottomNavProfileBody, active ? styles.bottomNavIconStrokeActive : null]} />
+          </View>
+        );
+      case 'signup':
+        return (
+          <View style={styles.bottomNavPlusIcon}>
+            <View style={[styles.bottomNavPlusLineHorizontal, active ? styles.bottomNavIconFillActive : null]} />
+            <View style={[styles.bottomNavPlusLineVertical, active ? styles.bottomNavIconFillActive : null]} />
+          </View>
+        );
+      case 'business':
+        return (
+          <View style={styles.bottomNavBusinessIcon}>
+            <View style={[styles.bottomNavBusinessHandle, active ? styles.bottomNavIconStrokeActive : null]} />
+            <View style={[styles.bottomNavBusinessBody, active ? styles.bottomNavIconStrokeActive : null]} />
+          </View>
+        );
+      default:
+        return null;
+    }
+  }
 
   function handleOpenSignInModal() {
     setSignInModalMounted(true);
@@ -235,29 +266,7 @@ export function SplashScreen({ apiBaseUrl, onCreateAccount, onOpenMap, onSelectP
             opacity: feedOpacity,
             transform: [{ translateY: feedTranslateY }],
           }}
-          footerContent={(
-            <Animated.View
-              style={[
-                styles.splashActionGroup,
-                {
-                  opacity: actionOpacity,
-                  transform: [{ translateY: actionTranslateY }],
-                },
-              ]}
-            >
-              <View style={styles.modeRow}>
-                <Pressable onPress={() => onSelectPortal('customer')} style={styles.splashPortalButton}>
-                  <Text style={styles.splashPortalButtonText}>Customer</Text>
-                </Pressable>
-                <Pressable onPress={() => onSelectPortal('business')} style={styles.splashPortalButton}>
-                  <Text style={styles.splashPortalButtonText}>Business</Text>
-                </Pressable>
-              </View>
-              <Pressable onPress={onCreateAccount} style={styles.splashCreateAccountLink}>
-                <Text style={styles.splashCreateAccountText}>Don&apos;t have an account? Create a free account here.</Text>
-              </Pressable>
-            </Animated.View>
-          )}
+          footerContent={<View style={{ height: homeBottomNavHeight + 16 }} />}
           headerContent={(
             <View style={styles.splashScrollHeaderContent}>
               <View style={styles.splashScrollHeroSpacer} />
@@ -289,6 +298,39 @@ export function SplashScreen({ apiBaseUrl, onCreateAccount, onOpenMap, onSelectP
           selectedCity="all"
           selectedVenueTypes={venueFilters.map((filter) => filter.value)}
         />
+      </View>
+
+      <View pointerEvents="box-none" style={styles.bottomNavOverlay}>
+        <Animated.View
+          style={[
+            styles.bottomNavShell,
+            {
+              opacity: actionOpacity,
+              paddingBottom: Math.max(insets.bottom + 10, 14),
+              transform: [{ translateY: actionTranslateY }],
+            },
+          ]}
+        >
+          <View pointerEvents="none" style={styles.bottomNavGlassHighlight} />
+          <Pressable accessibilityLabel="Open customer login" onPress={() => onSelectPortal('customer')} style={styles.bottomNavItem}>
+            <View style={[styles.bottomNavItemIconWrap, styles.bottomNavItemIconWrapActive]}>
+              {renderHomeBottomNavIcon('customer', true)}
+            </View>
+            <Text style={[styles.bottomNavItemLabel, styles.bottomNavItemLabelActive]}>Customer</Text>
+          </Pressable>
+          <Pressable accessibilityLabel="Create a free account" onPress={onCreateAccount} style={styles.bottomNavItem}>
+            <View style={styles.bottomNavItemIconWrap}>
+              {renderHomeBottomNavIcon('signup', false)}
+            </View>
+            <Text style={styles.bottomNavItemLabel}>Sign Up</Text>
+          </Pressable>
+          <Pressable accessibilityLabel="Open business login" onPress={() => onSelectPortal('business')} style={styles.bottomNavItem}>
+            <View style={styles.bottomNavItemIconWrap}>
+              {renderHomeBottomNavIcon('business', false)}
+            </View>
+            <Text style={styles.bottomNavItemLabel}>Business</Text>
+          </Pressable>
+        </Animated.View>
       </View>
 
       {signInModalMounted ? (

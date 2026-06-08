@@ -365,6 +365,7 @@ Run and fill up or take out temporary demo feed data (Home feed for business adv
 ```powershell
 python manage.py cleanup_demo_home_feed to remove demo feed data
 python manage.py seed_demo_home_feed to fill it back up again
+*Note: seeding businesses into the app will go into the database temporarily and will have the number businesses appear greater than what they actually are. Run the cleanup command to have the business count number return back to normal*
 ```
 
 ## Notes From Me
