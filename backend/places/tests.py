@@ -31,6 +31,7 @@ from .services.importers.base import BaseHtmlImporter
 from .services.importers.business_websites import BusinessWebsiteImporter
 from .services.importers.discovered_json_places import CuratedJsonPlacesImporter, DiscoveryJsonPlacesImporter, load_discovery_json_records, write_discovery_json_records
 from .services.deleted_businesses import filter_deleted_business_records
+from .services.demo_home_feed import DEMO_HOME_FEED_SOURCE_NAME, get_demo_home_feed_business_specs
 from .services.importers.here_places import HerePlacesImporter
 from .services.importers.openstreetmap_places import HybridPlacesImporter, OpenStreetMapPlacesImporter
 from .services.importers.tomtom_places import TomTomPlacesImporter
@@ -426,6 +427,71 @@ class SeedPhase2CommandTests(APITestCase):
 
 		self.assertEqual(ListingSnapshot.objects.count(), 0)
 		self.assertIn('Fetched 1 places, 1 deals, and 1 happy hour windows from website sources.', output.getvalue())
+
+
+class DemoHomeFeedCommandTests(TestCase):
+	def test_seed_command_creates_demo_feed_dataset(self):
+		output = StringIO()
+
+		call_command('seed_demo_home_feed', stdout=output)
+
+		expected_businesses = len(get_demo_home_feed_business_specs())
+		self.assertEqual(ListingSnapshot.objects.filter(source_name=DEMO_HOME_FEED_SOURCE_NAME).count(), expected_businesses)
+		self.assertEqual(BusinessClaim.objects.filter(listing_snapshot__source_name=DEMO_HOME_FEED_SOURCE_NAME).count(), expected_businesses)
+		self.assertEqual(BusinessMembership.objects.filter(claim__listing_snapshot__source_name=DEMO_HOME_FEED_SOURCE_NAME).count(), expected_businesses)
+		self.assertEqual(BusinessPost.objects.filter(listing_snapshot__source_name=DEMO_HOME_FEED_SOURCE_NAME).count(), 32)
+		self.assertEqual(SponsoredCampaign.objects.filter(post__listing_snapshot__source_name=DEMO_HOME_FEED_SOURCE_NAME).count(), 11)
+		self.assertIn('Seeded/updated 9 demo businesses, 32 posts, and 11 sponsored campaigns.', output.getvalue())
+
+	def test_cleanup_command_removes_only_demo_feed_dataset(self):
+		other_user = User.objects.create_user(username='real-owner', email='real@example.com', password='secret12345')
+		other_snapshot = ListingSnapshot.objects.create(
+			name='Real Business',
+			listing_slug='real-business-ventura',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='1 Main St',
+			source_name='manual_submission',
+		)
+		other_claim = BusinessClaim.objects.create(
+			listing_snapshot=other_snapshot,
+			claimant=other_user,
+			contact_name='Owner',
+			status=BusinessClaim.Status.APPROVED,
+			pathway=BusinessClaim.Pathway.CLAIMED,
+		)
+		other_membership = BusinessMembership.objects.create(user=other_user, claim=other_claim, is_active=True)
+		other_post = BusinessPost.objects.create(
+			membership=other_membership,
+			listing_snapshot=other_snapshot,
+			content_type=BusinessPost.ContentType.SPECIAL,
+			status=BusinessPost.Status.PUBLISHED,
+			title='Real Special',
+			slug='real-special',
+		)
+		SponsoredCampaign.objects.create(
+			membership=other_membership,
+			post=other_post,
+			name='Real Boost',
+			status=SponsoredCampaign.Status.ACTIVE,
+			starts_at=timezone.now() - timedelta(days=1),
+		)
+
+		call_command('seed_demo_home_feed')
+		output = StringIO()
+
+		call_command('cleanup_demo_home_feed', stdout=output)
+
+		self.assertEqual(ListingSnapshot.objects.filter(source_name=DEMO_HOME_FEED_SOURCE_NAME).count(), 0)
+		self.assertEqual(BusinessClaim.objects.filter(listing_snapshot__source_name=DEMO_HOME_FEED_SOURCE_NAME).count(), 0)
+		self.assertEqual(BusinessMembership.objects.filter(claim__listing_snapshot__source_name=DEMO_HOME_FEED_SOURCE_NAME).count(), 0)
+		self.assertEqual(BusinessPost.objects.filter(listing_snapshot__source_name=DEMO_HOME_FEED_SOURCE_NAME).count(), 0)
+		self.assertEqual(SponsoredCampaign.objects.filter(post__listing_snapshot__source_name=DEMO_HOME_FEED_SOURCE_NAME).count(), 0)
+		self.assertTrue(ListingSnapshot.objects.filter(pk=other_snapshot.pk).exists())
+		self.assertTrue(BusinessClaim.objects.filter(pk=other_claim.pk).exists())
+		self.assertTrue(BusinessMembership.objects.filter(pk=other_membership.pk).exists())
+		self.assertTrue(BusinessPost.objects.filter(pk=other_post.pk).exists())
+		self.assertIn('Cleaned up 9 demo users, 9 demo businesses, 9 claims, 32 posts, and 11 sponsored campaigns.', output.getvalue())
 
 
 class ImportSourceDataCommandTests(APITestCase):

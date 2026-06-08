@@ -360,6 +360,13 @@ python manage.py check
 python manage.py test places
 ```
 
+Run and fill up or take out temporary demo feed data (Home feed for business advertisement)
+
+```powershell
+python manage.py cleanup_demo_home_feed to remove demo feed data
+python manage.py seed_demo_home_feed to fill it back up again
+```
+
 ## Notes From Me
 
 I am intentionally trying to build this in phases:
