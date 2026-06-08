@@ -1,10 +1,11 @@
 from django.conf import settings
+from django.db.models import Count, Q
 from django.core.mail import send_mail
 from django.utils.html import escape
 from django.utils import timezone
 from email.utils import formataddr, parseaddr
 
-from places.models import AccountProfile, BusinessClaim, FavoriteBusiness, ProfileAuthToken, VenueType
+from places.models import AccountProfile, BusinessClaim, FavoriteBusiness, ProfileAuthToken, SponsoredCampaign, VenueType
 from places.services.business_profile_overrides import build_deal_payloads, build_operating_hour_payloads
 from places.services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
 
@@ -173,6 +174,7 @@ def build_account_response(user, portal, claim=None, token=None):
 		}
 		for favorite in FavoriteBusiness.objects.filter(user=user).order_by('name', 'city_label', '-created_at')
 	]
+	sponsored_campaigns = _build_sponsored_campaign_summaries(memberships)
 
 	business_contact = {}
 	if primary_claim is not None:
@@ -244,6 +246,7 @@ def build_account_response(user, portal, claim=None, token=None):
 		'two_factor_pending_setup': bool(profile.two_factor_pending_secret and not profile.two_factor_enabled),
 		'billing_portal_url': profile.billing_portal_url if profile_type == 'business' else '',
 		'approved_businesses': approved_businesses,
+		'sponsored_campaigns': sponsored_campaigns,
 		'favorite_businesses': favorite_businesses,
 		'business_contact': business_contact,
 		'business_location_tracking_available': business_location_tracking_available,
@@ -252,6 +255,60 @@ def build_account_response(user, portal, claim=None, token=None):
 		'tracked_business_location': tracked_business_location,
 		'can_access_places': not bool(hold_claim),
 	}
+
+
+def _build_sponsored_campaign_summaries(memberships, reference_time=None):
+	reference = reference_time or timezone.now()
+	window_start = reference - timezone.timedelta(days=7)
+	active_membership_ids = [membership.id for membership in memberships if membership.is_active]
+	if not active_membership_ids:
+		return []
+
+	queryset = (
+		SponsoredCampaign.objects
+		.filter(membership_id__in=active_membership_ids)
+		.select_related('post', 'post__listing_snapshot')
+		.annotate(
+			window_impressions=Count('impressions', filter=Q(impressions__created_at__gte=window_start), distinct=True),
+			window_clicks=Count('engagements', filter=Q(engagements__created_at__gte=window_start, engagements__event_type='click'), distinct=True),
+		)
+		.order_by('status', '-starts_at', '-created_at', '-pk')
+	)
+
+	results = []
+	for campaign in queryset:
+		remaining_impressions = None
+		if campaign.weekly_impression_quota:
+			remaining_impressions = max(campaign.weekly_impression_quota - campaign.window_impressions, 0)
+		click_through_rate = round((campaign.window_clicks / campaign.window_impressions) * 100, 1) if campaign.window_impressions else 0.0
+		results.append({
+			'id': campaign.id,
+			'name': campaign.name,
+			'status': campaign.status,
+			'status_label': campaign.get_status_display(),
+			'is_currently_active': campaign.is_active_now(reference),
+			'billing_model': campaign.billing_model,
+			'billing_model_label': campaign.get_billing_model_display(),
+			'weekly_price_cents': campaign.weekly_price_cents,
+			'weekly_impression_quota': campaign.weekly_impression_quota,
+			'impressions_last_7_days': campaign.window_impressions,
+			'clicks_last_7_days': campaign.window_clicks,
+			'click_through_rate_percent': click_through_rate,
+			'remaining_impressions': remaining_impressions,
+			'starts_at': campaign.starts_at,
+			'ends_at': campaign.ends_at,
+			'last_served_at': campaign.last_served_at,
+			'target_cities': list(campaign.target_cities or []),
+			'target_venue_types': list(campaign.target_venue_types or []),
+			'post': {
+				'id': campaign.post.id,
+				'title': campaign.post.title,
+				'content_type': campaign.post.content_type,
+				'content_type_label': campaign.post.get_content_type_display(),
+				'summary': campaign.post.summary,
+			},
+		})
+	return results
 
 
 def build_email_verification_challenge(user, portal, claim=None, force_resend=False):

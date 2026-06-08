@@ -219,6 +219,7 @@ class AccountResponseSerializer(serializers.Serializer):
 	two_factor_enabled = serializers.BooleanField(required=False)
 	billing_portal_url = serializers.CharField(required=False, allow_blank=True)
 	approved_businesses = serializers.ListField(child=serializers.DictField(), required=False)
+	sponsored_campaigns = serializers.ListField(child=serializers.DictField(), required=False)
 	favorite_businesses = serializers.ListField(child=serializers.DictField(), required=False)
 	business_contact = serializers.DictField(required=False)
 	can_access_places = serializers.BooleanField(required=False)

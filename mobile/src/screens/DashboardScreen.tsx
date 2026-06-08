@@ -97,6 +97,14 @@ function DashboardMultilineField({
   );
 }
 
+function formatCampaignPrice(weeklyPriceCents: number) {
+  return `$${(weeklyPriceCents / 100).toFixed(0)}/week`;
+}
+
+function formatCampaignPercent(value: number) {
+  return `${value.toFixed(1)}%`;
+}
+
 function joinDraftEntries(values?: string[]) {
   return (values ?? []).join('\n');
 }
@@ -349,6 +357,7 @@ function SecuritySettingsSection({
 
 export function DashboardScreen({ errorMessage, isLandscape, loading, message, onBack, onOpenBilling, onOpenApprovedBusiness, onOpenBusinessProfileEditor, onOpenFavoriteBusiness, onOpenPlaces, onOpenSettings, onRefresh, onResendVerification, onSaveProfileDetails, session, submitting }: DashboardScreenProps) {
   const approvedBusinesses = session.approved_businesses ?? [];
+  const sponsoredCampaigns = session.sponsored_campaigns ?? [];
   const favoriteBusinesses = session.favorite_businesses ?? [];
   const fullName = [session.first_name, session.last_name].filter(Boolean).join(' ');
   const trackedBusinessLocation = session.tracked_business_location ?? {};
@@ -561,6 +570,65 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
                 </View>
 
                 <View style={styles.dashboardSection}>
+                  <Text style={styles.dashboardSectionTitle}>Home feed boosts</Text>
+                  <Text style={styles.dashboardSupportText}>Boosted posts run on the weekly subscription MVP model. Each campaign tracks a 7-day delivery window so you can see impressions, clicks, and remaining quota without adding ad-manager complexity yet.</Text>
+                  {sponsoredCampaigns.length ? (
+                    <View style={styles.dashboardFieldGrid}>
+                      {sponsoredCampaigns.map((campaign) => (
+                        <View key={campaign.id} style={[styles.dashboardFavoriteBusinessCard, styles.dashboardCampaignCard]}>
+                          <View style={styles.dashboardCampaignHeaderRow}>
+                            <View style={styles.dashboardCampaignHeaderCopy}>
+                              <Text style={styles.dashboardDetailValue}>{campaign.name}</Text>
+                              <Text style={styles.dashboardSupportText}>{campaign.post.title} • {campaign.post.content_type_label}</Text>
+                            </View>
+                            <View style={[styles.dashboardCampaignStatusBadge, campaign.is_currently_active ? styles.dashboardCampaignStatusBadgeActive : null]}>
+                              <Text style={[styles.dashboardCampaignStatusBadgeText, campaign.is_currently_active ? styles.dashboardCampaignStatusBadgeTextActive : null]}>{campaign.is_currently_active ? 'Active' : campaign.status_label}</Text>
+                            </View>
+                          </View>
+                          <View style={styles.dashboardFieldGrid}>
+                            <View style={styles.dashboardDetailItem}>
+                              <Text style={styles.dashboardDetailLabel}>Price</Text>
+                              <Text style={styles.dashboardDetailValue}>{formatCampaignPrice(campaign.weekly_price_cents)}</Text>
+                            </View>
+                            <View style={styles.dashboardDetailItem}>
+                              <Text style={styles.dashboardDetailLabel}>Weekly quota</Text>
+                              <Text style={styles.dashboardDetailValue}>{campaign.weekly_impression_quota} impressions</Text>
+                            </View>
+                            <View style={styles.dashboardDetailItem}>
+                              <Text style={styles.dashboardDetailLabel}>Delivered</Text>
+                              <Text style={styles.dashboardDetailValue}>{campaign.impressions_last_7_days}</Text>
+                            </View>
+                            <View style={styles.dashboardDetailItem}>
+                              <Text style={styles.dashboardDetailLabel}>Remaining</Text>
+                              <Text style={styles.dashboardDetailValue}>{campaign.remaining_impressions ?? 'Unlimited'}</Text>
+                            </View>
+                            <View style={styles.dashboardDetailItem}>
+                              <Text style={styles.dashboardDetailLabel}>Clicks</Text>
+                              <Text style={styles.dashboardDetailValue}>{campaign.clicks_last_7_days}</Text>
+                            </View>
+                            <View style={styles.dashboardDetailItem}>
+                              <Text style={styles.dashboardDetailLabel}>CTR</Text>
+                              <Text style={styles.dashboardDetailValue}>{formatCampaignPercent(campaign.click_through_rate_percent)}</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.dashboardSupportText}>{campaign.post.summary || 'This boosted post is eligible for fair rotation inside the home feed and is throttled by weekly quota.'}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <View style={[styles.dashboardFavoriteBusinessCard, styles.dashboardCampaignCard]}>
+                      <Text style={styles.dashboardDetailValue}>No boosted campaigns yet</Text>
+                      <Text style={styles.dashboardSupportText}>Launch with weekly boosted posts first. It is the simplest MVP: one flat weekly price, quota-backed delivery, and fair rotation in the home feed.</Text>
+                    </View>
+                  )}
+                  {session.billing_portal_url ? (
+                    <Pressable onPress={onOpenBilling} style={styles.linkButtonSecondaryWide}>
+                      <Text style={styles.linkButtonSecondaryText}>{sponsoredCampaigns.length ? 'Manage billing for boosts' : 'Open billing to start boosting posts'}</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+
+                <View style={styles.dashboardSection}>
                   <Text style={styles.dashboardSectionTitle}>Approved Business</Text>
                   {approvedBusinesses.length ? <View style={styles.dashboardFieldGrid}>{approvedBusinesses.map((business) => (
                     <View key={business.id} style={[styles.dashboardDetailItem, styles.dashboardFavoriteBusinessCard]}>
@@ -573,12 +641,6 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
                     <Text style={styles.dashboardSupportText}>Claimed or created businesses appear here after admin approval.</Text>
                   )}
                 </View>
-
-                {session.billing_portal_url ? (
-                  <Pressable onPress={onOpenBilling} style={styles.linkButtonSecondaryWide}>
-                    <Text style={styles.linkButtonSecondaryText}>Open billing in browser</Text>
-                  </Pressable>
-                ) : null}
               </>
             ) : null}
 

@@ -1784,7 +1784,7 @@ export const styles = StyleSheet.create({
   splashBody: {
     alignItems: 'stretch',
     flex: 1,
-    paddingHorizontal: 28,
+    paddingHorizontal: 10,
     paddingBottom: 22,
   },
   splashScrollHeaderContent: {
@@ -2407,6 +2407,38 @@ export const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     marginTop: 4,
+  },
+  dashboardCampaignCard: {
+    gap: 10,
+    minWidth: 220,
+  },
+  dashboardCampaignHeaderRow: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'space-between',
+  },
+  dashboardCampaignHeaderCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  dashboardCampaignStatusBadge: {
+    backgroundColor: '#f4e5d7',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  dashboardCampaignStatusBadgeActive: {
+    backgroundColor: '#e4f3e8',
+  },
+  dashboardCampaignStatusBadgeText: {
+    color: '#7a4d2f',
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  dashboardCampaignStatusBadgeTextActive: {
+    color: '#22623d',
   },
   dashboardDetailLabel: {
     color: '#7a4d2f',
@@ -3077,7 +3109,7 @@ export const styles = StyleSheet.create({
   homeFeedCard: {
     backgroundColor: '#fffaf4',
     borderColor: '#ecd8c2',
-    borderRadius: 24,
+    borderRadius: 30,
     borderWidth: 1,
     overflow: 'hidden',
     padding: 18,

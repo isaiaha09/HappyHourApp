@@ -202,6 +202,33 @@ export type SignupResponse = {
     address_line_1?: string;
     website_url?: string;
   }>;
+  sponsored_campaigns?: Array<{
+    id: number;
+    name: string;
+    status: string;
+    status_label: string;
+    is_currently_active: boolean;
+    billing_model: string;
+    billing_model_label: string;
+    weekly_price_cents: number;
+    weekly_impression_quota: number;
+    impressions_last_7_days: number;
+    clicks_last_7_days: number;
+    click_through_rate_percent: number;
+    remaining_impressions: number | null;
+    starts_at: string;
+    ends_at?: string | null;
+    last_served_at?: string | null;
+    target_cities?: string[];
+    target_venue_types?: string[];
+    post: {
+      id: number;
+      title: string;
+      content_type: string;
+      content_type_label: string;
+      summary: string;
+    };
+  }>;
   favorite_businesses?: Array<{
     slug: string;
     name: string;

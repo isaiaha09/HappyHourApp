@@ -4548,7 +4548,41 @@ class ProfileDashboardApiTests(APITestCase):
 			verification_summary='I own the business.',
 			status=BusinessClaim.Status.APPROVED,
 		)
-		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+		membership = BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+		post = BusinessPost.objects.create(
+			membership=membership,
+			listing_snapshot=snapshot,
+			content_type=BusinessPost.ContentType.SPECIAL,
+			status=BusinessPost.Status.PUBLISHED,
+			title='Late Night Spotlight',
+			summary='A boosted special for the dashboard.',
+			published_at=timezone.now() - timedelta(hours=2),
+		)
+		campaign = SponsoredCampaign.objects.create(
+			membership=membership,
+			post=post,
+			name='Weekly Spotlight',
+			status=SponsoredCampaign.Status.ACTIVE,
+			weekly_price_cents=1500,
+			weekly_impression_quota=500,
+			starts_at=timezone.now() - timedelta(days=1),
+		)
+		for index in range(3):
+			impression = FeedImpression.objects.create(
+				post=post,
+				campaign=campaign,
+				placement_type=FeedImpression.PlacementType.SPONSORED,
+				feed_item_id=f'campaign-{campaign.pk}',
+				position=index,
+			)
+			if index < 2:
+				FeedEngagement.objects.create(
+					post=post,
+					campaign=campaign,
+					impression=impression,
+					event_type=FeedEngagement.EventType.CLICK,
+					feed_item_id=f'campaign-{campaign.pk}',
+				)
 
 		response = self.client.get(reverse('profile-dashboard'), {'portal': 'business'}, **self.auth_headers())
 
@@ -4561,6 +4595,12 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(response.data['approved_businesses'][0]['name'], 'Approved Spot')
 		self.assertEqual(response.data['business_contact']['work_email'], 'owner@approvedspot.com')
 		self.assertEqual(response.data['approved_businesses'][0]['address_line_1'], '55 Main St')
+		self.assertEqual(len(response.data['sponsored_campaigns']), 1)
+		self.assertEqual(response.data['sponsored_campaigns'][0]['name'], 'Weekly Spotlight')
+		self.assertEqual(response.data['sponsored_campaigns'][0]['impressions_last_7_days'], 3)
+		self.assertEqual(response.data['sponsored_campaigns'][0]['clicks_last_7_days'], 2)
+		self.assertEqual(response.data['sponsored_campaigns'][0]['remaining_impressions'], 497)
+		self.assertEqual(response.data['sponsored_campaigns'][0]['post']['title'], 'Late Night Spotlight')
 		self.assertEqual(response.data['business_contact']['offer_entries'], [])
 		self.assertEqual(response.data['business_contact']['deals'][0]['title'], 'Dashboard Happy Hour')
 		self.assertEqual(response.data['business_contact']['operating_hours'][0]['weekday'], Weekday.THURSDAY)
