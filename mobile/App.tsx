@@ -72,6 +72,7 @@ import { BrowseControls } from './src/screens/BrowseControls';
 import { PhotoLightbox } from './src/components/PhotoLightbox';
 import { PlaceDetailScreen } from './src/screens/PlaceDetailScreen';
 import { SplashScreen } from './src/screens/SplashScreen';
+import { shouldSkipBrowseMapAutoFit } from './src/mapBrowseState';
 import { buildSocialProfilesFromInputs, socialProfilesToInputs } from './src/socialProfiles';
 import { buildDealOverridesFromDeals, buildNormalizedDealOverrides, buildNormalizedOperatingHourOverrides, buildOperatingHourOverridesFromWindows } from './src/businessProfileOverrides';
 import {
@@ -495,6 +496,7 @@ function AppScreen() {
   const showMoreMapResultsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoFitMapRegionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mapMarkersTrackViewChangesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mapResultsCardTransitionVersionRef = useRef(0);
   const pendingImmediateMapPinsRefreshRef = useRef(false);
   const pendingListRevealRef = useRef(false);
   const [profileForm, setProfileForm] = useState<ProfileFormState>(initialProfileFormState);
@@ -843,7 +845,7 @@ function AppScreen() {
     };
   }, [startupImagesReady]);
 
-  const mapSearchResultPool = normalizedSearchQuery.length ? displayedMapPlaces : [];
+  const mapSearchResultPool = normalizedSearchQuery.length ? mappedPlaces : [];
   const mapSearchResultsKey = mapSearchResultPool.map((place) => place.markerKey).join('|');
   const bottomNavHeight = Math.max(insets.bottom + 76, 90);
   const mapOverlayBottomPadding = bottomNavHeight + 18;
@@ -863,6 +865,11 @@ function AppScreen() {
 
     clearTimeout(showMoreMapResultsTimeoutRef.current);
     showMoreMapResultsTimeoutRef.current = null;
+  }
+
+  function invalidateMapResultsCardTransitions() {
+    mapResultsCardTransitionVersionRef.current += 1;
+    clearShowMoreMapResultsTimer();
   }
 
   function animateShellFade(scope: ShellFadeScope) {
@@ -1394,6 +1401,11 @@ function AppScreen() {
       return;
     }
 
+    if (normalizedSearchQuery.length > 0) {
+      pendingImmediateMapPinsRefreshRef.current = false;
+      return;
+    }
+
     pendingImmediateMapPinsRefreshRef.current = false;
     mapPinsTransition.stopAnimation();
     setRenderedMappedPlaces(mappedPlaces);
@@ -1407,7 +1419,7 @@ function AppScreen() {
         useNativeDriver: true,
       }).start();
     });
-  }, [listLoading, mapPinsTransition, mappedPlaceKey, mappedPlaces, renderedMappedPlaceKey, renderedMappedPlaces.length, showMapBrowse]);
+  }, [listLoading, mapPinsTransition, mappedPlaceKey, mappedPlaces, normalizedSearchQuery.length, renderedMappedPlaceKey, renderedMappedPlaces.length, showMapBrowse]);
 
   function navigateScreen(
     nextScreen: AppScreenMode,
@@ -1710,6 +1722,7 @@ function AppScreen() {
 
   useEffect(() => {
     if (shouldShowMapResults) {
+      invalidateMapResultsCardTransitions();
       const resultsChanged = (
         mapSearchResultsKey !== renderedMapResultsKey ||
         mapSearchResultPool.length !== renderedMapResultCount
@@ -1758,12 +1771,14 @@ function AppScreen() {
     }
 
     mapResultsOpacity.stopAnimation();
+    const transitionVersion = mapResultsCardTransitionVersionRef.current + 1;
+    mapResultsCardTransitionVersionRef.current = transitionVersion;
     Animated.timing(mapResultsOpacity, {
       duration: 160,
       toValue: 0,
       useNativeDriver: true,
     }).start(({ finished }) => {
-      if (!finished) {
+      if (!finished || mapResultsCardTransitionVersionRef.current !== transitionVersion) {
         return;
       }
 
@@ -1817,6 +1832,7 @@ function AppScreen() {
   }
 
   function handleToggleMapResultsCollapsed() {
+    invalidateMapResultsCardTransitions();
     setMapResultsCollapsed((current) => !current);
   }
 
@@ -1923,7 +1939,12 @@ function AppScreen() {
   }, []);
 
   useEffect(() => {
-    if (!showMapBrowse || listLoading) {
+    if (shouldSkipBrowseMapAutoFit({
+      listLoading,
+      mappedPlaceCount: mappedPlaces.length,
+      normalizedSearchQuery,
+      showMapBrowse,
+    })) {
       clearAutoFitMapRegionTimer();
       return;
     }
@@ -1945,7 +1966,7 @@ function AppScreen() {
       mapRef.current?.animateToRegion(boundedRegion, 220);
       autoFitMapRegionTimeoutRef.current = null;
     }, normalizedSearchQuery.length > 0 ? 140 : 0);
-  }, [filteredPlaceKey, listLoading, normalizedSearchQuery.length, selectedCity, showMapBrowse]);
+  }, [filteredPlaceKey, listLoading, mappedPlaces.length, normalizedSearchQuery.length, selectedCity, showMapBrowse]);
 
   useEffect(() => {
     if (!showMapBrowse) {
@@ -2259,10 +2280,12 @@ function AppScreen() {
   }
 
   function handleToggleBrowseFilters() {
+    invalidateMapResultsCardTransitions();
     setBrowseFiltersExpanded((current) => !current);
   }
 
   function handleToggleMapSearchPanelLift() {
+    invalidateMapResultsCardTransitions();
     setMapSearchPanelLifted((current) => !current);
   }
 
@@ -2281,19 +2304,8 @@ function AppScreen() {
 
   function handleClearSearchQuery() {
     animateNextLayout();
-    const clearedFilteredPlaces = getFilteredPlaces(places, {
-      confirmedDealsOnly,
-      informalBusinessesOnly,
-      searchQuery: '',
-      selectedCity,
-      selectedDealDays,
-      selectedOperatingDays,
-      selectedVenueTypes,
-      verifiedBusinessesOnly,
-    });
-    const clearedMappedPlaces = getMappedPlacesForBrowse(clearedFilteredPlaces);
-
     pendingImmediateMapPinsRefreshRef.current = true;
+    invalidateMapResultsCardTransitions();
     clearAutoFitMapRegionTimer();
     setSearchQuery('');
     setSelectedMapPlaceKey(null);
@@ -2309,12 +2321,6 @@ function AppScreen() {
     setVisibleMapResultCount(0);
     setLoadingMoreMapResults(false);
     clearShowMoreMapResultsTimer();
-
-    if (showMapBrowse && !listLoading) {
-      const nextRegion = getBrowseMapRegion(selectedCity, clearedMappedPlaces);
-      mapRegionRef.current = nextRegion;
-      setMapRegion(nextRegion);
-    }
   }
 
   function handleBackToBrowse() {
@@ -3725,6 +3731,7 @@ function AppScreen() {
   }
 
   function handleSelectMapPin(placeKey: string) {
+    invalidateMapResultsCardTransitions();
     mapResultsOpacity.stopAnimation();
     mapResultsOpacity.setValue(1);
     setShowMapResultsCard(false);
@@ -3732,6 +3739,7 @@ function AppScreen() {
   }
 
   function handleFocusMapResult(place: MappedPlace) {
+    invalidateMapResultsCardTransitions();
     mapResultsOpacity.stopAnimation();
     mapResultsOpacity.setValue(0);
     setShowMapResultsCard(false);

@@ -2347,6 +2347,145 @@ class SourceListingIdentityTests(TestCase):
 
 	@patch('places.services.source_listings._get_place_coordinates')
 	@patch('places.services.source_listings.load_source_records')
+	def test_public_place_payload_applies_unclaimed_listing_snapshot_name_override(self, mock_load_source_records, mock_get_place_coordinates):
+		mock_get_place_coordinates.return_value = (34.2001, -119.1806)
+		mock_load_source_records.return_value = [
+			ImportedPlace(
+				name='Yard House',
+				profile_name='Yard House',
+				profile_slug='yard-house',
+				city=City.OXNARD,
+				venue_type=VenueType.BAR,
+				address_line_1='501 Collection Blvd Ste # 4130',
+				state='CA',
+				postal_code='93036',
+				website_url='https://imported.example.com/yard-house',
+				source_name='business_websites',
+				source_url='https://imported.example.com/yard-house',
+			),
+		]
+		ListingSnapshot.objects.create(
+			name='Yard House Oxnard',
+			listing_slug='yard-house',
+			city=City.OXNARD,
+			venue_type=VenueType.BAR,
+			address_line_1='501 Collection Blvd Ste # 4130',
+		)
+
+		payload = get_source_place_payload('yard-house')
+
+		self.assertEqual(payload['name'], 'Yard House Oxnard')
+		self.assertEqual(payload['locations'][0]['name'], 'Yard House Oxnard')
+
+	@patch('places.services.source_listings._get_place_coordinates')
+	@patch('places.services.source_listings.load_source_records')
+	def test_multi_location_snapshot_contact_overrides_only_affect_the_matching_location(self, mock_load_source_records, mock_get_place_coordinates):
+		mock_get_place_coordinates.side_effect = [(34.2243, -119.0382), (34.2099, -119.0901)]
+		mock_load_source_records.return_value = [
+			ImportedPlace(
+				name='Baskin-Robbins',
+				profile_name='Baskin-Robbins',
+				profile_slug='',
+				city=City.CAMARILLO,
+				venue_type=VenueType.CAFE,
+				address_line_1='738 Arneill Rd',
+				state='CA',
+				postal_code='93010',
+				phone_number='805-555-0101',
+				external_id='here:baskin-camarillo',
+				source_name='here_places',
+			),
+			ImportedPlace(
+				name='Baskin-Robbins',
+				profile_name='Baskin-Robbins',
+				profile_slug='',
+				city=City.OXNARD,
+				venue_type=VenueType.CAFE,
+				address_line_1='1251 S Victoria Ave',
+				state='CA',
+				postal_code='93035',
+				phone_number='805-555-0202',
+				external_id='here:baskin-oxnard',
+				source_name='here_places',
+			),
+		]
+		ListingSnapshot.objects.create(
+			name='Baskin-Robbins',
+			listing_slug='baskin-robbins-camarillo',
+			city=City.CAMARILLO,
+			venue_type=VenueType.CAFE,
+			address_line_1='738 Arneill Rd',
+			postal_code='93012',
+			phone_number='805-555-9999',
+			external_id='here:baskin-camarillo',
+			source_name='here_places',
+		)
+
+		payload = get_source_place_payload('baskin-robbins')
+
+		self.assertEqual(payload['address_line_1'], '738 Arneill Rd')
+		self.assertEqual(payload['postal_code'], '93012')
+		self.assertEqual(payload['phone_number'], '805-555-9999')
+		location_by_city = {location['city']: location for location in payload['locations']}
+		self.assertEqual(location_by_city[City.CAMARILLO]['postal_code'], '93012')
+		self.assertEqual(location_by_city[City.CAMARILLO]['phone_number'], '805-555-9999')
+		self.assertEqual(location_by_city[City.OXNARD]['address_line_1'], '1251 S Victoria Ave')
+		self.assertEqual(location_by_city[City.OXNARD]['postal_code'], '93035')
+		self.assertEqual(location_by_city[City.OXNARD]['phone_number'], '805-555-0202')
+
+	@patch('places.services.source_listings._get_place_coordinates')
+	@patch('places.services.source_listings.load_source_records')
+	def test_multi_location_snapshot_structured_hour_overrides_only_affect_the_matching_location(self, mock_load_source_records, mock_get_place_coordinates):
+		mock_get_place_coordinates.side_effect = [(34.2171, -119.0385), (34.1975, -119.1771)]
+		mock_load_source_records.return_value = [
+			ImportedPlace(
+				name='Baskin-Robbins',
+				profile_name='Baskin-Robbins',
+				profile_slug='',
+				city=City.CAMARILLO,
+				venue_type=VenueType.CAFE,
+				address_line_1='738 Arneill Rd',
+				state='CA',
+				postal_code='93010',
+				external_id='here:baskin-camarillo',
+				source_name='here_places',
+				operating_hours=[ImportedOperatingHour(weekday=Weekday.MONDAY, open_time='10:00', close_time='20:00')],
+			),
+			ImportedPlace(
+				name='Baskin-Robbins',
+				profile_name='Baskin-Robbins',
+				profile_slug='',
+				city=City.OXNARD,
+				venue_type=VenueType.CAFE,
+				address_line_1='1251 S Victoria Ave',
+				state='CA',
+				postal_code='93035',
+				external_id='here:baskin-oxnard',
+				source_name='here_places',
+				operating_hours=[ImportedOperatingHour(weekday=Weekday.TUESDAY, open_time='11:00', close_time='21:00')],
+			),
+		]
+		ListingSnapshot.objects.create(
+			name='Baskin-Robbins',
+			listing_slug='baskin-robbins-camarillo',
+			city=City.CAMARILLO,
+			venue_type=VenueType.CAFE,
+			address_line_1='738 Arneill Rd',
+			external_id='here:baskin-camarillo',
+			source_name='here_places',
+			operating_hour_overrides=[{'weekday': Weekday.FRIDAY, 'open_time': '12:00', 'close_time': '22:00'}],
+		)
+
+		payload = get_source_place_payload('baskin-robbins')
+
+		location_by_city = {location['city']: location for location in payload['locations']}
+		self.assertEqual(location_by_city[City.CAMARILLO]['operating_hours'][0]['weekday'], Weekday.FRIDAY)
+		self.assertEqual(location_by_city[City.CAMARILLO]['operating_hours'][0]['open_time'], '12:00')
+		self.assertEqual(location_by_city[City.OXNARD]['operating_hours'][0]['weekday'], Weekday.TUESDAY)
+		self.assertEqual(location_by_city[City.OXNARD]['operating_hours'][0]['open_time'], '11:00')
+
+	@patch('places.services.source_listings._get_place_coordinates')
+	@patch('places.services.source_listings.load_source_records')
 	def test_claim_override_takes_precedence_over_listing_snapshot_overrides(self, mock_load_source_records, mock_get_place_coordinates):
 		mock_get_place_coordinates.return_value = (34.2001, -119.1806)
 		mock_load_source_records.return_value = [
@@ -2366,7 +2505,7 @@ class SourceListingIdentityTests(TestCase):
 		]
 		owner = User.objects.create_user(username='yard_snapshot_owner', email='yard-snapshot-owner@example.com', password='test-pass-123')
 		snapshot = ListingSnapshot.objects.create(
-			name='Yard House',
+			name='Yard House Owner Edition',
 			listing_slug='yard-house',
 			city=City.OXNARD,
 			venue_type=VenueType.BAR,
@@ -2404,6 +2543,8 @@ class SourceListingIdentityTests(TestCase):
 
 		payload = get_source_place_payload('yard-house')
 
+		self.assertEqual(payload['name'], 'Yard House Owner Edition')
+		self.assertEqual(payload['locations'][0]['name'], 'Yard House Owner Edition')
 		self.assertEqual(payload['deals'][0]['title'], 'Owner Happy Hour')
 		self.assertEqual(payload['deals'][0]['happy_hours'][0]['weekday'], Weekday.FRIDAY)
 

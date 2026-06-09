@@ -78,19 +78,30 @@ def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_
 			continue
 		is_claimed = payload['slug'] in claimed_listing_slugs
 		if not is_claimed:
-			snapshot_override_payload = _get_matching_listing_snapshot_override_payload(
-				snapshot_overrides_by_slug,
-				payload['slug'],
-				place_records,
-			)
-			if snapshot_override_payload is not None:
+			snapshot_slug_override_payload = snapshot_overrides_by_slug['by_slug'].get(payload['slug'])
+			if snapshot_slug_override_payload is not None:
 				_apply_claim_structured_overrides(
 					payload,
 					None,
 					payload_namespace=payload['slug'],
-					source_payload=snapshot_override_payload,
+					source_payload=snapshot_slug_override_payload,
 					apply_source_address_overrides=True,
 				)
+			elif len(place_records) == 1:
+				snapshot_override_payload = _get_matching_listing_snapshot_override_payload_for_record(
+					snapshot_overrides_by_slug,
+					place_records[0],
+				)
+				if snapshot_override_payload is not None:
+					_apply_claim_structured_overrides(
+						payload,
+						None,
+						payload_namespace=payload['slug'],
+						source_payload=snapshot_override_payload,
+						apply_source_address_overrides=True,
+					)
+			else:
+				_apply_multi_location_snapshot_overrides(payload, place_records, snapshot_overrides_by_slug)
 		payload['is_claimed'] = is_claimed
 		payload['is_informal'] = False
 		payloads_by_slug[payload['slug']] = payload
@@ -135,6 +146,7 @@ def _get_listing_snapshot_override_payloads():
 	)
 	for snapshot in queryset:
 		override_payload = {
+			'name': snapshot.name,
 			'city': snapshot.city,
 			'city_label': _label_for_choice(City, snapshot.city) if snapshot.city else '',
 			'address_line_1': snapshot.address_line_1,
@@ -164,19 +176,118 @@ def _get_matching_listing_snapshot_override_payload(override_payloads, payload_s
 		return matched_payload
 
 	for place_record in place_records:
-		source_identity = _build_place_record_source_identity(place_record)
-		if source_identity:
-			matched_payload = override_payloads['by_source_identity'].get(source_identity)
-			if matched_payload is not None:
-				return matched_payload
-
-		location_identity = _build_place_record_location_identity(place_record)
-		if location_identity:
-			matched_payload = override_payloads['by_location_identity'].get(location_identity)
-			if matched_payload is not None:
-				return matched_payload
+		matched_payload = _get_matching_listing_snapshot_override_payload_for_record(override_payloads, place_record)
+		if matched_payload is not None:
+			return matched_payload
 
 	return None
+
+
+def _get_matching_listing_snapshot_override_payload_for_record(override_payloads, place_record):
+	source_identity = _build_place_record_source_identity(place_record)
+	if source_identity:
+		matched_payload = override_payloads['by_source_identity'].get(source_identity)
+		if matched_payload is not None:
+			return matched_payload
+
+	location_identity = _build_place_record_location_identity(place_record)
+	if location_identity:
+		matched_payload = override_payloads['by_location_identity'].get(location_identity)
+		if matched_payload is not None:
+			return matched_payload
+
+	return None
+
+
+def _apply_multi_location_snapshot_overrides(payload, place_records, override_payloads):
+	primary_location_id = _resolve_primary_location_id(payload)
+	locations_by_id = {location['id']: location for location in payload.get('locations', [])}
+	primary_location = None
+
+	for place_record in place_records:
+		matched_payload = _get_matching_listing_snapshot_override_payload_for_record(override_payloads, place_record)
+		if matched_payload is None:
+			continue
+
+		location_id = _stable_numeric_id(place_record.source_name, place_record.external_id, place_record.name, place_record.city)
+		location = locations_by_id.get(location_id)
+		if location is None:
+			continue
+
+		_apply_snapshot_contact_override_to_location(location, matched_payload)
+		_apply_snapshot_structured_override_to_location(
+			location,
+			matched_payload,
+			payload_namespace=f"{payload.get('slug', 'location')}:{location_id}",
+		)
+		if location_id == primary_location_id:
+			primary_location = location
+			_apply_snapshot_contact_override_to_payload(payload, location)
+			_apply_snapshot_structured_override_to_payload(payload, location)
+
+	if primary_location is not None:
+		_apply_snapshot_contact_override_to_payload(payload, primary_location)
+		_apply_snapshot_structured_override_to_payload(payload, primary_location)
+
+	payload['operating_weekdays'] = sorted({
+		weekday
+		for location in payload.get('locations', [])
+		for weekday in location.get('operating_weekdays', [])
+	})
+	payload['deal_weekdays'] = sorted({
+		weekday
+		for location in payload.get('locations', [])
+		for weekday in location.get('deal_weekdays', [])
+	})
+	payload['has_deals'] = any(bool(location.get('has_deals')) for location in payload.get('locations', []))
+	payload['deal_count'] = sum(int(location.get('deal_count', 0) or 0) for location in payload.get('locations', []))
+
+
+def _resolve_primary_location_id(payload):
+	for location in payload.get('locations', []):
+		if (
+			location.get('city') == payload.get('city')
+			and location.get('address_line_1') == payload.get('address_line_1')
+			and location.get('address_line_2') == payload.get('address_line_2')
+			and location.get('postal_code') == payload.get('postal_code')
+			and location.get('latitude') == payload.get('latitude')
+			and location.get('longitude') == payload.get('longitude')
+		):
+			return location.get('id')
+	return None
+
+
+def _apply_snapshot_contact_override_to_location(location, override_payload):
+	for field_name in ('name', 'city', 'city_label', 'address_line_1', 'address_line_2', 'neighborhood', 'state', 'postal_code', 'phone_number', 'website_url'):
+		value = override_payload.get(field_name)
+		if value not in (None, ''):
+			location[field_name] = value
+
+
+def _apply_snapshot_contact_override_to_payload(payload, location):
+	for field_name in ('name', 'city', 'city_label', 'address_line_1', 'address_line_2', 'neighborhood', 'state', 'postal_code', 'phone_number', 'website_url'):
+		payload[field_name] = location.get(field_name, payload.get(field_name))
+
+
+def _apply_snapshot_structured_override_to_location(location, override_payload, payload_namespace):
+	operating_hour_overrides = override_payload.get('operating_hour_overrides')
+	if operating_hour_overrides is not None:
+		location['operating_hours'] = build_operating_hour_payloads(operating_hour_overrides, payload_namespace)
+		location['operating_weekdays'] = build_operating_weekdays(operating_hour_overrides)
+
+	deal_overrides = override_payload.get('deal_overrides')
+	if deal_overrides is not None:
+		deal_payloads = build_deal_payloads(deal_overrides, payload_namespace)
+		location['deals'] = deal_payloads
+		location['has_deals'] = bool(deal_payloads)
+		location['deal_count'] = len(deal_payloads)
+		location['deal_weekdays'] = build_deal_weekdays(deal_overrides)
+
+
+def _apply_snapshot_structured_override_to_payload(payload, location):
+	for field_name in ('operating_hours', 'operating_weekdays', 'deals', 'deal_weekdays', 'has_deals', 'deal_count'):
+		if field_name in location:
+			payload[field_name] = location[field_name]
 
 
 def _build_snapshot_source_identity(snapshot):
@@ -546,6 +657,7 @@ def _merge_claimed_snapshot_payload(existing_payload, snapshot_payload):
 
 def _apply_claim_structured_overrides(payload, claim=None, payload_namespace='', source_payload=None, apply_source_address_overrides=False):
 	resolved_source_payload = source_payload or {}
+	name_override = resolved_source_payload.get('name') if source_payload is not None else ''
 	address_override_fields = {
 		'city': resolved_source_payload.get('city'),
 		'city_label': resolved_source_payload.get('city_label'),
@@ -559,6 +671,11 @@ def _apply_claim_structured_overrides(payload, claim=None, payload_namespace='',
 	website_url = resolved_source_payload.get('website_url') if source_payload is not None else ''
 	deal_overrides = resolved_source_payload.get('deal_overrides') if source_payload is not None else getattr(claim, 'deal_overrides', None)
 	operating_hour_overrides = resolved_source_payload.get('operating_hour_overrides') if source_payload is not None else getattr(claim, 'operating_hour_overrides', None)
+
+	if name_override:
+		payload['name'] = name_override
+		for location in payload.get('locations', []):
+			location['name'] = name_override
 
 	for field_name, value in address_override_fields.items():
 		if value not in (None, ''):

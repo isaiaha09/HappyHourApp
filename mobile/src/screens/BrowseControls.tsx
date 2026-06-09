@@ -255,14 +255,16 @@ export function BrowseControls({
         >
           <Text style={styles.searchInputIcon}>Find</Text>
           <TextInput
+            accessibilityLabel="Browse search"
             onChangeText={onChangeSearchQuery}
             placeholder="Search restaurants, bars, etc."
             placeholderTextColor="#9a7f6c"
             style={styles.searchInput}
+            testID="browse-search-input"
             value={searchQuery}
           />
           {searchQuery.length ? (
-            <Pressable hitSlop={8} onPress={onClearSearchQuery} style={styles.searchClearButton}>
+            <Pressable accessibilityLabel="Clear search" hitSlop={8} onPress={onClearSearchQuery} style={styles.searchClearButton} testID="browse-search-clear-button">
               <Text style={styles.searchClearButtonText}>Clear</Text>
             </Pressable>
           ) : null}
@@ -372,7 +374,9 @@ export function BrowseControls({
               <Text style={styles.reloadButtonText}>↻</Text>
             </Pressable>
             <Pressable
+              accessibilityLabel={filtersExpanded ? 'Hide filters' : 'Show filters'}
               onPress={onToggleFilters}
+              testID="browse-filters-toggle"
               style={styles.filtersToggleButtonPressable}
             >
               <Animated.View
