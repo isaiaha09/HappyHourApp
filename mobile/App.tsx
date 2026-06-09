@@ -6,6 +6,7 @@ import * as Location from 'expo-location';
 import {
   ActivityIndicator,
   Animated,
+  AppState,
   Easing,
   FlatList,
   Image,
@@ -542,6 +543,7 @@ function AppScreen() {
   const claimPrefillRequestRef = useRef(0);
   const claimPrefillLoadedKeyRef = useRef('');
   const startupImageLoadCountRef = useRef(0);
+  const appStateRef = useRef(AppState.currentState);
   const shouldUseNativeMapBoundaries = false;
   const normalizedSearchQuery = normalizeSearchText(searchQuery);
   const onboardingTransitionDuration = 480;
@@ -955,6 +957,35 @@ function AppScreen() {
     clearAutoFitMapRegionTimer();
     clearMapMarkersTrackViewChangesTimer();
   }, []);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      const previousAppState = appStateRef.current;
+      appStateRef.current = nextAppState;
+
+      if (nextAppState !== 'active') {
+        clearShowMoreMapResultsTimer();
+        clearAutoFitMapRegionTimer();
+        clearMapMarkersTrackViewChangesTimer();
+        return;
+      }
+
+      if (previousAppState === 'active' || !showMapBrowse) {
+        return;
+      }
+
+      setMapMarkersTrackViewChanges(true);
+      clearMapMarkersTrackViewChangesTimer();
+      mapMarkersTrackViewChangesTimeoutRef.current = setTimeout(() => {
+        setMapMarkersTrackViewChanges(false);
+        mapMarkersTrackViewChangesTimeoutRef.current = null;
+      }, 1200);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [showMapBrowse]);
 
   useEffect(() => {
     if (!bottomMoreSheetVisible || authenticatedSession) {
@@ -4311,17 +4342,17 @@ function AppScreen() {
                     );
                   }}
                   onRegionChangeComplete={(nextRegion, details) => {
+                    const isGesture = !!details?.isGesture;
                     const normalizedRegion = normalizeRegion(nextRegion);
                     const boundedRegion = shouldUseNativeMapBoundaries
                       ? normalizedRegion
                       : clampRegionToBounds(normalizedRegion);
 
-                    if (details.isGesture) {
+                    if (isGesture) {
                       clearAutoFitMapRegionTimer();
                     }
 
-                        
-                    if (details.isGesture) {
+                    if (isGesture) {
                       const shouldSnapToBounds = !shouldUseNativeMapBoundaries && shouldSnapRegionToBounds(normalizedRegion);
                       const nextControlledRegion = shouldSnapToBounds ? boundedRegion : normalizedRegion;
 

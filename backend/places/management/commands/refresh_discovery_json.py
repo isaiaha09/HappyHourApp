@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand, CommandError
 
+from places.services.importers.business_websites import BusinessWebsiteImporter
 from places.services.importers.discovered_json_places import filter_configured_place_records, merge_discovery_json_records, write_discovery_json_records
 from places.services.importers.here_places import HerePlacesImporter
 from places.services.importers.openstreetmap_places import OpenStreetMapPlacesImporter
@@ -15,13 +16,14 @@ IMPORTER_REGISTRY = {
 
 
 class Command(BaseCommand):
-	help = 'Fetch raw discovery businesses from live providers and store them in a JSON file instead of the database.'
+	help = 'Fetch discovery businesses from live providers, enrich them from business websites when possible, and store them in a JSON file instead of the database.'
 
 	def add_arguments(self, parser):
 		parser.add_argument('--source', default='here_places', choices=sorted(IMPORTER_REGISTRY.keys()))
 		parser.add_argument('--city', choices=['ventura', 'oxnard', 'camarillo'])
 		parser.add_argument('--limit', type=int, default=0)
 		parser.add_argument('--replace', action='store_true')
+		parser.add_argument('--skip-enrichment', action='store_true')
 
 	def handle(self, *args, **options):
 		importer_class = IMPORTER_REGISTRY[options['source']]
@@ -40,18 +42,23 @@ class Command(BaseCommand):
 			self.stdout.write(
 				f'Loaded {len(discovery_records)} discovery candidates, and {len(filtered_records)} businesses to store.'
 			)
-			self.stdout.write('Writing raw discovery results without website enrichment.')
+			if options.get('skip_enrichment'):
+				self.stdout.write('Writing raw discovery results without website enrichment.')
+				records_to_store = filtered_records
+			else:
+				self.stdout.write('Enriching discovery results from business websites before writing.')
+				records_to_store = list(BusinessWebsiteImporter().enrich_place_records(filtered_records))
 
 			if options.get('replace'):
-				json_path = write_discovery_json_records(filtered_records)
+				json_path = write_discovery_json_records(records_to_store)
 			else:
-				json_path = merge_discovery_json_records(filtered_records)
-			deal_count = sum(len(record.deals) for record in filtered_records)
-			happy_hour_count = sum(len(deal.happy_hours) for record in filtered_records for deal in record.deals)
+				json_path = merge_discovery_json_records(records_to_store)
+			deal_count = sum(len(record.deals) for record in records_to_store)
+			happy_hour_count = sum(len(deal.happy_hours) for record in records_to_store for deal in record.deals)
 
 			self.stdout.write(
 				self.style.SUCCESS(
-					f'Wrote {len(filtered_records)} discovery places, {deal_count} deals, and {happy_hour_count} happy hour windows to {json_path}.'
+					f'Wrote {len(records_to_store)} discovery places, {deal_count} deals, and {happy_hour_count} happy hour windows to {json_path}.'
 				)
 			)
 		except Exception as exc:

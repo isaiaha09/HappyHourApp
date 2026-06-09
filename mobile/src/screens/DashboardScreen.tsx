@@ -119,6 +119,7 @@ type BusinessProfileDraft = ProfileDashboardUpdateRequest & {
 function buildDashboardDraft(session: SignupResponse): BusinessProfileDraft {
   const businessContact = session.business_contact ?? {};
   const socialInputs = socialProfilesToInputs(businessContact.social_profiles, businessContact.business_website_url ?? '');
+  const operatingHourDraftRows = buildOperatingHourOverridesFromWindows((businessContact.operating_hour_overrides as never[] | undefined) ?? (businessContact.operating_hours ?? []));
 
   return {
     portal: session.portal,
@@ -137,7 +138,7 @@ function buildDashboardDraft(session: SignupResponse): BusinessProfileDraft {
     tiktok_profile: socialInputs.tiktok,
     youtube_profile: socialInputs.youtube,
     deal_overrides: businessContact.deal_overrides ?? buildDealOverridesFromDeals(businessContact.deals ?? []),
-    operating_hour_overrides: businessContact.operating_hour_overrides ?? buildOperatingHourOverridesFromWindows(businessContact.operating_hours ?? []),
+    operating_hour_overrides: operatingHourDraftRows,
     offer_entries_text: joinDraftEntries(businessContact.offer_entries),
     hours_of_operation_entries_text: joinDraftEntries(businessContact.hours_of_operation_entries),
     photo_references_text: joinDraftEntries(businessContact.photo_references),
@@ -870,7 +871,7 @@ export function BusinessProfileEditorScreen({
             <Text style={styles.detailCity}>Edit Business Profile</Text>
             <Text style={styles.detailTitle}>{approvedBusiness?.name ?? session.business_name ?? 'Business Profile'}</Text>
             {approvedBusiness?.address_line_1 ? <Text style={styles.detailMeta}>{approvedBusiness.address_line_1}</Text> : null}
-            <Text style={styles.profileIntroText}>Update the public-facing details for your approved business profile. Address and phone stay synced from the business source listing when that source is available.</Text>
+            <Text style={styles.profileIntroText}>Update the public-facing details for your approved business profile. Your approved business phone and address override pulled source data in the app.</Text>
 
             {message ? (
               <View style={styles.profileSuccessBanner}>
@@ -890,8 +891,8 @@ export function BusinessProfileEditorScreen({
                 <DashboardEditableField label="Contact name" onChangeText={(value) => setProfileDraft((current) => ({ ...current, contact_name: value }))} value={profileDraft.contact_name ?? ''} />
                 <DashboardEditableField label="Job title" onChangeText={(value) => setProfileDraft((current) => ({ ...current, job_title: value }))} value={profileDraft.job_title ?? ''} />
                 <DashboardEditableField label="Work email" onChangeText={(value) => setProfileDraft((current) => ({ ...current, work_email: value }))} value={profileDraft.work_email ?? ''} />
-                <DashboardEditableField label="Work phone" onChangeText={(value) => setProfileDraft((current) => ({ ...current, work_phone: value }))} value={profileDraft.work_phone ?? ''} />
-                <DashboardEditableField label="Employer address" onChangeText={(value) => setProfileDraft((current) => ({ ...current, employer_address: value }))} value={profileDraft.employer_address ?? ''} />
+                <DashboardEditableField label="Public phone" onChangeText={(value) => setProfileDraft((current) => ({ ...current, work_phone: value }))} value={profileDraft.work_phone ?? ''} />
+                <DashboardEditableField label="Public address" onChangeText={(value) => setProfileDraft((current) => ({ ...current, employer_address: value }))} value={profileDraft.employer_address ?? ''} />
                 <DashboardEditableField label="Business website" onChangeText={(value) => setProfileDraft((current) => ({ ...current, business_website_url: value }))} value={profileDraft.business_website_url ?? ''} />
               </View>
               {socialFieldErrors.website ? <Text style={styles.structuredEntryErrorText}>{socialFieldErrors.website}</Text> : null}

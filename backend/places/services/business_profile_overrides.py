@@ -66,13 +66,24 @@ def normalize_operating_hour_overrides(raw_overrides):
     for index, row in enumerate(raw_overrides):
         if not isinstance(row, dict):
             raise ValueError(f'Operating hour override #{index + 1} must be an object.')
-        normalized_rows.append({
+        group_id = str(row.get('group_id') or '').strip()
+        try:
+            group_rank = int(row.get('group_rank')) if row.get('group_rank') not in (None, '') else None
+        except (TypeError, ValueError):
+            raise ValueError(f'Operating hour override #{index + 1} group rank must be a valid integer.')
+
+        normalized_row = {
             'weekday': normalize_weekday_value(row.get('weekday')),
             'open_time': normalize_time_value(row.get('open_time'), f'Operating hour #{index + 1} open time'),
             'close_time': normalize_time_value(row.get('close_time'), f'Operating hour #{index + 1} close time'),
-        })
+        }
+        if group_id:
+            normalized_row['group_id'] = group_id
+        if group_rank is not None:
+            normalized_row['group_rank'] = group_rank
+        normalized_rows.append(normalized_row)
 
-    return sorted(normalized_rows, key=lambda row: (row['weekday'], row['open_time'], row['close_time']))
+    return sorted(normalized_rows, key=lambda row: (row.get('group_rank', 10 ** 6), row['weekday'], row['open_time'], row['close_time']))
 
 
 def normalize_deal_overrides(raw_overrides):
@@ -91,8 +102,11 @@ def normalize_deal_overrides(raw_overrides):
         price_text = str(row.get('price_text') or '').strip()
         terms = str(row.get('terms') or '').strip()
         deal_type = str(row.get('deal_type') or DealType.OTHER).strip().lower()
+        custom_deal_type_label = str(row.get('custom_deal_type_label') or '').strip()
         if deal_type not in DealType.values:
             raise ValueError(f'Deal override #{index + 1} must use a supported deal type.')
+        if deal_type == DealType.OTHER and custom_deal_type_label.lower() == DealType.OTHER.label.lower():
+            custom_deal_type_label = ''
         if not title:
             raise ValueError(f'Deal override #{index + 1} needs a title.')
         happy_hours = []
@@ -115,6 +129,7 @@ def normalize_deal_overrides(raw_overrides):
             'title': title,
             'description': description,
             'deal_type': deal_type,
+            'custom_deal_type_label': custom_deal_type_label,
             'price_text': price_text,
             'terms': terms,
             'happy_hours': sorted(happy_hours, key=lambda window: (window['weekday'], window['start_time'], window['end_time'], window['all_day'])),
@@ -148,6 +163,8 @@ def summarize_deal_overrides(overrides):
             sections.append(deal['description'])
         if deal['terms']:
             sections.append(f"Terms: {deal['terms']}")
+        if deal.get('custom_deal_type_label'):
+            sections.append(f"Type: {deal['custom_deal_type_label']}")
         if deal['happy_hours']:
             sections.append(
                 'Happy hour: ' + ', '.join(
@@ -167,6 +184,8 @@ def build_operating_hour_payloads(overrides, namespace):
             'weekday_label': _label_for_choice(Weekday, row['weekday']),
             'open_time': row['open_time'],
             'close_time': row['close_time'],
+            'group_id': row.get('group_id'),
+            'group_rank': row.get('group_rank'),
         }
         for row in overrides
     ]
@@ -181,7 +200,7 @@ def build_deal_payloads(overrides, namespace):
             'title': deal['title'],
             'description': deal['description'],
             'deal_type': deal['deal_type'],
-            'deal_type_label': _label_for_choice(DealType, deal['deal_type']),
+            'deal_type_label': deal.get('custom_deal_type_label') or _label_for_choice(DealType, deal['deal_type']),
             'price_text': deal['price_text'],
             'terms': deal['terms'],
             'is_active': True,

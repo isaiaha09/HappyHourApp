@@ -19,16 +19,16 @@ const dealTypeOptions = [
   { label: 'Other', value: 'other' },
 ] as const;
 
-function WeekdaySelector({ selectedWeekday, onSelect }: { onSelect: (weekday: number) => void; selectedWeekday: number }) {
+function WeekdaySelector({ selectedWeekdays, onToggle }: { onToggle: (weekday: number) => void; selectedWeekdays: number[] }) {
   return (
     <View style={styles.structuredWeekdayRow}>
       {businessWeekdayOptions.map((option) => (
         <Pressable
           key={option.weekday}
-          onPress={() => onSelect(option.weekday)}
-          style={[styles.structuredWeekdayChip, selectedWeekday === option.weekday ? styles.structuredWeekdayChipActive : null]}
+          onPress={() => onToggle(option.weekday)}
+          style={[styles.structuredWeekdayChip, selectedWeekdays.includes(option.weekday) ? styles.structuredWeekdayChipActive : null]}
         >
-          <Text style={[styles.structuredWeekdayChipText, selectedWeekday === option.weekday ? styles.structuredWeekdayChipTextActive : null]}>{option.label}</Text>
+          <Text style={[styles.structuredWeekdayChipText, selectedWeekdays.includes(option.weekday) ? styles.structuredWeekdayChipTextActive : null]}>{option.label}</Text>
         </Pressable>
       ))}
     </View>
@@ -63,13 +63,31 @@ export function BusinessHoursEditor({ label, onChange, supportText, value }: Bus
     onChange(value.map((row, rowIndex) => rowIndex === index ? nextRow : row));
   }
 
+  function toggleRowWeekday(index: number, weekday: number) {
+    const existingRow = value[index];
+    const existingWeekdays = Array.isArray(existingRow.weekdays) && existingRow.weekdays.length
+      ? existingRow.weekdays
+      : [existingRow.weekday];
+    const nextWeekdays = existingWeekdays.includes(weekday)
+      ? existingWeekdays.filter((entry) => entry !== weekday)
+      : [...existingWeekdays, weekday].sort((left, right) => left - right);
+    updateRow(index, {
+      ...existingRow,
+      weekday: nextWeekdays[0] ?? existingRow.weekday,
+      weekdays: nextWeekdays.length ? nextWeekdays : [weekday],
+    });
+  }
+
   return (
     <View style={styles.structuredEditorSection}>
       <Text style={styles.profileFieldLabel}>{label}</Text>
       <Text style={styles.profileSupportText}>{supportText}</Text>
       {value.map((row, index) => (
         <View key={row.id ?? `${row.weekday}-${index}`} style={styles.structuredEditorCard}>
-          <WeekdaySelector selectedWeekday={row.weekday} onSelect={(weekday) => updateRow(index, { ...row, weekday })} />
+          <WeekdaySelector
+            selectedWeekdays={Array.isArray(row.weekdays) && row.weekdays.length ? row.weekdays : [row.weekday]}
+            onToggle={(weekday) => toggleRowWeekday(index, weekday)}
+          />
           <View style={styles.structuredTimeRow}>
             <TextInput
               onChangeText={(open_time) => updateRow(index, { ...row, open_time })}
@@ -130,6 +148,25 @@ export function BusinessDealsEditor({ label, onChange, supportText, value }: Bus
     );
   }
 
+  function toggleHappyHourWeekday(dealIndex: number, happyHourIndex: number, weekday: number) {
+    const existingWindow = value[dealIndex].happy_hours[happyHourIndex];
+    const existingWeekdays = Array.isArray(existingWindow.weekdays) && existingWindow.weekdays.length
+      ? existingWindow.weekdays
+      : [existingWindow.weekday];
+    const nextWeekdays = existingWeekdays.includes(weekday)
+      ? existingWeekdays.filter((entry) => entry !== weekday)
+      : [...existingWeekdays, weekday].sort((left, right) => left - right);
+    updateHappyHour(
+      dealIndex,
+      happyHourIndex,
+      {
+        ...existingWindow,
+        weekday: nextWeekdays[0] ?? existingWindow.weekday,
+        weekdays: nextWeekdays.length ? nextWeekdays : [weekday],
+      },
+    );
+  }
+
   return (
     <View style={styles.structuredEditorSection}>
       <Text style={styles.profileFieldLabel}>{label}</Text>
@@ -144,7 +181,10 @@ export function BusinessDealsEditor({ label, onChange, supportText, value }: Bus
 
           {deal.happy_hours.map((window, happyHourIndex) => (
             <View key={window.id ?? `happy-hour-${happyHourIndex}`} style={styles.structuredNestedCard}>
-              <WeekdaySelector selectedWeekday={window.weekday} onSelect={(weekday) => updateHappyHour(dealIndex, happyHourIndex, { ...window, weekday })} />
+              <WeekdaySelector
+                selectedWeekdays={Array.isArray(window.weekdays) && window.weekdays.length ? window.weekdays : [window.weekday]}
+                onToggle={(weekday) => toggleHappyHourWeekday(dealIndex, happyHourIndex, weekday)}
+              />
               <Pressable onPress={() => updateHappyHour(dealIndex, happyHourIndex, { ...window, all_day: !window.all_day })} style={[styles.structuredWeekdayChip, window.all_day ? styles.structuredWeekdayChipActive : null]}>
                 <Text style={[styles.structuredWeekdayChipText, window.all_day ? styles.structuredWeekdayChipTextActive : null]}>All day</Text>
               </Pressable>

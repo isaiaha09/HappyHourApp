@@ -13,6 +13,8 @@ export type OperatingHourWindow = {
   weekday_label: string;
   open_time: string;
   close_time: string;
+  group_id?: string | null;
+  group_rank?: number | null;
 };
 
 export type Deal = {
@@ -31,6 +33,7 @@ export type Deal = {
 
 export type BusinessDealHappyHourOverride = {
   id?: string;
+  weekdays?: number[];
   weekday: number;
   start_time: string;
   end_time: string;
@@ -39,6 +42,9 @@ export type BusinessDealHappyHourOverride = {
 
 export type BusinessOperatingHourOverride = {
   id?: string;
+  group_id?: string;
+  group_rank?: number;
+  weekdays?: number[];
   weekday: number;
   open_time: string;
   close_time: string;

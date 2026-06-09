@@ -48,30 +48,6 @@
     "operating_hours": []
   },
   {
-    "name": "Ameci Pizza Kitchen",
-    "city": "camarillo",
-    "venue_type": "restaurant",
-    "address_line_1": "Las Posas Rd",
-    "address_line_2": "",
-    "neighborhood": "",
-    "state": "CA",
-    "postal_code": "93010-3403",
-    "latitude": 34.23531,
-    "longitude": -119.03735,
-    "geocode_query": "Ameci Pizza Kitchen, Camarillo, CA, CA",
-    "phone_number": "+18054823031",
-    "website_url": "https://www.amecicamarillo.com",
-    "image_urls": [],
-    "profile_name": "",
-    "profile_slug": "",
-    "is_active": true,
-    "external_id": "here:here:pds:place:8409q56g-4f89157bced641b1a948bacd19764fd9",
-    "source_name": "here_places",
-    "source_url": "https://www.amecicamarillo.com",
-    "deals": [],
-    "operating_hours": []
-  },
-  {
     "name": "American Pie Co",
     "city": "camarillo",
     "venue_type": "restaurant",
@@ -181,13 +157,59 @@
     "geocode_query": "Baskin-Robbins, Camarillo, CA, CA",
     "phone_number": "+18054829302",
     "website_url": "https://www.baskinrobbins.com/en",
-    "image_urls": [],
+    "image_urls": [
+      "https://www.baskinrobbins.com/etc/designs/br/images/hamburger-menu-bg.png",
+      "https://cdn-menu-us-east-1.tillster.com/br-us-original/289a7111-6d18-4890-8b50-40acb245c3d3.png",
+      "https://cdn-menu-us-east-1.tillster.com/br-us-original/5f087e01-4e21-41aa-b566-a5eaecee43f2.png",
+      "https://cdn-menu-us-east-1.tillster.com/br-us-original/f45c9f7e-1a99-4d6d-9c8a-1b2389be5abc.png",
+      "https://cdn-menu-us-east-1.tillster.com/br-us-original/5d369549-01e7-46ae-9c62-7f0a14a08e7e.png",
+      "https://cdn-menu-us-east-1.tillster.com/br-us-original/28e5f2eb-ee0f-40d6-b758-33d4902e54b3.png"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q56e-92955c6b8c81a070231288e7b05b25f6",
     "source_name": "here_places",
     "source_url": "https://www.baskinrobbins.com/en",
+    "deals": [
+      {
+        "title": "Discount Offer",
+        "deal_type": "discount",
+        "description": "Cool Dads Get Cool Cakes Make Father's Day extra cool with one of our Dad-approved designs, filled with his favorite cake & ice cream flavor. Join Baskin-Robbins Rewards\u00ae & get access to $5 off a Cake $35+. Order Now Join Now Terms and exclusions apply. Valid on Cake purchase $35+ pre-tax. Must be a Baskin-Robbins Rewards\u00ae member to redeem. See BR App for details. Taste Sweet Victory Cue the crowd",
+        "price_text": "$5 off",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "order-baskinrobbins-com-menu-details-beach-day-929900e881b7",
+        "source_name": "business_websites",
+        "source_url": "https://order.baskinrobbins.com/menu-details/beach-day?id=30a537f8-8e98-4aab-a37c-b2639b19706a&sizes=%5B%7B%22size%22:%222.5%20oz%20scoop%22,%22id%22:%2230a537f8-8e98-4aab-a37c-b2639b19706a%22%7D,%7B%22size%22:%224%20oz%20scoop%22,%22id%22:%228ca0afaa-0d1c-4e7f-91bd-4e0fd1cc4e41%22%7D%5D",
+        "happy_hours": []
+      }
+    ],
+    "operating_hours": []
+  },
+  {
+    "name": "Bistro",
+    "city": "camarillo",
+    "venue_type": "restaurant",
+    "address_line_1": "Verdugo Way",
+    "address_line_2": "",
+    "neighborhood": "",
+    "state": "CA",
+    "postal_code": "93012",
+    "latitude": 34.21494,
+    "longitude": -119.00516,
+    "geocode_query": "Bistro, Camarillo, CA, CA",
+    "phone_number": "+18053833388",
+    "website_url": "",
+    "image_urls": [],
+    "profile_name": "",
+    "profile_slug": "",
+    "is_active": true,
+    "external_id": "here:here:pds:place:8409q56e-e34fecc0cdd94ded85bc55a8d80d84aa",
+    "source_name": "here_places",
+    "source_url": "",
     "deals": [],
     "operating_hours": []
   },
@@ -223,7 +245,7 @@
     "address_line_2": "",
     "neighborhood": "",
     "state": "CA",
-    "postal_code": "93010-6041",
+    "postal_code": "93010",
     "latitude": 34.21944,
     "longitude": -119.05156,
     "geocode_query": "Braxton's Kitchen, Camarillo, CA, CA",
@@ -264,9 +286,33 @@
     "operating_hours": []
   },
   {
+    "name": "Breakfast Cafe",
+    "city": "camarillo",
+    "venue_type": "cafe",
+    "address_line_1": "Carmen Dr",
+    "address_line_2": "",
+    "neighborhood": "",
+    "state": "CA",
+    "postal_code": "93010",
+    "latitude": 34.21944,
+    "longitude": -119.05156,
+    "geocode_query": "Breakfast Cafe, Camarillo, CA, CA",
+    "phone_number": "+18053848089",
+    "website_url": "http://breakfastclubcafe.com",
+    "image_urls": [],
+    "profile_name": "",
+    "profile_slug": "",
+    "is_active": true,
+    "external_id": "here:here:pds:place:8409q56d-25ea42257fd1402e9ba2df89c89f3243",
+    "source_name": "here_places",
+    "source_url": "http://breakfastclubcafe.com",
+    "deals": [],
+    "operating_hours": []
+  },
+  {
     "name": "Cafe Ficelle",
     "city": "camarillo",
-    "venue_type": "fast_food",
+    "venue_type": "restaurant",
     "address_line_1": "Ventura Blvd",
     "address_line_2": "",
     "neighborhood": "",
@@ -360,30 +406,6 @@
     "operating_hours": []
   },
   {
-    "name": "Chili Peppers Mexican Restaurant & Seafood",
-    "city": "camarillo",
-    "venue_type": "restaurant",
-    "address_line_1": "Las Posas Rd",
-    "address_line_2": "",
-    "neighborhood": "",
-    "state": "CA",
-    "postal_code": "93010-2524",
-    "latitude": 34.24209,
-    "longitude": -119.01148,
-    "geocode_query": "Chili Peppers Mexican Restaurant & Seafood, Camarillo, CA, CA",
-    "phone_number": "+18053894793",
-    "website_url": "http://www.chilipepperscamarillo.com",
-    "image_urls": [],
-    "profile_name": "",
-    "profile_slug": "",
-    "is_active": true,
-    "external_id": "here:here:pds:place:840aabd1-140535edea23037f620906d2c3a2a701",
-    "source_name": "here_places",
-    "source_url": "http://www.chilipepperscamarillo.com",
-    "deals": [],
-    "operating_hours": []
-  },
-  {
     "name": "Chipotle",
     "city": "camarillo",
     "venue_type": "fast_food",
@@ -397,18 +419,54 @@
     "geocode_query": "Chipotle, Camarillo, CA, CA",
     "phone_number": "+18057387931",
     "website_url": "https://www.chipotle.com",
-    "image_urls": [],
+    "image_urls": [
+      "https://www.chipotle.com/content/dam/chipotle/pages/farm-to-foil/lifestyle-burrito-with-guac.jpg",
+      "https://www.chipotle.com/content/dam/chipotle/menu-item-campaigns/honey-chicken/us/2026/homepage/D-LTO_CHC-optimized.mp4",
+      "https://www.chipotle.com/content/dam/chipotle/menu-item-campaigns/honey-chicken/us/2026/homepage/M-LTO_CHC-optimized.mp4",
+      "https://www.chipotle.com/content/dam/chipotle/menu-item-campaigns/honey-chicken/us/2026/homepage/CHC-Secondary-Tout-Desktop-Optimized.mp4",
+      "https://www.chipotle.com/content/dam/chipotle/menu-item-campaigns/honey-chicken/us/2026/homepage/CHC-Secondary-Tout-Mobile-Optimized.mp4",
+      "https://www.chipotle.com/content/dam/chipotle/menu-item-campaigns/high-protein/2026/secondary-touts/D-HighProtein%20CHC%20Secondary%20Tout@2x.jpg"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q56e-e694efb2a67a44259803633da834c91e",
     "source_name": "here_places",
     "source_url": "https://www.chipotle.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "honey is back to kick off summer.",
+        "deal_type": "discount",
+        "description": "honey is back to kick off summer.",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-chipotle-com-58ae7977c0b3",
+        "source_name": "business_websites",
+        "source_url": "https://www.chipotle.com",
+        "happy_hours": []
+      },
+      {
+        "title": "Discount Offer",
+        "deal_type": "discount",
+        "description": "Fresh off the grill and packed with real protein, the High Protein Menu is the easiest way to keep your summer glow going. From the High Protein Cup to the Double High Protein Bowl, it\u2019s real protein you want to eat.",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-chipotle-com-b1f88fb5a944",
+        "source_name": "business_websites",
+        "source_url": "https://www.chipotle.com",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
-    "name": "Cronie's Sports Grill",
+    "name": "Cronies Sports Grill",
     "city": "camarillo",
     "venue_type": "restaurant",
     "address_line_1": "N Lantana St",
@@ -418,17 +476,70 @@
     "postal_code": "93010-6037",
     "latitude": 34.21961,
     "longitude": -119.05442,
-    "geocode_query": "Cronie's Sports Grill, Camarillo, CA, CA",
+    "geocode_query": "Cronies Sports Grill, Camarillo, CA, CA",
     "phone_number": "+18054825900",
     "website_url": "http://www.cronies.com",
-    "image_urls": [],
+    "image_urls": [
+      "https://static.wixstatic.com/media/224203_f2f550ccc6f84dc1845898915281fa3a%7Emv2.jpg/v1/fit/w_2500,h_1330,al_c/224203_f2f550ccc6f84dc1845898915281fa3a%7Emv2.jpg",
+      "https://static.wixstatic.com/media/224203_1ced8b51743a4f878c1e81eec7eead76~mv2.jpg/v1/fill/w_147,h_98,al_c,q_80,usm_0.66_1.00_0.01,blur_2,enc_avif,quality_auto/224203_1ced8b51743a4f878c1e81eec7eead76~mv2.jpg",
+      "https://static.wixstatic.com/media/224203_12dd5929fb064f2f923490234787e99d~mv2.jpg/v1/fill/w_1820,h_673,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/Thirsty%20Sauce_edited_edited.jpg",
+      "https://static.wixstatic.com/media/224203_12dd5929fb064f2f923490234787e99d~mv2.jpg/v1/fill/w_1820",
+      "http://www.cronies.com/h_673",
+      "http://www.cronies.com/al_c"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q56d-ac51d34b7c5845ed84959dbd82b2fea0",
     "source_name": "here_places",
     "source_url": "http://www.cronies.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "HAPPY HOUR Weekdays 3pm-6pm VIEW MENU",
+        "deal_type": "happy_hour",
+        "description": "HAPPY HOUR Weekdays 3pm-6pm VIEW MENU",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-cronies-com-e4ebba2bfa55",
+        "source_name": "business_websites",
+        "source_url": "http://www.cronies.com",
+        "happy_hours": [
+          {
+            "weekday": 0,
+            "start_time": "15:00",
+            "end_time": "18:00",
+            "all_day": false
+          },
+          {
+            "weekday": 1,
+            "start_time": "15:00",
+            "end_time": "18:00",
+            "all_day": false
+          },
+          {
+            "weekday": 2,
+            "start_time": "15:00",
+            "end_time": "18:00",
+            "all_day": false
+          },
+          {
+            "weekday": 3,
+            "start_time": "15:00",
+            "end_time": "18:00",
+            "all_day": false
+          },
+          {
+            "weekday": 4,
+            "start_time": "15:00",
+            "end_time": "18:00",
+            "all_day": false
+          }
+        ]
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -535,7 +646,7 @@
     "address_line_2": "",
     "neighborhood": "",
     "state": "CA",
-    "postal_code": "93010-6653",
+    "postal_code": "93012",
     "latitude": 34.21616,
     "longitude": -119.03919,
     "geocode_query": "El Rey Cantina, Camarillo, CA, CA",
@@ -570,6 +681,30 @@
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q56e-1c04c7baaeeb4ebb184d856631f38129",
+    "source_name": "here_places",
+    "source_url": "",
+    "deals": [],
+    "operating_hours": []
+  },
+  {
+    "name": "El Tecolote Restaurant",
+    "city": "camarillo",
+    "venue_type": "restaurant",
+    "address_line_1": "Lewis Rd",
+    "address_line_2": "",
+    "neighborhood": "",
+    "state": "CA",
+    "postal_code": "93012",
+    "latitude": 34.21984,
+    "longitude": -119.03139,
+    "geocode_query": "El Tecolote Restaurant, Camarillo, CA, CA",
+    "phone_number": "+18054824318",
+    "website_url": "",
+    "image_urls": [],
+    "profile_name": "",
+    "profile_slug": "",
+    "is_active": true,
+    "external_id": "here:here:pds:place:8409q56e-0afd8006e02c470f8b97096474225580",
     "source_name": "here_places",
     "source_url": "",
     "deals": [],
@@ -805,14 +940,120 @@
     "geocode_query": "IHOP, Camarillo, CA, CA",
     "phone_number": "",
     "website_url": "https://www.ihop.com",
-    "image_urls": [],
+    "image_urls": [
+      "https://www.ihop.com/-/media/ihop/marketing/pages/specials/value-menu/hero/value-landing-page---hero-test-v1_compressed.jpg",
+      "https://www.ihop.com/-/media/ihop/marketing/pages/home/modules---primary/homepoage-tile---blt.jpg",
+      "https://www.ihop.com/-/media/ihop/marketing/pages/specials/omelettes-landing-page/hero/specials-page--hero--stacked-n-stuffed--bbq-pulled-pork.jpg",
+      "https://www.ihop.com/-/media/ihop/marketing/pages/home/menu-highlights/menu-highlights-1-754--dulce.jpg",
+      "https://www.ihop.com/-/media/ihop/marketing/pages/home/menu-highlights/menu-highlights-2-754--burrito.jpg",
+      "https://www.ihop.com/-/media/ihop/marketing/pages/home/menu-highlights/menu-highlights-3-754---country-fried-steak.jpg"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q56d-202a0180c3af4e569968627084b04da4",
     "source_name": "here_places",
     "source_url": "https://www.ihop.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Discount Offer",
+        "deal_type": "discount",
+        "description": "20% OFF YOUR FIRST ONLINE ORDER WITH CODE IHOP20 ** IHOP CATERS TO ALL OF YOUR CRAVINGS GIFTS FOR THE ONE YOU LOVE EARN FREE FOOD***",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-ihop-com-happyhour-6344e662f21c",
+        "source_name": "business_websites",
+        "source_url": "https://www.ihop.com/happyhour",
+        "happy_hours": []
+      },
+      {
+        "title": "Daily Special",
+        "deal_type": "daily_special",
+        "description": "EARN REWARDS Join now to receive a free stack of 5 pancakes after your first purchase. *** Free Birthday Pancakes Exclusive Offers Rewards That Stack Up Join now BOLD BBQ PULLED PORK OMELETTE Our newest Stuffed 'N Stacked \u2122 Omelette. Hickory-smoked pulled pork paired with a sweet & tangy BBQ sauce, green peppers, onion & Jack & cheddar cheeses. Learn More VALUE MENU BLT Hickory-smoked bacon, fresh",
+        "price_text": "$7",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-ihop-com-happyhour-92cd66857d2c",
+        "source_name": "business_websites",
+        "source_url": "https://www.ihop.com/happyhour",
+        "happy_hours": []
+      },
+      {
+        "title": "Five Delicious Deals",
+        "deal_type": "daily_special",
+        "description": "Five Delicious Deals. Every Day. BLT Enjoy hickory-smoked bacon, fresh lettuce, tomato, and mayo on toasted white bread. Served with a choice of French fries or hash browns. Order Now BREAKFAST FAVES COMBO From sunrise to sunset, this combo hits the spot. 2 of our fluffy, world-famous buttermilk pancakes, 2 eggs, and 2 bacon strips or 2 pork sausage links. Order Now FRENCH TOAST FAVES COMBO Cravin",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-ihop-com-happyhour-e061a1a1b9d2",
+        "source_name": "business_websites",
+        "source_url": "https://www.ihop.com/happyhour",
+        "happy_hours": []
+      },
+      {
+        "title": "BREAKFAST FAVES COMBO From sunrise to sunset, this combo hits the spot",
+        "deal_type": "daily_special",
+        "description": "BREAKFAST FAVES COMBO From sunrise to sunset, this combo hits the spot. 2 of our fluffy, world-famous buttermilk pancakes, 2 eggs, and 2 bacon strips or 2 pork sausage links. Order Now",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-ihop-com-happyhour-d2eb44e5b2f3",
+        "source_name": "business_websites",
+        "source_url": "https://www.ihop.com/happyhour",
+        "happy_hours": []
+      },
+      {
+        "title": "FRENCH TOAST FAVES COMBO Craving something sweet and savory",
+        "deal_type": "daily_special",
+        "description": "FRENCH TOAST FAVES COMBO Craving something sweet and savory? Enjoy 1 slice of Classic Thick \u2018N Fluffy French Toast, 2 bacon strips or 2 pork sausage links, and 2 eggs. Order Now",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-ihop-com-happyhour-30421e140903",
+        "source_name": "business_websites",
+        "source_url": "https://www.ihop.com/happyhour",
+        "happy_hours": []
+      },
+      {
+        "title": "Discount Offer",
+        "deal_type": "discount",
+        "description": "IHOP SPECIALS BOLD BBQ PULLED PORK OMELETTE Our newest Stuffed 'N Stacked \u2122 Omelette. Hickory-smoked pulled pork paired with a sweet & tangy BBQ sauce, green peppers, onion & Jack & cheddar cheeses. Try Now VALUE MENU BLT Hickory-smoked bacon, fresh lettuce, tomato, and mayo on toasted white bread. Served with a choice of French fries or hash browns. Order Now SPECIAL OFFER ON GIFT CARDS For a lim",
+        "price_text": "$5",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-ihop-com-happyhour-b4d91b9bb713",
+        "source_name": "business_websites",
+        "source_url": "https://www.ihop.com/happyhour",
+        "happy_hours": []
+      },
+      {
+        "title": "Discount Offer",
+        "deal_type": "discount",
+        "description": "SPECIAL OFFER ON GIFT CARDS For a limited time, get a $5 Bonus Card with every $25 Gift Card purchase. * Buy Now",
+        "price_text": "$5",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-ihop-com-happyhour-5a16f70978d1",
+        "source_name": "business_websites",
+        "source_url": "https://www.ihop.com/happyhour",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -853,14 +1094,87 @@
     "geocode_query": "Institution Ale Co., Camarillo, CA, CA",
     "phone_number": "+18054823777",
     "website_url": "http://www.institutionales.com",
-    "image_urls": [],
+    "image_urls": [
+      "https://images.squarespace-cdn.com/content/v1/55949007e4b02d4647ccc29f/1780714527255-UKD0GK0AN2YZ12CXN7PO/image-asset.jpeg",
+      "https://images.squarespace-cdn.com/content/v1/55949007e4b02d4647ccc29f/1780532968124-9UULUGL7KCCHW9ON8LUD/image-asset.jpeg",
+      "https://images.squarespace-cdn.com/content/v1/55949007e4b02d4647ccc29f/1780087801311-T3AWYE55IXBIQPH1M269/image-asset.jpeg",
+      "https://images.squarespace-cdn.com/content/v1/55949007e4b02d4647ccc29f/1780880783988-N74A0R4XYWZEN9RI6HU2/image-asset.jpeg",
+      "https://images.squarespace-cdn.com/content/v1/55949007e4b02d4647ccc29f/1780619561584-7Q8K71OYQCEM9DBSZTKG/image-asset.jpeg",
+      "https://images.squarespace-cdn.com/content/v1/55949007e4b02d4647ccc29f/1780349798480-APJ5PVOO4D9HDPZISGJU/image-asset.jpeg"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:840aabd1-40c08e29cf2c0442c62543fea0b25cbb",
     "source_name": "here_places",
     "source_url": "http://www.institutionales.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "CAMARILLO & SANTA BARBARA) ORDER KEGS VIEW HOURS/LOCATIONS EVENT CALENDARS HAPPY HOUR FAQS",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-institutionales-com-happy-hour-0beff63c2b90",
+        "source_name": "business_websites",
+        "source_url": "http://www.institutionales.com/happy-hour",
+        "happy_hours": []
+      },
+      {
+        "title": "HAPPY HOUR CAMARILLO LOCATION NEW",
+        "deal_type": "happy_hour",
+        "description": "HAPPY HOUR CAMARILLO LOCATION NEW ! LATE NIGHT HAPPY HOUR (through May) MONDAY - THURSDAY 9:00PM - CLOSE WEDNESDAYS 4:00PM - CLOSE SUNDAYS 8:00PM - CLOSE $1.50 off Pints $2.00 off Glasses of wine $2.00 off IAC",
+        "price_text": "$1.50 off",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-institutionales-com-happy-hour-1f1b26398daa",
+        "source_name": "business_websites",
+        "source_url": "http://www.institutionales.com/happy-hour",
+        "happy_hours": [
+          {
+            "weekday": 0,
+            "start_time": "21:00",
+            "end_time": "23:59",
+            "all_day": false
+          },
+          {
+            "weekday": 1,
+            "start_time": "21:00",
+            "end_time": "23:59",
+            "all_day": false
+          },
+          {
+            "weekday": 2,
+            "start_time": "21:00",
+            "end_time": "23:59",
+            "all_day": false
+          },
+          {
+            "weekday": 3,
+            "start_time": "21:00",
+            "end_time": "23:59",
+            "all_day": false
+          },
+          {
+            "weekday": 2,
+            "start_time": "16:00",
+            "end_time": "23:59",
+            "all_day": false
+          },
+          {
+            "weekday": 6,
+            "start_time": "20:00",
+            "end_time": "23:59",
+            "all_day": false
+          }
+        ]
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -919,7 +1233,7 @@
     "address_line_2": "",
     "neighborhood": "",
     "state": "CA",
-    "postal_code": "93010",
+    "postal_code": "93010-2524",
     "latitude": 34.24209,
     "longitude": -119.01148,
     "geocode_query": "Kim's Donut, Camarillo, CA, CA",
@@ -1008,30 +1322,6 @@
     "operating_hours": []
   },
   {
-    "name": "Lombardo's Deli",
-    "city": "camarillo",
-    "venue_type": "fast_food",
-    "address_line_1": "Mobil Ave",
-    "address_line_2": "",
-    "neighborhood": "",
-    "state": "CA",
-    "postal_code": "93010-6315",
-    "latitude": 34.22315,
-    "longitude": -119.04329,
-    "geocode_query": "Lombardo's Deli, Camarillo, CA, CA",
-    "phone_number": "+18054827318",
-    "website_url": "https://www.facebook.com/606183193396771",
-    "image_urls": [],
-    "profile_name": "",
-    "profile_slug": "",
-    "is_active": true,
-    "external_id": "here:here:pds:place:8409q56e-a66b2045decb480cb93b78455862f1cb",
-    "source_name": "here_places",
-    "source_url": "https://www.facebook.com/606183193396771",
-    "deals": [],
-    "operating_hours": []
-  },
-  {
     "name": "Look!Poke",
     "city": "camarillo",
     "venue_type": "restaurant",
@@ -1104,30 +1394,6 @@
     "operating_hours": []
   },
   {
-    "name": "Makenna Koffee",
-    "city": "camarillo",
-    "venue_type": "cafe",
-    "address_line_1": "Ventura Blvd",
-    "address_line_2": "",
-    "neighborhood": "",
-    "state": "CA",
-    "postal_code": "93010-5808",
-    "latitude": 34.21712,
-    "longitude": -119.0657,
-    "geocode_query": "Makenna Koffee, Camarillo, CA, CA",
-    "phone_number": "+18052980111",
-    "website_url": "",
-    "image_urls": [],
-    "profile_name": "",
-    "profile_slug": "",
-    "is_active": true,
-    "external_id": "here:here:pds:place:8409q56d-fdff738f0b65ef3db55f47cd875ccdd0",
-    "source_name": "here_places",
-    "source_url": "",
-    "deals": [],
-    "operating_hours": []
-  },
-  {
     "name": "Marie Callender's",
     "city": "camarillo",
     "venue_type": "cafe",
@@ -1136,8 +1402,8 @@
     "neighborhood": "",
     "state": "CA",
     "postal_code": "93010-5809",
-    "latitude": 34.22025,
-    "longitude": -119.06814,
+    "latitude": 34.22034,
+    "longitude": -119.06826,
     "geocode_query": "Marie Callender's, Camarillo, CA, CA",
     "phone_number": "+18059875580",
     "website_url": "http://www.mariecallenders.com",
@@ -1237,14 +1503,36 @@
     "geocode_query": "Mister Softee, Camarillo, CA, CA",
     "phone_number": "+18053840750",
     "website_url": "http://www.mistersofteesocal.com",
-    "image_urls": [],
+    "image_urls": [
+      "http://www.mistersofteesocal.com/wp-content/uploads/2025/11/Mr.-Softee-Carts@Oxnard-Park-10-22-25-3-scaled.jpg",
+      "https://www.mistersofteesocal.com/wp-content/themes/lbwd_html5blank/img/responsive.png",
+      "http://www.mistersofteesocal.com/wp-content/plugins/revslider/sr6/assets/assets/dummy.png",
+      "http://www.mistersofteesocal.com/wp-content/themes/lbwd_html5blank/img/icecream-white.png",
+      "http://www.mistersofteesocal.com/wp-content/themes/lbwd_html5blank/img/featured-more.png",
+      "http://www.mistersofteesocal.com/wp-content/themes/lbwd_html5blank/img/icecream-choc.png"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:840d408k-6097cc6d6d0a08e57c0a6ff439ef0bbc",
     "source_name": "here_places",
     "source_url": "http://www.mistersofteesocal.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Camarillo and East Ventura",
+        "deal_type": "discount",
+        "description": "Camarillo and East Ventura. Our trucks and stores feature a full lineup of classic soft serve treats, including cones, sundaes, shakes, floats, and banana boats. Our retail locations offer expanded menu items such as Non-Dairy Dole Soft Serve, Italian Ice, Fresh Baked Goods, and select hard scoop flavors including Coconut Bliss. (Note: Our \u201csister store\u201d in Santa Barbara was successfully launched",
+        "price_text": "$500",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-mistersofteesocal-com-f0f2ceb021dc",
+        "source_name": "business_websites",
+        "source_url": "http://www.mistersofteesocal.com",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -1280,8 +1568,8 @@
     "neighborhood": "",
     "state": "CA",
     "postal_code": "93012",
-    "latitude": 34.22431,
-    "longitude": -119.03854,
+    "latitude": 34.2252,
+    "longitude": -119.03864,
     "geocode_query": "Nekter Juice Bar, Camarillo, CA, CA",
     "phone_number": "+18052163170",
     "website_url": "",
@@ -1381,14 +1669,36 @@
     "geocode_query": "Old Town Cafe, Camarillo, CA, CA",
     "phone_number": "+18054845500",
     "website_url": "http://www.myoldtowncafe.com",
-    "image_urls": [],
+    "image_urls": [
+      "https://static.wixstatic.com/media/c08449_d620a52f0af848f6abd63685d6c519e6~mv2.jpg/v1/fill/w_221,h_239,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/Brunch%20Burger%202016.jpg",
+      "https://static.wixstatic.com/media/c08449_d620a52f0af848f6abd63685d6c519e6~mv2.jpg/v1/fill/w_221",
+      "http://www.myoldtowncafe.com/h_239",
+      "http://www.myoldtowncafe.com/al_c",
+      "http://www.myoldtowncafe.com/q_80",
+      "http://www.myoldtowncafe.com/usm_0.66_1.00_0.01"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q56e-494c4992d7414a1d8bc8745db84b7d60",
     "source_name": "here_places",
     "source_url": "http://www.myoldtowncafe.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Camarillo Located in the heart of Old Town Camarillo",
+        "deal_type": "limited_time",
+        "description": "Camarillo Located in the heart of Old Town Camarillo! Come stop by and enjoy delicious breakfast and lunch! Order Now >> Established in 2011, our quaint Old Town Cafe has become a favorite Breakfast & Lunch spot on the Boulevard! We are a small family owned cafe nestled in the heart of Camarillo's Old Town next to the Bella Capri Inn & Suites. We know there are other places to eat in the area, but",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-myoldtowncafe-com-7e874b40053d",
+        "source_name": "business_websites",
+        "source_url": "http://www.myoldtowncafe.com",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -1525,14 +1835,36 @@
     "geocode_query": "Pardon My Cheesesteak, Camarillo, CA, CA",
     "phone_number": "+18884440934",
     "website_url": "http://pardonmycheesesteak.com",
-    "image_urls": [],
+    "image_urls": [
+      "https://pardonmycheesesteak.com/wp-content/uploads/2026/01/the-big-one.webp",
+      "https://pardonmycheesesteak.com/wp-content/uploads/2026/04/Chop-cheese-3-PMC-1024x683.webp",
+      "https://pardonmycheesesteak.com/wp-content/uploads/2026/01/786b41c3dc76431da364f07eb91ef2bf-1024x683.webp",
+      "https://pardonmycheesesteak.com/wp-content/uploads/2026/01/loaded-cheesesteak-fries-1024x683.webp",
+      "https://pardonmycheesesteak.com/wp-content/uploads/2026/01/Philly-CS13945Cheesesteak-scaled.webp",
+      "https://pardonmycheesesteak.com/wp-content/uploads/2026/01/Philly-CS13945Cheesesteak-300x200.webp"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q56e-95786d8d9a7fcdc6df22efb3254db117",
     "source_name": "here_places",
     "source_url": "http://pardonmycheesesteak.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Chopped Cheese Combo",
+        "deal_type": "daily_special",
+        "description": "Chopped Cheese Combo",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "pardonmycheesesteak-com-3a44b290bbed",
+        "source_name": "business_websites",
+        "source_url": "http://pardonmycheesesteak.com",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -1610,7 +1942,7 @@
   {
     "name": "Quality Foods of Camarillo",
     "city": "camarillo",
-    "venue_type": "restaurant",
+    "venue_type": "fast_food",
     "address_line_1": "Arneill Rd",
     "address_line_2": "",
     "neighborhood": "",
@@ -1752,30 +2084,6 @@
     "operating_hours": []
   },
   {
-    "name": "STARBUCKS",
-    "city": "camarillo",
-    "venue_type": "cafe",
-    "address_line_1": "Las Posas Rd",
-    "address_line_2": "",
-    "neighborhood": "",
-    "state": "CA",
-    "postal_code": "93010-3403",
-    "latitude": 34.23641,
-    "longitude": -119.03843,
-    "geocode_query": "STARBUCKS, Camarillo, CA, CA",
-    "phone_number": "+18053840353",
-    "website_url": "",
-    "image_urls": [],
-    "profile_name": "",
-    "profile_slug": "",
-    "is_active": true,
-    "external_id": "here:here:pds:place:8409q56g-38b0304f2fc649aba0a19ce48224431f",
-    "source_name": "here_places",
-    "source_url": "",
-    "deals": [],
-    "operating_hours": []
-  },
-  {
     "name": "SUBWAY",
     "city": "camarillo",
     "venue_type": "fast_food",
@@ -1844,6 +2152,30 @@
     "external_id": "here:here:pds:place:8409q56d-8a5fa0d32c5a4644acb2f8e70db1c283",
     "source_name": "here_places",
     "source_url": "http://www.sheilaswinebar.com",
+    "deals": [],
+    "operating_hours": []
+  },
+  {
+    "name": "Shoobys",
+    "city": "camarillo",
+    "venue_type": "restaurant",
+    "address_line_1": "Ventura Blvd",
+    "address_line_2": "",
+    "neighborhood": "",
+    "state": "CA",
+    "postal_code": "93010-7937",
+    "latitude": 34.21668,
+    "longitude": -119.04356,
+    "geocode_query": "Shoobys, Camarillo, CA, CA",
+    "phone_number": "",
+    "website_url": "",
+    "image_urls": [],
+    "profile_name": "",
+    "profile_slug": "",
+    "is_active": true,
+    "external_id": "here:here:pds:place:8409q56e-a5602041caa3f2a7e21cdc110347fdc6",
+    "source_name": "here_places",
+    "source_url": "",
     "deals": [],
     "operating_hours": []
   },
@@ -1981,14 +2313,36 @@
     "geocode_query": "Sushi Planet, Camarillo, CA, CA",
     "phone_number": "+18053837666",
     "website_url": "http://www.sushiplanet.net",
-    "image_urls": [],
+    "image_urls": [
+      "https://sushiplanet.net/storage/restaurant/items/sc10gN3FwZLA5mibQVBj0zvYBbii6VGQBI9Ut9Zi.png",
+      "https://sushiplanet.net/storage/restaurant/items/k8L4p7KUWNQagqI6eMRGDCa83Z4TMUwHOOSuFt1i.png",
+      "https://sushiplanet.net/storage/restaurant/items/JOuTLFLMcL3xaVXnpmKeIP6H5GGukjo3Ks0OSHKX.png",
+      "https://sushiplanet.net/storage/restaurant/items/dCHHhFoorbu8U1fX4pK7V56vh19ahdKY7tAabLtY.png",
+      "https://sushiplanet.net/storage/restaurant/items/PRDC24JTrVmwYw6RRRfwgd3YtBwCCkDERWxm70AM.png",
+      "https://sushiplanet.net/storage/restaurant/items/d3VbKnBmoNUDoQa7HIamVAOZeHntMtRcqZwh2Qh8.png"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q56e-cccdb7d5042c498fb6ae6b60d09c8c85",
     "source_name": "here_places",
     "source_url": "http://www.sushiplanet.net",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Daily Specials Limited-time offerings from our kitchen Chef's Pick Omakase Platter Let the chef surprise you with 15 pieces of today's finest \u20ac45.00 Order Now 20% Off Happy Hour Rolls All maki rolls 20% off, 4-6pm daily View Offer New Sake Pairing 3-course sushi with paired premium sake \u20ac35.00 Order Now",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "sushiplanet-net-restaurant-menu-5c347e53e27b",
+        "source_name": "business_websites",
+        "source_url": "https://sushiplanet.net/restaurant/menu",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -2005,14 +2359,46 @@
     "geocode_query": "Take Five Cocktails, Camarillo, CA, CA",
     "phone_number": "+18053832518",
     "website_url": "https://take-five-cocktails.edan.io",
-    "image_urls": [],
+    "image_urls": [
+      "https://streetviewpixels-pa.googleapis.com/v1/thumbnail?panoid=si0wJJOtnoobOpOxP9H_RQ",
+      "https://mc.yandex.ru/watch/68644717"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q56e-c049f2daab4b492eb11e39f163ed234d",
     "source_name": "here_places",
     "source_url": "https://take-five-cocktails.edan.io",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Happy Hour 14175 Mono Way, Sonora, CA 95370, United States +1 209-533-0223 Manage Listing",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "take-five-cocktails-edan-io-deals-857cf9160876",
+        "source_name": "business_websites",
+        "source_url": "https://take-five-cocktails.edan.io/deals",
+        "happy_hours": []
+      },
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Maps Call Pricing Happy Hour 14175 Mono Way, Sonora, CA 95370, United States +1 209-533-0223 Latest Feedback \"Great people, great place to get your hair or nails done.\" \"I payed money to have my hair ruined.\" \"If you want a professional hair colorist Celeste is the one to choose .\" Today Opening Hours Monday 9\u00e2\u0080\u00afam\u00e2\u0080\u00935\u00e2\u0080\u00afpm Tuesday 9\u00e2\u0080\u00afam\u00e2\u0080\u00935\u00e2\u0080\u00afpm Wednesday 9\u00e2\u0080\u00afam\u00e2\u0080\u00935\u00e2\u0080\u00afpm Thursday 9\u00e2\u0080\u00afam\u00e2\u0080\u00935\u00e2\u0080\u00afpm",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "take-five-cocktails-edan-io-deals-0de5e6d8a095",
+        "source_name": "business_websites",
+        "source_url": "https://take-five-cocktails.edan.io/deals",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -2197,38 +2583,35 @@
     "geocode_query": "Topa Topa Brewing Company, Camarillo, CA, CA",
     "phone_number": "+18057024091",
     "website_url": "http://topatopa.beer/pages/camarillo",
-    "image_urls": [],
+    "image_urls": [
+      "http://topatopa.beer/cdn/shop/files/TT_website_red_1000x1000.png?v=1613526755",
+      "http://topatopa.beer/cdn/shop/files/TT_website_red_150x.png?v=1613526755",
+      "http://topatopa.beer/cdn/shop/files/TT_website_red_{width}.png?v=1613526755",
+      "https://pagestudio.s3.theshoppad.net/topa-topa-brewing-company/f954e965ed114de50403c521ae4aee35.jpg",
+      "https://pagestudio.s3.theshoppad.net/topa-topa-brewing-company/0bf97f25d05e0d03e32cf0422dd60383.jpg"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q56e-ac584eb96039c592a732992ed3039279",
     "source_name": "here_places",
     "source_url": "http://topatopa.beer/pages/camarillo",
-    "deals": [],
-    "operating_hours": []
-  },
-  {
-    "name": "Totally Sauced Catering",
-    "city": "camarillo",
-    "venue_type": "restaurant",
-    "address_line_1": "Dawson Dr",
-    "address_line_2": "",
-    "neighborhood": "",
-    "state": "CA",
-    "postal_code": "93012",
-    "latitude": 34.21494,
-    "longitude": -119.03445,
-    "geocode_query": "Totally Sauced Catering, Camarillo, CA, CA",
-    "phone_number": "",
-    "website_url": "",
-    "image_urls": [],
-    "profile_name": "",
-    "profile_slug": "",
-    "is_active": true,
-    "external_id": "here:here:pds:place:8409q56e-7e9448202904666ddb099c435a4a2ea6",
-    "source_name": "here_places",
-    "source_url": "",
-    "deals": [],
+    "deals": [
+      {
+        "title": "$5 Pint Special // Bartender's Choice",
+        "deal_type": "discount",
+        "description": "$5 Pint Special // Bartender's Choice",
+        "price_text": "$5",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "topatopa-beer-pages-camarillo-10d347a21d55",
+        "source_name": "business_websites",
+        "source_url": "http://topatopa.beer/pages/camarillo",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -2293,14 +2676,50 @@
     "geocode_query": "Valentino's Take-N-Bake Pizza, Camarillo, CA, CA",
     "phone_number": "+18054827777",
     "website_url": "http://www.valentinosgourmet.com",
-    "image_urls": [],
+    "image_urls": [
+      "http://www.valentinosgourmet.com/images/visualPics/BaconSpinachCombo500x200px.jpg",
+      "http://www.valentinosgourmet.com/images/menuImg/Pizza/HousePizzaMenuImg400x267px.jpg",
+      "http://www.valentinosgourmet.com/images/menuImg/Pizza/MediterraneanPizza400x267px.jpg",
+      "http://www.valentinosgourmet.com/images/menuImg/Pizza/BBQChickenPizzaMenuImg400x267px.jpg",
+      "http://www.valentinosgourmet.com/images/menuImg/Pizza/thaiChickenPizzaUnCooked400x267px.jpg",
+      "http://www.valentinosgourmet.com/images/menuImg/Pizza/hotChickPizzaMenuImg400x267px.jpg"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q56d-d38614b02a0e454983611334b9d39ba0",
     "source_name": "here_places",
     "source_url": "http://www.valentinosgourmet.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Discount Offer",
+        "deal_type": "discount",
+        "description": "Specials / Coupons DIY Pizza Kit Do it yourself pizza kit includes: 7\" Pizza Shell, Sauce, Cheese, and 2 toppings. $8.99 each. Additional toppings for $0.75ea. Buy 4 or more DIY pizzas and get $1 off each pizza. Daily Specials All prices listed are for Take-n-Bake Pizzas. If you want your pizza cooked (Thousand Oaks Location Only) $3.00 extra. ORDER ONLINE T-n-B Cooked Thousand Oaks Only Monday La",
+        "price_text": "$8.99",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-valentinosgourmet-com-menu-html-7b49f484643e",
+        "source_name": "business_websites",
+        "source_url": "http://www.valentinosgourmet.com/menu.html#Specials",
+        "happy_hours": []
+      },
+      {
+        "title": "Camarillo: We only bake 8\" Personal size pizzas",
+        "deal_type": "discount",
+        "description": "Camarillo: We only bake 8\" Personal size pizzas. All other size pizzas must be Take-n-Bake. Ventura: We do not bake any pizzas in Ventura, All pizzas must be Take-n-Bake. Build Your Own Cooked Pizza Make it your way! Get creative, and design your own pizza from the crust up. Specialty Cooked Pizzas Select one of our Signature Combination Pizzas which we have specially designed to satisfy your tast",
+        "price_text": "$10",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-valentinosgourmet-com-menu-html-20e766d38fed",
+        "source_name": "business_websites",
+        "source_url": "http://www.valentinosgourmet.com/menu.html#Specials",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -2341,14 +2760,50 @@
     "geocode_query": "Wendy's, Camarillo, CA, CA",
     "phone_number": "+18059872666",
     "website_url": "https://locations.wendys.com/united-states/ca/camarillo/307-arneill-road",
-    "image_urls": [],
+    "image_urls": [
+      "https://dynl.mktgcdn.com/p/KZyrClhNrzbDN6KQih0Rg5Yn8RywLdceQZ7-UWquHSs/1900x1039.png",
+      "https://dynl.mktgcdn.com/p/44pIJP-TKrXO_U61SOr_6k-qlZkK89Seumk3EYLQjNk/619x619.jpg",
+      "https://dynl.mktgcdn.com/p/Xz2tRB7T6XSQJxi0GzMDFI3ZLqgaQ9T-SNyEUucv6pM/619x619.jpg",
+      "https://dynl.mktgcdn.com/p/-RvuuS00vfAbb0rIVHUSGq4DQVdnB1i8-Kf6PgdOSy4/600x261.jpg",
+      "https://dynl.mktgcdn.com/p/njN_ZnaHFBsNEYyKC3wruc8PZnVGJqvMPyPg7d0fk04/600x300.jpg",
+      "https://dynl.mktgcdn.com/p/Ik4uhDtpDCIKfGycMRY7iBJqA1r69luLvF5y32CpDnE/555x555.png"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q56e-446565be45f046d1afd7f62e1231c0a6",
     "source_name": "here_places",
     "source_url": "https://locations.wendys.com/united-states/ca/camarillo/307-arneill-road",
-    "deals": [],
+    "deals": [
+      {
+        "title": "What's New at Wendy's Join Wendy's Rewards",
+        "deal_type": "discount",
+        "description": "What's New at Wendy's Join Wendy's Rewards! The only thing better than eating Wendy\u2019s, is earning more Wendy\u2019s while you eat. And that, friends, is what Wendy\u2019s Rewards is all about. Sign up today and make eating at your favorite restaurant even better. Join Now Order Wendy's Delivery & Save Whether you're hungry for breakfast, lunch, or dinner, Wendy's delivery is $3 off orders of $20+ \u2014 call it",
+        "price_text": "$3 off",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "locations-wendys-com-united-states-ca-camarillo-307-arneill-road-4007834efbb5",
+        "source_name": "business_websites",
+        "source_url": "https://locations.wendys.com/united-states/ca/camarillo/307-arneill-road",
+        "happy_hours": []
+      },
+      {
+        "title": "Discount Offer",
+        "deal_type": "discount",
+        "description": "Featured Menu Items Jalape\u00f1o Sausage, Egg, and Cheese Biscuit Freshly cracked grade A egg, grilled sausage, American cheese, and\u2014of course\u2014jalape\u00f1os, on a fluffy buttermilk biscuit. Get off to a hot start. Order Now Jalape\u00f1o Bacon, Egg, and Cheese Biscuit Freshly cracked grade A egg, Applewood smoked bacon, American cheese, and\u2014of course\u2014jalape\u00f1os, on a fluffy buttermilk biscuit. Guaranteed to wak",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "locations-wendys-com-united-states-ca-camarillo-307-arneill-road-0e20952bfb38",
+        "source_name": "business_websites",
+        "source_url": "https://locations.wendys.com/united-states/ca/camarillo/307-arneill-road",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -2420,30 +2875,6 @@
     "external_id": "here:here:pds:place:840jx7ps-1766ebb2c0490e725e75f570923038e7",
     "source_name": "here_places",
     "source_url": "http://www.yelp.com/biz/yomama-sushi-camarillo",
-    "deals": [],
-    "operating_hours": []
-  },
-  {
-    "name": "1901 Speakeasy",
-    "city": "oxnard",
-    "venue_type": "bar",
-    "address_line_1": "S B St",
-    "address_line_2": "",
-    "neighborhood": "Downtown Oxnard",
-    "state": "CA",
-    "postal_code": "93030-7177",
-    "latitude": 34.19424,
-    "longitude": -119.17939,
-    "geocode_query": "1901 Speakeasy, Oxnard, CA, CA",
-    "phone_number": "+18054866878",
-    "website_url": "",
-    "image_urls": [],
-    "profile_name": "",
-    "profile_slug": "",
-    "is_active": true,
-    "external_id": "here:here:pds:place:8409q568-000a7ad108834853b18536d44203381f",
-    "source_name": "here_places",
-    "source_url": "",
     "deals": [],
     "operating_hours": []
   },
@@ -2628,14 +3059,14 @@
     "longitude": -119.1782,
     "geocode_query": "BG's Cafe, Oxnard, CA, CA",
     "phone_number": "+18054870700",
-    "website_url": "https://www.facebook.com/247159748634897",
+    "website_url": "http://www.bgscafe.com",
     "image_urls": [],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q568-1171405bb2c84ec28c6537e49b0e5ad6",
     "source_name": "here_places",
-    "source_url": "https://www.facebook.com/247159748634897",
+    "source_url": "http://www.bgscafe.com",
     "deals": [],
     "operating_hours": []
   },
@@ -2660,31 +3091,22 @@
     "external_id": "here:here:pds:place:8409q54z-7188c3bb3b8a4478b45689e81fa8f33d",
     "source_name": "here_places",
     "source_url": "http://www.bjsbrewhouse.com",
-    "deals": [],
-    "operating_hours": []
-  },
-  {
-    "name": "Bar. B.Q. House",
-    "city": "oxnard",
-    "venue_type": "restaurant",
-    "address_line_1": "Saviers Rd",
-    "address_line_2": "",
-    "neighborhood": "Kamala Park",
-    "state": "CA",
-    "postal_code": "93033-4519",
-    "latitude": 34.17559,
-    "longitude": -119.17902,
-    "geocode_query": "Bar. B.Q. House, Oxnard, CA, CA",
-    "phone_number": "+18054863965",
-    "website_url": "",
-    "image_urls": [],
-    "profile_name": "",
-    "profile_slug": "",
-    "is_active": true,
-    "external_id": "here:here:pds:place:8409q562-2a9f61ca76b7a0bebf025c8a204cdeef",
-    "source_name": "here_places",
-    "source_url": "",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Unwind and Save with BJ's Restaurant & Brewhouse Happy Hour Deals",
+        "deal_type": "happy_hour",
+        "description": "Unwind and Save with BJ's Restaurant & Brewhouse Happy Hour Deals",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-bjsbrewhouse-com-happyhour-4cfde2844503",
+        "source_name": "business_websites",
+        "source_url": "http://www.bjsbrewhouse.com/happyhour",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -2725,14 +3147,36 @@
     "geocode_query": "Baskin-Robbins, Oxnard, CA, CA",
     "phone_number": "+18053519450",
     "website_url": "https://www.baskinrobbins.com/en",
-    "image_urls": [],
+    "image_urls": [
+      "https://www.baskinrobbins.com/etc/designs/br/images/hamburger-menu-bg.png",
+      "https://cdn-menu-us-east-1.tillster.com/br-us-original/289a7111-6d18-4890-8b50-40acb245c3d3.png",
+      "https://cdn-menu-us-east-1.tillster.com/br-us-original/5f087e01-4e21-41aa-b566-a5eaecee43f2.png",
+      "https://cdn-menu-us-east-1.tillster.com/br-us-original/f45c9f7e-1a99-4d6d-9c8a-1b2389be5abc.png",
+      "https://cdn-menu-us-east-1.tillster.com/br-us-original/5d369549-01e7-46ae-9c62-7f0a14a08e7e.png",
+      "https://cdn-menu-us-east-1.tillster.com/br-us-original/28e5f2eb-ee0f-40d6-b758-33d4902e54b3.png"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q568-a07e11426c5f4895b5b659818ad55f71",
     "source_name": "here_places",
     "source_url": "https://www.baskinrobbins.com/en",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Discount Offer",
+        "deal_type": "discount",
+        "description": "Cool Dads Get Cool Cakes Make Father's Day extra cool with one of our Dad-approved designs, filled with his favorite cake & ice cream flavor. Join Baskin-Robbins Rewards\u00ae & get access to $5 off a Cake $35+. Order Now Join Now Terms and exclusions apply. Valid on Cake purchase $35+ pre-tax. Must be a Baskin-Robbins Rewards\u00ae member to redeem. See BR App for details. Taste Sweet Victory Cue the crowd",
+        "price_text": "$5 off",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "order-baskinrobbins-com-menu-details-beach-day-929900e881b7",
+        "source_name": "business_websites",
+        "source_url": "https://order.baskinrobbins.com/menu-details/beach-day?id=30a537f8-8e98-4aab-a37c-b2639b19706a&sizes=%5B%7B%22size%22:%222.5%20oz%20scoop%22,%22id%22:%2230a537f8-8e98-4aab-a37c-b2639b19706a%22%7D,%7B%22size%22:%224%20oz%20scoop%22,%22id%22:%228ca0afaa-0d1c-4e7f-91bd-4e0fd1cc4e41%22%7D%5D",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -2749,14 +3193,36 @@
     "geocode_query": "Baskin-Robbins, Oxnard, CA, CA",
     "phone_number": "+18053822605",
     "website_url": "https://www.baskinrobbins.com/en",
-    "image_urls": [],
+    "image_urls": [
+      "https://www.baskinrobbins.com/etc/designs/br/images/hamburger-menu-bg.png",
+      "https://cdn-menu-us-east-1.tillster.com/br-us-original/289a7111-6d18-4890-8b50-40acb245c3d3.png",
+      "https://cdn-menu-us-east-1.tillster.com/br-us-original/5f087e01-4e21-41aa-b566-a5eaecee43f2.png",
+      "https://cdn-menu-us-east-1.tillster.com/br-us-original/f45c9f7e-1a99-4d6d-9c8a-1b2389be5abc.png",
+      "https://cdn-menu-us-east-1.tillster.com/br-us-original/5d369549-01e7-46ae-9c62-7f0a14a08e7e.png",
+      "https://cdn-menu-us-east-1.tillster.com/br-us-original/28e5f2eb-ee0f-40d6-b758-33d4902e54b3.png"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q54x-d5aaa67eafee45ae95d72a505b43826c",
     "source_name": "here_places",
     "source_url": "https://www.baskinrobbins.com/en",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Discount Offer",
+        "deal_type": "discount",
+        "description": "Cool Dads Get Cool Cakes Make Father's Day extra cool with one of our Dad-approved designs, filled with his favorite cake & ice cream flavor. Join Baskin-Robbins Rewards\u00ae & get access to $5 off a Cake $35+. Order Now Join Now Terms and exclusions apply. Valid on Cake purchase $35+ pre-tax. Must be a Baskin-Robbins Rewards\u00ae member to redeem. See BR App for details. Taste Sweet Victory Cue the crowd",
+        "price_text": "$5 off",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "order-baskinrobbins-com-menu-details-beach-day-929900e881b7",
+        "source_name": "business_websites",
+        "source_url": "https://order.baskinrobbins.com/menu-details/beach-day?id=30a537f8-8e98-4aab-a37c-b2639b19706a&sizes=%5B%7B%22size%22:%222.5%20oz%20scoop%22,%22id%22:%2230a537f8-8e98-4aab-a37c-b2639b19706a%22%7D,%7B%22size%22:%224%20oz%20scoop%22,%22id%22:%228ca0afaa-0d1c-4e7f-91bd-4e0fd1cc4e41%22%7D%5D",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -2797,14 +3263,36 @@
     "geocode_query": "Buddy Burgers, Oxnard, CA, CA",
     "phone_number": "+18053858481",
     "website_url": "https://buddy-burger.hub.biz",
-    "image_urls": [],
+    "image_urls": [
+      "https://thumbs.hubbiz.net/0x260/https:%2F%2Fhubbiz-thumbnails.s3.amazonaws.com%2F2018%2F07%2F27%2Fi%2Fwhy-bison-burgers-are-all-the-rage-at-trendy-burger-spots.jpg",
+      "https://hubbiz.net/assets/blank.gif",
+      "https://thumbs.hubbiz.net/0x260/https:%2F%2Fhubbiz-thumbnails.s3.amazonaws.com%2F2019%2F06%2F10%2Fi%2Fmaking-vegan-versions-of-fast-food-burgers-tryveg-com.jpg",
+      "https://thumbs.hubbiz.net/0x260/https:%2F%2Fhubbiz-thumbnails.s3.amazonaws.com%2F2018%2F09%2F22%2Fi%2Fcan-burgers-be-good-for-you-this-one-can-makinis-kitchen.jpg",
+      "https://qrcode.hubbiz.net/qr_code/ca/74/buddy-burger.png?from=business-profile&v11",
+      "https://thumbs.hubbiz.net/0x260/https:%2F%2Fhubbiz-thumbnails.s3.amazonaws.com%2F2013%2F12%2F30%2Fi%2F10-chinese-dishes-that-real-chinese-people-dont-eat.png"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q568-ee8548f766cc4ce29738c935d95d3507",
     "source_name": "here_places",
     "source_url": "https://buddy-burger.hub.biz",
-    "deals": [],
+    "deals": [
+      {
+        "title": "There is Chinese food and then there is Americanized Chinese food",
+        "deal_type": "discount",
+        "description": "There is Chinese food and then there is Americanized Chinese food. Both can be delicious, but it's always good to know the difference between the two. To kick off Chinese Food Week, Girl Meets Food...",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "buddy-burger-hub-biz-6729eba97382",
+        "source_name": "business_websites",
+        "source_url": "https://buddy-burger.hub.biz",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -2864,8 +3352,8 @@
     "neighborhood": "Downtown Oxnard",
     "state": "CA",
     "postal_code": "93030-7157",
-    "latitude": 34.19796,
-    "longitude": -119.17891,
+    "latitude": 34.1977,
+    "longitude": -119.17955,
     "geocode_query": "Cafe on A, Oxnard, CA, CA",
     "phone_number": "+18053856300",
     "website_url": "http://downtowncafebyjl.com",
@@ -2888,8 +3376,8 @@
     "neighborhood": "Sierra Linda",
     "state": "CA",
     "postal_code": "93036-3322",
-    "latitude": 34.21968,
-    "longitude": -119.19242,
+    "latitude": 34.21957,
+    "longitude": -119.19239,
     "geocode_query": "Camelot Room, Oxnard, CA, CA",
     "phone_number": "+18052044403",
     "website_url": "https://www.facebook.com/217470928599765",
@@ -3168,7 +3656,7 @@
     "operating_hours": []
   },
   {
-    "name": "Dominick's Italian Restaurant",
+    "name": "Dominicks Italian Restaurant",
     "city": "oxnard",
     "venue_type": "restaurant",
     "address_line_1": "N Oxnard Blvd",
@@ -3178,7 +3666,7 @@
     "postal_code": "93030-4917",
     "latitude": 34.20702,
     "longitude": -119.17751,
-    "geocode_query": "Dominick's Italian Restaurant, Oxnard, CA, CA",
+    "geocode_query": "Dominicks Italian Restaurant, Oxnard, CA, CA",
     "phone_number": "+18054837933",
     "website_url": "http://www.dominicksoxnard.com",
     "image_urls": [],
@@ -3205,14 +3693,36 @@
     "geocode_query": "Domino's, Oxnard, CA, CA",
     "phone_number": "+18054875363",
     "website_url": "https://pizza.dominos.com/california/oxnard/1137-s-oxnard-blvd",
-    "image_urls": [],
+    "image_urls": [
+      "http://a.mktgcdn.com/p/J0kEQBbYI08aV6lM-uDI2YZt_8F3cwB0paDNDcAqaDE/1483x1483.jpg",
+      "https://dynl.mktgcdn.com/p/SRFYEpCKcfTxj96Y-SCWNfTfDZoRu505ffHDrwtf86Y/500x500",
+      "https://dynl.mktgcdn.com/p/SRFYEpCKcfTxj96Y-SCWNfTfDZoRu505ffHDrwtf86Y/100x67",
+      "https://dynl.mktgcdn.com/p/SRFYEpCKcfTxj96Y-SCWNfTfDZoRu505ffHDrwtf86Y/320x214",
+      "https://dynl.mktgcdn.com/p/SRFYEpCKcfTxj96Y-SCWNfTfDZoRu505ffHDrwtf86Y/640x428",
+      "https://dynl.mktgcdn.com/p/SRFYEpCKcfTxj96Y-SCWNfTfDZoRu505ffHDrwtf86Y/960x642"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q562-9fc78f9cd3774e32971dc250f80b62f6",
     "source_name": "here_places",
     "source_url": "https://pizza.dominos.com/california/oxnard/1137-s-oxnard-blvd",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Perfect Combo Offer Details",
+        "deal_type": "daily_special",
+        "description": "Perfect Combo Offer Details",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "pizza-dominos-com-california-oxnard-1137-s-oxnard-blvd-b59b8ca33307",
+        "source_name": "business_websites",
+        "source_url": "https://pizza.dominos.com/california/oxnard/1137-s-oxnard-blvd",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -3607,9 +4117,9 @@
     "address_line_2": "",
     "neighborhood": "Five Points NE",
     "state": "CA",
-    "postal_code": "93030-7453",
-    "latitude": 34.18754,
-    "longitude": -119.16996,
+    "postal_code": "93030",
+    "latitude": 34.18759,
+    "longitude": -119.16991,
     "geocode_query": "Hide Away Bar, Oxnard, CA, CA",
     "phone_number": "+18054867552",
     "website_url": "https://www.facebook.com/876354892434612",
@@ -3661,14 +4171,120 @@
     "geocode_query": "IHOP, Oxnard, CA, CA",
     "phone_number": "",
     "website_url": "https://www.ihop.com",
-    "image_urls": [],
+    "image_urls": [
+      "https://www.ihop.com/-/media/ihop/marketing/pages/specials/value-menu/hero/value-landing-page---hero-test-v1_compressed.jpg",
+      "https://www.ihop.com/-/media/ihop/marketing/pages/home/modules---primary/homepoage-tile---blt.jpg",
+      "https://www.ihop.com/-/media/ihop/marketing/pages/specials/omelettes-landing-page/hero/specials-page--hero--stacked-n-stuffed--bbq-pulled-pork.jpg",
+      "https://www.ihop.com/-/media/ihop/marketing/pages/home/menu-highlights/menu-highlights-1-754--dulce.jpg",
+      "https://www.ihop.com/-/media/ihop/marketing/pages/home/menu-highlights/menu-highlights-2-754--burrito.jpg",
+      "https://www.ihop.com/-/media/ihop/marketing/pages/home/menu-highlights/menu-highlights-3-754---country-fried-steak.jpg"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q568-dd6e2b34b8f849829932cb0817c77877",
     "source_name": "here_places",
     "source_url": "https://www.ihop.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Discount Offer",
+        "deal_type": "discount",
+        "description": "20% OFF YOUR FIRST ONLINE ORDER WITH CODE IHOP20 ** IHOP CATERS TO ALL OF YOUR CRAVINGS GIFTS FOR THE ONE YOU LOVE EARN FREE FOOD***",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-ihop-com-happyhour-6344e662f21c",
+        "source_name": "business_websites",
+        "source_url": "https://www.ihop.com/happyhour",
+        "happy_hours": []
+      },
+      {
+        "title": "Daily Special",
+        "deal_type": "daily_special",
+        "description": "EARN REWARDS Join now to receive a free stack of 5 pancakes after your first purchase. *** Free Birthday Pancakes Exclusive Offers Rewards That Stack Up Join now BOLD BBQ PULLED PORK OMELETTE Our newest Stuffed 'N Stacked \u2122 Omelette. Hickory-smoked pulled pork paired with a sweet & tangy BBQ sauce, green peppers, onion & Jack & cheddar cheeses. Learn More VALUE MENU BLT Hickory-smoked bacon, fresh",
+        "price_text": "$7",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-ihop-com-happyhour-92cd66857d2c",
+        "source_name": "business_websites",
+        "source_url": "https://www.ihop.com/happyhour",
+        "happy_hours": []
+      },
+      {
+        "title": "Five Delicious Deals",
+        "deal_type": "daily_special",
+        "description": "Five Delicious Deals. Every Day. BLT Enjoy hickory-smoked bacon, fresh lettuce, tomato, and mayo on toasted white bread. Served with a choice of French fries or hash browns. Order Now BREAKFAST FAVES COMBO From sunrise to sunset, this combo hits the spot. 2 of our fluffy, world-famous buttermilk pancakes, 2 eggs, and 2 bacon strips or 2 pork sausage links. Order Now FRENCH TOAST FAVES COMBO Cravin",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-ihop-com-happyhour-e061a1a1b9d2",
+        "source_name": "business_websites",
+        "source_url": "https://www.ihop.com/happyhour",
+        "happy_hours": []
+      },
+      {
+        "title": "BREAKFAST FAVES COMBO From sunrise to sunset, this combo hits the spot",
+        "deal_type": "daily_special",
+        "description": "BREAKFAST FAVES COMBO From sunrise to sunset, this combo hits the spot. 2 of our fluffy, world-famous buttermilk pancakes, 2 eggs, and 2 bacon strips or 2 pork sausage links. Order Now",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-ihop-com-happyhour-d2eb44e5b2f3",
+        "source_name": "business_websites",
+        "source_url": "https://www.ihop.com/happyhour",
+        "happy_hours": []
+      },
+      {
+        "title": "FRENCH TOAST FAVES COMBO Craving something sweet and savory",
+        "deal_type": "daily_special",
+        "description": "FRENCH TOAST FAVES COMBO Craving something sweet and savory? Enjoy 1 slice of Classic Thick \u2018N Fluffy French Toast, 2 bacon strips or 2 pork sausage links, and 2 eggs. Order Now",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-ihop-com-happyhour-30421e140903",
+        "source_name": "business_websites",
+        "source_url": "https://www.ihop.com/happyhour",
+        "happy_hours": []
+      },
+      {
+        "title": "Discount Offer",
+        "deal_type": "discount",
+        "description": "IHOP SPECIALS BOLD BBQ PULLED PORK OMELETTE Our newest Stuffed 'N Stacked \u2122 Omelette. Hickory-smoked pulled pork paired with a sweet & tangy BBQ sauce, green peppers, onion & Jack & cheddar cheeses. Try Now VALUE MENU BLT Hickory-smoked bacon, fresh lettuce, tomato, and mayo on toasted white bread. Served with a choice of French fries or hash browns. Order Now SPECIAL OFFER ON GIFT CARDS For a lim",
+        "price_text": "$5",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-ihop-com-happyhour-b4d91b9bb713",
+        "source_name": "business_websites",
+        "source_url": "https://www.ihop.com/happyhour",
+        "happy_hours": []
+      },
+      {
+        "title": "Discount Offer",
+        "deal_type": "discount",
+        "description": "SPECIAL OFFER ON GIFT CARDS For a limited time, get a $5 Bonus Card with every $25 Gift Card purchase. * Buy Now",
+        "price_text": "$5",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-ihop-com-happyhour-5a16f70978d1",
+        "source_name": "business_websites",
+        "source_url": "https://www.ihop.com/happyhour",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -3679,20 +4295,42 @@
     "address_line_2": "",
     "neighborhood": "Town Center",
     "state": "CA",
-    "postal_code": "93036-5446",
-    "latitude": 34.23954,
-    "longitude": -119.17573,
+    "postal_code": "93036",
+    "latitude": 34.23944,
+    "longitude": -119.1759,
     "geocode_query": "It's Boba Time, Oxnard, CA, CA",
     "phone_number": "+18059832622",
     "website_url": "https://itsbobatime.com",
-    "image_urls": [],
+    "image_urls": [
+      "https://itsbobatime.com/img/view-menu-btn.png",
+      "https://itsbobatime.com/img/OrderNow-Btn.png",
+      "https://itsbobatime.com/img/2-2.png",
+      "https://itsbobatime.com/img/circle.png",
+      "https://itsbobatime.com/img/2-1.png",
+      "https://itsbobatime.com/img/2-3.png"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q56b-c861ec04cd414b3b953c3e4e901247ee",
     "source_name": "here_places",
     "source_url": "https://itsbobatime.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "\ufffd\ufffd Buy 15 and Get $6 off your next order",
+        "deal_type": "discount",
+        "description": "\ufffd\ufffd Buy 15 and Get $6 off your next order",
+        "price_text": "$6 off",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "itsbobatime-com-ecb49c0c7a91",
+        "source_name": "business_websites",
+        "source_url": "https://itsbobatime.com",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -3746,7 +4384,7 @@
   {
     "name": "Kanaloa Seafood",
     "city": "oxnard",
-    "venue_type": "fast_food",
+    "venue_type": "restaurant",
     "address_line_1": "Lombard St",
     "address_line_2": "",
     "neighborhood": "Rose Park",
@@ -3805,14 +4443,46 @@
     "geocode_query": "La Cascada, Oxnard, CA, CA",
     "phone_number": "+18052409657",
     "website_url": "http://la-cascada-oxnard.yeeq.io",
-    "image_urls": [],
+    "image_urls": [
+      "https://streetviewpixels-pa.googleapis.com/v1/thumbnail?panoid=kBgcDGDepzXk75QIKOZFlw",
+      "https://mc.yandex.ru/watch/68644717"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q568-3d0f5e10b2044265a76c8b22acf0cbb8",
     "source_name": "here_places",
     "source_url": "http://la-cascada-oxnard.yeeq.io",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Happy Hour 14175 Mono Way, Sonora, CA 95370, United States +1 209-533-0223 Manage Listing",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "la-cascada-oxnard-yeeq-io-deals-dcd11f8c27e8",
+        "source_name": "business_websites",
+        "source_url": "http://la-cascada-oxnard.yeeq.io/deals",
+        "happy_hours": []
+      },
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Maps Call Pricing Happy Hour 14175 Mono Way, Sonora, CA 95370, United States +1 209-533-0223 Latest Feedback \"Great people, great place to get your hair or nails done.\" \"I payed money to have my hair ruined.\" \"If you want a professional hair colorist Celeste is the one to choose .\" Today Opening Hours Monday 9\u00e2\u0080\u00afam\u00e2\u0080\u00935\u00e2\u0080\u00afpm Tuesday 9\u00e2\u0080\u00afam\u00e2\u0080\u00935\u00e2\u0080\u00afpm Wednesday 9\u00e2\u0080\u00afam\u00e2\u0080\u00935\u00e2\u0080\u00afpm Thursday 9\u00e2\u0080\u00afam\u00e2\u0080\u00935\u00e2\u0080\u00afpm",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "la-cascada-oxnard-yeeq-io-deals-4e86ea508cb1",
+        "source_name": "business_websites",
+        "source_url": "http://la-cascada-oxnard.yeeq.io/deals",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -4028,30 +4698,6 @@
     "external_id": "here:here:pds:place:840jx7ps-9d9ce7c7a2eb093900f17e7660168252",
     "source_name": "here_places",
     "source_url": "http://larsensrestaurants.com",
-    "deals": [],
-    "operating_hours": []
-  },
-  {
-    "name": "Lazy Dog Restaurant",
-    "city": "oxnard",
-    "venue_type": "restaurant",
-    "address_line_1": "Town Center Dr",
-    "address_line_2": "",
-    "neighborhood": "Town Center",
-    "state": "CA",
-    "postal_code": "93036",
-    "latitude": 34.2393,
-    "longitude": -119.17845,
-    "geocode_query": "Lazy Dog Restaurant, Oxnard, CA, CA",
-    "phone_number": "+18052782820",
-    "website_url": "http://www.lazydogrestaurants.com",
-    "image_urls": [],
-    "profile_name": "",
-    "profile_slug": "",
-    "is_active": true,
-    "external_id": "here:here:pds:place:840jx7ps-1e1b57f1bf190752674e0f59dfe0e2d3",
-    "source_name": "here_places",
-    "source_url": "http://www.lazydogrestaurants.com",
     "deals": [],
     "operating_hours": []
   },
@@ -4320,30 +4966,6 @@
     "operating_hours": []
   },
   {
-    "name": "Mr Shrimp",
-    "city": "oxnard",
-    "venue_type": "restaurant",
-    "address_line_1": "Saviers Rd",
-    "address_line_2": "",
-    "neighborhood": "Cal-Gisler",
-    "state": "CA",
-    "postal_code": "93033-4512",
-    "latitude": 34.17706,
-    "longitude": -119.17717,
-    "geocode_query": "Mr Shrimp, Oxnard, CA, CA",
-    "phone_number": "+18053854171",
-    "website_url": "http://www.mrshrimp.com",
-    "image_urls": [],
-    "profile_name": "",
-    "profile_slug": "",
-    "is_active": true,
-    "external_id": "here:here:pds:place:840jx7ps-da8a5f6d60ef07114b0ebc183fce03fc",
-    "source_name": "here_places",
-    "source_url": "http://www.mrshrimp.com",
-    "deals": [],
-    "operating_hours": []
-  },
-  {
     "name": "OH Sushi",
     "city": "oxnard",
     "venue_type": "restaurant",
@@ -4477,14 +5099,122 @@
     "geocode_query": "Onyx Bistro, Oxnard, CA, CA",
     "phone_number": "+18059917356",
     "website_url": "http://www.onyxbistrocamarillo.com",
-    "image_urls": [],
+    "image_urls": [
+      "https://onyxbistrocamarillo.com/wp-content/uploads/2025/07/HAPPY-HOUR-300x300.jpg",
+      "https://onyxbistrocamarillo.com/wp-content/uploads/2026/01/Weekday-DEALS-300x300.jpg",
+      "https://onyxbistrocamarillo.com/wp-content/uploads/2017/01/Instagram-white-1.png",
+      "https://onyxbistrocamarillo.com/wp-content/uploads/2017/01/Yelp-white-1.png\""
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q56g-feb3ad0323ec60570a6fb960931846e4",
     "source_name": "here_places",
     "source_url": "http://www.onyxbistrocamarillo.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Happy Hour $10 Select Wines by the Glass $1.00 off Craft Beer on Tap (Pints) & Happy Hour Specials Menu subject to change Tuesday \u2013 Saturday 4:00PM-6:00PM SUBJECT TO CHANGE",
+        "price_text": "$10",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-onyxbistrocamarillo-com-e0d018d32702",
+        "source_name": "business_websites",
+        "source_url": "http://www.onyxbistrocamarillo.com",
+        "happy_hours": [
+          {
+            "weekday": 1,
+            "start_time": "16:00",
+            "end_time": "18:00",
+            "all_day": false
+          },
+          {
+            "weekday": 5,
+            "start_time": "16:00",
+            "end_time": "18:00",
+            "all_day": false
+          }
+        ]
+      },
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Welcome to Onyx Bistro 2390 Las Posas Rd Suite H, Camarillo CA Dinner : Tues-Sat @ 4:00pm Live music Friday & Saturday 5:30-8:30pm Daily Happy Hour 4:00-6:00pm **Closed Sundays & Mondays **",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-onyxbistrocamarillo-com-70c5313a8667",
+        "source_name": "business_websites",
+        "source_url": "http://www.onyxbistrocamarillo.com",
+        "happy_hours": [
+          {
+            "weekday": 1,
+            "start_time": "17:30",
+            "end_time": "20:30",
+            "all_day": false
+          },
+          {
+            "weekday": 2,
+            "start_time": "17:30",
+            "end_time": "20:30",
+            "all_day": false
+          },
+          {
+            "weekday": 3,
+            "start_time": "17:30",
+            "end_time": "20:30",
+            "all_day": false
+          },
+          {
+            "weekday": 4,
+            "start_time": "17:30",
+            "end_time": "20:30",
+            "all_day": false
+          },
+          {
+            "weekday": 5,
+            "start_time": "17:30",
+            "end_time": "20:30",
+            "all_day": false
+          },
+          {
+            "weekday": 0,
+            "start_time": "16:00",
+            "end_time": "18:00",
+            "all_day": false
+          },
+          {
+            "weekday": 1,
+            "start_time": "16:00",
+            "end_time": "18:00",
+            "all_day": false
+          },
+          {
+            "weekday": 2,
+            "start_time": "16:00",
+            "end_time": "18:00",
+            "all_day": false
+          },
+          {
+            "weekday": 3,
+            "start_time": "16:00",
+            "end_time": "18:00",
+            "all_day": false
+          },
+          {
+            "weekday": 4,
+            "start_time": "16:00",
+            "end_time": "18:00",
+            "all_day": false
+          }
+        ]
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -4549,14 +5279,36 @@
     "geocode_query": "Otani's, Oxnard, CA, CA",
     "phone_number": "+18054836519",
     "website_url": "http://www.Otanis-Seafood.com",
-    "image_urls": [],
+    "image_urls": [
+      "https://images.squarespace-cdn.com/content/v1/52799530e4b06b69607f6dc2/5962459b-b93d-4e2b-b612-1002ebd17c5c/menu+2025.PNG",
+      "https://images.squarespace-cdn.com/content/v1/52799530e4b06b69607f6dc2/6a098922-7ac3-4952-afb4-426116cf17a7/food+pics+6.22++page+1.jpg",
+      "https://images.squarespace-cdn.com/content/v1/52799530e4b06b69607f6dc2/d0d3dffa-2234-4df7-90f8-25d730d43e66/food+pics+6.22++page+2.jpg",
+      "https://images.squarespace-cdn.com/content/v1/52799530e4b06b69607f6dc2/1580763428526-KLS6ZKH2C5CPQEMQVCQ3/otani%27s+windows.jpg",
+      "https://images.squarespace-cdn.com/content/v1/52799530e4b06b69607f6dc2/cb0c406e-7f22-496b-8562-9c94ebb22c71/lent+2026.png",
+      "https://images.squarespace-cdn.com/content/v1/52799530e4b06b69607f6dc2/e5c06b9d-c196-4f69-8271-13c936522096/hours.PNG"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q568-1a56cda4de90332b8d67cd7dd858c10a",
     "source_name": "here_places",
     "source_url": "http://www.Otanis-Seafood.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Japanese style seafood with a twist of Mexican flair - many of the dishes we prepare are still made from great-grandpa Izuto (Izzy) Otani's own homemade recipes. Otani\u2019s Seafood is also still serving food according to great-grandpa Izzy\u2019s business concept: a family-orientated, friendly, quick-service restaurant (order at the counter). Orders usually take between 10 and 15 minutes to prepare (dine-",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-otanis-seafood-com-menu-338c9bc6e5ea",
+        "source_name": "business_websites",
+        "source_url": "http://www.Otanis-Seafood.com/menu",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -4663,9 +5415,9 @@
     "address_line_2": "",
     "neighborhood": "",
     "state": "CA",
-    "postal_code": "93036-1234",
-    "latitude": 34.23338,
-    "longitude": -119.17822,
+    "postal_code": "93036",
+    "latitude": 34.2334,
+    "longitude": -119.17827,
     "geocode_query": "Ozeki Noodle, Oxnard, CA, CA",
     "phone_number": "+18056044485",
     "website_url": "",
@@ -4704,7 +5456,7 @@
     "operating_hours": []
   },
   {
-    "name": "Pacifico's Sushi Mex",
+    "name": "Pacifico's Sushi-Mex",
     "city": "oxnard",
     "venue_type": "restaurant",
     "address_line_1": "S A St",
@@ -4714,7 +5466,7 @@
     "postal_code": "93030-5903",
     "latitude": 34.19792,
     "longitude": -119.17879,
-    "geocode_query": "Pacifico's Sushi Mex, Oxnard, CA, CA",
+    "geocode_query": "Pacifico's Sushi-Mex, Oxnard, CA, CA",
     "phone_number": "+18053850311",
     "website_url": "https://pacificossushimexca.com",
     "image_urls": [],
@@ -4765,14 +5517,46 @@
     "geocode_query": "Panaderia Vanessa, Oxnard, CA, CA",
     "phone_number": "+18054869966",
     "website_url": "http://panaderia-vanessa.edan.io",
-    "image_urls": [],
+    "image_urls": [
+      "https://streetviewpixels-pa.googleapis.com/v1/thumbnail?panoid=W1cjHIrVL09UeN6_ZvYsoQ",
+      "https://mc.yandex.ru/watch/68644717"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q568-fda759fbd72a4476a292183bc5481c66",
     "source_name": "here_places",
     "source_url": "http://panaderia-vanessa.edan.io",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Happy Hour 14175 Mono Way, Sonora, CA 95370, United States +1 209-533-0223 Manage Listing",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "panaderia-vanessa-edan-io-deals-7548691061ee",
+        "source_name": "business_websites",
+        "source_url": "http://panaderia-vanessa.edan.io/deals",
+        "happy_hours": []
+      },
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Maps Call Pricing Happy Hour 14175 Mono Way, Sonora, CA 95370, United States +1 209-533-0223 Latest Feedback \"Great people, great place to get your hair or nails done.\" \"I payed money to have my hair ruined.\" \"If you want a professional hair colorist Celeste is the one to choose .\" Today Opening Hours Monday 9\u00e2\u0080\u00afam\u00e2\u0080\u00935\u00e2\u0080\u00afpm Tuesday 9\u00e2\u0080\u00afam\u00e2\u0080\u00935\u00e2\u0080\u00afpm Wednesday 9\u00e2\u0080\u00afam\u00e2\u0080\u00935\u00e2\u0080\u00afpm Thursday 9\u00e2\u0080\u00afam\u00e2\u0080\u00935\u00e2\u0080\u00afpm",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "panaderia-vanessa-edan-io-deals-e4e39892f8f4",
+        "source_name": "business_websites",
+        "source_url": "http://panaderia-vanessa.edan.io/deals",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -5005,14 +5789,94 @@
     "geocode_query": "Q Club Oxnard, Oxnard, CA, CA",
     "phone_number": "+18052781231",
     "website_url": "http://qcluboxnard.com",
-    "image_urls": [],
+    "image_urls": [
+      "http://qcluboxnard.com/wp-content/uploads/2021/08/agua-santa.jpg",
+      "http://qcluboxnard.com/wp-content/uploads/2021/08/Karaoke-Night.jpg",
+      "http://qcluboxnard.com/wp-content/uploads/2021/08/tacos2.jpg",
+      "https://qcluboxnard.com/wp-content/uploads/2021/08/chilaquiles4.jpg",
+      "https://qcluboxnard.com/wp-content/uploads/2018/01/Front-Banner-Jan2018.png"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q568-3f07660c9e32496ca774b2463d717246",
     "source_name": "here_places",
     "source_url": "http://qcluboxnard.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Join us for Happy Hour, Monday-Friday, 4PM-7PM.",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "qcluboxnard-com-cd8a8cd47e8f",
+        "source_name": "business_websites",
+        "source_url": "http://qcluboxnard.com",
+        "happy_hours": [
+          {
+            "weekday": 0,
+            "start_time": "16:00",
+            "end_time": "19:00",
+            "all_day": false
+          },
+          {
+            "weekday": 1,
+            "start_time": "16:00",
+            "end_time": "19:00",
+            "all_day": false
+          },
+          {
+            "weekday": 2,
+            "start_time": "16:00",
+            "end_time": "19:00",
+            "all_day": false
+          },
+          {
+            "weekday": 3,
+            "start_time": "16:00",
+            "end_time": "19:00",
+            "all_day": false
+          },
+          {
+            "weekday": 4,
+            "start_time": "16:00",
+            "end_time": "19:00",
+            "all_day": false
+          }
+        ]
+      },
+      {
+        "title": "TACO TUESDAY",
+        "deal_type": "daily_special",
+        "description": "TACO TUESDAY",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "qcluboxnard-com-fc3e3598e47f",
+        "source_name": "business_websites",
+        "source_url": "http://qcluboxnard.com",
+        "happy_hours": []
+      },
+      {
+        "title": "Spice up Taco Tuesday by adding our $5 Margaritas to your order.",
+        "deal_type": "daily_special",
+        "description": "Spice up Taco Tuesday by adding our $5 Margaritas to your order.",
+        "price_text": "$5",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "qcluboxnard-com-ae3c4004c4ad",
+        "source_name": "business_websites",
+        "source_url": "http://qcluboxnard.com",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -5143,7 +6007,7 @@
     "address_line_2": "",
     "neighborhood": "Downtown Oxnard",
     "state": "CA",
-    "postal_code": "93030-5836",
+    "postal_code": "93030",
     "latitude": 34.19926,
     "longitude": -119.177,
     "geocode_query": "Rubys Cafe of Oxnard, Oxnard, CA, CA",
@@ -5154,30 +6018,6 @@
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q568-e4a6e7003e904b40824643ee8fb7d8e9",
-    "source_name": "here_places",
-    "source_url": "",
-    "deals": [],
-    "operating_hours": []
-  },
-  {
-    "name": "STARBUCKS",
-    "city": "oxnard",
-    "venue_type": "cafe",
-    "address_line_1": "Ives Ave",
-    "address_line_2": "",
-    "neighborhood": "",
-    "state": "CA",
-    "postal_code": "93033-1888",
-    "latitude": 34.18001,
-    "longitude": -119.16434,
-    "geocode_query": "STARBUCKS, Oxnard, CA, CA",
-    "phone_number": "+18053561177",
-    "website_url": "",
-    "image_urls": [],
-    "profile_name": "",
-    "profile_slug": "",
-    "is_active": true,
-    "external_id": "here:here:pds:place:8409q562-40c82a28a87f450f0bf3337523ed09b8",
     "source_name": "here_places",
     "source_url": "",
     "deals": [],
@@ -5357,9 +6197,9 @@
     "venue_type": "fast_food",
     "address_line_1": "S A St",
     "address_line_2": "",
-    "neighborhood": "Downtown Oxnard",
+    "neighborhood": "",
     "state": "CA",
-    "postal_code": "93030-7140",
+    "postal_code": "93030",
     "latitude": 34.19352,
     "longitude": -119.17825,
     "geocode_query": "Seasand, Oxnard, CA, CA",
@@ -5431,7 +6271,7 @@
     "address_line_2": "",
     "neighborhood": "Kamala Park",
     "state": "CA",
-    "postal_code": "93030-7400",
+    "postal_code": "93033",
     "latitude": 34.1897,
     "longitude": -119.18174,
     "geocode_query": "Smokin Jays, Oxnard, CA, CA",
@@ -5605,14 +6445,36 @@
     "geocode_query": "Taco Sisters, Oxnard, CA, CA",
     "phone_number": "+18053964441",
     "website_url": "http://tacosisterssonora.mobile-webview2.com/index.php",
-    "image_urls": [],
+    "image_urls": [
+      "https://themenustar2.com/upload/2020-02-04/A5e3996ad6bfd5.jpg",
+      "https://themenustar2.com/upload/2020-02-04/B5e3996ad6e027.jpg",
+      "https://themenustar2.com/upload/2020-02-04/C5e3996ad6fc11.jpg",
+      "https://themenustar2.com/upload/2020-02-04/Taco_Sisters_no_rewards5e3996e79e35f.jpg",
+      "https://themenustar2.com/webspace_development_themes/theme2_images/rest-hour-top.png",
+      "http://tacosisterssonora.mobile-webview2.com/images/btn_login_facebook.png"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q568-546fea8b149c43d0b6c629e3b6613b4a",
     "source_name": "here_places",
     "source_url": "http://tacosisterssonora.mobile-webview2.com/index.php",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Sign in to track your orders, earn rewards, use discount code, and more...",
+        "deal_type": "discount",
+        "description": "Sign in to track your orders, earn rewards, use discount code, and more...",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "tacosisterssonora-mobile-webview2-com-index-php-319530fdc772",
+        "source_name": "business_websites",
+        "source_url": "http://tacosisterssonora.mobile-webview2.com/index.php",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -5690,7 +6552,7 @@
   {
     "name": "Tacos Mis Gallos",
     "city": "oxnard",
-    "venue_type": "fast_food",
+    "venue_type": "cafe",
     "address_line_1": "Statham Blvd",
     "address_line_2": "",
     "neighborhood": "",
@@ -5983,7 +6845,7 @@
     "address_line_2": "",
     "neighborhood": "South Bank",
     "state": "CA",
-    "postal_code": "93036-1130",
+    "postal_code": "93036",
     "latitude": 34.2354,
     "longitude": -119.18149,
     "geocode_query": "Wagon Wheel Brewing Company, Oxnard, CA, CA",
@@ -6151,26 +7013,79 @@
     "address_line_2": "",
     "neighborhood": "",
     "state": "CA",
-    "postal_code": "93001-2824",
+    "postal_code": "93001",
     "latitude": 34.27629,
     "longitude": -119.29292,
     "geocode_query": "Aloha Steakhouse, Ventura, CA, CA",
     "phone_number": "+18056521799",
     "website_url": "http://www.alohasteakhouse.com",
-    "image_urls": [],
+    "image_urls": [
+      "https://popmenucloud.com/cdn-cgi/image/width=1200,height=630,format=auto,fit=cover/tnwlafer/4e89a795-8a8b-48a0-881b-6cd0415f2bb7",
+      "https://popmenucloud.com/cdn-cgi/image/width%3D1920%2Cheight%3D1920%2Cfit%3Dscale-down%2Cformat%3Dauto%2Cquality%3D20/tnwlafer/4e89a795-8a8b-48a0-881b-6cd0415f2bb7",
+      "https://popmenucloud.com/cdn-cgi/image/width%3D3840%2Cheight%3D3840%2Cfit%3Dscale-down%2Cformat%3Dauto%2Cquality%3D20/tnwlafer/4e89a795-8a8b-48a0-881b-6cd0415f2bb7",
+      "https://popmenucloud.com/cdn-cgi/image/width%3D5760%2Cheight%3D5760%2Cfit%3Dscale-down%2Cformat%3Dauto%2Cquality%3D20/tnwlafer/4e89a795-8a8b-48a0-881b-6cd0415f2bb7",
+      "https://popmenucloud.com/cdn-cgi/image/width%3D1440%2Cheight%3D1440%2Cfit%3Dscale-down%2Cformat%3Dauto%2Cquality%3D20/tnwlafer/4e89a795-8a8b-48a0-881b-6cd0415f2bb7",
+      "https://popmenucloud.com/cdn-cgi/image/width%3D2880%2Cheight%3D2880%2Cfit%3Dscale-down%2Cformat%3Dauto%2Cquality%3D20/tnwlafer/4e89a795-8a8b-48a0-881b-6cd0415f2bb7"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q54v-7713e44c7d2644688cd70c48718e1620",
     "source_name": "here_places",
     "source_url": "http://www.alohasteakhouse.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "-Happy Hour- Monday - Friday 3:00pm - 6:00pm",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-alohasteakhouse-com-e35a5c90bdfc",
+        "source_name": "business_websites",
+        "source_url": "http://www.alohasteakhouse.com",
+        "happy_hours": [
+          {
+            "weekday": 0,
+            "start_time": "15:00",
+            "end_time": "18:00",
+            "all_day": false
+          },
+          {
+            "weekday": 1,
+            "start_time": "15:00",
+            "end_time": "18:00",
+            "all_day": false
+          },
+          {
+            "weekday": 2,
+            "start_time": "15:00",
+            "end_time": "18:00",
+            "all_day": false
+          },
+          {
+            "weekday": 3,
+            "start_time": "15:00",
+            "end_time": "18:00",
+            "all_day": false
+          },
+          {
+            "weekday": 4,
+            "start_time": "15:00",
+            "end_time": "18:00",
+            "all_day": false
+          }
+        ]
+      }
+    ],
     "operating_hours": []
   },
   {
     "name": "Art's Corner Cafe",
     "city": "ventura",
-    "venue_type": "restaurant",
+    "venue_type": "cafe",
     "address_line_1": "E Thompson Blvd",
     "address_line_2": "",
     "neighborhood": "",
@@ -6384,30 +7299,6 @@
     "operating_hours": []
   },
   {
-    "name": "Barrelhouse 101",
-    "city": "ventura",
-    "venue_type": "restaurant",
-    "address_line_1": "E Thompson Blvd",
-    "address_line_2": "",
-    "neighborhood": "",
-    "state": "CA",
-    "postal_code": "93001-2826",
-    "latitude": 34.27863,
-    "longitude": -119.29246,
-    "geocode_query": "Barrelhouse 101, Ventura, CA, CA",
-    "phone_number": "+18056430906",
-    "website_url": "http://barrelhouse101-hub.com",
-    "image_urls": [],
-    "profile_name": "",
-    "profile_slug": "",
-    "is_active": true,
-    "external_id": "here:here:pds:place:8409q55j-55621d39aed3460aaeb424110657a3b9",
-    "source_name": "here_places",
-    "source_url": "http://barrelhouse101-hub.com",
-    "deals": [],
-    "operating_hours": []
-  },
-  {
     "name": "Baskin-Robbins",
     "city": "ventura",
     "venue_type": "cafe",
@@ -6421,14 +7312,36 @@
     "geocode_query": "Baskin-Robbins, Ventura, CA, CA",
     "phone_number": "+18056484384",
     "website_url": "https://www.baskinrobbins.com/en",
-    "image_urls": [],
+    "image_urls": [
+      "https://www.baskinrobbins.com/etc/designs/br/images/hamburger-menu-bg.png",
+      "https://cdn-menu-us-east-1.tillster.com/br-us-original/289a7111-6d18-4890-8b50-40acb245c3d3.png",
+      "https://cdn-menu-us-east-1.tillster.com/br-us-original/5f087e01-4e21-41aa-b566-a5eaecee43f2.png",
+      "https://cdn-menu-us-east-1.tillster.com/br-us-original/f45c9f7e-1a99-4d6d-9c8a-1b2389be5abc.png",
+      "https://cdn-menu-us-east-1.tillster.com/br-us-original/5d369549-01e7-46ae-9c62-7f0a14a08e7e.png",
+      "https://cdn-menu-us-east-1.tillster.com/br-us-original/28e5f2eb-ee0f-40d6-b758-33d4902e54b3.png"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q54y-e1c011d849e94a98b6de543e90365543",
     "source_name": "here_places",
     "source_url": "https://www.baskinrobbins.com/en",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Discount Offer",
+        "deal_type": "discount",
+        "description": "Cool Dads Get Cool Cakes Make Father's Day extra cool with one of our Dad-approved designs, filled with his favorite cake & ice cream flavor. Join Baskin-Robbins Rewards\u00ae & get access to $5 off a Cake $35+. Order Now Join Now Terms and exclusions apply. Valid on Cake purchase $35+ pre-tax. Must be a Baskin-Robbins Rewards\u00ae member to redeem. See BR App for details. Taste Sweet Victory Cue the crowd",
+        "price_text": "$5 off",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "order-baskinrobbins-com-menu-details-beach-day-929900e881b7",
+        "source_name": "business_websites",
+        "source_url": "https://order.baskinrobbins.com/menu-details/beach-day?id=30a537f8-8e98-4aab-a37c-b2639b19706a&sizes=%5B%7B%22size%22:%222.5%20oz%20scoop%22,%22id%22:%2230a537f8-8e98-4aab-a37c-b2639b19706a%22%7D,%7B%22size%22:%224%20oz%20scoop%22,%22id%22:%228ca0afaa-0d1c-4e7f-91bd-4e0fd1cc4e41%22%7D%5D",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -6439,20 +7352,42 @@
     "address_line_2": "",
     "neighborhood": "",
     "state": "CA",
-    "postal_code": "93003-6538",
+    "postal_code": "93003",
     "latitude": 34.2623,
     "longitude": -119.21287,
     "geocode_query": "Baskin-Robbins, Ventura, CA, CA",
     "phone_number": "+18056581481",
     "website_url": "https://www.baskinrobbins.com/en",
-    "image_urls": [],
+    "image_urls": [
+      "https://www.baskinrobbins.com/etc/designs/br/images/hamburger-menu-bg.png",
+      "https://cdn-menu-us-east-1.tillster.com/br-us-original/289a7111-6d18-4890-8b50-40acb245c3d3.png",
+      "https://cdn-menu-us-east-1.tillster.com/br-us-original/5f087e01-4e21-41aa-b566-a5eaecee43f2.png",
+      "https://cdn-menu-us-east-1.tillster.com/br-us-original/f45c9f7e-1a99-4d6d-9c8a-1b2389be5abc.png",
+      "https://cdn-menu-us-east-1.tillster.com/br-us-original/5d369549-01e7-46ae-9c62-7f0a14a08e7e.png",
+      "https://cdn-menu-us-east-1.tillster.com/br-us-original/28e5f2eb-ee0f-40d6-b758-33d4902e54b3.png"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q54z-00c93510cac5413b9d3985b52d5c4596",
     "source_name": "here_places",
     "source_url": "https://www.baskinrobbins.com/en",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Discount Offer",
+        "deal_type": "discount",
+        "description": "Cool Dads Get Cool Cakes Make Father's Day extra cool with one of our Dad-approved designs, filled with his favorite cake & ice cream flavor. Join Baskin-Robbins Rewards\u00ae & get access to $5 off a Cake $35+. Order Now Join Now Terms and exclusions apply. Valid on Cake purchase $35+ pre-tax. Must be a Baskin-Robbins Rewards\u00ae member to redeem. See BR App for details. Taste Sweet Victory Cue the crowd",
+        "price_text": "$5 off",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "order-baskinrobbins-com-menu-details-beach-day-929900e881b7",
+        "source_name": "business_websites",
+        "source_url": "https://order.baskinrobbins.com/menu-details/beach-day?id=30a537f8-8e98-4aab-a37c-b2639b19706a&sizes=%5B%7B%22size%22:%222.5%20oz%20scoop%22,%22id%22:%2230a537f8-8e98-4aab-a37c-b2639b19706a%22%7D,%7B%22size%22:%224%20oz%20scoop%22,%22id%22:%228ca0afaa-0d1c-4e7f-91bd-4e0fd1cc4e41%22%7D%5D",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -6463,7 +7398,7 @@
     "address_line_2": "",
     "neighborhood": "",
     "state": "CA",
-    "postal_code": "93001-2834",
+    "postal_code": "93001",
     "latitude": 34.27586,
     "longitude": -119.29046,
     "geocode_query": "Beach House Taco, Ventura, CA, CA",
@@ -6493,14 +7428,50 @@
     "geocode_query": "Bellringer Brew, Ventura, CA, CA",
     "phone_number": "+18056432337",
     "website_url": "http://www.anacapabrewing.com",
-    "image_urls": [],
+    "image_urls": [
+      "https://askanydifference.com/wp-content/uploads/2022/02/Quiche-vs-Souffle-2023-07-20T205732.337.jpg",
+      "https://askanydifference.com/wp-content/uploads/2024/03/25-Delicious-Skewer-Recipes-to-Grill-and-Thrill-Your-Taste-Buds.jpeg",
+      "https://askanydifference.com/wp-content/uploads/2024/03/25-Easy-Clean-Eating-Recipes.jpeg",
+      "https://askanydifference.com/wp-content/uploads/2025/02/sustainable-agriculture-vs-modern-agriculture-difference-and-comparison_660656.jpg",
+      "https://askanydifference.com/wp-content/uploads/2025/02/punjab-vs-andhra-pradesh-agriculture-difference-and-comparison_660641.jpg",
+      "https://askanydifference.com/wp-content/uploads/2025/02/roti-vs-naan-vs-paratha-vs-chapati-difference-and-comparison_660742.jpg"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8403fv6k-99c079b6aa5806cf385626642b7f5bfe",
     "source_name": "here_places",
     "source_url": "http://www.anacapabrewing.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Discount Offer",
+        "deal_type": "discount",
+        "description": "Posted in Food Nuts vs Dry Fruits: Difference and Comparison Nuts are bland or salty in flavor. Sugar isn't present. Sugar content is either extremely low or nonexistent. Nuts can be eaten right off the tree. Dried fruits have a\u2026 Posted by Sandeep Bhandari February 18, 2022",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-anacapabrewing-com-deals-24990f50d64f",
+        "source_name": "business_websites",
+        "source_url": "http://www.anacapabrewing.com/deals",
+        "happy_hours": []
+      },
+      {
+        "title": "Limited-Time Offer",
+        "deal_type": "limited_time",
+        "description": "Posted in Food Filter Coffee vs Espresso: Difference and Comparison Coffee is one of the most popular beverages today after beer and tea, excluding water. Can filter coffee and espresso be two different beverages? Special coffee shops and baristas who\u2026 Posted by Sandeep Bhandari February 12, 2022",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-anacapabrewing-com-deals-726ecaf2255a",
+        "source_name": "business_websites",
+        "source_url": "http://www.anacapabrewing.com/deals",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -6517,14 +7488,36 @@
     "geocode_query": "Best Donuts, Ventura, CA, CA",
     "phone_number": "+18056590133",
     "website_url": "http://www.bestdonuts.smoola.com",
-    "image_urls": [],
+    "image_urls": [
+      "https://static.hugedomains.com/images/hdv3-img/og_hugedomains.png",
+      "https://static.hugedomains.com/images/hdv3-img/favorite-header.png",
+      "https://static.hugedomains.com/images/hdv3-img/cart.png",
+      "https://static.hugedomains.com/images/hdv3-img/30daysmallico.png",
+      "https://static.hugedomains.com/images/hdv3-img/roket-side-ico.png",
+      "https://static.hugedomains.com/images/hdv3-img/safesmallico.png"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q55p-fcd4aa775439440fa8c45e786fc06739",
     "source_name": "here_places",
     "source_url": "http://www.bestdonuts.smoola.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Discount Offer",
+        "deal_type": "discount",
+        "description": "Since 2005, we've helped thousands of people get the perfect domain name K Great service! - Kofi Yeboah, April 22, 2026 Y Purchase went smooth. - Yvonne Perkins, April 21, 2026 T Huge domains is always a pleasure to deal with and the payment plan to pay off domains is absolutely exquisite. - Tony Ciccocelli, April 21, 2026 A It worked smoothly so far, as I bought domain with a payment plan. - Aiva",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-bestdonuts-smoola-com-deals-592eb21f523c",
+        "source_name": "business_websites",
+        "source_url": "http://www.bestdonuts.smoola.com/deals",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -6541,15 +7534,68 @@
     "geocode_query": "Big Mann BBQ, Ventura, CA, CA",
     "phone_number": "+18057464012",
     "website_url": "http://bigmannbbq.com",
-    "image_urls": [],
+    "image_urls": [
+      "https://img1.wsimg.com/isteam/stock/104363",
+      "http://bigmannbbq.com/m/cr=w:105",
+      "http://bigmannbbq.com/m/cr=w:211",
+      "http://bigmannbbq.com/m/cr=w:316",
+      "http://img1.wsimg.com/isteam/ip/static/transparent_placeholder.png/:/rs=w:451",
+      "http://bigmannbbq.com/m"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q54v-d84b8e60750d45b6b12a9eab5450c31d",
     "source_name": "here_places",
     "source_url": "http://bigmannbbq.com",
-    "deals": [],
-    "operating_hours": []
+    "deals": [
+      {
+        "title": "Discount Offer",
+        "deal_type": "discount",
+        "description": "What Others say Absolutely made our party a huge success Totally accommodating in the planning stage, ready to implement any menu or d\u00e9cor option, and very open to whatever service detail might enhance the occasion. At party time Roger and staff arrived early, well ahead of scheduled start, made all prep arrangements without interference or obstruction of other household operations, spread dining",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "bigmannbbq-com-ca6b385cfa04",
+        "source_name": "business_websites",
+        "source_url": "http://bigmannbbq.com",
+        "happy_hours": []
+      }
+    ],
+    "operating_hours": [
+      {
+        "weekday": 0,
+        "open_time": "11:00",
+        "close_time": "21:00"
+      },
+      {
+        "weekday": 1,
+        "open_time": "11:00",
+        "close_time": "21:00"
+      },
+      {
+        "weekday": 2,
+        "open_time": "11:00",
+        "close_time": "21:00"
+      },
+      {
+        "weekday": 3,
+        "open_time": "11:00",
+        "close_time": "21:00"
+      },
+      {
+        "weekday": 4,
+        "open_time": "11:00",
+        "close_time": "21:00"
+      },
+      {
+        "weekday": 5,
+        "open_time": "11:00",
+        "close_time": "23:00"
+      }
+    ]
   },
   {
     "name": "Bigstraw Boba",
@@ -6613,18 +7659,39 @@
     "geocode_query": "Blenders in the Grass, Ventura, CA, CA",
     "phone_number": "+18056410916",
     "website_url": "http://www.drinkblenders.com",
-    "image_urls": [],
+    "image_urls": [
+      "https://i0.wp.com/www.drinkblenders.com/wp-content/uploads/2026/03/HomePage_Graphics__03_10_2028_APP-advert-1.jpg?fit=2250%2C750&ssl=1",
+      "https://i0.wp.com/www.drinkblenders.com/wp-content/uploads/2026/03/HomePage_Graphics__03_10_2028_APP-advert2.jpg?fit=1100%2C750&ssl=1",
+      "https://i0.wp.com/www.drinkblenders.com/wp-content/uploads/2026/03/HomePage_Graphics__03_10_2028_APP-advert3.jpg?fit=1100%2C750&ssl=1",
+      "https://i0.wp.com/www.drinkblenders.com/wp-content/uploads/2022/10/Hiring_graphic_10_2022.jpg?fit=1867%2C208&ssl=1",
+      "https://i0.wp.com/www.drinkblenders.com/wp-content/uploads/2016/03/orange.png?fit=450%2C450&ssl=1"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q55j-2afe0008284648909f0b1e9bee31e551",
     "source_name": "here_places",
     "source_url": "http://www.drinkblenders.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Mug-Discount",
+        "deal_type": "discount",
+        "description": "Mug-Discount",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-drinkblenders-com-8d35c4301bfe",
+        "source_name": "business_websites",
+        "source_url": "http://www.drinkblenders.com",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
-    "name": "Bombay Bar and Grill",
+    "name": "Bombay Bar & Grill",
     "city": "ventura",
     "venue_type": "restaurant",
     "address_line_1": "S California St",
@@ -6634,7 +7701,7 @@
     "postal_code": "93001-2803",
     "latitude": 34.27891,
     "longitude": -119.29356,
-    "geocode_query": "Bombay Bar and Grill, Ventura, CA, CA",
+    "geocode_query": "Bombay Bar & Grill, Ventura, CA, CA",
     "phone_number": "+18056434404",
     "website_url": "http://www.bombaybarandgrill.com",
     "image_urls": [],
@@ -6751,20 +7818,42 @@
     "address_line_2": "",
     "neighborhood": "",
     "state": "CA",
-    "postal_code": "93001-2802",
-    "latitude": 34.27996,
-    "longitude": -119.2928,
+    "postal_code": "93001",
+    "latitude": 34.27999,
+    "longitude": -119.29284,
     "geocode_query": "Cafe Fiore, Ventura, CA, CA",
     "phone_number": "+18056531266",
     "website_url": "http://www.cafefiore.net",
-    "image_urls": [],
+    "image_urls": [
+      "https://static.spotapps.co/website_images/ab_websites/550540_website_v1/shared_image.jpg",
+      "https://static.spotapps.co/website_videos/CAFE_FIORE_EDIT_Vimeo720p30.mp4",
+      "https://static.spotapps.co/spots/4a/96c7b472ee442790ac74ce20617912/w926",
+      "https://static.spotapps.co/web/placeholder.png",
+      "http://static.spotapps.co/spots/ab/0a0e6a2d91416dab0ba870c9ccb935/medium",
+      "http://static.spotapps.co/spots/ab/0a0e6a2d91416dab0ba870c9ccb935/small"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q55j-bfb2ed397b68416a8ed714d056e605f7",
     "source_name": "here_places",
     "source_url": "http://www.cafefiore.net",
-    "deals": [],
+    "deals": [
+      {
+        "title": "\u00d7 Turn moments into memories",
+        "deal_type": "limited_time",
+        "description": "\u00d7 Turn moments into memories! Choose us for your next special occasion or get-together. Got a birthday party, rehearsal dinner, corporate or other event coming up? We're a great option for your gathering! Inquire today and let us know how we can make your special occasion perfect! Book your party",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-cafefiore-net-049791694367",
+        "source_name": "business_websites",
+        "source_url": "http://www.cafefiore.net",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -6847,7 +7936,7 @@
     "address_line_2": "",
     "neighborhood": "",
     "state": "CA",
-    "postal_code": "93003-0901",
+    "postal_code": "93003",
     "latitude": 34.26728,
     "longitude": -119.24891,
     "geocode_query": "California Pizza Kitchen, Ventura, CA, CA",
@@ -6895,20 +7984,42 @@
     "address_line_2": "",
     "neighborhood": "",
     "state": "CA",
-    "postal_code": "93001-2624",
-    "latitude": 34.281,
-    "longitude": -119.29481,
+    "postal_code": "93001",
+    "latitude": 34.28107,
+    "longitude": -119.29485,
     "geocode_query": "Casa Bella, Ventura, CA, CA",
     "phone_number": "+18053401118",
     "website_url": "http://www.casabellaprime.com",
-    "image_urls": [],
+    "image_urls": [
+      "https://static.hugedomains.com/images/hdv3-img/og_hugedomains.png",
+      "https://static.hugedomains.com/images/hdv3-img/favorite-header.png",
+      "https://static.hugedomains.com/images/hdv3-img/cart.png",
+      "https://static.hugedomains.com/images/hdv3-img/30daysmallico.png",
+      "https://static.hugedomains.com/images/hdv3-img/roket-side-ico.png",
+      "https://static.hugedomains.com/images/hdv3-img/safesmallico.png"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q55j-c3a7855b33b84289a6914e079db42d4b",
     "source_name": "here_places",
     "source_url": "http://www.casabellaprime.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Discount Offer",
+        "deal_type": "discount",
+        "description": "Since 2005, we've helped thousands of people get the perfect domain name K Great service! - Kofi Yeboah, April 22, 2026 Y Purchase went smooth. - Yvonne Perkins, April 21, 2026 T Huge domains is always a pleasure to deal with and the payment plan to pay off domains is absolutely exquisite. - Tony Ciccocelli, April 21, 2026 A It worked smoothly so far, as I bought domain with a payment plan. - Aiva",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-casabellaprime-com-deals-c5597c420520",
+        "source_name": "business_websites",
+        "source_url": "http://www.casabellaprime.com/deals",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -6956,30 +8067,6 @@
     "external_id": "here:here:pds:place:8409q55j-ec207fd9c38dbece5ab860aefec80120",
     "source_name": "here_places",
     "source_url": "https://www.clementebaking.com",
-    "deals": [],
-    "operating_hours": []
-  },
-  {
-    "name": "Coastal Cone",
-    "city": "ventura",
-    "venue_type": "cafe",
-    "address_line_1": "Spinnaker Dr",
-    "address_line_2": "",
-    "neighborhood": "",
-    "state": "CA",
-    "postal_code": "93001-4337",
-    "latitude": 34.24145,
-    "longitude": -119.2649,
-    "geocode_query": "Coastal Cone, Ventura, CA, CA",
-    "phone_number": "+18056582837",
-    "website_url": "http://www.coastalcone.com",
-    "image_urls": [],
-    "profile_name": "",
-    "profile_slug": "",
-    "is_active": true,
-    "external_id": "here:here:pds:place:8409q54y-0c3ef05cc8dd4c559553df6415d547c1",
-    "source_name": "here_places",
-    "source_url": "http://www.coastalcone.com",
     "deals": [],
     "operating_hours": []
   },
@@ -7069,14 +8156,67 @@
     "geocode_query": "Cronies Sports Grill, Ventura, CA, CA",
     "phone_number": "+18056506026",
     "website_url": "http://www.cronies.com",
-    "image_urls": [],
+    "image_urls": [
+      "https://static.wixstatic.com/media/224203_f2f550ccc6f84dc1845898915281fa3a%7Emv2.jpg/v1/fit/w_2500,h_1330,al_c/224203_f2f550ccc6f84dc1845898915281fa3a%7Emv2.jpg",
+      "https://static.wixstatic.com/media/224203_1ced8b51743a4f878c1e81eec7eead76~mv2.jpg/v1/fill/w_147,h_98,al_c,q_80,usm_0.66_1.00_0.01,blur_2,enc_avif,quality_auto/224203_1ced8b51743a4f878c1e81eec7eead76~mv2.jpg",
+      "https://static.wixstatic.com/media/224203_12dd5929fb064f2f923490234787e99d~mv2.jpg/v1/fill/w_1820,h_673,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/Thirsty%20Sauce_edited_edited.jpg",
+      "https://static.wixstatic.com/media/224203_12dd5929fb064f2f923490234787e99d~mv2.jpg/v1/fill/w_1820",
+      "http://www.cronies.com/h_673",
+      "http://www.cronies.com/al_c"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q54z-ffb7606035c1464cba7f08e85b7361e1",
     "source_name": "here_places",
     "source_url": "http://www.cronies.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "HAPPY HOUR Weekdays 3pm-6pm VIEW MENU",
+        "deal_type": "happy_hour",
+        "description": "HAPPY HOUR Weekdays 3pm-6pm VIEW MENU",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-cronies-com-e4ebba2bfa55",
+        "source_name": "business_websites",
+        "source_url": "http://www.cronies.com",
+        "happy_hours": [
+          {
+            "weekday": 0,
+            "start_time": "15:00",
+            "end_time": "18:00",
+            "all_day": false
+          },
+          {
+            "weekday": 1,
+            "start_time": "15:00",
+            "end_time": "18:00",
+            "all_day": false
+          },
+          {
+            "weekday": 2,
+            "start_time": "15:00",
+            "end_time": "18:00",
+            "all_day": false
+          },
+          {
+            "weekday": 3,
+            "start_time": "15:00",
+            "end_time": "18:00",
+            "all_day": false
+          },
+          {
+            "weekday": 4,
+            "start_time": "15:00",
+            "end_time": "18:00",
+            "all_day": false
+          }
+        ]
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -7093,14 +8233,36 @@
     "geocode_query": "Domino's, Ventura, CA, CA",
     "phone_number": "+18056481100",
     "website_url": "https://pizza.dominos.com/california/ventura/1017-n-ventura-ave",
-    "image_urls": [],
+    "image_urls": [
+      "http://a.mktgcdn.com/p/J0kEQBbYI08aV6lM-uDI2YZt_8F3cwB0paDNDcAqaDE/1483x1483.jpg",
+      "https://dynl.mktgcdn.com/p/SRFYEpCKcfTxj96Y-SCWNfTfDZoRu505ffHDrwtf86Y/500x500",
+      "https://dynl.mktgcdn.com/p/SRFYEpCKcfTxj96Y-SCWNfTfDZoRu505ffHDrwtf86Y/100x67",
+      "https://dynl.mktgcdn.com/p/SRFYEpCKcfTxj96Y-SCWNfTfDZoRu505ffHDrwtf86Y/320x214",
+      "https://dynl.mktgcdn.com/p/SRFYEpCKcfTxj96Y-SCWNfTfDZoRu505ffHDrwtf86Y/640x428",
+      "https://dynl.mktgcdn.com/p/SRFYEpCKcfTxj96Y-SCWNfTfDZoRu505ffHDrwtf86Y/960x642"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q55j-e77b71deb3184d3193018b8e8fb145d2",
     "source_name": "here_places",
     "source_url": "https://pizza.dominos.com/california/ventura/1017-n-ventura-ave",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Perfect Combo Offer Details",
+        "deal_type": "daily_special",
+        "description": "Perfect Combo Offer Details",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "pizza-dominos-com-california-ventura-1017-n-ventura-ave-211352ab9700",
+        "source_name": "business_websites",
+        "source_url": "https://pizza.dominos.com/california/ventura/1017-n-ventura-ave",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -7117,14 +8279,64 @@
     "geocode_query": "Duke's Griddle 'n Grill, Ventura, CA, CA",
     "phone_number": "+18056530707",
     "website_url": "http://www.bitchinburgers.com",
-    "image_urls": [],
+    "image_urls": [
+      "https://eu57f9pa98z.exactdn.com/wp-content/uploads/2023/09/og.jpg?strip=all",
+      "https://eu57f9pa98z.exactdn.com/wp-content/uploads/2023/08/van-02.png?strip=all",
+      "https://eu57f9pa98z.exactdn.com/wp-content/uploads/2023/09/GabrielPadilla.png?strip=all",
+      "https://eu57f9pa98z.exactdn.com/wp-content/uploads/2023/09/Roger-Heath.png?strip=all",
+      "https://eu57f9pa98z.exactdn.com/wp-content/uploads/2023/09/Daniel-Dan.png?strip=all",
+      "https://eu57f9pa98z.exactdn.com/wp-content/uploads/2023/09/duke_beach-03.png?strip=all"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q54v-214aaf3fe16647458d354a9166a0d83e",
     "source_name": "here_places",
     "source_url": "http://www.bitchinburgers.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Happy Hour Booze Mon - Fri 3 - 6 PM Draft Beers $1 OFF Bottle Beers $1 OFF GLASS HOUSE WINES $1 OFF WELL COCKTAILS $1 OFF WELL MARGARITA $2 OFF WELL MOSCOW MULE $2 OFF HAPPY HOUR BITES Mon - Fri 3 - 6 PM CHIPS & SALSA $4 CLAM CHOWDER CUP $4 HOUSE CHILI CUP $4 FRIED ZUCHINNI $4 MAC 'N CHEESE $4 CRISPY BEEF TACOS (2) $6 CHILI CHEESE FRIES $6 HOT DOG $6 KONA CHILI $6 POTATO SKINS $8 CAESAR SALAD $8 N",
+        "price_text": "$1 OFF",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-bitchinburgers-com-99da739ac1c1",
+        "source_name": "business_websites",
+        "source_url": "http://www.bitchinburgers.com",
+        "happy_hours": []
+      },
+      {
+        "title": "Ventura Order Online DocL 06/05/2025 This spot is really amazing",
+        "deal_type": "limited_time",
+        "description": "Ventura Order Online DocL 06/05/2025 This spot is really amazing! Nice friendly sevice, good food and reasonable prices. We had the Cheeseburger with fries. It was delicious. They have a choice of different beers at the count er and a beautiful patio. We had a real happy good time at your spot. Next time, we're in Ventura we come again - promise. Order Online Gabriel Padilla 05/09/2023 Fantastic C",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-bitchinburgers-com-1e86ffdeaecd",
+        "source_name": "business_websites",
+        "source_url": "http://www.bitchinburgers.com",
+        "happy_hours": []
+      },
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Menu Lunch And Dinner Happy Hour Breakfast Cocktails APPETIZERS 'N SIDES FRIES Sub tater tots +$1.25 | Sweet potato fries +$2.55 $6.05 ONION RINGS $9.10 FRINGS \u00bd Fries, \u00bd Onion Rings $7.55 LOADED FRIES Cheese, bacon, chives, sour cream, & chipotle cream sauce. Sub tots +$1.25 | Grilled chicken +$4.60 | Carne Asada or Carnitas +$5.35 $11.05 CHIPS & SALSA Made in house. Add Guacamole +$5.25 $5.15 CH",
+        "price_text": "$1.25",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-bitchinburgers-com-1ef7c2f31b86",
+        "source_name": "business_websites",
+        "source_url": "http://www.bitchinburgers.com",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -7231,9 +8443,9 @@
     "address_line_2": "",
     "neighborhood": "",
     "state": "CA",
-    "postal_code": "93001-2824",
-    "latitude": 34.27629,
-    "longitude": -119.29292,
+    "postal_code": "93001",
+    "latitude": 34.27627,
+    "longitude": -119.2939,
     "geocode_query": "Freedom Coffee, Ventura, CA, CA",
     "phone_number": "+16193174052",
     "website_url": "",
@@ -7355,7 +8567,7 @@
     "latitude": 34.28045,
     "longitude": -119.29177,
     "geocode_query": "Happy Place Eatery, Ventura, CA, CA",
-    "phone_number": "+18054794740",
+    "phone_number": "+18056699919",
     "website_url": "",
     "image_urls": [],
     "profile_name": "",
@@ -7405,14 +8617,120 @@
     "geocode_query": "IHOP, Ventura, CA, CA",
     "phone_number": "",
     "website_url": "https://www.ihop.com",
-    "image_urls": [],
+    "image_urls": [
+      "https://www.ihop.com/-/media/ihop/marketing/pages/specials/value-menu/hero/value-landing-page---hero-test-v1_compressed.jpg",
+      "https://www.ihop.com/-/media/ihop/marketing/pages/home/modules---primary/homepoage-tile---blt.jpg",
+      "https://www.ihop.com/-/media/ihop/marketing/pages/specials/omelettes-landing-page/hero/specials-page--hero--stacked-n-stuffed--bbq-pulled-pork.jpg",
+      "https://www.ihop.com/-/media/ihop/marketing/pages/home/menu-highlights/menu-highlights-1-754--dulce.jpg",
+      "https://www.ihop.com/-/media/ihop/marketing/pages/home/menu-highlights/menu-highlights-2-754--burrito.jpg",
+      "https://www.ihop.com/-/media/ihop/marketing/pages/home/menu-highlights/menu-highlights-3-754---country-fried-steak.jpg"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q54z-379dc247c51f4fd88cfc2673535b87df",
     "source_name": "here_places",
     "source_url": "https://www.ihop.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Discount Offer",
+        "deal_type": "discount",
+        "description": "20% OFF YOUR FIRST ONLINE ORDER WITH CODE IHOP20 ** IHOP CATERS TO ALL OF YOUR CRAVINGS GIFTS FOR THE ONE YOU LOVE EARN FREE FOOD***",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-ihop-com-happyhour-6344e662f21c",
+        "source_name": "business_websites",
+        "source_url": "https://www.ihop.com/happyhour",
+        "happy_hours": []
+      },
+      {
+        "title": "Daily Special",
+        "deal_type": "daily_special",
+        "description": "EARN REWARDS Join now to receive a free stack of 5 pancakes after your first purchase. *** Free Birthday Pancakes Exclusive Offers Rewards That Stack Up Join now BOLD BBQ PULLED PORK OMELETTE Our newest Stuffed 'N Stacked \u2122 Omelette. Hickory-smoked pulled pork paired with a sweet & tangy BBQ sauce, green peppers, onion & Jack & cheddar cheeses. Learn More VALUE MENU BLT Hickory-smoked bacon, fresh",
+        "price_text": "$7",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-ihop-com-happyhour-92cd66857d2c",
+        "source_name": "business_websites",
+        "source_url": "https://www.ihop.com/happyhour",
+        "happy_hours": []
+      },
+      {
+        "title": "Five Delicious Deals",
+        "deal_type": "daily_special",
+        "description": "Five Delicious Deals. Every Day. BLT Enjoy hickory-smoked bacon, fresh lettuce, tomato, and mayo on toasted white bread. Served with a choice of French fries or hash browns. Order Now BREAKFAST FAVES COMBO From sunrise to sunset, this combo hits the spot. 2 of our fluffy, world-famous buttermilk pancakes, 2 eggs, and 2 bacon strips or 2 pork sausage links. Order Now FRENCH TOAST FAVES COMBO Cravin",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-ihop-com-happyhour-e061a1a1b9d2",
+        "source_name": "business_websites",
+        "source_url": "https://www.ihop.com/happyhour",
+        "happy_hours": []
+      },
+      {
+        "title": "BREAKFAST FAVES COMBO From sunrise to sunset, this combo hits the spot",
+        "deal_type": "daily_special",
+        "description": "BREAKFAST FAVES COMBO From sunrise to sunset, this combo hits the spot. 2 of our fluffy, world-famous buttermilk pancakes, 2 eggs, and 2 bacon strips or 2 pork sausage links. Order Now",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-ihop-com-happyhour-d2eb44e5b2f3",
+        "source_name": "business_websites",
+        "source_url": "https://www.ihop.com/happyhour",
+        "happy_hours": []
+      },
+      {
+        "title": "FRENCH TOAST FAVES COMBO Craving something sweet and savory",
+        "deal_type": "daily_special",
+        "description": "FRENCH TOAST FAVES COMBO Craving something sweet and savory? Enjoy 1 slice of Classic Thick \u2018N Fluffy French Toast, 2 bacon strips or 2 pork sausage links, and 2 eggs. Order Now",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-ihop-com-happyhour-30421e140903",
+        "source_name": "business_websites",
+        "source_url": "https://www.ihop.com/happyhour",
+        "happy_hours": []
+      },
+      {
+        "title": "Discount Offer",
+        "deal_type": "discount",
+        "description": "IHOP SPECIALS BOLD BBQ PULLED PORK OMELETTE Our newest Stuffed 'N Stacked \u2122 Omelette. Hickory-smoked pulled pork paired with a sweet & tangy BBQ sauce, green peppers, onion & Jack & cheddar cheeses. Try Now VALUE MENU BLT Hickory-smoked bacon, fresh lettuce, tomato, and mayo on toasted white bread. Served with a choice of French fries or hash browns. Order Now SPECIAL OFFER ON GIFT CARDS For a lim",
+        "price_text": "$5",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-ihop-com-happyhour-b4d91b9bb713",
+        "source_name": "business_websites",
+        "source_url": "https://www.ihop.com/happyhour",
+        "happy_hours": []
+      },
+      {
+        "title": "Discount Offer",
+        "deal_type": "discount",
+        "description": "SPECIAL OFFER ON GIFT CARDS For a limited time, get a $5 Bonus Card with every $25 Gift Card purchase. * Buy Now",
+        "price_text": "$5",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-ihop-com-happyhour-5a16f70978d1",
+        "source_name": "business_websites",
+        "source_url": "https://www.ihop.com/happyhour",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -7687,7 +9005,7 @@
     "address_line_2": "",
     "neighborhood": "",
     "state": "CA",
-    "postal_code": "93003-0210",
+    "postal_code": "93003",
     "latitude": 34.26294,
     "longitude": -119.22541,
     "geocode_query": "Kuu Sushi, Ventura, CA, CA",
@@ -8000,8 +9318,8 @@
     "neighborhood": "",
     "state": "CA",
     "postal_code": "93001-2623",
-    "latitude": 34.28058,
-    "longitude": -119.29689,
+    "latitude": 34.28061,
+    "longitude": -119.29694,
     "geocode_query": "Maria Bonita, Ventura, CA, CA",
     "phone_number": "+18056520247",
     "website_url": "",
@@ -8053,13 +9371,69 @@
     "geocode_query": "Master's Donuts, Ventura, CA, CA",
     "phone_number": "+18056428398",
     "website_url": "http://masters-donuts-ventura.poi.place",
-    "image_urls": [],
+    "image_urls": [
+      "https://streetviewpixels-pa.googleapis.com/v1/thumbnail?panoid=OhtnBTJnpkwh0wb9hA-Kjg",
+      "https://mc.yandex.ru/watch/68644717"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q54z-a4e58f68544d44ffa949195422a19988",
     "source_name": "here_places",
     "source_url": "http://masters-donuts-ventura.poi.place",
+    "deals": [
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Happy Hour 14175 Mono Way, Sonora, CA 95370, United States +1 209-533-0223 Manage Listing",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "masters-donuts-ventura-poi-place-deals-c5a985d8888f",
+        "source_name": "business_websites",
+        "source_url": "http://masters-donuts-ventura.poi.place/deals",
+        "happy_hours": []
+      },
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Maps Call Pricing Happy Hour 14175 Mono Way, Sonora, CA 95370, United States +1 209-533-0223 Latest Feedback \"Great people, great place to get your hair or nails done.\" \"I payed money to have my hair ruined.\" \"If you want a professional hair colorist Celeste is the one to choose .\" Today Opening Hours Monday 9\u00e2\u0080\u00afam\u00e2\u0080\u00935\u00e2\u0080\u00afpm Tuesday 9\u00e2\u0080\u00afam\u00e2\u0080\u00935\u00e2\u0080\u00afpm Wednesday 9\u00e2\u0080\u00afam\u00e2\u0080\u00935\u00e2\u0080\u00afpm Thursday 9\u00e2\u0080\u00afam\u00e2\u0080\u00935\u00e2\u0080\u00afpm",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "masters-donuts-ventura-poi-place-deals-b48376d2c51f",
+        "source_name": "business_websites",
+        "source_url": "http://masters-donuts-ventura.poi.place/deals",
+        "happy_hours": []
+      }
+    ],
+    "operating_hours": []
+  },
+  {
+    "name": "McDonald's",
+    "city": "ventura",
+    "venue_type": "restaurant",
+    "address_line_1": "E Harbor Blvd",
+    "address_line_2": "",
+    "neighborhood": "",
+    "state": "CA",
+    "postal_code": "93001-3705",
+    "latitude": 34.26651,
+    "longitude": -119.2724,
+    "geocode_query": "McDonald's, Ventura, CA, CA",
+    "phone_number": "+18056430913",
+    "website_url": "https://www.mcdonalds.com",
+    "image_urls": [],
+    "profile_name": "",
+    "profile_slug": "",
+    "is_active": true,
+    "external_id": "here:here:pds:place:8409q54v-b82a22fdaa384b62b7ced7a1d6931cdf",
+    "source_name": "here_places",
+    "source_url": "https://www.mcdonalds.com",
     "deals": [],
     "operating_hours": []
   },
@@ -8101,14 +9475,31 @@
     "geocode_query": "Model Citizen, Ventura, CA, CA",
     "phone_number": "+18056283039",
     "website_url": "http://modelcitizenvta.com",
-    "image_urls": [],
+    "image_urls": [
+      "https://images.squarespace-cdn.com/content/v1/60dabdbe7cefd47227ca8daf/1653001521784-13DRB8G9RNHQEKNWMWUH/Space_004.jpg"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q55j-c20c80cd44a539375fa2758e84842046",
     "source_name": "here_places",
     "source_url": "http://modelcitizenvta.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "VENTURA, CALIF",
+        "deal_type": "happy_hour",
+        "description": "VENTURA, CALIF. 93001 4 PM TO 9 PM THURS- MON CLOSED TUES AND WED HAPPY HOUR 4-6 PM DAILY, ALL NIGHT MONDAY",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "modelcitizenvta-com-72638b0cf1c2",
+        "source_name": "business_websites",
+        "source_url": "http://modelcitizenvta.com",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -8125,14 +9516,96 @@
     "geocode_query": "Moofish Cafe, Ventura, CA, CA",
     "phone_number": "+18056482100",
     "website_url": "http://www.moofishcafevb.com",
-    "image_urls": [],
+    "image_urls": [
+      "https://moofishcafevb.com/wp-content/uploads/2022/11/MOOFISH-PHOTO-8w.jpg",
+      "https://moofishcafevb.com/wp-content/uploads/2023/01/newchef.jpg",
+      "https://moofishcafevb.com/wp-content/uploads/2022/11/MOOFISH-PHOTO-25sm-300x202.jpg",
+      "https://moofishcafevb.com/wp-content/uploads/2022/11/MOOFISH-PHOTO-17sm.jpg",
+      "https://moofishcafevb.com/wp-content/uploads/2022/11/MOOFISH-PHOTO-5sm.jpg",
+      "https://moofishcafevb.com/wp-content/uploads/2022/11/MOOFISH-PHOTO-12sm.jpg"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q54v-54541fb07fccd92ad86c8e6044b5fee5",
     "source_name": "here_places",
     "source_url": "http://www.moofishcafevb.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "VENTURA BEACH 450 E",
+        "deal_type": "limited_time",
+        "description": "VENTURA BEACH 450 E. Harbor Blvd., 93001 Book Now SUSTAINABLY DELICIOUS Casual Fare, Serious Sourcing LAND Locally Sourced Meats Our meats come from family owned and operated ranches where animals are naturally fed without steroids, growth hormones or antibiotics. COCKTAILS Inspired The perfect cocktail is a treat for the senses. Combining it with featured independent distilleries and breweries ma",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-moofishcafevb-com-397a6ae5045e",
+        "source_name": "business_websites",
+        "source_url": "http://www.moofishcafevb.com",
+        "happy_hours": []
+      }
+    ],
+    "operating_hours": []
+  },
+  {
+    "name": "Mothers",
+    "city": "ventura",
+    "venue_type": "fast_food",
+    "address_line_1": "E Thompson Blvd",
+    "address_line_2": "",
+    "neighborhood": "",
+    "state": "CA",
+    "postal_code": "93001-0002",
+    "latitude": 34.27713,
+    "longitude": -119.28292,
+    "geocode_query": "Mothers, Ventura, CA, CA",
+    "phone_number": "+16096470174",
+    "website_url": "https://motherstacos.com",
+    "image_urls": [
+      "https://static.wixstatic.com/media/541b6b_e4fffae86cfb4f9e87193f3c1332e778~mv2.jpg/v1/fill/w_2500,h_2059,al_c/541b6b_e4fffae86cfb4f9e87193f3c1332e778~mv2.jpg",
+      "https://static.wixstatic.com/media/6cfa6e_61130d3684954bc595bede7d3b8f282a~mv2.png/v1/fit/w_1366",
+      "https://motherstacos.com/h_710",
+      "https://motherstacos.com/q_90",
+      "https://motherstacos.com/enc_avif",
+      "https://motherstacos.com/quality_auto/6cfa6e_61130d3684954bc595bede7d3b8f282a~mv2.png"
+    ],
+    "profile_name": "",
+    "profile_slug": "",
+    "is_active": true,
+    "external_id": "here:here:pds:place:8409q54v-3a7442e95a7702a2dc5b363e5dd01289",
+    "source_name": "here_places",
+    "source_url": "https://motherstacos.com",
+    "deals": [
+      {
+        "title": "Discount Offer",
+        "deal_type": "discount",
+        "description": "VENTURA NAPA All Day Food & Drink Order Online Order Catering Catering Inquiry NAPA Reserve Order Online Order Catering Catering Inquiry Sun, Apr 19 Cars & Carnitas / Napa Details Apr 19, 2026, 11:00 AM \u2013 4:00 PM Napa, 3150a Jefferson St, Napa, CA 94558, USA Free event. Family friendly. First 50 cars get a Free Taco from Mothers, Free scoop from Thedas, 25% off a Cut at Empire Barber Studio. Pull",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "motherstacos-com-b828ebd594f5",
+        "source_name": "business_websites",
+        "source_url": "https://motherstacos.com",
+        "happy_hours": []
+      },
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Happy Hour: Monday - Friday | 3 PM - 6 PM Ventura 1177 E Thompson Blvd, Suite 101 Ventura, CA 93001 805.628.3160 Sun - Thurs | 11 AM -8 PM Fri & Sat | 11 AM - 9 PM \u200b Happy Hour: Monday - Friday | 3 PM - 6 PM",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "motherstacos-com-6dc1f0abd5c4",
+        "source_name": "business_websites",
+        "source_url": "https://motherstacos.com",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -8149,14 +9622,50 @@
     "geocode_query": "Mrs Fields, Ventura, CA, CA",
     "phone_number": "+18056582158",
     "website_url": "http://www.mrsfields.com",
-    "image_urls": [],
+    "image_urls": [
+      "http://www.mrsfields.com/cdn/shop/files/2023-19EVCCC140-BirthdayDippedNibblers.jpg?v=1684438837&width=533",
+      "http://www.mrsfields.com/cdn/shop/files/25FDBASKET-glamour-fathers-day-2025.webp?v=1749502628&width=533",
+      "http://www.mrsfields.com/cdn/shop/files/23BGBOX-FruitBox-HappyBirthday-Main.jpg?v=1687459953&width=533",
+      "http://www.mrsfields.com/cdn/shop/files/2023-20EVCCC122-SaltedCaramelChocolateStrawberries.jpg?v=1684347181&width=533",
+      "http://www.mrsfields.com/cdn/shop/files/Web-25EVNTIN148-Signature48NTin-249.webp?v=1769630706",
+      "http://www.mrsfields.com/cdn/shop/files/Web-26FDCTIN121-Father_sDaytinwithnibblers_popcorn-30.webp?v=1778000124"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q54y-ec6b0d91b8c54eb8addd35d7d900b704",
     "source_name": "here_places",
     "source_url": "http://www.mrsfields.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Daily Special",
+        "deal_type": "daily_special",
+        "description": "See our selections Trending Bestsellers New Items 48 Nibblers\u00ae Bite-Sized Cookies Signature Tin 48 Nibblers\u00ae Bite-Sized Cookies Signature Tin Regular price $49.99 Regular price Sale price $49.99 Unit price / per Congratulations 48 Nibblers\u00ae Bite-Sized Cookies Signature Tin Congratulations 48 Nibblers\u00ae Bite-Sized Cookies Signature Tin Regular price $49.99 Regular price Sale price $49.99 Unit price",
+        "price_text": "$49.99",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-mrsfields-com-collections-gifts-on-sale-c24003d93b98",
+        "source_name": "business_websites",
+        "source_url": "http://www.mrsfields.com/collections/gifts-on-sale",
+        "happy_hours": []
+      },
+      {
+        "title": "Discount Offer",
+        "deal_type": "discount",
+        "description": "Skip to content Bestsellers Shop By Treats Back to Main Menu Shop By Treats Gift Treats Gift Treats Nibblers\u00ae Bite-Sized Cookies Coffee Cakes Chocolate Covered Strawberries & Fresh Fruit Treats & Other Sweets Gift Types Gift Types Signature Gifts Gift Tins Gift Boxes Gift Baskets & Crates Gift Towers Gifts By Price Gifts By Price Gifts Under $30 Gifts $30 to $50 Gifts $50 to $75 Gifts $75 to $100",
+        "price_text": "$30",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-mrsfields-com-collections-gifts-on-sale-ff9f5060ae38",
+        "source_name": "business_websites",
+        "source_url": "http://www.mrsfields.com/collections/gifts-on-sale",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -8184,26 +9693,26 @@
     "operating_hours": []
   },
   {
-    "name": "O-Sabi Japanese Restaurant",
+    "name": "Olive Ventura",
     "city": "ventura",
-    "venue_type": "restaurant",
-    "address_line_1": "Walker St",
+    "venue_type": "bar",
+    "address_line_1": "E Main St",
     "address_line_2": "",
     "neighborhood": "",
     "state": "CA",
-    "postal_code": "93003",
-    "latitude": 34.25395,
-    "longitude": -119.21135,
-    "geocode_query": "O-Sabi Japanese Restaurant, Ventura, CA, CA",
-    "phone_number": "+18056426200",
-    "website_url": "",
+    "postal_code": "93001-2623",
+    "latitude": 34.28061,
+    "longitude": -119.29639,
+    "geocode_query": "Olive Ventura, Ventura, CA, CA",
+    "phone_number": "+18056486166",
+    "website_url": "http://www.oliveventura.com",
     "image_urls": [],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
-    "external_id": "here:here:pds:place:8409q54z-76f298fc44a84ecb8b13dd229c2c370c",
+    "external_id": "here:here:pds:place:8409q55j-9769ef5259a44140ba79bda9cbb2af8b",
     "source_name": "here_places",
-    "source_url": "",
+    "source_url": "http://www.oliveventura.com",
     "deals": [],
     "operating_hours": []
   },
@@ -8269,14 +9778,151 @@
     "geocode_query": "Paddy's, Ventura, CA, CA",
     "phone_number": "+18056521070",
     "website_url": "http://paddysventura.com",
-    "image_urls": [],
+    "image_urls": [
+      "https://images.squarespace-cdn.com/content/v1/64b0ac35d0d60362c25ab88c/2aefcf60-3e05-4151-94ac-efc6f8aedef1/org-lgbt-heart-02-256.png",
+      "https://images.squarespace-cdn.com/content/v1/64b0ac35d0d60362c25ab88c/a5eb3fe2-63b4-479c-bacc-be9938a16130/photo1714164385+%282%29.jpeg",
+      "https://images.squarespace-cdn.com/content/v1/64b0ac35d0d60362c25ab88c/942165da-8956-4ff2-85a1-956e744b8115/Insta-bg-overlay.png"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q55j-5cf31ddbe7ed447cb2e76969f1e3e3a1",
     "source_name": "here_places",
     "source_url": "http://paddysventura.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Ventura\u201ds only LGBTQIA+ bar Paddy\u2019s is OPEN from 2:00pm till 2:00am 7 days a week 365 days a year scroll to the bottom of the page for our Daily events Weekday Happy hour from 2pm-8pm Monday through Friday Weekend Happy hour is from 2pm-4pm Saturday and Sunday Paddys has been the center for LGBTQIA+ fun and entertainment for over 30 years! every weekend is a dance party here with DJ\u2019s spinning the",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "paddysventura-com-99985dc9e441",
+        "source_name": "business_websites",
+        "source_url": "http://paddysventura.com",
+        "happy_hours": [
+          {
+            "weekday": 0,
+            "start_time": "14:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 1,
+            "start_time": "14:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 2,
+            "start_time": "14:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 3,
+            "start_time": "14:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 4,
+            "start_time": "14:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 0,
+            "start_time": "14:00",
+            "end_time": "16:00",
+            "all_day": false
+          },
+          {
+            "weekday": 4,
+            "start_time": "14:00",
+            "end_time": "16:00",
+            "all_day": false
+          },
+          {
+            "weekday": 5,
+            "start_time": "20:30",
+            "end_time": "00:30",
+            "all_day": false
+          },
+          {
+            "weekday": 6,
+            "start_time": "20:30",
+            "end_time": "00:30",
+            "all_day": false
+          },
+          {
+            "weekday": 2,
+            "start_time": "20:30",
+            "end_time": "00:30",
+            "all_day": false
+          }
+        ]
+      },
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Weekday Happy hour from 2pm-8pm Monday through Friday Weekend Happy hour is from 2pm-4pm Saturday and Sunday",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "paddysventura-com-f62c3fcbe681",
+        "source_name": "business_websites",
+        "source_url": "http://paddysventura.com",
+        "happy_hours": [
+          {
+            "weekday": 0,
+            "start_time": "14:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 1,
+            "start_time": "14:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 2,
+            "start_time": "14:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 3,
+            "start_time": "14:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 4,
+            "start_time": "14:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 0,
+            "start_time": "14:00",
+            "end_time": "16:00",
+            "all_day": false
+          },
+          {
+            "weekday": 4,
+            "start_time": "14:00",
+            "end_time": "16:00",
+            "all_day": false
+          }
+        ]
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -8288,8 +9934,8 @@
     "neighborhood": "",
     "state": "CA",
     "postal_code": "93001-2624",
-    "latitude": 34.28109,
-    "longitude": -119.29575,
+    "latitude": 34.28143,
+    "longitude": -119.29619,
     "geocode_query": "Palermo, Ventura, CA, CA",
     "phone_number": "+18056433070",
     "website_url": "http://palermocoffee.com",
@@ -8551,7 +10197,7 @@
     "address_line_2": "",
     "neighborhood": "",
     "state": "CA",
-    "postal_code": "93001-2626",
+    "postal_code": "93001-5650",
     "latitude": 34.28117,
     "longitude": -119.29437,
     "geocode_query": "Rice by Mama, Ventura, CA, CA",
@@ -8575,9 +10221,9 @@
     "address_line_2": "",
     "neighborhood": "",
     "state": "CA",
-    "postal_code": "93001-2628",
-    "latitude": 34.28101,
-    "longitude": -119.29184,
+    "postal_code": "93001",
+    "latitude": 34.28119,
+    "longitude": -119.29177,
     "geocode_query": "Rice by Mama 2, Ventura, CA, CA",
     "phone_number": "+18056678776",
     "website_url": "https://ricebymama2.business.site",
@@ -8629,15 +10275,190 @@
     "geocode_query": "Rocks & Drams, Ventura, CA, CA",
     "phone_number": "+18056678585",
     "website_url": "https://rocksanddrams.com",
-    "image_urls": [],
+    "image_urls": [
+      "https://rocksanddrams.com/maglev/assets/76615450-2510-4414-bd81-72e4482b6b21-c61afeff-c810-4319-8f40-7f3c47e26f22.avif",
+      "https://rocksanddrams.com/maglev/assets/7df9dc07-d524-4b4a-b824-821cd1ba3ffe-screenshot_1.avif",
+      "https://image-cdn.chowlyinc.com/650%2Cfit/https%3A%2F%2Fs3.amazonaws.com%2Ftoasttab%2Fmenu_service%2Frestaurants%2Fc37ff81a-ff63-4436-8f9b-31a315b151c1%2FMenuItem%2Fac4d6376-174a-4cee-a13a-96894345c376.jpg",
+      "https://image-cdn.chowlyinc.com/650%2Cfit/https%3A%2F%2Fs3.amazonaws.com%2Ftoasttab%2Fmenu_service%2Frestaurants%2Fc37ff81a-ff63-4436-8f9b-31a315b151c1%2FMenuItem%2Fb8d8baeb-b9ca-4abc-b5c2-a3cc9c7727bd.jpg",
+      "https://rocksanddrams.com/maglev/assets/15b6218a-83bd-44f4-a7d4-094824245957-c42d6a00-17e0-468f-bf33-38becf427a9a.avif",
+      "https://rocksanddrams.com/maglev/assets/abba017f-72f4-4f97-9b27-96d6c8267510-73907043-de5c-45f3-a80c-5a99aa4b7639.avif"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q54y-a8245d9bb61518c7df23edf4af2f6d2c",
     "source_name": "here_places",
     "source_url": "https://rocksanddrams.com",
-    "deals": [],
-    "operating_hours": []
+    "deals": [
+      {
+        "title": "Happy Hour Weekdays and Weekends Who doesn\u00e2\u0080\u0099t love a good deal",
+        "deal_type": "happy_hour",
+        "description": "Happy Hour Weekdays and Weekends Who doesn\u00e2\u0080\u0099t love a good deal? Our happy hour makes it easy to enjoy great drinks and food without spending too much. Stop by on weekdays from 4-6pm, Saturdays from 12-2pm and Sunday ALL DAY to take advantage of $2 off all menu prices on food and drinks. It\u00e2\u0080\u0099s the perfect excuse to unwind after work or kick off the weekend with friends.",
+        "price_text": "$2 off",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "rocksanddrams-com-happyhour-78a8efb33ed6",
+        "source_name": "business_websites",
+        "source_url": "https://rocksanddrams.com/happyhour",
+        "happy_hours": []
+      },
+      {
+        "title": "Ventura Pier",
+        "deal_type": "happy_hour",
+        "description": "Ventura Pier. Home Our Story Catering Menu More Reservations We're Hiring Private Events Store Gift Cards Contact Us Order Now Home Our Story Catering Menu Reservations We're Hiring Private Events Store Gift Cards Contact Us Order Now Best Bar And Grill in Ventura, CA Rocks & Drams Order Pickup Order Delivery Featured Menu Explore our featured items for a delightful experience. Order Now Garlic No",
+        "price_text": "$2 off",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "rocksanddrams-com-happyhour-85f712e045b3",
+        "source_name": "business_websites",
+        "source_url": "https://rocksanddrams.com/happyhour",
+        "happy_hours": []
+      },
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Happy Hour , Catering Services , Private Events , Food Delivery , Online Ordering , Takeout . What areas do you serve? We are located at 14 S California St, Ventura, CA, 93001 , US . We service Downtown Ventura , S California Street Ventura , California Street , Main Street , Ventura Beach Area , Ventura Pier Area , Midtown Ventura , Ventura Harbor Area , Ventura County , Seaward Avenue , Poli Str",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "rocksanddrams-com-happyhour-507995f93885",
+        "source_name": "business_websites",
+        "source_url": "https://rocksanddrams.com/happyhour",
+        "happy_hours": []
+      },
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Happy Hour Specials near Ventura, California Order your favorites online from Rocks and Drams. Order Now",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "rocksanddrams-com-happyhour-6cb425731724",
+        "source_name": "business_websites",
+        "source_url": "https://rocksanddrams.com/happyhour",
+        "happy_hours": []
+      },
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Happy Hour Ventura Rocks and Drams is a dine-in destination in Downtown Ventura serving bold New American cuisine with craft cocktails , takeout , and delivery . Order Now",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "rocksanddrams-com-happyhour-1f36a2767645",
+        "source_name": "business_websites",
+        "source_url": "https://rocksanddrams.com/happyhour",
+        "happy_hours": []
+      },
+      {
+        "title": "Ventura Pier",
+        "deal_type": "happy_hour",
+        "description": "Ventura Pier. Home Our Story Catering Menu More Reservations We're Hiring Private Events Store Gift Cards Contact Us Order Now Home Our Story Catering Menu Reservations We're Hiring Private Events Store Gift Cards Contact Us Order Now Best Happy Hour Specials near Ventura, California Order your favorites online from Rocks and Drams. Order Now Happy Hour Specials Items Try these items Order Now Col",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "rocksanddrams-com-happyhour-1537e8e0953c",
+        "source_name": "business_websites",
+        "source_url": "https://rocksanddrams.com/happyhour",
+        "happy_hours": [
+          {
+            "weekday": 6,
+            "start_time": "12:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 0,
+            "start_time": "16:00",
+            "end_time": "22:00",
+            "all_day": false
+          },
+          {
+            "weekday": 1,
+            "start_time": "16:00",
+            "end_time": "22:00",
+            "all_day": false
+          },
+          {
+            "weekday": 2,
+            "start_time": "16:00",
+            "end_time": "22:00",
+            "all_day": false
+          },
+          {
+            "weekday": 3,
+            "start_time": "16:00",
+            "end_time": "22:00",
+            "all_day": false
+          },
+          {
+            "weekday": 4,
+            "start_time": "16:00",
+            "end_time": "23:59",
+            "all_day": false
+          },
+          {
+            "weekday": 5,
+            "start_time": "12:00",
+            "end_time": "23:59",
+            "all_day": false
+          }
+        ]
+      },
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Happy Hour Specials Items Try these items Order Now Cold Roasted Vegetables Slow-roasted seasonal vegetables, chilled and lightly dressed, served with garlic chive cream, chili truffle, and jalape\u00c3\u00b1o aioli for a rich, bold trio of dips. Add Item Calamari Lightly fried calamari with tender rings and crisp texture, finished with lemon and served with roasted garlic aioli for a bright, savory bite. A",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "rocksanddrams-com-happyhour-58ccff248b8c",
+        "source_name": "business_websites",
+        "source_url": "https://rocksanddrams.com/happyhour",
+        "happy_hours": []
+      }
+    ],
+    "operating_hours": [
+      {
+        "weekday": 2,
+        "open_time": "04:00",
+        "close_time": "10:00"
+      },
+      {
+        "weekday": 3,
+        "open_time": "04:00",
+        "close_time": "10:00"
+      },
+      {
+        "weekday": 4,
+        "open_time": "04:00",
+        "close_time": "11:59"
+      },
+      {
+        "weekday": 5,
+        "open_time": "12:00",
+        "close_time": "11:59"
+      },
+      {
+        "weekday": 6,
+        "open_time": "12:00",
+        "close_time": "08:00"
+      }
+    ]
   },
   {
     "name": "Rolling Pin Donuts",
@@ -8677,14 +10498,36 @@
     "geocode_query": "Romano's Macaroni Grill, Ventura, CA, CA",
     "phone_number": "+18054779925",
     "website_url": "http://www.macaronigrill.com",
-    "image_urls": [],
+    "image_urls": [
+      "http://www.macaronigrill.com/Themes/Default/Content/Images/hh-text.png",
+      "http://www.macaronigrill.com/Assets/macaroni-grill-generosity-kitchen.jpg",
+      "http://www.macaronigrill.com/Assets/mobile-macaroni-grill-generosity-kitchen.jpg",
+      "http://www.macaronigrill.com/Themes/Default/Content/Images/hh-tag.png",
+      "http://www.macaronigrill.com/Themes/Default/Content/Images/accent-ornate-under.png",
+      "http://www.macaronigrill.com/Assets/doodlesoyla81-op.jpg"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q54y-7e0a73b5d00442bc8f301c6540e69f84",
     "source_name": "here_places",
     "source_url": "http://www.macaronigrill.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "The best mac & cheese is now available at all locations for dine-in & delivery",
+        "deal_type": "happy_hour",
+        "description": "The best mac & cheese is now available at all locations for dine-in & delivery. See Our Menu Weekdays from 3pm\u20137pm SEE OUR NEW HAPPY HOUR MENU",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-macaronigrill-com-menus-menu-dine-in-happy-hour-300ef9f2f145",
+        "source_name": "business_websites",
+        "source_url": "http://www.macaronigrill.com/menus/menu/dine-in/happy-hour",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -8725,14 +10568,32 @@
     "geocode_query": "Rumfish Y Vino, Ventura, CA, CA",
     "phone_number": "+18056679288",
     "website_url": "http://www.rumfishyvinoventura.com",
-    "image_urls": [],
+    "image_urls": [
+      "https://rumfishyvinoventura.com/wp-content/plugins/seedprod-notification-bar-pro/template/images/close.png",
+      "https://rumfishyvinoventura.com/wp-content/plugins/seedprod-notification-bar-pro/template/images/open1.png"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:840aabd1-0f04fe83e66c0d8e30d0b7d3fe293af2",
     "source_name": "here_places",
     "source_url": "http://www.rumfishyvinoventura.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Ventura Coast \u201cBeachscape\u201d Pilsner Transmission Brewing \u201cFog Lights\u201d Hazy IPA Ventura Coast Oktoberfest Pilsner Leashless \u201cSunrise\u201d Blonde Ventura Coast Seasonal Stout PLANTAIN CHIPS with Valentina aioli 7 QUESO FUNDIDO chorizo, poblanos, queso Oaxaca 10 MUSSELS mustard crema, beer, garlic, shallots, parsley, served with grilled ciabatta 10 GARLIC FRIES cotija, parsley, Valentina aioli 6 FIG & GOA",
+        "price_text": "$2 OFF",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "rumfishyvinoventura-com-wp-content-uploads-2025-12-current-happy-hour-menu-09-29-25-pdf-09287e39f5d2",
+        "source_name": "business_websites",
+        "source_url": "https://rumfishyvinoventura.com/wp-content/uploads/2025/12/CURRENT-HAPPY-HOUR-MENU-09.29.25.pdf",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -8767,9 +10628,9 @@
     "address_line_2": "",
     "neighborhood": "",
     "state": "CA",
-    "postal_code": "93001-2814",
-    "latitude": 34.28099,
-    "longitude": -119.29139,
+    "postal_code": "93001",
+    "latitude": 34.28104,
+    "longitude": -119.29143,
     "geocode_query": "STARBUCKS, Ventura, CA, CA",
     "phone_number": "+18056482489",
     "website_url": "",
@@ -8904,6 +10765,30 @@
     "operating_hours": []
   },
   {
+    "name": "Seaward Sushi Bar",
+    "city": "ventura",
+    "venue_type": "restaurant",
+    "address_line_1": "S Seaward Ave",
+    "address_line_2": "",
+    "neighborhood": "",
+    "state": "CA",
+    "postal_code": "93003-2628",
+    "latitude": 34.27607,
+    "longitude": -119.26519,
+    "geocode_query": "Seaward Sushi Bar, Ventura, CA, CA",
+    "phone_number": "+18056289070",
+    "website_url": "https://seawardsushi.com",
+    "image_urls": [],
+    "profile_name": "",
+    "profile_slug": "",
+    "is_active": true,
+    "external_id": "here:here:pds:place:8409q54y-7833f5af39c24a998aef0310c1b75736",
+    "source_name": "here_places",
+    "source_url": "https://seawardsushi.com",
+    "deals": [],
+    "operating_hours": []
+  },
+  {
     "name": "Shavers Hawaiian Shave Ice",
     "city": "ventura",
     "venue_type": "cafe",
@@ -8959,7 +10844,7 @@
     "address_line_2": "",
     "neighborhood": "",
     "state": "CA",
-    "postal_code": "93001-2918",
+    "postal_code": "93001",
     "latitude": 34.27804,
     "longitude": -119.28825,
     "geocode_query": "Spencer Makenzie's Fish, Ventura, CA, CA",
@@ -9037,14 +10922,36 @@
     "geocode_query": "Stephens Market & Grill, Ventura, CA, CA",
     "phone_number": "+18056484200",
     "website_url": "http://www.stephensmarketandgrill.com",
-    "image_urls": [],
+    "image_urls": [
+      "https://images.squarespace-cdn.com/content/v1/5ba6902b51f4d4cb49537f64/1537920809929-0KT7ABM3V9KVJ6DKI1KE/Greek+Burger+with+Greek+Salad.jpg",
+      "https://images.squarespace-cdn.com/content/v1/5ba6902b51f4d4cb49537f64/1538008274312-A1UD3PLUWVVL9BDATYTM/santorini5.jpg",
+      "https://images.squarespace-cdn.com/content/v1/5ba6902b51f4d4cb49537f64/1537921538535-FBDSWZ2RH8N3NI2U02DW/Lamb+Gyro.jpg",
+      "https://images.squarespace-cdn.com/content/v1/5ba6902b51f4d4cb49537f64/1537920907203-WHA3GWDY1NECYRS6KPXA/Lentil+Soup+with+Pita+Bread.jpg",
+      "https://images.squarespace-cdn.com/content/v1/5ba6902b51f4d4cb49537f64/1537920944779-W6J2PL5YIISK2MB692XM/ChickenCaesarSalad.jpg",
+      "https://images.squarespace-cdn.com/content/v1/5ba6902b51f4d4cb49537f64/1537920967852-60DAJQYGDN8RGLRAEFYX/desserts.jpg"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:840jx7ps-9f5f28a4d947009b44e719462253cd24",
     "source_name": "here_places",
     "source_url": "http://www.stephensmarketandgrill.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Discount Offer",
+        "deal_type": "discount",
+        "description": "Some of Our Favorites \u2014 Stephen\u2019s Special 4 Jumbo shrimp stuffed with feta, jalapeno, wrapped with bacon, and topped with special sauce. $33.95 Briami (VEGETARIAN DISH) Potatoes, zucchini, eggplant, onions, fresh garlic and tomato sauce. $24.95 Moussaka Eggplant, potato, ground beef and b \u00e9 chamel sauce. $26.95 Gyro Choice of Chicken or Lamb (roasted on vertical spit). $13.95 Greek Burger Served w",
+        "price_text": "$33.95",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-stephensmarketandgrill-com-4acbacdd6d41",
+        "source_name": "business_websites",
+        "source_url": "http://www.stephensmarketandgrill.com",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -9133,14 +11040,50 @@
     "geocode_query": "Sushi Fresh, Ventura, CA, CA",
     "phone_number": "+18056506068",
     "website_url": "http://sushifreshventura.com",
-    "image_urls": [],
+    "image_urls": [
+      "https://static.wixstatic.com/media/9d86fb_6968dadc424748ef8ec393e05de36c0d~mv2.jpg/v1/fill/w_1000,h_614,al_c/9d86fb_6968dadc424748ef8ec393e05de36c0d~mv2.jpg",
+      "https://static.wixstatic.com/media/9d86fb_d5501daf38a14db2bacaec6233f1b340.jpg/v1/fill/w_2500,h_1495,al_c/9d86fb_d5501daf38a14db2bacaec6233f1b340.jpg",
+      "https://www.sushifreshventura.com/h_227",
+      "https://www.sushifreshventura.com/al_c",
+      "https://www.sushifreshventura.com/q_80",
+      "https://www.sushifreshventura.com/usm_0.66_1.00_0.01"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q55p-2261dd5281d341578558cb81b861fca3",
     "source_name": "here_places",
     "source_url": "http://sushifreshventura.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Order Takeout Online or Call Us (805) 650-6068 \u2022 Daily Happy Hour Specials \u2022 Order Takeout Online by Using the Spaces by Wix app > Use Invite Code UMG9WW",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-sushifreshventura-com-happy-hours-be215635db81",
+        "source_name": "business_websites",
+        "source_url": "https://www.sushifreshventura.com/happy-hours",
+        "happy_hours": []
+      },
+      {
+        "title": "Daily Happy Hours Happy Hour Pricing for Restaurant Dining Only",
+        "deal_type": "happy_hour",
+        "description": "Daily Happy Hours Happy Hour Pricing for Restaurant Dining Only",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-sushifreshventura-com-happy-hours-636575c17b26",
+        "source_name": "business_websites",
+        "source_url": "https://www.sushifreshventura.com/happy-hours",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -9236,30 +11179,6 @@
     "external_id": "here:here:pds:place:8409q54y-c3373750bb9155d5bb9e3f43ba23d9e8",
     "source_name": "here_places",
     "source_url": "",
-    "deals": [],
-    "operating_hours": []
-  },
-  {
-    "name": "Taj Cafe",
-    "city": "ventura",
-    "venue_type": "restaurant",
-    "address_line_1": "E Main St",
-    "address_line_2": "",
-    "neighborhood": "",
-    "state": "CA",
-    "postal_code": "93001-2629",
-    "latitude": 34.28057,
-    "longitude": -119.29198,
-    "geocode_query": "Taj Cafe, Ventura, CA, CA",
-    "phone_number": "+18056521521",
-    "website_url": "http://www.thetajcafeventura.com",
-    "image_urls": [],
-    "profile_name": "",
-    "profile_slug": "",
-    "is_active": true,
-    "external_id": "here:here:pds:place:8409q55j-4b2c6bfbc56040a4a599ffb5adad6f3b",
-    "source_name": "here_places",
-    "source_url": "http://www.thetajcafeventura.com",
     "deals": [],
     "operating_hours": []
   },
@@ -9360,30 +11279,6 @@
     "operating_hours": []
   },
   {
-    "name": "Taqueria la Victoria",
-    "city": "ventura",
-    "venue_type": "fast_food",
-    "address_line_1": "S Victoria Ave",
-    "address_line_2": "",
-    "neighborhood": "",
-    "state": "CA",
-    "postal_code": "93003-6538",
-    "latitude": 34.26136,
-    "longitude": -119.21347,
-    "geocode_query": "Taqueria la Victoria, Ventura, CA, CA",
-    "phone_number": "+18056769388",
-    "website_url": "https://lavictoriarestaurant.com",
-    "image_urls": [],
-    "profile_name": "",
-    "profile_slug": "",
-    "is_active": true,
-    "external_id": "here:here:pds:place:840aabd1-1ed4152fd81b00400ef63c64e91f7fe2",
-    "source_name": "here_places",
-    "source_url": "https://lavictoriarestaurant.com",
-    "deals": [],
-    "operating_hours": []
-  },
-  {
     "name": "Ten Tigers Ventura",
     "city": "ventura",
     "venue_type": "restaurant",
@@ -9439,7 +11334,7 @@
     "address_line_2": "",
     "neighborhood": "",
     "state": "CA",
-    "postal_code": "93001-4337",
+    "postal_code": "93001",
     "latitude": 34.24145,
     "longitude": -119.2649,
     "geocode_query": "The Greek Mediterranean Steak & Seafood, Ventura, CA, CA",
@@ -9480,6 +11375,30 @@
     "operating_hours": []
   },
   {
+    "name": "The Hive Bourbon Room & Cocktail Lounge",
+    "city": "ventura",
+    "venue_type": "bar",
+    "address_line_1": "E Main St",
+    "address_line_2": "",
+    "neighborhood": "",
+    "state": "CA",
+    "postal_code": "93001-2625",
+    "latitude": 34.28045,
+    "longitude": -119.2957,
+    "geocode_query": "The Hive Bourbon Room & Cocktail Lounge, Ventura, CA, CA",
+    "phone_number": "+18055075001",
+    "website_url": "",
+    "image_urls": [],
+    "profile_name": "",
+    "profile_slug": "",
+    "is_active": true,
+    "external_id": "here:here:pds:place:8409q55j-75a83b16550b2dfa4b61cfd2036352d9",
+    "source_name": "here_places",
+    "source_url": "",
+    "deals": [],
+    "operating_hours": []
+  },
+  {
     "name": "The Little Lion",
     "city": "ventura",
     "venue_type": "restaurant",
@@ -9493,13 +11412,306 @@
     "geocode_query": "The Little Lion, Ventura, CA, CA",
     "phone_number": "+18056200804",
     "website_url": "https://www.littlelionventura.com",
-    "image_urls": [],
+    "image_urls": [
+      "http://static1.squarespace.com/static/670ec3c22e8972744e780d9f/t/6744c0cbeb3428445ae7d242/1732559052003/IMG_0385.jpg?format=1500w",
+      "https://images.squarespace-cdn.com/content/v1/670ec3c22e8972744e780d9f/3cf58ae8-4b37-4b5c-8cf0-fa871fe4a787/IMG_9821.jpg",
+      "https://images.squarespace-cdn.com/content/v1/670ec3c22e8972744e780d9f/d53b12fc-3a09-4cb1-a3de-b3db50bcf19b/IMG_0434.jpg",
+      "https://images.squarespace-cdn.com/content/v1/670ec3c22e8972744e780d9f/d9b60da6-0f4b-454b-a9d9-702e1024f433/IMG_0281.jpg",
+      "https://images.squarespace-cdn.com/content/v1/670ec3c22e8972744e780d9f/370e390a-6da8-4530-821d-bed32d3b4bf5/IMG_0289.jpg",
+      "https://images.squarespace-cdn.com/content/v1/670ec3c22e8972744e780d9f/157be82c-38a4-4825-ad62-792ab5060d98/IMG_0073.jpg"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q54z-a38289046e4c715679bcb31ed94d37c3",
     "source_name": "here_places",
     "source_url": "https://www.littlelionventura.com",
+    "deals": [
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Ventura\u2019s playful take on brunch and daytime dining\u2014a neighborhood caf\u00e9 and bar serving up bold flavors, bottomless mimosas, espresso drinks, and a whole lot of good vibes. We\u2019re all about high-quality ingredients, a California-twist on comfort food, and a fun-girly-pop atmosphere that feels fresh, approachable, and a little bit iconic. Whether you\u2019re here for a latte on the go, a long brunch with",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-littlelionventura-com-190cc6d698e7",
+        "source_name": "business_websites",
+        "source_url": "https://www.littlelionventura.com",
+        "happy_hours": [
+          {
+            "weekday": 0,
+            "start_time": "09:00",
+            "end_time": "15:00",
+            "all_day": false
+          },
+          {
+            "weekday": 1,
+            "start_time": "09:00",
+            "end_time": "15:00",
+            "all_day": false
+          },
+          {
+            "weekday": 2,
+            "start_time": "09:00",
+            "end_time": "15:00",
+            "all_day": false
+          },
+          {
+            "weekday": 3,
+            "start_time": "09:00",
+            "end_time": "15:00",
+            "all_day": false
+          },
+          {
+            "weekday": 4,
+            "start_time": "08:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 0,
+            "start_time": "14:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 1,
+            "start_time": "14:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 2,
+            "start_time": "14:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 3,
+            "start_time": "14:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 4,
+            "start_time": "14:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 5,
+            "start_time": "08:00",
+            "end_time": "15:00",
+            "all_day": false
+          },
+          {
+            "weekday": 6,
+            "start_time": "08:00",
+            "end_time": "15:00",
+            "all_day": false
+          }
+        ]
+      },
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Ventura, CA 93003 Monday - Thursday | 9am - 3pm Friday | 8am - 8pm | Happy Hour | 2pm - 8pm Saturday & Sunday | 8am - 3pm",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-littlelionventura-com-2cb73d8e6a35",
+        "source_name": "business_websites",
+        "source_url": "https://www.littlelionventura.com",
+        "happy_hours": [
+          {
+            "weekday": 0,
+            "start_time": "09:00",
+            "end_time": "15:00",
+            "all_day": false
+          },
+          {
+            "weekday": 1,
+            "start_time": "09:00",
+            "end_time": "15:00",
+            "all_day": false
+          },
+          {
+            "weekday": 2,
+            "start_time": "09:00",
+            "end_time": "15:00",
+            "all_day": false
+          },
+          {
+            "weekday": 3,
+            "start_time": "09:00",
+            "end_time": "15:00",
+            "all_day": false
+          },
+          {
+            "weekday": 4,
+            "start_time": "08:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 0,
+            "start_time": "14:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 1,
+            "start_time": "14:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 2,
+            "start_time": "14:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 3,
+            "start_time": "14:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 4,
+            "start_time": "14:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 5,
+            "start_time": "08:00",
+            "end_time": "15:00",
+            "all_day": false
+          },
+          {
+            "weekday": 6,
+            "start_time": "08:00",
+            "end_time": "15:00",
+            "all_day": false
+          }
+        ]
+      },
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Ventura 5952 Telegraph Road Ventura, CA 93003 (805) 620-0804 info@littlelionventura.com Hours of Operation Monday - Thursday | 9am - 3pm Friday | 8am - 8pm | Happy Hour | 2pm - 8pm Saturday & Sunday | 8am - 3pm Copyright // Little Lion Ventura 2024",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "www-littlelionventura-com-76caad8e56c8",
+        "source_name": "business_websites",
+        "source_url": "https://www.littlelionventura.com",
+        "happy_hours": [
+          {
+            "weekday": 0,
+            "start_time": "09:00",
+            "end_time": "15:00",
+            "all_day": false
+          },
+          {
+            "weekday": 1,
+            "start_time": "09:00",
+            "end_time": "15:00",
+            "all_day": false
+          },
+          {
+            "weekday": 2,
+            "start_time": "09:00",
+            "end_time": "15:00",
+            "all_day": false
+          },
+          {
+            "weekday": 3,
+            "start_time": "09:00",
+            "end_time": "15:00",
+            "all_day": false
+          },
+          {
+            "weekday": 4,
+            "start_time": "08:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 0,
+            "start_time": "14:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 1,
+            "start_time": "14:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 2,
+            "start_time": "14:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 3,
+            "start_time": "14:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 4,
+            "start_time": "14:00",
+            "end_time": "20:00",
+            "all_day": false
+          },
+          {
+            "weekday": 5,
+            "start_time": "08:00",
+            "end_time": "15:00",
+            "all_day": false
+          },
+          {
+            "weekday": 6,
+            "start_time": "08:00",
+            "end_time": "15:00",
+            "all_day": false
+          }
+        ]
+      }
+    ],
+    "operating_hours": []
+  },
+  {
+    "name": "The Parlor",
+    "city": "ventura",
+    "venue_type": "cafe",
+    "address_line_1": "Spinnaker Dr",
+    "address_line_2": "",
+    "neighborhood": "",
+    "state": "CA",
+    "postal_code": "93001",
+    "latitude": 34.24145,
+    "longitude": -119.2649,
+    "geocode_query": "The Parlor, Ventura, CA, CA",
+    "phone_number": "+18056582837",
+    "website_url": "http://www.coastalcone.com",
+    "image_urls": [],
+    "profile_name": "",
+    "profile_slug": "",
+    "is_active": true,
+    "external_id": "here:here:pds:place:8409q54y-0c3ef05cc8dd4c559553df6415d547c1",
+    "source_name": "here_places",
+    "source_url": "http://www.coastalcone.com",
     "deals": [],
     "operating_hours": []
   },
@@ -9524,6 +11736,30 @@
     "external_id": "here:here:pds:place:840jx7ps-d03e3f7c87500a01601a0113961c38d0",
     "source_name": "here_places",
     "source_url": "http://www.saloonbbqco.com",
+    "deals": [],
+    "operating_hours": []
+  },
+  {
+    "name": "The Taj Cafe",
+    "city": "ventura",
+    "venue_type": "restaurant",
+    "address_line_1": "E Main St",
+    "address_line_2": "",
+    "neighborhood": "",
+    "state": "CA",
+    "postal_code": "93001-2629",
+    "latitude": 34.28057,
+    "longitude": -119.29198,
+    "geocode_query": "The Taj Cafe, Ventura, CA, CA",
+    "phone_number": "+18056521521",
+    "website_url": "http://www.thetajcafeventura.com",
+    "image_urls": [],
+    "profile_name": "",
+    "profile_slug": "",
+    "is_active": true,
+    "external_id": "here:here:pds:place:8409q55j-4b2c6bfbc56040a4a599ffb5adad6f3b",
+    "source_name": "here_places",
+    "source_url": "http://www.thetajcafeventura.com",
     "deals": [],
     "operating_hours": []
   },
@@ -9589,14 +11825,46 @@
     "geocode_query": "Thompson Donuts, Ventura, CA, CA",
     "phone_number": "+18056430108",
     "website_url": "http://thompson-donuts.poi.place",
-    "image_urls": [],
+    "image_urls": [
+      "https://streetviewpixels-pa.googleapis.com/v1/thumbnail?panoid=P3wXra1YxU6D7ouHMjcPMg",
+      "https://mc.yandex.ru/watch/68644717"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q54y-a0654b027a4d43b8895da879d0ce07d2",
     "source_name": "here_places",
     "source_url": "http://thompson-donuts.poi.place",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Happy Hour 14175 Mono Way, Sonora, CA 95370, United States +1 209-533-0223 Manage Listing",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "thompson-donuts-poi-place-deals-0d02269ea3d4",
+        "source_name": "business_websites",
+        "source_url": "http://thompson-donuts.poi.place/deals",
+        "happy_hours": []
+      },
+      {
+        "title": "Happy Hour",
+        "deal_type": "happy_hour",
+        "description": "Maps Call Pricing Happy Hour 14175 Mono Way, Sonora, CA 95370, United States +1 209-533-0223 Latest Feedback \"Great people, great place to get your hair or nails done.\" \"I payed money to have my hair ruined.\" \"If you want a professional hair colorist Celeste is the one to choose .\" Today Opening Hours Monday 9\u00e2\u0080\u00afam\u00e2\u0080\u00935\u00e2\u0080\u00afpm Tuesday 9\u00e2\u0080\u00afam\u00e2\u0080\u00935\u00e2\u0080\u00afpm Wednesday 9\u00e2\u0080\u00afam\u00e2\u0080\u00935\u00e2\u0080\u00afpm Thursday 9\u00e2\u0080\u00afam\u00e2\u0080\u00935\u00e2\u0080\u00afpm",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "thompson-donuts-poi-place-deals-1da0d8010616",
+        "source_name": "business_websites",
+        "source_url": "http://thompson-donuts.poi.place/deals",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -9733,14 +12001,50 @@
     "geocode_query": "Valentino's Gourmet, Ventura, CA, CA",
     "phone_number": "+18056438802",
     "website_url": "http://valentinosgourmet.com",
-    "image_urls": [],
+    "image_urls": [
+      "http://valentinosgourmet.com/images/visualPics/BaconSpinachCombo500x200px.jpg",
+      "http://valentinosgourmet.com/images/menuImg/Pizza/HousePizzaMenuImg400x267px.jpg",
+      "http://valentinosgourmet.com/images/menuImg/Pizza/MediterraneanPizza400x267px.jpg",
+      "http://valentinosgourmet.com/images/menuImg/Pizza/BBQChickenPizzaMenuImg400x267px.jpg",
+      "http://valentinosgourmet.com/images/menuImg/Pizza/thaiChickenPizzaUnCooked400x267px.jpg",
+      "http://valentinosgourmet.com/images/menuImg/Pizza/hotChickPizzaMenuImg400x267px.jpg"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q54y-efa60090563b4405b032b6437b5d3738",
     "source_name": "here_places",
     "source_url": "http://valentinosgourmet.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Discount Offer",
+        "deal_type": "discount",
+        "description": "Specials / Coupons DIY Pizza Kit Do it yourself pizza kit includes: 7\" Pizza Shell, Sauce, Cheese, and 2 toppings. $8.99 each. Additional toppings for $0.75ea. Buy 4 or more DIY pizzas and get $1 off each pizza. Daily Specials All prices listed are for Take-n-Bake Pizzas. If you want your pizza cooked (Thousand Oaks Location Only) $3.00 extra. ORDER ONLINE T-n-B Cooked Thousand Oaks Only Monday La",
+        "price_text": "$8.99",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "valentinosgourmet-com-menu-html-0bbbe30ebe05",
+        "source_name": "business_websites",
+        "source_url": "http://valentinosgourmet.com/menu.html#Specials",
+        "happy_hours": []
+      },
+      {
+        "title": "Ventura: We do not bake any pizzas in Ventura, All pizzas must be Take-n-Bake",
+        "deal_type": "discount",
+        "description": "Ventura: We do not bake any pizzas in Ventura, All pizzas must be Take-n-Bake. Build Your Own Cooked Pizza Make it your way! Get creative, and design your own pizza from the crust up. Specialty Cooked Pizzas Select one of our Signature Combination Pizzas which we have specially designed to satisfy your taste-buds. Build Your Own Cooked Pizza Want to create your own pizza? Build Your Own Cooked Piz",
+        "price_text": "$10",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "valentinosgourmet-com-menu-html-abb25d1830fb",
+        "source_name": "business_websites",
+        "source_url": "http://valentinosgourmet.com/menu.html#Specials",
+        "happy_hours": []
+      }
+    ],
     "operating_hours": []
   },
   {
@@ -9764,6 +12068,30 @@
     "external_id": "here:here:pds:place:8409q55j-04b231ad5c19288b44c04d8df7f999aa",
     "source_name": "here_places",
     "source_url": "",
+    "deals": [],
+    "operating_hours": []
+  },
+  {
+    "name": "Ventura Sandwich Company",
+    "city": "ventura",
+    "venue_type": "fast_food",
+    "address_line_1": "Loma Vista Rd",
+    "address_line_2": "",
+    "neighborhood": "",
+    "state": "CA",
+    "postal_code": "93003",
+    "latitude": 34.27473,
+    "longitude": -119.26018,
+    "geocode_query": "Ventura Sandwich Company, Ventura, CA, CA",
+    "phone_number": "+18056411915",
+    "website_url": "http://venturasandwichcompany.com",
+    "image_urls": [],
+    "profile_name": "",
+    "profile_slug": "",
+    "is_active": true,
+    "external_id": "here:here:pds:place:840jx7ps-daa627457e640f22005f5de2b1033139",
+    "source_name": "here_places",
+    "source_url": "http://venturasandwichcompany.com",
     "deals": [],
     "operating_hours": []
   },
@@ -9823,20 +12151,86 @@
     "address_line_2": "",
     "neighborhood": "",
     "state": "CA",
-    "postal_code": "93001-2815",
+    "postal_code": "93001",
     "latitude": 34.28057,
     "longitude": -119.29098,
     "geocode_query": "Winchesters Grill & Saloon, Ventura, CA, CA",
     "phone_number": "+18056537446",
     "website_url": "http://winchestersgrill.com",
-    "image_urls": [],
+    "image_urls": [
+      "https://popmenucloud.com/cdn-cgi/image/width=1200,height=630,format=auto,fit=cover/tdwqxhsl/52585cf6-daad-4cbf-a850-7aaf6944c574"
+    ],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q55j-d351c4126b074b93a01898cd8651a7ce",
     "source_name": "here_places",
     "source_url": "http://winchestersgrill.com",
-    "deals": [],
+    "deals": [
+      {
+        "title": "Ventura",
+        "deal_type": "happy_hour",
+        "description": "Ventura! Yeehaw! Saddle up at Winchesters for a delicious meal, a favorite beverage and genuine friendly service whether at the 40-foot mahogany bar, in a comfy booth or on our two large covered and heated patios. Mosey in Tuesdays through Sundays for lunch and dinner service. Savor our Happy Hour food & drink specials from 3:00-6:00 Tuesdays thru Fridays. Delicious carry-out is also available, or",
+        "price_text": "",
+        "terms": "",
+        "is_active": true,
+        "starts_on": null,
+        "ends_on": null,
+        "external_id": "winchestersgrill-com-7106277a14b9",
+        "source_name": "business_websites",
+        "source_url": "http://winchestersgrill.com",
+        "happy_hours": [
+          {
+            "weekday": 1,
+            "start_time": "15:00",
+            "end_time": "18:00",
+            "all_day": false
+          },
+          {
+            "weekday": 6,
+            "start_time": "15:00",
+            "end_time": "18:00",
+            "all_day": false
+          },
+          {
+            "weekday": 1,
+            "start_time": "23:00",
+            "end_time": "23:00",
+            "all_day": false
+          },
+          {
+            "weekday": 2,
+            "start_time": "23:00",
+            "end_time": "23:00",
+            "all_day": false
+          },
+          {
+            "weekday": 3,
+            "start_time": "23:00",
+            "end_time": "23:00",
+            "all_day": false
+          },
+          {
+            "weekday": 4,
+            "start_time": "23:00",
+            "end_time": "23:00",
+            "all_day": false
+          },
+          {
+            "weekday": 5,
+            "start_time": "23:00",
+            "end_time": "23:00",
+            "all_day": false
+          },
+          {
+            "weekday": 6,
+            "start_time": "23:00",
+            "end_time": "23:00",
+            "all_day": false
+          }
+        ]
+      }
+    ],
     "operating_hours": []
   },
   {

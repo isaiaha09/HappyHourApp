@@ -1,3 +1,6 @@
+import ast
+import json
+import re
 from urllib.parse import urlparse
 
 from django import forms
@@ -15,15 +18,19 @@ from django.utils.text import slugify
 from django.utils import timezone
 
 from .admin_site import happyhour_admin_site
-from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessMembership, CustomerAccount, DeletedBusiness, ListingSnapshot, ProviderUsageWindow
+from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessMembership, CustomerAccount, DealType, DeletedBusiness, ListingSnapshot, ProviderUsageWindow, Weekday
+from .services.business_profile_overrides import format_time_display, normalize_deal_overrides, normalize_operating_hour_overrides, normalize_time_value, summarize_deal_overrides, summarize_operating_hour_overrides
 from .services.importers.discovered_json_places import load_discovery_json_records, merge_discovery_json_records, write_discovery_json_records
 from .services.deleted_businesses import filter_deleted_business_records, imported_place_from_deleted_business, store_deleted_business
+from .services.importers.business_websites import BusinessWebsiteImporter
 from .services.importers.here_places import HerePlacesImporter
 from .services.provider_quota import delete_stale_provider_usage_windows, get_provider_policy, get_provider_usage_statuses, select_discovery_provider
-from .services.source_listings import get_listing_source_name, load_canonical_source_records, load_source_records
+from .services.source_listings import get_listing_source_name, get_source_place_payload, load_canonical_source_records, load_source_records
 
 
 LIVE_DISCOVERY_SOURCE_NAMES = {HerePlacesImporter.source_name}
+PLAIN_TEXT_HOUR_LINE_PATTERN = re.compile(r'^(?P<weekday>[A-Za-z]+)\s*:?\s*(?P<open>.+?)\s*-\s*(?P<close>.+)$')
+PLAIN_TEXT_HAPPY_HOUR_LINE_PATTERN = re.compile(r'^(?P<weekday>[A-Za-z]+)\s*:?\s*(?P<time_range>all\s+day|.+?)$', re.IGNORECASE)
 
 VERIFICATION_BLOCKER_LABELS = {
 	'missing_required_permit': 'Required permit documentation is still missing.',
@@ -37,6 +44,272 @@ def _format_verification_blocker(blocker_code):
 	if blocker_code in VERIFICATION_BLOCKER_LABELS:
 		return VERIFICATION_BLOCKER_LABELS[blocker_code]
 	return f'{str(blocker_code or "").replace("_", " ").capitalize()}.'
+
+
+def _json_text_for_admin(value):
+	if value in (None, [], {}):
+		return ''
+	return json.dumps(value, indent=2)
+
+
+def _deal_override_text_for_admin(value):
+	if value in (None, [], {}):
+		return ''
+	sections = []
+	for deal in value:
+		lines = [f"Title: {deal.get('title', '')}"]
+		deal_type = str(deal.get('deal_type') or '').strip()
+		custom_deal_type_label = str(deal.get('custom_deal_type_label') or '').strip()
+		if deal_type:
+			try:
+				resolved_type_label = custom_deal_type_label or DealType(deal_type).label
+				lines.append(f"Type: {resolved_type_label}")
+			except ValueError:
+				lines.append(f"Type: {custom_deal_type_label or deal_type}")
+		if deal.get('price_text'):
+			lines.append(f"Price: {deal['price_text']}")
+		if deal.get('description'):
+			lines.append(f"Description: {deal['description']}")
+		if deal.get('terms'):
+			lines.append(f"Terms: {deal['terms']}")
+		for happy_hour in deal.get('happy_hours', []):
+			weekday_label = Weekday(happy_hour['weekday']).label
+			if happy_hour.get('all_day'):
+				lines.append(f"Happy hour: {weekday_label} all day")
+			else:
+				lines.append(
+					f"Happy hour: {weekday_label} {format_time_display(happy_hour['start_time'])} - {format_time_display(happy_hour['end_time'])}"
+				)
+		sections.append('\n'.join(lines))
+	return '\n\n'.join(sections)
+
+
+def _format_public_deals_preview_lines(deals):
+	preview_lines = []
+	for deal in deals:
+		happy_hour_windows = deal.get('happy_hours', [])
+		hour_labels = []
+		for window in happy_hour_windows:
+			window_range = 'all day' if window.get('all_day') else f"{window.get('start_time')} - {window.get('end_time')}"
+			hour_labels.append(f"{window.get('weekday_label', window.get('weekday'))}: {window_range}")
+		hours_label = ', '.join(hour_labels) if hour_labels else 'No time windows parsed'
+		line_parts = [deal.get('title', 'Untitled deal')]
+		if deal.get('price_text'):
+			line_parts.append(str(deal['price_text']))
+		if deal.get('terms'):
+			line_parts.append(f"Terms: {deal['terms']}")
+		line_parts.append(hours_label)
+		preview_lines.append(' | '.join(part for part in line_parts if part))
+	return preview_lines
+
+
+def _format_public_hours_preview_lines(operating_hours):
+	return [
+		f"{row.get('weekday_label', row.get('weekday'))}: {row.get('open_time')} - {row.get('close_time')}"
+		for row in operating_hours
+	]
+
+
+class ManagedByBusinessUserFilter(admin.SimpleListFilter):
+	title = 'Managed by business user'
+	parameter_name = 'managed_by_business_user'
+
+	def lookups(self, request, model_admin):
+		return (
+			('yes', 'Managed'),
+			('no', 'Not managed'),
+		)
+
+	def queryset(self, request, queryset):
+		value = self.value()
+		if value == 'yes':
+			return queryset.filter(business_claims__membership__is_active=True).distinct()
+		if value == 'no':
+			return queryset.exclude(business_claims__membership__is_active=True).distinct()
+		return queryset
+
+
+def _operating_hour_override_text_for_admin(value):
+	if value in (None, [], {}):
+		return ''
+	return '\n'.join(
+		f"{Weekday(row['weekday']).label}: {format_time_display(row['open_time'])} - {format_time_display(row['close_time'])}"
+		for row in value
+	)
+
+
+def _literal_json_like_parse(raw_value):
+	try:
+		parsed = ast.literal_eval(raw_value)
+	except (ValueError, SyntaxError):
+		return None
+	return parsed
+
+
+def _coerce_deal_override_input(raw_value):
+	normalized = str(raw_value or '').strip()
+	if not normalized or normalized.lower() in {'null', 'none'}:
+		return []
+
+	try:
+		return normalize_deal_overrides(json.loads(normalized))
+	except json.JSONDecodeError:
+		pass
+
+	if normalized.startswith(('[', '{')):
+		literal_value = _literal_json_like_parse(normalized)
+		if literal_value is not None:
+			return normalize_deal_overrides(literal_value)
+
+	blocks = []
+	current_lines = []
+	for line in normalized.splitlines():
+		cleaned_line = str(line or '').strip()
+		if cleaned_line:
+			current_lines.append(cleaned_line)
+			continue
+		if current_lines:
+			blocks.append(current_lines)
+			current_lines = []
+	if current_lines:
+		blocks.append(current_lines)
+
+	parsed_overrides = []
+	for lines in blocks:
+		title = ''
+		price_text = ''
+		description_lines = []
+		terms = ''
+		deal_type = DealType.OTHER
+		custom_deal_type_label = ''
+		happy_hours = []
+		for line_index, line in enumerate(lines, start=1):
+			lowered = line.lower()
+			if lowered.startswith('title:'):
+				title = line.split(':', 1)[1].strip()
+			elif lowered.startswith('type:'):
+				raw_type_label = line.split(':', 1)[1].strip()
+				raw_type = raw_type_label.lower().replace(' ', '_')
+				if raw_type in DealType.values:
+					deal_type = raw_type or DealType.OTHER
+					custom_deal_type_label = ''
+				else:
+					deal_type = DealType.OTHER
+					custom_deal_type_label = raw_type_label
+			elif lowered.startswith('price:'):
+				price_text = line.split(':', 1)[1].strip()
+			elif lowered.startswith('description:'):
+				description_lines.append(line.split(':', 1)[1].strip())
+			elif lowered.startswith('terms:'):
+				terms = line.split(':', 1)[1].strip()
+			elif lowered.startswith('happy hour:'):
+				happy_hours.append(_parse_admin_happy_hour_line(line.split(':', 1)[1].strip()))
+			elif not title:
+				title = line
+			elif not price_text and line_index == 2:
+				price_text = line
+			else:
+				description_lines.append(line)
+		parsed_overrides.append({
+			'title': title,
+			'description': ' '.join(description_lines),
+			'deal_type': deal_type,
+			'custom_deal_type_label': custom_deal_type_label,
+			'price_text': price_text,
+			'terms': terms,
+			'happy_hours': happy_hours,
+		})
+
+	if not parsed_overrides:
+		raise ValueError('Enter deal overrides as valid JSON or plain text blocks with title, optional price, and optional description lines.')
+
+	return normalize_deal_overrides(parsed_overrides)
+
+
+def _weekday_value_from_admin_text(raw_value):
+	normalized = str(raw_value or '').strip().lower().rstrip(':')
+	weekday_map = {
+		'mon': Weekday.MONDAY,
+		'monday': Weekday.MONDAY,
+		'tue': Weekday.TUESDAY,
+		'tues': Weekday.TUESDAY,
+		'tuesday': Weekday.TUESDAY,
+		'wed': Weekday.WEDNESDAY,
+		'wednesday': Weekday.WEDNESDAY,
+		'thu': Weekday.THURSDAY,
+		'thur': Weekday.THURSDAY,
+		'thurs': Weekday.THURSDAY,
+		'thursday': Weekday.THURSDAY,
+		'fri': Weekday.FRIDAY,
+		'friday': Weekday.FRIDAY,
+		'sat': Weekday.SATURDAY,
+		'saturday': Weekday.SATURDAY,
+		'sun': Weekday.SUNDAY,
+		'sunday': Weekday.SUNDAY,
+	}
+	weekday_value = weekday_map.get(normalized)
+	if weekday_value is None:
+		raise ValueError('Use a weekday name like Monday or Mon for operating hour overrides.')
+	return weekday_value
+
+
+def _parse_admin_happy_hour_line(raw_value):
+	match = PLAIN_TEXT_HAPPY_HOUR_LINE_PATTERN.match(str(raw_value or '').strip())
+	if not match:
+		raise ValueError('Use happy-hour lines like "Happy hour: Monday 3:00 PM - 6:00 PM" or "Happy hour: Friday all day".')
+	weekday = _weekday_value_from_admin_text(match.group('weekday'))
+	time_range = str(match.group('time_range') or '').strip()
+	if re.fullmatch(r'all\s+day', time_range, re.IGNORECASE):
+		return {
+			'weekday': weekday,
+			'start_time': '00:00',
+			'end_time': '23:59',
+			'all_day': True,
+		}
+	parts = [part.strip() for part in time_range.split('-', 1)]
+	if len(parts) != 2:
+		raise ValueError('Use happy-hour lines like "Happy hour: Monday 3:00 PM - 6:00 PM" or "Happy hour: Friday all day".')
+	return {
+		'weekday': weekday,
+		'start_time': normalize_time_value(parts[0], 'Happy hour start time'),
+		'end_time': normalize_time_value(parts[1], 'Happy hour end time'),
+		'all_day': False,
+	}
+
+
+def _coerce_operating_hour_override_input(raw_value):
+	normalized = str(raw_value or '').strip()
+	if not normalized or normalized.lower() in {'null', 'none'}:
+		return []
+
+	try:
+		return normalize_operating_hour_overrides(json.loads(normalized))
+	except json.JSONDecodeError:
+		pass
+
+	if normalized.startswith(('[', '{')):
+		literal_value = _literal_json_like_parse(normalized)
+		if literal_value is not None:
+			return normalize_operating_hour_overrides(literal_value)
+
+	parsed_rows = []
+	for line in normalized.splitlines():
+		cleaned_line = str(line or '').strip()
+		if not cleaned_line:
+			continue
+		match = PLAIN_TEXT_HOUR_LINE_PATTERN.match(cleaned_line)
+		if not match:
+			raise ValueError('Enter operating hour overrides as valid JSON or one line per day like Monday: 11:00 AM - 9:00 PM.')
+		parsed_rows.append({
+			'weekday': _weekday_value_from_admin_text(match.group('weekday')),
+			'open_time': normalize_time_value(match.group('open').strip(), 'Operating hour open time'),
+			'close_time': normalize_time_value(match.group('close').strip(), 'Operating hour close time'),
+		})
+
+	if not parsed_rows:
+		raise ValueError('Enter operating hour overrides as valid JSON or one line per day like Monday: 11:00 AM - 9:00 PM.')
+
+	return normalize_operating_hour_overrides(parsed_rows)
 
 
 class BusinessClaimAdminForm(forms.ModelForm):
@@ -83,6 +356,63 @@ class BusinessClaimAdminForm(forms.ModelForm):
 		return super().save(commit=commit)
 
 
+class ListingSnapshotAdminForm(forms.ModelForm):
+	deal_overrides = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 8}))
+	operating_hour_overrides = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 6}))
+
+	class Media:
+		css = {
+			'all': ('places/admin/listingsnapshot_structured_overrides.css',),
+		}
+		js = ('places/admin/listingsnapshot_structured_overrides.js',)
+
+	class Meta:
+		model = ListingSnapshot
+		fields = '__all__'
+
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		self.fields['deal_overrides'].help_text = 'Optional deal overrides for this unclaimed business. Paste valid JSON, or plain text blocks with title on the first line, optional price on the second line, and optional description after that.'
+		self.fields['deal_overrides'].help_text = 'Add multiple deals by separating them with a blank line. Supported plain-text lines: Title, Type, Price, Description, Terms, and Happy hour: Monday 3:00 PM - 6:00 PM.'
+		self.fields['operating_hour_overrides'].help_text = 'Optional operating-hour overrides. Paste valid JSON, or one line per day like Monday: 11:00 AM - 9:00 PM.'
+		self.fields['deal_overrides'].widget.attrs.update({
+			'class': 'vLargeTextField structured-admin-source-field',
+			'data-structured-editor': 'deals',
+			'data-initial-json': json.dumps(self.instance.deal_overrides or []),
+		})
+		self.fields['operating_hour_overrides'].widget.attrs.update({
+			'class': 'vLargeTextField structured-admin-source-field',
+			'data-structured-editor': 'hours',
+			'data-initial-json': json.dumps(self.instance.operating_hour_overrides or []),
+		})
+		if not self.is_bound:
+			deal_override_initial = _deal_override_text_for_admin(self.instance.deal_overrides if self.instance.pk else None)
+			operating_hour_initial = _operating_hour_override_text_for_admin(self.instance.operating_hour_overrides if self.instance.pk else None)
+			self.fields['deal_overrides'].initial = deal_override_initial
+			self.fields['operating_hour_overrides'].initial = operating_hour_initial
+			self.initial['deal_overrides'] = deal_override_initial
+			self.initial['operating_hour_overrides'] = operating_hour_initial
+
+	def clean(self):
+		cleaned_data = super().clean()
+		raw_deal_overrides = cleaned_data.get('deal_overrides')
+		raw_operating_hour_overrides = cleaned_data.get('operating_hour_overrides')
+
+		if raw_deal_overrides is not None:
+			try:
+				cleaned_data['deal_overrides'] = _coerce_deal_override_input(raw_deal_overrides)
+			except ValueError as error:
+				self.add_error('deal_overrides', str(error))
+
+		if raw_operating_hour_overrides is not None:
+			try:
+				cleaned_data['operating_hour_overrides'] = _coerce_operating_hour_override_input(raw_operating_hour_overrides)
+			except ValueError as error:
+				self.add_error('operating_hour_overrides', str(error))
+
+		return cleaned_data
+
+
 def _normalize_lookup_text(value):
 	return ''.join(character.lower() for character in str(value or '') if character.isalnum())
 
@@ -93,10 +423,12 @@ def _normalized_domain(value):
 
 
 def _build_listing_slug(place_record):
-	return str(place_record.profile_slug or '').strip() or slugify(f'{place_record.profile_name or place_record.name}-{place_record.city or "unknown"}')
+	return str(place_record.profile_slug or '').strip() or slugify(place_record.profile_name or place_record.name)
 
 
 def _sync_listing_snapshot_from_imported_place(place_record, snapshot=None):
+	existing_snapshot = snapshot
+
 	defaults = {
 		'name': place_record.profile_name or place_record.name,
 		'city': place_record.city,
@@ -113,10 +445,13 @@ def _sync_listing_snapshot_from_imported_place(place_record, snapshot=None):
 		'external_id': place_record.external_id,
 		'listing_slug': _build_listing_slug(place_record),
 	}
+	if existing_snapshot is not None and not str(defaults['website_url'] or '').strip():
+		defaults['website_url'] = existing_snapshot.website_url
+	if existing_snapshot is not None and not str(defaults['source_url'] or '').strip():
+		defaults['source_url'] = existing_snapshot.source_url or existing_snapshot.website_url
 
 	if snapshot is not None:
-		for field_name, value in defaults.items():
-			setattr(snapshot, field_name, value)
+		_apply_non_destructive_snapshot_defaults(snapshot, defaults)
 		snapshot.save()
 		return snapshot
 
@@ -136,8 +471,34 @@ def _sync_listing_snapshot_from_imported_place(place_record, snapshot=None):
 			'address_line_1': defaults['address_line_1'],
 		}
 
-	snapshot, _ = ListingSnapshot.objects.update_or_create(**lookup, defaults=defaults)
+	existing_snapshot = ListingSnapshot.objects.filter(**lookup).order_by('-updated_at', '-captured_at', '-pk').first()
+	if existing_snapshot is not None:
+		if not str(defaults['website_url'] or '').strip():
+			defaults['website_url'] = existing_snapshot.website_url
+		if not str(defaults['source_url'] or '').strip():
+			defaults['source_url'] = existing_snapshot.source_url or existing_snapshot.website_url
+		_apply_non_destructive_snapshot_defaults(existing_snapshot, defaults)
+		existing_snapshot.save()
+		return existing_snapshot
+
+	snapshot = ListingSnapshot.objects.create(**defaults)
 	return snapshot
+
+
+def _apply_non_destructive_snapshot_defaults(snapshot, defaults):
+	# Imported pulls should fill missing snapshot data without replacing admin-entered values.
+	for field_name, value in defaults.items():
+		existing_value = getattr(snapshot, field_name)
+		if field_name in {'source_name', 'external_id'}:
+			if str(value or '').strip():
+				setattr(snapshot, field_name, value)
+			continue
+		if field_name == 'listing_slug':
+			if not str(existing_value or '').strip() and str(value or '').strip():
+				setattr(snapshot, field_name, value)
+			continue
+		if not str(existing_value or '').strip() and str(value or '').strip():
+			setattr(snapshot, field_name, value)
 
 
 def _sync_listing_snapshots_from_imported_places(place_records):
@@ -334,7 +695,21 @@ class BusinessAccountAdmin(UserAdmin):
 	list_filter = ('is_active', 'business_claims__status', 'business_memberships__is_active')
 	search_fields = ('username', 'first_name', 'last_name', 'email')
 	ordering = ('username',)
-	readonly_fields = ('date_joined', 'last_login', 'business_status', 'membership_status', 'claim_count', 'membership_count')
+	readonly_fields = (
+		'date_joined',
+		'last_login',
+		'business_status',
+		'membership_status',
+		'claim_count',
+		'membership_count',
+		'managed_businesses',
+		'managed_business_public_address',
+		'managed_business_public_phone',
+		'managed_business_public_website',
+		'managed_business_public_deals_preview',
+		'managed_business_public_hours_preview',
+		'managed_business_supporting_details',
+	)
 	fieldsets = (
 		('Business account', {
 			'fields': ('username', 'password'),
@@ -344,6 +719,18 @@ class BusinessAccountAdmin(UserAdmin):
 		}),
 		('Business status', {
 			'fields': ('business_status', 'membership_status', 'claim_count', 'membership_count', 'is_active', 'last_login', 'date_joined'),
+		}),
+		('Managed business profile', {
+			'fields': (
+				'managed_businesses',
+				'managed_business_public_address',
+				'managed_business_public_phone',
+				'managed_business_public_website',
+				'managed_business_public_deals_preview',
+				'managed_business_public_hours_preview',
+				'managed_business_supporting_details',
+			),
+			'description': 'These values reflect the current public business profile the app is showing for the active managed business, including approved business-user overrides.',
 		}),
 	)
 	add_fieldsets = (
@@ -401,6 +788,98 @@ class BusinessAccountAdmin(UserAdmin):
 			return ', '.join(sorted(memberships))
 		return 'No active business'
 
+	def _get_active_membership(self, obj):
+		memberships = [membership for membership in obj.business_memberships.all() if membership.is_active]
+		if not memberships:
+			return None
+		memberships.sort(key=lambda membership: (membership.approved_at or membership.created_at, membership.pk), reverse=True)
+		return memberships[0]
+
+	def _get_active_managed_business_payload(self, obj):
+		membership = self._get_active_membership(obj)
+		if membership is None:
+			return None
+		snapshot = membership.claim.listing_snapshot
+		if snapshot.listing_slug:
+			payload = get_source_place_payload(snapshot.listing_slug)
+			if payload is not None:
+				return payload
+		return {
+			'name': snapshot.name,
+			'address_line_1': membership.claim.employer_address or snapshot.address_line_1,
+			'address_line_2': snapshot.address_line_2,
+			'city_label': snapshot.get_city_display() or snapshot.city,
+			'state': snapshot.state,
+			'postal_code': snapshot.postal_code,
+			'phone_number': membership.claim.work_phone or snapshot.phone_number,
+			'website_url': membership.claim.business_website_url or snapshot.website_url,
+			'deals': [],
+			'operating_hours': [],
+			'supporting_details': membership.claim.supporting_details,
+		}
+
+	def _get_active_managed_claim(self, obj):
+		membership = self._get_active_membership(obj)
+		return membership.claim if membership is not None else None
+
+	@admin.display(description='Public address')
+	def managed_business_public_address(self, obj):
+		payload = self._get_active_managed_business_payload(obj)
+		if payload is None:
+			return 'No active business'
+		line_parts = [payload.get('address_line_1', ''), payload.get('address_line_2', '')]
+		city_line = ', '.join(part for part in [payload.get('city_label', ''), payload.get('state', '')] if part)
+		postal_code = payload.get('postal_code', '')
+		if city_line and postal_code:
+			city_line = f'{city_line} {postal_code}'
+		if city_line:
+			line_parts.append(city_line)
+		return ', '.join(part for part in line_parts if part) or 'No public address'
+
+	@admin.display(description='Public phone')
+	def managed_business_public_phone(self, obj):
+		payload = self._get_active_managed_business_payload(obj)
+		if payload is None:
+			return 'No active business'
+		return payload.get('phone_number') or 'No public phone'
+
+	@admin.display(description='Public website')
+	def managed_business_public_website(self, obj):
+		payload = self._get_active_managed_business_payload(obj)
+		if payload is None:
+			return 'No active business'
+		website_url = payload.get('website_url') or ''
+		if not website_url:
+			return 'No public website'
+		return format_html('<a href="{}" target="_blank" rel="noopener">{}</a>', website_url, website_url)
+
+	@admin.display(description='Public deals')
+	def managed_business_public_deals_preview(self, obj):
+		payload = self._get_active_managed_business_payload(obj)
+		if payload is None:
+			return 'No active business'
+		preview_lines = _format_public_deals_preview_lines(list(payload.get('deals', [])))
+		if not preview_lines:
+			return 'No deals currently surfaced.'
+		return format_html_join('', '{}<br>', ((line,) for line in preview_lines))
+
+	@admin.display(description='Public hours')
+	def managed_business_public_hours_preview(self, obj):
+		payload = self._get_active_managed_business_payload(obj)
+		if payload is None:
+			return 'No active business'
+		preview_lines = _format_public_hours_preview_lines(list(payload.get('operating_hours', [])))
+		if not preview_lines:
+			return 'No operating hours currently surfaced.'
+		return format_html_join('', '{}<br>', ((line,) for line in preview_lines))
+
+	@admin.display(description='Business notes')
+	def managed_business_supporting_details(self, obj):
+		claim = self._get_active_managed_claim(obj)
+		if claim is None:
+			return 'No active business'
+		return claim.supporting_details or 'No supporting details provided.'
+
 	@admin.display(description='Claims')
 	def claim_count(self, obj):
 		return obj.business_claims.count()
@@ -412,21 +891,30 @@ class BusinessAccountAdmin(UserAdmin):
 
 @admin.register(ListingSnapshot, site=happyhour_admin_site)
 class ListingSnapshotAdmin(admin.ModelAdmin):
+	form = ListingSnapshotAdminForm
 	actions = ['pull_all_business_data']
 	change_list_template = 'admin/places/listingsnapshot/change_list.html'
-	list_display = ('name', 'city', 'venue_type', 'source_name', 'pull_business_data_link', 'captured_at', 'updated_at')
-	list_filter = ('city', 'venue_type', 'source_name')
+	list_display = ('name', 'city', 'venue_type', 'source_name', 'manual_deal_override_count', 'pull_business_data_link', 'captured_at', 'updated_at')
+	list_filter = ('city', 'venue_type', 'source_name', ManagedByBusinessUserFilter)
 	search_fields = ('name', 'address_line_1', 'external_id', 'website_url')
-	readonly_fields = ('captured_at', 'updated_at')
+	readonly_fields = ('managed_business_account_link', 'current_public_deals_preview', 'current_public_hours_preview', 'manual_deal_override_summary', 'manual_operating_hour_override_summary', 'captured_at', 'updated_at')
 	fieldsets = (
 		('Snapshot identity', {
-			'fields': ('name', 'listing_slug', 'source_name', 'source_url', 'external_id'),
+			'fields': ('name', 'listing_slug', 'source_name', 'source_url', 'external_id', 'managed_business_account_link'),
 		}),
 		('Business details', {
 			'fields': ('city', 'venue_type', 'address_line_1', 'address_line_2', 'neighborhood', 'state', 'postal_code'),
 		}),
 		('Contact', {
 			'fields': ('phone_number', 'website_url'),
+		}),
+		('Current app data', {
+			'fields': ('current_public_deals_preview', 'current_public_hours_preview'),
+			'description': 'These previews show the deals and hours currently surfaced by the app for this business after importer enrichment and any overrides.',
+		}),
+		('Admin overrides for unclaimed businesses', {
+			'fields': ('deal_overrides', 'manual_deal_override_summary', 'operating_hour_overrides', 'manual_operating_hour_override_summary'),
+			'description': 'Use these structured overrides to fix or add legitimate deals and hours for existing unclaimed businesses. Once a business is claimed, the owner claim overrides take precedence.',
 		}),
 		('Timestamps', {
 			'fields': ('captured_at', 'updated_at'),
@@ -471,12 +959,13 @@ class ListingSnapshotAdmin(admin.ModelAdmin):
 
 	def _run_pull_all_business_data(self, request):
 		discovery_records = filter_deleted_business_records(list(HerePlacesImporter().load_records()))
+		discovery_records = list(BusinessWebsiteImporter().enrich_place_records(discovery_records))
 		write_discovery_json_records(discovery_records)
 		snapshot_records = list(load_canonical_source_records(source_name=get_listing_source_name()))
 		touched_snapshot_ids = _sync_listing_snapshots_from_imported_places(snapshot_records)
 		self.message_user(
 			request,
-			f'Pulled all business data. Stored {len(discovery_records)} live businesses and synced {len(touched_snapshot_ids)} admin rows.',
+			f'Pulled all business data. Stored {len(discovery_records)} live businesses with website enrichment and synced {len(touched_snapshot_ids)} admin rows.',
 			level=messages.SUCCESS,
 		)
 		return HttpResponseRedirect(reverse('happyhour_admin:places_listingsnapshot_changelist'))
@@ -524,10 +1013,64 @@ class ListingSnapshotAdmin(admin.ModelAdmin):
 			self.message_user(request, f'No matching live business data found for {snapshot.name}.', level=messages.WARNING)
 			return HttpResponseRedirect(reverse('happyhour_admin:places_listingsnapshot_changelist'))
 
+		best_record = BusinessWebsiteImporter().enrich_place_record(best_record)
 		merge_discovery_json_records([best_record])
 		_sync_listing_snapshot_from_imported_place(best_record, snapshot=snapshot)
 		self.message_user(request, f'Pulled business data for {snapshot.name}.', level=messages.SUCCESS)
 		return HttpResponseRedirect(reverse('happyhour_admin:places_listingsnapshot_changelist'))
+
+	def _get_active_business_membership(self, obj):
+		return (
+			BusinessMembership.objects
+			.select_related('user', 'claim__listing_snapshot')
+			.filter(claim__listing_snapshot=obj, is_active=True)
+			.order_by('-approved_at', '-created_at', '-pk')
+			.first()
+		)
+
+	@admin.display(description='Managed business account')
+	def managed_business_account_link(self, obj):
+		membership = self._get_active_business_membership(obj)
+		if membership is None or membership.user_id is None:
+			return 'No active business account manages this business.'
+		change_url = reverse('happyhour_admin:places_businessaccount_change', args=[membership.user_id])
+		return format_html('<a class="button" href="{}">Open {}</a>', change_url, membership.user.username)
+
+	@admin.display(description='Admin deals')
+	def manual_deal_override_count(self, obj):
+		return len(obj.deal_overrides or [])
+
+	@admin.display(description='Current public deals')
+	def current_public_deals_preview(self, obj):
+		payload = get_source_place_payload(obj.listing_slug) if obj.listing_slug else None
+		deals = list((payload or {}).get('deals', []))
+		if not deals:
+			return 'No deals currently surfaced.'
+		preview_lines = _format_public_deals_preview_lines(deals)
+		return format_html_join('', '{}<br>', ((line,) for line in preview_lines))
+
+	@admin.display(description='Current public hours')
+	def current_public_hours_preview(self, obj):
+		payload = get_source_place_payload(obj.listing_slug) if obj.listing_slug else None
+		operating_hours = list((payload or {}).get('operating_hours', []))
+		if not operating_hours:
+			return 'No operating hours currently surfaced.'
+		preview_lines = _format_public_hours_preview_lines(operating_hours)
+		return format_html_join('', '{}<br>', ((line,) for line in preview_lines))
+
+	@admin.display(description='Saved deal override summary')
+	def manual_deal_override_summary(self, obj):
+		summaries = summarize_deal_overrides(obj.deal_overrides or [])
+		if not summaries:
+			return 'No manual deal overrides saved.'
+		return format_html_join('', '{}<br>', ((line,) for line in summaries))
+
+	@admin.display(description='Saved hour override summary')
+	def manual_operating_hour_override_summary(self, obj):
+		summaries = summarize_operating_hour_overrides(obj.operating_hour_overrides or [])
+		if not summaries:
+			return 'No manual operating hour overrides saved.'
+		return format_html_join('', '{}<br>', ((line,) for line in summaries))
 
 	def delete_model(self, request, obj):
 		deleted_business, removed_records = _delete_snapshot_to_deleted_business(obj)
