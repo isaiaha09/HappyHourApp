@@ -6665,6 +6665,80 @@ class ListingSnapshotAdminTests(TestCase):
 		self.assertEqual(form.fields['deal_overrides'].widget.attrs['data-structured-editor'], 'deals')
 		self.assertEqual(form.fields['operating_hour_overrides'].widget.attrs['data-structured-editor'], 'hours')
 
+	@patch('places.admin.get_source_place_payload')
+	def test_listing_snapshot_admin_form_seeds_structured_editors_from_current_public_payload_when_overrides_are_blank(self, mock_get_source_place_payload):
+		mock_get_source_place_payload.return_value = {
+			'deals': [
+				{
+					'title': 'Imported Happy Hour',
+					'description': '$1.50 off drafts',
+					'deal_type': DealType.HAPPY_HOUR,
+					'deal_type_label': 'Happy Hour',
+					'price_text': '$1.50 off',
+					'terms': 'Dine-in only',
+					'happy_hours': [
+						{'weekday': Weekday.MONDAY, 'start_time': '21:00', 'end_time': '23:00', 'all_day': False},
+					],
+				},
+			],
+			'operating_hours': [
+				{'weekday': Weekday.MONDAY, 'open_time': '11:00', 'close_time': '23:00', 'group_id': None, 'group_rank': None},
+			],
+		}
+		snapshot = ListingSnapshot.objects.create(
+			name='Institution Ale Co.',
+			listing_slug='institution-ale-co',
+			city=City.CAMARILLO,
+			venue_type=VenueType.BAR,
+			address_line_1='311 Leisure Village Dr',
+		)
+
+		form = ListingSnapshotAdminForm(instance=snapshot)
+
+		self.assertEqual(form.initial['deal_overrides'], '')
+		self.assertEqual(form.initial['operating_hour_overrides'], '')
+		self.assertEqual(form.fields['deal_overrides'].widget.attrs['data-initial-source'], 'current-public')
+		self.assertEqual(form.fields['operating_hour_overrides'].widget.attrs['data-initial-source'], 'current-public')
+		self.assertEqual(
+			json.loads(form.fields['deal_overrides'].widget.attrs['data-initial-json'])[0]['title'],
+			'Imported Happy Hour',
+		)
+		self.assertEqual(
+			json.loads(form.fields['operating_hour_overrides'].widget.attrs['data-initial-json'])[0]['open_time'],
+			'11:00',
+		)
+
+	@patch('places.admin.get_source_place_payload')
+	def test_current_public_previews_render_times_in_12_hour_format(self, mock_get_source_place_payload):
+		mock_get_source_place_payload.return_value = {
+			'deals': [
+				{
+					'title': 'Imported Happy Hour',
+					'price_text': '$1.50 off',
+					'terms': 'Dine-in only',
+					'happy_hours': [
+						{'weekday_label': 'Monday', 'start_time': '21:00', 'end_time': '23:00', 'all_day': False},
+					],
+				},
+			],
+			'operating_hours': [
+				{'weekday_label': 'Monday', 'open_time': '11:00', 'close_time': '23:00'},
+			],
+		}
+		snapshot = ListingSnapshot.objects.create(
+			name='Institution Ale Co.',
+			listing_slug='institution-ale-co',
+			city=City.CAMARILLO,
+			venue_type=VenueType.BAR,
+			address_line_1='311 Leisure Village Dr',
+		)
+
+		deals_preview = str(self.admin.current_public_deals_preview(snapshot))
+		hours_preview = str(self.admin.current_public_hours_preview(snapshot))
+
+		self.assertIn('Monday: 9:00 PM - 11:00 PM', deals_preview)
+		self.assertIn('Monday: 11:00 AM - 11:00 PM', hours_preview)
+
 	@override_settings(DISCOVERY_JSON_PATH='')
 	def test_pull_all_business_data_view_writes_live_json_and_syncs_snapshots(self):
 		with TemporaryDirectory() as temp_dir:

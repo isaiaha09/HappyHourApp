@@ -574,10 +574,17 @@ function AppScreen() {
     verifiedBusinessesOnly,
   });
   const filteredPlaceKey = filteredPlaces.map((place) => place.id).join('|');
-  const displayedBrowsePlaces = getBrowsePlacesForDisplay(filteredPlaces);
+  const filteredBrowseLocations = getFilteredBrowseLocations(filteredPlaces, {
+    confirmedDealsOnly,
+    searchQuery: normalizedSearchQuery,
+    selectedCity,
+    selectedDealDays,
+    selectedOperatingDays,
+  });
+  const displayedBrowsePlaces = getBrowsePlacesForDisplay(filteredBrowseLocations);
 
-  const mappedPlaces = showMapBrowse ? getMappedPlacesForBrowse(filteredPlaces) : [];
-  const browseResultCount = showMapBrowse ? mappedPlaces.length : displayedBrowsePlaces.length;
+  const mappedPlaces = showMapBrowse ? getMappedPlacesForBrowse(filteredBrowseLocations) : [];
+  const browseResultCount = displayedBrowsePlaces.length;
   const mappedPlaceKey = mappedPlaces.map((place) => place.markerKey).join('|');
   const displayedMapPlaces = showMapBrowse ? renderedMappedPlaces : [];
   const unplacedPlaceCount = filteredPlaces.filter((place) => (
@@ -5273,42 +5280,78 @@ function getFilteredPlaces(
     .map(({ place }) => place);
 }
 
-function getMappedPlacesForBrowse(filteredPlaces: PlaceListItem[]): MappedPlace[] {
-  return filteredPlaces.flatMap((place) => (
-    getPlaceLocations(place).flatMap((location) => {
-      if (location.latitude === null || location.longitude === null) {
-        return [];
-      }
+function getFilteredBrowseLocations(
+  filteredPlaces: PlaceListItem[],
+  filters: {
+    confirmedDealsOnly: boolean;
+    searchQuery: string;
+    selectedCity: CityFilterValue;
+    selectedDealDays: WeekdayFilterValue[];
+    selectedOperatingDays: WeekdayFilterValue[];
+  },
+) {
+  return filteredPlaces.flatMap((place) => {
+    const placeScore = getPlaceSearchScore(place, filters.searchQuery);
 
-      return [
-        {
-          ...place,
-          city: location.city,
-          city_label: location.city_label,
-          address_line_1: location.address_line_1,
-          address_line_2: location.address_line_2,
-          neighborhood: location.neighborhood,
-          state: location.state,
-          postal_code: location.postal_code,
-          latitude: location.latitude,
-          longitude: location.longitude,
-          phone_number: location.phone_number,
-          website_url: location.website_url,
-          image_urls: location.image_urls,
-          fullAddress: formatPlaceAddress(location),
-          locationId: location.id,
-          markerLatitude: location.latitude,
-          markerLongitude: location.longitude,
-          markerKey: `${place.slug}:${location.id}`,
-        },
-      ];
-    })
-  ));
+    return getPlaceLocations(place)
+      .map((location) => ({
+        listKey: `${place.slug}:${location.id}`,
+        location,
+        markerKey: `${place.slug}:${location.id}`,
+        place,
+        score: placeScore + getLocationSearchScore(location, filters.searchQuery),
+      }))
+      .filter(({ location, score }) => {
+        const matchesCity = filters.selectedCity === 'all' || location.city === filters.selectedCity;
+        const matchesSearch = filters.searchQuery.length === 0 || score > 0;
+        const matchesDeals = !filters.confirmedDealsOnly || intValue(location.deal_count) > 0;
+        const matchesOperatingDays = !filters.selectedOperatingDays.length || hasAnyMatchingWeekday(location.operating_weekdays ?? [], filters.selectedOperatingDays);
+        const matchesDealDays = !filters.selectedDealDays.length || hasAnyMatchingWeekday(location.deal_weekdays ?? [], filters.selectedDealDays);
+
+        return matchesCity && matchesSearch && matchesDeals && matchesOperatingDays && matchesDealDays;
+      });
+  });
 }
 
-function getBrowsePlacesForDisplay(filteredPlaces: PlaceListItem[]): BrowsePlace[] {
-  return filteredPlaces.flatMap((place) => (
-    getPlaceLocations(place).map((location) => ({
+function intValue(value: unknown) {
+  const normalized = Number(value ?? 0);
+  return Number.isFinite(normalized) ? normalized : 0;
+}
+
+function getMappedPlacesForBrowse(filteredLocations: Array<{ listKey: string; location: PlaceLocation; markerKey: string; place: PlaceListItem }>): MappedPlace[] {
+  return filteredLocations.flatMap(({ location, markerKey, place }) => {
+    if (location.latitude === null || location.longitude === null) {
+      return [];
+    }
+
+    return [
+      {
+        ...place,
+        city: location.city,
+        city_label: location.city_label,
+        address_line_1: location.address_line_1,
+        address_line_2: location.address_line_2,
+        neighborhood: location.neighborhood,
+        state: location.state,
+        postal_code: location.postal_code,
+        latitude: location.latitude,
+        longitude: location.longitude,
+        phone_number: location.phone_number,
+        website_url: location.website_url,
+        image_urls: location.image_urls,
+        fullAddress: formatPlaceAddress(location),
+        locationId: location.id,
+        markerLatitude: location.latitude,
+        markerLongitude: location.longitude,
+        markerKey,
+        locations: [location],
+      },
+    ];
+  });
+}
+
+function getBrowsePlacesForDisplay(filteredLocations: Array<{ listKey: string; location: PlaceLocation; place: PlaceListItem }>): BrowsePlace[] {
+  return filteredLocations.map(({ listKey, location, place }) => ({
       ...place,
       city: location.city,
       city_label: location.city_label,
@@ -5324,14 +5367,32 @@ function getBrowsePlacesForDisplay(filteredPlaces: PlaceListItem[]): BrowsePlace
       image_urls: location.image_urls,
       fullAddress: formatPlaceAddress(location),
       locationId: location.id,
-      listKey: `${place.slug}:${location.id}`,
+      listKey,
       locations: [location],
-    }))
-  ));
+    }));
 }
 
 function hasAnyMatchingWeekday(placeWeekdays: number[], selectedWeekdays: WeekdayFilterValue[]) {
   return selectedWeekdays.some((weekday) => placeWeekdays.includes(weekday));
+}
+
+function getLocationSearchScore(location: PlaceLocation, searchQuery: string) {
+  if (!searchQuery.length) {
+    return 0;
+  }
+
+  const searchFields = [
+    { value: normalizeSearchText(location.city_label), weight: 6 },
+    { value: normalizeSearchText(location.neighborhood), weight: 7 },
+    { value: normalizeSearchText(location.address_line_1), weight: 8 },
+    { value: normalizeSearchText(location.address_line_2), weight: 3 },
+    { value: normalizeSearchText(formatPlaceAddress(location)), weight: 9 },
+    { value: normalizeSearchText(location.postal_code), weight: 2 },
+  ];
+
+  return searchFields.reduce((totalScore, field) => {
+    return totalScore + (getTokenMatchScore(field.value, searchQuery) * field.weight);
+  }, 0);
 }
 
 function getMapResultsIncrement(totalResults: number) {

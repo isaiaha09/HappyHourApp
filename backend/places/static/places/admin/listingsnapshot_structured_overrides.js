@@ -72,6 +72,37 @@
     return normalized;
   }
 
+  function normalizeTimeInput(value) {
+    const normalized = String(value || '').trim();
+    const match24 = normalized.match(/^(\d{1,2}):(\d{2})$/);
+    if (match24) {
+      const hour = Number.parseInt(match24[1], 10);
+      const minute = Number.parseInt(match24[2], 10);
+      if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+        return String(hour).padStart(2, '0') + ':' + String(minute).padStart(2, '0');
+      }
+      return normalized;
+    }
+
+    const match12 = normalized.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/i);
+    if (!match12) {
+      return normalized;
+    }
+
+    let hour = Number.parseInt(match12[1], 10);
+    const minute = Number.parseInt(match12[2] || '00', 10);
+    const meridiem = match12[3].toUpperCase();
+    if (hour < 1 || hour > 12 || minute < 0 || minute > 59) {
+      return normalized;
+    }
+    if (meridiem === 'AM') {
+      hour = hour === 12 ? 0 : hour;
+    } else {
+      hour = hour === 12 ? 12 : hour + 12;
+    }
+    return String(hour).padStart(2, '0') + ':' + String(minute).padStart(2, '0');
+  }
+
   function formatWeekdayRange(values) {
     const unique = Array.from(new Set(values)).sort(function (left, right) { return left - right; });
     if (!unique.length) {
@@ -256,6 +287,7 @@
     const parsedTextareaValue = safeJsonParse(textarea.value);
     const parsedInitialValue = safeJsonParse(textarea.dataset.initialJson || '[]');
     const initialValue = parsedTextareaValue !== null ? parsedTextareaValue : parsedInitialValue;
+    const seededFromCurrentPublic = textarea.dataset.initialSource === 'current-public' && parsedTextareaValue === null;
     if (parsedTextareaValue === null && parsedInitialValue === null && String(textarea.value || '').trim()) {
       return;
     }
@@ -284,11 +316,21 @@
       label.append(document.createTextNode(labelText));
       const element = (options && options.multiline) ? document.createElement('textarea') : document.createElement('input');
       element.className = options && options.multiline ? 'structured-admin-editor__textarea' : 'structured-admin-editor__input';
-      element.value = value || '';
+      const uses12HourTime = Boolean(options && options.timeFormat === '12hr');
+      element.value = uses12HourTime ? formatTime(value || '') : (value || '');
       if (options && options.placeholder) {
         element.placeholder = options.placeholder;
       }
-      element.addEventListener('input', function () { onInput(element.value); });
+      element.addEventListener('input', function () {
+        onInput(uses12HourTime ? normalizeTimeInput(element.value) : element.value);
+      });
+      if (uses12HourTime) {
+        element.addEventListener('blur', function () {
+          const normalizedValue = normalizeTimeInput(element.value);
+          onInput(normalizedValue);
+          element.value = formatTime(normalizedValue);
+        });
+      }
       label.append(element);
       return label;
     }
@@ -427,11 +469,11 @@
             timeRow.append(buildInput('Start time', window.start_time, function (nextValue) {
               state.value[dealIndex].happy_hours[windowIndex].start_time = nextValue;
               syncTextarea();
-            }, { placeholder: '3:00 PM' }));
+            }, { placeholder: '3:00 PM', timeFormat: '12hr' }));
             timeRow.append(buildInput('End time', window.end_time, function (nextValue) {
               state.value[dealIndex].happy_hours[windowIndex].end_time = nextValue;
               syncTextarea();
-            }, { placeholder: '6:00 PM' }));
+            }, { placeholder: '6:00 PM', timeFormat: '12hr' }));
             nestedCard.append(timeRow);
           }
 
@@ -542,11 +584,11 @@
         timeRow.append(buildInput('Open time', rowValue.open_time, function (nextValue) {
           state.value[rowIndex].open_time = nextValue;
           syncTextarea();
-        }, { placeholder: '11:00 AM' }));
+        }, { placeholder: '11:00 AM', timeFormat: '12hr' }));
         timeRow.append(buildInput('Close time', rowValue.close_time, function (nextValue) {
           state.value[rowIndex].close_time = nextValue;
           syncTextarea();
-        }, { placeholder: '10:00 PM' }));
+        }, { placeholder: '10:00 PM', timeFormat: '12hr' }));
         card.append(timeRow);
         card.append(buildButton('Remove hours row', 'structured-admin-editor__button--danger', function () {
           state.value.splice(rowIndex, 1);
@@ -579,7 +621,9 @@
       editorRoot.append(actions);
     }
 
-    syncTextarea();
+    if (!seededFromCurrentPublic) {
+      syncTextarea();
+    }
     if (type === 'deals') {
       renderDeals();
       return;

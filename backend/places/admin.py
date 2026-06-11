@@ -86,13 +86,60 @@ def _deal_override_text_for_admin(value):
 	return '\n\n'.join(sections)
 
 
+def _custom_deal_type_label_from_public_payload(deal):
+	deal_type_label = str(deal.get('deal_type_label') or '').strip()
+	if not deal_type_label:
+		return ''
+	if deal_type_label.lower() == DealType.OTHER.label.lower():
+		return ''
+	return deal_type_label
+
+
+def _deal_override_seed_from_public_payload(payload):
+	deals = list((payload or {}).get('deals', []))
+	return [
+		{
+			'title': deal.get('title', ''),
+			'description': deal.get('description', ''),
+			'deal_type': deal.get('deal_type', DealType.OTHER),
+			'custom_deal_type_label': _custom_deal_type_label_from_public_payload(deal),
+			'price_text': deal.get('price_text', ''),
+			'terms': deal.get('terms', ''),
+			'happy_hours': [
+				{
+					'weekday': window.get('weekday'),
+					'start_time': window.get('start_time', ''),
+					'end_time': window.get('end_time', ''),
+					'all_day': bool(window.get('all_day')),
+				}
+				for window in deal.get('happy_hours', [])
+			],
+		}
+		for deal in deals
+	]
+
+
+def _operating_hour_override_seed_from_public_payload(payload):
+	operating_hours = list((payload or {}).get('operating_hours', []))
+	return [
+		{
+			'weekday': row.get('weekday'),
+			'open_time': row.get('open_time', ''),
+			'close_time': row.get('close_time', ''),
+			'group_id': row.get('group_id'),
+			'group_rank': row.get('group_rank'),
+		}
+		for row in operating_hours
+	]
+
+
 def _format_public_deals_preview_lines(deals):
 	preview_lines = []
 	for deal in deals:
 		happy_hour_windows = deal.get('happy_hours', [])
 		hour_labels = []
 		for window in happy_hour_windows:
-			window_range = 'all day' if window.get('all_day') else f"{window.get('start_time')} - {window.get('end_time')}"
+			window_range = 'all day' if window.get('all_day') else f"{format_time_display(window.get('start_time'))} - {format_time_display(window.get('end_time'))}"
 			hour_labels.append(f"{window.get('weekday_label', window.get('weekday'))}: {window_range}")
 		hours_label = ', '.join(hour_labels) if hour_labels else 'No time windows parsed'
 		line_parts = [deal.get('title', 'Untitled deal')]
@@ -107,7 +154,7 @@ def _format_public_deals_preview_lines(deals):
 
 def _format_public_hours_preview_lines(operating_hours):
 	return [
-		f"{row.get('weekday_label', row.get('weekday'))}: {row.get('open_time')} - {row.get('close_time')}"
+		f"{row.get('weekday_label', row.get('weekday'))}: {format_time_display(row.get('open_time'))} - {format_time_display(row.get('close_time'))}"
 		for row in operating_hours
 	]
 
@@ -378,6 +425,11 @@ class ListingSnapshotAdminForm(forms.ModelForm):
 
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
+		current_public_payload = get_source_place_payload(self.instance.listing_slug) if self.instance.pk and self.instance.listing_slug else None
+		deal_override_seed = self.instance.deal_overrides if self.instance.pk and self.instance.deal_overrides else _deal_override_seed_from_public_payload(current_public_payload)
+		operating_hour_seed = self.instance.operating_hour_overrides if self.instance.pk and self.instance.operating_hour_overrides else _operating_hour_override_seed_from_public_payload(current_public_payload)
+		deal_seed_source = 'saved-override' if self.instance.pk and self.instance.deal_overrides else ('current-public' if deal_override_seed else 'empty')
+		hour_seed_source = 'saved-override' if self.instance.pk and self.instance.operating_hour_overrides else ('current-public' if operating_hour_seed else 'empty')
 		self.fields['instagram_url'].help_text = 'Optional Instagram profile URL or handle.'
 		self.fields['facebook_url'].help_text = 'Optional Facebook profile URL or page handle.'
 		self.fields['tiktok_url'].help_text = 'Optional TikTok profile URL or handle.'
@@ -388,12 +440,14 @@ class ListingSnapshotAdminForm(forms.ModelForm):
 		self.fields['deal_overrides'].widget.attrs.update({
 			'class': 'vLargeTextField structured-admin-source-field',
 			'data-structured-editor': 'deals',
-			'data-initial-json': json.dumps(self.instance.deal_overrides or []),
+			'data-initial-json': json.dumps(deal_override_seed),
+			'data-initial-source': deal_seed_source,
 		})
 		self.fields['operating_hour_overrides'].widget.attrs.update({
 			'class': 'vLargeTextField structured-admin-source-field',
 			'data-structured-editor': 'hours',
-			'data-initial-json': json.dumps(self.instance.operating_hour_overrides or []),
+			'data-initial-json': json.dumps(operating_hour_seed),
+			'data-initial-source': hour_seed_source,
 		})
 		if not self.is_bound:
 			social_profiles = self.instance.social_profiles or {}
