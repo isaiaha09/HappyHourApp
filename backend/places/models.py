@@ -150,6 +150,9 @@ class Weekday(models.IntegerChoices):
 class ListingSnapshot(models.Model):
 	source_name = models.CharField(max_length=80, blank=True)
 	source_url = models.URLField(blank=True)
+	social_profiles = models.JSONField(default=dict, blank=True)
+	social_media_links = models.JSONField(default=list, blank=True)
+	website_url_suppressed = models.BooleanField(default=False)
 	external_id = models.CharField(max_length=150, blank=True)
 	listing_slug = models.SlugField(max_length=170, blank=True)
 	name = models.CharField(max_length=150)
@@ -190,6 +193,9 @@ class ListingSnapshot(models.Model):
 class DeletedBusiness(models.Model):
 	source_name = models.CharField(max_length=80, blank=True)
 	source_url = models.URLField(blank=True)
+	social_profiles = models.JSONField(default=dict, blank=True)
+	social_media_links = models.JSONField(default=list, blank=True)
+	website_url_suppressed = models.BooleanField(default=False)
 	external_id = models.CharField(max_length=150, blank=True)
 	listing_slug = models.SlugField(max_length=170, blank=True)
 	deleted_from_business_database = models.BooleanField(default=True)

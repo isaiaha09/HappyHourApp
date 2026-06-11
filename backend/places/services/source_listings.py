@@ -64,6 +64,10 @@ def load_canonical_source_records(source_name=None):
 	return canonical_records
 
 
+def _normalize_structured_override_value(value):
+	return value if value else None
+
+
 def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_deals=None, resolve_missing_coordinates=True):
 	payloads_by_slug = {}
 	snapshot_overrides_by_slug = _get_listing_snapshot_override_payloads()
@@ -145,6 +149,13 @@ def _get_listing_snapshot_override_payloads():
 		.order_by('-updated_at', '-pk')
 	)
 	for snapshot in queryset:
+		normalized_deal_overrides = _normalize_structured_override_value(snapshot.deal_overrides)
+		normalized_operating_hour_overrides = _normalize_structured_override_value(snapshot.operating_hour_overrides)
+		normalized_social_profiles = normalize_social_profiles(
+			snapshot.social_profiles,
+			fallback_website_url=snapshot.website_url,
+			fallback_social_links=snapshot.social_media_links,
+		)
 		override_payload = {
 			'name': snapshot.name,
 			'city': snapshot.city,
@@ -156,8 +167,10 @@ def _get_listing_snapshot_override_payloads():
 			'postal_code': snapshot.postal_code,
 			'phone_number': snapshot.phone_number,
 			'website_url': snapshot.website_url,
-			'deal_overrides': snapshot.deal_overrides,
-			'operating_hour_overrides': snapshot.operating_hour_overrides,
+			'social_profiles': normalized_social_profiles,
+			'social_media_links': build_social_media_links(normalized_social_profiles),
+			'deal_overrides': normalized_deal_overrides,
+			'operating_hour_overrides': normalized_operating_hour_overrides,
 		}
 		if snapshot.listing_slug and snapshot.listing_slug not in override_payloads['by_slug']:
 			override_payloads['by_slug'][snapshot.listing_slug] = override_payload
@@ -258,15 +271,23 @@ def _resolve_primary_location_id(payload):
 
 
 def _apply_snapshot_contact_override_to_location(location, override_payload):
-	for field_name in ('name', 'city', 'city_label', 'address_line_1', 'address_line_2', 'neighborhood', 'state', 'postal_code', 'phone_number', 'website_url'):
+	for field_name in ('name', 'city', 'city_label', 'address_line_1', 'address_line_2', 'neighborhood', 'state', 'postal_code', 'phone_number'):
 		value = override_payload.get(field_name)
 		if value not in (None, ''):
 			location[field_name] = value
+	if 'website_url' in override_payload:
+		location['website_url'] = override_payload.get('website_url', '')
+	for field_name in ('social_profiles', 'social_media_links'):
+		if field_name in override_payload:
+			location[field_name] = override_payload[field_name]
 
 
 def _apply_snapshot_contact_override_to_payload(payload, location):
-	for field_name in ('name', 'city', 'city_label', 'address_line_1', 'address_line_2', 'neighborhood', 'state', 'postal_code', 'phone_number', 'website_url'):
+	for field_name in ('name', 'city', 'city_label', 'address_line_1', 'address_line_2', 'neighborhood', 'state', 'postal_code', 'phone_number'):
 		payload[field_name] = location.get(field_name, payload.get(field_name))
+	payload['website_url'] = location.get('website_url', payload.get('website_url', ''))
+	for field_name in ('social_profiles', 'social_media_links'):
+		payload[field_name] = location.get(field_name, payload.get(field_name, {} if field_name == 'social_profiles' else []))
 
 
 def _apply_snapshot_structured_override_to_location(location, override_payload, payload_namespace):
@@ -396,6 +417,7 @@ def _build_grouped_place_payload(place_records, preferred_city=None, resolve_mis
 		'name': profile_name,
 		'slug': profile_slug,
 		'is_claimed': False,
+		'social_profiles': {},
 		'social_media_links': [],
 		'offer_entries': [],
 		'hours_of_operation_entries': [],
@@ -669,8 +691,12 @@ def _apply_claim_structured_overrides(payload, claim=None, payload_namespace='',
 	} if source_payload is not None and apply_source_address_overrides else {}
 	phone_number = resolved_source_payload.get('phone_number') if source_payload is not None else ''
 	website_url = resolved_source_payload.get('website_url') if source_payload is not None else ''
+	social_profiles = resolved_source_payload.get('social_profiles') if source_payload is not None else None
+	social_media_links = resolved_source_payload.get('social_media_links') if source_payload is not None else None
 	deal_overrides = resolved_source_payload.get('deal_overrides') if source_payload is not None else getattr(claim, 'deal_overrides', None)
 	operating_hour_overrides = resolved_source_payload.get('operating_hour_overrides') if source_payload is not None else getattr(claim, 'operating_hour_overrides', None)
+	deal_overrides = _normalize_structured_override_value(deal_overrides)
+	operating_hour_overrides = _normalize_structured_override_value(operating_hour_overrides)
 
 	if name_override:
 		payload['name'] = name_override
@@ -683,7 +709,11 @@ def _apply_claim_structured_overrides(payload, claim=None, payload_namespace='',
 			for location in payload.get('locations', []):
 				location[field_name] = value
 
-	if website_url:
+	if source_payload is not None and 'website_url' in resolved_source_payload:
+		payload['website_url'] = website_url or ''
+		for location in payload.get('locations', []):
+			location['website_url'] = website_url or ''
+	elif website_url:
 		payload['website_url'] = website_url
 		for location in payload.get('locations', []):
 			location['website_url'] = website_url
@@ -692,6 +722,16 @@ def _apply_claim_structured_overrides(payload, claim=None, payload_namespace='',
 		payload['phone_number'] = phone_number
 		for location in payload.get('locations', []):
 			location['phone_number'] = phone_number
+
+	if social_profiles is not None:
+		payload['social_profiles'] = social_profiles
+		for location in payload.get('locations', []):
+			location['social_profiles'] = social_profiles
+
+	if social_media_links is not None:
+		payload['social_media_links'] = social_media_links
+		for location in payload.get('locations', []):
+			location['social_media_links'] = social_media_links
 
 	if operating_hour_overrides is not None:
 		operating_hours = build_operating_hour_payloads(operating_hour_overrides, payload_namespace)

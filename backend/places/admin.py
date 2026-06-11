@@ -1,4 +1,5 @@
 import ast
+from dataclasses import replace
 import json
 import re
 from urllib.parse import urlparse
@@ -25,6 +26,7 @@ from .services.deleted_businesses import filter_deleted_business_records, import
 from .services.importers.business_websites import BusinessWebsiteImporter
 from .services.importers.here_places import HerePlacesImporter
 from .services.provider_quota import delete_stale_provider_usage_windows, get_provider_policy, get_provider_usage_statuses, select_discovery_provider
+from .services.social_profiles import build_social_media_links, normalize_business_contact_channels, normalize_social_profile
 from .services.source_listings import get_listing_source_name, get_source_place_payload, load_canonical_source_records, load_source_records
 
 
@@ -359,6 +361,10 @@ class BusinessClaimAdminForm(forms.ModelForm):
 class ListingSnapshotAdminForm(forms.ModelForm):
 	deal_overrides = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 8}))
 	operating_hour_overrides = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 6}))
+	instagram_url = forms.CharField(required=False)
+	facebook_url = forms.CharField(required=False)
+	tiktok_url = forms.CharField(required=False)
+	youtube_url = forms.CharField(required=False)
 
 	class Media:
 		css = {
@@ -372,6 +378,10 @@ class ListingSnapshotAdminForm(forms.ModelForm):
 
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
+		self.fields['instagram_url'].help_text = 'Optional Instagram profile URL or handle.'
+		self.fields['facebook_url'].help_text = 'Optional Facebook profile URL or page handle.'
+		self.fields['tiktok_url'].help_text = 'Optional TikTok profile URL or handle.'
+		self.fields['youtube_url'].help_text = 'Optional YouTube profile URL or handle.'
 		self.fields['deal_overrides'].help_text = 'Optional deal overrides for this unclaimed business. Paste valid JSON, or plain text blocks with title on the first line, optional price on the second line, and optional description after that.'
 		self.fields['deal_overrides'].help_text = 'Add multiple deals by separating them with a blank line. Supported plain-text lines: Title, Type, Price, Description, Terms, and Happy hour: Monday 3:00 PM - 6:00 PM.'
 		self.fields['operating_hour_overrides'].help_text = 'Optional operating-hour overrides. Paste valid JSON, or one line per day like Monday: 11:00 AM - 9:00 PM.'
@@ -386,8 +396,15 @@ class ListingSnapshotAdminForm(forms.ModelForm):
 			'data-initial-json': json.dumps(self.instance.operating_hour_overrides or []),
 		})
 		if not self.is_bound:
+			social_profiles = self.instance.social_profiles or {}
 			deal_override_initial = _deal_override_text_for_admin(self.instance.deal_overrides if self.instance.pk else None)
 			operating_hour_initial = _operating_hour_override_text_for_admin(self.instance.operating_hour_overrides if self.instance.pk else None)
+			for platform in ('instagram', 'facebook', 'tiktok', 'youtube'):
+				field_name = f'{platform}_url'
+				profile = social_profiles.get(platform) or {}
+				initial_value = str(profile.get('url') or '').strip()
+				self.fields[field_name].initial = initial_value
+				self.initial[field_name] = initial_value
 			self.fields['deal_overrides'].initial = deal_override_initial
 			self.fields['operating_hour_overrides'].initial = operating_hour_initial
 			self.initial['deal_overrides'] = deal_override_initial
@@ -397,6 +414,33 @@ class ListingSnapshotAdminForm(forms.ModelForm):
 		cleaned_data = super().clean()
 		raw_deal_overrides = cleaned_data.get('deal_overrides')
 		raw_operating_hour_overrides = cleaned_data.get('operating_hour_overrides')
+		website_url_suppressed = bool(cleaned_data.get('website_url_suppressed'))
+
+		normalized_social_profiles = {}
+		for platform in ('instagram', 'facebook', 'tiktok', 'youtube'):
+			raw_value = str(cleaned_data.get(f'{platform}_url') or '').strip()
+			if not raw_value:
+				continue
+			try:
+				profile = normalize_social_profile(platform, raw_value)
+			except ValueError as error:
+				self.add_error(f'{platform}_url', str(error))
+				continue
+			if profile:
+				normalized_social_profiles[platform] = profile
+
+		normalized_contact_channels = normalize_business_contact_channels(
+			website_url=cleaned_data.get('website_url', ''),
+			source_url=cleaned_data.get('source_url', ''),
+			social_profiles=normalized_social_profiles,
+			social_media_links=build_social_media_links(normalized_social_profiles),
+		)
+		if website_url_suppressed:
+			normalized_contact_channels['website_url'] = ''
+		cleaned_data['website_url'] = normalized_contact_channels['website_url']
+		cleaned_data['source_url'] = normalized_contact_channels['source_url']
+		cleaned_data['social_profiles'] = normalized_contact_channels['social_profiles']
+		cleaned_data['social_media_links'] = normalized_contact_channels['social_media_links']
 
 		if raw_deal_overrides is not None:
 			try:
@@ -411,6 +455,14 @@ class ListingSnapshotAdminForm(forms.ModelForm):
 				self.add_error('operating_hour_overrides', str(error))
 
 		return cleaned_data
+
+	def save(self, commit=True):
+		self.instance.social_profiles = self.cleaned_data.get('social_profiles', {})
+		self.instance.social_media_links = self.cleaned_data.get('social_media_links', [])
+		self.instance.website_url = self.cleaned_data.get('website_url', '')
+		self.instance.website_url_suppressed = bool(self.cleaned_data.get('website_url_suppressed'))
+		self.instance.source_url = self.cleaned_data.get('source_url', '')
+		return super().save(commit=commit)
 
 
 def _normalize_lookup_text(value):
@@ -449,6 +501,19 @@ def _sync_listing_snapshot_from_imported_place(place_record, snapshot=None):
 		defaults['website_url'] = existing_snapshot.website_url
 	if existing_snapshot is not None and not str(defaults['source_url'] or '').strip():
 		defaults['source_url'] = existing_snapshot.source_url or existing_snapshot.website_url
+	if existing_snapshot is not None and existing_snapshot.website_url_suppressed:
+		defaults['website_url'] = ''
+	normalized_contact_channels = normalize_business_contact_channels(
+		website_url=defaults['website_url'],
+		source_url=defaults['source_url'],
+		social_profiles=getattr(existing_snapshot, 'social_profiles', {}),
+		social_media_links=getattr(existing_snapshot, 'social_media_links', []),
+	)
+	defaults['website_url'] = normalized_contact_channels['website_url']
+	defaults['source_url'] = normalized_contact_channels['source_url']
+	defaults['social_profiles'] = normalized_contact_channels['social_profiles']
+	defaults['social_media_links'] = normalized_contact_channels['social_media_links']
+	defaults['website_url_suppressed'] = bool(getattr(existing_snapshot, 'website_url_suppressed', False))
 
 	if snapshot is not None:
 		_apply_non_destructive_snapshot_defaults(snapshot, defaults)
@@ -477,6 +542,8 @@ def _sync_listing_snapshot_from_imported_place(place_record, snapshot=None):
 			defaults['website_url'] = existing_snapshot.website_url
 		if not str(defaults['source_url'] or '').strip():
 			defaults['source_url'] = existing_snapshot.source_url or existing_snapshot.website_url
+		if existing_snapshot.website_url_suppressed:
+			defaults['website_url'] = ''
 		_apply_non_destructive_snapshot_defaults(existing_snapshot, defaults)
 		existing_snapshot.save()
 		return existing_snapshot
@@ -495,6 +562,14 @@ def _apply_non_destructive_snapshot_defaults(snapshot, defaults):
 			continue
 		if field_name == 'listing_slug':
 			if not str(existing_value or '').strip() and str(value or '').strip():
+				setattr(snapshot, field_name, value)
+			continue
+		if field_name == 'website_url':
+			if getattr(snapshot, 'website_url_suppressed', False):
+				setattr(snapshot, field_name, '')
+				continue
+		if field_name in {'social_profiles', 'social_media_links'}:
+			if value:
 				setattr(snapshot, field_name, value)
 			continue
 		if not str(existing_value or '').strip() and str(value or '').strip():
@@ -593,6 +668,32 @@ def _snapshot_match_score(snapshot, place_record):
 		score += 60
 
 	return score
+
+
+def _preferred_snapshot_enrichment_url(snapshot):
+	for candidate in (snapshot.website_url, snapshot.source_url):
+		resolved = str(candidate or '').strip()
+		if resolved:
+			return resolved
+	return ''
+
+
+def _apply_snapshot_enrichment_url_override(snapshot, place_record):
+	preferred_url = _preferred_snapshot_enrichment_url(snapshot)
+	if not preferred_url:
+		return place_record
+	return replace(place_record, website_url=preferred_url, source_url=preferred_url)
+
+
+def _find_best_matching_snapshot(place_record, snapshots):
+	best_snapshot = None
+	best_score = 0
+	for snapshot in snapshots:
+		score = _snapshot_match_score(snapshot, place_record)
+		if score > best_score:
+			best_snapshot = snapshot
+			best_score = score
+	return best_snapshot if best_score >= 70 else None
 
 
 def _select_best_matching_record(snapshot, place_records):
@@ -906,7 +1007,11 @@ class ListingSnapshotAdmin(admin.ModelAdmin):
 			'fields': ('city', 'venue_type', 'address_line_1', 'address_line_2', 'neighborhood', 'state', 'postal_code'),
 		}),
 		('Contact', {
-			'fields': ('phone_number', 'website_url'),
+			'fields': ('phone_number', 'website_url', 'website_url_suppressed'),
+		}),
+		('Social media', {
+			'fields': ('instagram_url', 'facebook_url', 'tiktok_url', 'youtube_url'),
+			'description': 'Store third-party profile URLs here instead of putting them in Website or Source URL.',
 		}),
 		('Current app data', {
 			'fields': ('current_public_deals_preview', 'current_public_hours_preview'),
@@ -959,6 +1064,13 @@ class ListingSnapshotAdmin(admin.ModelAdmin):
 
 	def _run_pull_all_business_data(self, request):
 		discovery_records = filter_deleted_business_records(list(HerePlacesImporter().load_records()))
+		existing_snapshots = list(ListingSnapshot.objects.exclude(source_name=BusinessClaim.MANUAL_SOURCE_NAME).order_by('-updated_at', '-pk'))
+		discovery_records = [
+			_apply_snapshot_enrichment_url_override(snapshot, place_record)
+			if snapshot is not None else place_record
+			for place_record in discovery_records
+			for snapshot in [_find_best_matching_snapshot(place_record, existing_snapshots)]
+		]
 		discovery_records = list(BusinessWebsiteImporter().enrich_place_records(discovery_records))
 		write_discovery_json_records(discovery_records)
 		snapshot_records = list(load_canonical_source_records(source_name=get_listing_source_name()))
@@ -1013,6 +1125,7 @@ class ListingSnapshotAdmin(admin.ModelAdmin):
 			self.message_user(request, f'No matching live business data found for {snapshot.name}.', level=messages.WARNING)
 			return HttpResponseRedirect(reverse('happyhour_admin:places_listingsnapshot_changelist'))
 
+		best_record = _apply_snapshot_enrichment_url_override(snapshot, best_record)
 		best_record = BusinessWebsiteImporter().enrich_place_record(best_record)
 		merge_discovery_json_records([best_record])
 		_sync_listing_snapshot_from_imported_place(best_record, snapshot=snapshot)
@@ -1113,7 +1226,10 @@ class DeletedBusinessAdmin(admin.ModelAdmin):
 			'fields': ('city', 'venue_type', 'address_line_1', 'address_line_2', 'neighborhood', 'state', 'postal_code'),
 		}),
 		('Contact', {
-			'fields': ('phone_number', 'website_url'),
+			'fields': ('phone_number', 'website_url', 'website_url_suppressed'),
+		}),
+		('Social media', {
+			'fields': ('social_profiles', 'social_media_links'),
 		}),
 		('Stored payload', {
 			'fields': ('payload',),
@@ -1161,7 +1277,11 @@ class DeletedBusinessAdmin(admin.ModelAdmin):
 		place_record = imported_place_from_deleted_business(deleted_business)
 		if str(place_record.source_name or '').strip().lower() in LIVE_DISCOVERY_SOURCE_NAMES:
 			merge_discovery_json_records([place_record])
-		_sync_listing_snapshot_from_imported_place(place_record)
+		snapshot = _sync_listing_snapshot_from_imported_place(place_record)
+		if snapshot is not None and deleted_business.website_url_suppressed:
+			snapshot.website_url_suppressed = True
+			snapshot.website_url = ''
+			snapshot.save(update_fields=['website_url_suppressed', 'website_url', 'updated_at'])
 		deleted_business.delete()
 
 

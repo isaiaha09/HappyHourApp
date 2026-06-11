@@ -236,6 +236,12 @@ function extractPlatformUsername(platform: SocialPlatform, parsed: URL | null) {
     if (segments[0] === 'profile.php') {
       return normalizeUsername(platform, query.get('id') ?? '');
     }
+    if (segments[0] === 'people') {
+      if (segments.length < 2) {
+        return '';
+      }
+      return normalizeUsername(platform, segments.slice(0, 3).join('/'));
+    }
     if (['groups', 'events', 'watch', 'marketplace', 'gaming'].includes(segments[0])) {
       return '';
     }

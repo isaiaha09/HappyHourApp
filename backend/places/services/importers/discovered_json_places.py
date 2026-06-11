@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from shutil import copyfile
 
 from django.conf import settings
 
@@ -13,6 +14,28 @@ def get_discovery_json_path():
 	if configured_path:
 		return Path(configured_path)
 	return Path(settings.BASE_DIR) / 'config' / 'discovered_places.json'
+
+
+def get_discovery_json_seed_path():
+	configured_path = getattr(settings, 'DISCOVERY_JSON_SEED_PATH', '')
+	if configured_path:
+		return Path(configured_path)
+	return Path(settings.BASE_DIR) / 'config' / 'discovered_places.json'
+
+
+def _ensure_discovery_json_seeded(path):
+	if path.exists():
+		return path
+	if not getattr(settings, 'DISCOVERY_JSON_BOOTSTRAP_FROM_SEED', False):
+		return path
+
+	seed_path = get_discovery_json_seed_path()
+	if seed_path == path or not seed_path.exists():
+		return path
+
+	path.parent.mkdir(parents=True, exist_ok=True)
+	copyfile(seed_path, path)
+	return path
 
 
 def _normalize_lookup_text(value):
@@ -161,6 +184,8 @@ def deserialize_imported_place(payload):
 
 def load_discovery_json_records(file_path=None):
 	path = Path(file_path) if file_path else get_discovery_json_path()
+	if file_path is None:
+		path = _ensure_discovery_json_seeded(path)
 	if not path.exists():
 		return []
 

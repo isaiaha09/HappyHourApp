@@ -1210,7 +1210,7 @@ export const styles = StyleSheet.create({
   },
   detailScrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 18,
+    paddingHorizontal: 10,
     paddingTop: 0,
     paddingBottom: 20,
   },
@@ -1266,6 +1266,7 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     marginTop: 12,
     padding: 18,
+    
     width: '100%',
   },
   detailCardLandscape: {

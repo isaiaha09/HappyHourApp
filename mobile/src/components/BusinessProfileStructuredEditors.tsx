@@ -138,6 +138,13 @@ export function BusinessDealsEditor({ label, onChange, supportText, value }: Bus
     onChange(value.map((deal, dealIndex) => dealIndex === index ? nextDeal : deal));
   }
 
+  function resolveDealTypeLabel(deal: BusinessDealOverride) {
+    if (deal.deal_type === 'other' && String(deal.custom_deal_type_label ?? '').trim()) {
+      return String(deal.custom_deal_type_label).trim();
+    }
+    return dealTypeOptions.find((option) => option.value === deal.deal_type)?.label ?? 'Deal';
+  }
+
   function updateHappyHour(dealIndex: number, happyHourIndex: number, nextWindow: BusinessDealHappyHourOverride) {
     updateDeal(
       dealIndex,
@@ -177,7 +184,23 @@ export function BusinessDealsEditor({ label, onChange, supportText, value }: Bus
           <TextInput onChangeText={(price_text) => updateDeal(dealIndex, { ...deal, price_text })} placeholder="Price or savings" placeholderTextColor="#9a7f6c" style={styles.profileInput} value={deal.price_text} />
           <TextInput multiline onChangeText={(description) => updateDeal(dealIndex, { ...deal, description })} placeholder="Deal description" placeholderTextColor="#9a7f6c" style={[styles.profileInput, styles.dashboardMultilineInput]} textAlignVertical="top" value={deal.description} />
           <TextInput onChangeText={(terms) => updateDeal(dealIndex, { ...deal, terms })} placeholder="Terms or restrictions" placeholderTextColor="#9a7f6c" style={styles.profileInput} value={deal.terms} />
-          <DealTypeSelector selectedDealType={deal.deal_type} onSelect={(deal_type) => updateDeal(dealIndex, { ...deal, deal_type })} />
+          <DealTypeSelector
+            selectedDealType={deal.deal_type}
+            onSelect={(deal_type) => updateDeal(dealIndex, {
+              ...deal,
+              deal_type,
+              custom_deal_type_label: deal_type === 'other' ? (deal.custom_deal_type_label ?? '') : '',
+            })}
+          />
+          {deal.deal_type === 'other' ? (
+            <TextInput
+              onChangeText={(custom_deal_type_label) => updateDeal(dealIndex, { ...deal, custom_deal_type_label })}
+              placeholder="Custom deal type"
+              placeholderTextColor="#9a7f6c"
+              style={styles.profileInput}
+              value={deal.custom_deal_type_label ?? ''}
+            />
+          ) : null}
 
           {deal.happy_hours.map((window, happyHourIndex) => (
             <View key={window.id ?? `happy-hour-${happyHourIndex}`} style={styles.structuredNestedCard}>
@@ -220,7 +243,7 @@ export function BusinessDealsEditor({ label, onChange, supportText, value }: Bus
             <View style={styles.dealHeaderRow}>
               <Text style={styles.dealTitle}>{deal.title || 'Untitled deal'}</Text>
               <View style={styles.pill}>
-                <Text style={styles.pillText}>{dealTypeOptions.find((option) => option.value === deal.deal_type)?.label ?? 'Deal'}</Text>
+                <Text style={styles.pillText}>{resolveDealTypeLabel(deal)}</Text>
               </View>
             </View>
             {deal.price_text ? <Text style={styles.dealPrice}>{deal.price_text}</Text> : null}

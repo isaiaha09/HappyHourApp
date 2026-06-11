@@ -24,7 +24,7 @@ from rest_framework.test import APITestCase
 from bs4 import BeautifulSoup
 import pyotp
 
-from .admin import BusinessAccountAdmin, BusinessClaimAdmin, CustomerAccountAdmin, DeletedBusinessAdmin, ListingSnapshotAdmin, ListingSnapshotAdminForm, ProviderUsageWindowAdmin
+from .admin import BusinessAccountAdmin, BusinessClaimAdmin, CustomerAccountAdmin, DeletedBusinessAdmin, ListingSnapshotAdmin, ListingSnapshotAdminForm, ProviderUsageWindowAdmin, _sync_listing_snapshot_from_imported_place
 from .admin_site import happyhour_admin_site
 from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessMembership, BusinessPost, City, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, FeedEngagement, FeedImpression, ListingSnapshot, ProfileAuthToken, ProviderUsageWindow, SponsoredCampaign, VenueType, Weekday
 from .services.importers.base import BaseHtmlImporter
@@ -558,6 +558,34 @@ class DiscoveryJsonStorageTests(TestCase):
 		self.assertEqual(records[0].name, 'Stored Spot')
 		self.assertEqual(len(records[0].deals), 1)
 		self.assertEqual(len(records[0].deals[0].happy_hours), 1)
+
+	def test_json_importer_bootstraps_runtime_discovery_file_from_seed(self):
+		with TemporaryDirectory() as temp_dir:
+			seed_path = Path(temp_dir) / 'seed-discovered-places.json'
+			runtime_path = Path(temp_dir) / '.runtime' / 'discovered_places.json'
+			write_discovery_json_records([
+				ImportedPlace(
+					name='Seeded Spot',
+					city=City.VENTURA,
+					venue_type=VenueType.RESTAURANT,
+					address_line_1='123 Main St',
+					website_url='https://example.com/seeded-spot',
+					source_name='here_places',
+					external_id='here:seeded-1',
+				),
+			], file_path=seed_path)
+
+			with self.settings(
+				DISCOVERY_JSON_PATH=runtime_path,
+				DISCOVERY_JSON_SEED_PATH=seed_path,
+				DISCOVERY_JSON_BOOTSTRAP_FROM_SEED=True,
+			):
+				records = DiscoveryJsonPlacesImporter().load_records()
+
+			self.assertEqual(len(records), 1)
+			self.assertEqual(records[0].external_id, 'here:seeded-1')
+			self.assertTrue(runtime_path.exists())
+			self.assertEqual(runtime_path.read_text(encoding='utf-8'), seed_path.read_text(encoding='utf-8'))
 
 	def test_refresh_discovery_json_command_writes_enriched_here_records(self):
 		with TemporaryDirectory() as temp_dir:
@@ -2079,6 +2107,61 @@ class SourceListingIdentityTests(TestCase):
 
 	@patch('places.services.source_listings._get_place_coordinates')
 	@patch('places.services.source_listings.load_source_records')
+	def test_public_place_payload_moves_snapshot_facebook_link_into_socials_for_unclaimed_businesses(self, mock_load_source_records, mock_get_place_coordinates):
+		mock_get_place_coordinates.return_value = (34.2783, -119.2931)
+		mock_load_source_records.return_value = [
+			ImportedPlace(
+				name='Cafe 805',
+				profile_name='Cafe 805',
+				profile_slug='cafe-805',
+				city=City.VENTURA,
+				venue_type=VenueType.CAFE,
+				address_line_1='123 Main St',
+				state='CA',
+				postal_code='93001',
+				website_url='https://facebook.com/cafe805',
+				external_id='here:cafe-805',
+				source_name='here_places',
+				source_url='https://facebook.com/cafe805',
+			),
+		]
+		ListingSnapshot.objects.create(
+			name='Cafe 805',
+			listing_slug='cafe-805',
+			city=City.VENTURA,
+			venue_type=VenueType.CAFE,
+			address_line_1='123 Main St',
+			source_name='here_places',
+			external_id='here:cafe-805',
+			website_url='',
+			source_url='',
+			social_profiles={
+				'facebook': {
+					'url': 'https://facebook.com/cafe805',
+					'username': 'cafe805',
+				},
+			},
+			social_media_links=['https://facebook.com/cafe805'],
+		)
+
+		payload = get_source_place_payload('cafe-805')
+
+		self.assertIsNotNone(payload)
+		self.assertEqual(payload['website_url'], '')
+		self.assertEqual(payload['locations'][0]['website_url'], '')
+		self.assertEqual(
+			payload['social_profiles'],
+			{
+				'facebook': {
+					'url': 'https://facebook.com/cafe805',
+					'username': 'cafe805',
+				},
+			},
+		)
+		self.assertEqual(payload['social_media_links'], ['https://facebook.com/cafe805'])
+
+	@patch('places.services.source_listings._get_place_coordinates')
+	@patch('places.services.source_listings.load_source_records')
 	def test_public_place_payload_replaces_pulled_deals_and_hours_with_structured_claim_overrides(self, mock_load_source_records, mock_get_place_coordinates):
 		mock_get_place_coordinates.return_value = (34.2001, -119.1806)
 		mock_load_source_records.return_value = [
@@ -2242,6 +2325,94 @@ class SourceListingIdentityTests(TestCase):
 
 		self.assertEqual(payload['deals'][0]['deal_type'], DealType.OTHER)
 		self.assertEqual(payload['deals'][0]['deal_type_label'], 'Event Special')
+
+	@patch('places.services.source_listings._get_place_coordinates')
+	@patch('places.services.source_listings.load_source_records')
+	def test_public_place_payload_preserves_imported_deals_when_snapshot_has_no_structured_overrides(self, mock_load_source_records, mock_get_place_coordinates):
+		mock_get_place_coordinates.return_value = (34.21681, -119.07423)
+		mock_load_source_records.return_value = [
+			ImportedPlace(
+				name='Institution Ale Co.',
+				profile_name='Institution Ale Co.',
+				profile_slug='institution-ale-co',
+				city=City.CAMARILLO,
+				venue_type=VenueType.BAR,
+				address_line_1='311 Leisure Village Dr',
+				state='CA',
+				postal_code='93012',
+				phone_number='805-555-0100',
+				website_url='https://institution.example.com/camarillo',
+				source_name='business_websites',
+				source_url='https://institution.example.com/camarillo',
+				deals=[ImportedDeal(title='Imported Happy Hour', deal_type=DealType.HAPPY_HOUR, happy_hours=[ImportedHappyHour(weekday=Weekday.MONDAY, start_time='15:00', end_time='18:00')])],
+				operating_hours=[ImportedOperatingHour(weekday=Weekday.MONDAY, open_time='11:00', close_time='22:00')],
+			),
+		]
+		ListingSnapshot.objects.create(
+			name='Institution Ale Co.',
+			listing_slug='institution-ale-co',
+			city=City.CAMARILLO,
+			venue_type=VenueType.BAR,
+			address_line_1='311 Leisure Village Dr',
+			phone_number='805-555-9999',
+		)
+
+		payload = get_source_place_payload('institution-ale-co')
+
+		self.assertEqual(payload['phone_number'], '805-555-9999')
+		self.assertTrue(payload['has_deals'])
+		self.assertEqual(payload['deal_count'], 1)
+		self.assertEqual(payload['deals'][0]['title'], 'Imported Happy Hour')
+		self.assertEqual(payload['operating_hours'][0]['weekday'], Weekday.MONDAY)
+
+	@patch('places.services.source_listings._get_place_coordinates')
+	@patch('places.services.source_listings.load_source_records')
+	def test_public_place_payload_preserves_imported_deals_when_claim_has_no_structured_overrides(self, mock_load_source_records, mock_get_place_coordinates):
+		mock_get_place_coordinates.return_value = (34.2001, -119.1806)
+		mock_load_source_records.return_value = [
+			ImportedPlace(
+				name='Yard House',
+				profile_name='Yard House',
+				profile_slug='yard-house',
+				city=City.OXNARD,
+				venue_type=VenueType.BAR,
+				address_line_1='501 Collection Blvd Ste # 4130',
+				state='CA',
+				postal_code='93036',
+				website_url='https://imported.example.com/yard-house',
+				source_name='business_websites',
+				source_url='https://imported.example.com/yard-house',
+				deals=[ImportedDeal(title='Imported Happy Hour', deal_type=DealType.HAPPY_HOUR, happy_hours=[ImportedHappyHour(weekday=Weekday.MONDAY, start_time='15:00', end_time='18:00')])],
+			),
+		]
+		snapshot = ListingSnapshot.objects.create(
+			name='Yard House',
+			listing_slug='yard-house',
+			city=City.OXNARD,
+			venue_type=VenueType.BAR,
+			address_line_1='501 Collection Blvd Ste # 4130',
+		)
+		owner = User.objects.create_user(username='owner-no-override', password='password123')
+		claim = BusinessClaim.objects.create(
+			claimant=owner,
+			listing_snapshot=snapshot,
+			pathway=BusinessClaim.Pathway.CLAIMED,
+			status=BusinessClaim.Status.APPROVED,
+			contact_name='Owner Name',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='owner@yardhouse.example.com',
+			work_phone='805-555-0100',
+			employer_address='501 Collection Blvd Ste # 4130',
+			verification_summary='Approved claimed business verification.',
+		)
+		BusinessMembership.objects.create(claim=claim, user=owner, is_active=True)
+
+		payload = get_source_place_payload('yard-house')
+
+		self.assertTrue(payload['is_claimed'])
+		self.assertTrue(payload['has_deals'])
+		self.assertEqual(payload['deal_count'], 1)
+		self.assertEqual(payload['deals'][0]['title'], 'Imported Happy Hour')
 
 	@patch('places.services.source_listings._get_place_coordinates')
 	@patch('places.services.source_listings.load_source_records')
@@ -6187,6 +6358,234 @@ class ListingSnapshotAdminTests(TestCase):
 		self.assertEqual(form.cleaned_data['deal_overrides'][1]['happy_hours'][1]['weekday'], Weekday.TUESDAY)
 		self.assertTrue(form.cleaned_data['deal_overrides'][1]['happy_hours'][1]['all_day'])
 
+	def test_listing_snapshot_admin_form_moves_facebook_urls_out_of_website_and_source_fields(self):
+		form = ListingSnapshotAdminForm(data={
+			'name': 'Cafe 805',
+			'listing_slug': 'cafe-805',
+			'source_name': 'here_places',
+			'source_url': 'https://facebook.com/cafe805',
+			'external_id': 'here:cafe-805',
+			'city': City.VENTURA,
+			'venue_type': VenueType.CAFE,
+			'address_line_1': '123 Main St',
+			'address_line_2': '',
+			'neighborhood': '',
+			'state': 'CA',
+			'postal_code': '93001',
+			'phone_number': '',
+			'website_url': 'https://facebook.com/cafe805',
+			'instagram_url': '',
+			'facebook_url': 'https://facebook.com/cafe805',
+			'tiktok_url': '',
+			'youtube_url': '',
+			'deal_overrides': '',
+			'operating_hour_overrides': '',
+			'tracked_location_latitude': '',
+			'tracked_location_longitude': '',
+			'tracked_location_accuracy_meters': '',
+			'tracked_location_updated_at': '',
+		})
+
+		self.assertTrue(form.is_valid(), form.errors.as_json())
+		self.assertEqual(form.cleaned_data['website_url'], '')
+		self.assertEqual(form.cleaned_data['source_url'], '')
+		self.assertEqual(
+			form.cleaned_data['social_profiles'],
+			{
+				'facebook': {
+					'url': 'https://facebook.com/cafe805',
+					'username': 'cafe805',
+				},
+			},
+		)
+		self.assertEqual(form.cleaned_data['social_media_links'], ['https://facebook.com/cafe805'])
+
+	def test_listing_snapshot_admin_form_preserves_facebook_people_profile_paths(self):
+		form = ListingSnapshotAdminForm(data={
+			'name': 'Eggs Y Mas',
+			'listing_slug': 'eggs-y-mas',
+			'source_name': 'here_places',
+			'source_url': '',
+			'external_id': 'here:eggs-y-mas',
+			'city': City.VENTURA,
+			'venue_type': VenueType.RESTAURANT,
+			'address_line_1': '123 Breakfast Ave',
+			'address_line_2': '',
+			'neighborhood': '',
+			'state': 'CA',
+			'postal_code': '93001',
+			'phone_number': '',
+			'website_url': '',
+			'instagram_url': '',
+			'facebook_url': 'https://facebook.com/people/Eggs-Y-Mas/61565561839458/',
+			'tiktok_url': '',
+			'youtube_url': '',
+			'deal_overrides': '',
+			'operating_hour_overrides': '',
+			'tracked_location_latitude': '',
+			'tracked_location_longitude': '',
+			'tracked_location_accuracy_meters': '',
+			'tracked_location_updated_at': '',
+		})
+
+		self.assertTrue(form.is_valid(), form.errors.as_json())
+		self.assertEqual(
+			form.cleaned_data['social_profiles']['facebook'],
+			{
+				'url': 'https://facebook.com/people/Eggs-Y-Mas/61565561839458',
+				'username': 'people/Eggs-Y-Mas/61565561839458',
+			},
+		)
+		self.assertEqual(
+			form.cleaned_data['social_media_links'],
+			['https://facebook.com/people/Eggs-Y-Mas/61565561839458'],
+		)
+
+	def test_listing_snapshot_admin_form_populates_platform_specific_social_fields_from_instance(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Eggs Y Mas',
+			listing_slug='eggs-y-mas',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='401 Example St',
+			social_profiles={
+				'facebook': {
+					'url': 'https://facebook.com/eggsymas',
+					'username': 'eggsymas',
+				},
+				'instagram': {
+					'url': 'https://instagram.com/eggsymas',
+					'username': 'eggsymas',
+				},
+			},
+			social_media_links=['https://facebook.com/eggsymas', 'https://instagram.com/eggsymas'],
+		)
+
+		form = ListingSnapshotAdminForm(instance=snapshot)
+
+		self.assertEqual(form.initial['facebook_url'], 'https://facebook.com/eggsymas')
+		self.assertEqual(form.initial['instagram_url'], 'https://instagram.com/eggsymas')
+		self.assertEqual(form.initial['tiktok_url'], '')
+		self.assertEqual(form.initial['youtube_url'], '')
+
+	def test_listing_snapshot_admin_form_save_persists_platform_specific_social_fields(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Eggs Y Mas',
+			listing_slug='eggs-y-mas',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='401 Example St',
+		)
+
+		form = ListingSnapshotAdminForm(instance=snapshot, data={
+			'name': 'Eggs Y Mas',
+			'listing_slug': 'eggs-y-mas',
+			'source_name': '',
+			'source_url': '',
+			'external_id': '',
+			'city': City.VENTURA,
+			'venue_type': VenueType.RESTAURANT,
+			'address_line_1': '401 Example St',
+			'address_line_2': '',
+			'neighborhood': '',
+			'state': 'CA',
+			'postal_code': '',
+			'phone_number': '',
+			'website_url': '',
+			'instagram_url': '',
+			'facebook_url': 'https://facebook.com/eggsymas',
+			'tiktok_url': '',
+			'youtube_url': '',
+			'deal_overrides': '',
+			'operating_hour_overrides': '',
+			'tracked_location_latitude': '',
+			'tracked_location_longitude': '',
+			'tracked_location_accuracy_meters': '',
+			'tracked_location_updated_at': '',
+		})
+
+		self.assertTrue(form.is_valid(), form.errors.as_json())
+		saved_snapshot = form.save()
+
+		self.assertEqual(
+			saved_snapshot.social_profiles,
+			{
+				'facebook': {
+					'url': 'https://facebook.com/eggsymas',
+					'username': 'eggsymas',
+				},
+			},
+		)
+		self.assertEqual(saved_snapshot.social_media_links, ['https://facebook.com/eggsymas'])
+
+	def test_listing_snapshot_admin_form_can_suppress_website_url(self):
+		form = ListingSnapshotAdminForm(data={
+			'name': 'No Website Cafe',
+			'listing_slug': 'no-website-cafe',
+			'source_name': 'here_places',
+			'source_url': '',
+			'external_id': 'here:no-website-cafe',
+			'city': City.VENTURA,
+			'venue_type': VenueType.CAFE,
+			'address_line_1': '123 Main St',
+			'address_line_2': '',
+			'neighborhood': '',
+			'state': 'CA',
+			'postal_code': '93001',
+			'phone_number': '',
+			'website_url': '',
+			'website_url_suppressed': 'on',
+			'instagram_url': '',
+			'facebook_url': '',
+			'tiktok_url': '',
+			'youtube_url': '',
+			'deal_overrides': '',
+			'operating_hour_overrides': '',
+			'tracked_location_latitude': '',
+			'tracked_location_longitude': '',
+			'tracked_location_accuracy_meters': '',
+			'tracked_location_updated_at': '',
+		})
+
+		self.assertTrue(form.is_valid(), form.errors.as_json())
+		snapshot = form.save()
+
+		self.assertEqual(snapshot.website_url, '')
+		self.assertTrue(snapshot.website_url_suppressed)
+
+	def test_sync_listing_snapshot_does_not_refill_suppressed_website_url(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='No Website Cafe',
+			listing_slug='no-website-cafe',
+			city=City.VENTURA,
+			venue_type=VenueType.CAFE,
+			address_line_1='123 Main St',
+			source_name='here_places',
+			external_id='here:no-website-cafe',
+			website_url='',
+			website_url_suppressed=True,
+		)
+
+		_sync_listing_snapshot_from_imported_place(ImportedPlace(
+			name='No Website Cafe',
+			profile_name='No Website Cafe',
+			profile_slug='no-website-cafe',
+			city=City.VENTURA,
+			venue_type=VenueType.CAFE,
+			address_line_1='123 Main St',
+			state='CA',
+			postal_code='93001',
+			website_url='https://wrong.example.com',
+			external_id='here:no-website-cafe',
+			source_name='here_places',
+			source_url='https://here.example.com/no-website-cafe',
+		), snapshot=snapshot)
+
+		snapshot.refresh_from_db()
+
+		self.assertEqual(snapshot.website_url, '')
+		self.assertTrue(snapshot.website_url_suppressed)
+
 	def test_listing_snapshot_admin_form_accepts_custom_type_when_other_is_selected(self):
 		form = ListingSnapshotAdminForm(data={
 			'name': '999 Pizza',
@@ -6334,6 +6733,41 @@ class ListingSnapshotAdminTests(TestCase):
 			self.assertEqual(snapshot.website_url, 'https://admin.example.com/pulled-tacos')
 			self.assertEqual(snapshot.deal_overrides[0]['title'], 'Admin Deal')
 			self.assertEqual(snapshot.operating_hour_overrides[0]['weekday'], Weekday.MONDAY)
+
+	@override_settings(DISCOVERY_JSON_PATH='')
+	def test_pull_all_business_data_view_prefers_snapshot_website_for_enrichment(self):
+		with TemporaryDirectory() as temp_dir:
+			json_path = Path(temp_dir) / 'discovered_places.json'
+			ListingSnapshot.objects.create(
+				name='Pulled Tacos',
+				listing_slug='pulled-tacos',
+				city=City.VENTURA,
+				venue_type=VenueType.RESTAURANT,
+				address_line_1='123 Main St',
+				source_name='here_places',
+				external_id='here:pull-all-1',
+				website_url='https://admin.example.com/pulled-tacos',
+			)
+			place_record = ImportedPlace(
+				name='Pulled Tacos',
+				city=City.VENTURA,
+				venue_type=VenueType.RESTAURANT,
+				address_line_1='123 Main St',
+				phone_number='805-555-0101',
+				website_url='https://wrong.example.com/pulled-tacos',
+				external_id='here:pull-all-1',
+				source_name='here_places',
+				source_url='https://discover.search.hereapi.com/v1/discover',
+			)
+
+			def assert_enrichment_input(place_records):
+				place_records = list(place_records)
+				self.assertEqual(place_records[0].website_url, 'https://admin.example.com/pulled-tacos')
+				self.assertEqual(place_records[0].source_url, 'https://admin.example.com/pulled-tacos')
+				return place_records
+
+			with override_settings(DISCOVERY_JSON_PATH=json_path), patch.object(HerePlacesImporter, 'load_records', return_value=[place_record]), patch.object(BusinessWebsiteImporter, 'enrich_place_records', side_effect=assert_enrichment_input), patch('places.admin.load_source_records', return_value=[place_record]):
+				self.admin.pull_all_business_data_view(self._build_request('/admin/places/listingsnapshot/pull-all-business-data/'))
 
 	@override_settings(DISCOVERY_JSON_PATH='')
 	def test_pull_all_business_data_view_preserves_existing_admin_text_fields_when_live_record_has_new_values(self):
@@ -6581,6 +7015,72 @@ class ListingSnapshotAdminTests(TestCase):
 			self.assertEqual(snapshot.website_url, 'https://admin.example.com/cronies')
 			self.assertEqual(snapshot.deal_overrides[0]['title'], 'Admin Deal')
 			self.assertEqual(snapshot.operating_hour_overrides[0]['weekday'], Weekday.MONDAY)
+
+	@override_settings(DISCOVERY_JSON_PATH='')
+	def test_pull_business_data_view_prefers_snapshot_website_for_enrichment(self):
+		with TemporaryDirectory() as temp_dir:
+			json_path = Path(temp_dir) / 'discovered_places.json'
+			snapshot = ListingSnapshot.objects.create(
+				name='Cronies Sports Grill',
+				city=City.VENTURA,
+				venue_type=VenueType.BAR,
+				address_line_1='2855 Johnson Dr',
+				website_url='https://admin.example.com/cronies',
+			)
+			place_record = ImportedPlace(
+				name='Cronies Sports Grill',
+				city=City.VENTURA,
+				venue_type=VenueType.BAR,
+				address_line_1='2855 Johnson Dr',
+				phone_number='(805) 650-6026',
+				website_url='https://wrong.example.com/cronies',
+				external_id='here:cronies-ventura',
+				source_name='here_places',
+				source_url='https://discover.search.hereapi.com/v1/discover',
+			)
+
+			def assert_enrichment_input(record):
+				self.assertEqual(record.website_url, 'https://admin.example.com/cronies')
+				self.assertEqual(record.source_url, 'https://admin.example.com/cronies')
+				return record
+
+			with override_settings(DISCOVERY_JSON_PATH=json_path), patch.object(HerePlacesImporter, 'load_records_for_search', return_value=[place_record]), patch.object(BusinessWebsiteImporter, 'enrich_place_record', side_effect=assert_enrichment_input):
+				response = self.admin.pull_business_data_view(self._build_request(f'/admin/places/listingsnapshot/{snapshot.pk}/pull-business-data/'), str(snapshot.pk))
+
+			self.assertEqual(response.status_code, 302)
+
+	@override_settings(DISCOVERY_JSON_PATH='')
+	def test_pull_business_data_view_falls_back_to_snapshot_source_url_for_enrichment(self):
+		with TemporaryDirectory() as temp_dir:
+			json_path = Path(temp_dir) / 'discovered_places.json'
+			snapshot = ListingSnapshot.objects.create(
+				name='Cronies Sports Grill',
+				city=City.VENTURA,
+				venue_type=VenueType.BAR,
+				address_line_1='2855 Johnson Dr',
+				source_url='https://admin.example.com/cronies-source',
+			)
+			place_record = ImportedPlace(
+				name='Cronies Sports Grill',
+				city=City.VENTURA,
+				venue_type=VenueType.BAR,
+				address_line_1='2855 Johnson Dr',
+				phone_number='(805) 650-6026',
+				website_url='https://wrong.example.com/cronies',
+				external_id='here:cronies-ventura',
+				source_name='here_places',
+				source_url='https://discover.search.hereapi.com/v1/discover',
+			)
+
+			def assert_enrichment_input(record):
+				self.assertEqual(record.website_url, 'https://admin.example.com/cronies-source')
+				self.assertEqual(record.source_url, 'https://admin.example.com/cronies-source')
+				return record
+
+			with override_settings(DISCOVERY_JSON_PATH=json_path), patch.object(HerePlacesImporter, 'load_records_for_search', return_value=[place_record]), patch.object(BusinessWebsiteImporter, 'enrich_place_record', side_effect=assert_enrichment_input):
+				response = self.admin.pull_business_data_view(self._build_request(f'/admin/places/listingsnapshot/{snapshot.pk}/pull-business-data/'), str(snapshot.pk))
+
+			self.assertEqual(response.status_code, 302)
 
 	@override_settings(DISCOVERY_JSON_PATH='')
 	def test_pull_business_data_view_preserves_existing_admin_text_fields_when_pulled_record_has_new_values(self):

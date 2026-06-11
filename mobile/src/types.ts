@@ -23,6 +23,7 @@ export type Deal = {
   description: string;
   deal_type: string;
   deal_type_label: string;
+  custom_deal_type_label?: string;
   price_text: string;
   terms: string;
   is_active: boolean;
@@ -55,6 +56,7 @@ export type BusinessDealOverride = {
   title: string;
   description: string;
   deal_type: string;
+  custom_deal_type_label?: string;
   price_text: string;
   terms: string;
   happy_hours: BusinessDealHappyHourOverride[];

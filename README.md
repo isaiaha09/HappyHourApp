@@ -98,7 +98,7 @@ That means the current direction is:
 - pull configured listing data from curated and discovery-oriented sources
 - normalize and group them at request time through the backend service layer
 - expose them through API endpoints that the mobile app consumes directly
-- keep app-owned workflow data in the database while leaving listing data source-backed
+- keep durable business edits in `ListingSnapshot` while leaving raw discovery data source-backed
 
 ## Current Listing Pipeline
 
@@ -113,7 +113,13 @@ That currently includes:
 - multi-location grouping so one business profile can expose multiple addresses inside the app
 - address-quality merging so partial or duplicate records collapse into a better canonical location when possible
 
-The current runtime goal is to keep listings source-backed and normalized while only storing claim/account workflow data permanently in the database.
+The current runtime goal is:
+
+- keep `ListingSnapshot` as the durable source of truth for admin-edited business data
+- treat `backend/config/discovered_places.json` as generated/cache/seed discovery data, not the long-term source of truth
+- keep listings source-backed and normalized while durable business edits live in the database
+
+In Postgres-backed deployments, the committed `backend/config/discovered_places.json` file is now treated as a seed file. If the runtime discovery file does not exist yet, the backend can bootstrap a runtime copy once. After that, normal discovery writes go to the runtime file instead of mutating the committed `config/` copy.
 
 ### Multi-Location Source Rule
 
@@ -188,6 +194,142 @@ If a future Render deployment needs full image OCR, the backend runtime will nee
 - move image OCR to an external OCR service
 
 Until then, the current code safely degrades instead of breaking uploads or claim review.
+
+## Migrating Local SQLite Data To Render Postgres
+
+If I want my admin-edited business rows to survive the move from local development to Render Postgres, I need to migrate both:
+
+- the database schema
+- the actual data currently stored in `backend/db.sqlite3`
+
+The backend now supports Postgres through either:
+
+- `DATABASE_URL`
+- standard Postgres env vars such as `PGDATABASE`, `PGUSER`, `PGPASSWORD`, `PGHOST`, and `PGPORT`
+
+If none of those are set, it still falls back to local SQLite in [backend/config/settings.py](c:/dev/HappyHourApp/backend/config/settings.py).
+
+### What Will Transfer
+
+These database-backed edits will transfer if I export the SQLite data and load it into Postgres:
+
+- `ListingSnapshot` rows, which should be treated as the durable source of truth for admin-edited business data, including edited names, addresses, phone numbers, `website_url`, `source_url`, `deal_overrides`, and `operating_hour_overrides`
+- `BusinessClaim`, `BusinessMembership`, and account workflow data
+- deleted-business records stored in the database
+- uploaded-file references stored in database fields
+
+### What Will Not Move Just Because Postgres Exists
+
+These need separate handling:
+
+- `backend/config/discovery_exclusions.json` is file-based and must be committed/deployed with the repo
+- `backend/config/discovered_places.json` is also file-based, is not moved by a database migration, and should be treated as generated/cache/seed discovery data rather than durable production business data
+- local uploaded media under `backend/media` is not copied into Postgres
+- file-based caches do not transfer automatically
+
+### First Deploy Versus Later Deploys
+
+This is the most important distinction to keep straight:
+
+- `ListingSnapshot` rows do not get created automatically just because `backend/config/discovered_places.json` exists.
+- The first Postgres-backed deploy can bootstrap the runtime discovery JSON file from the committed seed file if the runtime file does not exist yet.
+- The first Postgres-backed deploy only gets my durable business edits if I explicitly migrate/import the SQLite database data into Postgres.
+- After that first bootstrap, discovery JSON writes should go to the runtime discovery file, not back into the committed repo copy.
+- After the first real data migration, Postgres and `ListingSnapshot` should be treated as the authoritative source of truth for admin-edited business data.
+
+### Recommended Migration Order
+
+1. Finish the admin edits locally.
+2. Commit any file-based changes that matter in production, especially `backend/config/discovery_exclusions.json`.
+3. Refresh or review the committed `backend/config/discovered_places.json` seed file if I want a clean first-bootstrap discovery snapshot.
+4. Set the production Postgres environment variables for the backend service.
+5. Create the Render Postgres database and note the internal/external connection string.
+6. Take a final SQLite export from the local app.
+7. Load that export into Postgres.
+8. Point the Render backend service at Postgres.
+9. Run a quick verification pass in admin and the API.
+
+### Step 1: Export The Local SQLite Data
+
+From the `backend` folder, after all local edits are complete:
+
+```powershell
+venv\Scripts\Activate
+python manage.py dumpdata --exclude auth.permission --exclude contenttypes --exclude sessions --indent 2 > data-migration.json
+```
+
+Why exclude those tables:
+
+- `contenttypes` and `auth.permission` are recreated by migrations
+- `sessions` are temporary and not worth migrating
+
+This fixture should contain the business/admin data that matters, including `ListingSnapshot` edits.
+
+### Step 2: Prepare Render Postgres
+
+In Render:
+
+1. Create the Postgres database.
+2. Create or update the backend web service.
+3. Set either `DATABASE_URL` or the equivalent Postgres env vars on the backend service.
+4. Make sure the app can connect to Postgres instead of SQLite.
+
+*Note: put database_url in local env so django can connect to render's postgresql database so you can migrate and load the updated listsnapshot data (and admin) into live prod (first time)
+
+Do not rely on `python manage.py migrate` alone to move the data. That only creates tables.
+
+### Step 3: Run Migrations Against Postgres
+
+Once Django is configured to connect to the Render Postgres database, run:
+
+```powershell
+python manage.py migrate
+```
+
+That creates the schema in Postgres, but the database will still be empty until the fixture is loaded.
+
+### Step 4: Load The SQLite Export Into Postgres
+
+The safest approach is usually to point a local backend shell at the Render Postgres connection temporarily, then load the fixture from the local machine.
+
+After switching the backend environment to the Render Postgres connection, run:
+
+```powershell
+python manage.py loaddata data-migration.json
+```
+
+That inserts the exported SQLite rows into Postgres using Django's models instead of hand-written SQL.
+
+This step is what makes the first deployment accurate for my admin-edited business data. The discovery JSON seed file alone is not enough for that.
+
+### Step 5: Verify The Data Before Cutover
+
+Before treating Render as the new source of truth, verify:
+
+- edited business names still appear in admin
+- `website_url` and `source_url` edits are still present on `ListingSnapshot`
+- manual deal and hours overrides still exist
+- deleted businesses and exclusions still behave as expected
+- `/api/places/` and `/api/places/<slug>/` still reflect the edited snapshot data
+
+If I want the first production runtime discovery cache to be fresher than the committed seed file, I should run a discovery refresh or admin pull flow after deployment.
+
+### Step 6: Handle File-Based Data Separately
+
+For this repo, Postgres is not the whole story.
+
+- Keep `backend/config/discovery_exclusions.json` in source control so Render deploys it.
+- Treat `backend/config/discovered_places.json` as seed/cache/generated discovery data only. It can be deployed as a bootstrap snapshot for the runtime discovery file, but it should not be treated as the durable system of record for business edits.
+- If local uploads matter, move `backend/media` to production storage separately.
+
+### Practical Cutover Advice
+
+- Avoid editing admin data in both SQLite and Postgres at the same time.
+- Take the final `dumpdata` as close to deployment as possible.
+- If more local edits are made after the export, take a fresh export instead of trying to merge by hand.
+- If I care about the first deployed discovery snapshot, make sure the committed `backend/config/discovered_places.json` seed is reasonably current before the first Postgres-backed deploy.
+- After the Render deploy is live, treat Postgres and `ListingSnapshot` as the durable source of truth for business edits.
+- Do not treat `backend/config/discovered_places.json` as authoritative production data after Render is live.
 
 ## Media Storage
 

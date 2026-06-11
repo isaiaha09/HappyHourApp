@@ -108,6 +108,32 @@ def get_business_website_url(profiles, fallback=''):
 	return str(website_profile.get('url') or '').strip()
 
 
+def normalize_business_contact_channels(website_url='', source_url='', social_profiles=None, social_media_links=None):
+	raw_website_url = str(website_url or '').strip()
+	raw_source_url = str(source_url or '').strip()
+	fallback_social_links = list(social_media_links or [])
+
+	if raw_website_url and infer_social_platform(raw_website_url):
+		fallback_social_links.append(raw_website_url)
+		raw_website_url = ''
+
+	if raw_source_url and infer_social_platform(raw_source_url):
+		fallback_social_links.append(raw_source_url)
+		raw_source_url = ''
+
+	normalized_social_profiles = normalize_social_profiles(
+		social_profiles,
+		fallback_website_url=raw_website_url,
+		fallback_social_links=fallback_social_links,
+	)
+	return {
+		'social_profiles': normalized_social_profiles,
+		'social_media_links': build_social_media_links(normalized_social_profiles),
+		'website_url': get_business_website_url(normalized_social_profiles, fallback=raw_website_url),
+		'source_url': _normalize_absolute_url(raw_source_url) if raw_source_url else '',
+	}
+
+
 def infer_social_platform(value):
 	if not _looks_like_url(value):
 		return None
@@ -167,6 +193,10 @@ def _extract_platform_username_from_url(platform, parsed):
 			return _normalize_platform_username(platform, query.get('id', [''])[0])
 		if segments[0] == 'profile.php':
 			return _normalize_platform_username(platform, query.get('id', [''])[0])
+		if segments[0] == 'people':
+			if len(segments) < 2:
+				return ''
+			return _normalize_platform_username(platform, '/'.join(segments[:3]))
 		if segments[0] in {'groups', 'events', 'watch', 'marketplace', 'gaming'}:
 			return ''
 		return _normalize_platform_username(platform, segments[0])

@@ -46,6 +46,7 @@ export const businessWeekdayOptions = weekdayLabels.map((label, weekday) => ({
       title: '',
       description: '',
       deal_type: 'happy_hour',
+      custom_deal_type_label: '',
       price_text: '',
       terms: '',
       happy_hours: [createEmptyHappyHourOverride()],
@@ -70,6 +71,7 @@ export const businessWeekdayOptions = weekdayLabels.map((label, weekday) => ({
       title: deal.title,
       description: deal.description,
       deal_type: deal.deal_type,
+      custom_deal_type_label: deal.custom_deal_type_label ?? (deal.deal_type === 'other' ? deal.deal_type_label : ''),
       price_text: deal.price_text,
       terms: deal.terms,
       happy_hours: deal.happy_hours.length
@@ -142,6 +144,7 @@ export const businessWeekdayOptions = weekdayLabels.map((label, weekday) => ({
         title: override.title.trim(),
         description: override.description.trim(),
         deal_type: override.deal_type.trim() || 'happy_hour',
+        custom_deal_type_label: override.deal_type.trim() === 'other' ? (override.custom_deal_type_label ?? '').trim() : '',
         price_text: override.price_text.trim(),
         terms: override.terms.trim(),
         happy_hours: override.happy_hours

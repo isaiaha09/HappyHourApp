@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
+from urllib.parse import parse_qsl, unquote, urlparse
 
 from .business_sources import BUSINESS_SOURCE_PAGES
 from .env import get_bool_env, get_env, get_int_env, load_env_file
@@ -84,12 +85,87 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
+
+def _build_sqlite_database_config(base_dir):
+    return {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': base_dir / 'db.sqlite3',
     }
+
+
+def _postgres_database_config_from_url(database_url):
+    parsed = urlparse(database_url)
+    if parsed.scheme.lower() not in {'postgres', 'postgresql'}:
+        raise ValueError('DATABASE_URL must use a postgres:// or postgresql:// scheme.')
+
+    database_name = unquote(parsed.path.lstrip('/'))
+    if not database_name:
+        raise ValueError('DATABASE_URL must include a database name.')
+
+    options = {
+        key: value
+        for key, value in parse_qsl(parsed.query, keep_blank_values=False)
+        if value != ''
+    }
+    config = {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': database_name,
+        'USER': unquote(parsed.username or ''),
+        'PASSWORD': unquote(parsed.password or ''),
+        'HOST': parsed.hostname or '',
+        'PORT': str(parsed.port or ''),
+        'CONN_MAX_AGE': get_int_env('DATABASE_CONN_MAX_AGE', ENV_VALUES, 600),
+    }
+    if options:
+        config['OPTIONS'] = options
+    return config
+
+
+def _build_postgres_database_config_from_env():
+    database_name = get_env('PGDATABASE', ENV_VALUES, get_env('POSTGRES_DB', ENV_VALUES, '')).strip()
+    if not database_name:
+        return None
+
+    config = {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': database_name,
+        'USER': get_env('PGUSER', ENV_VALUES, get_env('POSTGRES_USER', ENV_VALUES, '')).strip(),
+        'PASSWORD': get_env('PGPASSWORD', ENV_VALUES, get_env('POSTGRES_PASSWORD', ENV_VALUES, '')).strip(),
+        'HOST': get_env('PGHOST', ENV_VALUES, get_env('POSTGRES_HOST', ENV_VALUES, '')).strip(),
+        'PORT': get_env('PGPORT', ENV_VALUES, get_env('POSTGRES_PORT', ENV_VALUES, '5432')).strip(),
+        'CONN_MAX_AGE': get_int_env('DATABASE_CONN_MAX_AGE', ENV_VALUES, 600),
+    }
+    ssl_mode = get_env('PGSSLMODE', ENV_VALUES, get_env('POSTGRES_SSLMODE', ENV_VALUES, '')).strip()
+    if ssl_mode:
+        config['OPTIONS'] = {'sslmode': ssl_mode}
+    return config
+
+
+def _build_default_database_config(base_dir):
+    database_url = get_env('DATABASE_URL', ENV_VALUES, '').strip()
+    if database_url:
+        return _postgres_database_config_from_url(database_url)
+
+    postgres_config = _build_postgres_database_config_from_env()
+    if postgres_config is not None:
+        return postgres_config
+
+    return _build_sqlite_database_config(base_dir)
+
+DATABASES = {
+    'default': _build_default_database_config(BASE_DIR)
 }
+
+
+def _build_discovery_json_path(base_dir, database_config):
+    configured_path = get_env('DISCOVERY_JSON_PATH', ENV_VALUES, '').strip()
+    if configured_path:
+        return Path(configured_path)
+
+    if database_config.get('ENGINE') == 'django.db.backends.postgresql':
+        return base_dir / '.runtime' / 'discovered_places.json'
+
+    return base_dir / 'config' / 'discovered_places.json'
 
 
 CACHES = {
@@ -144,7 +220,13 @@ PLACE_GEOCODE_TIMEOUT = 5
 PLACE_GEOCODE_URL = 'https://nominatim.openstreetmap.org/search'
 PLACE_GEOCODE_USER_AGENT = 'HappyHourApp/1.0'
 LISTING_SOURCE_NAME = 'curated_json_places'
-DISCOVERY_JSON_PATH = BASE_DIR / 'config' / 'discovered_places.json'
+DISCOVERY_JSON_SEED_PATH = BASE_DIR / 'config' / 'discovered_places.json'
+DISCOVERY_JSON_PATH = _build_discovery_json_path(BASE_DIR, DATABASES['default'])
+DISCOVERY_JSON_BOOTSTRAP_FROM_SEED = get_bool_env(
+    'DISCOVERY_JSON_BOOTSTRAP_FROM_SEED',
+    ENV_VALUES,
+    DATABASES['default'].get('ENGINE') == 'django.db.backends.postgresql',
+)
 BUSINESS_SOURCE_STRICT_ERRORS = False
 BUSINESS_SOURCE_ALLOWED_CITIES = ('ventura', 'oxnard', 'camarillo')
 OSM_PLACE_DISCOVERY_URL = 'https://overpass-api.de/api/interpreter'
