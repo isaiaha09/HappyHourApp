@@ -36,14 +36,14 @@
     "longitude": -119.04425,
     "geocode_query": "All Things Tea, Camarillo, CA, CA",
     "phone_number": "+18054458327",
-    "website_url": "",
+    "website_url": "https://www.tealiteful.com/",
     "image_urls": [],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q56e-db2bfdcb7a7d4c91a1a2babfad381915",
     "source_name": "here_places",
-    "source_url": "",
+    "source_url": "https://www.tealiteful.com/",
     "deals": [],
     "operating_hours": []
   },
@@ -1130,30 +1130,6 @@
     "operating_hours": []
   },
   {
-    "name": "Kay's Coffee Shop",
-    "city": "camarillo",
-    "venue_type": "cafe",
-    "address_line_1": "Ventura Blvd",
-    "address_line_2": "",
-    "neighborhood": "",
-    "state": "CA",
-    "postal_code": "93010-6644",
-    "latitude": 34.21607,
-    "longitude": -119.03832,
-    "geocode_query": "Kay's Coffee Shop, Camarillo, CA, CA",
-    "phone_number": "+18053836005",
-    "website_url": "",
-    "image_urls": [],
-    "profile_name": "",
-    "profile_slug": "",
-    "is_active": true,
-    "external_id": "here:here:pds:place:8409q56e-8873362420c43b19d6fc2e11fcb84e4f",
-    "source_name": "here_places",
-    "source_url": "",
-    "deals": [],
-    "operating_hours": []
-  },
-  {
     "name": "Kim's Donut",
     "city": "camarillo",
     "venue_type": "cafe",
@@ -1464,30 +1440,6 @@
     "operating_hours": []
   },
   {
-    "name": "Misuper Taqueria",
-    "city": "camarillo",
-    "venue_type": "restaurant",
-    "address_line_1": "Arneill Rd",
-    "address_line_2": "",
-    "neighborhood": "",
-    "state": "CA",
-    "postal_code": "93012",
-    "latitude": 34.21884,
-    "longitude": -119.03919,
-    "geocode_query": "Misuper Taqueria, Camarillo, CA, CA",
-    "phone_number": "+18053840779",
-    "website_url": "",
-    "image_urls": [],
-    "profile_name": "",
-    "profile_slug": "",
-    "is_active": true,
-    "external_id": "here:here:pds:place:8409q56e-7597f454e98d446c8ea6ed74926edc44",
-    "source_name": "here_places",
-    "source_url": "",
-    "deals": [],
-    "operating_hours": []
-  },
-  {
     "name": "Nekter Juice Bar",
     "city": "camarillo",
     "venue_type": "cafe",
@@ -1556,30 +1508,6 @@
     "external_id": "here:here:pds:place:8409q56e-07a6a71e10199fc8bb9d6a64e9c61e1e",
     "source_name": "here_places",
     "source_url": "http://www.nonasdeli.com",
-    "deals": [],
-    "operating_hours": []
-  },
-  {
-    "name": "Oak Ranch Coffee Company",
-    "city": "camarillo",
-    "venue_type": "cafe",
-    "address_line_1": "E Daily Dr",
-    "address_line_2": "",
-    "neighborhood": "",
-    "state": "CA",
-    "postal_code": "93010-6200",
-    "latitude": 34.21881,
-    "longitude": -119.0463,
-    "geocode_query": "Oak Ranch Coffee Company, Camarillo, CA, CA",
-    "phone_number": "+18053833775",
-    "website_url": "",
-    "image_urls": [],
-    "profile_name": "",
-    "profile_slug": "",
-    "is_active": true,
-    "external_id": "here:here:pds:place:8403fv6k-86041ad9af6a0b3e56b99c23200d189f",
-    "source_name": "here_places",
-    "source_url": "",
     "deals": [],
     "operating_hours": []
   },
@@ -2929,7 +2857,7 @@
   {
     "name": "Arco Iris Juice Bar & Restaurant",
     "city": "oxnard",
-    "venue_type": "cafe",
+    "venue_type": "bar",
     "address_line_1": "S Oxnard Blvd",
     "address_line_2": "",
     "neighborhood": "Downtown Oxnard",
@@ -2939,14 +2867,14 @@
     "longitude": -119.17713,
     "geocode_query": "Arco Iris Juice Bar & Restaurant, Oxnard, CA, CA",
     "phone_number": "+18054879967",
-    "website_url": "http://www.no1fastfoodcarlstadt.com",
+    "website_url": "https://www.yelp.com/biz/arco-iris-juice-bar-and-restaurant-oxnard?adjust_creative=microsoft&utm_campaign=yelp_feed&utm_medium=feed_v2&utm_source=microsoft",
     "image_urls": [],
     "profile_name": "",
     "profile_slug": "",
     "is_active": true,
     "external_id": "here:here:pds:place:8409q568-c651ac8c930049c594dcacab6a952656",
     "source_name": "here_places",
-    "source_url": "http://www.no1fastfoodcarlstadt.com",
+    "source_url": "https://www.yelp.com/biz/arco-iris-juice-bar-and-restaurant-oxnard?adjust_creative=microsoft&utm_campaign=yelp_feed&utm_medium=feed_v2&utm_source=microsoft",
     "deals": [],
     "operating_hours": []
   },
@@ -4881,138 +4809,6 @@
     "source_name": "here_places",
     "source_url": "https://www.olivegarden.com",
     "deals": [],
-    "operating_hours": []
-  },
-  {
-    "name": "Onyx Bistro",
-    "city": "oxnard",
-    "venue_type": "restaurant",
-    "address_line_1": "Las Posas Rd",
-    "address_line_2": "",
-    "neighborhood": "",
-    "state": "CA",
-    "postal_code": "93010-3403",
-    "latitude": 34.23531,
-    "longitude": -119.03735,
-    "geocode_query": "Onyx Bistro, Oxnard, CA, CA",
-    "phone_number": "+18059917356",
-    "website_url": "http://www.onyxbistrocamarillo.com",
-    "image_urls": [
-      "https://onyxbistrocamarillo.com/wp-content/uploads/2025/07/HAPPY-HOUR-300x300.jpg",
-      "https://onyxbistrocamarillo.com/wp-content/uploads/2026/01/Weekday-DEALS-300x300.jpg",
-      "https://onyxbistrocamarillo.com/wp-content/uploads/2017/01/Instagram-white-1.png",
-      "https://onyxbistrocamarillo.com/wp-content/uploads/2017/01/Yelp-white-1.png\""
-    ],
-    "profile_name": "",
-    "profile_slug": "",
-    "is_active": true,
-    "external_id": "here:here:pds:place:8409q56g-feb3ad0323ec60570a6fb960931846e4",
-    "source_name": "here_places",
-    "source_url": "http://www.onyxbistrocamarillo.com",
-    "deals": [
-      {
-        "title": "Happy Hour",
-        "deal_type": "happy_hour",
-        "description": "Happy Hour $10 Select Wines by the Glass $1.00 off Craft Beer on Tap (Pints) & Happy Hour Specials Menu subject to change Tuesday \u2013 Saturday 4:00PM-6:00PM SUBJECT TO CHANGE",
-        "price_text": "$10",
-        "terms": "",
-        "is_active": true,
-        "starts_on": null,
-        "ends_on": null,
-        "external_id": "www-onyxbistrocamarillo-com-e0d018d32702",
-        "source_name": "business_websites",
-        "source_url": "http://www.onyxbistrocamarillo.com",
-        "happy_hours": [
-          {
-            "weekday": 1,
-            "start_time": "16:00",
-            "end_time": "18:00",
-            "all_day": false
-          },
-          {
-            "weekday": 5,
-            "start_time": "16:00",
-            "end_time": "18:00",
-            "all_day": false
-          }
-        ]
-      },
-      {
-        "title": "Happy Hour",
-        "deal_type": "happy_hour",
-        "description": "Welcome to Onyx Bistro 2390 Las Posas Rd Suite H, Camarillo CA Dinner : Tues-Sat @ 4:00pm Live music Friday & Saturday 5:30-8:30pm Daily Happy Hour 4:00-6:00pm **Closed Sundays & Mondays **",
-        "price_text": "",
-        "terms": "",
-        "is_active": true,
-        "starts_on": null,
-        "ends_on": null,
-        "external_id": "www-onyxbistrocamarillo-com-70c5313a8667",
-        "source_name": "business_websites",
-        "source_url": "http://www.onyxbistrocamarillo.com",
-        "happy_hours": [
-          {
-            "weekday": 1,
-            "start_time": "17:30",
-            "end_time": "20:30",
-            "all_day": false
-          },
-          {
-            "weekday": 2,
-            "start_time": "17:30",
-            "end_time": "20:30",
-            "all_day": false
-          },
-          {
-            "weekday": 3,
-            "start_time": "17:30",
-            "end_time": "20:30",
-            "all_day": false
-          },
-          {
-            "weekday": 4,
-            "start_time": "17:30",
-            "end_time": "20:30",
-            "all_day": false
-          },
-          {
-            "weekday": 5,
-            "start_time": "17:30",
-            "end_time": "20:30",
-            "all_day": false
-          },
-          {
-            "weekday": 0,
-            "start_time": "16:00",
-            "end_time": "18:00",
-            "all_day": false
-          },
-          {
-            "weekday": 1,
-            "start_time": "16:00",
-            "end_time": "18:00",
-            "all_day": false
-          },
-          {
-            "weekday": 2,
-            "start_time": "16:00",
-            "end_time": "18:00",
-            "all_day": false
-          },
-          {
-            "weekday": 3,
-            "start_time": "16:00",
-            "end_time": "18:00",
-            "all_day": false
-          },
-          {
-            "weekday": 4,
-            "start_time": "16:00",
-            "end_time": "18:00",
-            "all_day": false
-          }
-        ]
-      }
-    ],
     "operating_hours": []
   },
   {
@@ -8744,30 +8540,6 @@
     "external_id": "here:here:pds:place:8409q55j-3128fe2ad24b487590174d76b95952cf",
     "source_name": "here_places",
     "source_url": "https://www.facebook.com/109562337284223",
-    "deals": [],
-    "operating_hours": []
-  },
-  {
-    "name": "Lavp Services",
-    "city": "ventura",
-    "venue_type": "restaurant",
-    "address_line_1": "S Oak St",
-    "address_line_2": "",
-    "neighborhood": "",
-    "state": "CA",
-    "postal_code": "93001-2702",
-    "latitude": 34.28049,
-    "longitude": -119.2945,
-    "geocode_query": "Lavp Services, Ventura, CA, CA",
-    "phone_number": "+17326219036",
-    "website_url": "",
-    "image_urls": [],
-    "profile_name": "",
-    "profile_slug": "",
-    "is_active": true,
-    "external_id": "here:here:pds:place:8409q55j-b52ee25cba7966aafe284045c5497081",
-    "source_name": "here_places",
-    "source_url": "",
     "deals": [],
     "operating_hours": []
   },

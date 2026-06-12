@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -563,7 +563,7 @@ function AppScreen() {
       && !selectedPlaceSlug
       && browseMode === 'map');
 
-  const filteredPlaces = getFilteredPlaces(places, {
+  const filteredPlaces = useMemo(() => getFilteredPlaces(places, {
     confirmedDealsOnly,
     informalBusinessesOnly,
     searchQuery: normalizedSearchQuery,
@@ -572,24 +572,41 @@ function AppScreen() {
     selectedOperatingDays,
     selectedVenueTypes,
     verifiedBusinessesOnly,
-  });
-  const filteredPlaceKey = filteredPlaces.map((place) => place.id).join('|');
-  const filteredBrowseLocations = getFilteredBrowseLocations(filteredPlaces, {
+  }), [
+    confirmedDealsOnly,
+    informalBusinessesOnly,
+    normalizedSearchQuery,
+    places,
+    selectedCity,
+    selectedDealDays,
+    selectedOperatingDays,
+    selectedVenueTypes,
+    verifiedBusinessesOnly,
+  ]);
+  const filteredPlaceKey = useMemo(() => filteredPlaces.map((place) => place.id).join('|'), [filteredPlaces]);
+  const filteredBrowseLocations = useMemo(() => getFilteredBrowseLocations(filteredPlaces, {
     confirmedDealsOnly,
     searchQuery: normalizedSearchQuery,
     selectedCity,
     selectedDealDays,
     selectedOperatingDays,
-  });
-  const displayedBrowsePlaces = getBrowsePlacesForDisplay(filteredBrowseLocations);
+  }), [
+    confirmedDealsOnly,
+    filteredPlaces,
+    normalizedSearchQuery,
+    selectedCity,
+    selectedDealDays,
+    selectedOperatingDays,
+  ]);
+  const displayedBrowsePlaces = useMemo(() => getBrowsePlacesForDisplay(filteredBrowseLocations), [filteredBrowseLocations]);
 
-  const mappedPlaces = showMapBrowse ? getMappedPlacesForBrowse(filteredBrowseLocations) : [];
+  const mappedPlaces = useMemo(() => (showMapBrowse ? getMappedPlacesForBrowse(filteredBrowseLocations) : []), [filteredBrowseLocations, showMapBrowse]);
   const browseResultCount = displayedBrowsePlaces.length;
-  const mappedPlaceKey = mappedPlaces.map((place) => place.markerKey).join('|');
+  const mappedPlaceKey = useMemo(() => mappedPlaces.map((place) => place.markerKey).join('|'), [mappedPlaces]);
   const displayedMapPlaces = showMapBrowse ? renderedMappedPlaces : [];
-  const unplacedPlaceCount = filteredPlaces.filter((place) => (
+  const unplacedPlaceCount = useMemo(() => filteredPlaces.filter((place) => (
     !getPlaceLocations(place).some((location) => location.latitude !== null && location.longitude !== null)
-  )).length;
+  )).length, [filteredPlaces]);
   const selectedMapPlace = selectedMapPlaceKey
     ? displayedMapPlaces.find((place) => place.markerKey === selectedMapPlaceKey) ?? null
     : null;
@@ -2208,7 +2225,7 @@ function AppScreen() {
     setMapRegion(clampRegionToBounds(defaultMapRegion));
   }
 
-  function handleSelectPlace(place: { slug: string; locationId?: number }) {
+  const handleSelectPlace = useCallback((place: { slug: string; locationId?: number }) => {
     dismissKeyboardForScreenTransition();
     animateNextLayout();
     setDetailLoading(true);
@@ -2217,7 +2234,7 @@ function AppScreen() {
     setSelectedPlace(null);
     setSelectedLocationId(place.locationId ?? null);
     setSelectedPlaceSlug(place.slug);
-  }
+  }, []);
 
   function handleToggleVenueType(venueType: VenueFilterValue) {
     setSelectedVenueTypes((current) => {
@@ -4696,27 +4713,14 @@ function AppScreen() {
                         <Text style={styles.centerStateText}>Loading places...</Text>
                       </View>
                     ) : (
-                      <FlatList
-                        columnWrapperStyle={browseListColumns > 1 ? styles.placeCardColumn : undefined}
-                        contentContainerStyle={[styles.listContent, browseListColumns > 1 ? styles.listContentLandscape : null]}
-                        data={displayedBrowsePlaces}
-                        keyExtractor={(item) => item.listKey}
-                        key={browseListColumns}
-                        initialNumToRender={6}
-                        numColumns={browseListColumns}
-                        renderItem={({ item, index }) => (
-                          <AnimatedListPlaceCard
-                            browseListColumns={browseListColumns}
-                            distanceLabel={getDistanceAwayLabel(userCoordinates, item)}
-                            item={item}
-                            listRevealEnabled={listRevealEnabled}
-                            revealIndex={index}
-                            revealToken={listRevealToken}
-                            onPress={() => handleSelectPlace(item)}
-                          />
-                        )}
-                        ListEmptyComponent={displayedBrowsePlaces.length === 0 ? <Text style={styles.emptyStateText}>{getBrowseEmptyStateMessage(normalizedSearchQuery)}</Text> : null}
-                        showsVerticalScrollIndicator={false}
+                      <BrowsePlaceList
+                        browseListColumns={browseListColumns}
+                        displayedBrowsePlaces={displayedBrowsePlaces}
+                        listRevealEnabled={listRevealEnabled}
+                        listRevealToken={listRevealToken}
+                        normalizedSearchQuery={normalizedSearchQuery}
+                        onSelectPlace={handleSelectPlace}
+                        userCoordinates={userCoordinates}
                       />
                     )}
 
@@ -5107,6 +5111,55 @@ function AnimatedListPlaceCard({
     </Animated.View>
   );
 }
+
+const BrowsePlaceList = memo(function BrowsePlaceList({
+  browseListColumns,
+  displayedBrowsePlaces,
+  listRevealEnabled,
+  listRevealToken,
+  normalizedSearchQuery,
+  onSelectPlace,
+  userCoordinates,
+}: {
+  browseListColumns: number;
+  displayedBrowsePlaces: BrowsePlace[];
+  listRevealEnabled: boolean;
+  listRevealToken: number;
+  normalizedSearchQuery: string;
+  onSelectPlace: (place: { slug: string; locationId?: number }) => void;
+  userCoordinates: UserCoordinates | null;
+}) {
+  const renderBrowsePlaceItem = useCallback(({ index, item }: { index: number; item: BrowsePlace }) => (
+    <AnimatedListPlaceCard
+      browseListColumns={browseListColumns}
+      distanceLabel={getDistanceAwayLabel(userCoordinates, item)}
+      item={item}
+      listRevealEnabled={listRevealEnabled}
+      onPress={() => onSelectPlace(item)}
+      revealIndex={index}
+      revealToken={listRevealToken}
+    />
+  ), [browseListColumns, listRevealEnabled, listRevealToken, onSelectPlace, userCoordinates]);
+
+  const emptyBrowseList = displayedBrowsePlaces.length === 0
+    ? <Text style={styles.emptyStateText}>{getBrowseEmptyStateMessage(normalizedSearchQuery)}</Text>
+    : null;
+
+  return (
+    <FlatList
+      columnWrapperStyle={browseListColumns > 1 ? styles.placeCardColumn : undefined}
+      contentContainerStyle={[styles.listContent, browseListColumns > 1 ? styles.listContentLandscape : null]}
+      data={displayedBrowsePlaces}
+      initialNumToRender={6}
+      key={browseListColumns}
+      keyExtractor={(item) => item.listKey}
+      ListEmptyComponent={emptyBrowseList}
+      numColumns={browseListColumns}
+      renderItem={renderBrowsePlaceItem}
+      showsVerticalScrollIndicator={false}
+    />
+  );
+});
 
 function getAnimatedMapMarkerStyle(
   place: MappedPlace,

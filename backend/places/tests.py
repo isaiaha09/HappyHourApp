@@ -7543,7 +7543,89 @@ class ListingSnapshotAdminTests(TestCase):
 			self.assertEqual(snapshot.phone_number, '805-555-9999')
 			self.assertEqual(snapshot.website_url, 'https://admin.example.com/cronies')
 			self.assertEqual(snapshot.source_name, 'here_places')
-			self.assertEqual(snapshot.external_id, 'here:cronies-ventura')
+
+	@override_settings(DISCOVERY_JSON_PATH='')
+	def test_pull_business_data_view_preserves_all_saved_admin_editable_fields(self):
+		with TemporaryDirectory() as temp_dir:
+			json_path = Path(temp_dir) / 'discovered_places.json'
+			snapshot = ListingSnapshot.objects.create(
+				name='Admin Name',
+				listing_slug='admin-name',
+				city=City.VENTURA,
+				venue_type=VenueType.BAR,
+				address_line_1='2855 Johnson Dr',
+				address_line_2='Suite 100',
+				neighborhood='Midtown',
+				state='CA',
+				postal_code='93003',
+				phone_number='805-555-9999',
+				website_url='https://admin.example.com/cronies',
+				source_name='manual_admin_source',
+				source_url='https://admin.example.com/source',
+				external_id='admin-external-id',
+				social_profiles={
+					'facebook': {
+						'url': 'https://facebook.com/adminspot',
+						'username': 'adminspot',
+					},
+				},
+				social_media_links=['https://facebook.com/adminspot'],
+				deal_overrides=[{
+					'title': 'Admin Deal',
+					'description': 'Still here',
+					'deal_type': DealType.OTHER,
+					'price_text': '$10',
+					'terms': '',
+					'happy_hours': [],
+				}],
+				operating_hour_overrides=[{'weekday': Weekday.MONDAY, 'open_time': '11:00', 'close_time': '21:00'}],
+			)
+			place_record = ImportedPlace(
+				name='Pulled Name',
+				profile_name='Pulled Profile Name',
+				city=City.OXNARD,
+				venue_type=VenueType.RESTAURANT,
+				address_line_1='999 Wrong St',
+				address_line_2='Suite 200',
+				neighborhood='Downtown',
+				state='NV',
+				postal_code='93030',
+				phone_number='805-555-0101',
+				website_url='https://pulled.example.com/cronies',
+				external_id='here:cronies-ventura',
+				source_name='here_places',
+				source_url='https://discover.search.hereapi.com/v1/discover',
+			)
+
+			with override_settings(DISCOVERY_JSON_PATH=json_path), patch.object(HerePlacesImporter, 'load_records_for_search', return_value=[place_record]), patch.object(BusinessWebsiteImporter, 'enrich_place_record', return_value=place_record):
+				response = self.admin.pull_business_data_view(self._build_request(f'/admin/places/listingsnapshot/{snapshot.pk}/pull-business-data/'), str(snapshot.pk))
+
+			self.assertEqual(response.status_code, 302)
+			snapshot.refresh_from_db()
+			self.assertEqual(snapshot.name, 'Admin Name')
+			self.assertEqual(snapshot.listing_slug, 'admin-name')
+			self.assertEqual(snapshot.city, City.VENTURA)
+			self.assertEqual(snapshot.venue_type, VenueType.BAR)
+			self.assertEqual(snapshot.address_line_1, '2855 Johnson Dr')
+			self.assertEqual(snapshot.address_line_2, 'Suite 100')
+			self.assertEqual(snapshot.neighborhood, 'Midtown')
+			self.assertEqual(snapshot.state, 'CA')
+			self.assertEqual(snapshot.postal_code, '93003')
+			self.assertEqual(snapshot.phone_number, '805-555-9999')
+			self.assertEqual(snapshot.website_url, 'https://admin.example.com/cronies')
+			self.assertEqual(snapshot.source_name, 'manual_admin_source')
+			self.assertEqual(snapshot.source_url, 'https://admin.example.com/source')
+			self.assertEqual(snapshot.external_id, 'admin-external-id')
+			self.assertEqual(
+				snapshot.social_profiles,
+				{
+					'facebook': {
+						'url': 'https://facebook.com/adminspot',
+						'username': 'adminspot',
+					},
+				},
+			)
+			self.assertEqual(snapshot.social_media_links, ['https://facebook.com/adminspot'])
 			self.assertEqual(snapshot.deal_overrides[0]['title'], 'Admin Deal')
 			self.assertEqual(snapshot.operating_hour_overrides[0]['weekday'], Weekday.MONDAY)
 

@@ -637,20 +637,15 @@ def _apply_non_destructive_snapshot_defaults(snapshot, defaults):
 	# Imported pulls should fill missing snapshot data without replacing admin-entered values.
 	for field_name, value in defaults.items():
 		existing_value = getattr(snapshot, field_name)
-		if field_name in {'source_name', 'external_id'}:
-			if str(value or '').strip():
-				setattr(snapshot, field_name, value)
-			continue
-		if field_name == 'listing_slug':
-			if not str(existing_value or '').strip() and str(value or '').strip():
-				setattr(snapshot, field_name, value)
-			continue
 		if field_name == 'website_url':
 			if getattr(snapshot, 'website_url_suppressed', False):
 				setattr(snapshot, field_name, '')
 				continue
+		if field_name == 'website_url_suppressed':
+			setattr(snapshot, field_name, bool(existing_value))
+			continue
 		if field_name in {'social_profiles', 'social_media_links'}:
-			if value:
+			if not existing_value and value:
 				setattr(snapshot, field_name, value)
 			continue
 		if not str(existing_value or '').strip() and str(value or '').strip():
