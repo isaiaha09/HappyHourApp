@@ -198,7 +198,7 @@ def _literal_json_like_parse(raw_value):
 def _coerce_deal_override_input(raw_value):
 	normalized = str(raw_value or '').strip()
 	if not normalized or normalized.lower() in {'null', 'none'}:
-		return []
+		return None
 
 	try:
 		return normalize_deal_overrides(json.loads(normalized))
@@ -329,7 +329,7 @@ def _parse_admin_happy_hour_line(raw_value):
 def _coerce_operating_hour_override_input(raw_value):
 	normalized = str(raw_value or '').strip()
 	if not normalized or normalized.lower() in {'null', 'none'}:
-		return []
+		return None
 
 	try:
 		return normalize_operating_hour_overrides(json.loads(normalized))
@@ -407,7 +407,9 @@ class BusinessClaimAdminForm(forms.ModelForm):
 
 class ListingSnapshotAdminForm(forms.ModelForm):
 	deal_overrides = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 8}))
+	deal_overrides_touched = forms.BooleanField(required=False, widget=forms.HiddenInput())
 	operating_hour_overrides = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 6}))
+	operating_hour_overrides_touched = forms.BooleanField(required=False, widget=forms.HiddenInput())
 	instagram_url = forms.CharField(required=False)
 	facebook_url = forms.CharField(required=False)
 	tiktok_url = forms.CharField(required=False)
@@ -467,7 +469,9 @@ class ListingSnapshotAdminForm(forms.ModelForm):
 	def clean(self):
 		cleaned_data = super().clean()
 		raw_deal_overrides = cleaned_data.get('deal_overrides')
+		deal_overrides_touched = bool(cleaned_data.get('deal_overrides_touched'))
 		raw_operating_hour_overrides = cleaned_data.get('operating_hour_overrides')
+		operating_hour_overrides_touched = bool(cleaned_data.get('operating_hour_overrides_touched'))
 		website_url_suppressed = bool(cleaned_data.get('website_url_suppressed'))
 
 		normalized_social_profiles = {}
@@ -498,13 +502,25 @@ class ListingSnapshotAdminForm(forms.ModelForm):
 
 		if raw_deal_overrides is not None:
 			try:
-				cleaned_data['deal_overrides'] = _coerce_deal_override_input(raw_deal_overrides)
+				parsed_deal_overrides = _coerce_deal_override_input(raw_deal_overrides)
+				if deal_overrides_touched and parsed_deal_overrides in (None, []):
+					cleaned_data['deal_overrides'] = []
+					cleaned_data['deal_overrides_cleared'] = True
+				else:
+					cleaned_data['deal_overrides'] = parsed_deal_overrides
+					cleaned_data['deal_overrides_cleared'] = False
 			except ValueError as error:
 				self.add_error('deal_overrides', str(error))
 
 		if raw_operating_hour_overrides is not None:
 			try:
-				cleaned_data['operating_hour_overrides'] = _coerce_operating_hour_override_input(raw_operating_hour_overrides)
+				parsed_operating_hour_overrides = _coerce_operating_hour_override_input(raw_operating_hour_overrides)
+				if operating_hour_overrides_touched and parsed_operating_hour_overrides in (None, []):
+					cleaned_data['operating_hour_overrides'] = []
+					cleaned_data['operating_hour_overrides_cleared'] = True
+				else:
+					cleaned_data['operating_hour_overrides'] = parsed_operating_hour_overrides
+					cleaned_data['operating_hour_overrides_cleared'] = False
 			except ValueError as error:
 				self.add_error('operating_hour_overrides', str(error))
 
@@ -516,6 +532,8 @@ class ListingSnapshotAdminForm(forms.ModelForm):
 		self.instance.website_url = self.cleaned_data.get('website_url', '')
 		self.instance.website_url_suppressed = bool(self.cleaned_data.get('website_url_suppressed'))
 		self.instance.source_url = self.cleaned_data.get('source_url', '')
+		self.instance.deal_overrides_cleared = bool(self.cleaned_data.get('deal_overrides_cleared', False))
+		self.instance.operating_hour_overrides_cleared = bool(self.cleaned_data.get('operating_hour_overrides_cleared', False))
 		return super().save(commit=commit)
 
 

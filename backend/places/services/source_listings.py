@@ -64,8 +64,14 @@ def load_canonical_source_records(source_name=None):
 	return canonical_records
 
 
-def _normalize_structured_override_value(value):
-	return value if value else None
+def _normalize_structured_override_value(value, cleared=False):
+	if value is None:
+		return None
+	if isinstance(value, dict) and not value:
+		return None
+	if isinstance(value, list) and not value:
+		return [] if cleared else None
+	return value
 
 
 def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_deals=None, resolve_missing_coordinates=True):
@@ -83,7 +89,7 @@ def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_
 		is_claimed = payload['slug'] in claimed_listing_slugs
 		if not is_claimed:
 			snapshot_slug_override_payload = snapshot_overrides_by_slug['by_slug'].get(payload['slug'])
-			if snapshot_slug_override_payload is not None:
+			if snapshot_slug_override_payload is not None and len(place_records) == 1:
 				_apply_claim_structured_overrides(
 					payload,
 					None,
@@ -149,8 +155,8 @@ def _get_listing_snapshot_override_payloads():
 		.order_by('-updated_at', '-pk')
 	)
 	for snapshot in queryset:
-		normalized_deal_overrides = _normalize_structured_override_value(snapshot.deal_overrides)
-		normalized_operating_hour_overrides = _normalize_structured_override_value(snapshot.operating_hour_overrides)
+		normalized_deal_overrides = _normalize_structured_override_value(snapshot.deal_overrides, cleared=bool(getattr(snapshot, 'deal_overrides_cleared', False)))
+		normalized_operating_hour_overrides = _normalize_structured_override_value(snapshot.operating_hour_overrides, cleared=bool(getattr(snapshot, 'operating_hour_overrides_cleared', False)))
 		normalized_social_profiles = normalize_social_profiles(
 			snapshot.social_profiles,
 			fallback_website_url=snapshot.website_url,
@@ -170,7 +176,9 @@ def _get_listing_snapshot_override_payloads():
 			'social_profiles': normalized_social_profiles,
 			'social_media_links': build_social_media_links(normalized_social_profiles),
 			'deal_overrides': normalized_deal_overrides,
+			'deal_overrides_cleared': bool(getattr(snapshot, 'deal_overrides_cleared', False)),
 			'operating_hour_overrides': normalized_operating_hour_overrides,
+			'operating_hour_overrides_cleared': bool(getattr(snapshot, 'operating_hour_overrides_cleared', False)),
 		}
 		if snapshot.listing_slug and snapshot.listing_slug not in override_payloads['by_slug']:
 			override_payloads['by_slug'][snapshot.listing_slug] = override_payload
@@ -695,8 +703,8 @@ def _apply_claim_structured_overrides(payload, claim=None, payload_namespace='',
 	social_media_links = resolved_source_payload.get('social_media_links') if source_payload is not None else None
 	deal_overrides = resolved_source_payload.get('deal_overrides') if source_payload is not None else getattr(claim, 'deal_overrides', None)
 	operating_hour_overrides = resolved_source_payload.get('operating_hour_overrides') if source_payload is not None else getattr(claim, 'operating_hour_overrides', None)
-	deal_overrides = _normalize_structured_override_value(deal_overrides)
-	operating_hour_overrides = _normalize_structured_override_value(operating_hour_overrides)
+	deal_overrides = _normalize_structured_override_value(deal_overrides, cleared=bool(resolved_source_payload.get('deal_overrides_cleared')) if source_payload is not None else False)
+	operating_hour_overrides = _normalize_structured_override_value(operating_hour_overrides, cleared=bool(resolved_source_payload.get('operating_hour_overrides_cleared')) if source_payload is not None else False)
 
 	if name_override:
 		payload['name'] = name_override

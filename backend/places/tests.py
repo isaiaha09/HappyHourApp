@@ -2367,6 +2367,146 @@ class SourceListingIdentityTests(TestCase):
 
 	@patch('places.services.source_listings._get_place_coordinates')
 	@patch('places.services.source_listings.load_source_records')
+	def test_multi_location_snapshot_slug_override_does_not_replace_other_locations(self, mock_load_source_records, mock_get_place_coordinates):
+		mock_get_place_coordinates.side_effect = [
+			(34.2785, -119.2931),
+			(34.2168, -119.0376),
+		]
+		mock_load_source_records.return_value = [
+			ImportedPlace(
+				name='Lure Fish House',
+				profile_name='Lure Fish House',
+				profile_slug='lure-fish-house',
+				city=City.VENTURA,
+				venue_type=VenueType.RESTAURANT,
+				address_line_1='60 California Street',
+				state='CA',
+				postal_code='93001',
+				website_url='https://www.lurefishhouse.com/location/lure-fish-house-ventura/',
+				source_name='business_websites',
+				source_url='https://www.lurefishhouse.com/location/lure-fish-house-ventura/',
+				external_id='lure-ventura',
+				deals=[ImportedDeal(title='Ventura Happy Hour', deal_type=DealType.HAPPY_HOUR, happy_hours=[ImportedHappyHour(weekday=Weekday.MONDAY, start_time='15:00', end_time='18:00')])],
+			),
+			ImportedPlace(
+				name='Lure Fish House Camarillo',
+				profile_name='Lure Fish House',
+				profile_slug='lure-fish-house',
+				city=City.CAMARILLO,
+				venue_type=VenueType.RESTAURANT,
+				address_line_1='259 W. Ventura Blvd',
+				state='CA',
+				postal_code='93010',
+				website_url='https://www.lurefishhouse.com/location/lure-fish-house-camarillo/',
+				source_name='business_websites',
+				source_url='https://www.lurefishhouse.com/location/lure-fish-house-camarillo/',
+				external_id='lure-camarillo',
+				deals=[ImportedDeal(title='Camarillo Happy Hour', deal_type=DealType.HAPPY_HOUR, happy_hours=[ImportedHappyHour(weekday=Weekday.TUESDAY, start_time='15:00', end_time='18:00')])],
+			),
+		]
+		ListingSnapshot.objects.create(
+			name='Lure Fish House',
+			listing_slug='lure-fish-house',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='60 California Street',
+			source_name='business_websites',
+			external_id='lure-ventura',
+		)
+		ListingSnapshot.objects.create(
+			name='Lure Fish House',
+			listing_slug='lure-fish-house',
+			city=City.CAMARILLO,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='259 W. Ventura Blvd',
+			source_name='business_websites',
+			external_id='lure-camarillo',
+		)
+
+		payload = get_source_place_payload('lure-fish-house')
+
+		self.assertEqual(len(payload['locations']), 2)
+		location_pairs = {(location['city'], location['address_line_1']) for location in payload['locations']}
+		self.assertEqual(location_pairs, {
+			(City.VENTURA, '60 California Street'),
+			(City.CAMARILLO, '259 W. Ventura Blvd'),
+		})
+
+	@patch('places.services.source_listings._get_place_coordinates')
+	@patch('places.services.source_listings.load_source_records')
+	def test_public_place_payload_allows_snapshot_to_explicitly_clear_imported_deals(self, mock_load_source_records, mock_get_place_coordinates):
+		mock_get_place_coordinates.return_value = (34.21681, -119.07423)
+		mock_load_source_records.return_value = [
+			ImportedPlace(
+				name='La Cascada',
+				profile_name='La Cascada',
+				profile_slug='la-cascada',
+				city=City.CAMARILLO,
+				venue_type=VenueType.RESTAURANT,
+				address_line_1='435 Arneill Rd',
+				state='CA',
+				postal_code='93010',
+				phone_number='805-555-0111',
+				website_url='https://lacascada.example.com',
+				source_name='business_websites',
+				source_url='https://lacascada.example.com',
+				deals=[ImportedDeal(title='Imported Happy Hour', deal_type=DealType.HAPPY_HOUR, happy_hours=[ImportedHappyHour(weekday=Weekday.MONDAY, start_time='15:00', end_time='18:00')])],
+			),
+		]
+		ListingSnapshot.objects.create(
+			name='La Cascada',
+			listing_slug='la-cascada',
+			city=City.CAMARILLO,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='435 Arneill Rd',
+			deal_overrides=[],
+			deal_overrides_cleared=True,
+		)
+
+		payload = get_source_place_payload('la-cascada')
+
+		self.assertFalse(payload['has_deals'])
+		self.assertEqual(payload['deal_count'], 0)
+		self.assertEqual(payload['deals'], [])
+
+	@patch('places.services.source_listings._get_place_coordinates')
+	@patch('places.services.source_listings.load_source_records')
+	def test_public_place_payload_ignores_legacy_empty_snapshot_deal_overrides_without_clear_flag(self, mock_load_source_records, mock_get_place_coordinates):
+		mock_get_place_coordinates.return_value = (34.21681, -119.07423)
+		mock_load_source_records.return_value = [
+			ImportedPlace(
+				name='Legacy Empty Override Cafe',
+				profile_name='Legacy Empty Override Cafe',
+				profile_slug='legacy-empty-override-cafe',
+				city=City.CAMARILLO,
+				venue_type=VenueType.CAFE,
+				address_line_1='10 Main St',
+				state='CA',
+				postal_code='93010',
+				website_url='https://legacy-empty.example.com',
+				source_name='business_websites',
+				source_url='https://legacy-empty.example.com',
+				deals=[ImportedDeal(title='Imported Happy Hour', deal_type=DealType.HAPPY_HOUR, happy_hours=[ImportedHappyHour(weekday=Weekday.MONDAY, start_time='15:00', end_time='18:00')])],
+			),
+		]
+		ListingSnapshot.objects.create(
+			name='Legacy Empty Override Cafe',
+			listing_slug='legacy-empty-override-cafe',
+			city=City.CAMARILLO,
+			venue_type=VenueType.CAFE,
+			address_line_1='10 Main St',
+			deal_overrides=[],
+			deal_overrides_cleared=False,
+		)
+
+		payload = get_source_place_payload('legacy-empty-override-cafe')
+
+		self.assertTrue(payload['has_deals'])
+		self.assertEqual(payload['deal_count'], 1)
+		self.assertEqual(payload['deals'][0]['title'], 'Imported Happy Hour')
+
+	@patch('places.services.source_listings._get_place_coordinates')
+	@patch('places.services.source_listings.load_source_records')
 	def test_public_place_payload_preserves_imported_deals_when_claim_has_no_structured_overrides(self, mock_load_source_records, mock_get_place_coordinates):
 		mock_get_place_coordinates.return_value = (34.2001, -119.1806)
 		mock_load_source_records.return_value = [
@@ -6664,6 +6804,45 @@ class ListingSnapshotAdminTests(TestCase):
 		self.assertIn('places/admin/listingsnapshot_structured_overrides.css', str(form.media))
 		self.assertEqual(form.fields['deal_overrides'].widget.attrs['data-structured-editor'], 'deals')
 		self.assertEqual(form.fields['operating_hour_overrides'].widget.attrs['data-structured-editor'], 'hours')
+
+	def test_listing_snapshot_admin_form_marks_empty_touched_deal_override_as_explicit_clear(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='La Cascada',
+			listing_slug='la-cascada',
+			city=City.CAMARILLO,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='435 Arneill Rd',
+		)
+
+		form = ListingSnapshotAdminForm(data={
+			'source_name': '',
+			'source_url': '',
+			'external_id': '',
+			'listing_slug': 'la-cascada',
+			'name': 'La Cascada',
+			'city': City.CAMARILLO,
+			'venue_type': VenueType.RESTAURANT,
+			'address_line_1': '435 Arneill Rd',
+			'address_line_2': '',
+			'neighborhood': '',
+			'state': 'CA',
+			'postal_code': '',
+			'phone_number': '',
+			'website_url': '',
+			'website_url_suppressed': '',
+			'deal_overrides': '',
+			'deal_overrides_touched': '1',
+			'operating_hour_overrides': '',
+			'operating_hour_overrides_touched': '',
+			'tracked_location_latitude': '',
+			'tracked_location_longitude': '',
+			'tracked_location_accuracy_meters': '',
+			'tracked_location_updated_at': '',
+		}, instance=snapshot)
+
+		self.assertTrue(form.is_valid(), form.errors.as_json())
+		self.assertEqual(form.cleaned_data['deal_overrides'], [])
+		self.assertTrue(form.cleaned_data['deal_overrides_cleared'])
 
 	@patch('places.admin.get_source_place_payload')
 	def test_listing_snapshot_admin_form_seeds_structured_editors_from_current_public_payload_when_overrides_are_blank(self, mock_get_source_place_payload):

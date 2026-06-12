@@ -302,9 +302,18 @@
     }
 
     textarea.classList.add('is-structured-enhanced');
+    const touchedInput = document.createElement('input');
+    touchedInput.type = 'hidden';
+    touchedInput.name = textarea.name + '_touched';
+    touchedInput.value = '0';
+    textarea.insertAdjacentElement('afterend', touchedInput);
     const editorRoot = document.createElement('div');
     editorRoot.className = 'structured-admin-editor';
     textarea.insertAdjacentElement('afterend', editorRoot);
+
+    function markTouched() {
+      touchedInput.value = '1';
+    }
 
     function syncTextarea() {
       textarea.value = JSON.stringify(type === 'deals' ? serializeDealsForTextarea(state.value) : serializeHoursForTextarea(state.value));
@@ -322,10 +331,12 @@
         element.placeholder = options.placeholder;
       }
       element.addEventListener('input', function () {
+      markTouched();
         onInput(uses12HourTime ? normalizeTimeInput(element.value) : element.value);
       });
       if (uses12HourTime) {
         element.addEventListener('blur', function () {
+        markTouched();
           const normalizedValue = normalizeTimeInput(element.value);
           onInput(normalizedValue);
           element.value = formatTime(normalizedValue);
@@ -350,7 +361,7 @@
         }
         select.append(optionElement);
       });
-      select.addEventListener('change', function () { onChange(select.value); });
+      select.addEventListener('change', function () { markTouched(); onChange(select.value); });
       label.append(select);
       return label;
     }
@@ -366,7 +377,7 @@
         button.type = 'button';
         button.className = 'structured-admin-editor__weekday-button' + (activeWeekdays.includes(option.value) ? ' is-active' : '');
         button.textContent = option.label;
-        button.addEventListener('click', function () { onSelect(option.value); });
+        button.addEventListener('click', function () { markTouched(); onSelect(option.value); });
         row.append(button);
       });
       return row;
@@ -377,7 +388,7 @@
       button.type = 'button';
       button.className = className;
       button.textContent = labelText;
-      button.addEventListener('click', onClick);
+      button.addEventListener('click', function () { markTouched(); onClick(); });
       return button;
     }
 
