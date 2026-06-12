@@ -63,6 +63,17 @@ export function BusinessHoursEditor({ label, onChange, supportText, value }: Bus
     onChange(value.map((row, rowIndex) => rowIndex === index ? nextRow : row));
   }
 
+  function toggleOpen24Hours(index: number) {
+    const existingRow = value[index];
+    const nextOpen24Hours = !existingRow.open_24_hours;
+    updateRow(index, {
+      ...existingRow,
+      open_24_hours: nextOpen24Hours,
+      open_time: nextOpen24Hours ? '12:00 AM' : existingRow.open_time,
+      close_time: nextOpen24Hours ? '11:59 PM' : existingRow.close_time,
+    });
+  }
+
   function toggleRowWeekday(index: number, weekday: number) {
     const existingRow = value[index];
     const existingWeekdays = Array.isArray(existingRow.weekdays) && existingRow.weekdays.length
@@ -88,22 +99,27 @@ export function BusinessHoursEditor({ label, onChange, supportText, value }: Bus
             selectedWeekdays={Array.isArray(row.weekdays) && row.weekdays.length ? row.weekdays : [row.weekday]}
             onToggle={(weekday) => toggleRowWeekday(index, weekday)}
           />
-          <View style={styles.structuredTimeRow}>
-            <TextInput
-              onChangeText={(open_time) => updateRow(index, { ...row, open_time })}
-              placeholder="11:00 AM"
-              placeholderTextColor="#9a7f6c"
-              style={[styles.profileInput, styles.structuredTimeInput]}
-              value={row.open_time}
-            />
-            <TextInput
-              onChangeText={(close_time) => updateRow(index, { ...row, close_time })}
-              placeholder="10:00 PM"
-              placeholderTextColor="#9a7f6c"
-              style={[styles.profileInput, styles.structuredTimeInput]}
-              value={row.close_time}
-            />
-          </View>
+          <Pressable onPress={() => toggleOpen24Hours(index)} style={[styles.structuredWeekdayChip, row.open_24_hours ? styles.structuredWeekdayChipActive : null]}>
+            <Text style={[styles.structuredWeekdayChipText, row.open_24_hours ? styles.structuredWeekdayChipTextActive : null]}>Open 24 hrs</Text>
+          </Pressable>
+          {row.open_24_hours ? null : (
+            <View style={styles.structuredTimeRow}>
+              <TextInput
+                onChangeText={(open_time) => updateRow(index, { ...row, open_time })}
+                placeholder="11:00 AM"
+                placeholderTextColor="#9a7f6c"
+                style={[styles.profileInput, styles.structuredTimeInput]}
+                value={row.open_time}
+              />
+              <TextInput
+                onChangeText={(close_time) => updateRow(index, { ...row, close_time })}
+                placeholder="10:00 PM"
+                placeholderTextColor="#9a7f6c"
+                style={[styles.profileInput, styles.structuredTimeInput]}
+                value={row.close_time}
+              />
+            </View>
+          )}
           <Pressable onPress={() => onChange(value.filter((_, rowIndex) => rowIndex !== index))} style={styles.structuredRemoveButton}>
             <Text style={styles.structuredRemoveButtonText}>Remove hours row</Text>
           </Pressable>

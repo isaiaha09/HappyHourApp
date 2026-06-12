@@ -13,6 +13,7 @@ export type OperatingHourWindow = {
   weekday_label: string;
   open_time: string;
   close_time: string;
+  open_24_hours?: boolean;
   group_id?: string | null;
   group_rank?: number | null;
 };
@@ -49,6 +50,7 @@ export type BusinessOperatingHourOverride = {
   weekday: number;
   open_time: string;
   close_time: string;
+  open_24_hours?: boolean;
 };
 
 export type BusinessDealOverride = {

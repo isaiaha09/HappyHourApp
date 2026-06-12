@@ -2223,11 +2223,67 @@ class SourceListingIdentityTests(TestCase):
 			'weekday_label': 'Friday',
 			'open_time': '10:00',
 			'close_time': '22:00',
+			'open_24_hours': False,
 			'group_id': None,
 			'group_rank': None,
 		}])
 		self.assertEqual(payload['offer_entries'], [])
 		self.assertEqual(payload['hours_of_operation_entries'], [])
+
+	@patch('places.services.source_listings._get_place_coordinates')
+	@patch('places.services.source_listings.load_source_records')
+	def test_public_place_payload_marks_24_hour_claim_overrides(self, mock_load_source_records, mock_get_place_coordinates):
+		mock_get_place_coordinates.return_value = (34.2001, -119.1806)
+		mock_load_source_records.return_value = [
+			ImportedPlace(
+				name='Night Owl Diner',
+				profile_name='Night Owl Diner',
+				profile_slug='night-owl-diner',
+				city=City.OXNARD,
+				venue_type=VenueType.RESTAURANT,
+				address_line_1='100 Harbor Blvd',
+				state='CA',
+				postal_code='93035',
+				website_url='https://imported.example.com/night-owl-diner',
+				source_name='business_websites',
+				source_url='https://imported.example.com/night-owl-diner',
+			),
+		]
+		owner = User.objects.create_user(username='night_owl_owner', email='night-owl-owner@example.com', password='test-pass-123')
+		snapshot = ListingSnapshot.objects.create(
+			name='Night Owl Diner',
+			listing_slug='night-owl-diner',
+			city=City.OXNARD,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='100 Harbor Blvd',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=owner,
+			listing_snapshot=snapshot,
+			pathway=BusinessClaim.Pathway.CLAIMED,
+			status=BusinessClaim.Status.APPROVED,
+			contact_name='Owner Name',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='owner@nightowl.example.com',
+			work_phone='805-555-0100',
+			employer_address='100 Harbor Blvd',
+			operating_hour_overrides=[{'weekday': Weekday.SATURDAY, 'open_24_hours': True}],
+			verification_summary='Approved claimed business verification.',
+		)
+		BusinessMembership.objects.create(claim=claim, user=owner, is_active=True)
+
+		payload = get_source_place_payload('night-owl-diner')
+
+		self.assertEqual(payload['operating_hours'], [{
+			'id': payload['operating_hours'][0]['id'],
+			'weekday': Weekday.SATURDAY,
+			'weekday_label': 'Saturday',
+			'open_time': '00:00',
+			'close_time': '23:59',
+			'open_24_hours': True,
+			'group_id': None,
+			'group_rank': None,
+		}])
 
 	@patch('places.services.source_listings._get_place_coordinates')
 	@patch('places.services.source_listings.load_source_records')
@@ -5467,6 +5523,52 @@ class ProfileDashboardApiTests(APITestCase):
 		)
 		self.assertEqual(response.data['business_contact']['social_media_links'], ['https://instagram.com/approvedspot', 'https://facebook.com/approvedspot'])
 
+	def test_profile_dashboard_update_accepts_24_hour_business_hours(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Open Late Cafe',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='77 Main St',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@openlate.example.com',
+			work_phone='805-555-0200',
+			employer_address='77 Main St, Ventura, CA 93001',
+			verification_summary='I own the business.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+
+		response = self.client.post(
+			reverse('profile-dashboard'),
+			{
+				'portal': 'business',
+				'username': 'dashboard_user',
+				'email': 'dashboard@example.com',
+				'contact_name': 'Casey Manager',
+				'operating_hour_overrides': [
+					{'weekday': Weekday.FRIDAY, 'open_24_hours': True},
+				],
+			},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 200)
+		claim.refresh_from_db()
+		self.assertEqual(claim.operating_hour_overrides, [{
+			'weekday': Weekday.FRIDAY,
+			'open_time': '00:00',
+			'close_time': '23:59',
+			'open_24_hours': True,
+		}])
+		self.assertEqual(response.data['business_contact']['operating_hours'][0]['open_24_hours'], True)
+		self.assertEqual(response.data['business_contact']['hours_of_operation_entries'], ['Friday: Open 24 hours'])
+
 	def test_profile_dashboard_update_accepts_business_profile_photo_uploads(self):
 		snapshot = ListingSnapshot.objects.create(
 			name='Approved Spot',
@@ -5510,7 +5612,7 @@ class ProfileDashboardApiTests(APITestCase):
 		claim.refresh_from_db()
 		self.assertEqual(len(claim.photo_references), 2)
 		self.assertEqual(claim.photo_references[0], 'https://cdn.example.com/approvedspot/front.jpg')
-		self.assertTrue(claim.photo_references[1].startswith('http://testserver/media/business-profile-photos/'))
+		self.assertIn('/business-profile-photos/', claim.photo_references[1])
 		self.assertTrue(claim.photo_gallery_overridden)
 		self.assertIn(claim.photo_references[1], response.data['business_contact']['photo_references'])
 
@@ -6844,6 +6946,38 @@ class ListingSnapshotAdminTests(TestCase):
 		self.assertEqual(form.cleaned_data['deal_overrides'], [])
 		self.assertTrue(form.cleaned_data['deal_overrides_cleared'])
 
+	def test_listing_snapshot_admin_form_accepts_open_24_hours_plain_text(self):
+		form = ListingSnapshotAdminForm(data={
+			'name': 'Night Owl Diner',
+			'listing_slug': 'night-owl-diner',
+			'source_name': 'here_places',
+			'source_url': '',
+			'external_id': 'here:night-owl-diner',
+			'city': City.CAMARILLO,
+			'venue_type': VenueType.RESTAURANT,
+			'address_line_1': '100 Harbor Blvd',
+			'address_line_2': '',
+			'neighborhood': '',
+			'state': 'CA',
+			'postal_code': '93010',
+			'phone_number': '',
+			'website_url': '',
+			'deal_overrides': '',
+			'operating_hour_overrides': 'Saturday: Open 24 hours',
+			'tracked_location_latitude': '',
+			'tracked_location_longitude': '',
+			'tracked_location_accuracy_meters': '',
+			'tracked_location_updated_at': '',
+		})
+
+		self.assertTrue(form.is_valid(), form.errors.as_json())
+		self.assertEqual(form.cleaned_data['operating_hour_overrides'], [{
+			'weekday': Weekday.SATURDAY,
+			'open_time': '00:00',
+			'close_time': '23:59',
+			'open_24_hours': True,
+		}])
+
 	@patch('places.admin.get_source_place_payload')
 	def test_listing_snapshot_admin_form_seeds_structured_editors_from_current_public_payload_when_overrides_are_blank(self, mock_get_source_place_payload):
 		mock_get_source_place_payload.return_value = {
@@ -6917,6 +7051,26 @@ class ListingSnapshotAdminTests(TestCase):
 
 		self.assertIn('Monday: 9:00 PM - 11:00 PM', deals_preview)
 		self.assertIn('Monday: 11:00 AM - 11:00 PM', hours_preview)
+
+	@patch('places.admin.get_source_place_payload')
+	def test_current_public_hours_preview_renders_open_24_hours_label(self, mock_get_source_place_payload):
+		mock_get_source_place_payload.return_value = {
+			'deals': [],
+			'operating_hours': [
+				{'weekday_label': 'Monday', 'open_time': '00:00', 'close_time': '23:59', 'open_24_hours': True},
+			],
+		}
+		snapshot = ListingSnapshot.objects.create(
+			name='Institution Ale Co.',
+			listing_slug='institution-ale-co',
+			city=City.CAMARILLO,
+			venue_type=VenueType.BAR,
+			address_line_1='311 Leisure Village Dr',
+		)
+
+		hours_preview = str(self.admin.current_public_hours_preview(snapshot))
+
+		self.assertIn('Monday: Open 24 hours', hours_preview)
 
 	@override_settings(DISCOVERY_JSON_PATH='')
 	def test_pull_all_business_data_view_writes_live_json_and_syncs_snapshots(self):

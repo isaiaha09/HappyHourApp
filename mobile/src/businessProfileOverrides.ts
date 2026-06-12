@@ -26,6 +26,7 @@ export const businessWeekdayOptions = weekdayLabels.map((label, weekday) => ({
       weekday: 0,
       open_time: '11:00 AM',
       close_time: '10:00 PM',
+      open_24_hours: false,
     };
   }
 
@@ -62,6 +63,7 @@ export const businessWeekdayOptions = weekdayLabels.map((label, weekday) => ({
       weekday: window.weekdays[0] ?? 0,
       open_time: window.open_time,
       close_time: window.close_time,
+      open_24_hours: Boolean(window.open_24_hours),
     }));
   }
 
@@ -92,12 +94,13 @@ export const businessWeekdayOptions = weekdayLabels.map((label, weekday) => ({
       .flatMap((override, index) => expandOperatingHourOverride(override)
         .map((expandedOverride) => ({
           weekday: expandedOverride.weekday,
-          open_time: expandedOverride.open_time.trim(),
-          close_time: expandedOverride.close_time.trim(),
+          open_time: expandedOverride.open_24_hours ? '00:00' : expandedOverride.open_time.trim(),
+          close_time: expandedOverride.open_24_hours ? '23:59' : expandedOverride.close_time.trim(),
+          open_24_hours: expandedOverride.open_24_hours,
           group_id: override.group_id || override.id || `hours-group-${index}`,
           group_rank: override.group_rank ?? index,
         })))
-      .filter((override) => override.open_time && override.close_time)
+      .filter((override) => override.open_24_hours || (override.open_time && override.close_time))
       .sort((left, right) => (left.group_rank ?? Number.MAX_SAFE_INTEGER) - (right.group_rank ?? Number.MAX_SAFE_INTEGER) || left.weekday - right.weekday || left.open_time.localeCompare(right.open_time));
   }
 
@@ -109,9 +112,9 @@ export const businessWeekdayOptions = weekdayLabels.map((label, weekday) => ({
   }
 
   function groupOperatingHourOverrides(operatingHours: OperatingHourWindow[]) {
-    const groups = new Map<string, { close_time: string; group_id: string; group_rank: number | null; open_time: string; weekdays: number[] }>();
+    const groups = new Map<string, { close_time: string; group_id: string; group_rank: number | null; open_24_hours: boolean; open_time: string; weekdays: number[] }>();
     operatingHours.forEach((window, index) => {
-      const key = window.group_id ? `group:${window.group_id}` : `${window.open_time}|${window.close_time}`;
+      const key = window.group_id ? `group:${window.group_id}` : `${window.open_24_hours ? '24hr' : 'timed'}|${window.open_time}|${window.close_time}`;
       const current = groups.get(key);
       if (current) {
         current.weekdays.push(window.weekday);
@@ -122,8 +125,9 @@ export const businessWeekdayOptions = weekdayLabels.map((label, weekday) => ({
         group_id: window.group_id || `derived-hours-group-${index}`,
         group_rank: window.group_rank ?? index,
         weekdays: [window.weekday],
-        open_time: formatTime(window.open_time),
-        close_time: formatTime(window.close_time),
+        open_time: window.open_24_hours ? '12:00 AM' : formatTime(window.open_time),
+        close_time: window.open_24_hours ? '11:59 PM' : formatTime(window.close_time),
+        open_24_hours: Boolean(window.open_24_hours),
       });
     });
     return Array.from(groups.values()).sort((left, right) => (left.group_rank ?? Number.MAX_SAFE_INTEGER) - (right.group_rank ?? Number.MAX_SAFE_INTEGER));
@@ -135,6 +139,7 @@ export const businessWeekdayOptions = weekdayLabels.map((label, weekday) => ({
       weekday,
       open_time: window.open_time,
       close_time: window.close_time,
+      open_24_hours: Boolean(window.open_24_hours),
     }));
   }
 
@@ -250,7 +255,7 @@ export const businessWeekdayOptions = weekdayLabels.map((label, weekday) => ({
     return operatingHours.map((operatingHour, index) => ({
       id: ('group_id' in operatingHour && operatingHour.group_id) ? operatingHour.group_id : `hours-row-${index}`,
       dayLabel: formatWeekdayRanges(getOperatingHourOverrideWeekdays(operatingHour)),
-      timeLabel: `${formatTime(operatingHour.open_time)} - ${formatTime(operatingHour.close_time)}`,
+      timeLabel: operatingHour.open_24_hours ? 'Open 24 hours' : `${formatTime(operatingHour.open_time)} - ${formatTime(operatingHour.close_time)}`,
     }));
   }
 
@@ -284,7 +289,7 @@ export const businessWeekdayOptions = weekdayLabels.map((label, weekday) => ({
     const closeTimesByWeekday = new Map<number, string>();
     operatingHours.forEach((operatingHour) => {
       getOperatingHourOverrideWeekdays(operatingHour).forEach((weekday) => {
-        closeTimesByWeekday.set(weekday, operatingHour.close_time);
+        closeTimesByWeekday.set(weekday, operatingHour.open_24_hours ? '23:59' : operatingHour.close_time);
       });
     });
     return weekdays.every((weekday) => closeTimesByWeekday.get(weekday) === endTime);

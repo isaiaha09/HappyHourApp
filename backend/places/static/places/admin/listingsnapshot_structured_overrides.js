@@ -53,6 +53,7 @@
       weekday: 0,
       open_time: '11:00 AM',
       close_time: '10:00 PM',
+      open_24_hours: false,
     };
   }
 
@@ -217,7 +218,7 @@
       return {
         id: row.group_id || 'hours-' + index,
         dayLabel: formatWeekdayRange(getOperatingHourWeekdays(row)),
-        timeLabel: formatTime(row.open_time) + ' - ' + formatTime(row.close_time),
+        timeLabel: row.open_24_hours ? 'Open 24 hours' : formatTime(row.open_time) + ' - ' + formatTime(row.close_time),
       };
     });
   }
@@ -232,7 +233,7 @@
   function groupOperatingHoursForState(rows) {
     const groups = new Map();
     (rows || []).forEach(function (row, index) {
-      const key = row.group_id ? 'group:' + String(row.group_id) : String(row.open_time || '') + '|' + String(row.close_time || '');
+      const key = row.group_id ? 'group:' + String(row.group_id) : (row.open_24_hours ? '24hr' : 'timed') + '|' + String(row.open_time || '') + '|' + String(row.close_time || '');
       const current = groups.get(key);
       if (current) {
         current.weekdays = Array.from(new Set(current.weekdays.concat([row.weekday]))).sort(function (left, right) { return left - right; });
@@ -248,6 +249,7 @@
         weekdays: weekdays.length ? weekdays : [Number(row.weekday || 0)],
         open_time: String(row.open_time || ''),
         close_time: String(row.close_time || ''),
+        open_24_hours: Boolean(row.open_24_hours),
       });
     });
     return Array.from(groups.values()).sort(function (left, right) {
@@ -260,8 +262,9 @@
       return getOperatingHourWeekdays(row).map(function (weekday) {
         return {
           weekday: weekday,
-          open_time: row.open_time,
-          close_time: row.close_time,
+          open_time: row.open_24_hours ? '00:00' : row.open_time,
+          close_time: row.open_24_hours ? '23:59' : row.close_time,
+          open_24_hours: Boolean(row.open_24_hours),
           group_id: row.group_id || row.id || 'hours-group-' + index,
           group_rank: row.group_rank !== undefined && row.group_rank !== null ? Number(row.group_rank) : index,
         };
@@ -590,17 +593,32 @@
           renderHours();
         }, getOperatingHourWeekdays(rowValue)));
 
-        const timeRow = document.createElement('div');
-        timeRow.className = 'structured-admin-editor__row structured-admin-editor__row--split';
-        timeRow.append(buildInput('Open time', rowValue.open_time, function (nextValue) {
-          state.value[rowIndex].open_time = nextValue;
+        const toggleRow = document.createElement('div');
+        toggleRow.className = 'structured-admin-editor__inline-toggle-row';
+        toggleRow.append(buildButton('Open 24 hrs', 'structured-admin-editor__toggle' + (rowValue.open_24_hours ? ' is-active' : ''), function () {
+          state.value[rowIndex].open_24_hours = !state.value[rowIndex].open_24_hours;
+          if (state.value[rowIndex].open_24_hours) {
+            state.value[rowIndex].open_time = '00:00';
+            state.value[rowIndex].close_time = '23:59';
+          }
           syncTextarea();
-        }, { placeholder: '11:00 AM', timeFormat: '12hr' }));
-        timeRow.append(buildInput('Close time', rowValue.close_time, function (nextValue) {
-          state.value[rowIndex].close_time = nextValue;
-          syncTextarea();
-        }, { placeholder: '10:00 PM', timeFormat: '12hr' }));
-        card.append(timeRow);
+          renderHours();
+        }));
+        card.append(toggleRow);
+
+        if (!rowValue.open_24_hours) {
+          const timeRow = document.createElement('div');
+          timeRow.className = 'structured-admin-editor__row structured-admin-editor__row--split';
+          timeRow.append(buildInput('Open time', rowValue.open_time, function (nextValue) {
+            state.value[rowIndex].open_time = nextValue;
+            syncTextarea();
+          }, { placeholder: '11:00 AM', timeFormat: '12hr' }));
+          timeRow.append(buildInput('Close time', rowValue.close_time, function (nextValue) {
+            state.value[rowIndex].close_time = nextValue;
+            syncTextarea();
+          }, { placeholder: '10:00 PM', timeFormat: '12hr' }));
+          card.append(timeRow);
+        }
         card.append(buildButton('Remove hours row', 'structured-admin-editor__button--danger', function () {
           state.value.splice(rowIndex, 1);
           syncTextarea();

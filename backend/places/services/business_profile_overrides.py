@@ -56,6 +56,25 @@ def normalize_weekday_value(value, field_name='weekday'):
     return normalized
 
 
+def is_open_24_hours_row(row):
+    return bool(row.get('open_24_hours'))
+
+
+def format_operating_hour_display(row):
+    if is_open_24_hours_row(row):
+        return 'Open 24 hours'
+    return f"{format_time_display(row['open_time'])} - {format_time_display(row['close_time'])}"
+
+
+def normalize_operating_hour_row_for_output(row):
+    normalized_row = dict(row)
+    if is_open_24_hours_row(normalized_row):
+        normalized_row['open_time'] = '00:00'
+        normalized_row['close_time'] = '23:59'
+        normalized_row['open_24_hours'] = True
+    return normalized_row
+
+
 def normalize_operating_hour_overrides(raw_overrides):
     if raw_overrides in (None, ''):
         return []
@@ -74,9 +93,15 @@ def normalize_operating_hour_overrides(raw_overrides):
 
         normalized_row = {
             'weekday': normalize_weekday_value(row.get('weekday')),
-            'open_time': normalize_time_value(row.get('open_time'), f'Operating hour #{index + 1} open time'),
-            'close_time': normalize_time_value(row.get('close_time'), f'Operating hour #{index + 1} close time'),
         }
+        open_24_hours = bool(row.get('open_24_hours'))
+        if open_24_hours:
+            normalized_row['open_time'] = '00:00'
+            normalized_row['close_time'] = '23:59'
+            normalized_row['open_24_hours'] = True
+        else:
+            normalized_row['open_time'] = normalize_time_value(row.get('open_time'), f'Operating hour #{index + 1} open time')
+            normalized_row['close_time'] = normalize_time_value(row.get('close_time'), f'Operating hour #{index + 1} close time')
         if group_id:
             normalized_row['group_id'] = group_id
         if group_rank is not None:
@@ -148,8 +173,8 @@ def format_time_display(value):
 
 def summarize_operating_hour_overrides(overrides):
     return [
-        f"{_label_for_choice(Weekday, row['weekday'])}: {format_time_display(row['open_time'])} - {format_time_display(row['close_time'])}"
-        for row in overrides
+        f"{_label_for_choice(Weekday, normalized_row['weekday'])}: {format_operating_hour_display(normalized_row)}"
+        for normalized_row in (normalize_operating_hour_row_for_output(row) for row in overrides)
     ]
 
 
@@ -179,15 +204,16 @@ def summarize_deal_overrides(overrides):
 def build_operating_hour_payloads(overrides, namespace):
     return [
         {
-            'id': _stable_numeric_id(namespace, 'operating-hours', row['weekday'], row['open_time'], row['close_time']),
-            'weekday': row['weekday'],
-            'weekday_label': _label_for_choice(Weekday, row['weekday']),
-            'open_time': row['open_time'],
-            'close_time': row['close_time'],
-            'group_id': row.get('group_id'),
-            'group_rank': row.get('group_rank'),
+            'id': _stable_numeric_id(namespace, 'operating-hours', normalized_row['weekday'], normalized_row['open_time'], normalized_row['close_time']),
+            'weekday': normalized_row['weekday'],
+            'weekday_label': _label_for_choice(Weekday, normalized_row['weekday']),
+            'open_time': normalized_row['open_time'],
+            'close_time': normalized_row['close_time'],
+            'open_24_hours': is_open_24_hours_row(normalized_row),
+            'group_id': normalized_row.get('group_id'),
+            'group_rank': normalized_row.get('group_rank'),
         }
-        for row in overrides
+        for normalized_row in (normalize_operating_hour_row_for_output(row) for row in overrides)
     ]
 
 

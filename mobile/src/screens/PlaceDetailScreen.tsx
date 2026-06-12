@@ -372,7 +372,7 @@ function formatOperatingHourGroups(operatingHours: OperatingHourWindow[]) {
   const groupedHours = new Map<string, OperatingHourWindow[]>();
 
   operatingHours.forEach((operatingHour) => {
-    const key = `${operatingHour.open_time}-${operatingHour.close_time}`;
+    const key = operatingHour.open_24_hours ? '24hr' : `${operatingHour.open_time}-${operatingHour.close_time}`;
     const existingGroup = groupedHours.get(key);
 
     if (existingGroup) {
@@ -386,7 +386,7 @@ function formatOperatingHourGroups(operatingHours: OperatingHourWindow[]) {
   return Array.from(groupedHours.entries()).map(([key, group]) => ({
     id: key,
     dayLabel: formatWeekdayRanges(group.map((operatingHour) => operatingHour.weekday)),
-    timeLabel: `${formatTime(group[0].open_time)} - ${formatTime(group[0].close_time)}`,
+    timeLabel: group[0].open_24_hours ? 'Open 24 hours' : `${formatTime(group[0].open_time)} - ${formatTime(group[0].close_time)}`,
   }));
 }
 

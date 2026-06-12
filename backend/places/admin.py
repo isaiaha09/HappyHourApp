@@ -20,7 +20,7 @@ from django.utils import timezone
 
 from .admin_site import happyhour_admin_site
 from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessMembership, CustomerAccount, DealType, DeletedBusiness, ListingSnapshot, ProviderUsageWindow, Weekday
-from .services.business_profile_overrides import format_time_display, normalize_deal_overrides, normalize_operating_hour_overrides, normalize_time_value, summarize_deal_overrides, summarize_operating_hour_overrides
+from .services.business_profile_overrides import format_operating_hour_display, format_time_display, is_open_24_hours_row, normalize_deal_overrides, normalize_operating_hour_overrides, normalize_time_value, summarize_deal_overrides, summarize_operating_hour_overrides
 from .services.importers.discovered_json_places import load_discovery_json_records, merge_discovery_json_records, write_discovery_json_records
 from .services.deleted_businesses import filter_deleted_business_records, imported_place_from_deleted_business, store_deleted_business
 from .services.importers.business_websites import BusinessWebsiteImporter
@@ -126,6 +126,7 @@ def _operating_hour_override_seed_from_public_payload(payload):
 			'weekday': row.get('weekday'),
 			'open_time': row.get('open_time', ''),
 			'close_time': row.get('close_time', ''),
+			'open_24_hours': bool(row.get('open_24_hours')),
 			'group_id': row.get('group_id'),
 			'group_rank': row.get('group_rank'),
 		}
@@ -154,7 +155,7 @@ def _format_public_deals_preview_lines(deals):
 
 def _format_public_hours_preview_lines(operating_hours):
 	return [
-		f"{row.get('weekday_label', row.get('weekday'))}: {format_time_display(row.get('open_time'))} - {format_time_display(row.get('close_time'))}"
+		f"{row.get('weekday_label', row.get('weekday'))}: {format_operating_hour_display(row)}"
 		for row in operating_hours
 	]
 
@@ -182,7 +183,7 @@ def _operating_hour_override_text_for_admin(value):
 	if value in (None, [], {}):
 		return ''
 	return '\n'.join(
-		f"{Weekday(row['weekday']).label}: {format_time_display(row['open_time'])} - {format_time_display(row['close_time'])}"
+		f"{Weekday(row['weekday']).label}: {format_operating_hour_display(row)}"
 		for row in value
 	)
 
@@ -346,9 +347,17 @@ def _coerce_operating_hour_override_input(raw_value):
 		cleaned_line = str(line or '').strip()
 		if not cleaned_line:
 			continue
+		if ':' in cleaned_line:
+			weekday_text, remainder = cleaned_line.split(':', 1)
+			if str(remainder or '').strip().lower() in {'open 24 hours', 'open 24 hrs'}:
+				parsed_rows.append({
+					'weekday': _weekday_value_from_admin_text(weekday_text),
+					'open_24_hours': True,
+				})
+				continue
 		match = PLAIN_TEXT_HOUR_LINE_PATTERN.match(cleaned_line)
 		if not match:
-			raise ValueError('Enter operating hour overrides as valid JSON or one line per day like Monday: 11:00 AM - 9:00 PM.')
+			raise ValueError('Enter operating hour overrides as valid JSON or one line per day like Monday: 11:00 AM - 9:00 PM or Monday: Open 24 hours.')
 		parsed_rows.append({
 			'weekday': _weekday_value_from_admin_text(match.group('weekday')),
 			'open_time': normalize_time_value(match.group('open').strip(), 'Operating hour open time'),
@@ -356,7 +365,7 @@ def _coerce_operating_hour_override_input(raw_value):
 		})
 
 	if not parsed_rows:
-		raise ValueError('Enter operating hour overrides as valid JSON or one line per day like Monday: 11:00 AM - 9:00 PM.')
+		raise ValueError('Enter operating hour overrides as valid JSON or one line per day like Monday: 11:00 AM - 9:00 PM or Monday: Open 24 hours.')
 
 	return normalize_operating_hour_overrides(parsed_rows)
 
@@ -438,7 +447,7 @@ class ListingSnapshotAdminForm(forms.ModelForm):
 		self.fields['youtube_url'].help_text = 'Optional YouTube profile URL or handle.'
 		self.fields['deal_overrides'].help_text = 'Optional deal overrides for this unclaimed business. Paste valid JSON, or plain text blocks with title on the first line, optional price on the second line, and optional description after that.'
 		self.fields['deal_overrides'].help_text = 'Add multiple deals by separating them with a blank line. Supported plain-text lines: Title, Type, Price, Description, Terms, and Happy hour: Monday 3:00 PM - 6:00 PM.'
-		self.fields['operating_hour_overrides'].help_text = 'Optional operating-hour overrides. Paste valid JSON, or one line per day like Monday: 11:00 AM - 9:00 PM.'
+		self.fields['operating_hour_overrides'].help_text = 'Optional operating-hour overrides. Paste valid JSON, or one line per day like Monday: 11:00 AM - 9:00 PM or Monday: Open 24 hours.'
 		self.fields['deal_overrides'].widget.attrs.update({
 			'class': 'vLargeTextField structured-admin-source-field',
 			'data-structured-editor': 'deals',
