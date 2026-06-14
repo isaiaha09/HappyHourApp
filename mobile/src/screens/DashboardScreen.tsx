@@ -47,8 +47,9 @@ export type AccountSettingsScreenProps = {
   onDeleteAccount: () => void;
   onOpenPrivacyPolicy: () => void;
   onOpenTermsOfService: () => void;
+  pendingBusinessLocationTrackingEnabled: boolean | null;
   session: SignupResponse;
-  submitting: boolean;
+  settingsSubmittingAction: 'two-factor-begin' | 'two-factor-confirm' | 'two-factor-disable' | 'business-location' | 'delete-account' | null;
   twoFactorDisableCode: string;
   twoFactorSetup: TwoFactorSetupResponse | null;
   twoFactorSetupCode: string;
@@ -175,8 +176,8 @@ function SecuritySettingsSection({
   onChangeTwoFactorSetupCode,
   onConfirmTwoFactorSetup,
   onDisableTwoFactor,
+  settingsSubmittingAction,
   session,
-  submitting,
   twoFactorDisableCode,
   twoFactorSetup,
   twoFactorSetupCode,
@@ -186,8 +187,8 @@ function SecuritySettingsSection({
   | 'onChangeTwoFactorSetupCode'
   | 'onConfirmTwoFactorSetup'
   | 'onDisableTwoFactor'
+  | 'settingsSubmittingAction'
   | 'session'
-  | 'submitting'
   | 'twoFactorDisableCode'
   | 'twoFactorSetup'
   | 'twoFactorSetupCode'
@@ -195,6 +196,10 @@ function SecuritySettingsSection({
   const [twoFactorQrMatrix, setTwoFactorQrMatrix] = useState<QrMatrix | null>(null);
   const [twoFactorQrLoadFailed, setTwoFactorQrLoadFailed] = useState(false);
   const [twoFactorKeyCopied, setTwoFactorKeyCopied] = useState(false);
+  const submitting = settingsSubmittingAction !== null;
+  const beginningTwoFactorSetup = settingsSubmittingAction === 'two-factor-begin';
+  const confirmingTwoFactorSetup = settingsSubmittingAction === 'two-factor-confirm';
+  const disablingTwoFactor = settingsSubmittingAction === 'two-factor-disable';
 
   async function handleOpenAuthenticatorApp() {
     if (!twoFactorSetup?.otpauth_url) {
@@ -273,7 +278,7 @@ function SecuritySettingsSection({
           <Text style={styles.dashboardSupportText}>Enter a current authenticator code to disable 2FA on this account.</Text>
           <TextInput keyboardType="number-pad" onChangeText={onChangeTwoFactorDisableCode} style={styles.profileInput} value={twoFactorDisableCode} />
           <Pressable onPress={onDisableTwoFactor} style={[styles.linkButtonSecondaryWide, submitting ? styles.linkButtonDisabled : null]}>
-            <Text style={styles.linkButtonSecondaryText}>{submitting ? 'Saving...' : 'Disable authenticator 2FA'}</Text>
+            <Text style={styles.linkButtonSecondaryText}>{disablingTwoFactor ? 'Saving...' : 'Disable authenticator 2FA'}</Text>
           </Pressable>
         </>
       ) : twoFactorSetup ? (
@@ -341,14 +346,14 @@ function SecuritySettingsSection({
           </View>
           <TextInput keyboardType="number-pad" onChangeText={onChangeTwoFactorSetupCode} style={styles.profileInput} value={twoFactorSetupCode} />
           <Pressable onPress={onConfirmTwoFactorSetup} style={[styles.linkButtonSecondaryWide, submitting ? styles.linkButtonDisabled : null]}>
-            <Text style={styles.linkButtonSecondaryText}>{submitting ? 'Saving...' : 'Confirm authenticator setup'}</Text>
+            <Text style={styles.linkButtonSecondaryText}>{confirmingTwoFactorSetup ? 'Saving...' : 'Confirm authenticator setup'}</Text>
           </Pressable>
         </>
       ) : (
         <>
           <Text style={styles.dashboardSupportText}>Set up an authenticator app to require a 6-digit verification code each time you sign in.</Text>
           <Pressable onPress={onBeginTwoFactorSetup} style={[styles.linkButtonSecondaryWide, submitting ? styles.linkButtonDisabled : null]}>
-            <Text style={styles.linkButtonSecondaryText}>{submitting ? 'Preparing...' : 'Set up authenticator app'}</Text>
+            <Text style={styles.linkButtonSecondaryText}>{beginningTwoFactorSetup ? 'Preparing...' : 'Set up authenticator app'}</Text>
           </Pressable>
         </>
       )}
@@ -1010,12 +1015,18 @@ export function AccountSettingsScreen({
   onDeleteAccount,
   onOpenPrivacyPolicy,
   onOpenTermsOfService,
+  pendingBusinessLocationTrackingEnabled,
   session,
-  submitting,
+  settingsSubmittingAction,
   twoFactorDisableCode,
   twoFactorSetup,
   twoFactorSetupCode,
 }: AccountSettingsScreenProps) {
+  const submitting = settingsSubmittingAction !== null;
+  const togglingBusinessLocation = settingsSubmittingAction === 'business-location';
+  const deletingAccount = settingsSubmittingAction === 'delete-account';
+  const displayedBusinessLocationTrackingEnabled = pendingBusinessLocationTrackingEnabled ?? !!session.business_location_tracking_enabled;
+
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
       <KeyboardAvoidingView
@@ -1056,8 +1067,8 @@ export function AccountSettingsScreen({
               onChangeTwoFactorSetupCode={onChangeTwoFactorSetupCode}
               onConfirmTwoFactorSetup={onConfirmTwoFactorSetup}
               onDisableTwoFactor={onDisableTwoFactor}
+              settingsSubmittingAction={settingsSubmittingAction}
               session={session}
-              submitting={submitting}
               twoFactorDisableCode={twoFactorDisableCode}
               twoFactorSetup={twoFactorSetup}
               twoFactorSetupCode={twoFactorSetupCode}
@@ -1073,12 +1084,12 @@ export function AccountSettingsScreen({
                   <View style={styles.settingsSwitchCluster}>
                     <View style={styles.settingsSwitchLabelGroup}>
                       <Text style={styles.dashboardDetailLabel}>Location services</Text>
-                      <Text style={styles.dashboardSupportText}>{session.business_location_tracking_enabled ? 'On' : 'Off'}</Text>
+                      <Text style={styles.dashboardSupportText}>{displayedBusinessLocationTrackingEnabled ? 'On' : 'Off'}</Text>
                     </View>
                     <Switch
                       disabled={submitting}
                       onValueChange={onToggleBusinessLocationTracking}
-                      value={!!session.business_location_tracking_enabled}
+                      value={displayedBusinessLocationTrackingEnabled}
                     />
                   </View>
                 </View>
@@ -1128,7 +1139,7 @@ export function AccountSettingsScreen({
               </View>
               <View style={styles.settingsItemActions}>
                 <Pressable onPress={onDeleteAccount} style={[styles.destructiveButton, styles.settingsInlineButton, submitting ? styles.linkButtonDisabled : null]}>
-                  <Text style={styles.destructiveButtonText}>{submitting ? 'Deleting account...' : 'Delete account'}</Text>
+                  <Text style={styles.destructiveButtonText}>{deletingAccount ? 'Deleting account...' : 'Delete account'}</Text>
                 </Pressable>
               </View>
             </View>

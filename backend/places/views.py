@@ -612,8 +612,16 @@ class BusinessLocationTrackingPreferenceView(generics.GenericAPIView):
 			return Response({'detail': 'Live location settings are only available for service area businesses.'}, status=status.HTTP_400_BAD_REQUEST)
 
 		profile = get_or_create_account_profile(request.user)
-		profile.business_location_tracking_enabled = serializer.validated_data['enabled']
+		enabled = serializer.validated_data['enabled']
+		profile.business_location_tracking_enabled = enabled
 		profile.save(update_fields=['business_location_tracking_enabled', 'updated_at'])
+
+		if not enabled:
+			snapshot.tracked_location_latitude = None
+			snapshot.tracked_location_longitude = None
+			snapshot.tracked_location_accuracy_meters = None
+			snapshot.tracked_location_updated_at = None
+			snapshot.save(update_fields=['tracked_location_latitude', 'tracked_location_longitude', 'tracked_location_accuracy_meters', 'tracked_location_updated_at', 'updated_at'])
 
 		return Response(build_account_response(request.user, 'business', token=request.auth))
 

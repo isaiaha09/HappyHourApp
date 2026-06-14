@@ -5272,6 +5272,45 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertTrue(response.data['auth_token'])
 
+	def test_login_allows_multiple_area_informal_vendor_without_city(self):
+		user = User.objects.create_user(username='mobile_vendor', email='mobile-vendor@example.com', password='test-pass-123')
+		AccountProfile.objects.create(user=user, email_verified_at=timezone.now())
+		snapshot = ListingSnapshot.objects.create(
+			name='Mobile Vendor',
+			city='',
+			venue_type=VenueType.FAST_FOOD,
+			address_line_1='Approximate live location',
+			serves_multiple_areas=True,
+			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=user,
+			listing_snapshot=snapshot,
+			pathway=BusinessClaim.Pathway.INFORMAL,
+			status=BusinessClaim.Status.APPROVED,
+			contact_name='Mobile Vendor',
+			work_email='mobile-vendor@example.com',
+			address_not_applicable=True,
+			serves_multiple_areas=True,
+			verification_summary='Approved multiple-area vendor.',
+		)
+		BusinessMembership.objects.create(user=user, claim=claim, is_active=True)
+
+		response = self.client.post(
+			reverse('profile-login'),
+			{
+				'portal': 'business',
+				'identifier': 'mobile_vendor',
+				'password': 'test-pass-123',
+			},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertTrue(response.data['auth_token'])
+		self.assertEqual(response.data['business_name'], 'Mobile Vendor')
+		self.assertTrue(response.data['business_location_tracking_available'])
+
 	def test_login_rejects_business_account_on_customer_portal(self):
 		user = User.objects.create_user(username='business_portal_only', email='business-portal@example.com', password='test-pass-123')
 		AccountProfile.objects.create(user=user, email_verified_at=timezone.now())
@@ -6198,6 +6237,10 @@ class ProfileDashboardApiTests(APITestCase):
 			city=City.VENTURA,
 			venue_type=VenueType.MOBILE,
 			address_line_1='Approximate live location',
+			tracked_location_latitude=34.2812,
+			tracked_location_longitude=-119.2944,
+			tracked_location_accuracy_meters=35.5,
+			tracked_location_updated_at=timezone.now(),
 		)
 		claim = BusinessClaim.objects.create(
 			claimant=self.user,
@@ -6220,10 +6263,22 @@ class ProfileDashboardApiTests(APITestCase):
 
 		self.assertEqual(response.status_code, 200)
 		self.profile.refresh_from_db()
+		snapshot.refresh_from_db()
 		self.assertFalse(self.profile.business_location_tracking_enabled)
+		self.assertIsNone(snapshot.tracked_location_latitude)
+		self.assertIsNone(snapshot.tracked_location_longitude)
+		self.assertIsNone(snapshot.tracked_location_accuracy_meters)
+		self.assertIsNone(snapshot.tracked_location_updated_at)
 		self.assertTrue(response.data['business_location_tracking_available'])
 		self.assertFalse(response.data['business_location_tracking_enabled'])
 		self.assertFalse(response.data['requires_business_location_tracking'])
+
+		payload = get_source_place_payload(snapshot.listing_slug)
+		self.assertIsNotNone(payload)
+		self.assertIsNone(payload['latitude'])
+		self.assertIsNone(payload['longitude'])
+		self.assertIsNone(payload['locations'][0]['latitude'])
+		self.assertIsNone(payload['locations'][0]['longitude'])
 
 	def test_resend_verification_email_sends_message(self):
 		response = self.client.post(reverse('profile-resend-verification'), {}, format='json', **self.auth_headers())

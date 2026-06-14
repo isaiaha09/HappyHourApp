@@ -138,6 +138,7 @@ const maxLatitudeDelta = 0.24;
 const maxLongitudeDelta = 0.32;
 const maxMapGestureDelta = Math.hypot(maxLatitudeDelta, maxLongitudeDelta);
 const mapFitPaddingFactor = 1.15;
+const shellFadeDurationMs = 360;
 const defaultMapRegion = {
   latitude: (mapAreaBounds.minLatitude + mapAreaBounds.maxLatitude) / 2,
   longitude: (mapAreaBounds.minLongitude + mapAreaBounds.maxLongitude) / 2,
@@ -173,6 +174,7 @@ type ClaimReturnDestination = 'business-search' | 'browse-map' | 'profiles';
 type MainShellScreen = 'browse' | 'profiles' | 'business-profile-editor' | 'settings' | 'support' | 'privacy-policy' | 'terms-of-service';
 type MainShellBottomNavItem = 'map' | 'profile' | 'more';
 type ShellFadeScope = 'browse' | 'profile';
+type SettingsSubmittingAction = 'two-factor-begin' | 'two-factor-confirm' | 'two-factor-disable' | 'business-location' | 'delete-account' | null;
 type CustomerBusinessClaimNotice = {
   businessName: string;
   locationLabel: string;
@@ -183,19 +185,25 @@ type UserCoordinates = {
   longitude: number;
 };
 
-type MappedPlace = PlaceListItem & {
-  latitude: number;
-  longitude: number;
+type MapPreviewPlace = PlaceListItem & {
   fullAddress: string;
   locationId: number;
+};
+
+type MapSearchResultPlace = MapPreviewPlace & {
+  markerKey: string | null;
+  resultKey: string;
+};
+
+type MappedPlace = MapPreviewPlace & {
+  latitude: number;
+  longitude: number;
   markerLatitude: number;
   markerLongitude: number;
   markerKey: string;
 };
 
-type BrowsePlace = PlaceListItem & {
-  fullAddress: string;
-  locationId: number;
+type BrowsePlace = MapPreviewPlace & {
   listKey: string;
 };
 
@@ -466,7 +474,8 @@ function AppScreen() {
   const [selectedPlaceSlug, setSelectedPlaceSlug] = useState<string | null>(null);
   const [selectedPlace, setSelectedPlace] = useState<PlaceDetail | null>(null);
   const [selectedMapPlaceKey, setSelectedMapPlaceKey] = useState<string | null>(null);
-  const [displayedMapPreviewPlace, setDisplayedMapPreviewPlace] = useState<MappedPlace | null>(null);
+  const [selectedMapSearchPreviewPlace, setSelectedMapSearchPreviewPlace] = useState<MapPreviewPlace | null>(null);
+  const [displayedMapPreviewPlace, setDisplayedMapPreviewPlace] = useState<MapPreviewPlace | null>(null);
   const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null);
   const [listLoading, setListLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -485,7 +494,7 @@ function AppScreen() {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [showMapResultsCard, setShowMapResultsCard] = useState(false);
   const [mapResultsCollapsed, setMapResultsCollapsed] = useState(false);
-  const [renderedMapSearchResults, setRenderedMapSearchResults] = useState<MappedPlace[]>([]);
+  const [renderedMapSearchResults, setRenderedMapSearchResults] = useState<MapSearchResultPlace[]>([]);
   const [renderedMapResultsKey, setRenderedMapResultsKey] = useState('');
   const [renderedMapResultCount, setRenderedMapResultCount] = useState(0);
   const [visibleMapResultCount, setVisibleMapResultCount] = useState(0);
@@ -510,6 +519,8 @@ function AppScreen() {
   const [emailVerificationCode, setEmailVerificationCode] = useState('');
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [dashboardSubmitting, setDashboardSubmitting] = useState(false);
+  const [settingsSubmittingAction, setSettingsSubmittingAction] = useState<SettingsSubmittingAction>(null);
+  const [pendingBusinessLocationTrackingEnabled, setPendingBusinessLocationTrackingEnabled] = useState<boolean | null>(null);
   const [deleteAccountPassword, setDeleteAccountPassword] = useState('');
   const [bottomMoreSheetVisible, setBottomMoreSheetVisible] = useState(false);
   const [shellFadeScope, setShellFadeScope] = useState<ShellFadeScope | null>(null);
@@ -610,6 +621,7 @@ function AppScreen() {
   const selectedMapPlace = selectedMapPlaceKey
     ? displayedMapPlaces.find((place) => place.markerKey === selectedMapPlaceKey) ?? null
     : null;
+  const activeMapPreviewPlace = selectedMapPlace ?? selectedMapSearchPreviewPlace;
   const displayedMapPreviewImageUrls = displayedMapPreviewPlace ? dedupeImageUrls(displayedMapPreviewPlace.image_urls) : [];
   const selectedPlaceLocation = getSelectedPlaceLocation(selectedPlace, selectedLocationId, selectedCity);
   const selectedPlaceDeals = selectedPlaceLocation?.deals ?? selectedPlace?.deals ?? [];
@@ -792,6 +804,8 @@ function AppScreen() {
             return;
           }
 
+          const approvedBusinessSlugs = new Set((currentSession.approved_businesses ?? []).map((business) => business.slug));
+
           const roundedLocationKey = `${coords.latitude.toFixed(4)}:${coords.longitude.toFixed(4)}`;
           if (businessLocationLastReportedRef.current === roundedLocationKey) {
             return;
@@ -806,6 +820,26 @@ function AppScreen() {
             });
             if (!cancelled) {
               setAuthenticatedSessionIfCurrentToken(currentSession.auth_token, response);
+              if (approvedBusinessSlugs.size > 0) {
+                setPlaces((current) => current.map((place) => applyTrackedCoordinatesToBusiness(
+                  place,
+                  approvedBusinessSlugs,
+                  coords.latitude,
+                  coords.longitude,
+                )));
+                setProfilePlaces((current) => current.map((place) => applyTrackedCoordinatesToBusiness(
+                  place,
+                  approvedBusinessSlugs,
+                  coords.latitude,
+                  coords.longitude,
+                )));
+                setSelectedPlace((current) => current ? applyTrackedCoordinatesToBusinessDetail(
+                  current,
+                  approvedBusinessSlugs,
+                  coords.latitude,
+                  coords.longitude,
+                ) : current);
+              }
             }
           } catch (error) {
             if (!cancelled) {
@@ -869,8 +903,8 @@ function AppScreen() {
     };
   }, [startupImagesReady]);
 
-  const mapSearchResultPool = normalizedSearchQuery.length ? mappedPlaces : [];
-  const mapSearchResultsKey = mapSearchResultPool.map((place) => place.markerKey).join('|');
+  const mapSearchResultPool = normalizedSearchQuery.length ? getMapSearchResults(filteredBrowseLocations) : [];
+  const mapSearchResultsKey = mapSearchResultPool.map((place) => place.resultKey).join('|');
   const bottomNavHeight = Math.max(insets.bottom + 76, 90);
   const mapOverlayBottomPadding = bottomNavHeight + 18;
   const floatingDashboardButtonOffset = bottomNavHeight + 16;
@@ -910,7 +944,7 @@ function AppScreen() {
     targetTransition.setValue(0);
     requestAnimationFrame(() => {
       Animated.timing(targetTransition, {
-        duration: 220,
+        duration: shellFadeDurationMs,
         easing: Easing.out(Easing.cubic),
         toValue: 1,
         useNativeDriver: true,
@@ -1190,6 +1224,12 @@ function AppScreen() {
       },
     ],
   };
+  const browseShellFadeMaskStyle = {
+    opacity: browseSceneTransition.interpolate({
+      inputRange: [0, 1],
+      outputRange: [1, 0],
+    }),
+  };
   const browseModeTransitionStyle = {
     opacity: browseModeTransition,
   };
@@ -1253,7 +1293,7 @@ function AppScreen() {
       }
     : null;
 
-  const shouldShowMapResults = showMapBrowse && !selectedMapPlace && normalizedSearchQuery.length > 0;
+  const shouldShowMapResults = showMapBrowse && !activeMapPreviewPlace && normalizedSearchQuery.length > 0;
   const isLandscape = width > height;
   const useWideLandscapeLayout = isLandscape && width >= 760;
   const browseListColumns = useWideLandscapeLayout ? 2 : 1;
@@ -1411,6 +1451,14 @@ function AppScreen() {
   }, [browseEntryOffset, browseSceneTransition, screenMode, selectedPlaceSlug]);
 
   useEffect(() => {
+    const shouldPreserveRenderedMapPins = !showMapBrowse && browseMode === 'map' && selectedPlaceSlug !== null;
+
+    if (shouldPreserveRenderedMapPins) {
+      mapPinsTransition.stopAnimation();
+      mapPinsTransition.setValue(1);
+      return;
+    }
+
     if (!showMapBrowse || listLoading) {
       if (renderedMappedPlaces.length || renderedMappedPlaceKey) {
         setRenderedMappedPlaces([]);
@@ -1443,7 +1491,7 @@ function AppScreen() {
         useNativeDriver: true,
       }).start();
     });
-  }, [listLoading, mapPinsTransition, mappedPlaceKey, mappedPlaces, normalizedSearchQuery.length, renderedMappedPlaceKey, renderedMappedPlaces.length, showMapBrowse]);
+  }, [browseMode, listLoading, mapPinsTransition, mappedPlaceKey, mappedPlaces, normalizedSearchQuery.length, renderedMappedPlaceKey, renderedMappedPlaces.length, selectedPlaceSlug, showMapBrowse]);
 
   function navigateScreen(
     nextScreen: AppScreenMode,
@@ -2148,6 +2196,23 @@ function AppScreen() {
   }, [displayedMapPlaces, selectedMapPlaceKey, showMapBrowse]);
 
   useEffect(() => {
+    if (!showMapBrowse || !selectedMapSearchPreviewPlace) {
+      if (!showMapBrowse && selectedMapSearchPreviewPlace !== null) {
+        setSelectedMapSearchPreviewPlace(null);
+      }
+      return;
+    }
+
+    const previewStillAvailable = filteredBrowseLocations.some(({ location, place }) => (
+      place.slug === selectedMapSearchPreviewPlace.slug && location.id === selectedMapSearchPreviewPlace.locationId
+    ));
+
+    if (!previewStillAvailable) {
+      setSelectedMapSearchPreviewPlace(null);
+    }
+  }, [filteredBrowseLocations, selectedMapSearchPreviewPlace, showMapBrowse]);
+
+  useEffect(() => {
     if (!showMapBrowse) {
       mapPreviewOpacity.stopAnimation();
       mapPreviewOpacity.setValue(0);
@@ -2157,8 +2222,8 @@ function AppScreen() {
       return;
     }
 
-    if (selectedMapPlace) {
-      setDisplayedMapPreviewPlace(selectedMapPlace);
+    if (activeMapPreviewPlace) {
+      setDisplayedMapPreviewPlace(activeMapPreviewPlace);
       mapPreviewOpacity.stopAnimation();
       mapPreviewOpacity.setValue(0);
       Animated.timing(mapPreviewOpacity, {
@@ -2179,13 +2244,13 @@ function AppScreen() {
       toValue: 0,
       useNativeDriver: true,
     }).start(({ finished }) => {
-      if (!finished || selectedMapPlace !== null) {
+      if (!finished || activeMapPreviewPlace !== null) {
         return;
       }
 
       setDisplayedMapPreviewPlace(null);
     });
-  }, [displayedMapPreviewPlace, mapPreviewOpacity, selectedMapPlace, showMapBrowse]);
+  }, [activeMapPreviewPlace, displayedMapPreviewPlace, mapPreviewOpacity, showMapBrowse]);
 
   useLayoutEffect(() => {
     if (!browseModeFadePendingRef.current) {
@@ -2353,17 +2418,11 @@ function AppScreen() {
     setSelectedPlaceSlug(null);
 
     if (screenMode === 'profiles' || screenMode === 'business-profile-editor') {
-      setProfileEntryOffset(0);
-      profileSceneTransition.stopAnimation();
-      profileSceneTransition.setValue(0);
-      requestAnimationFrame(() => {
-        Animated.timing(profileSceneTransition, {
-          duration: 220,
-          toValue: 1,
-          useNativeDriver: true,
-        }).start();
-      });
+      animateShellFade('profile');
+      return;
     }
+
+    animateShellFade('browse');
   }
 
   function fadeIntoProfileScreen(nextScreen: 'profiles' | 'business-profile-editor') {
@@ -3461,7 +3520,7 @@ function AppScreen() {
       return;
     }
 
-    setDashboardSubmitting(true);
+    setSettingsSubmittingAction('two-factor-begin');
     setProfileErrorMessage(null);
 
     try {
@@ -3472,7 +3531,7 @@ function AppScreen() {
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
     } finally {
-      setDashboardSubmitting(false);
+      setSettingsSubmittingAction(null);
     }
   }
 
@@ -3483,7 +3542,7 @@ function AppScreen() {
 
     const currentAuthToken = authenticatedSession.auth_token;
 
-    setDashboardSubmitting(true);
+    setSettingsSubmittingAction('two-factor-confirm');
     setProfileErrorMessage(null);
 
     try {
@@ -3495,7 +3554,7 @@ function AppScreen() {
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
     } finally {
-      setDashboardSubmitting(false);
+      setSettingsSubmittingAction(null);
     }
   }
 
@@ -3506,7 +3565,7 @@ function AppScreen() {
 
     const currentAuthToken = authenticatedSession.auth_token;
 
-    setDashboardSubmitting(true);
+    setSettingsSubmittingAction('two-factor-disable');
     setProfileErrorMessage(null);
 
     try {
@@ -3519,7 +3578,7 @@ function AppScreen() {
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
     } finally {
-      setDashboardSubmitting(false);
+      setSettingsSubmittingAction(null);
     }
   }
 
@@ -3529,20 +3588,28 @@ function AppScreen() {
     }
 
     const currentAuthToken = authenticatedSession.auth_token;
+    const approvedBusinessSlugs = new Set((authenticatedSession.approved_businesses ?? []).map((business) => business.slug));
 
-    setDashboardSubmitting(true);
+    setSettingsSubmittingAction('business-location');
+    setPendingBusinessLocationTrackingEnabled(enabled);
     setProfileErrorMessage(null);
 
     try {
       const response = await updateBusinessLocationTrackingPreference(apiBaseUrl, currentAuthToken, { enabled });
       setAuthenticatedSessionIfCurrentToken(currentAuthToken, response);
+      if (!enabled && approvedBusinessSlugs.size > 0) {
+        setPlaces((current) => current.map((place) => clearTrackedCoordinatesForBusiness(place, approvedBusinessSlugs)));
+        setProfilePlaces((current) => current.map((place) => clearTrackedCoordinatesForBusiness(place, approvedBusinessSlugs)));
+        setSelectedPlace((current) => current ? clearTrackedCoordinatesForBusinessDetail(current, approvedBusinessSlugs) : current);
+      }
       setProfileMessage(enabled
         ? 'Business location services turned on.'
         : 'Business location services turned off. Live pin updates have stopped.');
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
     } finally {
-      setDashboardSubmitting(false);
+      setPendingBusinessLocationTrackingEnabled(null);
+      setSettingsSubmittingAction(null);
     }
   }
 
@@ -3574,7 +3641,7 @@ function AppScreen() {
   }
 
   function handleDeleteAccount() {
-    if (!authenticatedSession?.auth_token || dashboardSubmitting) {
+    if (!authenticatedSession?.auth_token || settingsSubmittingAction !== null) {
       return;
     }
 
@@ -3591,7 +3658,7 @@ function AppScreen() {
       return;
     }
 
-    setDashboardSubmitting(true);
+    setSettingsSubmittingAction('delete-account');
     setProfileErrorMessage(null);
 
     try {
@@ -3608,7 +3675,7 @@ function AppScreen() {
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
     } finally {
-      setDashboardSubmitting(false);
+      setSettingsSubmittingAction(null);
     }
   }
 
@@ -3752,6 +3819,7 @@ function AppScreen() {
     }
 
     setSelectedMapPlaceKey(null);
+    setSelectedMapSearchPreviewPlace(null);
   }
 
   function handleSelectMapPin(placeKey: string) {
@@ -3759,14 +3827,27 @@ function AppScreen() {
     mapResultsOpacity.stopAnimation();
     mapResultsOpacity.setValue(1);
     setShowMapResultsCard(false);
+    setSelectedMapSearchPreviewPlace(null);
     setSelectedMapPlaceKey(placeKey);
   }
 
-  function handleFocusMapResult(place: MappedPlace) {
+  function handleFocusMapResult(place: MapSearchResultPlace) {
     invalidateMapResultsCardTransitions();
     mapResultsOpacity.stopAnimation();
     mapResultsOpacity.setValue(0);
     setShowMapResultsCard(false);
+
+    if (!place.markerKey || place.latitude === null || place.longitude === null) {
+      const nextRegion = clampRegionToBounds(defaultMapRegion);
+      setSelectedMapPlaceKey(null);
+      setSelectedMapSearchPreviewPlace(place);
+      mapRegionRef.current = nextRegion;
+      setMapRegion(nextRegion);
+      mapRef.current?.animateToRegion(nextRegion, 250);
+      return;
+    }
+
+    setSelectedMapSearchPreviewPlace(null);
     setSelectedMapPlaceKey(place.markerKey);
     const currentMapRegion = mapRegionRef.current;
     const nextRegion = clampRegionToBounds({
@@ -3865,8 +3946,9 @@ function AppScreen() {
             onOpenContactSupport={handleOpenSupport}
             onOpenPrivacyPolicy={handleOpenPrivacyPolicy}
             onOpenTermsOfService={handleOpenTermsOfService}
+            pendingBusinessLocationTrackingEnabled={pendingBusinessLocationTrackingEnabled}
             session={profileSession}
-            submitting={dashboardSubmitting}
+            settingsSubmittingAction={settingsSubmittingAction}
             twoFactorDisableCode={twoFactorDisableCode}
             twoFactorSetup={twoFactorSetup}
             twoFactorSetupCode={twoFactorSetupCode}
@@ -4071,6 +4153,9 @@ function AppScreen() {
             suppressTransitionOverlay: true,
           })}
         </Animated.View>
+        {!browseTransitionActive && showingBrowse && shellFadeScope === 'browse' ? (
+          <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, browseShellFadeMaskStyle]} />
+        ) : null}
         {overlayScreen ? (
           <Animated.View
             pointerEvents={incomingOnboardingScreen || returningToSplashScreen ? 'none' : 'auto'}
@@ -4159,6 +4244,9 @@ function AppScreen() {
             suppressTransitionOverlay: true,
           })}
         </Animated.View>
+        {!transitionActive && !showingProfile && shellFadeScope === 'browse' ? (
+          <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, browseShellFadeMaskStyle]} />
+        ) : null}
         {renderBottomNav({ guest: false })}
       </View>
     );
@@ -4562,6 +4650,9 @@ function AppScreen() {
 
                         <View style={styles.mapPreviewDetails}>
                           <Text style={[styles.mapPreviewDetailText, isLandscape ? styles.mapPreviewDetailTextLandscape : null]}>{displayedMapPreviewPlace.fullAddress}</Text>
+                          {displayedMapPreviewPlace.latitude === null || displayedMapPreviewPlace.longitude === null ? (
+                            <Text style={[styles.mapPreviewDetailText, isLandscape ? styles.mapPreviewDetailTextLandscape : null]}>Map pin unavailable right now.</Text>
+                          ) : null}
                           {displayedMapPreviewPlace.phone_number ? (
                             <Text style={[styles.mapPreviewDetailText, isLandscape ? styles.mapPreviewDetailTextLandscape : null]}>{displayedMapPreviewPlace.phone_number}</Text>
                           ) : null}
@@ -4662,17 +4753,17 @@ function AppScreen() {
                             >
                               {renderedMapSearchResults.map((place) => (
                                 <Pressable
-                                  key={place.markerKey}
+                                  key={place.resultKey}
                                   onPress={() => handleFocusMapResult(place)}
                                   style={styles.mapResultRow}
                                 >
                                   <View style={styles.mapResultCopy}>
                                     <Text numberOfLines={1} style={styles.mapResultTitle}>{place.name}</Text>
                                     <Text numberOfLines={2} style={styles.mapResultMeta}>
-                                      {place.venue_type_label} • {place.fullAddress}
+                                      {place.venue_type_label} • {place.fullAddress}{place.markerKey ? '' : ' • No map pin yet'}
                                     </Text>
                                   </View>
-                                  <Text style={styles.mapResultAction}>Focus</Text>
+                                  <Text style={styles.mapResultAction}>{place.markerKey ? 'Focus' : 'Preview'}</Text>
                                 </Pressable>
                               ))}
                             </ScrollView>
@@ -5237,6 +5328,88 @@ function getDistanceInMiles(
   return earthRadiusMiles * c;
 }
 
+function clearTrackedCoordinatesForBusiness(place: PlaceListItem, approvedBusinessSlugs: Set<string>): PlaceListItem {
+  if (!approvedBusinessSlugs.has(place.slug)) {
+    return place;
+  }
+
+  const nextLocations = getPlaceLocations(place).map((location) => ({
+    ...location,
+    latitude: null,
+    longitude: null,
+  }));
+
+  return {
+    ...place,
+    latitude: null,
+    longitude: null,
+    locations: nextLocations,
+  };
+}
+
+function clearTrackedCoordinatesForBusinessDetail(place: PlaceDetail, approvedBusinessSlugs: Set<string>): PlaceDetail {
+  if (!approvedBusinessSlugs.has(place.slug)) {
+    return place;
+  }
+
+  return {
+    ...place,
+    latitude: null,
+    longitude: null,
+    locations: place.locations.map((location) => ({
+      ...location,
+      latitude: null,
+      longitude: null,
+    })),
+  };
+}
+
+function applyTrackedCoordinatesToBusiness(
+  place: PlaceListItem,
+  approvedBusinessSlugs: Set<string>,
+  latitude: number,
+  longitude: number,
+): PlaceListItem {
+  if (!approvedBusinessSlugs.has(place.slug)) {
+    return place;
+  }
+
+  const nextLocations = getPlaceLocations(place).map((location) => ({
+    ...location,
+    latitude,
+    longitude,
+  }));
+
+  return {
+    ...place,
+    latitude,
+    longitude,
+    locations: nextLocations,
+  };
+}
+
+function applyTrackedCoordinatesToBusinessDetail(
+  place: PlaceDetail,
+  approvedBusinessSlugs: Set<string>,
+  latitude: number,
+  longitude: number,
+): PlaceDetail {
+  if (!approvedBusinessSlugs.has(place.slug)) {
+    return place;
+  }
+
+  return {
+    ...place,
+    latitude,
+    longitude,
+    locations: place.locations.map((location) => ({
+      ...location,
+      latitude,
+      longitude,
+    })),
+  };
+}
+
 function toRadians(value: number) {
   return value * (Math.PI / 180);
 }
@@ -5392,7 +5565,7 @@ function getMappedPlacesForBrowse(filteredLocations: Array<{ listKey: string; lo
         phone_number: location.phone_number,
         website_url: location.website_url,
         image_urls: location.image_urls,
-        fullAddress: formatPlaceAddress(location),
+        fullAddress: getMapPlaceFullAddress(location),
         locationId: location.id,
         markerLatitude: location.latitude,
         markerLongitude: location.longitude,
@@ -5401,6 +5574,29 @@ function getMappedPlacesForBrowse(filteredLocations: Array<{ listKey: string; lo
       },
     ];
   });
+}
+
+function getMapSearchResults(filteredLocations: Array<{ listKey: string; location: PlaceLocation; markerKey: string; place: PlaceListItem }>): MapSearchResultPlace[] {
+  return filteredLocations.map(({ listKey, location, markerKey, place }) => ({
+    ...place,
+    city: location.city,
+    city_label: location.city_label,
+    address_line_1: location.address_line_1,
+    address_line_2: location.address_line_2,
+    neighborhood: location.neighborhood,
+    state: location.state,
+    postal_code: location.postal_code,
+    latitude: location.latitude,
+    longitude: location.longitude,
+    phone_number: location.phone_number,
+    website_url: location.website_url,
+    image_urls: location.image_urls,
+    fullAddress: getMapPlaceFullAddress(location),
+    locationId: location.id,
+    markerKey: location.latitude !== null && location.longitude !== null ? markerKey : null,
+    resultKey: listKey,
+    locations: [location],
+  }));
 }
 
 function getBrowsePlacesForDisplay(filteredLocations: Array<{ listKey: string; location: PlaceLocation; place: PlaceListItem }>): BrowsePlace[] {
@@ -5418,11 +5614,22 @@ function getBrowsePlacesForDisplay(filteredLocations: Array<{ listKey: string; l
       phone_number: location.phone_number,
       website_url: location.website_url,
       image_urls: location.image_urls,
-      fullAddress: formatPlaceAddress(location),
+      fullAddress: getMapPlaceFullAddress(location),
       locationId: location.id,
       listKey,
       locations: [location],
     }));
+}
+
+function getMapPlaceFullAddress(location: PlaceLocation) {
+  const hasStreetAddress = Boolean(String(location.address_line_1 || '').trim() || String(location.address_line_2 || '').trim());
+  if (hasStreetAddress) {
+    return formatPlaceAddress(location);
+  }
+
+  return location.city_label
+    ? `No established address on file in ${location.city_label}`
+    : 'No established address on file';
 }
 
 function hasAnyMatchingWeekday(placeWeekdays: number[], selectedWeekdays: WeekdayFilterValue[]) {

@@ -1202,6 +1202,8 @@ def _profile_name_for_record(place_record):
 
 
 def _label_for_choice(choice_enum, value):
+	if value in (None, ''):
+		return ''
 	return choice_enum(value).label
 
 
