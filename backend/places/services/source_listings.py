@@ -547,7 +547,7 @@ def _build_snapshot_place_payload(claim, resolve_missing_coordinates=True):
 		website_url=website_url,
 		external_id=snapshot.external_id or snapshot.listing_slug or f'listing-snapshot-{snapshot.pk}',
 		source_name='claimed_business',
-		source_url=snapshot.source_url or website_url,
+		source_url=snapshot.source_url,
 	)
 	payload = _build_place_payload(place_record, resolve_missing_coordinates=should_resolve_coordinates)
 	if payload is not None:

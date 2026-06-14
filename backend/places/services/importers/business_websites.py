@@ -222,7 +222,16 @@ class BusinessWebsiteImporter(BaseHtmlImporter):
 
 	def _build_discovery_source(self, place_record):
 		website_url = self._normalized_http_url(getattr(place_record, 'website_url', ''))
-		if not website_url or not self._is_supported_discovery_website_url(website_url):
+		source_url = self._normalized_http_url(getattr(place_record, 'source_url', ''))
+		preferred_source_url = ''
+		if source_url and self._is_supported_discovery_website_url(source_url):
+			if not website_url or self._is_same_site_url(website_url, source_url):
+				preferred_source_url = source_url
+		if not preferred_source_url and source_url and self._is_allowed_third_party_discovery_source_url(source_url, website_url):
+			preferred_source_url = source_url
+		if not preferred_source_url and website_url and self._is_supported_discovery_website_url(website_url):
+			preferred_source_url = website_url
+		if not preferred_source_url:
 			return None
 		return {
 			'name': place_record.name,
@@ -238,8 +247,9 @@ class BusinessWebsiteImporter(BaseHtmlImporter):
 			'postal_code': place_record.postal_code,
 			'phone_number': place_record.phone_number,
 			'website_url': website_url,
-			'source_url': website_url,
-			'external_id': place_record.external_id or self._default_external_id(website_url),
+			'source_url': preferred_source_url,
+			'allow_fallback_promotion_paths': self._is_supported_discovery_website_url(preferred_source_url),
+			'external_id': place_record.external_id or self._default_external_id(preferred_source_url),
 		}
 
 	def _build_discovery_source_documents(self, source):
@@ -253,7 +263,14 @@ class BusinessWebsiteImporter(BaseHtmlImporter):
 			'soup': home_soup,
 		}]
 
-		for index, candidate_url in enumerate(self._discover_promotion_document_urls(home_soup, home_url), start=1):
+		for index, candidate_url in enumerate(
+			self._discover_promotion_document_urls(
+				home_soup,
+				home_url,
+				include_fallback_paths=bool(source.get('allow_fallback_promotion_paths', True)),
+			),
+			start=1,
+		):
 			document_format = self._normalize_document_format('', candidate_url)
 			try:
 				if document_format == 'pdf':
@@ -271,7 +288,7 @@ class BusinessWebsiteImporter(BaseHtmlImporter):
 
 		return documents
 
-	def _discover_promotion_document_urls(self, soup, home_url):
+	def _discover_promotion_document_urls(self, soup, home_url, include_fallback_paths=True):
 		candidates = {}
 		max_links = max(0, getattr(settings, 'DISCOVERY_WEBSITE_MAX_PROMO_LINKS', 4))
 		for node in soup.select('a[href]'):
@@ -295,9 +312,10 @@ class BusinessWebsiteImporter(BaseHtmlImporter):
 			if existing is None or score > existing['score']:
 				candidates[candidate_url] = {'url': candidate_url, 'score': score}
 
-		for candidate_url in self._fallback_promotion_document_urls(home_url):
-			if candidate_url not in candidates:
-				candidates[candidate_url] = {'url': candidate_url, 'score': self._promotion_link_score('', candidate_url)}
+		if include_fallback_paths:
+			for candidate_url in self._fallback_promotion_document_urls(home_url):
+				if candidate_url not in candidates:
+					candidates[candidate_url] = {'url': candidate_url, 'score': self._promotion_link_score('', candidate_url)}
 
 		ranked_candidates = sorted(candidates.values(), key=lambda candidate: (-candidate['score'], candidate['url']))
 		return [candidate['url'] for candidate in ranked_candidates[:max_links]]
@@ -362,6 +380,22 @@ class BusinessWebsiteImporter(BaseHtmlImporter):
 			return False
 		return True
 
+	def _is_allowed_third_party_discovery_source_url(self, source_url, website_url=''):
+		normalized_source_url = self._normalized_http_url(source_url)
+		if not normalized_source_url:
+			return False
+
+		normalized_website_url = self._normalized_http_url(website_url)
+		if normalized_website_url and self._is_supported_discovery_website_url(normalized_website_url):
+			return False
+
+		parsed = urlparse(normalized_source_url)
+		host = parsed.netloc.lower().removeprefix('www.')
+		path = (parsed.path or '').lower()
+		if host != 'yelp.com' and not host.endswith('.yelp.com'):
+			return False
+		return path.startswith('/biz/')
+
 	def _with_discovery_enrichment_status(self, place_record, status):
 		setattr(place_record, 'discovery_enrichment_status', status)
 		return place_record
@@ -370,6 +404,7 @@ class BusinessWebsiteImporter(BaseHtmlImporter):
 		cache_input = '|'.join([
 			str(place_record.external_id or ''),
 			str(place_record.website_url or ''),
+			str(place_record.source_url or ''),
 			str(place_record.city or ''),
 			str(place_record.name or ''),
 		])

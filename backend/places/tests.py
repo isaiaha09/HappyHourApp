@@ -1555,6 +1555,52 @@ class BusinessWebsiteImporterTests(TestCase):
 		self.assertGreaterEqual(len(enriched_record.deals), 1)
 		self.assertIn('https://fallback-bistro.example.com/happy-hour', session.calls)
 
+	def test_importer_uses_source_url_as_discovery_scrape_source_when_supported(self):
+		home_html = """
+		<html>
+			<body>
+				<a href="happy-hour">Happy Hour</a>
+			</body>
+		</html>
+		"""
+		deal_html = """
+		<html>
+			<body>
+				<section>Happy Hour Monday-Friday 3pm to 6pm. $6 cocktails.</section>
+			</body>
+		</html>
+		"""
+
+		class StubSession:
+			def __init__(self):
+				self.calls = []
+
+			def get(self, url, headers=None, timeout=None):
+				self.calls.append(url)
+				if url.endswith('/specials/happy-hour'):
+					return StubResponse(deal_html)
+				return StubResponse(home_html)
+
+		session = StubSession()
+		importer = BusinessWebsiteImporter(session=session, business_sources=[])
+		place_record = ImportedPlace(
+			name='Split URL Bistro',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='123 Main St',
+			website_url='https://public.example.com/split-url-bistro',
+			source_name='here_places',
+			source_url='https://public.example.com/specials/',
+		)
+
+		enriched_record = importer.enrich_place_record(place_record)
+
+		self.assertGreaterEqual(len(enriched_record.deals), 1)
+		self.assertIn('https://public.example.com/specials/', session.calls)
+		self.assertIn('https://public.example.com/specials/happy-hour', session.calls)
+		self.assertNotIn('https://public.example.com/split-url-bistro', session.calls)
+		self.assertEqual(enriched_record.website_url, 'https://public.example.com/split-url-bistro')
+
 	def test_importer_skips_discovery_enrichment_without_http_website(self):
 		importer = BusinessWebsiteImporter(business_sources=[])
 		place_record = ImportedPlace(
@@ -1590,6 +1636,66 @@ class BusinessWebsiteImporterTests(TestCase):
 
 		self.assertEqual(getattr(enriched_record, 'discovery_enrichment_status', ''), 'blocked_url')
 		self.assertEqual(enriched_record, place_record)
+
+	def test_importer_allows_yelp_business_source_url_when_no_supported_website_exists(self):
+		html = """
+		<html>
+			<body>
+				<section class="promo">Happy Hour Monday-Friday 3pm to 6pm. $5 margaritas and $2 off tacos.</section>
+			</body>
+		</html>
+		"""
+
+		class StubSession:
+			def __init__(self):
+				self.calls = []
+
+			def get(self, url, headers=None, timeout=None):
+				self.calls.append(url)
+				return StubResponse(html)
+
+		session = StubSession()
+		importer = BusinessWebsiteImporter(session=session, business_sources=[])
+		place_record = ImportedPlace(
+			name='Yelp Bistro',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='123 Main St',
+			website_url='',
+			source_name='here_places',
+			source_url='https://www.yelp.com/biz/yelp-bistro-ventura',
+		)
+
+		enriched_record = importer.enrich_place_record(place_record)
+
+		self.assertGreaterEqual(len(enriched_record.deals), 1)
+		self.assertEqual(getattr(enriched_record, 'discovery_enrichment_status', ''), 'auto_confirmed')
+		self.assertEqual(session.calls, ['https://www.yelp.com/biz/yelp-bistro-ventura'])
+
+	def test_importer_keeps_preferring_supported_first_party_website_over_yelp_source_url(self):
+		class StubSession:
+			def __init__(self):
+				self.calls = []
+
+			def get(self, url, headers=None, timeout=None):
+				self.calls.append(url)
+				return StubResponse('<html><body>Welcome.</body></html>')
+
+		session = StubSession()
+		importer = BusinessWebsiteImporter(session=session, business_sources=[])
+		place_record = ImportedPlace(
+			name='First Party Bistro',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='123 Main St',
+			website_url='https://firstparty.example.com/menu',
+			source_name='here_places',
+			source_url='https://www.yelp.com/biz/first-party-bistro-ventura',
+		)
+
+		importer.enrich_place_record(place_record)
+
+		self.assertEqual(session.calls[0], 'https://firstparty.example.com/menu')
 
 	@override_settings(DISCOVERY_WEBSITE_FALLBACK_PATHS=('/happy-hour',))
 	def test_importer_marks_discovery_place_as_auto_no_evidence_when_no_deals_found(self):
@@ -7142,7 +7248,7 @@ class ListingSnapshotAdminTests(TestCase):
 			self.assertEqual(snapshot.operating_hour_overrides[0]['weekday'], Weekday.MONDAY)
 
 	@override_settings(DISCOVERY_JSON_PATH='')
-	def test_pull_all_business_data_view_prefers_snapshot_website_for_enrichment(self):
+	def test_pull_all_business_data_view_keeps_snapshot_website_public_without_overwriting_source_url(self):
 		with TemporaryDirectory() as temp_dir:
 			json_path = Path(temp_dir) / 'discovered_places.json'
 			ListingSnapshot.objects.create(
@@ -7170,7 +7276,7 @@ class ListingSnapshotAdminTests(TestCase):
 			def assert_enrichment_input(place_records):
 				place_records = list(place_records)
 				self.assertEqual(place_records[0].website_url, 'https://admin.example.com/pulled-tacos')
-				self.assertEqual(place_records[0].source_url, 'https://admin.example.com/pulled-tacos')
+				self.assertEqual(place_records[0].source_url, 'https://discover.search.hereapi.com/v1/discover')
 				return place_records
 
 			with override_settings(DISCOVERY_JSON_PATH=json_path), patch.object(HerePlacesImporter, 'load_records', return_value=[place_record]), patch.object(BusinessWebsiteImporter, 'enrich_place_records', side_effect=assert_enrichment_input), patch('places.admin.load_source_records', return_value=[place_record]):
@@ -7424,7 +7530,7 @@ class ListingSnapshotAdminTests(TestCase):
 			self.assertEqual(snapshot.operating_hour_overrides[0]['weekday'], Weekday.MONDAY)
 
 	@override_settings(DISCOVERY_JSON_PATH='')
-	def test_pull_business_data_view_prefers_snapshot_website_for_enrichment(self):
+	def test_pull_business_data_view_keeps_snapshot_website_public_and_snapshot_source_for_enrichment(self):
 		with TemporaryDirectory() as temp_dir:
 			json_path = Path(temp_dir) / 'discovered_places.json'
 			snapshot = ListingSnapshot.objects.create(
@@ -7433,6 +7539,7 @@ class ListingSnapshotAdminTests(TestCase):
 				venue_type=VenueType.BAR,
 				address_line_1='2855 Johnson Dr',
 				website_url='https://admin.example.com/cronies',
+				source_url='https://admin.example.com/cronies/menu',
 			)
 			place_record = ImportedPlace(
 				name='Cronies Sports Grill',
@@ -7448,7 +7555,7 @@ class ListingSnapshotAdminTests(TestCase):
 
 			def assert_enrichment_input(record):
 				self.assertEqual(record.website_url, 'https://admin.example.com/cronies')
-				self.assertEqual(record.source_url, 'https://admin.example.com/cronies')
+				self.assertEqual(record.source_url, 'https://admin.example.com/cronies/menu')
 				return record
 
 			with override_settings(DISCOVERY_JSON_PATH=json_path), patch.object(HerePlacesImporter, 'load_records_for_search', return_value=[place_record]), patch.object(BusinessWebsiteImporter, 'enrich_place_record', side_effect=assert_enrichment_input):
@@ -7480,7 +7587,7 @@ class ListingSnapshotAdminTests(TestCase):
 			)
 
 			def assert_enrichment_input(record):
-				self.assertEqual(record.website_url, 'https://admin.example.com/cronies-source')
+				self.assertEqual(record.website_url, 'https://wrong.example.com/cronies')
 				self.assertEqual(record.source_url, 'https://admin.example.com/cronies-source')
 				return record
 
@@ -7629,7 +7736,7 @@ class ListingSnapshotAdminTests(TestCase):
 			self.assertEqual(snapshot.deal_overrides[0]['title'], 'Admin Deal')
 			self.assertEqual(snapshot.operating_hour_overrides[0]['weekday'], Weekday.MONDAY)
 
-	def test_get_queryset_excludes_non_public_manual_submissions(self):
+	def test_get_queryset_includes_admin_created_manual_submissions_but_excludes_unmanaged_claim_submissions(self):
 		public_snapshot = ListingSnapshot.objects.create(
 			name='Pulled Place',
 			city=City.VENTURA,
@@ -7637,12 +7744,29 @@ class ListingSnapshotAdminTests(TestCase):
 			address_line_1='123 Main St',
 			source_name='here_places',
 		)
-		manual_snapshot = ListingSnapshot.objects.create(
-			name='Draft Manual Place',
+		manual_claim_snapshot = ListingSnapshot.objects.create(
+			name='Draft Manual Claim Place',
 			city=City.OXNARD,
 			venue_type=VenueType.RESTAURANT,
 			address_line_1='456 Harbor Blvd',
 			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+		)
+		manual_admin_snapshot = ListingSnapshot.objects.create(
+			name='Draft Manual Admin Place',
+			city=City.OXNARD,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='457 Harbor Blvd',
+			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+		)
+		manual_claim_user = User.objects.create_user(username='draft_manual_owner', email='draft-manual@example.com', password='test-pass-123')
+		BusinessClaim.objects.create(
+			claimant=manual_claim_user,
+			listing_snapshot=manual_claim_snapshot,
+			pathway=BusinessClaim.Pathway.ESTABLISHED,
+			status=BusinessClaim.Status.UNDER_REVIEW,
+			contact_name='Draft Owner',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='draft-manual@example.com',
 		)
 		approved_manual_snapshot = ListingSnapshot.objects.create(
 			name='Approved Manual Place',
@@ -7667,7 +7791,8 @@ class ListingSnapshotAdminTests(TestCase):
 		queryset = self.admin.get_queryset(self._build_request('/admin/places/listingsnapshot/'))
 
 		self.assertIn(public_snapshot, queryset)
-		self.assertNotIn(manual_snapshot, queryset)
+		self.assertNotIn(manual_claim_snapshot, queryset)
+		self.assertIn(manual_admin_snapshot, queryset)
 		self.assertIn(approved_manual_snapshot, queryset)
 
 	def test_listing_snapshot_changelist_can_filter_managed_businesses(self):

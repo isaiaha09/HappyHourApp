@@ -20,6 +20,24 @@ The app is meant to help users find:
 - daily specials
 - limited-time discounts
 
+## URL Field Behavior
+
+For business listing data, the backend treats `source_url` and `website_url` as different roles:
+
+- `source_url`: enrichment/scraping source URL used by pull actions to fetch/update business details (deals, hours, images, and related extracted fields)
+- `website_url`: public website URL shown and opened in the app business profile
+
+When running admin pull actions (single-business pull or pull-all):
+
+- enrichment tries to use `source_url` first when it is valid for discovery enrichment
+- if `source_url` is not usable, enrichment falls back to `website_url` when `website_url` is usable
+- imported values only fill whichever role is blank in the snapshot; they do not collapse both fields into one value
+
+Yelp exception:
+
+- if there is no usable first-party `website_url`, a Yelp business profile `source_url` (for example `/biz/...`) can be used as the enrichment source
+- if a usable first-party `website_url` exists, that first-party website is still preferred over Yelp for enrichment
+
 For the initial launch, I am keeping the scope small on purpose and only targeting these cities in the 805 area:
 
 - Ventura

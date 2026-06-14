@@ -574,14 +574,14 @@ def _sync_listing_snapshot_from_imported_place(place_record, snapshot=None):
 		'phone_number': place_record.phone_number,
 		'website_url': place_record.website_url,
 		'source_name': place_record.source_name,
-		'source_url': place_record.source_url or place_record.website_url,
+		'source_url': place_record.source_url,
 		'external_id': place_record.external_id,
 		'listing_slug': _build_listing_slug(place_record),
 	}
 	if existing_snapshot is not None and not str(defaults['website_url'] or '').strip():
 		defaults['website_url'] = existing_snapshot.website_url
 	if existing_snapshot is not None and not str(defaults['source_url'] or '').strip():
-		defaults['source_url'] = existing_snapshot.source_url or existing_snapshot.website_url
+		defaults['source_url'] = existing_snapshot.source_url
 	if existing_snapshot is not None and existing_snapshot.website_url_suppressed:
 		defaults['website_url'] = ''
 	normalized_contact_channels = normalize_business_contact_channels(
@@ -622,7 +622,7 @@ def _sync_listing_snapshot_from_imported_place(place_record, snapshot=None):
 		if not str(defaults['website_url'] or '').strip():
 			defaults['website_url'] = existing_snapshot.website_url
 		if not str(defaults['source_url'] or '').strip():
-			defaults['source_url'] = existing_snapshot.source_url or existing_snapshot.website_url
+			defaults['source_url'] = existing_snapshot.source_url
 		if existing_snapshot.website_url_suppressed:
 			defaults['website_url'] = ''
 		_apply_non_destructive_snapshot_defaults(existing_snapshot, defaults)
@@ -746,19 +746,21 @@ def _snapshot_match_score(snapshot, place_record):
 	return score
 
 
-def _preferred_snapshot_enrichment_url(snapshot):
-	for candidate in (snapshot.website_url, snapshot.source_url):
-		resolved = str(candidate or '').strip()
-		if resolved:
-			return resolved
-	return ''
+def _preferred_snapshot_enrichment_source_url(snapshot):
+	return str(snapshot.source_url or '').strip()
 
 
 def _apply_snapshot_enrichment_url_override(snapshot, place_record):
-	preferred_url = _preferred_snapshot_enrichment_url(snapshot)
-	if not preferred_url:
+	overrides = {}
+	preferred_website_url = str(snapshot.website_url or '').strip()
+	preferred_source_url = _preferred_snapshot_enrichment_source_url(snapshot)
+	if preferred_website_url:
+		overrides['website_url'] = preferred_website_url
+	if preferred_source_url:
+		overrides['source_url'] = preferred_source_url
+	if not overrides:
 		return place_record
-	return replace(place_record, website_url=preferred_url, source_url=preferred_url)
+	return replace(place_record, **overrides)
 
 
 def _find_best_matching_snapshot(place_record, snapshots):
@@ -1107,6 +1109,7 @@ class ListingSnapshotAdmin(admin.ModelAdmin):
 		queryset = super().get_queryset(request)
 		return queryset.filter(
 			~Q(source_name=BusinessClaim.MANUAL_SOURCE_NAME)
+			| Q(business_claims__isnull=True)
 			| Q(business_claims__membership__is_active=True)
 		).distinct()
 
