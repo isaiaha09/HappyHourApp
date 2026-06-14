@@ -1,4 +1,4 @@
-import { memo, startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, startTransition, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -559,6 +559,8 @@ function AppScreen() {
   const appStateRef = useRef(AppState.currentState);
   const shouldUseNativeMapBoundaries = false;
   const normalizedSearchQuery = normalizeSearchText(searchQuery);
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const normalizedDeferredSearchQuery = normalizeSearchText(deferredSearchQuery);
   const onboardingTransitionDuration = 480;
   const showTransitionMapBrowse = browseProfileTransitionFrom !== null
     && incomingBrowseProfileScreen !== null
@@ -577,7 +579,7 @@ function AppScreen() {
   const filteredPlaces = useMemo(() => getFilteredPlaces(places, {
     confirmedDealsOnly,
     informalBusinessesOnly,
-    searchQuery: normalizedSearchQuery,
+    searchQuery: normalizedDeferredSearchQuery,
     selectedCity,
     selectedDealDays,
     selectedOperatingDays,
@@ -586,7 +588,7 @@ function AppScreen() {
   }), [
     confirmedDealsOnly,
     informalBusinessesOnly,
-    normalizedSearchQuery,
+    normalizedDeferredSearchQuery,
     places,
     selectedCity,
     selectedDealDays,
@@ -597,14 +599,14 @@ function AppScreen() {
   const filteredPlaceKey = useMemo(() => filteredPlaces.map((place) => place.id).join('|'), [filteredPlaces]);
   const filteredBrowseLocations = useMemo(() => getFilteredBrowseLocations(filteredPlaces, {
     confirmedDealsOnly,
-    searchQuery: normalizedSearchQuery,
+    searchQuery: normalizedDeferredSearchQuery,
     selectedCity,
     selectedDealDays,
     selectedOperatingDays,
   }), [
     confirmedDealsOnly,
     filteredPlaces,
-    normalizedSearchQuery,
+    normalizedDeferredSearchQuery,
     selectedCity,
     selectedDealDays,
     selectedOperatingDays,
@@ -614,7 +616,11 @@ function AppScreen() {
   const mappedPlaces = useMemo(() => (showMapBrowse ? getMappedPlacesForBrowse(filteredBrowseLocations) : []), [filteredBrowseLocations, showMapBrowse]);
   const browseResultCount = displayedBrowsePlaces.length;
   const mappedPlaceKey = useMemo(() => mappedPlaces.map((place) => place.markerKey).join('|'), [mappedPlaces]);
-  const displayedMapPlaces = showMapBrowse ? renderedMappedPlaces : [];
+  const displayedMapPlaces = showMapBrowse
+    ? normalizedDeferredSearchQuery.length > 0
+      ? mappedPlaces
+      : renderedMappedPlaces
+    : [];
   const unplacedPlaceCount = useMemo(() => filteredPlaces.filter((place) => (
     !getPlaceLocations(place).some((location) => location.latitude !== null && location.longitude !== null)
   )).length, [filteredPlaces]);
@@ -903,7 +909,7 @@ function AppScreen() {
     };
   }, [startupImagesReady]);
 
-  const mapSearchResultPool = normalizedSearchQuery.length ? getMapSearchResults(filteredBrowseLocations) : [];
+  const mapSearchResultPool = normalizedDeferredSearchQuery.length ? getMapSearchResults(filteredBrowseLocations) : [];
   const mapSearchResultsKey = mapSearchResultPool.map((place) => place.resultKey).join('|');
   const bottomNavHeight = Math.max(insets.bottom + 76, 90);
   const mapOverlayBottomPadding = bottomNavHeight + 18;
@@ -1293,7 +1299,7 @@ function AppScreen() {
       }
     : null;
 
-  const shouldShowMapResults = showMapBrowse && !activeMapPreviewPlace && normalizedSearchQuery.length > 0;
+  const shouldShowMapResults = showMapBrowse && !activeMapPreviewPlace && normalizedDeferredSearchQuery.length > 0;
   const isLandscape = width > height;
   const useWideLandscapeLayout = isLandscape && width >= 760;
   const browseListColumns = useWideLandscapeLayout ? 2 : 1;
@@ -1473,7 +1479,7 @@ function AppScreen() {
       return;
     }
 
-    if (normalizedSearchQuery.length > 0) {
+    if (normalizedDeferredSearchQuery.length > 0) {
       pendingImmediateMapPinsRefreshRef.current = false;
       return;
     }
@@ -1491,7 +1497,7 @@ function AppScreen() {
         useNativeDriver: true,
       }).start();
     });
-  }, [browseMode, listLoading, mapPinsTransition, mappedPlaceKey, mappedPlaces, normalizedSearchQuery.length, renderedMappedPlaceKey, renderedMappedPlaces.length, selectedPlaceSlug, showMapBrowse]);
+  }, [browseMode, listLoading, mapPinsTransition, mappedPlaceKey, mappedPlaces, normalizedDeferredSearchQuery.length, renderedMappedPlaceKey, renderedMappedPlaces.length, selectedPlaceSlug, showMapBrowse]);
 
   function navigateScreen(
     nextScreen: AppScreenMode,
@@ -2014,7 +2020,7 @@ function AppScreen() {
     if (shouldSkipBrowseMapAutoFit({
       listLoading,
       mappedPlaceCount: mappedPlaces.length,
-      normalizedSearchQuery,
+      normalizedSearchQuery: normalizedDeferredSearchQuery,
       showMapBrowse,
     })) {
       clearAutoFitMapRegionTimer();
@@ -2037,8 +2043,8 @@ function AppScreen() {
       ));
       mapRef.current?.animateToRegion(boundedRegion, 220);
       autoFitMapRegionTimeoutRef.current = null;
-    }, normalizedSearchQuery.length > 0 ? 140 : 0);
-  }, [filteredPlaceKey, listLoading, mappedPlaces.length, normalizedSearchQuery.length, selectedCity, showMapBrowse]);
+    }, normalizedDeferredSearchQuery.length > 0 ? 140 : 0);
+  }, [filteredPlaceKey, listLoading, mappedPlaces.length, normalizedDeferredSearchQuery.length, selectedCity, showMapBrowse]);
 
   useEffect(() => {
     if (!showMapBrowse) {
