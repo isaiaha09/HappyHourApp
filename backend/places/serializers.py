@@ -729,7 +729,7 @@ class EstablishedBusinessSignupSerializer(CustomerSignupSerializer):
 			serves_multiple_areas=serves_multiple_areas,
 			website_url=validated_data.pop('business_website_url', ''),
 			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
-			external_id=f'manual-{slugify(validated_data.get("username", "business"))}',
+			external_id=f'user-{slugify(validated_data.get("username", "business")).replace("_", "-")}',
 		)
 
 		claim_data = {

@@ -127,6 +127,13 @@ def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_
 			continue
 		payloads_by_slug[snapshot_payload['slug']] = _merge_claimed_snapshot_payload(existing_payload, snapshot_payload)
 
+	for snapshot in _get_unclaimed_manual_admin_snapshots():
+		manual_payload = _build_manual_admin_snapshot_payload(snapshot, resolve_missing_coordinates=resolve_missing_coordinates)
+		if manual_payload is None:
+			continue
+		if manual_payload['slug'] not in payloads_by_slug:
+			payloads_by_slug[manual_payload['slug']] = manual_payload
+
 	payloads = []
 	for payload in payloads_by_slug.values():
 		if has_deals is True and not payload['has_deals']:
@@ -151,7 +158,7 @@ def _get_listing_snapshot_override_payloads():
 	queryset = (
 		ListingSnapshot.objects
 		.exclude(listing_slug='')
-		.exclude(source_name=BusinessClaim.MANUAL_SOURCE_NAME)
+		.exclude(source_name__in=(BusinessClaim.ADMIN_SOURCE_NAME, *BusinessClaim.USER_SOURCE_NAMES))
 		.order_by('-updated_at', '-pk')
 	)
 	for snapshot in queryset:
@@ -463,6 +470,79 @@ def _build_grouped_place_payload(place_records, preferred_city=None, resolve_mis
 		'deals': grouped_deals,
 		'locations': location_payloads,
 	}
+
+
+def _get_unclaimed_manual_admin_snapshots():
+	claimed_snapshot_ids = set(
+		BusinessClaim.objects
+		.exclude(status=BusinessClaim.Status.REJECTED)
+		.values_list('listing_snapshot_id', flat=True)
+	)
+	return (
+		ListingSnapshot.objects
+		.filter(source_name=BusinessClaim.ADMIN_SOURCE_NAME)
+		.exclude(listing_slug='')
+		.exclude(pk__in=claimed_snapshot_ids)
+		.order_by('name', 'city', 'pk')
+	)
+
+
+def _build_manual_admin_snapshot_payload(snapshot, resolve_missing_coordinates=True):
+	is_live_location_business = snapshot.venue_type == VenueType.MOBILE or snapshot.serves_multiple_areas
+	should_resolve_coordinates = resolve_missing_coordinates and not is_live_location_business
+	normalized_social_profiles = normalize_social_profiles(
+		snapshot.social_profiles,
+		fallback_website_url=snapshot.website_url,
+		fallback_social_links=snapshot.social_media_links,
+	)
+	place_record = ImportedPlace(
+		name=snapshot.name,
+		profile_name=snapshot.name,
+		profile_slug=snapshot.listing_slug,
+		city=snapshot.city,
+		venue_type=snapshot.venue_type,
+		address_line_1=snapshot.address_line_1,
+		address_line_2=snapshot.address_line_2,
+		neighborhood=snapshot.neighborhood,
+		state=snapshot.state,
+		postal_code=snapshot.postal_code,
+		latitude=snapshot.tracked_location_latitude if is_live_location_business else None,
+		longitude=snapshot.tracked_location_longitude if is_live_location_business else None,
+		phone_number=snapshot.phone_number,
+		website_url=snapshot.website_url,
+		external_id=snapshot.external_id or snapshot.listing_slug or f'listing-snapshot-{snapshot.pk}',
+		source_name=BusinessClaim.ADMIN_SOURCE_NAME,
+		source_url=snapshot.source_url,
+	)
+	payload = _build_place_payload(place_record, resolve_missing_coordinates=should_resolve_coordinates)
+	if payload is None:
+		return None
+	payload['is_claimed'] = False
+	payload['is_informal'] = False
+	payload['social_profiles'] = normalized_social_profiles
+	payload['social_media_links'] = build_social_media_links(normalized_social_profiles)
+	normalized_deal_overrides = _normalize_structured_override_value(
+		snapshot.deal_overrides, cleared=bool(getattr(snapshot, 'deal_overrides_cleared', False))
+	)
+	normalized_operating_hour_overrides = _normalize_structured_override_value(
+		snapshot.operating_hour_overrides, cleared=bool(getattr(snapshot, 'operating_hour_overrides_cleared', False))
+	)
+	override_payload = {
+		'deal_overrides': normalized_deal_overrides,
+		'deal_overrides_cleared': bool(getattr(snapshot, 'deal_overrides_cleared', False)),
+		'operating_hour_overrides': normalized_operating_hour_overrides,
+		'operating_hour_overrides_cleared': bool(getattr(snapshot, 'operating_hour_overrides_cleared', False)),
+		'website_url': snapshot.website_url,
+		'phone_number': snapshot.phone_number,
+	}
+	_apply_claim_structured_overrides(
+		payload,
+		None,
+		payload_namespace=snapshot.listing_slug or f'manual-{snapshot.pk}',
+		source_payload=override_payload,
+		apply_source_address_overrides=False,
+	)
+	return payload
 
 
 def _get_active_business_claims():

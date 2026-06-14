@@ -189,6 +189,18 @@ class ListingSnapshot(models.Model):
 		if not self.listing_slug:
 			city_part = self.city or 'unknown'
 			self.listing_slug = slugify(f'{self.name}-{city_part}')
+		source_name = str(self.source_name or '').strip().lower()
+		external_id = str(self.external_id or '').strip()
+		if source_name.startswith('admin'):
+			if not external_id:
+				external_id = self.listing_slug or f'listing-snapshot-{self.pk or "new"}'
+			normalized_external_id = external_id.lower()
+			if normalized_external_id.startswith('manual-'):
+				external_id = f"admin-{external_id[len('manual-'):]}"
+				normalized_external_id = external_id.lower()
+			if not normalized_external_id.startswith(('admin-', 'admin:', 'admin_')):
+				external_id = f'admin-{external_id}'
+			self.external_id = external_id
 		super().save(*args, **kwargs)
 
 
@@ -257,7 +269,10 @@ class ProviderUsageWindow(models.Model):
 
 
 class BusinessClaim(models.Model):
+	ADMIN_SOURCE_NAME = 'admin_submission'
 	MANUAL_SOURCE_NAME = 'manual_submission'
+	LEGACY_SELF_SERVICE_SOURCE_NAME = 'manual_submission_self_service'
+	USER_SOURCE_NAMES = (MANUAL_SOURCE_NAME, LEGACY_SELF_SERVICE_SOURCE_NAME)
 	MULTIPLE_AREAS_VALUE = 'multiple_areas'
 
 	class ProfileEntryKind(models.TextChoices):
@@ -603,7 +618,7 @@ class BusinessClaim(models.Model):
 				if not getattr(self, field_name):
 					missing_fields.append(field_name)
 
-			is_manual_submission = self.listing_snapshot.source_name == self.MANUAL_SOURCE_NAME
+			is_manual_submission = self.listing_snapshot.source_name in self.USER_SOURCE_NAMES
 			if self.pathway in {self.Pathway.CLAIMED, self.Pathway.ESTABLISHED}:
 				for field_name in ['contact_name', 'work_email', 'work_phone']:
 					if not getattr(self, field_name):

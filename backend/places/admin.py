@@ -448,6 +448,7 @@ class ListingSnapshotAdminForm(forms.ModelForm):
 		self.fields['deal_overrides'].help_text = 'Optional deal overrides for this unclaimed business. Paste valid JSON, or plain text blocks with title on the first line, optional price on the second line, and optional description after that.'
 		self.fields['deal_overrides'].help_text = 'Add multiple deals by separating them with a blank line. Supported plain-text lines: Title, Type, Price, Description, Terms, and Happy hour: Monday 3:00 PM - 6:00 PM.'
 		self.fields['operating_hour_overrides'].help_text = 'Optional operating-hour overrides. Paste valid JSON, or one line per day like Monday: 11:00 AM - 9:00 PM or Monday: Open 24 hours.'
+		self.fields['external_id'].help_text = 'Staff/superusers: when Source name starts with admin, save will normalize this to an admin-prefixed external ID (for example admin-camarillo-premium-outlets).'
 		self.fields['deal_overrides'].widget.attrs.update({
 			'class': 'vLargeTextField structured-admin-source-field',
 			'data-structured-editor': 'deals',
@@ -1108,8 +1109,10 @@ class ListingSnapshotAdmin(admin.ModelAdmin):
 	def get_queryset(self, request):
 		queryset = super().get_queryset(request)
 		return queryset.filter(
-			~Q(source_name=BusinessClaim.MANUAL_SOURCE_NAME)
-			| Q(business_claims__isnull=True)
+			(
+				~Q(source_name__in=(BusinessClaim.ADMIN_SOURCE_NAME, *BusinessClaim.USER_SOURCE_NAMES))
+				| Q(source_name=BusinessClaim.ADMIN_SOURCE_NAME, business_claims__isnull=True)
+			)
 			| Q(business_claims__membership__is_active=True)
 		).distinct()
 
@@ -1143,7 +1146,11 @@ class ListingSnapshotAdmin(admin.ModelAdmin):
 
 	def _run_pull_all_business_data(self, request):
 		discovery_records = filter_deleted_business_records(list(HerePlacesImporter().load_records()))
-		existing_snapshots = list(ListingSnapshot.objects.exclude(source_name=BusinessClaim.MANUAL_SOURCE_NAME).order_by('-updated_at', '-pk'))
+		existing_snapshots = list(
+			ListingSnapshot.objects
+			.exclude(source_name__in=(BusinessClaim.ADMIN_SOURCE_NAME, *BusinessClaim.USER_SOURCE_NAMES))
+			.order_by('-updated_at', '-pk')
+		)
 		discovery_records = [
 			_apply_snapshot_enrichment_url_override(snapshot, place_record)
 			if snapshot is not None else place_record

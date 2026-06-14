@@ -2751,6 +2751,33 @@ class SourceListingIdentityTests(TestCase):
 
 	@patch('places.services.source_listings._get_place_coordinates')
 	@patch('places.services.source_listings.load_source_records')
+	def test_public_place_payload_includes_unclaimed_admin_manual_submission_in_app_feed(self, mock_load_source_records, mock_get_place_coordinates):
+		mock_get_place_coordinates.return_value = (34.2783, -119.2931)
+		mock_load_source_records.return_value = []
+		ListingSnapshot.objects.create(
+			name='Ventura Harbor Village',
+			listing_slug='ventura-harbor-village-ventura',
+			city=City.VENTURA,
+			venue_type=VenueType.ATTRACTION,
+			address_line_1='1583 Spinnaker Dr',
+			state='CA',
+			postal_code='93001',
+			phone_number='805-477-0470',
+			website_url='https://www.venturaharborvillage.com/',
+			source_name=BusinessClaim.ADMIN_SOURCE_NAME,
+			external_id='manual-attraction-ventura-ventura-harbor-village',
+		)
+
+		payload = get_source_place_payload('ventura-harbor-village-ventura')
+
+		self.assertIsNotNone(payload)
+		self.assertEqual(payload['name'], 'Ventura Harbor Village')
+		self.assertEqual(payload['venue_type'], VenueType.ATTRACTION)
+		self.assertFalse(payload['is_claimed'])
+		self.assertEqual(payload['website_url'], 'https://www.venturaharborvillage.com/')
+
+	@patch('places.services.source_listings._get_place_coordinates')
+	@patch('places.services.source_listings.load_source_records')
 	def test_public_place_payload_applies_unclaimed_listing_snapshot_website_override_when_snapshot_slug_differs(self, mock_load_source_records, mock_get_place_coordinates):
 		mock_get_place_coordinates.return_value = (34.21681, -119.04423)
 		mock_load_source_records.return_value = [
@@ -4589,6 +4616,7 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertTrue(claim.address_not_applicable)
 		self.assertTrue(claim.serves_multiple_areas)
 		self.assertEqual(claim.listing_snapshot.source_name, BusinessClaim.MANUAL_SOURCE_NAME)
+		self.assertEqual(claim.listing_snapshot.external_id, 'user-new-bistro-owner')
 		self.assertEqual(claim.listing_snapshot.address_line_1, 'Approximate live location')
 
 	@override_settings(
@@ -6901,6 +6929,40 @@ class ListingSnapshotAdminTests(TestCase):
 		self.assertEqual(snapshot.website_url, '')
 		self.assertTrue(snapshot.website_url_suppressed)
 
+	def test_admin_source_snapshot_auto_prefixes_external_id(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Admin Spot',
+			city=City.VENTURA,
+			venue_type=VenueType.CAFE,
+			address_line_1='123 Main St',
+			source_name=BusinessClaim.ADMIN_SOURCE_NAME,
+			external_id='my-manual-id',
+		)
+
+		self.assertEqual(snapshot.external_id, 'admin-my-manual-id')
+
+		snapshot_without_external_id = ListingSnapshot.objects.create(
+			name='Admin Spot 2',
+			city=City.OXNARD,
+			venue_type=VenueType.CAFE,
+			address_line_1='456 Harbor Blvd',
+			source_name=BusinessClaim.ADMIN_SOURCE_NAME,
+			external_id='',
+		)
+
+		self.assertTrue(snapshot_without_external_id.external_id.startswith('admin-'))
+
+		snapshot_with_manual_prefix = ListingSnapshot.objects.create(
+			name='Admin Spot 3',
+			city=City.CAMARILLO,
+			venue_type=VenueType.CAFE,
+			address_line_1='789 Ventura Blvd',
+			source_name=BusinessClaim.ADMIN_SOURCE_NAME,
+			external_id='manual-camarillo-premium-outlets',
+		)
+
+		self.assertEqual(snapshot_with_manual_prefix.external_id, 'admin-camarillo-premium-outlets')
+
 	def test_sync_listing_snapshot_does_not_refill_suppressed_website_url(self):
 		snapshot = ListingSnapshot.objects.create(
 			name='No Website Cafe',
@@ -7756,7 +7818,7 @@ class ListingSnapshotAdminTests(TestCase):
 			city=City.OXNARD,
 			venue_type=VenueType.RESTAURANT,
 			address_line_1='457 Harbor Blvd',
-			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+			source_name=BusinessClaim.ADMIN_SOURCE_NAME,
 		)
 		manual_claim_user = User.objects.create_user(username='draft_manual_owner', email='draft-manual@example.com', password='test-pass-123')
 		BusinessClaim.objects.create(
