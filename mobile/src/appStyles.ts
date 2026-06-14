@@ -2302,6 +2302,7 @@ export const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     gap: 10,
+    marginTop: 18,
     padding: 14,
   },
   claimBusinessHint: {

@@ -483,6 +483,7 @@ function AppScreen() {
   const [guestBrowseModeLocked, setGuestBrowseModeLocked] = useState(false);
   const [showGuestFavoritePrompt, setShowGuestFavoritePrompt] = useState(false);
   const [showGuestBusinessClaimPrompt, setShowGuestBusinessClaimPrompt] = useState(false);
+  const [showGuestAccuracyPrompt, setShowGuestAccuracyPrompt] = useState(false);
   const [showGuestBottomNavPrompt, setShowGuestBottomNavPrompt] = useState(false);
   const [showCustomerBusinessClaimPrompt, setShowCustomerBusinessClaimPrompt] = useState(false);
   const [customerBusinessClaimNotice, setCustomerBusinessClaimNotice] = useState<CustomerBusinessClaimNotice | null>(null);
@@ -2706,6 +2707,10 @@ function AppScreen() {
     setShowGuestFavoritePrompt(false);
   }
 
+  function handleDismissGuestAccuracyPrompt() {
+    setShowGuestAccuracyPrompt(false);
+  }
+
   function handleDismissGuestBottomNavPrompt() {
     setShowGuestBottomNavPrompt(false);
   }
@@ -2729,6 +2734,20 @@ function AppScreen() {
     setSelectedPlaceSlug(null);
     setSelectedLocationId(null);
     handleOpenProfiles();
+  }
+
+  function handleCreateCustomerAccountFromGuestAccuracy() {
+    setShowGuestAccuracyPrompt(false);
+    setSelectedPlaceSlug(null);
+    setSelectedLocationId(null);
+    handleOpenProfiles();
+  }
+
+  function handleCreateBusinessAccountFromGuestAccuracy() {
+    setShowGuestAccuracyPrompt(false);
+    setSelectedPlaceSlug(null);
+    setSelectedLocationId(null);
+    handleOpenBusinessSearch();
   }
 
   function handleBackFromProfiles() {
@@ -2777,6 +2796,35 @@ function AppScreen() {
     } finally {
       setProfileSubmitting(false);
     }
+  }
+
+  async function handleSubmitPlaceAccuracyReport(subject: string, message: string) {
+    if (!authenticatedSession?.auth_token) {
+      throw new Error('Sign in to report business profile updates.');
+    }
+
+    if (!selectedPlace) {
+      throw new Error('Open a business profile again before sending this report.');
+    }
+
+    const locationLabel = selectedPlaceLocation
+      ? `${selectedPlaceLocation.city_label} - ${formatPlaceAddress(selectedPlaceLocation)}`
+      : formatPlaceAddress(selectedPlace);
+    const contextualMessage = [
+      `Business: ${selectedPlace.name}`,
+      `Slug: ${selectedPlace.slug}`,
+      `Location: ${locationLabel}`,
+      '',
+      message.trim(),
+    ].join('\n');
+
+    const response = await submitSupportRequest(apiBaseUrl, authenticatedSession.auth_token, {
+      portal: authenticatedSession.portal,
+      subject: `Business profile accuracy: ${subject}`,
+      message: contextualMessage,
+    });
+
+    return response.detail;
   }
 
   function handleOpenSettings() {
@@ -4931,6 +4979,7 @@ function AppScreen() {
           <SafeAreaView edges={['left', 'right', 'bottom']} style={styles.safeArea}>
             <PlaceDetailScreen
               backButtonLabel={screenMode === 'profiles' || screenMode === 'business-profile-editor' ? 'Back to Profile' : 'Back to Places'}
+              canSubmitPlaceAccuracyReport={!!authenticatedSession?.auth_token}
               detailLoading={detailLoading}
               errorMessage={errorMessage}
               favoriteHelperText={favoriteHelperText}
@@ -4940,7 +4989,9 @@ function AppScreen() {
               onBack={handleBackToBrowse}
               onClaimBusiness={handleOpenBusinessClaimFromPlaceDetail}
               onEditBusinessProfile={handleOpenBusinessProfileEditor}
+              onRequirePlaceAccuracyAccount={() => setShowGuestAccuracyPrompt(true)}
               onSelectLocation={setSelectedLocationId}
+              onSubmitPlaceAccuracyReport={(subject, message) => handleSubmitPlaceAccuracyReport(subject, message)}
               onToggleFavorite={() => void handleToggleFavoriteBusiness()}
               showClaimBusinessControl={showClaimBusinessControl}
               showEditBusinessProfileControl={selectedPlaceIsOwnedByAuthenticatedBusiness}
@@ -5062,6 +5113,32 @@ function AppScreen() {
               </Pressable>
               <Pressable onPress={handleCreateCustomerAccountFromGuestFavorite} style={styles.guestFavoriteModalPrimaryButton}>
                 <Text style={styles.guestFavoriteModalPrimaryText}>Create free customer account</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      <Modal
+        animationType="fade"
+        onRequestClose={handleDismissGuestAccuracyPrompt}
+        transparent
+        visible={showGuestAccuracyPrompt}
+      >
+        <View style={styles.guestFavoriteModalBackdrop}>
+          <View style={styles.guestFavoriteModalCard}>
+            <Pressable accessibilityLabel="Close account prompt" onPress={handleDismissGuestAccuracyPrompt} style={styles.guestBottomNavCloseButton}>
+              <Text style={styles.guestBottomNavCloseButtonText}>X</Text>
+            </Pressable>
+            <Text style={styles.guestFavoriteModalTitle}>Create an account to report business profile updates</Text>
+            <Text style={styles.guestFavoriteModalText}>
+              Sign in or create an account to send profile accuracy updates so the team can follow up and review your submission.
+            </Text>
+            <View style={styles.guestFavoriteModalActions}>
+              <Pressable onPress={handleCreateCustomerAccountFromGuestAccuracy} style={styles.guestFavoriteModalPrimaryButton}>
+                <Text style={styles.guestFavoriteModalPrimaryText}>Customer</Text>
+              </Pressable>
+              <Pressable onPress={handleCreateBusinessAccountFromGuestAccuracy} style={styles.guestFavoriteModalSecondaryButton}>
+                <Text style={styles.guestFavoriteModalSecondaryText}>Business</Text>
               </Pressable>
             </View>
           </View>

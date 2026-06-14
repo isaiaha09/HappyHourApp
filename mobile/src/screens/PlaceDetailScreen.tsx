@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Image, Linking, Pressable, ScrollView, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { ActivityIndicator, Image, Keyboard, Linking, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
 
@@ -12,9 +12,12 @@ import type { Deal, HappyHourWindow, OperatingHourWindow, PlaceDetail, PlaceLoca
 
 export type PlaceDetailScreenProps = {
   backButtonLabel?: string;
+  canSubmitPlaceAccuracyReport?: boolean;
   distanceLabel?: string | null;
   onEditBusinessProfile?: () => void;
   onClaimBusiness?: () => void;
+  onRequirePlaceAccuracyAccount?: () => void;
+  onSubmitPlaceAccuracyReport?: (subject: string, message: string) => Promise<string>;
   showClaimBusinessControl?: boolean;
   showEditBusinessProfileControl?: boolean;
   detailLoading: boolean;
@@ -35,9 +38,12 @@ export type PlaceDetailScreenProps = {
 
 export function PlaceDetailScreen({
   backButtonLabel = 'Back to Places',
+  canSubmitPlaceAccuracyReport = true,
   distanceLabel = null,
   onEditBusinessProfile,
   onClaimBusiness,
+  onRequirePlaceAccuracyAccount,
+  onSubmitPlaceAccuracyReport,
   showClaimBusinessControl = false,
   showEditBusinessProfileControl = false,
   detailLoading,
@@ -58,6 +64,14 @@ export function PlaceDetailScreen({
   const insets = useSafeAreaInsets();
   const [photoLightboxVisible, setPhotoLightboxVisible] = useState(false);
   const [photoLightboxIndex, setPhotoLightboxIndex] = useState(0);
+  const [accuracyModalVisible, setAccuracyModalVisible] = useState(false);
+  const [accuracySuccessModalVisible, setAccuracySuccessModalVisible] = useState(false);
+  const [selectedAccuracySubject, setSelectedAccuracySubject] = useState<string>('hours');
+  const [customAccuracySubject, setCustomAccuracySubject] = useState('');
+  const [accuracyMessage, setAccuracyMessage] = useState('');
+  const [accuracySubmitting, setAccuracySubmitting] = useState(false);
+  const [accuracyErrorMessage, setAccuracyErrorMessage] = useState<string | null>(null);
+  const [accuracySuccessMessage, setAccuracySuccessMessage] = useState<string | null>(null);
   const selectedPlaceMapRegion = getPlacePreviewRegion(selectedPlaceLocation ?? selectedPlace);
   const showVerifiedBadge = !!selectedPlace?.is_claimed;
   const selectedPlaceImageUrls = dedupeImageUrls([
@@ -66,6 +80,94 @@ export function PlaceDetailScreen({
   ]);
   const socialButtons = selectedPlace ? getSocialProfilesForDisplay(selectedPlace.social_profiles) : [];
   const hasWebsiteSocialButton = socialButtons.some((profile) => profile.platform === 'website');
+  const accuracySubjectOptions = useMemo(() => ([
+    { label: 'Address or pin', value: 'address-or-pin' },
+    { label: 'Hours of operation', value: 'hours' },
+    { label: 'Phone number', value: 'phone' },
+    { label: 'Website or social links', value: 'website-social' },
+    { label: 'Deals or specials', value: 'deals' },
+    { label: 'Photos', value: 'photos' },
+    { label: 'Business details', value: 'business-details' },
+    { label: 'Other', value: 'other' },
+  ]), []);
+  const resolvedAccuracySubject = selectedAccuracySubject === 'other'
+    ? customAccuracySubject.trim()
+    : accuracySubjectOptions.find((option) => option.value === selectedAccuracySubject)?.label ?? '';
+
+  function handleOpenAccuracyModal() {
+    setAccuracyModalVisible(true);
+    setAccuracyErrorMessage(null);
+    setAccuracySuccessMessage(null);
+    setAccuracySuccessModalVisible(false);
+  }
+
+  function handleCloseAccuracyModal() {
+    if (accuracySubmitting) {
+      return;
+    }
+
+    setAccuracyModalVisible(false);
+    setAccuracyErrorMessage(null);
+  }
+
+  function handleAccuracyModalBackdropPress() {
+    if (accuracySubmitting) {
+      return;
+    }
+
+    Keyboard.dismiss();
+  }
+
+  function handleCloseAccuracySuccessModal() {
+    setAccuracySuccessModalVisible(false);
+  }
+
+  async function handleSubmitAccuracyReport() {
+    if (!canSubmitPlaceAccuracyReport) {
+      Keyboard.dismiss();
+      setAccuracyErrorMessage(null);
+      setAccuracyModalVisible(false);
+      onRequirePlaceAccuracyAccount?.();
+      return;
+    }
+
+    if (!onSubmitPlaceAccuracyReport) {
+      setAccuracyErrorMessage('This report form is not available right now. Close and reopen the business profile and try again.');
+      return;
+    }
+
+    const nextSubject = resolvedAccuracySubject;
+    const nextMessage = accuracyMessage.trim();
+
+    if (!nextSubject.length) {
+      setAccuracyErrorMessage('Choose what needs to be updated. If you select Other, enter a subject.');
+      return;
+    }
+
+    if (!nextMessage.length) {
+      setAccuracyErrorMessage('Explain what is wrong with the business profile before sending your report.');
+      return;
+    }
+
+    Keyboard.dismiss();
+    setAccuracySubmitting(true);
+    setAccuracyErrorMessage(null);
+    setAccuracySuccessMessage(null);
+
+    try {
+      const detail = await onSubmitPlaceAccuracyReport(nextSubject, nextMessage);
+      setAccuracySuccessMessage(detail);
+      setAccuracyModalVisible(false);
+      setAccuracySuccessModalVisible(true);
+      setAccuracyMessage('');
+      setCustomAccuracySubject('');
+      setSelectedAccuracySubject('hours');
+    } catch (error) {
+      setAccuracyErrorMessage(error instanceof Error ? error.message : 'Unable to send your report right now.');
+    } finally {
+      setAccuracySubmitting(false);
+    }
+  }
 
   function handleOpenPhotoLightbox(index: number) {
     setPhotoLightboxIndex(index);
@@ -319,9 +421,113 @@ export function PlaceDetailScreen({
                 <Text style={styles.detailMeta}>{selectedPlace.supporting_details}</Text>
               </>
             ) : null}
+
+            <View style={styles.dashboardCalloutCard}>
+              <Text style={styles.dashboardSupportText}>
+                Spot a missing detail or outdated information? Send a quick correction request for this business profile.
+              </Text>
+              <Pressable onPress={handleOpenAccuracyModal} style={styles.linkButtonSecondaryWide}>
+                <Text style={styles.linkButtonSecondaryText}>Report a business profile update</Text>
+              </Pressable>
+            </View>
           </View>
         ) : null}
       </ScrollView>
+      <Modal animationType="fade" onRequestClose={handleCloseAccuracyModal} transparent visible={accuracyModalVisible}>
+        <Pressable onPress={handleAccuracyModalBackdropPress} style={styles.guestFavoriteModalBackdrop}>
+          <View style={[styles.guestFavoriteModalCard, { maxHeight: '84%' }]}> 
+            <Pressable onPress={handleCloseAccuracyModal} style={styles.guestBottomNavCloseButton}>
+              <Text style={styles.guestBottomNavCloseButtonText}>×</Text>
+            </Pressable>
+            <Text style={styles.guestFavoriteModalTitle}>Report profile accuracy</Text>
+            <Text style={styles.guestFavoriteModalText}>
+              Choose the detail that needs to be fixed, then explain exactly what should be added or changed.
+            </Text>
+
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <View style={styles.profileFormSection}>
+                <Text style={styles.profileFieldLabel}>What needs to be updated?</Text>
+                <View style={styles.filterRow}>
+                  {accuracySubjectOptions.map((option) => {
+                    const isActive = option.value === selectedAccuracySubject;
+
+                    return (
+                      <Pressable
+                        key={option.value}
+                        onPress={() => {
+                          setSelectedAccuracySubject(option.value);
+                          setAccuracyErrorMessage(null);
+                        }}
+                        style={[styles.filterChip, isActive ? styles.filterChipActive : null]}
+                      >
+                        <Text style={[styles.filterChipText, isActive ? styles.filterChipTextActive : null]}>{option.label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                {selectedAccuracySubject === 'other' ? (
+                  <>
+                    <Text style={styles.profileFieldLabel}>Subject</Text>
+                    <TextInput
+                      onChangeText={(value) => {
+                        setCustomAccuracySubject(value);
+                        setAccuracyErrorMessage(null);
+                      }}
+                      placeholder="What needs to be added or changed?"
+                      placeholderTextColor="#9a7f6c"
+                      style={styles.profileInput}
+                      value={customAccuracySubject}
+                    />
+                  </>
+                ) : null}
+
+                <Text style={styles.profileFieldLabel}>What is wrong with the business profile?</Text>
+                <TextInput
+                  multiline
+                  numberOfLines={7}
+                  onChangeText={(value) => {
+                    setAccuracyMessage(value);
+                    setAccuracyErrorMessage(null);
+                  }}
+                  placeholder="Explain what is incorrect, missing, or outdated."
+                  placeholderTextColor="#9a7f6c"
+                  style={[styles.profileInput, styles.supportMessageInput]}
+                  textAlignVertical="top"
+                  value={accuracyMessage}
+                />
+
+                <Text style={styles.profileSupportText}>
+                  Include any corrected hours, links, phone numbers, addresses, or missing details you want the team to review.
+                </Text>
+                {accuracyErrorMessage ? <Text style={styles.errorText}>{accuracyErrorMessage}</Text> : null}
+              </View>
+            </ScrollView>
+
+            <View style={styles.guestFavoriteModalActions}>
+              <Pressable onPress={handleCloseAccuracyModal} style={styles.guestFavoriteModalSecondaryButton}>
+                <Text style={styles.guestFavoriteModalSecondaryText}>Cancel</Text>
+              </Pressable>
+              <Pressable onPress={() => void handleSubmitAccuracyReport()} style={[styles.guestFavoriteModalPrimaryButton, accuracySubmitting ? styles.linkButtonDisabled : null]}>
+                {accuracySubmitting ? <ActivityIndicator color="#fffaf4" /> : <Text style={styles.guestFavoriteModalPrimaryText}>Send update request</Text>}
+              </Pressable>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
+      <Modal animationType="fade" onRequestClose={handleCloseAccuracySuccessModal} transparent visible={accuracySuccessModalVisible}>
+        <View style={styles.guestFavoriteModalBackdrop}>
+          <View style={styles.guestFavoriteModalCard}>
+            <Pressable onPress={handleCloseAccuracySuccessModal} style={styles.guestBottomNavCloseButton}>
+              <Text style={styles.guestBottomNavCloseButtonText}>×</Text>
+            </Pressable>
+            <Text style={styles.guestFavoriteModalTitle}>Update request sent</Text>
+            <Text style={styles.guestFavoriteModalText}>
+              {accuracySuccessMessage ?? 'Your message has been sent to Dining Deals support.'}
+            </Text>
+          </View>
+        </View>
+      </Modal>
       <PhotoLightbox
         imageUrls={selectedPlaceImageUrls}
         initialIndex={photoLightboxIndex}
