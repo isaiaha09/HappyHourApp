@@ -611,6 +611,9 @@ class BusinessWebsiteImporter(BaseHtmlImporter):
 			for node in soup.select('img, source'):
 				self._append_node_image_candidates(candidates, node, page_url, source='node')
 
+			for node in soup.select('[style*="background-image"], [data-bg], [data-background], [data-background-image], [poster]'):
+				self._append_node_image_candidates(candidates, node, page_url, source='node', score_bonus=6)
+
 		ranked_candidates = sorted(
 			candidates.values(),
 			key=lambda candidate: (-candidate['score'], candidate['order'], candidate['url']),
@@ -622,7 +625,7 @@ class BusinessWebsiteImporter(BaseHtmlImporter):
 		if not self._is_likely_preview_image_node(node, context):
 			return
 
-		for attribute in ['src', 'data-src', 'data-original', 'srcset', 'data-srcset']:
+		for attribute in ['src', 'data-src', 'data-original', 'srcset', 'data-srcset', 'data-bg', 'data-background', 'data-background-image', 'data-lazy-src', 'poster']:
 			value = node.get(attribute, '')
 			if not value:
 				continue
@@ -633,6 +636,10 @@ class BusinessWebsiteImporter(BaseHtmlImporter):
 						self._append_image_candidate(candidates, parts[0], page_url, source=source, context=context, score_bonus=score_bonus)
 			else:
 				self._append_image_candidate(candidates, value, page_url, source=source, context=context, score_bonus=score_bonus)
+
+		style_value = node.get('style', '')
+		for style_match in re.findall(r'background-image\s*:\s*url\(([^)]+)\)', style_value, re.I):
+			self._append_image_candidate(candidates, style_match.strip(' \"\''), page_url, source=source, context=context, score_bonus=score_bonus)
 
 	def _append_image_candidate(self, candidates, candidate_url, page_url, source='node', context='', score_bonus=0):
 		resolved_url = self._resolve_image_url(candidate_url, page_url)
@@ -669,7 +676,12 @@ class BusinessWebsiteImporter(BaseHtmlImporter):
 		value = candidate_url.lower()
 		if any(token in value for token in ['logo', 'icon', 'sprite', 'favicon', 'avatar']):
 			return False
-		if value.endswith('.svg'):
+		if any(token in value for token in ['transparent_placeholder', 'placeholder.png', 'blank.gif', 'qrcode', 'url-preview-background']):
+			return False
+		if any(value.endswith(extension) for extension in ['.svg', '.mp4', '.mov', '.m4v', '.webm', '.pdf']):
+			return False
+		path = (parsed.path or '').strip().lower().rstrip('/')
+		if path in {'', '/m', '/menu', '/menus', '/order', '/locations'}:
 			return False
 		return True
 

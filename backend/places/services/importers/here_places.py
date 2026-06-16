@@ -396,12 +396,21 @@ class HerePlacesImporter:
 		web_entries = first_contact.get('www') or []
 		phone_number = str(phone_entries[0].get('value') if phone_entries else '').strip()
 		website_url = str(web_entries[0].get('value') if web_entries else '').strip()
+		house_number = str(address.get('houseNumber') or '').strip()
+		street_name = str(address.get('street') or '').strip()
+		address_label = str(address.get('label') or '').strip()
+		label_first_segment = str(address_label.split(',')[0] or '').strip()
+		full_street_address = ' '.join(part for part in [house_number, street_name] if part).strip()
+		if full_street_address and label_first_segment.lower().startswith(full_street_address.lower()):
+			resolved_address_line_1 = label_first_segment
+		else:
+			resolved_address_line_1 = full_street_address or address_label
 
 		return ImportedPlace(
 			name=name,
 			city=city,
 			venue_type=venue_type,
-			address_line_1=str(address.get('street') or address.get('label') or '').strip(),
+			address_line_1=resolved_address_line_1,
 			neighborhood=str(address.get('district') or '').strip(),
 			state=str(address.get('stateCode') or 'CA').strip() or 'CA',
 			postal_code=str(address.get('postalCode') or '').strip(),

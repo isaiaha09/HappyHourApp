@@ -3,7 +3,7 @@ from datetime import timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from io import StringIO
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.admin import helpers
@@ -1781,6 +1781,49 @@ class BusinessWebsiteImporterTests(TestCase):
 		self.assertEqual(records[0].postal_code, '93036')
 		self.assertEqual(records[0].phone_number, '(805)555-0101')
 
+	def test_here_importer_combines_house_number_and_street_for_address_line_1(self):
+		importer = HerePlacesImporter(session=MagicMock())
+		item = {
+			'id': 'test-place-1',
+			'title': 'Test Bistro',
+			'address': {
+				'houseNumber': '123',
+				'street': 'Main St',
+				'postalCode': '93001',
+				'stateCode': 'CA',
+			},
+			'position': {'lat': 34.28, 'lng': -119.29},
+			'contacts': [{'phone': [{'value': '805-555-0101'}], 'www': [{'value': 'https://example.com'}]}],
+			'href': 'https://discover.search.hereapi.com/v1/discover/test-place-1',
+		}
+
+		record = importer._build_place_record(City.VENTURA, VenueType.RESTAURANT, item)
+
+		self.assertIsNotNone(record)
+		self.assertEqual(record.address_line_1, '123 Main St')
+
+	def test_here_importer_keeps_suite_number_in_address_line_1_when_label_includes_it(self):
+		importer = HerePlacesImporter(session=MagicMock())
+		item = {
+			'id': 'test-place-suite-1',
+			'title': 'Suite Test Bistro',
+			'address': {
+				'houseNumber': '501',
+				'street': 'Collection Blvd',
+				'label': '501 Collection Blvd Ste # 4130, Oxnard, CA 93036, United States',
+				'postalCode': '93036',
+				'stateCode': 'CA',
+			},
+			'position': {'lat': 34.22, 'lng': -119.18},
+			'contacts': [{'phone': [{'value': '805-555-0101'}], 'www': [{'value': 'https://example.com'}]}],
+			'href': 'https://discover.search.hereapi.com/v1/discover/test-place-suite-1',
+		}
+
+		record = importer._build_place_record(City.OXNARD, VenueType.RESTAURANT, item)
+
+		self.assertIsNotNone(record)
+		self.assertEqual(record.address_line_1, '501 Collection Blvd Ste # 4130')
+
 	def test_importer_extracts_city_scoped_contact_details_from_embedded_location_payload(self):
 		html = """
 		<html>
@@ -1884,6 +1927,66 @@ class BusinessWebsiteImporterTests(TestCase):
 				'https://example.com/images/margarita.jpg?width=800',
 			],
 		)
+
+	def test_importer_extracts_background_and_data_background_images(self):
+		html = """
+		<html>
+			<body>
+				<div style="background-image: url('/images/patio-hero.jpg')"></div>
+				<div data-background-image="https://example.com/images/dining-room.jpg"></div>
+			</body>
+		</html>
+		"""
+
+		importer = BusinessWebsiteImporter(
+			session=CountingSession(html),
+			business_sources=[
+				{
+					'name': 'Background Photo Test',
+					'city': City.VENTURA,
+					'venue_type': VenueType.RESTAURANT,
+					'source_url': 'https://example.com/background-photo-test',
+				}
+			],
+		)
+
+		records = importer.load_records()
+
+		self.assertEqual(
+			records[0].image_urls,
+			[
+				'https://example.com/images/patio-hero.jpg',
+				'https://example.com/images/dining-room.jpg',
+			],
+		)
+
+	def test_importer_rejects_placeholder_video_and_page_urls(self):
+		html = """
+		<html>
+			<body>
+				<img src="https://example.com/m" alt="Menu page" />
+				<img src="https://example.com/assets/transparent_placeholder.png" alt="Placeholder" />
+				<img src="https://example.com/videos/hero.mp4" alt="Hero video" />
+				<img src="https://example.com/images/brunch.jpg" alt="Weekend brunch" />
+			</body>
+		</html>
+		"""
+
+		importer = BusinessWebsiteImporter(
+			session=CountingSession(html),
+			business_sources=[
+				{
+					'name': 'Filtered Photo Test',
+					'city': City.VENTURA,
+					'venue_type': VenueType.RESTAURANT,
+					'source_url': 'https://example.com/filtered-photo-test',
+				}
+			],
+		)
+
+		records = importer.load_records()
+
+		self.assertEqual(records[0].image_urls, ['https://example.com/images/brunch.jpg'])
 
 	def test_importer_rejects_sources_outside_supported_cities(self):
 		home_html = """
@@ -2421,6 +2524,7 @@ class SourceListingIdentityTests(TestCase):
 			address_line_2='Suite 500',
 			neighborhood='Collection District',
 			postal_code='93030',
+			imported_image_urls=['https://images.example.com/yard-house-imported.jpg'],
 			deal_overrides=[{
 				'title': 'Admin Happy Hour',
 				'description': '$3 off cocktails and apps',
@@ -2446,6 +2550,8 @@ class SourceListingIdentityTests(TestCase):
 		self.assertEqual(payload['locations'][0]['address_line_2'], 'Suite 500')
 		self.assertEqual(payload['locations'][0]['neighborhood'], 'Collection District')
 		self.assertEqual(payload['locations'][0]['postal_code'], '93030')
+		self.assertEqual(payload['image_urls'], ['https://images.example.com/yard-house-imported.jpg'])
+		self.assertEqual(payload['locations'][0]['image_urls'], ['https://images.example.com/yard-house-imported.jpg'])
 
 	@patch('places.services.source_listings._get_place_coordinates')
 	@patch('places.services.source_listings.load_source_records')
@@ -6949,6 +7055,82 @@ class ListingSnapshotAdminTests(TestCase):
 		)
 		self.assertEqual(saved_snapshot.social_media_links, ['https://facebook.com/eggsymas'])
 
+	def test_listing_snapshot_admin_form_removing_imported_images_suppresses_future_repulls(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Photo Spot',
+			listing_slug='photo-spot',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='123 Main St',
+			source_name='here_places',
+			external_id='here:photo-spot',
+			imported_image_urls=[
+				'https://images.example.com/keep.jpg',
+				'https://images.example.com/remove.jpg',
+			],
+		)
+
+		form = ListingSnapshotAdminForm(instance=snapshot, data={
+			'name': 'Photo Spot',
+			'listing_slug': 'photo-spot',
+			'source_name': 'here_places',
+			'source_url': '',
+			'external_id': 'here:photo-spot',
+			'city': City.VENTURA,
+			'venue_type': VenueType.RESTAURANT,
+			'address_line_1': '123 Main St',
+			'address_line_2': '',
+			'neighborhood': '',
+			'state': 'CA',
+			'postal_code': '',
+			'phone_number': '',
+			'website_url': '',
+			'imported_image_urls': 'https://images.example.com/keep.jpg',
+			'instagram_url': '',
+			'facebook_url': '',
+			'tiktok_url': '',
+			'youtube_url': '',
+			'deal_overrides': '',
+			'operating_hour_overrides': '',
+			'tracked_location_latitude': '',
+			'tracked_location_longitude': '',
+			'tracked_location_accuracy_meters': '',
+			'tracked_location_updated_at': '',
+		})
+
+		self.assertTrue(form.is_valid(), form.errors.as_json())
+		saved_snapshot = form.save()
+
+		self.assertEqual(saved_snapshot.imported_image_urls, ['https://images.example.com/keep.jpg'])
+		self.assertEqual(saved_snapshot.suppressed_imported_image_urls, ['https://images.example.com/remove.jpg'])
+
+		_sync_listing_snapshot_from_imported_place(ImportedPlace(
+			name='Photo Spot',
+			profile_name='Photo Spot',
+			profile_slug='photo-spot',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='123 Main St',
+			state='CA',
+			postal_code='93001',
+			image_urls=[
+				'https://images.example.com/keep.jpg',
+				'https://images.example.com/remove.jpg',
+				'https://images.example.com/new.jpg',
+			],
+			external_id='here:photo-spot',
+			source_name='here_places',
+			source_url='https://here.example.com/photo-spot',
+		), snapshot=snapshot)
+
+		snapshot.refresh_from_db()
+
+		self.assertEqual(
+			snapshot.imported_image_urls,
+			['https://images.example.com/keep.jpg', 'https://images.example.com/new.jpg'],
+		)
+		self.assertEqual(snapshot.suppressed_imported_image_urls, ['https://images.example.com/remove.jpg'])
+
 	def test_listing_snapshot_admin_form_can_suppress_website_url(self):
 		form = ListingSnapshotAdminForm(data={
 			'name': 'No Website Cafe',
@@ -7127,6 +7309,7 @@ class ListingSnapshotAdminTests(TestCase):
 
 		self.assertIn('places/admin/listingsnapshot_structured_overrides.js', str(form.media))
 		self.assertIn('places/admin/listingsnapshot_structured_overrides.css', str(form.media))
+		self.assertEqual(form.fields['imported_image_urls'].widget.attrs['data-image-gallery-editor'], 'imported-images')
 		self.assertEqual(form.fields['deal_overrides'].widget.attrs['data-structured-editor'], 'deals')
 		self.assertEqual(form.fields['operating_hour_overrides'].widget.attrs['data-structured-editor'], 'hours')
 
@@ -7276,6 +7459,81 @@ class ListingSnapshotAdminTests(TestCase):
 		self.assertIn('Monday: 11:00 AM - 11:00 PM', hours_preview)
 
 	@patch('places.admin.get_source_place_payload')
+	def test_changelist_deal_counts_separate_public_deals_from_manual_overrides(self, mock_get_source_place_payload):
+		mock_get_source_place_payload.return_value = {
+			'deals': [
+				{'title': 'Imported Happy Hour'},
+				{'title': 'Late Night'},
+			],
+			'operating_hours': [],
+		}
+		snapshot = ListingSnapshot.objects.create(
+			name='Institution Ale Co.',
+			listing_slug='institution-ale-co',
+			city=City.CAMARILLO,
+			venue_type=VenueType.BAR,
+			address_line_1='311 Leisure Village Dr',
+			deal_overrides=[{'title': 'Manual Deal'}],
+		)
+
+		self.assertEqual(self.admin.current_public_deal_count(snapshot), 2)
+		self.assertEqual(self.admin.manual_deal_override_count(snapshot), 1)
+
+	@patch('places.admin.get_source_place_payloads')
+	@patch('places.admin.get_source_place_payload')
+	def test_changelist_view_batches_public_deal_counts(self, mock_get_source_place_payload, mock_get_source_place_payloads):
+		mock_get_source_place_payloads.return_value = [
+			{'slug': 'institution-ale-co', 'deals': [{'title': 'Imported Happy Hour'}, {'title': 'Late Night'}]},
+		]
+		snapshot = ListingSnapshot.objects.create(
+			name='Institution Ale Co.',
+			listing_slug='institution-ale-co',
+			city=City.CAMARILLO,
+			venue_type=VenueType.BAR,
+			address_line_1='311 Leisure Village Dr',
+		)
+
+		with patch('django.contrib.admin.options.ModelAdmin.changelist_view', autospec=True) as mock_super_changelist_view:
+			mock_super_changelist_view.side_effect = lambda _self, request, extra_context=None: self.admin.current_public_deal_count(snapshot)
+			result = self.admin.changelist_view(self._build_request('/admin/places/listingsnapshot/'))
+
+		self.assertEqual(result, 2)
+		mock_get_source_place_payloads.assert_called_once_with(resolve_missing_coordinates=False)
+		mock_get_source_place_payload.assert_not_called()
+
+	@patch('places.admin.get_source_place_payloads')
+	@patch('places.admin.get_source_place_payload')
+	def test_changelist_view_keeps_batched_deal_counts_until_response_render(self, mock_get_source_place_payload, mock_get_source_place_payloads):
+		from django.template import engines
+		from django.template.response import SimpleTemplateResponse
+
+		mock_get_source_place_payloads.return_value = [
+			{'slug': 'institution-ale-co', 'deals': [{'title': 'Imported Happy Hour'}, {'title': 'Late Night'}]},
+		]
+		snapshot = ListingSnapshot.objects.create(
+			name='Institution Ale Co.',
+			listing_slug='institution-ale-co',
+			city=City.CAMARILLO,
+			venue_type=VenueType.BAR,
+			address_line_1='311 Leisure Village Dr',
+		)
+
+		with patch('django.contrib.admin.options.ModelAdmin.changelist_view', autospec=True) as mock_super_changelist_view:
+			def _fake_super(_self, request, extra_context=None):
+				response = SimpleTemplateResponse(engines['django'].from_string('ok'))
+				response.add_post_render_callback(lambda rendered_response: setattr(rendered_response, '_deal_count_during_render', self.admin.current_public_deal_count(snapshot)))
+				return response
+
+			mock_super_changelist_view.side_effect = _fake_super
+			response = self.admin.changelist_view(self._build_request('/admin/places/listingsnapshot/'))
+			self.assertIsNotNone(getattr(self.admin, '_changelist_public_deal_counts', None))
+			response.render()
+
+		self.assertEqual(response._deal_count_during_render, 2)
+		self.assertIsNone(getattr(self.admin, '_changelist_public_deal_counts', None))
+		mock_get_source_place_payload.assert_not_called()
+
+	@patch('places.admin.get_source_place_payload')
 	def test_current_public_hours_preview_renders_open_24_hours_label(self, mock_get_source_place_payload):
 		mock_get_source_place_payload.return_value = {
 			'deals': [],
@@ -7400,6 +7658,48 @@ class ListingSnapshotAdminTests(TestCase):
 				self.admin.pull_all_business_data_view(self._build_request('/admin/places/listingsnapshot/pull-all-business-data/'))
 
 	@override_settings(DISCOVERY_JSON_PATH='')
+	def test_pull_all_business_data_view_preserves_snapshot_source_url_and_suppressed_website(self):
+		with TemporaryDirectory() as temp_dir:
+			json_path = Path(temp_dir) / 'discovered_places.json'
+			snapshot = ListingSnapshot.objects.create(
+				name='Pulled Tacos',
+				listing_slug='pulled-tacos',
+				city=City.VENTURA,
+				venue_type=VenueType.RESTAURANT,
+				address_line_1='123 Main St',
+				source_name='here_places',
+				external_id='here:pull-all-1',
+				source_url='https://admin.example.com/pulled-tacos/source',
+				website_url='',
+				website_url_suppressed=True,
+			)
+			place_record = ImportedPlace(
+				name='Pulled Tacos',
+				city=City.VENTURA,
+				venue_type=VenueType.RESTAURANT,
+				address_line_1='123 Main St',
+				phone_number='805-555-0101',
+				website_url='https://invalid.example.com/pulled-tacos',
+				external_id='here:pull-all-1',
+				source_name='here_places',
+				source_url='https://discover.search.hereapi.com/v1/discover',
+			)
+
+			def assert_enrichment_input(place_records):
+				place_records = list(place_records)
+				self.assertEqual(place_records[0].source_url, 'https://admin.example.com/pulled-tacos/source')
+				self.assertEqual(place_records[0].website_url, '')
+				return place_records
+
+			with override_settings(DISCOVERY_JSON_PATH=json_path), patch.object(HerePlacesImporter, 'load_records', return_value=[place_record]), patch.object(BusinessWebsiteImporter, 'enrich_place_records', side_effect=assert_enrichment_input), patch('places.admin.load_source_records', return_value=[place_record]):
+				self.admin.pull_all_business_data_view(self._build_request('/admin/places/listingsnapshot/pull-all-business-data/'))
+
+			snapshot.refresh_from_db()
+			self.assertEqual(snapshot.source_url, 'https://admin.example.com/pulled-tacos/source')
+			self.assertTrue(snapshot.website_url_suppressed)
+			self.assertEqual(snapshot.website_url, '')
+
+	@override_settings(DISCOVERY_JSON_PATH='')
 	def test_pull_all_business_data_view_preserves_existing_admin_text_fields_when_live_record_has_new_values(self):
 		with TemporaryDirectory() as temp_dir:
 			json_path = Path(temp_dir) / 'discovered_places.json'
@@ -7456,6 +7756,98 @@ class ListingSnapshotAdminTests(TestCase):
 			self.assertEqual(snapshot.website_url, 'https://admin.example.com/custom')
 			self.assertEqual(snapshot.deal_overrides[0]['title'], 'Admin Deal')
 			self.assertEqual(snapshot.operating_hour_overrides[0]['weekday'], Weekday.MONDAY)
+
+	@override_settings(DISCOVERY_JSON_PATH='')
+	def test_pull_all_business_data_view_reuses_snapshot_when_external_id_matches_but_address_changes(self):
+		with TemporaryDirectory() as temp_dir:
+			json_path = Path(temp_dir) / 'discovered_places.json'
+			snapshot = ListingSnapshot.objects.create(
+				name='Admin Corrected Spot',
+				listing_slug='admin-corrected-spot',
+				city=City.VENTURA,
+				venue_type=VenueType.RESTAURANT,
+				address_line_1='123 Main St',
+				address_line_2='Suite 500',
+				neighborhood='Midtown',
+				phone_number='805-555-9999',
+				website_url='https://admin.example.com/custom',
+				source_name='here_places',
+				external_id='here:keep-identity',
+				social_profiles={
+					'instagram': {
+						'url': 'https://instagram.com/admincorrectedspot',
+						'username': 'admincorrectedspot',
+					},
+				},
+				social_media_links=['https://instagram.com/admincorrectedspot'],
+				deal_overrides=[{
+					'title': 'Admin Deal',
+					'description': 'Still here',
+					'deal_type': DealType.OTHER,
+					'price_text': '$10',
+					'terms': '',
+					'happy_hours': [],
+				}],
+				operating_hour_overrides=[{'weekday': Weekday.MONDAY, 'open_time': '11:00', 'close_time': '21:00'}],
+			)
+			place_record = ImportedPlace(
+				name='Pulled Name',
+				profile_name='Pulled Profile Name',
+				city=City.OXNARD,
+				venue_type=VenueType.BAR,
+				address_line_1='Main St',
+				address_line_2='',
+				neighborhood='',
+				postal_code='93030',
+				phone_number='805-555-0101',
+				website_url='https://pulled.example.com/location',
+				external_id='here:keep-identity',
+				source_name='here_places',
+				source_url='https://discover.search.hereapi.com/v1/discover',
+			)
+
+			with override_settings(DISCOVERY_JSON_PATH=json_path), patch.object(HerePlacesImporter, 'load_records', return_value=[place_record]), patch.object(BusinessWebsiteImporter, 'enrich_place_records', side_effect=lambda place_records: list(place_records)), patch('places.admin.load_source_records', return_value=[place_record]):
+				self.admin.pull_all_business_data_view(self._build_request('/admin/places/listingsnapshot/pull-all-business-data/'))
+
+			snapshot.refresh_from_db()
+			self.assertEqual(ListingSnapshot.objects.filter(external_id='here:keep-identity').count(), 1)
+			self.assertEqual(snapshot.address_line_1, '123 Main St')
+			self.assertEqual(snapshot.address_line_2, 'Suite 500')
+			self.assertEqual(snapshot.neighborhood, 'Midtown')
+			self.assertEqual(snapshot.phone_number, '805-555-9999')
+			self.assertEqual(snapshot.website_url, 'https://admin.example.com/custom')
+			self.assertEqual(snapshot.deal_overrides[0]['title'], 'Admin Deal')
+			self.assertEqual(snapshot.operating_hour_overrides[0]['weekday'], Weekday.MONDAY)
+			self.assertEqual(snapshot.social_profiles['instagram']['username'], 'admincorrectedspot')
+
+	@override_settings(DISCOVERY_JSON_PATH='')
+	def test_pull_all_business_data_view_upgrades_street_only_address_to_numbered_address(self):
+		with TemporaryDirectory() as temp_dir:
+			json_path = Path(temp_dir) / 'discovered_places.json'
+			snapshot = ListingSnapshot.objects.create(
+				name='Street Only Spot',
+				listing_slug='street-only-spot',
+				city=City.VENTURA,
+				venue_type=VenueType.RESTAURANT,
+				address_line_1='E Santa Clara St',
+				source_name='here_places',
+				external_id='here:street-only-spot',
+			)
+			place_record = ImportedPlace(
+				name='Street Only Spot',
+				city=City.VENTURA,
+				venue_type=VenueType.RESTAURANT,
+				address_line_1='211 E Santa Clara St',
+				postal_code='93001-2717',
+				external_id='here:street-only-spot',
+				source_name='here_places',
+			)
+
+			with override_settings(DISCOVERY_JSON_PATH=json_path), patch.object(HerePlacesImporter, 'load_records', return_value=[place_record]), patch.object(BusinessWebsiteImporter, 'enrich_place_records', side_effect=lambda place_records: list(place_records)), patch('places.admin.load_source_records', return_value=[place_record]):
+				self.admin.pull_all_business_data_view(self._build_request('/admin/places/listingsnapshot/pull-all-business-data/'))
+
+			snapshot.refresh_from_db()
+			self.assertEqual(snapshot.address_line_1, '211 E Santa Clara St')
 
 	@override_settings(DISCOVERY_JSON_PATH='')
 	def test_pull_all_business_data_view_skips_deleted_businesses(self):
@@ -7553,6 +7945,52 @@ class ListingSnapshotAdminTests(TestCase):
 			set(cronies_snapshots.values_list('address_line_1', flat=True)),
 			{'2855 Johnson Dr', '370 N Lantana St'},
 		)
+
+	@override_settings(DISCOVERY_JSON_PATH='')
+	def test_pull_all_business_data_view_preserves_unmatched_snapshot_with_admin_managed_data(self):
+		with TemporaryDirectory() as temp_dir:
+			json_path = Path(temp_dir) / 'discovered_places.json'
+			preserved_snapshot = ListingSnapshot.objects.create(
+				name='Admin Corrected Spot',
+				listing_slug='admin-corrected-spot',
+				city=City.VENTURA,
+				venue_type=VenueType.RESTAURANT,
+				address_line_1='123 Main St',
+				address_line_2='Suite 500',
+				neighborhood='Midtown',
+				source_name='here_places',
+				external_id='here:preserve-admin-data',
+				social_profiles={
+					'instagram': {
+						'url': 'https://instagram.com/admincorrectedspot',
+						'username': 'admincorrectedspot',
+					},
+				},
+				social_media_links=['https://instagram.com/admincorrectedspot'],
+			)
+			transient_snapshot = ListingSnapshot.objects.create(
+				name='Transient Spot',
+				listing_slug='transient-spot',
+				city=City.VENTURA,
+				venue_type=VenueType.RESTAURANT,
+				address_line_1='456 Main St',
+				source_name='here_places',
+				external_id='here:transient',
+			)
+			place_record = ImportedPlace(
+				name='Fresh Pulled Spot',
+				city=City.VENTURA,
+				venue_type=VenueType.RESTAURANT,
+				address_line_1='789 Main St',
+				external_id='here:fresh-pulled',
+				source_name='here_places',
+			)
+
+			with override_settings(DISCOVERY_JSON_PATH=json_path), patch.object(HerePlacesImporter, 'load_records', return_value=[place_record]), patch.object(BusinessWebsiteImporter, 'enrich_place_records', side_effect=lambda place_records: list(place_records)), patch('places.admin.load_source_records', return_value=[place_record]):
+				self.admin.pull_all_business_data_view(self._build_request('/admin/places/listingsnapshot/pull-all-business-data/'))
+
+			self.assertTrue(ListingSnapshot.objects.filter(pk=preserved_snapshot.pk).exists())
+			self.assertFalse(ListingSnapshot.objects.filter(pk=transient_snapshot.pk).exists())
 
 	@override_settings(DISCOVERY_JSON_PATH='')
 	def test_pull_business_data_view_delete_moves_to_deleted_businesses_and_restore_brings_it_back(self):
@@ -7952,6 +8390,39 @@ class ListingSnapshotAdminTests(TestCase):
 		self.assertEqual(unmanaged_response.status_code, 200)
 		self.assertContains(unmanaged_response, 'Unmanaged Spot')
 		self.assertNotContains(unmanaged_response, 'Managed Spot')
+
+	def test_listing_snapshot_changelist_can_filter_businesses_with_images(self):
+		with_images_snapshot = ListingSnapshot.objects.create(
+			name='Photo Spot',
+			listing_slug='photo-spot',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='123 Main St',
+			source_name='here_places',
+			imported_image_urls=['https://images.example.com/photo-spot.jpg'],
+		)
+		without_images_snapshot = ListingSnapshot.objects.create(
+			name='No Photo Spot',
+			listing_slug='no-photo-spot',
+			city=City.OXNARD,
+			venue_type=VenueType.CAFE,
+			address_line_1='456 Harbor Blvd',
+			source_name='here_places',
+			imported_image_urls=[],
+		)
+		self.client.force_login(self.admin_user)
+
+		with_images_response = self.client.get(reverse('happyhour_admin:places_listingsnapshot_changelist'), {'has_images': 'yes'})
+		without_images_response = self.client.get(reverse('happyhour_admin:places_listingsnapshot_changelist'), {'has_images': 'no'})
+		with_image_names = {snapshot.name for snapshot in with_images_response.context['cl'].queryset}
+		without_image_names = {snapshot.name for snapshot in without_images_response.context['cl'].queryset}
+
+		self.assertEqual(with_images_response.status_code, 200)
+		self.assertIn(with_images_snapshot.name, with_image_names)
+		self.assertNotIn(without_images_snapshot.name, with_image_names)
+		self.assertEqual(without_images_response.status_code, 200)
+		self.assertIn(without_images_snapshot.name, without_image_names)
+		self.assertNotIn(with_images_snapshot.name, without_image_names)
 
 	def test_listing_snapshot_change_page_links_to_managing_business_account(self):
 		snapshot = ListingSnapshot.objects.create(

@@ -180,6 +180,7 @@ def _get_listing_snapshot_override_payloads():
 			'postal_code': snapshot.postal_code,
 			'phone_number': snapshot.phone_number,
 			'website_url': snapshot.website_url,
+			'imported_image_urls': list(snapshot.imported_image_urls or []),
 			'social_profiles': normalized_social_profiles,
 			'social_media_links': build_social_media_links(normalized_social_profiles),
 			'deal_overrides': normalized_deal_overrides,
@@ -292,6 +293,9 @@ def _apply_snapshot_contact_override_to_location(location, override_payload):
 			location[field_name] = value
 	if 'website_url' in override_payload:
 		location['website_url'] = override_payload.get('website_url', '')
+	imported_image_urls = list(override_payload.get('imported_image_urls') or [])
+	if imported_image_urls and not location.get('image_urls'):
+		location['image_urls'] = imported_image_urls
 	for field_name in ('social_profiles', 'social_media_links'):
 		if field_name in override_payload:
 			location[field_name] = override_payload[field_name]
@@ -301,6 +305,8 @@ def _apply_snapshot_contact_override_to_payload(payload, location):
 	for field_name in ('name', 'city', 'city_label', 'address_line_1', 'address_line_2', 'neighborhood', 'state', 'postal_code', 'phone_number'):
 		payload[field_name] = location.get(field_name, payload.get(field_name))
 	payload['website_url'] = location.get('website_url', payload.get('website_url', ''))
+	if location.get('image_urls') and not payload.get('image_urls'):
+		payload['image_urls'] = location.get('image_urls', [])
 	for field_name in ('social_profiles', 'social_media_links'):
 		payload[field_name] = location.get(field_name, payload.get(field_name, {} if field_name == 'social_profiles' else []))
 
@@ -805,6 +811,14 @@ def _apply_claim_structured_overrides(payload, claim=None, payload_namespace='',
 		payload['website_url'] = website_url
 		for location in payload.get('locations', []):
 			location['website_url'] = website_url
+
+	imported_image_urls = list(resolved_source_payload.get('imported_image_urls') or []) if source_payload is not None else []
+	if imported_image_urls:
+		if not payload.get('image_urls'):
+			payload['image_urls'] = imported_image_urls
+		for location in payload.get('locations', []):
+			if not location.get('image_urls'):
+				location['image_urls'] = imported_image_urls
 
 	if phone_number:
 		payload['phone_number'] = phone_number

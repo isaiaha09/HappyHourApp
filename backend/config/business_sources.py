@@ -16,45 +16,6 @@ def multi_location_business(profile_name, locations):
 
 
 BUSINESS_SOURCE_PAGES = [
-	*multi_location_business('Lure Fish House', [
-		{
-			'city': 'ventura',
-			'venue_type': 'restaurant',
-			'source_url': 'https://www.lurefishhouse.com/location/lure-fish-house-ventura/',
-			'source_documents': [
-				{
-					'url': 'https://www.lurefishhouse.com/location/lure-fish-house-ventura/',
-					'roles': ['identity', 'deals', 'images'],
-				},
-				{
-					'text': 'Sunday - Thursday: 11:30am - 9:00pm. Friday - Saturday: 11:30am - 10:00pm.',
-					'roles': ['hours'],
-				},
-			],
-			'deal_selectors': ['#happy-hour'],
-			'geocode_query': 'Lure Fish House, Ventura, CA',
-			'website_url': 'https://www.lurefishhouse.com/location/lure-fish-house-ventura/',
-		},
-		{
-			'name': 'Lure Fish House Camarillo',
-			'city': 'camarillo',
-			'venue_type': 'restaurant',
-			'source_url': 'https://www.lurefishhouse.com/location/lure-fish-house-camarillo/',
-			'source_documents': [
-				{
-					'url': 'https://www.lurefishhouse.com/location/lure-fish-house-camarillo/',
-					'roles': ['identity', 'deals', 'images'],
-				},
-				{
-					'text': 'Sunday - Thursday: 11:30am - 9:00pm. Friday - Saturday: 11:30am - 10:00pm.',
-					'roles': ['hours'],
-				},
-			],
-			'deal_selectors': ['#happy-hour'],
-			'geocode_query': 'Lure Fish House, Camarillo, CA',
-			'website_url': 'https://www.lurefishhouse.com/location/lure-fish-house-camarillo/',
-		},
-	]),
 	*multi_location_business("Finney's Crafthouse", [
 		{
 			'city': 'ventura',
@@ -156,25 +117,6 @@ BUSINESS_SOURCE_PAGES = [
 		},
 	]),
 	{
-		'name': "Snapper Jack's Taco Shack",
-		'enabled': True,
-		'city': 'ventura',
-		'venue_type': 'fast_food',
-		'source_url': 'https://www.snapperjackstacoshack.com/',
-		'source_documents': [
-			{
-				'url': 'https://www.snapperjackstacoshack.com/',
-				'roles': ['identity', 'deals', 'images'],
-			},
-		],
-		'address_line_1': '533 E. Main Street',
-		'latitude': 34.2809848,
-		'longitude': -119.2924028,
-		'postal_code': '93001',
-		'geocode_query': "Snapper Jack's Taco Shack, Ventura, CA",
-		'website_url': 'https://www.snapperjackstacoshack.com/',
-	},
-	{
 		'name': "Yolanda's Mexican Cafe",
 		'enabled': True,
 		'city': 'oxnard',
@@ -263,33 +205,6 @@ BUSINESS_SOURCE_PAGES = [
 		'postal_code': '93036',
 		'geocode_query': 'Yard House, Oxnard, CA',
 		'website_url': 'https://www.yardhouse.com/locations/ca/oxnard/oxnard-the-collection-at-riverpark/8349',
-	},
-	{
-		'name': 'Institution Ale Co.',
-		'city': 'camarillo',
-		'venue_type': 'bar',
-		'source_url': 'https://www.institutionales.com/',
-		'source_documents': [
-			{
-				'url': 'https://www.institutionales.com/',
-				'roles': ['identity', 'images'],
-			},
-			{
-				'url': 'https://www.institutionales.com/happy-hour',
-				'roles': ['deals', 'images'],
-			},
-			{
-				'url': 'https://www.institutionales.com/hours',
-				'roles': ['hours'],
-			},
-		],
-		'address_line_1': '3841 Mission Oaks Boulevard',
-		'latitude': 34.2164508,
-		'longitude': -119.01936,
-		'phone_number': '(805) 482-3777',
-		'postal_code': '93011',
-		'geocode_query': 'Institution Ale Co., Camarillo, CA',
-		'website_url': 'https://www.institutionales.com/',
 	},
 	{
 		'name': 'Aloha Steakhouse',
@@ -417,28 +332,5 @@ BUSINESS_SOURCE_PAGES = [
 		'postal_code': '93001',
 		'geocode_query': 'Winchesters Grill & Saloon, Ventura, CA',
 		'website_url': 'https://www.winchestersgrill.com/',
-	},
-	{
-		'name': 'Old Town Cafe',
-		'city': 'camarillo',
-		'venue_type': 'cafe',
-		'source_url': 'https://www.oldtowncafecamarillo.com/',
-		'source_documents': [
-			{
-				'url': 'https://www.myoldtowncafe.com/',
-				'roles': ['identity', 'images'],
-			},
-			{
-				'text': 'Daily Special breakfast and lunch favorites served every day.',
-				'roles': ['deals'],
-			},
-		],
-		'address_line_1': '2050 E Ventura Blvd',
-		'latitude': 34.2179816,
-		'longitude': -119.0649251,
-		'phone_number': '(805) 484-5500',
-		'postal_code': '93010',
-		'geocode_query': 'Old Town Cafe, Camarillo, CA',
-		'website_url': 'https://www.myoldtowncafe.com/',
 	},
 ]

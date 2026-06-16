@@ -12,8 +12,74 @@ export function normalizeSearchText(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+function normalizeImageUrlForDedup(imageUrl: string) {
+  const trimmedValue = imageUrl.trim();
+  if (!trimmedValue) {
+    return '';
+  }
+
+  const withoutFragment = trimmedValue.replace(/#.*$/, '');
+  const [withoutQuery] = withoutFragment.split('?');
+  const normalizedUrlMatch = withoutQuery.match(/^(https?:\/\/[^/]+)(\/.*)?$/i);
+  if (!normalizedUrlMatch) {
+    return withoutQuery.toLowerCase();
+  }
+
+  const normalizedOrigin = normalizedUrlMatch[1].toLowerCase();
+  let normalizedPath = normalizedUrlMatch[2] || '/';
+
+  normalizedPath = normalizedPath.replace(/\/cdn-cgi\/image\/[^/]+\//i, '/');
+  normalizedPath = normalizedPath.replace(/\/resize=[^/]+\/output=[^/]+\//i, '/');
+  normalizedPath = normalizedPath.replace(/(\/)p\/([^/]+)\/\d+x\d+$/i, '$1p/$2');
+  normalizedPath = normalizedPath.replace(/\/:\/rs=[^/]+$/i, '');
+  normalizedPath = normalizedPath.replace(/[-_](\d{2,4})x(\d{2,4})(?=\.[a-z0-9]+$)/i, '');
+  normalizedPath = normalizedPath.replace(/\/(small|medium|large|original)$/i, '');
+
+  return `${normalizedOrigin}${normalizedPath}`;
+}
+
 export function dedupeImageUrls(imageUrls: string[]) {
-  return Array.from(new Set(imageUrls.filter((imageUrl) => imageUrl.trim().length > 0)));
+  const dedupedImageUrls: string[] = [];
+  const seenKeys = new Set<string>();
+
+  for (const imageUrl of imageUrls) {
+    const trimmedValue = imageUrl.trim();
+    if (!trimmedValue) {
+      continue;
+    }
+
+    const dedupeKey = normalizeImageUrlForDedup(trimmedValue);
+    if (seenKeys.has(dedupeKey)) {
+      continue;
+    }
+
+    seenKeys.add(dedupeKey);
+    dedupedImageUrls.push(trimmedValue);
+  }
+
+  return dedupedImageUrls;
+}
+
+function isDisplayableImageUrl(imageUrl: string) {
+  const normalizedValue = imageUrl.trim().toLowerCase();
+  if (!normalizedValue) {
+    return false;
+  }
+
+  if (/\.(mp4|mov|m4v|webm)(?:$|[?#])/.test(normalizedValue)) {
+    return false;
+  }
+
+  return normalizedValue.startsWith('http://') || normalizedValue.startsWith('https://');
+}
+
+export function getPlaceCardImageUrl(place: PlaceListItem) {
+  const candidateUrls = dedupeImageUrls([
+    ...place.image_urls,
+    ...getPlaceLocations(place).flatMap((location) => location.image_urls ?? []),
+  ]);
+
+  return candidateUrls.find(isDisplayableImageUrl) ?? null;
 }
 
 export function getPlaceLocations(place: PlaceListItem | PlaceDetail) {

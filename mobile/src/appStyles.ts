@@ -1163,6 +1163,12 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 18,
   },
+  placeCardImage: {
+    borderRadius: 16,
+    height: 168,
+    marginBottom: 14,
+    width: '100%',
+  },
   placeCardLandscape: {
     flex: 1,
   },

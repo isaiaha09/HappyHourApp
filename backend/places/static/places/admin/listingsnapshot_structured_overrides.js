@@ -281,6 +281,129 @@
     }
   }
 
+  function parseLineSeparatedList(rawValue) {
+    return String(rawValue || '')
+      .split(/\r?\n/)
+      .map(function (value) { return String(value || '').trim(); })
+      .filter(function (value, index, values) { return value && values.indexOf(value) === index; });
+  }
+
+  function hydrateImportedImageGallery(textarea) {
+    if (!textarea.dataset.imageGalleryEditor) {
+      return;
+    }
+
+    const state = {
+      images: parseLineSeparatedList(textarea.value),
+      deleted: new Set(),
+    };
+
+    textarea.classList.add('is-structured-enhanced');
+
+    const editorRoot = document.createElement('div');
+    editorRoot.className = 'structured-admin-image-editor';
+    textarea.insertAdjacentElement('afterend', editorRoot);
+
+    function syncTextarea() {
+      textarea.value = state.images.filter(function (url) {
+        return !state.deleted.has(url);
+      }).join('\n');
+    }
+
+    function render() {
+      editorRoot.innerHTML = '';
+
+      if (!state.images.length) {
+        const empty = document.createElement('div');
+        empty.className = 'structured-admin-editor__empty';
+        empty.textContent = 'No imported images are stored for this business.';
+        editorRoot.append(empty);
+        syncTextarea();
+        return;
+      }
+
+      const grid = document.createElement('div');
+      grid.className = 'structured-admin-image-editor__grid';
+
+      state.images.forEach(function (imageUrl, index) {
+        const pendingDelete = state.deleted.has(imageUrl);
+
+        const card = document.createElement('div');
+        card.className = 'structured-admin-image-editor__card' + (pendingDelete ? ' is-pending-delete' : '');
+
+        const imageWrap = document.createElement('div');
+        imageWrap.className = 'structured-admin-image-editor__image-wrap';
+        const image = document.createElement('img');
+        image.className = 'structured-admin-image-editor__image';
+        image.src = imageUrl;
+        image.alt = 'Imported business image ' + (index + 1);
+        image.loading = 'lazy';
+        imageWrap.append(image);
+        if (pendingDelete) {
+          const badge = document.createElement('div');
+          badge.className = 'structured-admin-image-editor__badge';
+          badge.textContent = 'Will delete';
+          imageWrap.append(badge);
+        }
+        card.append(imageWrap);
+
+        const meta = document.createElement('div');
+        meta.className = 'structured-admin-image-editor__meta';
+        const title = document.createElement('div');
+        title.className = 'structured-admin-image-editor__title';
+        title.textContent = 'Imported image ' + (index + 1);
+        meta.append(title);
+        const copy = document.createElement('div');
+        copy.className = 'structured-admin-image-editor__copy';
+        copy.textContent = imageUrl;
+        meta.append(copy);
+        card.append(meta);
+
+        const actions = document.createElement('div');
+        actions.className = 'structured-admin-image-editor__actions';
+
+        const deleteButton = document.createElement('button');
+        deleteButton.type = 'button';
+        deleteButton.className = 'structured-admin-image-editor__button--danger';
+        deleteButton.textContent = 'Delete image';
+        deleteButton.hidden = pendingDelete;
+        deleteButton.addEventListener('click', function () {
+          state.deleted.add(imageUrl);
+          syncTextarea();
+          render();
+        });
+        actions.append(deleteButton);
+
+        const undoButton = document.createElement('button');
+        undoButton.type = 'button';
+        undoButton.className = 'structured-admin-image-editor__button--undo';
+        undoButton.textContent = 'Undo';
+        undoButton.hidden = !pendingDelete;
+        undoButton.addEventListener('click', function () {
+          state.deleted.delete(imageUrl);
+          syncTextarea();
+          render();
+        });
+        actions.append(undoButton);
+        card.append(actions);
+
+        const status = document.createElement('div');
+        status.className = 'structured-admin-image-editor__status';
+        status.textContent = pendingDelete
+          ? 'This image will be removed when you save. Undo to keep it.'
+          : 'Delete this pulled image to suppress it from future pulls.';
+        card.append(status);
+
+        grid.append(card);
+      });
+
+      editorRoot.append(grid);
+      syncTextarea();
+    }
+
+    render();
+  }
+
   function hydrateStructuredEditor(textarea) {
     const type = textarea.dataset.structuredEditor;
     if (!type) {
@@ -661,6 +784,7 @@
   }
 
   function initializeStructuredEditors() {
+    document.querySelectorAll('textarea[data-image-gallery-editor]').forEach(hydrateImportedImageGallery);
     document.querySelectorAll('textarea[data-structured-editor]').forEach(hydrateStructuredEditor);
   }
 

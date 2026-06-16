@@ -90,6 +90,7 @@ import {
   consolidatePlacesBySlug,
   dedupeImageUrls,
   formatPlaceAddress,
+  getPlaceCardImageUrl,
   getPlaceCardAddress,
   getPlaceCardEyebrow,
   getPlaceLocations,
@@ -5240,6 +5241,7 @@ function AnimatedListPlaceCard({
   revealToken: number;
 }) {
   const entrance = useRef(new Animated.Value(0)).current;
+  const cardImageUrl = getPlaceCardImageUrl(item);
 
   useEffect(() => {
     entrance.stopAnimation();
@@ -5276,6 +5278,9 @@ function AnimatedListPlaceCard({
         onPress={onPress}
         style={[styles.placeCard, browseListColumns > 1 ? styles.placeCardLandscape : null]}
       >
+        {cardImageUrl ? (
+          <Image resizeMode="cover" source={{ uri: cardImageUrl }} style={styles.placeCardImage} />
+        ) : null}
         <Text style={styles.placeCity}>{getPlaceCardEyebrow(item)}</Text>
         <Text style={styles.placeTitle}>{item.name}</Text>
         <Text style={styles.placeMeta}>{item.venue_type_label}</Text>
