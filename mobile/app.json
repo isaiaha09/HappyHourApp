@@ -25,6 +25,14 @@
       },
       "predictiveBackGestureEnabled": false
     },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "business-updates"
+        }
+      ]
+    ],
     "web": {
       "favicon": "./assets/DiningDealz-Icon.png"
     }

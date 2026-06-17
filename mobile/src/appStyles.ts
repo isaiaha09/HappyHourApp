@@ -2410,6 +2410,32 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 12,
   },
+  dashboardNotificationCard: {
+    backgroundColor: '#fffaf4',
+    borderColor: '#efd8bd',
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 12,
+  },
+  dashboardNotificationHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'space-between',
+  },
+  dashboardNotificationTitle: {
+    color: '#2d221a',
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '800',
+    lineHeight: 18,
+  },
+  dashboardNotificationTimestamp: {
+    color: '#8b6c59',
+    fontSize: 11,
+    fontWeight: '700',
+    textAlign: 'right',
+  },
   dashboardFavoriteBusinessAction: {
     color: '#9e5b49',
     fontSize: 12,
@@ -2939,9 +2965,12 @@ export const styles = StyleSheet.create({
     fontWeight: '800',
   },
   bottomSheetBackdrop: {
-    backgroundColor: 'rgba(45, 34, 26, 0.22)',
     flex: 1,
     justifyContent: 'flex-end',
+  },
+  bottomSheetBackdropOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(45, 34, 26, 0.22)',
   },
   bottomSheetBackdropPressable: {
     flex: 1,
@@ -2960,6 +2989,13 @@ export const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -10 },
     shadowOpacity: 0.16,
     shadowRadius: 22,
+  },
+  bottomSheetDragZone: {
+    marginHorizontal: -20,
+    marginTop: -14,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 6,
   },
   bottomSheetHandle: {
     alignSelf: 'center',

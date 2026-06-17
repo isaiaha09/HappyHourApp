@@ -179,6 +179,24 @@ export type FeedEngagementRequest = {
   position: number;
 };
 
+export type PushDeviceRegistrationRequest = {
+  installation_id: string;
+  push_token: string;
+  platform: 'ios' | 'android';
+  portal?: 'customer' | 'business';
+};
+
+export type FavoriteBusinessNotification = {
+  id: number;
+  slug: string;
+  business_name: string;
+  event_type: 'profile_update' | 'special' | 'announcement' | 'event' | 'blog';
+  title: string;
+  message: string;
+  post_id: number | null;
+  created_at: string;
+};
+
 export type SignupResponse = {
   id: number;
   username: string;
@@ -201,6 +219,7 @@ export type SignupResponse = {
   two_factor_enabled: boolean;
   two_factor_pending_setup?: boolean;
   billing_portal_url?: string;
+  push_notifications_enabled?: boolean;
   approved_businesses?: Array<{
     id: number;
     slug: string;
@@ -249,6 +268,7 @@ export type SignupResponse = {
     address_line_1: string;
     website_url: string;
   }>;
+  favorite_business_notifications?: FavoriteBusinessNotification[];
   business_contact?: {
     contact_name?: string;
     job_title?: string;

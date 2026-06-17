@@ -1051,6 +1051,59 @@ class FavoriteBusiness(models.Model):
 		return f'{self.name} favorite for {self.user.username}'
 
 
+class FavoriteBusinessNotification(models.Model):
+	class EventType(models.TextChoices):
+		PROFILE_UPDATE = 'profile_update', 'Business Profile Update'
+		SPECIAL = 'special', 'Special'
+		ANNOUNCEMENT = 'announcement', 'Announcement'
+		EVENT = 'event', 'Event'
+		BLOG = 'blog', 'Blog Post'
+
+	user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='favorite_business_notifications', on_delete=models.CASCADE)
+	listing_slug = models.SlugField(max_length=170)
+	business_name = models.CharField(max_length=150)
+	event_type = models.CharField(max_length=24, choices=EventType.choices)
+	title = models.CharField(max_length=180)
+	message = models.CharField(max_length=400, blank=True)
+	source_post = models.ForeignKey('BusinessPost', related_name='favorite_notifications', null=True, blank=True, on_delete=models.SET_NULL)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ['-created_at', '-id']
+		indexes = [
+			models.Index(fields=['user', '-created_at']),
+			models.Index(fields=['listing_slug', '-created_at']),
+		]
+
+	def __str__(self):
+		return f'{self.business_name} {self.event_type} notification for {self.user.username}'
+
+
+class FavoriteBusinessPushDevice(models.Model):
+	class Platform(models.TextChoices):
+		IOS = 'ios', 'iOS'
+		ANDROID = 'android', 'Android'
+
+	user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='favorite_business_push_devices', on_delete=models.CASCADE)
+	installation_id = models.CharField(max_length=80, unique=True)
+	expo_push_token = models.CharField(max_length=255, unique=True)
+	platform = models.CharField(max_length=20, choices=Platform.choices)
+	is_active = models.BooleanField(default=True)
+	last_error = models.CharField(max_length=255, blank=True)
+	last_registered_at = models.DateTimeField(auto_now=True)
+	last_push_sent_at = models.DateTimeField(null=True, blank=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ['-last_registered_at', '-created_at']
+		indexes = [
+			models.Index(fields=['user', 'is_active']),
+		]
+
+	def __str__(self):
+		return f'{self.user.username} {self.platform} push device'
+
+
 class BusinessPost(models.Model):
 	class ContentType(models.TextChoices):
 		SPECIAL = 'special', 'Business Special'
@@ -1090,6 +1143,14 @@ class BusinessPost(models.Model):
 		return f'{self.title} ({self.get_content_type_display()})'
 
 	def save(self, *args, **kwargs):
+		previous_status = None
+		if self.pk:
+			previous_status = (
+				BusinessPost.objects
+				.filter(pk=self.pk)
+				.values_list('status', flat=True)
+				.first()
+			)
 		self.listing_snapshot = self.membership.claim.listing_snapshot
 		if not self.slug:
 			base_slug = slugify(self.title) or slugify(f'{self.get_content_type_display()}-{self.membership.claim.listing_snapshot.name}') or 'post'
@@ -1097,6 +1158,10 @@ class BusinessPost(models.Model):
 		if self.status == self.Status.PUBLISHED and self.published_at is None:
 			self.published_at = timezone.now()
 		super().save(*args, **kwargs)
+		if self.status == self.Status.PUBLISHED and previous_status != self.Status.PUBLISHED:
+			from places.services.favorite_notifications import create_notifications_for_published_post
+
+			create_notifications_for_published_post(self)
 
 
 class SponsoredCampaign(models.Model):

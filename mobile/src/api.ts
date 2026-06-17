@@ -21,6 +21,7 @@ import type {
   PlaceDetail,
   PlaceListItem,
   ProfileDashboardUpdateRequest,
+  PushDeviceRegistrationRequest,
   ResendEmailVerificationCodeRequest,
   SignupResponse,
   SupportContactRequest,
@@ -165,6 +166,10 @@ export async function submitSupportRequest(baseUrl: string, authToken: string, p
 
 export async function toggleFavoriteBusiness(baseUrl: string, authToken: string, payload: FavoriteBusinessToggleRequest) {
   return postAuthedJson<SignupResponse>(baseUrl, '/profiles/favorites/', authToken, payload);
+}
+
+export async function registerPushDevice(baseUrl: string, authToken: string, payload: PushDeviceRegistrationRequest) {
+  return postAuthedJson<{ detail: string }>(baseUrl, '/profiles/push-devices/', authToken, payload);
 }
 
 export async function resendVerificationEmail(baseUrl: string, authToken: string) {

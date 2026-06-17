@@ -351,6 +351,27 @@ class FavoriteBusinessToggleSerializer(serializers.Serializer):
 		return normalized
 
 
+class PushDeviceRegistrationSerializer(serializers.Serializer):
+	installation_id = serializers.CharField(max_length=80)
+	push_token = serializers.CharField(max_length=255)
+	platform = serializers.ChoiceField(choices=['ios', 'android'])
+	portal = serializers.ChoiceField(choices=['customer', 'business'], required=False, allow_blank=True)
+
+	def validate_installation_id(self, value):
+		normalized = value.strip()
+		if not normalized:
+			raise serializers.ValidationError('Missing device installation id.')
+		return normalized
+
+	def validate_push_token(self, value):
+		normalized = value.strip()
+		if not normalized:
+			raise serializers.ValidationError('Missing push token.')
+		if not (normalized.startswith('ExponentPushToken[') or normalized.startswith('ExpoPushToken[')):
+			raise serializers.ValidationError('Push token must be an Expo push token.')
+		return normalized
+
+
 class DeleteAccountSerializer(serializers.Serializer):
 	password = serializers.CharField(write_only=True, style={'input_type': 'password'})
 

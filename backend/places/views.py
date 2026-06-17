@@ -31,6 +31,7 @@ from .serializers import (
 	LoginSerializer,
 	PasswordResetConfirmSerializer,
 	PasswordResetRequestSerializer,
+	PushDeviceRegistrationSerializer,
 	ProfileDashboardUpdateSerializer,
 	ManualBusinessSignupSerializer,
 	PlaceDetailSerializer,
@@ -44,7 +45,8 @@ from .serializers import (
 	sync_listing_snapshot_from_place_payload,
 )
 from .services.account_profiles import build_account_response, build_email_verification_challenge, get_business_access_hold_claim, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, send_business_claim_received_email, send_password_reset_email, send_support_contact_email, send_username_reminder_email, send_verification_email
-from .models import FavoriteBusiness, FeedImpression, VenueType
+from .models import FavoriteBusiness, FavoriteBusinessPushDevice, FeedImpression, VenueType
+from .services.favorite_notifications import create_notifications_for_business_profile_update
 from .services.home_feed import get_feed_interval, get_feed_queryset, get_organic_page_size, get_ranked_campaigns, get_requested_feed_page_size, mix_feed_items, record_campaign_served
 from .services.social_profiles import build_social_media_links, get_business_website_url
 from .services.source_listings import get_source_deal_payloads, get_source_place_payload, get_source_place_payloads, load_source_records
@@ -505,6 +507,7 @@ class ProfileDashboardView(APIView):
 
 			claim = membership.claim
 			snapshot = claim.listing_snapshot
+			changed_business_fields = set()
 			try:
 				uploaded_photo_urls = _save_uploaded_profile_photo_urls(request, claim)
 			except ValueError as error:
@@ -517,6 +520,7 @@ class ProfileDashboardView(APIView):
 				if field_name in serializer.validated_data:
 					setattr(claim, field_name, serializer.validated_data[field_name])
 					claim_update_fields.append(field_name)
+					changed_business_fields.add(field_name)
 
 			if any(field_name in serializer.validated_data for field_name in ('business_website_url', 'social_profiles', 'social_media_links_text')):
 				claim.social_profiles = serializer.validated_data.get('social_profiles', {})
@@ -527,14 +531,17 @@ class ProfileDashboardView(APIView):
 				)
 				claim_update_fields.extend(['social_profiles', 'social_media_links', 'business_website_url'])
 				profile_entry_payload['social_media_links'] = claim.social_media_links
+				changed_business_fields.update({'business_website_url', 'social_profiles', 'social_media_links_text'})
 
 			if 'deal_overrides' in serializer.validated_data:
 				claim.deal_overrides = serializer.validated_data.get('deal_overrides', [])
 				claim_update_fields.append('deal_overrides')
+				changed_business_fields.add('deal_overrides')
 
 			if 'operating_hour_overrides' in serializer.validated_data:
 				claim.operating_hour_overrides = serializer.validated_data.get('operating_hour_overrides', [])
 				claim_update_fields.append('operating_hour_overrides')
+				changed_business_fields.add('operating_hour_overrides')
 
 			for request_field_name, claim_field_name in (
 				('offer_entries_text', 'offer_entries'),
@@ -546,6 +553,7 @@ class ProfileDashboardView(APIView):
 					setattr(claim, claim_field_name, normalized_entries)
 					claim_update_fields.append(claim_field_name)
 					profile_entry_payload[claim_field_name] = normalized_entries
+					changed_business_fields.add(request_field_name)
 					if claim_field_name == 'photo_references':
 						claim.photo_gallery_overridden = True
 						claim_update_fields.append('photo_gallery_overridden')
@@ -556,12 +564,15 @@ class ProfileDashboardView(APIView):
 				claim.photo_gallery_overridden = True
 				claim_update_fields.append('photo_gallery_overridden')
 				profile_entry_payload['photo_references'] = claim.photo_references
+				changed_business_fields.add('photo_references_text')
 
 			claim.save(update_fields=list(dict.fromkeys(claim_update_fields)))
 			if profile_entry_payload:
 				_replace_claim_profile_entries(claim, profile_entry_payload)
 			if snapshot_update_fields:
 				snapshot.save(update_fields=list(dict.fromkeys(snapshot_update_fields)))
+			if changed_business_fields:
+				create_notifications_for_business_profile_update(claim, changed_business_fields)
 
 		response_payload = build_account_response(user, portal, token=request.auth)
 		response_payload['detail'] = 'Profile updated. Verify your new email address to finish the email change.' if email_changed else 'Profile updated.'
@@ -674,6 +685,33 @@ class FavoriteBusinessView(APIView):
 		response_payload = build_account_response(request.user, portal, token=request.auth)
 		response_payload['detail'] = detail
 		return Response(response_payload)
+
+
+class PushDeviceRegistrationView(APIView):
+	authentication_classes = [ProfileTokenAuthentication]
+	permission_classes = [IsAuthenticated]
+
+	def post(self, request):
+		serializer = PushDeviceRegistrationSerializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		portal = infer_portal_for_user(request.user, serializer.validated_data.get('portal'))
+		if portal != 'customer':
+			return Response({'detail': 'Only customer accounts can enable favorite business push notifications.'}, status=status.HTTP_403_FORBIDDEN)
+
+		installation_id = serializer.validated_data['installation_id']
+		push_token = serializer.validated_data['push_token']
+		FavoriteBusinessPushDevice.objects.filter(expo_push_token=push_token).exclude(installation_id=installation_id).delete()
+		FavoriteBusinessPushDevice.objects.update_or_create(
+			installation_id=installation_id,
+			defaults={
+				'user': request.user,
+				'expo_push_token': push_token,
+				'platform': serializer.validated_data['platform'],
+				'is_active': True,
+				'last_error': '',
+			},
+		)
+		return Response({'detail': 'Push notifications enabled.'})
 
 
 class ContactSupportView(generics.GenericAPIView):

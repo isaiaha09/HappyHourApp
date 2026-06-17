@@ -26,7 +26,7 @@ import pyotp
 
 from .admin import BusinessAccountAdmin, BusinessClaimAdmin, CustomerAccountAdmin, DeletedBusinessAdmin, ListingSnapshotAdmin, ListingSnapshotAdminForm, ProviderUsageWindowAdmin, _sync_listing_snapshot_from_imported_place
 from .admin_site import happyhour_admin_site
-from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessMembership, BusinessPost, City, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, FeedEngagement, FeedImpression, ListingSnapshot, ProfileAuthToken, ProviderUsageWindow, SponsoredCampaign, VenueType, Weekday
+from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessMembership, BusinessPost, City, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedEngagement, FeedImpression, ListingSnapshot, ProfileAuthToken, ProviderUsageWindow, SponsoredCampaign, VenueType, Weekday
 from .services.importers.base import BaseHtmlImporter
 from .services.importers.business_websites import BusinessWebsiteImporter
 from .services.importers.discovered_json_places import CuratedJsonPlacesImporter, DiscoveryJsonPlacesImporter, load_discovery_json_records, write_discovery_json_records
@@ -2621,6 +2621,46 @@ class SourceListingIdentityTests(TestCase):
 		self.assertEqual(payload['locations'][0]['postal_code'], '93030')
 		self.assertEqual(payload['image_urls'], ['https://images.example.com/yard-house-imported.jpg'])
 		self.assertEqual(payload['locations'][0]['image_urls'], ['https://images.example.com/yard-house-imported.jpg'])
+
+	@patch('places.services.source_listings._get_place_coordinates')
+	@patch('places.services.source_listings.load_source_records')
+	def test_public_place_payload_hides_suppressed_source_images_for_unclaimed_businesses(self, mock_load_source_records, mock_get_place_coordinates):
+		mock_get_place_coordinates.return_value = (34.2001, -119.1806)
+		mock_load_source_records.return_value = [
+			ImportedPlace(
+				name='Photo Spot',
+				profile_name='Photo Spot',
+				profile_slug='photo-spot',
+				city=City.VENTURA,
+				venue_type=VenueType.RESTAURANT,
+				address_line_1='123 Main St',
+				state='CA',
+				postal_code='93001',
+				website_url='https://imported.example.com/photo-spot',
+				source_name='business_websites',
+				source_url='https://imported.example.com/photo-spot',
+				image_urls=[
+					'https://images.example.com/keep.jpg',
+					'https://images.example.com/remove.jpg',
+				],
+			),
+		]
+		ListingSnapshot.objects.create(
+			name='Photo Spot',
+			listing_slug='photo-spot',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='123 Main St',
+			source_name='business_websites',
+			external_id='',
+			imported_image_urls=['https://images.example.com/keep.jpg'],
+			suppressed_imported_image_urls=['https://images.example.com/remove.jpg'],
+		)
+
+		payload = get_source_place_payload('photo-spot')
+
+		self.assertEqual(payload['image_urls'], ['https://images.example.com/keep.jpg'])
+		self.assertEqual(payload['locations'][0]['image_urls'], ['https://images.example.com/keep.jpg'])
 
 	@patch('places.services.source_listings._get_place_coordinates')
 	@patch('places.services.source_listings.load_source_records')
@@ -6269,6 +6309,247 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertFalse(FavoriteBusiness.objects.filter(user=self.user, listing_slug='favorite-tacos-ventura').exists())
 		self.assertEqual(response.data['detail'], 'Business removed from favorites.')
+
+	def test_profile_push_device_registration_persists_customer_device(self):
+		response = self.client.post(
+			reverse('profile-push-devices'),
+			{
+				'installation_id': 'device-installation-1',
+				'push_token': 'ExponentPushToken[test-token-1]',
+				'platform': 'ios',
+				'portal': 'customer',
+			},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 200)
+		device = FavoriteBusinessPushDevice.objects.get(user=self.user)
+		self.assertEqual(device.installation_id, 'device-installation-1')
+		self.assertEqual(device.expo_push_token, 'ExponentPushToken[test-token-1]')
+		self.assertTrue(device.is_active)
+
+	@patch('places.services.favorite_notifications.send_push_notifications_for_favorite_business_event')
+	def test_profile_dashboard_update_sends_push_for_registered_favorite_device(self, mock_send_push):
+		snapshot = ListingSnapshot.objects.create(
+			name='Favorite Tacos',
+			listing_slug='favorite-tacos-ventura',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='123 Main St',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@favoritetacos.com',
+			work_phone='805-555-0200',
+			employer_address='123 Main St, Ventura, CA 93001',
+			verification_summary='I own the business.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+		customer_user = User.objects.create_user(username='favorite_customer_push', email='favoritepush@example.com', password='test-pass-123')
+		FavoriteBusiness.objects.create(
+			user=customer_user,
+			listing_slug='favorite-tacos-ventura',
+			name='Favorite Tacos',
+			city=City.VENTURA,
+			city_label='Ventura',
+			venue_type=VenueType.RESTAURANT,
+			venue_type_label='Restaurant',
+			address_line_1='123 Main St',
+			website_url='https://example.com/favorite-tacos',
+		)
+
+		response = self.client.post(
+			reverse('profile-dashboard'),
+			{
+				'portal': 'business',
+				'username': 'dashboard_user',
+				'email': 'dashboard@example.com',
+				'first_name': 'Dash',
+				'last_name': 'Board',
+				'work_phone': '805-555-0999',
+			},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 200)
+		mock_send_push.assert_called_once()
+		args, kwargs = mock_send_push.call_args
+		self.assertEqual(args[0], [customer_user.id])
+		self.assertEqual(kwargs['listing_slug'], 'favorite-tacos-ventura')
+		self.assertEqual(kwargs['event_type'], FavoriteBusinessNotification.EventType.PROFILE_UPDATE)
+
+	@patch('places.services.favorite_notifications.send_push_notifications_for_favorite_business_event')
+	def test_publishing_business_post_sends_push_for_registered_favorite_device(self, mock_send_push):
+		snapshot = ListingSnapshot.objects.create(
+			name='Favorite Tacos',
+			listing_slug='favorite-tacos-ventura',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='123 Main St',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@favoritetacos.com',
+			work_phone='805-555-0200',
+			employer_address='123 Main St, Ventura, CA 93001',
+			verification_summary='I own the business.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		membership = BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+		customer_user = User.objects.create_user(username='favorite_post_customer_push', email='postfavoritepush@example.com', password='test-pass-123')
+		FavoriteBusiness.objects.create(
+			user=customer_user,
+			listing_slug='favorite-tacos-ventura',
+			name='Favorite Tacos',
+			city=City.VENTURA,
+			city_label='Ventura',
+			venue_type=VenueType.RESTAURANT,
+			venue_type_label='Restaurant',
+			address_line_1='123 Main St',
+			website_url='https://example.com/favorite-tacos',
+		)
+
+		BusinessPost.objects.create(
+			membership=membership,
+			listing_snapshot=snapshot,
+			content_type=BusinessPost.ContentType.ANNOUNCEMENT,
+			status=BusinessPost.Status.PUBLISHED,
+			title='New patio opening',
+			summary='We just opened the patio for sunset happy hour.',
+		)
+
+		mock_send_push.assert_called_once()
+		args, kwargs = mock_send_push.call_args
+		self.assertEqual(args[0], [customer_user.id])
+		self.assertEqual(kwargs['listing_slug'], 'favorite-tacos-ventura')
+		self.assertEqual(kwargs['event_type'], FavoriteBusinessNotification.EventType.ANNOUNCEMENT)
+
+	def test_profile_dashboard_update_creates_favorite_business_notification(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Favorite Tacos',
+			listing_slug='favorite-tacos-ventura',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='123 Main St',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@favoritetacos.com',
+			work_phone='805-555-0200',
+			employer_address='123 Main St, Ventura, CA 93001',
+			verification_summary='I own the business.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+		customer_user = User.objects.create_user(username='favorite_customer', email='favorite@example.com', password='test-pass-123')
+		FavoriteBusiness.objects.create(
+			user=customer_user,
+			listing_slug='favorite-tacos-ventura',
+			name='Favorite Tacos',
+			city=City.VENTURA,
+			city_label='Ventura',
+			venue_type=VenueType.RESTAURANT,
+			venue_type_label='Restaurant',
+			address_line_1='123 Main St',
+			website_url='https://example.com/favorite-tacos',
+		)
+		customer_token = ProfileAuthToken.objects.create(user=customer_user)
+
+		response = self.client.post(
+			reverse('profile-dashboard'),
+			{
+				'portal': 'business',
+				'username': 'dashboard_user',
+				'email': 'dashboard@example.com',
+				'first_name': 'Dash',
+				'last_name': 'Board',
+				'work_phone': '805-555-0999',
+				'offer_entries_text': 'Taco Tuesday all day',
+			},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 200)
+		notification = FavoriteBusinessNotification.objects.get(user=customer_user)
+		self.assertEqual(notification.listing_slug, 'favorite-tacos-ventura')
+		self.assertEqual(notification.event_type, FavoriteBusinessNotification.EventType.PROFILE_UPDATE)
+		self.assertIn('updated its business profile', notification.title)
+		self.assertIn('deals', notification.message)
+		self.assertIn('phone number', notification.message)
+
+		customer_dashboard_response = self.client.get(
+			reverse('profile-dashboard'),
+			{'portal': 'customer'},
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+
+		self.assertEqual(customer_dashboard_response.status_code, 200)
+		self.assertEqual(len(customer_dashboard_response.data['favorite_business_notifications']), 1)
+		self.assertEqual(
+			customer_dashboard_response.data['favorite_business_notifications'][0]['event_type'],
+			FavoriteBusinessNotification.EventType.PROFILE_UPDATE,
+		)
+
+	def test_publishing_business_post_creates_favorite_business_notification(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Favorite Tacos',
+			listing_slug='favorite-tacos-ventura',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='123 Main St',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@favoritetacos.com',
+			work_phone='805-555-0200',
+			employer_address='123 Main St, Ventura, CA 93001',
+			verification_summary='I own the business.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		membership = BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+		customer_user = User.objects.create_user(username='favorite_post_customer', email='postfavorite@example.com', password='test-pass-123')
+		FavoriteBusiness.objects.create(
+			user=customer_user,
+			listing_slug='favorite-tacos-ventura',
+			name='Favorite Tacos',
+			city=City.VENTURA,
+			city_label='Ventura',
+			venue_type=VenueType.RESTAURANT,
+			venue_type_label='Restaurant',
+			address_line_1='123 Main St',
+			website_url='https://example.com/favorite-tacos',
+		)
+
+		post = BusinessPost.objects.create(
+			membership=membership,
+			listing_snapshot=snapshot,
+			content_type=BusinessPost.ContentType.ANNOUNCEMENT,
+			status=BusinessPost.Status.PUBLISHED,
+			title='New patio opening',
+			summary='We just opened the patio for sunset happy hour.',
+		)
+
+		notification = FavoriteBusinessNotification.objects.get(user=customer_user)
+		self.assertEqual(notification.source_post, post)
+		self.assertEqual(notification.event_type, FavoriteBusinessNotification.EventType.ANNOUNCEMENT)
+		self.assertEqual(notification.title, 'New announcement from Favorite Tacos')
+		self.assertEqual(notification.message, 'We just opened the patio for sunset happy hour.')
 
 	def test_profile_dashboard_reverts_unverified_email_change_after_24_hours(self):
 		self.profile.email_verified_at = timezone.now()

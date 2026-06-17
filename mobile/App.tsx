@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
+import * as Notifications from 'expo-notifications';
 import {
   ActivityIndicator,
   Animated,
@@ -22,6 +23,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { GestureHandlerRootView, PanGestureHandler, State } from 'react-native-gesture-handler';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker, type Region } from 'react-native-maps';
 
@@ -39,6 +41,7 @@ import {
   fetchPlaces,
   getDefaultApiBaseUrl,
   loginProfile,
+  registerPushDevice,
   requestPasswordReset,
   requestUsernameReminder,
   resendVerificationCode,
@@ -67,7 +70,7 @@ import {
   weekdayFilters,
   type WeekdayFilterValue,
 } from './src/browseConfig';
-import { AccountSettingsScreen, BusinessProfileEditorScreen, DashboardScreen } from './src/screens/DashboardScreen';
+import { AccountSettingsScreen, BusinessProfileEditorScreen, DashboardScreen, FavoriteBusinessNotificationsScreen, FavoriteBusinessesScreen } from './src/screens/DashboardScreen';
 import { BrowseControls } from './src/screens/BrowseControls';
 import { PhotoLightbox } from './src/components/PhotoLightbox';
 import { PlaceDetailScreen } from './src/screens/PlaceDetailScreen';
@@ -75,6 +78,7 @@ import { SplashScreen } from './src/screens/SplashScreen';
 import { shouldSkipBrowseMapAutoFit } from './src/mapBrowseState';
 import { buildSocialProfilesFromInputs, socialProfilesToInputs } from './src/socialProfiles';
 import { buildDealOverridesFromDeals, buildNormalizedDealOverrides, buildNormalizedOperatingHourOverrides, buildOperatingHourOverridesFromWindows } from './src/businessProfileOverrides';
+import { extractFavoriteBusinessSlugFromNotificationData, registerForPushNotificationsAsync } from './src/pushNotifications';
 import {
   AuthPortalScreen,
   BusinessClaimReviewPendingScreen,
@@ -168,7 +172,7 @@ const cityMapRegions: Record<Exclude<CityFilterValue, 'all'>, Region> = {
 };
 const mobileBusinessVenueType = 'mobile';
 const multipleAreasBusinessCityValue = multipleAreasBusinessCityOption.value;
-type AppScreenMode = 'splash' | 'auth' | 'browse' | 'profiles' | 'business-profile-editor' | 'settings' | 'support' | 'privacy-policy' | 'terms-of-service' | 'business-search' | 'business-claim' | 'manual-business-claim' | 'informal-business-claim' | 'email-verification' | 'business-claim-review-pending';
+type AppScreenMode = 'splash' | 'auth' | 'browse' | 'profiles' | 'favorite-businesses' | 'business-notifications' | 'business-profile-editor' | 'settings' | 'support' | 'privacy-policy' | 'terms-of-service' | 'business-search' | 'business-claim' | 'manual-business-claim' | 'informal-business-claim' | 'email-verification' | 'business-claim-review-pending';
 type OnboardingTransitionDirection = 'forward' | 'backward';
 type TransitionAxis = 'x' | 'y';
 type ClaimReturnDestination = 'business-search' | 'browse-map' | 'profiles';
@@ -203,6 +207,15 @@ type MappedPlace = MapPreviewPlace & {
   markerLongitude: number;
   markerKey: string;
 };
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: false,
+    shouldSetBadge: false,
+  }),
+});
 
 type BrowsePlace = MapPreviewPlace & {
   listKey: string;
@@ -415,9 +428,11 @@ const initialLoginFormState: LoginFormState = {
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <AppScreen />
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <AppScreen />
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
@@ -442,6 +457,8 @@ function AppScreen() {
   const mapPreviewOpacity = useRef(new Animated.Value(0)).current;
   const mapThemeFade = useRef(new Animated.Value(0)).current;
   const bottomMoreSheetProgress = useRef(new Animated.Value(0)).current;
+  const bottomMoreSheetDragY = useRef(new Animated.Value(0)).current;
+  const bottomMoreSheetClosingRef = useRef(false);
   const [apiBaseUrl, setApiBaseUrl] = useState(initialApiBaseUrl);
   const [screenMode, setScreenMode] = useState<AppScreenMode>('splash');
   const [onboardingTransitionDirection, setOnboardingTransitionDirection] = useState<OnboardingTransitionDirection>('forward');
@@ -559,6 +576,9 @@ function AppScreen() {
   const claimPrefillLoadedKeyRef = useRef('');
   const startupImageLoadCountRef = useRef(0);
   const appStateRef = useRef(AppState.currentState);
+  const pushRegistrationAuthTokenRef = useRef('');
+  const lastHandledNotificationResponseIdRef = useRef('');
+  const openFavoriteBusinessFromNotificationRef = useRef<(slug: string) => void>(() => undefined);
   const shouldUseNativeMapBoundaries = false;
   const normalizedSearchQuery = normalizeSearchText(searchQuery);
   const deferredSearchQuery = useDeferredValue(searchQuery);
@@ -659,6 +679,90 @@ function AppScreen() {
   useEffect(() => {
     authenticatedSessionRef.current = authenticatedSession;
   }, [authenticatedSession]);
+
+  useEffect(() => {
+    openFavoriteBusinessFromNotificationRef.current = (slug: string) => {
+      if (!slug) {
+        return;
+      }
+
+      setScreenMode('browse');
+      handleOpenFavoriteBusiness(slug);
+    };
+  });
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function restoreNotificationNavigation() {
+      try {
+        const response = await Notifications.getLastNotificationResponseAsync();
+        if (!isActive || !response) {
+          return;
+        }
+
+        handleNotificationResponse(response);
+      } catch {
+        // Ignore notification restoration failures.
+      }
+    }
+
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      handleNotificationResponse(response);
+    });
+
+    void restoreNotificationNavigation();
+
+    return () => {
+      isActive = false;
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    const authToken = authenticatedSession?.auth_token ?? '';
+    const portal = authenticatedSession?.portal;
+
+    if (!authToken || portal !== 'customer') {
+      pushRegistrationAuthTokenRef.current = '';
+      return;
+    }
+
+    if (pushRegistrationAuthTokenRef.current === authToken) {
+      return;
+    }
+
+    pushRegistrationAuthTokenRef.current = authToken;
+    let cancelled = false;
+
+    async function registerCurrentDeviceForPush() {
+      try {
+        const registration = await registerForPushNotificationsAsync();
+        if (!registration || cancelled) {
+          return;
+        }
+
+        await registerPushDevice(apiBaseUrl, authToken, {
+          installation_id: registration.installationId,
+          push_token: registration.pushToken,
+          platform: registration.platform,
+          portal,
+        });
+
+        if (!cancelled) {
+          void refreshDashboard(false);
+        }
+      } catch {
+        // Leave push registration as a best-effort enhancement.
+      }
+    }
+
+    void registerCurrentDeviceForPush();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBaseUrl, authenticatedSession?.auth_token, authenticatedSession?.portal]);
 
   function setAuthenticatedSessionIfCurrentToken(expectedAuthToken: string, session: SignupResponse) {
     if (authenticatedSessionRef.current?.auth_token !== expectedAuthToken) {
@@ -967,9 +1071,12 @@ function AppScreen() {
   }
 
   function openBottomMoreSheet() {
+    bottomMoreSheetClosingRef.current = false;
     setBottomMoreSheetVisible(true);
     bottomMoreSheetProgress.stopAnimation();
+    bottomMoreSheetDragY.stopAnimation();
     bottomMoreSheetProgress.setValue(0);
+    bottomMoreSheetDragY.setValue(0);
     requestAnimationFrame(() => {
       Animated.timing(bottomMoreSheetProgress, {
         duration: 240,
@@ -980,11 +1087,84 @@ function AppScreen() {
     });
   }
 
-  function closeBottomMoreSheet(afterClose?: () => void) {
+  function closeBottomMoreSheet(afterClose?: () => void, options?: { dragTargetY?: number; duration?: number }) {
+    if (!bottomMoreSheetVisible) {
+      afterClose?.();
+      return;
+    }
+
+    if (bottomMoreSheetClosingRef.current) {
+      return;
+    }
+
+    bottomMoreSheetClosingRef.current = true;
     bottomMoreSheetProgress.stopAnimation();
-    bottomMoreSheetProgress.setValue(0);
-    setBottomMoreSheetVisible(false);
-    afterClose?.();
+    bottomMoreSheetDragY.stopAnimation();
+    Animated.parallel([
+      Animated.timing(bottomMoreSheetProgress, {
+        duration: options?.duration ?? 220,
+        easing: Easing.out(Easing.cubic),
+        toValue: 0,
+        useNativeDriver: true,
+      }),
+      Animated.timing(bottomMoreSheetDragY, {
+        duration: options?.duration ?? 220,
+        easing: Easing.out(Easing.cubic),
+        toValue: options?.dragTargetY ?? 0,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      bottomMoreSheetProgress.setValue(0);
+      bottomMoreSheetDragY.setValue(0);
+      bottomMoreSheetClosingRef.current = false;
+      setBottomMoreSheetVisible(false);
+      afterClose?.();
+    });
+  }
+
+  function dismissBottomMoreSheetByDrag(translationY: number) {
+    closeBottomMoreSheet(undefined, {
+      dragTargetY: Math.max(translationY, 260),
+      duration: 180,
+    });
+  }
+
+  const bottomMoreSheetTranslateY = Animated.add(
+    bottomMoreSheetProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [42, 0],
+    }),
+    bottomMoreSheetDragY.interpolate({
+      inputRange: [-240, 0, 360],
+      outputRange: [0, 0, 360],
+      extrapolate: 'clamp',
+    }),
+  );
+
+  const handleBottomMoreSheetGestureEvent = Animated.event(
+    [{ nativeEvent: { translationY: bottomMoreSheetDragY } }],
+    { useNativeDriver: true },
+  );
+
+  function handleBottomMoreSheetStateChange(event: { nativeEvent: { oldState: number; state: number; translationY: number; velocityY: number } }) {
+    const { nativeEvent } = event;
+    if (nativeEvent.oldState !== State.ACTIVE && nativeEvent.state !== State.END) {
+      return;
+    }
+
+    const shouldDismiss = nativeEvent.translationY > 90 || nativeEvent.velocityY > 1100;
+    if (shouldDismiss) {
+      dismissBottomMoreSheetByDrag(nativeEvent.translationY);
+      return;
+    }
+
+    Animated.spring(bottomMoreSheetDragY, {
+      damping: 22,
+      mass: 0.7,
+      stiffness: 240,
+      toValue: 0,
+      useNativeDriver: true,
+    }).start();
   }
 
   function fadeIntoMainShellScreen(nextScreen: MainShellScreen) {
@@ -1065,10 +1245,13 @@ function AppScreen() {
       return;
     }
 
+    bottomMoreSheetClosingRef.current = false;
     setBottomMoreSheetVisible(false);
     bottomMoreSheetProgress.stopAnimation();
+    bottomMoreSheetDragY.stopAnimation();
     bottomMoreSheetProgress.setValue(0);
-  }, [authenticatedSession, bottomMoreSheetProgress, bottomMoreSheetVisible]);
+    bottomMoreSheetDragY.setValue(0);
+  }, [authenticatedSession, bottomMoreSheetDragY, bottomMoreSheetProgress, bottomMoreSheetVisible]);
 
   useEffect(() => {
     async function handleInitialUrl() {
@@ -1088,8 +1271,8 @@ function AppScreen() {
     };
   }, [apiBaseUrl]);
   const availableClaimPlaces = consolidatePlacesBySlug(availableProfilePlaces);
-  const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service', 'business-search', 'business-claim', 'manual-business-claim', 'informal-business-claim', 'email-verification', 'business-claim-review-pending']);
-  const profileStackTransitionScreens = new Set<AppScreenMode>(['profiles', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service']);
+  const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service', 'business-search', 'business-claim', 'manual-business-claim', 'informal-business-claim', 'email-verification', 'business-claim-review-pending']);
+  const profileStackTransitionScreens = new Set<AppScreenMode>(['profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service']);
   const currentOnboardingScreen = onboardingScreenKeys.has(screenMode) ? screenMode : null;
   const usesOnboardingSlideTransition = currentOnboardingScreen !== null || incomingOnboardingScreen !== null;
   const usesProfileStackSlideTransition = currentOnboardingScreen !== null
@@ -1594,7 +1777,7 @@ function AppScreen() {
       return;
     }
 
-    const currentBrowseProfileScreen = ['profiles', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service'].includes(screenMode)
+    const currentBrowseProfileScreen = ['profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service'].includes(screenMode)
       ? 'profiles'
       : 'browse';
 
@@ -2542,6 +2725,21 @@ function AppScreen() {
     setSelectedPlaceSlug(slug);
   }
 
+  function handleNotificationResponse(response: Notifications.NotificationResponse) {
+    const responseId = response.notification.request.identifier;
+    if (lastHandledNotificationResponseIdRef.current === responseId) {
+      return;
+    }
+
+    lastHandledNotificationResponseIdRef.current = responseId;
+    const slug = extractFavoriteBusinessSlugFromNotificationData(response.notification.request.content.data);
+    if (!slug) {
+      return;
+    }
+
+    openFavoriteBusinessFromNotificationRef.current(slug);
+  }
+
   function handleOpenBusinessProfileEditorFromDashboard() {
     if (!authenticatedSession?.approved_businesses?.length) {
       return;
@@ -2768,6 +2966,32 @@ function AppScreen() {
     navigateScreen('support', 'forward');
   }
 
+  function handleOpenFavoriteBusinesses() {
+    dismissKeyboardForScreenTransition();
+    setProfileErrorMessage(null);
+    setProfileMessage(null);
+    navigateScreen('favorite-businesses', 'forward');
+  }
+
+  function handleBackFromFavoriteBusinesses() {
+    dismissKeyboardForScreenTransition();
+    setProfileErrorMessage(null);
+    navigateScreen('profiles', 'backward');
+  }
+
+  function handleOpenBusinessNotifications() {
+    dismissKeyboardForScreenTransition();
+    setProfileErrorMessage(null);
+    setProfileMessage(null);
+    navigateScreen('business-notifications', 'forward');
+  }
+
+  function handleBackFromBusinessNotifications() {
+    dismissKeyboardForScreenTransition();
+    setProfileErrorMessage(null);
+    navigateScreen('profiles', 'backward');
+  }
+
   function handleBackFromSupport() {
     dismissKeyboardForScreenTransition();
     setProfileErrorMessage(null);
@@ -2903,7 +3127,7 @@ function AppScreen() {
     setSelectedLocationId(null);
     setSelectedMapPlaceKey(null);
 
-    if (['business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service'].includes(screenMode)) {
+    if (['favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service'].includes(screenMode)) {
       navigateScreen('profiles', 'backward');
       return;
     }
@@ -2946,6 +3170,38 @@ function AppScreen() {
     }
 
     closeBottomMoreSheet(() => navigateScreen('settings', 'forward'));
+  }
+
+  function handleBottomMenuOpenFavoriteBusinesses() {
+    if (screenMode === 'favorite-businesses') {
+      closeBottomMoreSheet();
+      return;
+    }
+
+    clearSelectedPlaceRoute();
+
+    if (screenMode === 'browse') {
+      closeBottomMoreSheet(() => navigateBrowseProfileTransition('profiles', 'favorite-businesses'));
+      return;
+    }
+
+    closeBottomMoreSheet(() => navigateScreen('favorite-businesses', 'forward'));
+  }
+
+  function handleBottomMenuOpenBusinessNotifications() {
+    if (screenMode === 'business-notifications') {
+      closeBottomMoreSheet();
+      return;
+    }
+
+    clearSelectedPlaceRoute();
+
+    if (screenMode === 'browse') {
+      closeBottomMoreSheet(() => navigateBrowseProfileTransition('profiles', 'business-notifications'));
+      return;
+    }
+
+    closeBottomMoreSheet(() => navigateScreen('business-notifications', 'forward'));
   }
 
   function handleBottomMenuOpenSupport() {
@@ -3946,6 +4202,32 @@ function AppScreen() {
     const profileSession = profileSessionOverride ?? authenticatedSession;
     const targetScreen = targetScreenOverride ?? screenMode;
 
+    if (targetScreen === 'favorite-businesses' && profileSession?.profile_type !== 'business') {
+      return (
+        <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
+          <FavoriteBusinessesScreen
+            isLandscape={isLandscape}
+            onBack={handleBackFromFavoriteBusinesses}
+            onOpenFavoriteBusiness={handleOpenFavoriteBusiness}
+            session={profileSession!}
+          />
+        </SafeAreaView>
+      );
+    }
+
+    if (targetScreen === 'business-notifications' && profileSession?.profile_type !== 'business') {
+      return (
+        <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
+          <FavoriteBusinessNotificationsScreen
+            isLandscape={isLandscape}
+            onBack={handleBackFromBusinessNotifications}
+            onOpenFavoriteBusiness={handleOpenFavoriteBusiness}
+            session={profileSession!}
+          />
+        </SafeAreaView>
+      );
+    }
+
     if (targetScreen === 'support' && profileSession) {
       return (
         <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
@@ -4042,6 +4324,8 @@ function AppScreen() {
             onOpenApprovedBusiness={handleOpenFavoriteBusiness}
             onOpenBusinessProfileEditor={handleOpenBusinessProfileEditorFromDashboard}
             onOpenFavoriteBusiness={handleOpenFavoriteBusiness}
+            onOpenFavoriteBusinesses={handleOpenFavoriteBusinesses}
+            onOpenBusinessNotifications={handleOpenBusinessNotifications}
             onOpenPlaces={handleContinueToApp}
             onOpenSettings={handleOpenSettings}
             onRefresh={() => void refreshDashboard()}
@@ -4123,7 +4407,7 @@ function AppScreen() {
   function renderBottomNav(options: { guest: boolean }) {
     let activeItem: MainShellBottomNavItem = 'map';
     if (!options.guest) {
-      if (['settings', 'support', 'privacy-policy', 'terms-of-service'].includes(screenMode)) {
+      if (['settings', 'support', 'privacy-policy', 'terms-of-service', 'favorite-businesses', 'business-notifications'].includes(screenMode)) {
         activeItem = 'more';
       } else if (screenMode !== 'browse') {
         activeItem = 'profile';
@@ -4146,7 +4430,7 @@ function AppScreen() {
             </View>
             <Text style={[styles.bottomNavItemLabel, activeItem === 'profile' ? styles.bottomNavItemLabelActive : null]}>Profile</Text>
           </Pressable>
-          <Pressable accessibilityLabel="Open more menu" onPress={handleBottomNavOpenMore} style={styles.bottomNavItem}>
+          <Pressable accessibilityLabel="Open more menu" hitSlop={12} onPress={handleBottomNavOpenMore} pressRetentionOffset={12} style={styles.bottomNavItem}>
             <View style={[styles.bottomNavItemIconWrap, activeItem === 'more' || bottomMoreSheetVisible ? styles.bottomNavItemIconWrapActive : null]}>
               {renderBottomNavIcon('more', activeItem === 'more' || bottomMoreSheetVisible)}
             </View>
@@ -4239,7 +4523,7 @@ function AppScreen() {
       && profileStackTransitionScreens.has(currentOnboardingScreen)
       && profileStackTransitionScreens.has(incomingOnboardingScreen);
     const transitionActive = usesBrowseProfileSlideTransition || profileStackTransitionActive;
-    const showingProfile = ['profiles', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service'].includes(screenMode);
+    const showingProfile = ['profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service'].includes(screenMode);
     const incomingProfileScreen = transitionActive && incomingBrowseProfileScreen === 'profiles'
       ? incomingBrowseProfileTargetScreen ?? 'profiles'
       : undefined;
@@ -4336,6 +4620,10 @@ function AppScreen() {
         );
       case 'profiles':
         return renderProfilesScreen(profileSessionOverride, 'profiles');
+      case 'favorite-businesses':
+        return renderProfilesScreen(profileSessionOverride, 'favorite-businesses');
+      case 'business-notifications':
+        return renderProfilesScreen(profileSessionOverride, 'business-notifications');
       case 'business-profile-editor':
         return renderProfilesScreen(profileSessionOverride, 'business-profile-editor');
       case 'settings':
@@ -4971,7 +5259,7 @@ function AppScreen() {
             {renderOnboardingScreen('auth')}
           </Animated.View>
         </View>
-      ) : authenticatedSession && !selectedPlaceSlug && (['profiles', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service', 'browse'].includes(screenMode) || usesBrowseProfileSlideTransition || usesProfileStackSlideTransition) ? (
+      ) : authenticatedSession && !selectedPlaceSlug && (['profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service', 'browse'].includes(screenMode) || usesBrowseProfileSlideTransition || usesProfileStackSlideTransition) ? (
         renderAuthenticatedMainShell()
       ) : !authenticatedSession && !selectedPlaceSlug && (screenMode === 'browse' || currentOnboardingScreen !== null || usesGuestBrowseSlideTransition || incomingOnboardingScreen !== null || returningToSplashScreen !== null) ? (
         renderGuestMainShell()
@@ -5035,39 +5323,57 @@ function AppScreen() {
         visible={bottomMoreSheetVisible}
       >
         <View style={styles.bottomSheetBackdrop}>
-          <Pressable onPress={() => closeBottomMoreSheet()} style={styles.bottomSheetBackdropPressable} />
-          <Animated.View
-            style={[
-              styles.bottomSheetCard,
-              {
-                opacity: bottomMoreSheetProgress,
-                transform: [{
-                  translateY: bottomMoreSheetProgress.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [42, 0],
-                  }),
-                }],
-              },
-            ]}
-          >
-            <View style={styles.bottomSheetHandle} />
-            <Text style={styles.bottomSheetTitle}>More</Text>
-            <Pressable onPress={handleBottomMenuOpenSettings} style={styles.bottomSheetActionButton}>
-              <Text style={styles.bottomSheetActionText}>Settings</Text>
-            </Pressable>
-            <Pressable onPress={handleBottomMenuOpenSupport} style={styles.bottomSheetActionButton}>
-              <Text style={styles.bottomSheetActionText}>Contact Support</Text>
-            </Pressable>
-            <Pressable onPress={handleBottomMenuOpenTerms} style={styles.bottomSheetActionButton}>
-              <Text style={styles.bottomSheetActionText}>Terms of Service and Agreements</Text>
-            </Pressable>
-            <Pressable onPress={handleBottomMenuOpenPrivacy} style={styles.bottomSheetActionButton}>
-              <Text style={styles.bottomSheetActionText}>Privacy Policy</Text>
-            </Pressable>
-            <Pressable onPress={() => closeBottomMoreSheet(() => handleLogout())} style={[styles.bottomSheetActionButton, styles.bottomSheetActionButtonDestructive]}>
-              <Text style={[styles.bottomSheetActionText, styles.bottomSheetActionTextDestructive]}>Log out</Text>
-            </Pressable>
+          <Animated.View pointerEvents="box-none" style={[styles.bottomSheetBackdropOverlay, { opacity: bottomMoreSheetProgress }]}> 
+            <Pressable onPress={() => closeBottomMoreSheet()} style={styles.bottomSheetBackdropPressable} />
           </Animated.View>
+          <PanGestureHandler
+            activeOffsetY={8}
+            failOffsetX={[-16, 16]}
+            onGestureEvent={handleBottomMoreSheetGestureEvent}
+            onHandlerStateChange={handleBottomMoreSheetStateChange}
+          >
+            <Animated.View
+              style={[
+                styles.bottomSheetCard,
+                {
+                  opacity: bottomMoreSheetProgress,
+                  transform: [{
+                    translateY: bottomMoreSheetTranslateY,
+                  }],
+                },
+              ]}
+            >
+              <View style={styles.bottomSheetDragZone}>
+                <View style={styles.bottomSheetHandle} />
+                <Text style={styles.bottomSheetTitle}>More</Text>
+              </View>
+              {authenticatedSession?.profile_type !== 'business' ? (
+                <>
+                  <Pressable onPress={handleBottomMenuOpenFavoriteBusinesses} style={styles.bottomSheetActionButton}>
+                    <Text style={styles.bottomSheetActionText}>Favorite Businesses</Text>
+                  </Pressable>
+                  <Pressable onPress={handleBottomMenuOpenBusinessNotifications} style={styles.bottomSheetActionButton}>
+                    <Text style={styles.bottomSheetActionText}>Business Notifications</Text>
+                  </Pressable>
+                </>
+              ) : null}
+              <Pressable onPress={handleBottomMenuOpenSettings} style={styles.bottomSheetActionButton}>
+                <Text style={styles.bottomSheetActionText}>Settings</Text>
+              </Pressable>
+              <Pressable onPress={handleBottomMenuOpenSupport} style={styles.bottomSheetActionButton}>
+                <Text style={styles.bottomSheetActionText}>Contact Support</Text>
+              </Pressable>
+              <Pressable onPress={handleBottomMenuOpenTerms} style={styles.bottomSheetActionButton}>
+                <Text style={styles.bottomSheetActionText}>Terms of Service and Agreements</Text>
+              </Pressable>
+              <Pressable onPress={handleBottomMenuOpenPrivacy} style={styles.bottomSheetActionButton}>
+                <Text style={styles.bottomSheetActionText}>Privacy Policy</Text>
+              </Pressable>
+              <Pressable onPress={() => closeBottomMoreSheet(() => handleLogout())} style={[styles.bottomSheetActionButton, styles.bottomSheetActionButtonDestructive]}>
+                <Text style={[styles.bottomSheetActionText, styles.bottomSheetActionTextDestructive]}>Log out</Text>
+              </Pressable>
+            </Animated.View>
+          </PanGestureHandler>
         </View>
       </Modal>
       <Modal

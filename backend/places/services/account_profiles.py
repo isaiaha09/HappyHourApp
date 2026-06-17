@@ -5,7 +5,7 @@ from django.utils.html import escape
 from django.utils import timezone
 from email.utils import formataddr, parseaddr
 
-from places.models import AccountProfile, BusinessClaim, FavoriteBusiness, ProfileAuthToken, SponsoredCampaign, VenueType
+from places.models import AccountProfile, BusinessClaim, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, ProfileAuthToken, SponsoredCampaign, VenueType
 from places.services.business_profile_overrides import build_deal_payloads, build_operating_hour_payloads
 from places.services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
 
@@ -174,6 +174,20 @@ def build_account_response(user, portal, claim=None, token=None):
 		}
 		for favorite in FavoriteBusiness.objects.filter(user=user).order_by('name', 'city_label', '-created_at')
 	]
+	favorite_business_notifications = [
+		{
+			'id': notification.id,
+			'slug': notification.listing_slug,
+			'business_name': notification.business_name,
+			'event_type': notification.event_type,
+			'title': notification.title,
+			'message': notification.message,
+			'post_id': notification.source_post_id,
+			'created_at': notification.created_at,
+		}
+		for notification in FavoriteBusinessNotification.objects.filter(user=user).select_related('source_post')[:20]
+	]
+	push_notifications_enabled = FavoriteBusinessPushDevice.objects.filter(user=user, is_active=True).exists()
 	sponsored_campaigns = _build_sponsored_campaign_summaries(memberships)
 
 	business_contact = {}
@@ -248,6 +262,8 @@ def build_account_response(user, portal, claim=None, token=None):
 		'approved_businesses': approved_businesses,
 		'sponsored_campaigns': sponsored_campaigns,
 		'favorite_businesses': favorite_businesses,
+		'favorite_business_notifications': favorite_business_notifications,
+		'push_notifications_enabled': push_notifications_enabled,
 		'business_contact': business_contact,
 		'business_location_tracking_available': business_location_tracking_available,
 		'business_location_tracking_enabled': business_location_tracking_enabled,

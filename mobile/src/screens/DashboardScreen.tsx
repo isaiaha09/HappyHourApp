@@ -8,7 +8,7 @@ import { buildDealOverridesFromDeals, buildNormalizedDealOverrides, buildNormali
 import { BusinessDealsEditor, BusinessHoursEditor } from '../components/BusinessProfileStructuredEditors';
 import { SOCIAL_PLATFORM_LABELS, buildSocialProfilesFromInputs, getSocialProfilePreview, getSocialProfileValidationMessage, socialProfilesToInputs } from '../socialProfiles';
 import { dedupeImageUrls, normalizeSearchText } from '../placeHelpers';
-import type { BusinessAttachmentDraft, ProfileDashboardUpdateRequest, SignupResponse, TwoFactorSetupResponse } from '../types';
+import type { BusinessAttachmentDraft, FavoriteBusinessNotification, ProfileDashboardUpdateRequest, SignupResponse, TwoFactorSetupResponse } from '../types';
 
 export type DashboardScreenProps = {
   errorMessage: string | null;
@@ -20,6 +20,8 @@ export type DashboardScreenProps = {
   onOpenApprovedBusiness: (slug: string) => void;
   onOpenBusinessProfileEditor: () => void;
   onOpenFavoriteBusiness: (slug: string) => void;
+  onOpenFavoriteBusinesses: () => void;
+  onOpenBusinessNotifications: () => void;
   onOpenPlaces: () => void;
   onOpenSettings: () => void;
   onRefresh: () => void;
@@ -108,6 +110,57 @@ function formatCampaignPercent(value: number) {
 
 function joinDraftEntries(values?: string[]) {
   return (values ?? []).join('\n');
+}
+
+function formatDashboardNotificationTimestamp(value: string) {
+  const parsedValue = new Date(value);
+  if (Number.isNaN(parsedValue.getTime())) {
+    return '';
+  }
+  return parsedValue.toLocaleString();
+}
+
+function FavoriteBusinessCard({
+  addressLine,
+  cityLabel,
+  name,
+  onPress,
+  venueTypeLabel,
+}: {
+  addressLine: string;
+  cityLabel: string;
+  name: string;
+  onPress: () => void;
+  venueTypeLabel: string;
+}) {
+  return (
+    <Pressable onPress={onPress} style={[styles.dashboardDetailItem, styles.dashboardFavoriteBusinessCard]}>
+      <Text style={styles.dashboardDetailValue}>{name}</Text>
+      <Text style={styles.dashboardSupportText}>{cityLabel} • {venueTypeLabel}</Text>
+      <Text style={styles.dashboardSupportText}>{addressLine}</Text>
+      <Text style={styles.dashboardFavoriteBusinessAction}>Open business profile</Text>
+    </Pressable>
+  );
+}
+
+function FavoriteBusinessNotificationCard({
+  notification,
+  onPress,
+}: {
+  notification: FavoriteBusinessNotification;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={[styles.dashboardDetailItem, styles.dashboardNotificationCard]}>
+      <View style={styles.dashboardNotificationHeader}>
+        <Text style={styles.dashboardNotificationTitle}>{notification.title}</Text>
+        <Text style={styles.dashboardNotificationTimestamp}>{formatDashboardNotificationTimestamp(notification.created_at)}</Text>
+      </View>
+      {notification.message ? <Text style={styles.dashboardSupportText}>{notification.message}</Text> : null}
+      <Text style={styles.dashboardSupportText}>{notification.business_name}</Text>
+      <Text style={styles.dashboardFavoriteBusinessAction}>Open business profile</Text>
+    </Pressable>
+  );
 }
 
 type BusinessProfileDraft = ProfileDashboardUpdateRequest & {
@@ -361,16 +414,16 @@ function SecuritySettingsSection({
   );
 }
 
-export function DashboardScreen({ errorMessage, isLandscape, loading, message, onBack, onOpenBilling, onOpenApprovedBusiness, onOpenBusinessProfileEditor, onOpenFavoriteBusiness, onOpenPlaces, onOpenSettings, onRefresh, onResendVerification, onSaveProfileDetails, session, submitting }: DashboardScreenProps) {
+export function DashboardScreen({ errorMessage, isLandscape, loading, message, onBack, onOpenBilling, onOpenApprovedBusiness, onOpenBusinessProfileEditor, onOpenFavoriteBusiness, onOpenFavoriteBusinesses, onOpenBusinessNotifications, onOpenPlaces, onOpenSettings, onRefresh, onResendVerification, onSaveProfileDetails, session, submitting }: DashboardScreenProps) {
   const approvedBusinesses = session.approved_businesses ?? [];
   const sponsoredCampaigns = session.sponsored_campaigns ?? [];
   const favoriteBusinesses = session.favorite_businesses ?? [];
+  const favoriteBusinessNotifications = session.favorite_business_notifications ?? [];
   const fullName = [session.first_name, session.last_name].filter(Boolean).join(' ');
   const trackedBusinessLocation = session.tracked_business_location ?? {};
   const trackedBusinessLocationUpdatedAt = trackedBusinessLocation.updated_at
     ? new Date(trackedBusinessLocation.updated_at).toLocaleString()
     : null;
-  const [favoriteSearchQuery, setFavoriteSearchQuery] = useState('');
   const [profileDraft, setProfileDraft] = useState<ProfileDashboardUpdateRequest>(() => buildDashboardDraft(session));
 
   useEffect(() => {
@@ -381,26 +434,6 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
     || profileDraft.email !== session.email
     || profileDraft.first_name !== session.first_name
     || profileDraft.last_name !== session.last_name;
-  const normalizedFavoriteSearchQuery = normalizeSearchText(favoriteSearchQuery);
-  const filteredFavoriteBusinesses = favoriteBusinesses.filter((business) => {
-    if (!normalizedFavoriteSearchQuery.length) {
-      return true;
-    }
-
-    const searchableText = normalizeSearchText([
-      business.name,
-      business.city_label,
-      business.venue_type_label,
-      business.address_line_1,
-    ].filter(Boolean).join(' '));
-
-    return searchableText.includes(normalizedFavoriteSearchQuery);
-  });
-
-  useEffect(() => {
-    setFavoriteSearchQuery('');
-  }, [session.favorite_businesses]);
-
   function buildSavePayload(): ProfileDashboardUpdateRequest {
     const payload: ProfileDashboardUpdateRequest = {
       portal: session.portal,
@@ -512,33 +545,25 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
 
             {session.profile_type !== 'business' ? (
               <View style={styles.dashboardSection}>
+                <Text style={styles.dashboardSectionTitle}>Business notifications</Text>
+                <Text style={styles.dashboardSupportText}>When a favorited business updates its profile or publishes new content, those alerts will appear on a dedicated screen.</Text>
+                <View style={styles.dashboardInlineActions}>
+                  <Pressable onPress={onOpenBusinessNotifications} style={[styles.linkButtonSecondaryWide, styles.dashboardInlineButton]}>
+                    <Text style={styles.linkButtonSecondaryText}>{favoriteBusinessNotifications.length ? `View business notifications (${favoriteBusinessNotifications.length})` : 'View business notifications'}</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
+
+            {session.profile_type !== 'business' ? (
+              <View style={styles.dashboardSection}>
                 <Text style={styles.dashboardSectionTitle}>Favorite businesses</Text>
-                {favoriteBusinesses.length > 1 ? (
-                  <TextInput
-                    onChangeText={setFavoriteSearchQuery}
-                    placeholder="Search favorite businesses"
-                    placeholderTextColor="#9a7f6c"
-                    style={styles.profileInput}
-                    value={favoriteSearchQuery}
-                  />
-                ) : null}
-                {favoriteBusinesses.length ? (
-                  <View style={styles.dashboardFieldGrid}>
-                    {filteredFavoriteBusinesses.map((business) => (
-                      <Pressable key={business.slug} onPress={() => onOpenFavoriteBusiness(business.slug)} style={[styles.dashboardDetailItem, styles.dashboardFavoriteBusinessCard]}>
-                        <Text style={styles.dashboardDetailValue}>{business.name}</Text>
-                        <Text style={styles.dashboardSupportText}>{business.city_label} • {business.venue_type_label}</Text>
-                        <Text style={styles.dashboardSupportText}>{business.address_line_1}</Text>
-                        <Text style={styles.dashboardFavoriteBusinessAction}>Open business profile</Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                ) : null}
-                {favoriteBusinesses.length && !filteredFavoriteBusinesses.length ? (
-                  <Text style={styles.dashboardSupportText}>No favorite businesses matched that search.</Text>
-                ) : (
-                  !favoriteBusinesses.length ? <Text style={styles.dashboardSupportText}>Star businesses from place details to keep a list of favorites here.</Text> : null
-                )}
+                <Text style={styles.dashboardSupportText}>Open your saved businesses on a dedicated screen so you can browse them separately from the rest of the dashboard.</Text>
+                <View style={styles.dashboardInlineActions}>
+                  <Pressable onPress={onOpenFavoriteBusinesses} style={[styles.linkButtonSecondaryWide, styles.dashboardInlineButton]}>
+                    <Text style={styles.linkButtonSecondaryText}>{favoriteBusinesses.length ? `View favorite businesses (${favoriteBusinesses.length})` : 'View favorite businesses'}</Text>
+                  </Pressable>
+                </View>
               </View>
             ) : null}
 
@@ -653,6 +678,142 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+    </View>
+  );
+}
+
+export function FavoriteBusinessesScreen({
+  isLandscape,
+  onBack,
+  onOpenFavoriteBusiness,
+  session,
+}: {
+  isLandscape: boolean;
+  onBack: () => void;
+  onOpenFavoriteBusiness: (slug: string) => void;
+  session: SignupResponse;
+}) {
+  const favoriteBusinesses = session.favorite_businesses ?? [];
+  const [favoriteSearchQuery, setFavoriteSearchQuery] = useState('');
+  const normalizedFavoriteSearchQuery = normalizeSearchText(favoriteSearchQuery);
+  const filteredFavoriteBusinesses = favoriteBusinesses.filter((business) => {
+    if (!normalizedFavoriteSearchQuery.length) {
+      return true;
+    }
+
+    const searchableText = normalizeSearchText([
+      business.name,
+      business.city_label,
+      business.venue_type_label,
+      business.address_line_1,
+    ].filter(Boolean).join(' '));
+
+    return searchableText.includes(normalizedFavoriteSearchQuery);
+  });
+
+  useEffect(() => {
+    setFavoriteSearchQuery('');
+  }, [session.favorite_businesses]);
+
+  return (
+    <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
+      <ScrollView contentContainerStyle={styles.dashboardScrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <View style={styles.screenHeaderBar}>
+          <View style={styles.dashboardHeaderRow}>
+            <Pressable onPress={onBack} style={styles.backButton}>
+              <Text style={styles.backButtonText}>Back to Profile</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.dashboardShell}>
+          <Text style={styles.detailCity}>Customer Dashboard</Text>
+          <Text style={styles.detailTitle}>Favorite Businesses</Text>
+          <Text style={styles.profileIntroText}>Open one of your saved businesses to jump back into its public profile.</Text>
+
+          <View style={styles.dashboardSection}>
+            <Text style={styles.dashboardSectionTitle}>Saved businesses</Text>
+            {favoriteBusinesses.length > 1 ? (
+              <TextInput
+                onChangeText={setFavoriteSearchQuery}
+                placeholder="Search favorite businesses"
+                placeholderTextColor="#9a7f6c"
+                style={styles.profileInput}
+                value={favoriteSearchQuery}
+              />
+            ) : null}
+            {filteredFavoriteBusinesses.length ? (
+              <View style={styles.dashboardFieldGrid}>
+                {filteredFavoriteBusinesses.map((business) => (
+                  <FavoriteBusinessCard
+                    key={business.slug}
+                    addressLine={business.address_line_1}
+                    cityLabel={business.city_label}
+                    name={business.name}
+                    onPress={() => onOpenFavoriteBusiness(business.slug)}
+                    venueTypeLabel={business.venue_type_label}
+                  />
+                ))}
+              </View>
+            ) : favoriteBusinesses.length ? (
+              <Text style={styles.dashboardSupportText}>No favorite businesses matched that search.</Text>
+            ) : (
+              <Text style={styles.dashboardSupportText}>Star businesses from place details to keep a list of favorites here.</Text>
+            )}
+          </View>
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+export function FavoriteBusinessNotificationsScreen({
+  isLandscape,
+  onBack,
+  onOpenFavoriteBusiness,
+  session,
+}: {
+  isLandscape: boolean;
+  onBack: () => void;
+  onOpenFavoriteBusiness: (slug: string) => void;
+  session: SignupResponse;
+}) {
+  const favoriteBusinessNotifications = session.favorite_business_notifications ?? [];
+
+  return (
+    <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
+      <ScrollView contentContainerStyle={styles.dashboardScrollContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.screenHeaderBar}>
+          <View style={styles.dashboardHeaderRow}>
+            <Pressable onPress={onBack} style={styles.backButton}>
+              <Text style={styles.backButtonText}>Back to Profile</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.dashboardShell}>
+          <Text style={styles.detailCity}>Customer Dashboard</Text>
+          <Text style={styles.detailTitle}>Business Notifications</Text>
+          <Text style={styles.profileIntroText}>These alerts appear when one of your favorited businesses updates its profile or publishes something new.</Text>
+
+          <View style={styles.dashboardSection}>
+            <Text style={styles.dashboardSectionTitle}>Recent alerts</Text>
+            {favoriteBusinessNotifications.length ? (
+              <View style={styles.dashboardFieldGrid}>
+                {favoriteBusinessNotifications.map((notification) => (
+                  <FavoriteBusinessNotificationCard
+                    key={notification.id}
+                    notification={notification}
+                    onPress={() => onOpenFavoriteBusiness(notification.slug)}
+                  />
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.dashboardSupportText}>When a favorited business updates its profile or publishes new content, those alerts will show up here.</Text>
+            )}
+          </View>
+        </View>
+      </ScrollView>
     </View>
   );
 }
