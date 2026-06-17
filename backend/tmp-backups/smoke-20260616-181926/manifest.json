@@ -1,0 +1,12 @@
+{
+  "generated_at": "2026-06-17T01:19:26.128Z",
+  "backup_dir": "tmp-backups\\smoke-20260616-181926",
+  "database_vendor": "sqlite",
+  "sqlite_database_backup": "db.sqlite3",
+  "database_fixture": "database-fixture.json",
+  "listing_snapshot_export": "listing-snapshots.json",
+  "listing_snapshot_count": 395,
+  "copied_runtime_files": [
+    "discovered_places.json"
+  ]
+}

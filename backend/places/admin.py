@@ -22,12 +22,12 @@ from .admin_site import happyhour_admin_site
 from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessMembership, CustomerAccount, DealType, DeletedBusiness, ListingSnapshot, ProviderUsageWindow, Weekday
 from .services.business_profile_overrides import format_operating_hour_display, format_time_display, is_open_24_hours_row, normalize_deal_overrides, normalize_operating_hour_overrides, normalize_time_value, summarize_deal_overrides, summarize_operating_hour_overrides
 from .services.importers.discovered_json_places import load_discovery_json_records, merge_discovery_json_records, write_discovery_json_records
-from .services.deleted_businesses import filter_deleted_business_records, imported_place_from_deleted_business, store_deleted_business
+from .services.deleted_businesses import imported_place_from_deleted_business, store_deleted_business
 from .services.importers.business_websites import BusinessWebsiteImporter
 from .services.importers.here_places import HerePlacesImporter
 from .services.provider_quota import delete_stale_provider_usage_windows, get_provider_policy, get_provider_usage_statuses, select_discovery_provider
 from .services.social_profiles import build_social_media_links, normalize_business_contact_channels, normalize_social_profile
-from .services.source_listings import get_listing_source_name, get_source_place_payload, get_source_place_payloads, load_canonical_source_records, load_source_records
+from .services.source_listings import get_source_place_payload, get_source_place_payloads, load_source_records
 
 
 LIVE_DISCOVERY_SOURCE_NAMES = {HerePlacesImporter.source_name}
@@ -818,34 +818,6 @@ def _snapshot_has_admin_managed_data(snapshot):
 	return False
 
 
-def _sync_listing_snapshots_from_imported_places(place_records):
-	touched_snapshot_ids = set()
-	touched_source_names = set()
-	identity_counts = {}
-	for place_record in place_records:
-		identity = (str(place_record.source_name or '').strip().lower(), str(place_record.external_id or '').strip().lower())
-		if identity[0] and identity[1]:
-			identity_counts[identity] = identity_counts.get(identity, 0) + 1
-	for place_record in place_records:
-		identity = (str(place_record.source_name or '').strip().lower(), str(place_record.external_id or '').strip().lower())
-		allow_address_mismatch_identity_reuse = identity_counts.get(identity, 0) <= 1
-		snapshot = _sync_listing_snapshot_from_imported_place(
-			place_record,
-			allow_address_mismatch_identity_reuse=allow_address_mismatch_identity_reuse,
-		)
-		touched_snapshot_ids.add(snapshot.pk)
-		if str(place_record.source_name or '').strip():
-			touched_source_names.add(str(place_record.source_name).strip())
-
-	for source_name in touched_source_names:
-		stale_snapshots = ListingSnapshot.objects.filter(source_name=source_name, business_claims__isnull=True).exclude(pk__in=touched_snapshot_ids)
-		for snapshot in stale_snapshots:
-			if _snapshot_has_admin_managed_data(snapshot):
-				continue
-			snapshot.delete()
-	return touched_snapshot_ids
-
-
 def _snapshot_matches_discovery_record(snapshot, place_record):
 	if str(snapshot.source_name or '').strip().lower() != str(place_record.source_name or '').strip().lower():
 		return False
@@ -943,17 +915,6 @@ def _apply_snapshot_enrichment_url_override(snapshot, place_record):
 	if not overrides:
 		return place_record
 	return replace(place_record, **overrides)
-
-
-def _find_best_matching_snapshot(place_record, snapshots):
-	best_snapshot = None
-	best_score = 0
-	for snapshot in snapshots:
-		score = _snapshot_match_score(snapshot, place_record)
-		if score > best_score:
-			best_snapshot = snapshot
-			best_score = score
-	return best_snapshot if best_score >= 70 else None
 
 
 def _select_best_matching_record(snapshot, place_records):
@@ -1253,7 +1214,6 @@ class BusinessAccountAdmin(UserAdmin):
 @admin.register(ListingSnapshot, site=happyhour_admin_site)
 class ListingSnapshotAdmin(admin.ModelAdmin):
 	form = ListingSnapshotAdminForm
-	actions = ['pull_all_business_data']
 	change_list_template = 'admin/places/listingsnapshot/change_list.html'
 	list_display = ('name', 'city', 'venue_type', 'source_name', 'imported_image_count', 'current_public_deal_count', 'manual_deal_override_count', 'pull_business_data_link', 'captured_at', 'updated_at')
 	list_filter = ('city', 'venue_type', 'source_name', HasImportedImagesFilter, ManagedByBusinessUserFilter)
@@ -1299,7 +1259,6 @@ class ListingSnapshotAdmin(admin.ModelAdmin):
 
 	def get_urls(self):
 		custom_urls = [
-			path('pull-all-business-data/', self.admin_site.admin_view(self.pull_all_business_data_view), name='places_listingsnapshot_pull_all'),
 			path('search-businesses/', self.admin_site.admin_view(self.search_businesses_view), name='places_listingsnapshot_search'),
 			path('<path:object_id>/pull-business-data/', self.admin_site.admin_view(self.pull_business_data_view), name='places_listingsnapshot_pull_one'),
 		]
@@ -1307,7 +1266,6 @@ class ListingSnapshotAdmin(admin.ModelAdmin):
 
 	def changelist_view(self, request, extra_context=None):
 		extra_context = extra_context or {}
-		extra_context['pull_all_business_data_url'] = reverse('happyhour_admin:places_listingsnapshot_pull_all')
 		extra_context['search_businesses_url'] = reverse('happyhour_admin:places_listingsnapshot_search')
 		self._changelist_public_deal_counts = {
 			payload.get('slug'): len(list(payload.get('deals', [])))
@@ -1346,39 +1304,6 @@ class ListingSnapshotAdmin(admin.ModelAdmin):
 				((image_url,) for image_url in image_urls),
 			),
 		)
-
-	@admin.action(description='Pull all business data')
-	def pull_all_business_data(self, request, queryset):
-		return self._run_pull_all_business_data(request)
-
-	def pull_all_business_data_view(self, request):
-		if not self.has_change_permission(request):
-			return HttpResponseRedirect(reverse('happyhour_admin:index'))
-		return self._run_pull_all_business_data(request)
-
-	def _run_pull_all_business_data(self, request):
-		discovery_records = filter_deleted_business_records(list(HerePlacesImporter().load_records()))
-		existing_snapshots = list(
-			ListingSnapshot.objects
-			.exclude(source_name__in=(BusinessClaim.ADMIN_SOURCE_NAME, *BusinessClaim.USER_SOURCE_NAMES))
-			.order_by('-updated_at', '-pk')
-		)
-		discovery_records = [
-			_apply_snapshot_enrichment_url_override(snapshot, place_record)
-			if snapshot is not None else place_record
-			for place_record in discovery_records
-			for snapshot in [_find_best_matching_snapshot(place_record, existing_snapshots)]
-		]
-		discovery_records = list(BusinessWebsiteImporter().enrich_place_records(discovery_records))
-		write_discovery_json_records(discovery_records)
-		snapshot_records = list(load_canonical_source_records(source_name=get_listing_source_name()))
-		touched_snapshot_ids = _sync_listing_snapshots_from_imported_places(snapshot_records)
-		self.message_user(
-			request,
-			f'Pulled all business data. Stored {len(discovery_records)} live businesses with website enrichment and synced {len(touched_snapshot_ids)} admin rows.',
-			level=messages.SUCCESS,
-		)
-		return HttpResponseRedirect(reverse('happyhour_admin:places_listingsnapshot_changelist'))
 
 	def search_businesses_view(self, request):
 		if not self.has_view_or_change_permission(request):

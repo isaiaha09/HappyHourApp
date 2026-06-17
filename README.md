@@ -269,6 +269,22 @@ This is the most important distinction to keep straight:
 
 ### Step 1: Export The Local SQLite Data
 
+For an all-in-one local safety backup before running any admin pull, create a timestamped bundle from the `backend` folder:
+
+```powershell
+venv\Scripts\Activate
+python manage.py backup_admin_data
+```
+
+That command creates `backend/backups/admin-backup-YYYYMMDD-HHMMSS/` with:
+
+- a raw SQLite copy as `db.sqlite3`
+- a portable Django fixture as `database-fixture.json`
+- a `listing-snapshots.json` export that includes each `ListingSnapshot` row, its admin-managed display fields, and any matching stored discovery record from `discovered_places.json`
+- copies of `discovered_places.json` and `discovery_exclusions.json` when those files exist
+
+If the admin data gets wiped locally, restoring the copied `db.sqlite3` is the fastest full recovery path.
+
 From the `backend` folder, after all local edits are complete:
 
 ```powershell
