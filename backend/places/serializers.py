@@ -228,6 +228,8 @@ class AccountResponseSerializer(serializers.Serializer):
 	business_location_tracking_enabled = serializers.BooleanField(required=False)
 	requires_business_location_tracking = serializers.BooleanField(required=False)
 	tracked_business_location = serializers.DictField(required=False)
+	direct_messaging_enabled = serializers.BooleanField(required=False)
+	blocked_customer_accounts = serializers.ListField(child=serializers.DictField(), required=False)
 
 
 class ProfileDashboardUpdateSerializer(serializers.Serializer):
@@ -249,6 +251,7 @@ class ProfileDashboardUpdateSerializer(serializers.Serializer):
 	hours_of_operation_entries_text = serializers.CharField(required=False, allow_blank=True)
 	photo_references_text = serializers.CharField(required=False, allow_blank=True)
 	supporting_details = serializers.CharField(max_length=4000, required=False, allow_blank=True)
+	direct_messaging_enabled = serializers.BooleanField(required=False)
 
 	def validate_username(self, value):
 		normalized = value.strip()
@@ -348,6 +351,58 @@ class FavoriteBusinessToggleSerializer(serializers.Serializer):
 		normalized = value.strip()
 		if not normalized:
 			raise serializers.ValidationError('Select a business to favorite.')
+		return normalized
+
+
+class DirectMessageSendSerializer(serializers.Serializer):
+	portal = serializers.ChoiceField(choices=['customer', 'business'], required=False, allow_blank=True)
+	listing_slug = serializers.SlugField(max_length=170, required=False, allow_blank=True)
+	thread_id = serializers.IntegerField(required=False, allow_null=True)
+	message = serializers.CharField(max_length=4000, required=False, allow_blank=True)
+	image = serializers.ImageField(required=False, allow_null=True)
+
+	def validate_message(self, value):
+		normalized = value.strip()
+		return normalized
+
+	def validate(self, attrs):
+		attrs = super().validate(attrs)
+		has_listing_slug = bool(str(attrs.get('listing_slug') or '').strip())
+		has_thread_id = attrs.get('thread_id') is not None
+		if has_listing_slug == has_thread_id:
+			raise serializers.ValidationError('Provide either listing_slug or thread_id to send a direct message.')
+		return attrs
+
+
+class DirectMessageThreadListSerializer(serializers.Serializer):
+	id = serializers.IntegerField()
+	business_slug = serializers.SlugField()
+	business_name = serializers.CharField()
+	customer_username = serializers.CharField()
+	last_message_at = serializers.DateTimeField()
+	last_message_preview = serializers.CharField()
+	unread_count = serializers.IntegerField()
+
+
+class DirectMessageItemSerializer(serializers.Serializer):
+	id = serializers.IntegerField()
+	sender_id = serializers.IntegerField()
+	sender_username = serializers.CharField()
+	message = serializers.CharField()
+	message_type = serializers.ChoiceField(choices=['text', 'image'])
+	image_url = serializers.CharField(allow_blank=True)
+	created_at = serializers.DateTimeField()
+	read_at = serializers.DateTimeField(allow_null=True)
+
+
+class DirectMessageBlockSerializer(serializers.Serializer):
+	portal = serializers.ChoiceField(choices=['customer', 'business'], required=False, allow_blank=True)
+	customer_username = serializers.CharField(max_length=150)
+
+	def validate_customer_username(self, value):
+		normalized = value.strip()
+		if not normalized:
+			raise serializers.ValidationError('Enter the username you want to block from direct messaging.')
 		return normalized
 
 
@@ -1109,6 +1164,9 @@ class PlaceListSerializer(serializers.Serializer):
 	slug = serializers.CharField()
 	is_claimed = serializers.BooleanField(required=False, default=False)
 	is_informal = serializers.BooleanField(required=False, default=False)
+	direct_messaging_enabled = serializers.BooleanField(required=False, default=False)
+	direct_message_restricted = serializers.BooleanField(required=False, default=False)
+	can_direct_message = serializers.BooleanField(required=False, default=False)
 	social_profiles = serializers.DictField(required=False, default=dict)
 	deal_overrides = serializers.ListField(child=serializers.DictField(), required=False, allow_null=True)
 	operating_hour_overrides = serializers.ListField(child=serializers.DictField(), required=False, allow_null=True)

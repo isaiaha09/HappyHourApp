@@ -14,11 +14,13 @@ export type PlaceDetailScreenProps = {
   backButtonLabel?: string;
   canSubmitPlaceAccuracyReport?: boolean;
   distanceLabel?: string | null;
+  onOpenDirectMessages?: () => void;
   onEditBusinessProfile?: () => void;
   onClaimBusiness?: () => void;
   onRequirePlaceAccuracyAccount?: () => void;
   onSubmitPlaceAccuracyReport?: (subject: string, message: string) => Promise<string>;
   showClaimBusinessControl?: boolean;
+  showDirectMessageControl?: boolean;
   showEditBusinessProfileControl?: boolean;
   detailLoading: boolean;
   errorMessage: string | null;
@@ -40,11 +42,13 @@ export function PlaceDetailScreen({
   backButtonLabel = 'Back to Places',
   canSubmitPlaceAccuracyReport = true,
   distanceLabel = null,
+  onOpenDirectMessages,
   onEditBusinessProfile,
   onClaimBusiness,
   onRequirePlaceAccuracyAccount,
   onSubmitPlaceAccuracyReport,
   showClaimBusinessControl = false,
+  showDirectMessageControl = false,
   showEditBusinessProfileControl = false,
   detailLoading,
   errorMessage,
@@ -184,10 +188,23 @@ export function PlaceDetailScreen({
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
+        <View style={[styles.screenHeaderBar, styles.screenHeaderBarRow]}>
           <Pressable onPress={onBack} style={styles.backButton}>
             <Text style={styles.backButtonText}>{backButtonLabel}</Text>
           </Pressable>
+          {showDirectMessageControl ? (
+            <Pressable
+              accessibilityLabel="Open direct messages"
+              onPress={onOpenDirectMessages}
+              style={styles.directMessageHeaderActionButton}
+            >
+              <View style={styles.directMessagePlaneIcon}>
+                <View style={styles.directMessagePlaneLineBase} />
+                <View style={styles.directMessagePlaneLineWing} />
+                <View style={styles.directMessagePlaneLineTail} />
+              </View>
+            </Pressable>
+          ) : null}
         </View>
 
         {detailLoading && !selectedPlace ? (

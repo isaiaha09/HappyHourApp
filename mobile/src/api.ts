@@ -8,6 +8,10 @@ import type {
   BusinessLocationUpdateRequest,
   BusinessSignupRequest,
   CustomerSignupRequest,
+  DirectMessageSendResponse,
+  DirectMessageSendRequest,
+  DirectMessageThreadDetailResponse,
+  DirectMessageThreadsResponse,
   EmailVerificationChallengeResponse,
   EmailVerificationCodeRequest,
   FeedEngagementRequest,
@@ -80,7 +84,10 @@ export async function fetchPlaces(baseUrl: string, city: string, hasDeals?: bool
   return fetchAllPaginatedJson<PlaceListItem>(baseUrl, `/places/${query}`);
 }
 
-export async function fetchPlaceDetail(baseUrl: string, slug: string) {
+export async function fetchPlaceDetail(baseUrl: string, slug: string, authToken?: string) {
+  if (authToken) {
+    return fetchAuthedJson<PlaceDetail>(baseUrl, `/places/${encodeURIComponent(slug)}/`, authToken);
+  }
   return fetchJson<PlaceDetail>(baseUrl, `/places/${encodeURIComponent(slug)}/`);
 }
 
@@ -166,6 +173,50 @@ export async function submitSupportRequest(baseUrl: string, authToken: string, p
 
 export async function toggleFavoriteBusiness(baseUrl: string, authToken: string, payload: FavoriteBusinessToggleRequest) {
   return postAuthedJson<SignupResponse>(baseUrl, '/profiles/favorites/', authToken, payload);
+}
+
+export async function sendDirectMessage(baseUrl: string, authToken: string, payload: DirectMessageSendRequest) {
+  return postAuthedJson<DirectMessageSendResponse>(baseUrl, '/profiles/direct-messages/', authToken, payload);
+}
+
+export async function sendDirectMessageImage(baseUrl: string, authToken: string, payload: {
+  portal: 'business';
+  thread_id: number;
+  image: BusinessAttachmentDraft;
+}) {
+  const formData = new FormData();
+  formData.append('portal', payload.portal);
+  formData.append('thread_id', String(payload.thread_id));
+  formData.append('image', {
+    uri: payload.image.uri,
+    name: payload.image.name,
+    type: payload.image.mimeType ?? 'image/jpeg',
+  } as any);
+  return postAuthedMultipartJson<DirectMessageSendResponse>(baseUrl, '/profiles/direct-messages/', authToken, formData);
+}
+
+export async function fetchDirectMessageThreads(baseUrl: string, authToken: string, portal: 'customer' | 'business') {
+  const response = await fetchAuthedJson<DirectMessageThreadsResponse>(baseUrl, `/profiles/direct-messages/?portal=${encodeURIComponent(portal)}`, authToken);
+  return response.threads ?? [];
+}
+
+export async function fetchDirectMessageThreadDetail(baseUrl: string, authToken: string, threadId: number, portal: 'customer' | 'business') {
+  return fetchAuthedJson<DirectMessageThreadDetailResponse>(
+    baseUrl,
+    `/profiles/direct-messages/threads/${threadId}/?portal=${encodeURIComponent(portal)}`,
+    authToken,
+  );
+}
+
+export async function blockBusinessDirectMessagesForCustomer(baseUrl: string, authToken: string, customerUsername: string) {
+  return postAuthedJson<SignupResponse>(baseUrl, '/profiles/direct-message-blocks/', authToken, {
+    portal: 'business',
+    customer_username: customerUsername,
+  });
+}
+
+export async function unblockBusinessDirectMessagesForCustomer(baseUrl: string, authToken: string, blockId: number) {
+  return deleteAuthedJson<SignupResponse>(baseUrl, `/profiles/direct-message-blocks/${blockId}/?portal=business`, authToken);
 }
 
 export async function registerPushDevice(baseUrl: string, authToken: string, payload: PushDeviceRegistrationRequest) {

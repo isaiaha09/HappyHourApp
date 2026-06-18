@@ -26,7 +26,7 @@ import pyotp
 
 from .admin import BusinessAccountAdmin, BusinessClaimAdmin, CustomerAccountAdmin, DeletedBusinessAdmin, ListingSnapshotAdmin, ListingSnapshotAdminForm, ProviderUsageWindowAdmin, _sync_listing_snapshot_from_imported_place
 from .admin_site import happyhour_admin_site
-from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessMembership, BusinessPost, City, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedEngagement, FeedImpression, ListingSnapshot, ProfileAuthToken, ProviderUsageWindow, SponsoredCampaign, VenueType, Weekday
+from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, BusinessPost, City, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedEngagement, FeedImpression, ListingSnapshot, ProfileAuthToken, ProviderUsageWindow, SponsoredCampaign, VenueType, Weekday
 from .services.importers.base import BaseHtmlImporter
 from .services.importers.business_websites import BusinessWebsiteImporter
 from .services.importers.discovered_json_places import CuratedJsonPlacesImporter, DiscoveryJsonPlacesImporter, load_discovery_json_records, write_discovery_json_records
@@ -7051,6 +7051,244 @@ class ProfileDashboardApiTests(APITestCase):
 
 		self.assertEqual(response.status_code, 302)
 		self.assertEqual(response['Location'], 'happyhourapp://verification-error')
+
+	def test_customer_direct_message_send_and_business_block_hides_access(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Direct Message Diner',
+			listing_slug='direct-message-diner',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='42 Main St',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@diner.example.com',
+			work_phone='805-555-1234',
+			employer_address='42 Main St, Ventura, CA 93001',
+			verification_summary='I own the business.',
+			status=BusinessClaim.Status.APPROVED,
+			direct_messaging_enabled=True,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+
+		customer_user = User.objects.create_user(username='dm_customer', email='dmcustomer@example.com', password='test-pass-123')
+		customer_token = ProfileAuthToken.objects.create(user=customer_user)
+
+		initial_detail = self.client.get(
+			reverse('place-detail', kwargs={'slug': 'direct-message-diner'}),
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+		self.assertEqual(initial_detail.status_code, 200)
+		self.assertTrue(initial_detail.data['direct_messaging_enabled'])
+		self.assertFalse(initial_detail.data['direct_message_restricted'])
+		self.assertTrue(initial_detail.data['can_direct_message'])
+
+		send_response = self.client.post(
+			reverse('profile-direct-messages'),
+			{
+				'portal': 'customer',
+				'listing_slug': 'direct-message-diner',
+				'message': 'Hi there, do you have patio seating tonight?',
+			},
+			format='json',
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+		self.assertEqual(send_response.status_code, 201)
+		self.assertEqual(BusinessDirectMessageThread.objects.count(), 1)
+		self.assertEqual(BusinessDirectMessage.objects.count(), 1)
+
+		block_response = self.client.post(
+			reverse('profile-direct-message-blocks'),
+			{
+				'portal': 'business',
+				'customer_username': 'dm_customer',
+			},
+			format='json',
+			**self.auth_headers(),
+		)
+		self.assertEqual(block_response.status_code, 200)
+		self.assertTrue(BusinessDirectMessageBlock.objects.filter(business_claim=claim, customer=customer_user).exists())
+
+		blocked_detail = self.client.get(
+			reverse('place-detail', kwargs={'slug': 'direct-message-diner'}),
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+		self.assertEqual(blocked_detail.status_code, 200)
+		self.assertTrue(blocked_detail.data['direct_messaging_enabled'])
+		self.assertTrue(blocked_detail.data['direct_message_restricted'])
+		self.assertFalse(blocked_detail.data['can_direct_message'])
+
+		blocked_send_response = self.client.post(
+			reverse('profile-direct-messages'),
+			{
+				'portal': 'customer',
+				'listing_slug': 'direct-message-diner',
+				'message': 'Trying again after being blocked.',
+			},
+			format='json',
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+		self.assertEqual(blocked_send_response.status_code, 403)
+
+	@patch('places.views.send_push_notifications_for_direct_message')
+	def test_business_direct_message_requires_image_and_triggers_push_notification(self, mock_send_dm_push):
+		valid_png_bytes = (
+			b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89'
+			b'\x00\x00\x00\x0cIDATx\x9cc```\x00\x00\x00\x04\x00\x01\xf6\x178U\x00\x00\x00\x00IEND\xaeB`\x82'
+		)
+		snapshot = ListingSnapshot.objects.create(
+			name='Photo Message Bistro',
+			listing_slug='photo-message-bistro',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='99 Harbor Blvd',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@photo-message.example.com',
+			work_phone='805-555-7711',
+			employer_address='99 Harbor Blvd, Ventura, CA 93001',
+			verification_summary='I own the business.',
+			status=BusinessClaim.Status.APPROVED,
+			direct_messaging_enabled=True,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+
+		customer_user = User.objects.create_user(username='image_dm_customer', email='image_dm_customer@example.com', password='test-pass-123')
+		customer_token = ProfileAuthToken.objects.create(user=customer_user)
+
+		thread_response = self.client.post(
+			reverse('profile-direct-messages'),
+			{
+				'portal': 'customer',
+				'listing_slug': 'photo-message-bistro',
+				'message': 'Hello business profile!',
+			},
+			format='json',
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+		self.assertEqual(thread_response.status_code, 201)
+		thread_id = thread_response.data['thread']['id']
+
+		text_only_response = self.client.post(
+			reverse('profile-direct-messages'),
+			{
+				'portal': 'business',
+				'thread_id': thread_id,
+				'message': 'This should fail because business messages are image-only.',
+			},
+			format='json',
+			**self.auth_headers(),
+		)
+		self.assertEqual(text_only_response.status_code, 400)
+
+		image_payload = SimpleUploadedFile('dm-photo.png', valid_png_bytes, content_type='image/png')
+		image_send_response = self.client.post(
+			reverse('profile-direct-messages'),
+			{
+				'portal': 'business',
+				'thread_id': thread_id,
+				'image': image_payload,
+			},
+			format='multipart',
+			**self.auth_headers(),
+		)
+		self.assertEqual(image_send_response.status_code, 201)
+		self.assertEqual(image_send_response.data['message']['message_type'], 'image')
+		self.assertTrue(bool(image_send_response.data['message']['image_url']))
+		mock_send_dm_push.assert_called()
+
+	def test_customer_direct_message_rejects_image_payload(self):
+		valid_png_bytes = (
+			b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89'
+			b'\x00\x00\x00\x0cIDATx\x9cc```\x00\x00\x00\x04\x00\x01\xf6\x178U\x00\x00\x00\x00IEND\xaeB`\x82'
+		)
+		snapshot = ListingSnapshot.objects.create(
+			name='Text Only Cafe',
+			listing_slug='text-only-cafe',
+			city=City.VENTURA,
+			venue_type=VenueType.CAFE,
+			address_line_1='11 Main St',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@textonly.example.com',
+			work_phone='805-555-9199',
+			employer_address='11 Main St, Ventura, CA 93001',
+			verification_summary='I own the business.',
+			status=BusinessClaim.Status.APPROVED,
+			direct_messaging_enabled=True,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+
+		customer_user = User.objects.create_user(username='text_only_customer', email='text_only_customer@example.com', password='test-pass-123')
+		customer_token = ProfileAuthToken.objects.create(user=customer_user)
+
+		image_payload = SimpleUploadedFile('customer-photo.png', valid_png_bytes, content_type='image/png')
+		response = self.client.post(
+			reverse('profile-direct-messages'),
+			{
+				'portal': 'customer',
+				'listing_slug': 'text-only-cafe',
+				'message': 'Hello from customer',
+				'image': image_payload,
+			},
+			format='multipart',
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+
+		self.assertEqual(response.status_code, 400)
+		self.assertEqual(response.data['detail'], 'Customer direct messages cannot include images.')
+
+	def test_business_profile_dashboard_updates_direct_messaging_toggle(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Toggle Test Bistro',
+			listing_slug='toggle-test-bistro',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='10 Toggle Ave',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@toggle.example.com',
+			work_phone='805-555-9191',
+			employer_address='10 Toggle Ave, Ventura, CA 93001',
+			verification_summary='I own the business.',
+			status=BusinessClaim.Status.APPROVED,
+			direct_messaging_enabled=True,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+
+		response = self.client.post(
+			reverse('profile-dashboard'),
+			{
+				'portal': 'business',
+				'username': self.user.username,
+				'email': self.user.email,
+				'first_name': self.user.first_name,
+				'last_name': self.user.last_name,
+				'direct_messaging_enabled': False,
+			},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 200)
+		claim.refresh_from_db()
+		self.assertFalse(claim.direct_messaging_enabled)
+		self.assertFalse(response.data['direct_messaging_enabled'])
 
 
 class AccountProxyTests(APITestCase):

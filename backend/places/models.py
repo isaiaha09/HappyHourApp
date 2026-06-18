@@ -342,6 +342,7 @@ class BusinessClaim(models.Model):
 	verification_documents = models.JSONField(default=dict, blank=True)
 	verification_summary = models.TextField(blank=True)
 	supporting_details = models.TextField(blank=True)
+	direct_messaging_enabled = models.BooleanField(default=True)
 	verification_score = models.PositiveSmallIntegerField(default=0)
 	verification_flags = models.JSONField(default=list, blank=True)
 	rejection_reason_codes = models.JSONField(default=list, blank=True)
@@ -1026,6 +1027,81 @@ class AccountProfile(models.Model):
 		self.password_reset_token = ''
 		self.password_reset_sent_at = None
 		self.save(update_fields=['password_reset_token', 'password_reset_sent_at', 'updated_at'])
+
+
+class BusinessDirectMessageThread(models.Model):
+	business_claim = models.ForeignKey(BusinessClaim, related_name='direct_message_threads', on_delete=models.CASCADE)
+	customer = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='direct_message_threads', on_delete=models.CASCADE)
+	last_message_at = models.DateTimeField(default=timezone.now)
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ['-last_message_at', '-created_at']
+		constraints = [
+			models.UniqueConstraint(fields=['business_claim', 'customer'], name='unique_direct_message_thread_per_business_customer'),
+		]
+
+	def __str__(self):
+		return f'DM thread {self.business_claim.listing_snapshot.name} <-> {self.customer.username}'
+
+
+class BusinessDirectMessage(models.Model):
+	thread = models.ForeignKey(BusinessDirectMessageThread, related_name='messages', on_delete=models.CASCADE)
+	sender = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='sent_direct_messages', on_delete=models.CASCADE)
+	body = models.TextField(blank=True, default='')
+	image = models.ImageField(upload_to='direct-message-images/', null=True, blank=True)
+	read_at = models.DateTimeField(null=True, blank=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ['created_at', 'id']
+
+	def __str__(self):
+		return f'DM #{self.pk} in thread {self.thread_id}'
+
+	def clean(self):
+		valid_sender_ids = {
+			self.thread.customer_id,
+			self.thread.business_claim.claimant_id,
+		}
+		if self.sender_id not in valid_sender_ids:
+			raise ValidationError('Sender must belong to this direct message thread.')
+
+		body_text = str(self.body or '').strip()
+		is_customer_sender = self.sender_id == self.thread.customer_id
+		if is_customer_sender:
+			if not body_text:
+				raise ValidationError('Customer direct messages must include text.')
+			if self.image:
+				raise ValidationError('Customer direct messages cannot include images.')
+		else:
+			if not self.image:
+				raise ValidationError('Business direct messages must include an image.')
+			if body_text:
+				raise ValidationError('Business direct messages cannot include text.')
+
+
+class BusinessDirectMessageBlock(models.Model):
+	business_claim = models.ForeignKey(BusinessClaim, related_name='direct_message_blocks', on_delete=models.CASCADE)
+	customer = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='blocked_business_direct_messages', on_delete=models.CASCADE)
+	blocked_by = models.ForeignKey(
+		settings.AUTH_USER_MODEL,
+		related_name='business_direct_message_blocks_created',
+		null=True,
+		blank=True,
+		on_delete=models.SET_NULL,
+	)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ['-created_at', '-id']
+		constraints = [
+			models.UniqueConstraint(fields=['business_claim', 'customer'], name='unique_blocked_customer_per_business_claim'),
+		]
+
+	def __str__(self):
+		return f'{self.customer.username} blocked for {self.business_claim.listing_snapshot.name}'
 
 
 class FavoriteBusiness(models.Model):

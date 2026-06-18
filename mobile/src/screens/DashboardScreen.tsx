@@ -33,11 +33,14 @@ export type DashboardScreenProps = {
 
 export type AccountSettingsScreenProps = {
   deleteAccountPassword: string;
+  directMessageBlockUsername: string;
   errorMessage: string | null;
   isLandscape: boolean;
   message: string | null;
   onBack: () => void;
   onBeginTwoFactorSetup: () => void;
+  onBlockCustomerFromDirectMessaging: () => void;
+  onChangeDirectMessageBlockUsername: (value: string) => void;
   onChangeTwoFactorDisableCode: (value: string) => void;
   onChangeTwoFactorSetupCode: (value: string) => void;
   onConfirmTwoFactorSetup: () => void;
@@ -49,9 +52,11 @@ export type AccountSettingsScreenProps = {
   onDeleteAccount: () => void;
   onOpenPrivacyPolicy: () => void;
   onOpenTermsOfService: () => void;
+  onToggleDirectMessaging: (value: boolean) => void;
+  onUnblockCustomerFromDirectMessaging: (blockId: number) => void;
   pendingBusinessLocationTrackingEnabled: boolean | null;
   session: SignupResponse;
-  settingsSubmittingAction: 'two-factor-begin' | 'two-factor-confirm' | 'two-factor-disable' | 'business-location' | 'delete-account' | null;
+  settingsSubmittingAction: 'two-factor-begin' | 'two-factor-confirm' | 'two-factor-disable' | 'business-location' | 'direct-messaging' | 'direct-message-block' | 'delete-account' | null;
   twoFactorDisableCode: string;
   twoFactorSetup: TwoFactorSetupResponse | null;
   twoFactorSetupCode: string;
@@ -1202,11 +1207,14 @@ export function BusinessProfileEditorScreen({
 
 export function AccountSettingsScreen({
   deleteAccountPassword,
+  directMessageBlockUsername,
   errorMessage,
   isLandscape,
   message,
   onBack,
   onBeginTwoFactorSetup,
+  onBlockCustomerFromDirectMessaging,
+  onChangeDirectMessageBlockUsername,
   onChangeDeleteAccountPassword,
   onChangeTwoFactorDisableCode,
   onChangeTwoFactorSetupCode,
@@ -1218,6 +1226,8 @@ export function AccountSettingsScreen({
   onDeleteAccount,
   onOpenPrivacyPolicy,
   onOpenTermsOfService,
+  onToggleDirectMessaging,
+  onUnblockCustomerFromDirectMessaging,
   pendingBusinessLocationTrackingEnabled,
   session,
   settingsSubmittingAction,
@@ -1227,8 +1237,12 @@ export function AccountSettingsScreen({
 }: AccountSettingsScreenProps) {
   const submitting = settingsSubmittingAction !== null;
   const togglingBusinessLocation = settingsSubmittingAction === 'business-location';
+  const togglingDirectMessaging = settingsSubmittingAction === 'direct-messaging';
+  const changingDirectMessageBlocks = settingsSubmittingAction === 'direct-message-block';
   const deletingAccount = settingsSubmittingAction === 'delete-account';
   const displayedBusinessLocationTrackingEnabled = pendingBusinessLocationTrackingEnabled ?? !!session.business_location_tracking_enabled;
+  const displayedDirectMessagingEnabled = !!session.direct_messaging_enabled;
+  const blockedCustomerAccounts = session.blocked_customer_accounts ?? [];
 
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
@@ -1295,6 +1309,58 @@ export function AccountSettingsScreen({
                       value={displayedBusinessLocationTrackingEnabled}
                     />
                   </View>
+                </View>
+              </View>
+            ) : null}
+
+            {session.portal === 'business' ? (
+              <View style={styles.settingsItemRow}>
+                <View style={styles.settingsItemBody}>
+                  <Text style={styles.dashboardSectionTitle}>Direct messaging</Text>
+                  <Text style={styles.dashboardSupportText}>Allow customers to direct message your business profile. Turn this off to hide direct messaging for all customer accounts.</Text>
+                  <View style={styles.settingsSwitchCluster}>
+                    <View style={styles.settingsSwitchLabelGroup}>
+                      <Text style={styles.dashboardDetailLabel}>Direct messaging</Text>
+                      <Text style={styles.dashboardSupportText}>{displayedDirectMessagingEnabled ? 'On' : 'Off'}</Text>
+                    </View>
+                    <Switch
+                      disabled={submitting}
+                      onValueChange={onToggleDirectMessaging}
+                      value={displayedDirectMessagingEnabled}
+                    />
+                  </View>
+                  <Text style={styles.profileFieldLabel}>Block a customer username</Text>
+                  <TextInput
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    onChangeText={onChangeDirectMessageBlockUsername}
+                    placeholder="customer_username"
+                    placeholderTextColor="#9a7f6c"
+                    style={styles.profileInput}
+                    value={directMessageBlockUsername}
+                  />
+                  <Text style={styles.dashboardSupportText}>Blocked customers will no longer see the direct message icon on your business profile.</Text>
+                  <Pressable onPress={onBlockCustomerFromDirectMessaging} style={[styles.linkButtonSecondaryWide, styles.settingsInlineButton, submitting ? styles.linkButtonDisabled : null]}>
+                    <Text style={styles.linkButtonSecondaryText}>{changingDirectMessageBlocks ? 'Saving block...' : 'Block customer from direct messages'}</Text>
+                  </Pressable>
+                  {blockedCustomerAccounts.length ? (
+                    <View>
+                      {blockedCustomerAccounts.map((blockedAccount) => (
+                        <View key={blockedAccount.block_id} style={[styles.dashboardDetailItem, styles.dashboardNotificationCard]}>
+                          <Text style={styles.dashboardDetailValue}>{blockedAccount.username}</Text>
+                          <Text style={styles.dashboardSupportText}>{[blockedAccount.first_name, blockedAccount.last_name].filter(Boolean).join(' ') || 'Customer account'}</Text>
+                          <Pressable onPress={() => onUnblockCustomerFromDirectMessaging(blockedAccount.block_id)} style={[styles.linkButtonSecondaryWide, styles.settingsInlineButton, submitting ? styles.linkButtonDisabled : null]}>
+                            <Text style={styles.linkButtonSecondaryText}>{changingDirectMessageBlocks ? 'Updating...' : 'Unblock customer'}</Text>
+                          </Pressable>
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <Text style={styles.dashboardSupportText}>No blocked customers.</Text>
+                  )}
+                </View>
+                <View style={styles.settingsItemActions}>
+                  {togglingDirectMessaging ? <ActivityIndicator color="#8a4b2a" /> : null}
                 </View>
               </View>
             ) : null}

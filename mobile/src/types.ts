@@ -107,6 +107,9 @@ export type PlaceLocationDetail = PlaceLocation & {
 export type PlaceListItem = PlaceLocation & {
   is_claimed: boolean;
   is_informal?: boolean;
+  direct_messaging_enabled?: boolean;
+  direct_message_restricted?: boolean;
+  can_direct_message?: boolean;
   social_profiles?: SocialProfiles;
   deal_overrides?: BusinessDealOverride[] | null;
   operating_hour_overrides?: BusinessOperatingHourOverride[] | null;
@@ -297,6 +300,14 @@ export type SignupResponse = {
     accuracy_meters?: number | null;
     updated_at?: string | null;
   };
+  direct_messaging_enabled?: boolean;
+  blocked_customer_accounts?: Array<{
+    block_id: number;
+    customer_id: number;
+    username: string;
+    first_name: string;
+    last_name: string;
+  }>;
   can_access_places?: boolean;
 };
 
@@ -327,12 +338,56 @@ export type ProfileDashboardUpdateRequest = {
   hours_of_operation_entries_text?: string;
   photo_references_text?: string;
   supporting_details?: string;
+  direct_messaging_enabled?: boolean;
 };
 
 export type SupportContactRequest = {
   portal?: 'customer' | 'business';
   subject?: string;
   message: string;
+};
+
+export type DirectMessageSendRequest = {
+  portal?: 'customer' | 'business';
+  listing_slug?: string;
+  thread_id?: number;
+  message?: string;
+};
+
+export type DirectMessageThread = {
+  id: number;
+  business_slug: string;
+  business_name: string;
+  customer_username: string;
+  last_message_at: string;
+  last_message_preview: string;
+  unread_count: number;
+};
+
+export type DirectMessageItem = {
+  id: number;
+  sender_id: number;
+  sender_username: string;
+  message: string;
+  message_type: 'text' | 'image';
+  image_url: string;
+  created_at: string;
+  read_at: string | null;
+};
+
+export type DirectMessageThreadsResponse = {
+  threads: DirectMessageThread[];
+};
+
+export type DirectMessageThreadDetailResponse = {
+  thread: DirectMessageThread;
+  messages: DirectMessageItem[];
+};
+
+export type DirectMessageSendResponse = {
+  detail: string;
+  thread: DirectMessageThread;
+  message: DirectMessageItem;
 };
 
 export type FavoriteBusinessToggleRequest = {

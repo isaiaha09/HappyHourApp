@@ -439,6 +439,9 @@ def _build_grouped_place_payload(place_records, preferred_city=None, resolve_mis
 		'slug': profile_slug,
 		'is_claimed': False,
 		'social_profiles': {},
+		'direct_messaging_enabled': False,
+		'direct_message_restricted': False,
+		'can_direct_message': False,
 		'social_media_links': [],
 		'offer_entries': [],
 		'hours_of_operation_entries': [],
@@ -595,6 +598,9 @@ def _build_claim_override_payload(claim, public_address_overridden=False, public
 	)
 	return {
 		'is_informal': claim.pathway == BusinessClaim.Pathway.INFORMAL,
+		'direct_messaging_enabled': bool(claim.direct_messaging_enabled),
+		'direct_message_restricted': False,
+		'can_direct_message': False,
 		'public_address_overridden': public_address_overridden,
 		'public_postal_code_overridden': public_postal_code_overridden,
 		'social_profiles': normalized_social_profiles,
@@ -766,6 +772,9 @@ def _merge_claimed_snapshot_payload(existing_payload, snapshot_payload):
 		'hours_of_operation_entries': snapshot_payload.get('hours_of_operation_entries', []),
 		'photo_references': snapshot_payload.get('photo_references', []),
 		'supporting_details': snapshot_payload.get('supporting_details', ''),
+		'direct_messaging_enabled': bool(snapshot_payload.get('direct_messaging_enabled', False)),
+		'direct_message_restricted': bool(snapshot_payload.get('direct_message_restricted', False)),
+		'can_direct_message': bool(snapshot_payload.get('can_direct_message', False)),
 	})
 	_apply_claim_structured_overrides(merged_payload, None, payload_namespace=snapshot_payload.get('slug', existing_payload.get('slug', 'claimed-business')), source_payload=snapshot_payload)
 	return merged_payload

@@ -52,6 +52,22 @@ export function extractFavoriteBusinessSlugFromNotificationData(data: unknown) {
   return typeof slug === 'string' && slug.trim().length ? slug.trim() : null;
 }
 
+export function extractDirectMessageThreadIdFromNotificationData(data: unknown) {
+  if (!data || typeof data !== 'object') {
+    return null;
+  }
+
+  const rawThreadId = (data as Record<string, unknown>).thread_id;
+  const parsedThreadId = typeof rawThreadId === 'number'
+    ? rawThreadId
+    : Number.parseInt(String(rawThreadId ?? ''), 10);
+  if (Number.isNaN(parsedThreadId) || parsedThreadId <= 0) {
+    return null;
+  }
+
+  return parsedThreadId;
+}
+
 async function getPushInstallationId() {
   const installationIdFile = getInstallationIdFile();
 

@@ -22,6 +22,10 @@ from .serializers import (
 	CustomerSignupSerializer,
 	DeleteAccountSerializer,
 	DealSerializer,
+	DirectMessageBlockSerializer,
+	DirectMessageItemSerializer,
+	DirectMessageSendSerializer,
+	DirectMessageThreadListSerializer,
 	EmailVerificationCodeSerializer,
 	FeedEngagementWriteSerializer,
 	FeedImpressionWriteSerializer,
@@ -45,8 +49,9 @@ from .serializers import (
 	sync_listing_snapshot_from_place_payload,
 )
 from .services.account_profiles import build_account_response, build_email_verification_challenge, get_business_access_hold_claim, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, send_business_claim_received_email, send_password_reset_email, send_support_contact_email, send_username_reminder_email, send_verification_email
-from .models import FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedImpression, VenueType
+from .models import BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedImpression, VenueType
 from .services.favorite_notifications import create_notifications_for_business_profile_update
+from .services.direct_message_push import send_push_notifications_for_direct_message
 from .services.home_feed import get_feed_interval, get_feed_queryset, get_organic_page_size, get_ranked_campaigns, get_requested_feed_page_size, mix_feed_items, record_campaign_served
 from .services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
 from .services.source_listings import get_source_deal_payloads, get_source_place_payload, get_source_place_payloads, load_source_records
@@ -106,6 +111,88 @@ def _append_uploaded_profile_photos_to_claim(request, claim):
 			'photo_references': claim.photo_references,
 		},
 	)
+
+
+def _get_active_business_claim_by_slug(listing_slug):
+	if not listing_slug:
+		return None
+	membership = (
+		BusinessMembership.objects
+		.select_related('claim__listing_snapshot', 'user')
+		.filter(is_active=True, claim__listing_snapshot__listing_slug=listing_slug)
+		.first()
+	)
+	if membership is None:
+		return None
+	return membership.claim
+
+
+def _can_customer_direct_message_claim(user, claim):
+	if user is None or not getattr(user, 'is_authenticated', False):
+		return False, False
+	portal = infer_portal_for_user(user, 'customer')
+	if portal != 'customer':
+		return False, False
+	if not claim.direct_messaging_enabled:
+		return False, False
+	is_blocked = claim.direct_message_blocks.filter(customer=user).exists()
+	return (not is_blocked), is_blocked
+
+
+def _apply_direct_message_access(payload, user=None):
+	is_claimed = bool(payload.get('is_claimed'))
+	claim = _get_active_business_claim_by_slug(payload.get('slug')) if is_claimed else None
+	direct_messaging_enabled = bool(claim.direct_messaging_enabled) if claim is not None else bool(payload.get('direct_messaging_enabled', False))
+	can_direct_message = False
+	direct_message_restricted = False
+	if claim is not None:
+		can_direct_message, direct_message_restricted = _can_customer_direct_message_claim(user, claim)
+
+	payload['direct_messaging_enabled'] = direct_messaging_enabled
+	payload['direct_message_restricted'] = direct_message_restricted
+	payload['can_direct_message'] = can_direct_message
+	return payload
+
+
+def _build_direct_message_thread_payload(thread, user):
+	last_message = thread.messages.select_related('sender').order_by('-created_at', '-id').first()
+	unread_query = thread.messages.exclude(sender_id=user.id).filter(read_at__isnull=True)
+	if last_message is not None and last_message.image:
+		last_message_preview = 'Sent a photo'
+	elif last_message is not None:
+		last_message_preview = last_message.body[:160]
+	else:
+		last_message_preview = ''
+	return {
+		'id': thread.id,
+		'business_slug': thread.business_claim.listing_snapshot.listing_slug,
+		'business_name': thread.business_claim.listing_snapshot.name,
+		'customer_username': thread.customer.username,
+		'last_message_at': thread.last_message_at,
+		'last_message_preview': last_message_preview,
+		'unread_count': unread_query.count(),
+	}
+
+
+def _build_direct_message_item_payload(message, request=None):
+	image_url = ''
+	if message.image:
+		try:
+			image_url = message.image.url
+		except ValueError:
+			image_url = ''
+	if image_url and request is not None and image_url.startswith('/'):
+		image_url = request.build_absolute_uri(image_url)
+	return {
+		'id': message.id,
+		'sender_id': message.sender_id,
+		'sender_username': message.sender.username,
+		'message': message.body,
+		'message_type': 'image' if message.image else 'text',
+		'image_url': image_url,
+		'created_at': message.created_at,
+		'read_at': message.read_at,
+	}
 
 
 class HealthCheckView(APIView):
@@ -184,11 +271,14 @@ class PlaceListView(generics.GenericAPIView):
 
 class PlaceDetailView(generics.GenericAPIView):
 	serializer_class = PlaceDetailSerializer
+	authentication_classes = [ProfileTokenAuthentication]
+	permission_classes = []
 
 	def get(self, request, slug):
 		payload = get_source_place_payload(slug)
 		if payload is None:
 			raise Http404('Place not found.')
+		_apply_direct_message_access(payload, user=request.user)
 
 		serializer = self.get_serializer(payload)
 		return Response(serializer.data)
@@ -498,6 +588,7 @@ class ProfileDashboardView(APIView):
 			'hours_of_operation_entries_text',
 			'photo_references_text',
 			'supporting_details',
+			'direct_messaging_enabled',
 		}
 		has_business_updates = any(field_name in serializer.validated_data for field_name in business_field_names)
 		if has_business_updates:
@@ -523,6 +614,13 @@ class ProfileDashboardView(APIView):
 						setattr(claim, field_name, new_value)
 						claim_update_fields.append(field_name)
 						changed_business_fields.add(field_name)
+
+			if 'direct_messaging_enabled' in serializer.validated_data:
+				direct_messaging_enabled = bool(serializer.validated_data['direct_messaging_enabled'])
+				if claim.direct_messaging_enabled != direct_messaging_enabled:
+					claim.direct_messaging_enabled = direct_messaging_enabled
+					claim_update_fields.append('direct_messaging_enabled')
+					changed_business_fields.add('direct_messaging_enabled')
 
 			if any(field_name in serializer.validated_data for field_name in ('business_website_url', 'social_profiles', 'social_media_links_text')):
 				current_profiles = normalize_social_profiles(
@@ -717,6 +815,223 @@ class FavoriteBusinessView(APIView):
 		return Response(response_payload)
 
 
+class DirectMessageThreadsView(APIView):
+	authentication_classes = [ProfileTokenAuthentication]
+	permission_classes = [IsAuthenticated]
+
+	def get(self, request):
+		portal = infer_portal_for_user(request.user, request.query_params.get('portal'))
+		threads = self._get_threads_for_portal(request.user, portal)
+		thread_payloads = [
+			_build_direct_message_thread_payload(thread, request.user)
+			for thread in threads
+		]
+		serializer = DirectMessageThreadListSerializer(thread_payloads, many=True)
+		return Response({'threads': serializer.data})
+
+	def post(self, request):
+		serializer = DirectMessageSendSerializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		portal = infer_portal_for_user(request.user, serializer.validated_data.get('portal'))
+		listing_slug = str(serializer.validated_data.get('listing_slug') or '').strip()
+		thread_id = serializer.validated_data.get('thread_id')
+		message_text = str(serializer.validated_data.get('message') or '').strip()
+		message_image = serializer.validated_data.get('image')
+
+		if listing_slug:
+			if portal != 'customer':
+				return Response({'detail': 'Only customer accounts can start direct messages from a business profile.'}, status=status.HTTP_403_FORBIDDEN)
+			claim = _get_active_business_claim_by_slug(listing_slug)
+			if claim is None:
+				return Response({'detail': 'Direct messaging is only available for approved business profiles.'}, status=status.HTTP_404_NOT_FOUND)
+			if not claim.direct_messaging_enabled:
+				return Response({'detail': 'This business has direct messaging turned off.'}, status=status.HTTP_403_FORBIDDEN)
+			if claim.direct_message_blocks.filter(customer=request.user).exists():
+				return Response({'detail': 'This business has restricted direct messaging for your account.'}, status=status.HTTP_403_FORBIDDEN)
+			thread, _ = BusinessDirectMessageThread.objects.get_or_create(
+				business_claim=claim,
+				customer=request.user,
+				defaults={'last_message_at': timezone.now()},
+			)
+		else:
+			thread = self._get_thread_for_portal(request.user, portal, thread_id)
+			if thread is None:
+				return Response({'detail': 'Direct message thread not found.'}, status=status.HTTP_404_NOT_FOUND)
+			if portal == 'customer':
+				if not thread.business_claim.direct_messaging_enabled:
+					return Response({'detail': 'This business has direct messaging turned off.'}, status=status.HTTP_403_FORBIDDEN)
+				if thread.business_claim.direct_message_blocks.filter(customer=request.user).exists():
+					return Response({'detail': 'This business has restricted direct messaging for your account.'}, status=status.HTTP_403_FORBIDDEN)
+
+		if portal == 'customer':
+			if not message_text:
+				return Response({'detail': 'Customer direct messages must include text.'}, status=status.HTTP_400_BAD_REQUEST)
+			if message_image is not None:
+				return Response({'detail': 'Customer direct messages cannot include images.'}, status=status.HTTP_400_BAD_REQUEST)
+		else:
+			if message_image is None:
+				return Response({'detail': 'Business direct messages must include an image.'}, status=status.HTTP_400_BAD_REQUEST)
+			if message_text:
+				return Response({'detail': 'Business direct messages cannot include text.'}, status=status.HTTP_400_BAD_REQUEST)
+
+		message = BusinessDirectMessage(
+			thread=thread,
+			sender=request.user,
+			body=message_text,
+			image=message_image,
+		)
+		message.full_clean()
+		message.save()
+		thread.last_message_at = message.created_at
+		thread.save(update_fields=['last_message_at', 'updated_at'])
+		recipient_id = thread.business_claim.claimant_id if request.user.id == thread.customer_id else thread.customer_id
+		send_push_notifications_for_direct_message(
+			[recipient_id],
+			thread_id=thread.id,
+			listing_slug=thread.business_claim.listing_snapshot.listing_slug,
+			title=f'New direct message from {request.user.username}',
+			message='Sent a photo.' if message.image else (message.body[:120] or 'Sent you a message.'),
+		)
+
+		thread_payload = DirectMessageThreadListSerializer(_build_direct_message_thread_payload(thread, request.user)).data
+		message_payload = DirectMessageItemSerializer(_build_direct_message_item_payload(message, request=request)).data
+		return Response(
+			{
+				'detail': 'Direct message sent.',
+				'thread': thread_payload,
+				'message': message_payload,
+			},
+			status=status.HTTP_201_CREATED,
+		)
+
+	def _get_threads_for_portal(self, user, portal):
+		queryset = BusinessDirectMessageThread.objects.select_related(
+			'business_claim__listing_snapshot',
+			'customer',
+		).prefetch_related('messages__sender')
+		if portal == 'business':
+			return list(
+				queryset
+				.filter(
+					business_claim__membership__is_active=True,
+					business_claim__membership__user=user,
+				)
+				.distinct()
+			)
+		return list(queryset.filter(customer=user))
+
+	def _get_thread_for_portal(self, user, portal, thread_id):
+		queryset = BusinessDirectMessageThread.objects.select_related(
+			'business_claim__listing_snapshot',
+			'customer',
+		).prefetch_related('messages__sender')
+		if portal == 'business':
+			return queryset.filter(
+				id=thread_id,
+				business_claim__membership__is_active=True,
+				business_claim__membership__user=user,
+			).distinct().first()
+		return queryset.filter(id=thread_id, customer=user).first()
+
+
+class DirectMessageThreadDetailView(APIView):
+	authentication_classes = [ProfileTokenAuthentication]
+	permission_classes = [IsAuthenticated]
+
+	def get(self, request, thread_id):
+		portal = infer_portal_for_user(request.user, request.query_params.get('portal'))
+		if portal == 'business':
+			thread = BusinessDirectMessageThread.objects.select_related(
+				'business_claim__listing_snapshot',
+				'customer',
+			).filter(
+				id=thread_id,
+				business_claim__membership__is_active=True,
+				business_claim__membership__user=request.user,
+			).distinct().first()
+		else:
+			thread = BusinessDirectMessageThread.objects.select_related(
+				'business_claim__listing_snapshot',
+				'customer',
+			).filter(id=thread_id, customer=request.user).first()
+		if thread is None:
+			return Response({'detail': 'Direct message thread not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+		BusinessDirectMessage.objects.filter(thread=thread, read_at__isnull=True).exclude(sender_id=request.user.id).update(read_at=timezone.now())
+		messages = list(thread.messages.select_related('sender').order_by('created_at', 'id'))
+		thread_payload = DirectMessageThreadListSerializer(_build_direct_message_thread_payload(thread, request.user)).data
+		message_payloads = [
+			_build_direct_message_item_payload(message, request=request)
+			for message in messages
+		]
+		return Response({
+			'thread': thread_payload,
+			'messages': DirectMessageItemSerializer(message_payloads, many=True).data,
+		})
+
+
+class DirectMessageBlocksView(APIView):
+	authentication_classes = [ProfileTokenAuthentication]
+	permission_classes = [IsAuthenticated]
+
+	def get(self, request):
+		portal = infer_portal_for_user(request.user, request.query_params.get('portal'))
+		if portal != 'business':
+			return Response({'detail': 'Only business accounts can manage direct message restrictions.'}, status=status.HTTP_403_FORBIDDEN)
+		return Response(build_account_response(request.user, portal, token=request.auth))
+
+	def post(self, request):
+		serializer = DirectMessageBlockSerializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		portal = infer_portal_for_user(request.user, serializer.validated_data.get('portal'))
+		if portal != 'business':
+			return Response({'detail': 'Only business accounts can block customer direct messages.'}, status=status.HTTP_403_FORBIDDEN)
+
+		membership = request.user.business_memberships.select_related('claim').filter(is_active=True).first()
+		if membership is None:
+			return Response({'detail': 'An approved business membership is required before blocking direct messages.'}, status=status.HTTP_400_BAD_REQUEST)
+
+		customer = User.objects.filter(username__iexact=serializer.validated_data['customer_username']).first()
+		if customer is None:
+			return Response({'detail': 'That customer account could not be found.'}, status=status.HTTP_404_NOT_FOUND)
+		if infer_portal_for_user(customer, 'customer') != 'customer':
+			return Response({'detail': 'Only customer accounts can be blocked from direct messaging.'}, status=status.HTTP_400_BAD_REQUEST)
+
+		BusinessDirectMessageBlock.objects.update_or_create(
+			business_claim=membership.claim,
+			customer=customer,
+			defaults={'blocked_by': request.user},
+		)
+		response_payload = build_account_response(request.user, portal, token=request.auth)
+		response_payload['detail'] = f'Direct messaging blocked for {customer.username}.'
+		return Response(response_payload)
+
+
+class DirectMessageBlockDetailView(APIView):
+	authentication_classes = [ProfileTokenAuthentication]
+	permission_classes = [IsAuthenticated]
+
+	def delete(self, request, block_id):
+		portal = infer_portal_for_user(request.user, request.query_params.get('portal') or request.data.get('portal'))
+		if portal != 'business':
+			return Response({'detail': 'Only business accounts can unblock customer direct messages.'}, status=status.HTTP_403_FORBIDDEN)
+
+		membership = request.user.business_memberships.select_related('claim').filter(is_active=True).first()
+		if membership is None:
+			return Response({'detail': 'An approved business membership is required before removing direct message blocks.'}, status=status.HTTP_400_BAD_REQUEST)
+
+		deleted_count, _ = BusinessDirectMessageBlock.objects.filter(
+			id=block_id,
+			business_claim=membership.claim,
+		).delete()
+		if not deleted_count:
+			return Response({'detail': 'That direct message block could not be found.'}, status=status.HTTP_404_NOT_FOUND)
+
+		response_payload = build_account_response(request.user, portal, token=request.auth)
+		response_payload['detail'] = 'Direct message block removed.'
+		return Response(response_payload)
+
+
 class PushDeviceRegistrationView(APIView):
 	authentication_classes = [ProfileTokenAuthentication]
 	permission_classes = [IsAuthenticated]
@@ -725,8 +1040,8 @@ class PushDeviceRegistrationView(APIView):
 		serializer = PushDeviceRegistrationSerializer(data=request.data)
 		serializer.is_valid(raise_exception=True)
 		portal = infer_portal_for_user(request.user, serializer.validated_data.get('portal'))
-		if portal != 'customer':
-			return Response({'detail': 'Only customer accounts can enable favorite business push notifications.'}, status=status.HTTP_403_FORBIDDEN)
+		if portal not in {'customer', 'business'}:
+			return Response({'detail': 'Sign in with a customer or business account to enable push notifications.'}, status=status.HTTP_403_FORBIDDEN)
 
 		installation_id = serializer.validated_data['installation_id']
 		push_token = serializer.validated_data['push_token']

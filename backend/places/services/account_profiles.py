@@ -131,6 +131,7 @@ def build_account_response(user, portal, claim=None, token=None):
 	claims = list(user.business_claims.select_related('listing_snapshot').order_by('-created_at'))
 	memberships = list(user.business_memberships.select_related('claim__listing_snapshot').all())
 	active_membership = next((membership for membership in memberships if membership.is_active), None)
+	active_business_claim = active_membership.claim if active_membership else None
 	primary_claim = claim or (claims[0] if claims else None)
 	hold_claim = get_business_access_hold_claim(user, portal, claim=primary_claim)
 	profile = get_or_create_account_profile(user)
@@ -223,6 +224,19 @@ def build_account_response(user, portal, claim=None, token=None):
 		}
 
 	tracked_business_location = {}
+	direct_messaging_enabled = bool((active_business_claim or primary_claim).direct_messaging_enabled) if (active_business_claim or primary_claim) is not None else False
+	blocked_customer_accounts = []
+	if active_business_claim is not None:
+		blocked_customer_accounts = [
+			{
+				'block_id': block.id,
+				'customer_id': block.customer_id,
+				'username': block.customer.username,
+				'first_name': block.customer.first_name,
+				'last_name': block.customer.last_name,
+			}
+			for block in active_business_claim.direct_message_blocks.select_related('customer').order_by('-created_at', '-id')
+		]
 	business_location_tracking_available = False
 	business_location_tracking_enabled = False
 	requires_business_location_tracking = False
@@ -269,6 +283,8 @@ def build_account_response(user, portal, claim=None, token=None):
 		'business_location_tracking_enabled': business_location_tracking_enabled,
 		'requires_business_location_tracking': requires_business_location_tracking,
 		'tracked_business_location': tracked_business_location,
+		'direct_messaging_enabled': direct_messaging_enabled,
+		'blocked_customer_accounts': blocked_customer_accounts,
 		'can_access_places': not bool(hold_claim),
 	}
 
