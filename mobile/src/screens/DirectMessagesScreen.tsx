@@ -87,9 +87,31 @@ export function DirectMessagesScreen({
   const [threads, setThreads] = useState<DirectMessageThread[]>(() => cachedThreads ?? []);
   const [loadingThreads, setLoadingThreads] = useState(() => !cachedThreads);
   const [threadsError, setThreadsError] = useState<string | null>(null);
+  const normalizedContextBusinessName = contextBusinessName?.trim().toLowerCase() ?? '';
+  const hasCustomerContext = session.portal === 'customer' && Boolean(contextListingSlug || normalizedContextBusinessName);
+
+  function findPreferredThread(nextThreads: DirectMessageThread[]) {
+    if (!hasCustomerContext) {
+      return null;
+    }
+
+    const slugMatch = contextListingSlug
+      ? nextThreads.find((thread) => thread.business_slug === contextListingSlug)
+      : null;
+    if (slugMatch) {
+      return slugMatch;
+    }
+
+    if (!normalizedContextBusinessName) {
+      return null;
+    }
+
+    return nextThreads.find((thread) => thread.business_name.trim().toLowerCase() === normalizedContextBusinessName) ?? null;
+  }
+
   const [selectedThreadId, setSelectedThreadId] = useState<number | null>(() => {
-    if (contextListingSlug && cachedThreads?.length) {
-      return cachedThreads.find((thread) => thread.business_slug === contextListingSlug)?.id ?? null;
+    if (cachedThreads?.length) {
+      return findPreferredThread(cachedThreads)?.id ?? null;
     }
 
     return null;
@@ -108,8 +130,8 @@ export function DirectMessagesScreen({
   );
 
   const isBusinessPortal = session.portal === 'business';
-  const launchedFromBusinessProfile = Boolean(contextListingSlug);
-  const customerHasContextWithoutThread = !!(session.portal === 'customer' && contextListingSlug && !selectedThreadId);
+  const launchedFromBusinessProfile = hasCustomerContext;
+  const customerHasContextWithoutThread = !!(hasCustomerContext && !selectedThreadId);
   const showInboxList = !launchedFromBusinessProfile && !selectedThreadId;
   const showConversation = launchedFromBusinessProfile || !!selectedThreadId;
   const inboxFade = useRef(new Animated.Value(showInboxList ? 1 : 0)).current;
@@ -162,10 +184,16 @@ export function DirectMessagesScreen({
     let mounted = true;
 
     async function loadThreads() {
-      if (cachedThreads) {
+      const cachedPreferredThread = cachedThreads ? findPreferredThread(cachedThreads) : null;
+      const canUseCachedThreads = Boolean(cachedThreads) && (!hasCustomerContext || Boolean(cachedPreferredThread));
+
+      if (canUseCachedThreads && cachedThreads) {
         setThreads(cachedThreads);
         setLoadingThreads(false);
         setThreadsError(null);
+        if (cachedPreferredThread) {
+          setSelectedThreadId(cachedPreferredThread.id);
+        }
         return;
       }
 
@@ -179,9 +207,7 @@ export function DirectMessagesScreen({
         setThreads(nextThreads);
         directMessageThreadCache.set(threadCacheKey, nextThreads);
 
-        const preferredThread = contextListingSlug
-          ? nextThreads.find((thread) => thread.business_slug === contextListingSlug)
-          : null;
+        const preferredThread = findPreferredThread(nextThreads);
         setSelectedThreadId(preferredThread ? preferredThread.id : null);
       } catch (error) {
         if (!mounted) {
@@ -200,7 +226,7 @@ export function DirectMessagesScreen({
     return () => {
       mounted = false;
     };
-  }, [cachedThreads, contextListingSlug, onRefreshThreads, threadCacheKey]);
+  }, [cachedThreads, contextListingSlug, hasCustomerContext, normalizedContextBusinessName, onRefreshThreads, threadCacheKey]);
 
   useEffect(() => {
     let mounted = true;
@@ -252,9 +278,7 @@ export function DirectMessagesScreen({
       return;
     }
 
-    const nextPreferred = contextListingSlug
-      ? nextThreads.find((thread) => thread.business_slug === contextListingSlug)
-      : null;
+    const nextPreferred = findPreferredThread(nextThreads);
     setSelectedThreadId(nextPreferred?.id ?? null);
   }
 

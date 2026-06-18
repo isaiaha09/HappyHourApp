@@ -3225,6 +3225,12 @@ function AppScreen() {
     if (!showDirectMessageControl) {
       return;
     }
+
+    if (authenticatedSession?.portal === 'business') {
+      handleOpenDirectMessagesFromDashboard();
+      return;
+    }
+
     if (placeDetailPanel === 'direct-messages') {
       return;
     }
@@ -5684,8 +5690,8 @@ function AppScreen() {
                 {authenticatedSession ? (
                   <DirectMessagesScreen
                     backButtonLabel="Back to Profile"
-                    contextBusinessName={selectedPlace?.name ?? null}
-                    contextListingSlug={selectedPlace?.slug ?? null}
+                    contextBusinessName={authenticatedSession.portal === 'customer' ? (selectedPlace?.name ?? null) : null}
+                    contextListingSlug={authenticatedSession.portal === 'customer' ? (selectedPlace?.slug ?? null) : null}
                     isLandscape={isLandscape}
                     onBack={handleBackFromDirectMessagesToPlaceDetail}
                     onLoadThreadDetail={handleLoadDirectMessageThreadDetail}
