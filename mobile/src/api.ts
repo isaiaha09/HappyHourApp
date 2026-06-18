@@ -172,6 +172,15 @@ export async function registerPushDevice(baseUrl: string, authToken: string, pay
   return postAuthedJson<{ detail: string }>(baseUrl, '/profiles/push-devices/', authToken, payload);
 }
 
+export async function clearFavoriteBusinessNotifications(baseUrl: string, authToken: string, portal?: 'customer' | 'business') {
+  return postAuthedJson<SignupResponse>(baseUrl, '/profiles/favorite-business-notifications/', authToken, { portal });
+}
+
+export async function clearFavoriteBusinessNotification(baseUrl: string, authToken: string, notificationId: number, portal?: 'customer' | 'business') {
+  const query = portal ? `?portal=${encodeURIComponent(portal)}` : '';
+  return deleteAuthedJson<SignupResponse>(baseUrl, `/profiles/favorite-business-notifications/${notificationId}/${query}`, authToken);
+}
+
 export async function resendVerificationEmail(baseUrl: string, authToken: string) {
   return postAuthedJson<{ detail: string }>(baseUrl, '/profiles/resend-verification/', authToken, {});
 }
@@ -271,6 +280,26 @@ async function postMultipartJson<T>(baseUrl: string, path: string, payload: Form
       ...(authToken ? { Authorization: `Token ${authToken}` } : {}),
     },
     body: payload,
+  });
+
+  if (!response.ok) {
+    const errorPayload = await response.json().catch(() => null);
+    const message = errorPayload && typeof errorPayload === 'object'
+      ? flattenApiError(errorPayload)
+      : `Backend request failed with status ${response.status}.`;
+    throw new Error(message);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+async function deleteAuthedJson<T>(baseUrl: string, path: string, authToken: string): Promise<T> {
+  const response = await fetch(buildApiUrl(baseUrl, path), {
+    method: 'DELETE',
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Token ${authToken}`,
+    },
   });
 
   if (!response.ok) {

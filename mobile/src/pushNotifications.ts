@@ -3,7 +3,6 @@ import { File, Paths } from 'expo-file-system';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
-const installationIdFile = new File(Paths.document, 'push-installation-id.txt');
 const androidNotificationChannelId = 'business-updates';
 
 export type PushRegistrationResult = {
@@ -54,6 +53,13 @@ export function extractFavoriteBusinessSlugFromNotificationData(data: unknown) {
 }
 
 async function getPushInstallationId() {
+  const installationIdFile = getInstallationIdFile();
+
+  // Test/runtime fallback when document storage is unavailable.
+  if (!installationIdFile) {
+    return createInstallationId();
+  }
+
   try {
     if (installationIdFile.exists) {
       const existingValue = installationIdFile.textSync().trim();
@@ -72,6 +78,18 @@ async function getPushInstallationId() {
     // Best-effort persistence only.
   }
   return nextValue;
+}
+
+function getInstallationIdFile() {
+  try {
+    if (!Paths.document) {
+      return null;
+    }
+
+    return new File(Paths.document, 'push-installation-id.txt');
+  } catch {
+    return null;
+  }
 }
 
 function getExpoProjectId() {

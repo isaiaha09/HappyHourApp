@@ -49,6 +49,17 @@ jest.mock('expo-location', () => ({
   watchPositionAsync: jest.fn(),
 }));
 
+jest.mock('expo-notifications', () => ({
+  AndroidImportance: { DEFAULT: 3 },
+  addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  getLastNotificationResponseAsync: jest.fn(async () => null),
+  getPermissionsAsync: jest.fn(async () => ({ canAskAgain: false, granted: false })),
+  getExpoPushTokenAsync: jest.fn(async () => ({ data: 'ExponentPushToken[test-token]' })),
+  requestPermissionsAsync: jest.fn(async () => ({ canAskAgain: false, granted: false })),
+  setNotificationChannelAsync: jest.fn(async () => undefined),
+  setNotificationHandler: jest.fn(),
+}));
+
 jest.mock('../screens/SplashScreen', () => ({
   SplashScreen: ({ onOpenMap }: { onOpenMap: () => void }) => {
     const React = require('react');

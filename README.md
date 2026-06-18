@@ -95,6 +95,23 @@ Current mobile work includes:
 - native map boundary handling for built apps, with a JS fallback for Expo Go
 - modularized screen-level mobile code so auth/profile/dashboard/detail views are no longer all inline in `mobile/App.tsx`
 
+### Temporary TestFlight Seed Data Mode
+
+For current TestFlight testing, I am intentionally shipping a built-in mobile seed dataset so first installs can browse business data without requiring a hosted backend.
+
+- The seed file is bundled in the app at `mobile/assets/seeds/places.json`.
+- The mobile app attempts live backend requests first, then falls back to bundled seed data if the backend is unavailable.
+- This is temporary testing behavior and is not the final production architecture.
+
+Before production go-live, these seed-data fallback changes must be removed so all clients use the hosted backend as the single source of truth.
+
+Production cleanup checklist:
+
+- remove fallback imports/usages in `mobile/App.tsx`
+- remove helper module `mobile/src/seededPlaces.ts`
+- remove bundled seed file `mobile/assets/seeds/places.json`
+- confirm mobile app only reads listing data from hosted API endpoints
+
 ### Current Backend Models
 
 The backend currently includes data models for:

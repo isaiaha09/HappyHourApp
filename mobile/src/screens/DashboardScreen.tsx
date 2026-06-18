@@ -144,22 +144,33 @@ function FavoriteBusinessCard({
 }
 
 function FavoriteBusinessNotificationCard({
+  onDismiss,
   notification,
   onPress,
+  submitting,
 }: {
+  onDismiss: () => void;
   notification: FavoriteBusinessNotification;
   onPress: () => void;
+  submitting: boolean;
 }) {
   return (
-    <Pressable onPress={onPress} style={[styles.dashboardDetailItem, styles.dashboardNotificationCard]}>
+    <View style={[styles.dashboardDetailItem, styles.dashboardNotificationCard]}>
       <View style={styles.dashboardNotificationHeader}>
-        <Text style={styles.dashboardNotificationTitle}>{notification.title}</Text>
-        <Text style={styles.dashboardNotificationTimestamp}>{formatDashboardNotificationTimestamp(notification.created_at)}</Text>
+        <View style={styles.dashboardNotificationHeaderCopy}>
+          <Text style={styles.dashboardNotificationTitle}>{notification.title}</Text>
+          <Text style={styles.dashboardNotificationTimestamp}>{formatDashboardNotificationTimestamp(notification.created_at)}</Text>
+        </View>
+        <Pressable onPress={onDismiss} style={[styles.dashboardNotificationDismissButton, submitting ? styles.linkButtonDisabled : null]}>
+          <Text style={styles.dashboardNotificationDismissButtonText}>{submitting ? '...' : 'Dismiss'}</Text>
+        </Pressable>
       </View>
       {notification.message ? <Text style={styles.dashboardSupportText}>{notification.message}</Text> : null}
       <Text style={styles.dashboardSupportText}>{notification.business_name}</Text>
-      <Text style={styles.dashboardFavoriteBusinessAction}>Open business profile</Text>
-    </Pressable>
+      <Pressable onPress={onPress}>
+        <Text style={styles.dashboardFavoriteBusinessAction}>Open business profile</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -768,15 +779,25 @@ export function FavoriteBusinessesScreen({
 }
 
 export function FavoriteBusinessNotificationsScreen({
+  errorMessage,
   isLandscape,
+  message,
   onBack,
+  onClear,
+  onClearNotification,
   onOpenFavoriteBusiness,
   session,
+  submitting,
 }: {
+  errorMessage: string | null;
   isLandscape: boolean;
+  message: string | null;
   onBack: () => void;
+  onClear: () => void;
+  onClearNotification: (notificationId: number) => void;
   onOpenFavoriteBusiness: (slug: string) => void;
   session: SignupResponse;
+  submitting: boolean;
 }) {
   const favoriteBusinessNotifications = session.favorite_business_notifications ?? [];
 
@@ -796,15 +817,36 @@ export function FavoriteBusinessNotificationsScreen({
           <Text style={styles.detailTitle}>Business Notifications</Text>
           <Text style={styles.profileIntroText}>These alerts appear when one of your favorited businesses updates its profile or publishes something new.</Text>
 
+          {message ? (
+            <View style={styles.profileSuccessBanner}>
+              <Text style={styles.profileSuccessText}>{message}</Text>
+            </View>
+          ) : null}
+
+          {errorMessage ? (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            </View>
+          ) : null}
+
           <View style={styles.dashboardSection}>
-            <Text style={styles.dashboardSectionTitle}>Recent alerts</Text>
+            <View style={styles.dashboardNotificationHeader}>
+              <Text style={styles.dashboardSectionTitle}>Recent alerts</Text>
+              {favoriteBusinessNotifications.length ? (
+                <Pressable onPress={onClear} style={[styles.linkButtonSecondaryWide, styles.dashboardInlineButton, submitting ? styles.linkButtonDisabled : null]}>
+                  <Text style={styles.linkButtonSecondaryText}>{submitting ? 'Clearing...' : 'Clear all'}</Text>
+                </Pressable>
+              ) : null}
+            </View>
             {favoriteBusinessNotifications.length ? (
               <View style={styles.dashboardFieldGrid}>
                 {favoriteBusinessNotifications.map((notification) => (
                   <FavoriteBusinessNotificationCard
                     key={notification.id}
+                    onDismiss={() => onClearNotification(notification.id)}
                     notification={notification}
                     onPress={() => onOpenFavoriteBusiness(notification.slug)}
+                    submitting={submitting}
                   />
                 ))}
               </View>

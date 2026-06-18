@@ -14,9 +14,11 @@
     },
     "ios": {
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "DiningDealz uses your location so approved mobile or multi-area business accounts can update their live map location and service area in the app."
+        "NSLocationWhenInUseUsageDescription": "DiningDealz uses your location so approved mobile or multi-area business accounts can update their live map location and service area in the app.",
+        "ITSAppUsesNonExemptEncryption": false
       },
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ia09.diningdealz"
     },
     "android": {
       "adaptiveIcon": {
@@ -35,6 +37,11 @@
     ],
     "web": {
       "favicon": "./assets/DiningDealz-Icon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "ab9e547f-3d7a-4033-bbd2-6c96f4eeeef1"
+      }
     }
   }
 }

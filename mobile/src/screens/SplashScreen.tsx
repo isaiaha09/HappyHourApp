@@ -31,6 +31,7 @@ export function SplashScreen({ apiBaseUrl, onCreateAccount, onOpenMap, onSelectP
   useEffect(() => {
     if (splashIntroState !== 'unplayed') {
       hasStartedAnimationRef.current = true;
+      timeline.setValue(1);
       logoEntranceOpacity.setValue(1);
       logoEntranceScale.setValue(1);
       return;
@@ -45,6 +46,15 @@ export function SplashScreen({ apiBaseUrl, onCreateAccount, onOpenMap, onSelectP
     timeline.setValue(0);
     logoEntranceOpacity.setValue(0);
     logoEntranceScale.setValue(0.5);
+    const introFailSafeTimer = setTimeout(() => {
+      splashIntroState = 'played';
+      timeline.stopAnimation();
+      logoEntranceOpacity.stopAnimation();
+      logoEntranceScale.stopAnimation();
+      timeline.setValue(1);
+      logoEntranceOpacity.setValue(1);
+      logoEntranceScale.setValue(1);
+    }, 5200);
     Animated.parallel([
       Animated.timing(logoEntranceOpacity, {
         duration: 900,
@@ -74,13 +84,21 @@ export function SplashScreen({ apiBaseUrl, onCreateAccount, onOpenMap, onSelectP
         }),
       ]),
     ]).start(({ finished }) => {
+      clearTimeout(introFailSafeTimer);
       if (finished) {
         splashIntroState = 'played';
         return;
       }
 
-      splashIntroState = 'playing';
+      splashIntroState = 'played';
+      timeline.setValue(1);
+      logoEntranceOpacity.setValue(1);
+      logoEntranceScale.setValue(1);
     });
+
+    return () => {
+      clearTimeout(introFailSafeTimer);
+    };
   }, [logoEntranceOpacity, logoEntranceScale, timeline]);
 
   const logoTravelStart = Math.max(height * 0.24, 150);

@@ -6329,6 +6329,108 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(device.expo_push_token, 'ExponentPushToken[test-token-1]')
 		self.assertTrue(device.is_active)
 
+	def test_profile_favorite_business_notifications_clear_endpoint_removes_customer_notifications(self):
+		FavoriteBusinessNotification.objects.create(
+			user=self.user,
+			listing_slug='favorite-tacos-ventura',
+			business_name='Favorite Tacos',
+			event_type=FavoriteBusinessNotification.EventType.PROFILE_UPDATE,
+			title='Favorite Tacos updated its business profile',
+			message='Updated deals.',
+		)
+
+		response = self.client.post(
+			reverse('profile-favorite-business-notifications'),
+			{'portal': 'customer'},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data['detail'], 'Business notifications cleared.')
+		self.assertEqual(response.data['favorite_business_notifications'], [])
+		self.assertFalse(FavoriteBusinessNotification.objects.filter(user=self.user).exists())
+
+	def test_profile_favorite_business_notifications_clear_endpoint_rejects_business_portal(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Approved Spot',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='55 Main St',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@approvedspot.com',
+			work_phone='805-555-0200',
+			employer_address='55 Main St, Ventura, CA 93001',
+			verification_summary='I own the business.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+		FavoriteBusinessNotification.objects.create(
+			user=self.user,
+			listing_slug='favorite-tacos-ventura',
+			business_name='Favorite Tacos',
+			event_type=FavoriteBusinessNotification.EventType.PROFILE_UPDATE,
+			title='Favorite Tacos updated its business profile',
+			message='Updated deals.',
+		)
+
+		response = self.client.post(
+			reverse('profile-favorite-business-notifications'),
+			{'portal': 'business'},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 403)
+		self.assertEqual(response.data['detail'], 'Only customer accounts can clear business notifications.')
+		self.assertTrue(FavoriteBusinessNotification.objects.filter(user=self.user).exists())
+
+	def test_profile_favorite_business_notification_detail_delete_removes_one_customer_notification(self):
+		first_notification = FavoriteBusinessNotification.objects.create(
+			user=self.user,
+			listing_slug='favorite-tacos-ventura',
+			business_name='Favorite Tacos',
+			event_type=FavoriteBusinessNotification.EventType.PROFILE_UPDATE,
+			title='Favorite Tacos updated its business profile',
+			message='Updated deals.',
+		)
+		second_notification = FavoriteBusinessNotification.objects.create(
+			user=self.user,
+			listing_slug='favorite-tacos-ventura',
+			business_name='Favorite Tacos',
+			event_type=FavoriteBusinessNotification.EventType.ANNOUNCEMENT,
+			title='New announcement from Favorite Tacos',
+			message='Patio is now open.',
+		)
+
+		response = self.client.delete(
+			reverse('profile-favorite-business-notification-detail', args=[first_notification.id]) + '?portal=customer',
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data['detail'], 'Business notification cleared.')
+		self.assertEqual(len(response.data['favorite_business_notifications']), 1)
+		self.assertEqual(response.data['favorite_business_notifications'][0]['id'], second_notification.id)
+		self.assertFalse(FavoriteBusinessNotification.objects.filter(pk=first_notification.id).exists())
+		self.assertTrue(FavoriteBusinessNotification.objects.filter(pk=second_notification.id).exists())
+
+	def test_profile_favorite_business_notification_detail_delete_rejects_missing_notification(self):
+		response = self.client.delete(
+			reverse('profile-favorite-business-notification-detail', args=[999999]) + '?portal=customer',
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 404)
+		self.assertEqual(response.data['detail'], 'That business notification could not be found.')
+
 	@patch('places.services.favorite_notifications.send_push_notifications_for_favorite_business_event')
 	def test_profile_dashboard_update_sends_push_for_registered_favorite_device(self, mock_send_push):
 		snapshot = ListingSnapshot.objects.create(
@@ -6502,6 +6604,69 @@ class ProfileDashboardApiTests(APITestCase):
 			customer_dashboard_response.data['favorite_business_notifications'][0]['event_type'],
 			FavoriteBusinessNotification.EventType.PROFILE_UPDATE,
 		)
+
+	def test_profile_dashboard_update_notification_message_only_includes_actual_changed_fields(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Favorite Tacos',
+			listing_slug='favorite-tacos-ventura',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='123 Main St',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@favoritetacos.com',
+			work_phone='805-555-0200',
+			employer_address='123 Main St, Ventura, CA 93001',
+			business_website_url='https://example.com/favorite-tacos',
+			social_profiles={'website': 'https://example.com/favorite-tacos'},
+			social_media_links=['https://example.com/favorite-tacos'],
+			verification_summary='I own the business.',
+			photo_references=['https://images.example.com/old-photo.jpg'],
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+		customer_user = User.objects.create_user(username='favorite_customer_photo_only', email='favoritephotoonly@example.com', password='test-pass-123')
+		FavoriteBusiness.objects.create(
+			user=customer_user,
+			listing_slug='favorite-tacos-ventura',
+			name='Favorite Tacos',
+			city=City.VENTURA,
+			city_label='Ventura',
+			venue_type=VenueType.RESTAURANT,
+			venue_type_label='Restaurant',
+			address_line_1='123 Main St',
+			website_url='https://example.com/favorite-tacos',
+		)
+
+		response = self.client.post(
+			reverse('profile-dashboard'),
+			{
+				'portal': 'business',
+				'username': 'dashboard_user',
+				'email': 'dashboard@example.com',
+				'first_name': 'Dash',
+				'last_name': 'Board',
+				'contact_name': 'Dash Board',
+				'job_title': 'Owner',
+				'work_email': 'owner@favoritetacos.com',
+				'work_phone': '805-555-0200',
+				'employer_address': '123 Main St, Ventura, CA 93001',
+				'business_website_url': 'https://example.com/favorite-tacos',
+				'social_profiles': {'website': 'https://example.com/favorite-tacos'},
+				'photo_references_text': 'https://images.example.com/new-photo.jpg',
+			},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 200)
+		notification = FavoriteBusinessNotification.objects.get(user=customer_user)
+		self.assertEqual(notification.event_type, FavoriteBusinessNotification.EventType.PROFILE_UPDATE)
+		self.assertEqual(notification.message, 'Updated photos.')
 
 	def test_publishing_business_post_creates_favorite_business_notification(self):
 		snapshot = ListingSnapshot.objects.create(

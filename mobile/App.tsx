@@ -34,6 +34,8 @@ import {
   createCustomerProfile,
   createInformalBusinessProfile,
   createManualBusinessProfile,
+  clearFavoriteBusinessNotification,
+  clearFavoriteBusinessNotifications,
   deleteProfileAccount,
   disableTwoFactor,
   fetchProfileDashboard,
@@ -101,6 +103,7 @@ import {
   getSelectedClaimLocation,
   normalizeSearchText,
 } from './src/placeHelpers';
+import { getSeededPlaceDetail, getSeededPlaces, seededPlacesAvailable } from './src/seededPlaces';
 import type {
   BusinessAttachmentBuckets,
   BusinessAttachmentDraft,
@@ -144,6 +147,7 @@ const maxLongitudeDelta = 0.32;
 const maxMapGestureDelta = Math.hypot(maxLatitudeDelta, maxLongitudeDelta);
 const mapFitPaddingFactor = 1.15;
 const shellFadeDurationMs = 360;
+const seedDataFallbackMessage = 'Live backend unavailable. Showing bundled test data.';
 const defaultMapRegion = {
   latitude: (mapAreaBounds.minLatitude + mapAreaBounds.maxLatitude) / 2,
   longitude: (mapAreaBounds.minLongitude + mapAreaBounds.maxLongitude) / 2,
@@ -2118,6 +2122,13 @@ function AppScreen() {
           return;
         }
 
+        const seededPlaces = getSeededPlaces(selectedCity);
+        if (seededPlacesAvailable() && seededPlaces.length > 0) {
+          setErrorMessage(seedDataFallbackMessage);
+          setPlaces(seededPlaces);
+          return;
+        }
+
         setErrorMessage(getErrorMessage(error));
         setPlaces([]);
       } finally {
@@ -2157,6 +2168,13 @@ function AppScreen() {
         setSelectedPlace(detail);
       } catch (error) {
         if (!isMounted) {
+          return;
+        }
+
+        const seededPlaceDetail = getSeededPlaceDetail(placeSlug);
+        if (seededPlaceDetail) {
+          setErrorMessage(seedDataFallbackMessage);
+          setSelectedPlace(seededPlaceDetail);
           return;
         }
 
@@ -2271,6 +2289,13 @@ function AppScreen() {
         return;
       }
 
+      const seededPlaces = getSeededPlaces('all');
+      if (seededPlacesAvailable() && seededPlaces.length > 0) {
+        setProfileErrorMessage(seedDataFallbackMessage);
+        setProfilePlaces(seededPlaces);
+        return;
+      }
+
       setProfileErrorMessage(getErrorMessage(error));
     }).finally(() => {
       if (isMounted) {
@@ -2339,6 +2364,42 @@ function AppScreen() {
         });
       })
       .catch(() => {
+        if (!isMounted || claimPrefillRequestRef.current !== requestId) {
+          return;
+        }
+
+        const seededDetail = getSeededPlaceDetail(profileForm.business_slug);
+        if (!seededDetail) {
+          return;
+        }
+
+        const prefill = buildClaimPrefill(seededDetail, selectedClaimLocationId);
+        claimPrefillLoadedKeyRef.current = prefillKey;
+
+        startTransition(() => {
+          setSelectedClaimPlace(seededDetail);
+          setSelectedClaimLocationId(prefill.locationId);
+          setProfileErrorMessage(seedDataFallbackMessage);
+          setProfileForm((current) => {
+            if (current.business_slug !== profileForm.business_slug) {
+              return current;
+            }
+
+            return {
+              ...current,
+              business_city: current.business_city || prefill.business_city,
+              business_venue_type: current.business_venue_type || prefill.business_venue_type,
+              business_website_url: current.business_website_url || prefill.business_website_url,
+              instagram_profile: current.instagram_profile || prefill.instagram_profile,
+              facebook_profile: current.facebook_profile || prefill.facebook_profile,
+              tiktok_profile: current.tiktok_profile || prefill.tiktok_profile,
+              youtube_profile: current.youtube_profile || prefill.youtube_profile,
+              deal_overrides: current.deal_overrides.length ? current.deal_overrides : prefill.deal_overrides,
+              operating_hour_overrides: current.operating_hour_overrides.length ? current.operating_hour_overrides : prefill.operating_hour_overrides,
+              photo_references_text: current.photo_references_text.trim() ? current.photo_references_text : prefill.photo_references_text,
+            };
+          });
+        });
       });
 
     return () => {
@@ -2984,6 +3045,48 @@ function AppScreen() {
     setProfileErrorMessage(null);
     setProfileMessage(null);
     navigateScreen('business-notifications', 'forward');
+  }
+
+  async function handleClearFavoriteBusinessNotifications() {
+    if (!authenticatedSession?.auth_token) {
+      setProfileErrorMessage('Sign in again before clearing business notifications.');
+      return;
+    }
+
+    setDashboardSubmitting(true);
+    setProfileErrorMessage(null);
+    setProfileMessage(null);
+
+    try {
+      const response = await clearFavoriteBusinessNotifications(apiBaseUrl, authenticatedSession.auth_token, authenticatedSession.portal);
+      setAuthenticatedSession(response);
+      setProfileMessage(response.detail ?? 'Business notifications cleared.');
+    } catch (error) {
+      setProfileErrorMessage(getErrorMessage(error));
+    } finally {
+      setDashboardSubmitting(false);
+    }
+  }
+
+  async function handleClearFavoriteBusinessNotification(notificationId: number) {
+    if (!authenticatedSession?.auth_token) {
+      setProfileErrorMessage('Sign in again before clearing business notifications.');
+      return;
+    }
+
+    setDashboardSubmitting(true);
+    setProfileErrorMessage(null);
+    setProfileMessage(null);
+
+    try {
+      const response = await clearFavoriteBusinessNotification(apiBaseUrl, authenticatedSession.auth_token, notificationId, authenticatedSession.portal);
+      setAuthenticatedSession(response);
+      setProfileMessage(response.detail ?? 'Business notification cleared.');
+    } catch (error) {
+      setProfileErrorMessage(getErrorMessage(error));
+    } finally {
+      setDashboardSubmitting(false);
+    }
   }
 
   function handleBackFromBusinessNotifications() {
@@ -4219,10 +4322,15 @@ function AppScreen() {
       return (
         <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
           <FavoriteBusinessNotificationsScreen
+            errorMessage={profileErrorMessage}
             isLandscape={isLandscape}
+            message={profileMessage}
             onBack={handleBackFromBusinessNotifications}
+            onClear={() => void handleClearFavoriteBusinessNotifications()}
+            onClearNotification={(notificationId) => void handleClearFavoriteBusinessNotification(notificationId)}
             onOpenFavoriteBusiness={handleOpenFavoriteBusiness}
             session={profileSession!}
+            submitting={dashboardSubmitting}
           />
         </SafeAreaView>
       );

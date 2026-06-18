@@ -2423,6 +2423,10 @@ export const styles = StyleSheet.create({
     gap: 10,
     justifyContent: 'space-between',
   },
+  dashboardNotificationHeaderCopy: {
+    flex: 1,
+    gap: 4,
+  },
   dashboardNotificationTitle: {
     color: '#2d221a',
     flex: 1,
@@ -2434,7 +2438,20 @@ export const styles = StyleSheet.create({
     color: '#8b6c59',
     fontSize: 11,
     fontWeight: '700',
-    textAlign: 'right',
+    textAlign: 'left',
+  },
+  dashboardNotificationDismissButton: {
+    backgroundColor: '#fff1ed',
+    borderColor: '#efb1a7',
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  dashboardNotificationDismissButtonText: {
+    color: '#8d2500',
+    fontSize: 11,
+    fontWeight: '800',
   },
   dashboardFavoriteBusinessAction: {
     color: '#9e5b49',
