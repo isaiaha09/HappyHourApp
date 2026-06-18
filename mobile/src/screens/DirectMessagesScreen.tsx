@@ -4,6 +4,7 @@ import { ActivityIndicator, Animated, Image, Keyboard, KeyboardAvoidingView, Pre
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { styles } from '../appStyles';
+import { PhotoLightbox } from '../components/PhotoLightbox';
 import type { BusinessAttachmentDraft, DirectMessageItem, DirectMessageThread, DirectMessageThreadDetailResponse, DirectMessageSendResponse, SignupResponse } from '../types';
 
 type DirectMessagesScreenProps = {
@@ -123,10 +124,18 @@ export function DirectMessagesScreen({
   const [composerImageDraft, setComposerImageDraft] = useState<BusinessAttachmentDraft | null>(null);
   const [sending, setSending] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [photoLightboxVisible, setPhotoLightboxVisible] = useState(false);
+  const [photoLightboxIndex, setPhotoLightboxIndex] = useState(0);
 
   const selectedThread = useMemo(
     () => threads.find((thread) => thread.id === selectedThreadId) ?? null,
     [selectedThreadId, threads],
+  );
+  const messageImageUrls = useMemo(
+    () => messages
+      .filter((message) => message.message_type === 'image' && Boolean(message.image_url))
+      .map((message) => message.image_url),
+    [messages],
   );
 
   const isBusinessPortal = session.portal === 'business';
@@ -171,6 +180,15 @@ export function DirectMessagesScreen({
     }
 
     return `${tokens[0][0]}${tokens[1][0]}`.toUpperCase();
+  }
+
+  function handleOpenMessagePhotoLightbox(imageUrl: string) {
+    const imageIndex = messageImageUrls.indexOf(imageUrl);
+    if (imageIndex < 0) {
+      return;
+    }
+    setPhotoLightboxIndex(imageIndex);
+    setPhotoLightboxVisible(true);
   }
 
   function getThreadDisplayName(thread: DirectMessageThread) {
@@ -520,7 +538,9 @@ export function DirectMessagesScreen({
                         <View key={message.id} style={[styles.directMessageBubbleWrap, isMine ? styles.directMessageBubbleWrapMine : null]}>
                           {message.message_type === 'image' && message.image_url ? (
                             <View style={[styles.directMessageImageWrap, isMine ? styles.directMessageImageWrapMine : null]}>
-                              <Image source={{ uri: message.image_url }} style={styles.directMessageImage} />
+                              <Pressable onPress={() => handleOpenMessagePhotoLightbox(message.image_url)}>
+                                <Image source={{ uri: message.image_url }} style={styles.directMessageImage} />
+                              </Pressable>
                             </View>
                           ) : (
                             <View style={[styles.directMessageBubble, isMine ? styles.directMessageBubbleMine : null]}>
@@ -585,6 +605,12 @@ export function DirectMessagesScreen({
           ) : null}
         </Animated.View>
       </View>
+      <PhotoLightbox
+        imageUrls={messageImageUrls}
+        initialIndex={photoLightboxIndex}
+        onClose={() => setPhotoLightboxVisible(false)}
+        visible={photoLightboxVisible}
+      />
     </KeyboardAvoidingView>
   );
 }
