@@ -2717,7 +2717,7 @@ function AppScreen() {
     animateShellFade('browse');
   }
 
-  function fadeIntoProfileScreen(nextScreen: 'profiles' | 'business-profile-editor') {
+  function fadeIntoProfileScreen(nextScreen: 'profiles' | 'business-profile-editor' | 'direct-messages') {
     dismissKeyboardForScreenTransition();
     setSelectedPlaceSlug(null);
     setProfileEntryOffset(0);
@@ -3151,7 +3151,14 @@ function AppScreen() {
   function handleBackFromDirectMessages() {
     dismissKeyboardForScreenTransition();
     setProfileErrorMessage(null);
-    navigateScreen('profiles', 'backward');
+    fadeIntoProfileScreen('profiles');
+  }
+
+  function handleOpenDirectMessagesFromDashboard() {
+    dismissKeyboardForScreenTransition();
+    setProfileErrorMessage(null);
+    setProfileMessage(null);
+    fadeIntoProfileScreen('direct-messages');
   }
 
   function handleBackFromSupport() {
@@ -3446,7 +3453,7 @@ function AppScreen() {
     setSelectedMapPlaceKey(null);
 
     if (['favorite-businesses', 'business-notifications', 'direct-messages', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service'].includes(screenMode)) {
-      navigateScreen('profiles', 'backward');
+      fadeIntoProfileScreen('profiles');
       return;
     }
 
@@ -3538,7 +3545,7 @@ function AppScreen() {
       return;
     }
 
-    closeBottomMoreSheet(() => navigateScreen('direct-messages', 'forward'));
+    closeBottomMoreSheet(() => fadeIntoProfileScreen('direct-messages'));
   }
 
   function handleBottomMenuOpenSupport() {
@@ -4581,10 +4588,10 @@ function AppScreen() {
             contextListingSlug={null}
             isLandscape={isLandscape}
             onBack={handleBackFromDirectMessages}
-            onLoadThreadDetail={(threadId) => handleLoadDirectMessageThreadDetail(threadId)}
-            onRefreshThreads={() => handleRefreshDirectMessageThreads()}
-            onSendImageMessage={(threadId, image) => handleSendImageDirectMessage(threadId, image)}
-            onSendTextMessage={(payload) => handleSendTextDirectMessage(payload)}
+            onLoadThreadDetail={handleLoadDirectMessageThreadDetail}
+            onRefreshThreads={handleRefreshDirectMessageThreads}
+            onSendImageMessage={handleSendImageDirectMessage}
+            onSendTextMessage={handleSendTextDirectMessage}
             session={profileSession}
           />
         </SafeAreaView>
@@ -4694,6 +4701,7 @@ function AppScreen() {
             onOpenFavoriteBusiness={handleOpenFavoriteBusiness}
             onOpenFavoriteBusinesses={handleOpenFavoriteBusinesses}
             onOpenBusinessNotifications={handleOpenBusinessNotifications}
+            onOpenDirectMessages={handleOpenDirectMessagesFromDashboard}
             onOpenPlaces={handleContinueToApp}
             onOpenSettings={handleOpenSettings}
             onRefresh={() => void refreshDashboard()}

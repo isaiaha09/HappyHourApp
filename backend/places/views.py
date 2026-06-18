@@ -869,10 +869,8 @@ class DirectMessageThreadsView(APIView):
 			if message_image is not None:
 				return Response({'detail': 'Customer direct messages cannot include images.'}, status=status.HTTP_400_BAD_REQUEST)
 		else:
-			if message_image is None:
-				return Response({'detail': 'Business direct messages must include an image.'}, status=status.HTTP_400_BAD_REQUEST)
-			if message_text:
-				return Response({'detail': 'Business direct messages cannot include text.'}, status=status.HTTP_400_BAD_REQUEST)
+			if not message_text and message_image is None:
+				return Response({'detail': 'Business direct messages must include text or an image.'}, status=status.HTTP_400_BAD_REQUEST)
 
 		message = BusinessDirectMessage(
 			thread=thread,

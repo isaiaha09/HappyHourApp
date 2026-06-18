@@ -7134,7 +7134,7 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(blocked_send_response.status_code, 403)
 
 	@patch('places.views.send_push_notifications_for_direct_message')
-	def test_business_direct_message_requires_image_and_triggers_push_notification(self, mock_send_dm_push):
+	def test_business_direct_message_allows_text_and_image_and_triggers_push_notification(self, mock_send_dm_push):
 		valid_png_bytes = (
 			b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89'
 			b'\x00\x00\x00\x0cIDATx\x9cc```\x00\x00\x00\x04\x00\x01\xf6\x178U\x00\x00\x00\x00IEND\xaeB`\x82'
@@ -7181,12 +7181,13 @@ class ProfileDashboardApiTests(APITestCase):
 			{
 				'portal': 'business',
 				'thread_id': thread_id,
-				'message': 'This should fail because business messages are image-only.',
+				'message': 'Absolutely, thanks for reaching out.',
 			},
 			format='json',
 			**self.auth_headers(),
 		)
-		self.assertEqual(text_only_response.status_code, 400)
+		self.assertEqual(text_only_response.status_code, 201)
+		self.assertEqual(text_only_response.data['message']['message_type'], 'text')
 
 		image_payload = SimpleUploadedFile('dm-photo.png', valid_png_bytes, content_type='image/png')
 		image_send_response = self.client.post(
@@ -7202,7 +7203,7 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(image_send_response.status_code, 201)
 		self.assertEqual(image_send_response.data['message']['message_type'], 'image')
 		self.assertTrue(bool(image_send_response.data['message']['image_url']))
-		mock_send_dm_push.assert_called()
+		self.assertGreaterEqual(mock_send_dm_push.call_count, 2)
 
 	def test_customer_direct_message_rejects_image_payload(self):
 		valid_png_bytes = (

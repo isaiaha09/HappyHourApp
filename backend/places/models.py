@@ -1076,10 +1076,8 @@ class BusinessDirectMessage(models.Model):
 			if self.image:
 				raise ValidationError('Customer direct messages cannot include images.')
 		else:
-			if not self.image:
-				raise ValidationError('Business direct messages must include an image.')
-			if body_text:
-				raise ValidationError('Business direct messages cannot include text.')
+			if not body_text and not self.image:
+				raise ValidationError('Business direct messages must include text or an image.')
 
 
 class BusinessDirectMessageBlock(models.Model):

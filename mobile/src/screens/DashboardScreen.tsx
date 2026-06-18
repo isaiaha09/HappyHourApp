@@ -22,6 +22,7 @@ export type DashboardScreenProps = {
   onOpenFavoriteBusiness: (slug: string) => void;
   onOpenFavoriteBusinesses: () => void;
   onOpenBusinessNotifications: () => void;
+  onOpenDirectMessages: () => void;
   onOpenPlaces: () => void;
   onOpenSettings: () => void;
   onRefresh: () => void;
@@ -239,6 +240,16 @@ function SettingsGearIcon() {
   );
 }
 
+function DirectMessageHeaderIcon() {
+  return (
+    <View style={styles.directMessageHeaderGlyphIcon}>
+      <View style={styles.directMessageHeaderGlyphBase} />
+      <View style={styles.directMessageHeaderGlyphWing} />
+      <View style={styles.directMessageHeaderGlyphTail} />
+    </View>
+  );
+}
+
 function SecuritySettingsSection({
   onBeginTwoFactorSetup,
   onChangeTwoFactorDisableCode,
@@ -430,7 +441,7 @@ function SecuritySettingsSection({
   );
 }
 
-export function DashboardScreen({ errorMessage, isLandscape, loading, message, onBack, onOpenBilling, onOpenApprovedBusiness, onOpenBusinessProfileEditor, onOpenFavoriteBusiness, onOpenFavoriteBusinesses, onOpenBusinessNotifications, onOpenPlaces, onOpenSettings, onRefresh, onResendVerification, onSaveProfileDetails, session, submitting }: DashboardScreenProps) {
+export function DashboardScreen({ errorMessage, isLandscape, loading, message, onBack, onOpenBilling, onOpenApprovedBusiness, onOpenBusinessProfileEditor, onOpenFavoriteBusiness, onOpenFavoriteBusinesses, onOpenBusinessNotifications, onOpenDirectMessages, onOpenPlaces, onOpenSettings, onRefresh, onResendVerification, onSaveProfileDetails, session, submitting }: DashboardScreenProps) {
   const approvedBusinesses = session.approved_businesses ?? [];
   const sponsoredCampaigns = session.sponsored_campaigns ?? [];
   const favoriteBusinesses = session.favorite_businesses ?? [];
@@ -492,9 +503,14 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
               <Pressable onPress={onBack} style={styles.backButton}>
                 <Text style={styles.backButtonText}>Open Map</Text>
               </Pressable>
-              <Pressable accessibilityLabel="Open settings" onPress={onOpenSettings} style={styles.settingsIconButton}>
-                <SettingsGearIcon />
-              </Pressable>
+              <View style={styles.dashboardHeaderActions}>
+                <Pressable accessibilityLabel="Open direct messages" onPress={onOpenDirectMessages} style={styles.settingsIconButton}>
+                  <DirectMessageHeaderIcon />
+                </Pressable>
+                <Pressable accessibilityLabel="Open settings" onPress={onOpenSettings} style={styles.settingsIconButton}>
+                  <SettingsGearIcon />
+                </Pressable>
+              </View>
             </View>
           </View>
 
