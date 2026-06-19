@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Image, Keyboard, Linking, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
@@ -198,11 +199,7 @@ export function PlaceDetailScreen({
               onPress={onOpenDirectMessages}
               style={styles.directMessageHeaderActionButton}
             >
-              <View style={styles.directMessagePlaneIcon}>
-                <View style={styles.directMessagePlaneLineBase} />
-                <View style={styles.directMessagePlaneLineWing} />
-                <View style={styles.directMessagePlaneLineTail} />
-              </View>
+              <Ionicons color="#402214" name="paper-plane-outline" size={19} />
             </Pressable>
           ) : null}
         </View>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
@@ -241,13 +242,7 @@ function SettingsGearIcon() {
 }
 
 function DirectMessageHeaderIcon() {
-  return (
-    <View style={styles.directMessageHeaderGlyphIcon}>
-      <View style={styles.directMessageHeaderGlyphBase} />
-      <View style={styles.directMessageHeaderGlyphWing} />
-      <View style={styles.directMessageHeaderGlyphTail} />
-    </View>
-  );
+  return <Ionicons color="#402214" name="paper-plane-outline" size={19} />;
 }
 
 function SecuritySettingsSection({
