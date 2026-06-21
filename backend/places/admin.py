@@ -209,6 +209,17 @@ def _format_public_hours_preview_lines(operating_hours):
 	]
 
 
+def _format_public_hours_preview_lines_24_hour(operating_hours):
+	return [
+		(
+			f"{row.get('weekday_label', row.get('weekday'))}: Open 24 hours"
+			if row.get('open_24_hours')
+			else f"{row.get('weekday_label', row.get('weekday'))}: {row.get('open_time')} - {row.get('close_time')}"
+		)
+		for row in operating_hours
+	]
+
+
 class ManagedByBusinessUserFilter(admin.SimpleListFilter):
 	title = 'Managed by business user'
 	parameter_name = 'managed_by_business_user'
@@ -1190,7 +1201,7 @@ class BusinessAccountAdmin(UserAdmin):
 		payload = self._get_active_managed_business_payload(obj)
 		if payload is None:
 			return 'No active business'
-		preview_lines = _format_public_hours_preview_lines(list(payload.get('operating_hours', [])))
+		preview_lines = _format_public_hours_preview_lines_24_hour(list(payload.get('operating_hours', [])))
 		if not preview_lines:
 			return 'No operating hours currently surfaced.'
 		return format_html_join('', '{}<br>', ((line,) for line in preview_lines))

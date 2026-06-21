@@ -2118,6 +2118,8 @@ class SourceListingIdentityTests(TestCase):
 
 	@patch('places.services.source_listings.requests.get')
 	def test_place_payload_includes_cached_coordinates(self, mock_get):
+		caches[getattr(settings, 'PLACE_GEOCODE_CACHE_ALIAS', 'default')].clear()
+
 		mock_response = mock_get.return_value
 		mock_response.raise_for_status.return_value = None
 		mock_response.json.return_value = [{'lat': '34.2783', 'lon': '-119.2931'}]
@@ -9237,9 +9239,27 @@ class MediaStorageCleanupTests(TestCase):
 		claim_data.update(overrides)
 		return BusinessClaim.objects.create(**claim_data)
 
+	def _filesystem_storage_settings(self, temp_dir):
+		return {
+			'MEDIA_ROOT': Path(temp_dir),
+			'MEDIA_STORAGE_BACKEND': 'local',
+			'DIRECT_MESSAGE_MEDIA_STORAGE_BACKEND': 'local',
+			'STORAGES': {
+				'default': {
+					'BACKEND': 'django.core.files.storage.FileSystemStorage',
+				},
+				'direct_messages': {
+					'BACKEND': 'django.core.files.storage.FileSystemStorage',
+				},
+				'staticfiles': {
+					'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+				},
+			},
+		}
+
 	def test_deleting_claim_removes_uploaded_profile_photos_and_attachments(self):
 		with TemporaryDirectory() as temp_dir:
-			with override_settings(MEDIA_ROOT=Path(temp_dir)):
+			with override_settings(**self._filesystem_storage_settings(temp_dir)):
 				photo_name = default_storage.save('business-profile-photos/cleanup/front.jpg', ContentFile(b'front-photo'))
 				photo_path = Path(default_storage.path(photo_name))
 				claim = self.create_claim(photo_references=[f'http://testserver/media/{photo_name}'], photo_gallery_overridden=True)
@@ -9263,7 +9283,7 @@ class MediaStorageCleanupTests(TestCase):
 
 	def test_updating_claim_photo_references_deletes_removed_uploaded_files(self):
 		with TemporaryDirectory() as temp_dir:
-			with override_settings(MEDIA_ROOT=Path(temp_dir)):
+			with override_settings(**self._filesystem_storage_settings(temp_dir)):
 				photo_name = default_storage.save('business-profile-photos/cleanup/remove-me.jpg', ContentFile(b'remove-me'))
 				photo_path = Path(default_storage.path(photo_name))
 				claim = self.create_claim(photo_references=[f'http://testserver/media/{photo_name}'], photo_gallery_overridden=True)
@@ -9277,7 +9297,7 @@ class MediaStorageCleanupTests(TestCase):
 
 	def test_cleanup_orphaned_media_command_deletes_unreferenced_local_files(self):
 		with TemporaryDirectory() as temp_dir:
-			with override_settings(MEDIA_ROOT=Path(temp_dir)):
+			with override_settings(**self._filesystem_storage_settings(temp_dir)):
 				active_name = default_storage.save('business-profile-photos/cleanup/active.jpg', ContentFile(b'active-photo'))
 				orphan_name = default_storage.save('business-profile-photos/cleanup/orphan.jpg', ContentFile(b'orphan-photo'))
 				self.create_claim(photo_references=[f'http://testserver/media/{active_name}'], photo_gallery_overridden=True)

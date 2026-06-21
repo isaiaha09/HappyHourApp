@@ -1046,7 +1046,7 @@ def _get_place_coordinates(place_record, resolve_missing=True):
 	if not queries:
 		return (None, None)
 
-	cache = caches[getattr(settings, 'SOURCE_FETCH_CACHE_ALIAS', 'default')]
+	cache = caches[getattr(settings, 'PLACE_GEOCODE_CACHE_ALIAS', 'default')]
 	for query in queries:
 		cache_key = f"place-geocode:{sha256(query.encode('utf-8')).hexdigest()}"
 		cached_coordinates = cache.get(cache_key)
