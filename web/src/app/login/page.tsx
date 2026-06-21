@@ -2,8 +2,11 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { LoginForm } from "@/components/login-form";
+import { getTurnstileSiteKey } from "@/lib/turnstile";
 
 export default function LoginPage() {
+  const turnstileSiteKey = getTurnstileSiteKey();
+
   return (
     <main className="dd-site-shell grid min-h-screen gap-10 px-6 py-10 lg:grid-cols-[1.05fr_0.95fr] lg:px-10 lg:py-14">
       <section className="flex flex-col justify-between gap-10 py-2 lg:py-6">
@@ -28,7 +31,7 @@ export default function LoginPage() {
       </section>
 
       <section className="flex items-center">
-        <LoginForm />
+        <LoginForm turnstileSiteKey={turnstileSiteKey} />
       </section>
     </main>
   );

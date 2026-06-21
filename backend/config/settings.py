@@ -26,7 +26,7 @@ ENV_VALUES = load_env_file(BASE_DIR)
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-h#v2wxzl1*2%#w*yz=%y0r=x*n+y-_s6i9p!kbosj0_jhige^l'
+SECRET_KEY = get_env('DJANGO_SECRET_KEY', ENV_VALUES, 'django-insecure-change-me-in-production')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -308,6 +308,7 @@ STATIC_URL = 'static/'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 MEDIA_STORAGE_BACKEND = get_env('MEDIA_STORAGE_BACKEND', ENV_VALUES, 'local').strip().lower()
+DIRECT_MESSAGE_MEDIA_STORAGE_BACKEND = get_env('DIRECT_MESSAGE_MEDIA_STORAGE_BACKEND', ENV_VALUES, '').strip().lower()
 SUPABASE_STORAGE_BUCKET = get_env('SUPABASE_STORAGE_BUCKET', ENV_VALUES, '')
 SUPABASE_STORAGE_ENDPOINT = get_env('SUPABASE_STORAGE_ENDPOINT', ENV_VALUES, '')
 SUPABASE_STORAGE_REGION = get_env('SUPABASE_STORAGE_REGION', ENV_VALUES, 'us-east-1')
@@ -319,11 +320,15 @@ STORAGES = {
     'default': {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',
     },
+    'direct_messages': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
     'staticfiles': {
         'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
     },
 }
 MEDIA_PUBLIC_BASE_URL = MEDIA_URL
+_direct_message_storage_backend = DIRECT_MESSAGE_MEDIA_STORAGE_BACKEND or MEDIA_STORAGE_BACKEND
 
 if MEDIA_STORAGE_BACKEND == 'supabase':
     missing_supabase_settings = [
@@ -355,6 +360,21 @@ if MEDIA_STORAGE_BACKEND == 'supabase':
         },
     }
     MEDIA_PUBLIC_BASE_URL = SUPABASE_STORAGE_PUBLIC_URL_BASE
+
+if _direct_message_storage_backend == 'supabase':
+    STORAGES['direct_messages'] = {
+        'BACKEND': 'config.storage.SupabaseMediaStorage',
+        'OPTIONS': {
+            'bucket_name': SUPABASE_STORAGE_BUCKET,
+            'access_key': SUPABASE_STORAGE_ACCESS_KEY,
+            'secret_key': SUPABASE_STORAGE_SECRET_KEY,
+            'endpoint_url': SUPABASE_STORAGE_ENDPOINT,
+            'region_name': SUPABASE_STORAGE_REGION,
+            'default_acl': 'public-read',
+            'querystring_auth': False,
+            'file_overwrite': False,
+        },
+    }
 
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True

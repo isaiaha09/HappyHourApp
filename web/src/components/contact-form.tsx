@@ -1,21 +1,62 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, useTransition } from "react";
 
-const CONTACT_EMAIL = "support@diningdealz.com";
+import { TurnstileWidget } from "@/components/turnstile-widget";
 
-export function ContactForm() {
+type ContactFormProps = {
+  turnstileSiteKey: string;
+};
+
+export function ContactForm({ turnstileSiteKey }: ContactFormProps) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const body = [`Name: ${name}`, `Email: ${email}`, "", message].join("\n");
-    const mailtoUrl = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    window.location.href = mailtoUrl;
+    setErrorMessage(null);
+    if (!turnstileToken) {
+      setErrorMessage("Complete the security check before opening the email draft.");
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const response = await fetch("/api/contact", {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name,
+            email,
+            subject,
+            message,
+            turnstileToken,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorPayload = (await response.json().catch(() => null)) as { detail?: string } | null;
+          throw new Error(errorPayload?.detail || `Request failed with status ${response.status}.`);
+        }
+
+        const payload = (await response.json()) as { mailtoUrl: string };
+        window.location.href = payload.mailtoUrl;
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : "Unable to prepare the email draft.");
+      } finally {
+        setTurnstileResetKey((currentValue) => currentValue + 1);
+      }
+    });
   }
 
   return (
@@ -52,8 +93,12 @@ export function ContactForm() {
         />
       </label>
 
-      <button type="submit" className="dd-button-primary w-full sm:w-fit">
-        Open Email Draft
+      <TurnstileWidget siteKey={turnstileSiteKey} onTokenChange={setTurnstileToken} resetKey={turnstileResetKey} />
+
+      {errorMessage ? <p className="rounded-2xl border border-[#ff6a5f]/40 bg-[#401010]/80 px-4 py-3 text-sm text-[#ffd1cb]">{errorMessage}</p> : null}
+
+      <button type="submit" className="dd-button-primary w-full sm:w-fit" disabled={isPending || !turnstileToken || !turnstileSiteKey}>
+        {isPending ? "Preparing..." : "Open Email Draft"}
       </button>
     </form>
   );

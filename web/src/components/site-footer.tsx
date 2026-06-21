@@ -6,9 +6,20 @@ export function SiteFooter() {
   return (
     <footer className="border-t border-white/8 bg-black/25 px-6 py-5 backdrop-blur-sm lg:px-10">
       <div className="mx-auto flex max-w-6xl flex-col gap-6">
-        <div className="flex flex-col items-center gap-3 lg:items-end">
-          <p className="dd-kicker text-center lg:text-right">Quick Links</p>
-          <nav className="flex flex-col items-center gap-2 text-sm font-medium text-[#ffe7d8] lg:items-end">
+        <div className="flex flex-col items-center justify-between gap-8 lg:flex-row lg:items-start">
+          <div className="max-w-xl space-y-3 text-center lg:text-left">
+            <p className="dd-kicker">DiningDealz</p>
+            <p className="text-sm leading-7 text-[#f6d6c5]">
+              DiningDealz helps customers discover local specials, happy hours, and last-minute food deals while supporting businesses with better visibility and direct community reach.
+            </p>
+          </div>
+
+          <div className="flex flex-col items-center gap-3 lg:items-end">
+            <p className="dd-kicker text-center lg:text-right">Quick Links</p>
+            <nav className="flex flex-col items-center gap-2 text-sm font-medium text-[#ffe7d8] lg:items-end">
+              <Link href="/about" className="hover:text-[#ffd35a]">
+                About
+              </Link>
             <Link href="/contact" className="hover:text-[#ffd35a]">
               Contact Us
             </Link>
@@ -18,7 +29,8 @@ export function SiteFooter() {
             <Link href="/privacy" className="hover:text-[#ffd35a]">
               Privacy Policy
             </Link>
-          </nav>
+            </nav>
+          </div>
         </div>
 
         <div className="text-center text-sm text-[#f6d6c5]">

@@ -1,8 +1,11 @@
 import Link from "next/link";
 
 import { ContactForm } from "@/components/contact-form";
+import { getTurnstileSiteKey } from "@/lib/turnstile";
 
 export default function ContactPage() {
+  const turnstileSiteKey = getTurnstileSiteKey();
+
   return (
     <main className="dd-site-shell px-6 py-10 lg:px-10 lg:py-14">
       <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-[0.9fr_1.1fr]">
@@ -30,7 +33,7 @@ export default function ContactPage() {
         </section>
 
         <section>
-          <ContactForm />
+          <ContactForm turnstileSiteKey={turnstileSiteKey} />
         </section>
       </div>
     </main>

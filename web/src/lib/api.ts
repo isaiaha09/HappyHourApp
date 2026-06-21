@@ -17,11 +17,13 @@ export async function loginProfile(
   portal: AccountPortal,
   identifier: string,
   password: string,
+  turnstileToken: string,
 ) {
-  return postJson<SignupResponse>("/profiles/login/", {
+  return postLocalJson<SignupResponse>("/api/auth/login", {
     portal,
     identifier,
     password,
+    turnstileToken,
   });
 }
 
@@ -31,6 +33,24 @@ export async function fetchProfileDashboard(authToken: string, portal: AccountPo
 
 function buildApiUrl(path: string) {
   return `${getApiBaseUrl()}${path}`;
+}
+
+async function postLocalJson<T>(path: string, payload: object): Promise<T> {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorPayload = await response.json().catch(() => null);
+    throw new Error(flattenApiError(errorPayload) || `Request failed with status ${response.status}.`);
+  }
+
+  return response.json() as Promise<T>;
 }
 
 async function postJson<T>(path: string, payload: object): Promise<T> {

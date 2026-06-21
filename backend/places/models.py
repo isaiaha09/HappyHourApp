@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from django.core.files.storage import storages
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
@@ -1046,11 +1047,15 @@ class BusinessDirectMessageThread(models.Model):
 		return f'DM thread {self.business_claim.listing_snapshot.name} <-> {self.customer.username}'
 
 
+def get_direct_message_image_storage():
+	return storages['direct_messages']
+
+
 class BusinessDirectMessage(models.Model):
 	thread = models.ForeignKey(BusinessDirectMessageThread, related_name='messages', on_delete=models.CASCADE)
 	sender = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='sent_direct_messages', on_delete=models.CASCADE)
 	body = models.TextField(blank=True, default='')
-	image = models.ImageField(upload_to='direct-message-images/', null=True, blank=True)
+	image = models.ImageField(upload_to='direct-message-images/', storage=get_direct_message_image_storage, null=True, blank=True)
 	read_at = models.DateTimeField(null=True, blank=True)
 	created_at = models.DateTimeField(auto_now_add=True)
 

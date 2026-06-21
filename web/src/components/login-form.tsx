@@ -3,19 +3,23 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import { TurnstileWidget } from "@/components/turnstile-widget";
 import { loginProfile } from "@/lib/api";
 import { saveSession } from "@/lib/session";
 import type { AccountPortal } from "@/lib/types";
 
 type LoginFormProps = {
   compact?: boolean;
+  turnstileSiteKey: string;
 };
 
-export function LoginForm({ compact = false }: LoginFormProps) {
+export function LoginForm({ compact = false, turnstileSiteKey }: LoginFormProps) {
   const router = useRouter();
   const [portal, setPortal] = useState<AccountPortal>("customer");
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -23,13 +27,20 @@ export function LoginForm({ compact = false }: LoginFormProps) {
     event.preventDefault();
     setErrorMessage(null);
 
+    if (!turnstileToken) {
+      setErrorMessage("Complete the security check before signing in.");
+      return;
+    }
+
     startTransition(async () => {
       try {
-        const response = await loginProfile(portal, identifier.trim(), password);
+        const response = await loginProfile(portal, identifier.trim(), password, turnstileToken);
         saveSession({ authToken: response.auth_token, portal: response.portal });
         router.push("/dashboard");
       } catch (error) {
         setErrorMessage(error instanceof Error ? error.message : "Unable to sign in.");
+      } finally {
+        setTurnstileResetKey((currentValue) => currentValue + 1);
       }
     });
   }
@@ -82,9 +93,11 @@ export function LoginForm({ compact = false }: LoginFormProps) {
         />
       </label>
 
+      <TurnstileWidget siteKey={turnstileSiteKey} onTokenChange={setTurnstileToken} resetKey={turnstileResetKey} />
+
       {errorMessage ? <p className="rounded-2xl border border-[#ff6a5f]/40 bg-[#401010]/80 px-4 py-3 text-sm text-[#ffd1cb]">{errorMessage}</p> : null}
 
-      <button className="dd-button-primary" disabled={isPending} type="submit">
+      <button className="dd-button-primary" disabled={isPending || !turnstileToken || !turnstileSiteKey} type="submit">
         {isPending ? "Signing in..." : "Open dashboard"}
       </button>
     </form>
