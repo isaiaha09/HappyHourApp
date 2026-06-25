@@ -1,5 +1,7 @@
 import re
 from hashlib import sha256
+from pathlib import Path
+from urllib.parse import urlparse
 
 from places.models import DealType, Weekday
 
@@ -128,6 +130,7 @@ def normalize_deal_overrides(raw_overrides):
         terms = str(row.get('terms') or '').strip()
         deal_type = str(row.get('deal_type') or DealType.OTHER).strip().lower()
         custom_deal_type_label = str(row.get('custom_deal_type_label') or '').strip()
+        attachment = _normalize_deal_attachment(row.get('attachment'))
         if deal_type not in DealType.values:
             raise ValueError(f'Deal override #{index + 1} must use a supported deal type.')
         if deal_type == DealType.OTHER and custom_deal_type_label.lower() == DealType.OTHER.label.lower():
@@ -150,7 +153,7 @@ def normalize_deal_overrides(raw_overrides):
             }
             happy_hours.append(normalized_window)
 
-        normalized_deals.append({
+        normalized_deal = {
             'title': title,
             'description': description,
             'deal_type': deal_type,
@@ -158,7 +161,10 @@ def normalize_deal_overrides(raw_overrides):
             'price_text': price_text,
             'terms': terms,
             'happy_hours': sorted(happy_hours, key=lambda window: (window['weekday'], window['start_time'], window['end_time'], window['all_day'])),
-        })
+        }
+        if attachment is not None:
+            normalized_deal['attachment'] = attachment
+        normalized_deals.append(normalized_deal)
 
     return normalized_deals
 
@@ -197,6 +203,8 @@ def summarize_deal_overrides(overrides):
                     for window in deal['happy_hours']
                 )
             )
+        if isinstance(deal.get('attachment'), dict) and deal['attachment'].get('name'):
+            sections.append(f"Attachment: {deal['attachment']['name']}")
         summaries.append(' | '.join(part for part in sections if part))
     return summaries
 
@@ -227,8 +235,10 @@ def build_deal_payloads(overrides, namespace):
             'description': deal['description'],
             'deal_type': deal['deal_type'],
             'deal_type_label': deal.get('custom_deal_type_label') or _label_for_choice(DealType, deal['deal_type']),
+            'custom_deal_type_label': deal.get('custom_deal_type_label') or '',
             'price_text': deal['price_text'],
             'terms': deal['terms'],
+            'attachment': deal.get('attachment'),
             'is_active': True,
             'starts_on': None,
             'ends_on': None,
@@ -245,6 +255,43 @@ def build_deal_payloads(overrides, namespace):
             ],
         })
     return payloads
+
+
+def _normalize_deal_attachment(value):
+    if value in (None, ''):
+        return None
+    if not isinstance(value, dict):
+        raise ValueError('Deal attachments must be objects.')
+
+    url = str(value.get('url') or '').strip()
+    if not url:
+        return None
+
+    name = str(value.get('name') or '').strip()
+    if not name:
+        name = Path(urlparse(url).path or '').name or 'deal-attachment'
+
+    content_type = str(value.get('content_type') or value.get('mime_type') or '').strip().lower()
+    raw_file_size = value.get('file_size', value.get('size'))
+    if raw_file_size in (None, ''):
+        file_size = None
+    else:
+        try:
+            file_size = int(raw_file_size)
+        except (TypeError, ValueError):
+            raise ValueError('Deal attachment size must be a valid integer.')
+        if file_size < 0:
+            raise ValueError('Deal attachment size must be zero or greater.')
+
+    normalized_attachment = {
+        'url': url,
+        'name': name,
+    }
+    if content_type:
+        normalized_attachment['content_type'] = content_type
+    if file_size is not None:
+        normalized_attachment['file_size'] = file_size
+    return normalized_attachment
 
 
 def build_operating_weekdays(overrides):

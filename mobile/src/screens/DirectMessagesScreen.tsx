@@ -212,10 +212,15 @@ export function DirectMessagesScreen({
         if (cachedPreferredThread) {
           setSelectedThreadId(cachedPreferredThread.id);
         }
-        return;
+      } else if (cachedThreads && !hasCustomerContext) {
+        setThreads(cachedThreads);
+        setLoadingThreads(false);
+        setThreadsError(null);
       }
 
-      setLoadingThreads(true);
+      if (!cachedThreads) {
+        setLoadingThreads(true);
+      }
       setThreadsError(null);
       try {
         const nextThreads = await onRefreshThreads();

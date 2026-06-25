@@ -1,8 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system/legacy';
 import { ActivityIndicator, Image, Keyboard, Linking, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
+import { WebView } from 'react-native-webview';
 
 import { styles } from '../appStyles';
 import { PhotoLightbox } from '../components/PhotoLightbox';
@@ -10,6 +12,129 @@ import { SocialButton } from '../components/SocialButton';
 import { buildGoogleReviewsUrl, dedupeImageUrls, formatPlaceAddress, getPlacePreviewRegion, openMapsAddress } from '../placeHelpers';
 import { getSocialProfilesForDisplay } from '../socialProfiles';
 import type { Deal, HappyHourWindow, OperatingHourWindow, PlaceDetail, PlaceLocationDetail } from '../types';
+
+type AttachmentPreviewState =
+  | { kind: 'image'; name: string; uri: string }
+  | { kind: 'pdf'; name: string; html: string };
+
+function getAttachmentPreviewKind(mimeType: string | null | undefined, fileName: string) {
+  const normalizedMimeType = String(mimeType || '').trim().toLowerCase();
+  const normalizedFileName = String(fileName || '').trim().toLowerCase();
+
+  if (normalizedMimeType.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp)$/i.test(normalizedFileName)) {
+    return 'image' as const;
+  }
+  if (normalizedMimeType === 'application/pdf' || normalizedFileName.endsWith('.pdf')) {
+    return 'pdf' as const;
+  }
+  return null;
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function buildPdfPreviewHtml(base64Document: string, fileName: string) {
+  const safeName = escapeHtml(fileName || 'Document preview');
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+        <title>${safeName}</title>
+        <style>
+          body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f3e7d8;
+            color: #402214;
+          }
+          #status {
+            padding: 16px;
+            text-align: center;
+            font-size: 14px;
+            color: #7d614f;
+          }
+          #pages {
+            padding: 12px;
+          }
+          .page {
+            margin: 0 auto 14px;
+            width: fit-content;
+            box-shadow: 0 8px 24px rgba(45, 34, 26, 0.14);
+            background: white;
+          }
+          canvas {
+            display: block;
+            max-width: 100%;
+            height: auto;
+          }
+        </style>
+      </head>
+      <body>
+        <div id="status">Loading PDF preview...</div>
+        <div id="pages"></div>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+        <script>
+          const status = document.getElementById('status');
+          const pages = document.getElementById('pages');
+          const base64 = '${base64Document}';
+
+          function base64ToUint8Array(input) {
+            const binary = atob(input);
+            const length = binary.length;
+            const bytes = new Uint8Array(length);
+            for (let index = 0; index < length; index += 1) {
+              bytes[index] = binary.charCodeAt(index);
+            }
+            return bytes;
+          }
+
+          async function renderPdf() {
+            try {
+              pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+              const pdf = await pdfjsLib.getDocument({ data: base64ToUint8Array(base64) }).promise;
+              status.textContent = 'Rendering pages...';
+              for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+                const page = await pdf.getPage(pageNumber);
+                const baseViewport = page.getViewport({ scale: 1 });
+                const availableWidth = Math.max(window.innerWidth - 24, 1);
+                const availableHeight = Math.max(window.innerHeight - 24, 1);
+                const fitScale = Math.min(availableWidth / baseViewport.width, availableHeight / baseViewport.height);
+                const scale = Math.max(Math.min(fitScale, 1), 0.35);
+                const viewport = page.getViewport({ scale });
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                const wrapper = document.createElement('div');
+                wrapper.className = 'page';
+                const deviceScale = window.devicePixelRatio || 1;
+                canvas.width = Math.floor(viewport.width * deviceScale);
+                canvas.height = Math.floor(viewport.height * deviceScale);
+                canvas.style.width = viewport.width + 'px';
+                canvas.style.height = viewport.height + 'px';
+                context.scale(deviceScale, deviceScale);
+                wrapper.appendChild(canvas);
+                pages.appendChild(wrapper);
+                await page.render({ canvasContext: context, viewport }).promise;
+              }
+              status.remove();
+            } catch (error) {
+              status.textContent = 'Unable to preview this PDF in-app.';
+            }
+          }
+
+          renderPdf();
+        </script>
+      </body>
+    </html>
+  `;
+}
 
 export type PlaceDetailScreenProps = {
   backButtonLabel?: string;
@@ -77,6 +202,9 @@ export function PlaceDetailScreen({
   const [accuracySubmitting, setAccuracySubmitting] = useState(false);
   const [accuracyErrorMessage, setAccuracyErrorMessage] = useState<string | null>(null);
   const [accuracySuccessMessage, setAccuracySuccessMessage] = useState<string | null>(null);
+  const [attachmentPreview, setAttachmentPreview] = useState<AttachmentPreviewState | null>(null);
+  const [attachmentPreviewLoading, setAttachmentPreviewLoading] = useState(false);
+  const attachmentPreviewRequestIdRef = useRef(0);
   const selectedPlaceMapRegion = getPlacePreviewRegion(selectedPlaceLocation ?? selectedPlace);
   const showVerifiedBadge = !!selectedPlace?.is_claimed;
   const selectedPlaceImageUrls = dedupeImageUrls([
@@ -177,6 +305,52 @@ export function PlaceDetailScreen({
   function handleOpenPhotoLightbox(index: number) {
     setPhotoLightboxIndex(index);
     setPhotoLightboxVisible(true);
+  }
+
+  function handleCloseAttachmentPreview() {
+    attachmentPreviewRequestIdRef.current += 1;
+    setAttachmentPreviewLoading(false);
+    setAttachmentPreview(null);
+  }
+
+  async function handleOpenDealAttachment(deal: Deal) {
+    const uri = deal.attachment?.url ?? '';
+    const attachmentName = deal.attachment?.name ?? 'Attachment';
+    if (!uri) {
+      return;
+    }
+
+    const previewKind = getAttachmentPreviewKind(deal.attachment?.content_type, attachmentName);
+    if (previewKind === 'image') {
+      setAttachmentPreviewLoading(false);
+      setAttachmentPreview({ kind: 'image', name: attachmentName, uri });
+      return;
+    }
+
+    if (previewKind === 'pdf') {
+      const requestId = attachmentPreviewRequestIdRef.current + 1;
+      attachmentPreviewRequestIdRef.current = requestId;
+      setAttachmentPreviewLoading(true);
+      setAttachmentPreview(null);
+      try {
+        const localUri = uri.startsWith('file://')
+          ? uri
+          : (await FileSystem.downloadAsync(uri, `${FileSystem.cacheDirectory ?? ''}deal-preview-${Date.now()}.pdf`)).uri;
+        const base64Document = await FileSystem.readAsStringAsync(localUri, { encoding: 'base64' });
+        if (attachmentPreviewRequestIdRef.current !== requestId) {
+          return;
+        }
+        setAttachmentPreview({
+          kind: 'pdf',
+          name: attachmentName,
+          html: buildPdfPreviewHtml(base64Document, attachmentName),
+        });
+      } finally {
+        if (attachmentPreviewRequestIdRef.current === requestId) {
+          setAttachmentPreviewLoading(false);
+        }
+      }
+    }
   }
 
   return (
@@ -393,12 +567,25 @@ export function PlaceDetailScreen({
             {selectedPlaceDeals.length ? (
               selectedPlaceDeals.map((deal) => (
                 <View key={deal.id} style={styles.dealCard}>
+                  {deal.attachment?.url && getAttachmentPreviewKind(deal.attachment.content_type, deal.attachment.name) === 'image' ? (
+                    <Pressable onPress={() => void handleOpenDealAttachment(deal)} style={styles.dealAttachmentImageButton}>
+                      <Image resizeMode="cover" source={{ uri: deal.attachment.url }} style={styles.dealAttachmentImage} />
+                    </Pressable>
+                  ) : null}
                   <View style={styles.dealHeaderRow}>
                     <Text style={styles.dealTitle}>{deal.title}</Text>
                     <View style={styles.pill}>
                       <Text style={styles.pillText}>{deal.deal_type_label}</Text>
                     </View>
                   </View>
+                  {deal.attachment?.url && getAttachmentPreviewKind(deal.attachment.content_type, deal.attachment.name) === 'pdf' ? (
+                    <Pressable onPress={() => void handleOpenDealAttachment(deal)} style={[styles.attachmentCard, styles.dealAttachmentPdfCard]}>
+                      <View style={styles.attachmentMeta}>
+                        <Text style={styles.attachmentName}>{deal.attachment.name}</Text>
+                        <Text style={styles.attachmentDetail}>PDF attachment • Tap to view</Text>
+                      </View>
+                    </Pressable>
+                  ) : null}
                   {deal.price_text ? <Text style={styles.dealPrice}>{deal.price_text}</Text> : null}
                   {deal.description ? <Text style={styles.dealDescription}>{deal.description}</Text> : null}
                   {deal.terms ? <Text style={styles.dealTerms}>Terms: {deal.terms}</Text> : null}
@@ -548,6 +735,30 @@ export function PlaceDetailScreen({
         onClose={() => setPhotoLightboxVisible(false)}
         visible={photoLightboxVisible}
       />
+      <Modal animationType="fade" onRequestClose={handleCloseAttachmentPreview} transparent visible={attachmentPreview !== null || attachmentPreviewLoading}>
+        <View style={styles.photoLightboxOverlay}>
+          <View style={[styles.photoLightboxHeader, styles.attachmentLightboxHeader, { paddingTop: Math.max(insets.top + 8, 18) }]}>
+            <Text numberOfLines={1} style={styles.attachmentLightboxTitle}>{attachmentPreview?.name ?? 'Preparing preview...'}</Text>
+            <Pressable onPress={handleCloseAttachmentPreview} style={styles.photoLightboxCloseButton}>
+              <Text style={styles.photoLightboxCloseButtonText}>X</Text>
+            </Pressable>
+          </View>
+          <View style={styles.attachmentLightboxBody}>
+            {attachmentPreviewLoading ? (
+              <View style={styles.attachmentPreviewLoadingState}>
+                <ActivityIndicator color="#fff7ef" size="large" />
+                <Text style={styles.attachmentLightboxLoadingText}>Preparing document preview...</Text>
+              </View>
+            ) : attachmentPreview?.kind === 'image' ? (
+              <View style={styles.attachmentLightboxImageStage}>
+                <Image resizeMode="contain" source={{ uri: attachmentPreview.uri }} style={styles.photoLightboxImage} />
+              </View>
+            ) : attachmentPreview?.kind === 'pdf' ? (
+              <WebView originWhitelist={["*"]} source={{ html: attachmentPreview.html }} style={styles.attachmentPreviewWebView} />
+            ) : null}
+          </View>
+        </View>
+      </Modal>
       {errorMessage ? (
         <View style={styles.errorBanner}>
           <Text style={styles.errorText}>{errorMessage}</Text>

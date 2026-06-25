@@ -1,4 +1,6 @@
 import type {
+  BusinessAttachmentDraft,
+  BusinessDealAttachment,
   BusinessDealHappyHourOverride,
   BusinessDealOverride,
   BusinessOperatingHourOverride,
@@ -50,6 +52,8 @@ export const businessWeekdayOptions = weekdayLabels.map((label, weekday) => ({
       custom_deal_type_label: '',
       price_text: '',
       terms: '',
+      attachment: null,
+      attachment_upload: null,
       happy_hours: [createEmptyHappyHourOverride()],
     };
   }
@@ -76,6 +80,8 @@ export const businessWeekdayOptions = weekdayLabels.map((label, weekday) => ({
       custom_deal_type_label: deal.custom_deal_type_label ?? (deal.deal_type === 'other' ? deal.deal_type_label : ''),
       price_text: deal.price_text,
       terms: deal.terms,
+      attachment: normalizeDealAttachment(deal.attachment),
+      attachment_upload: null,
       happy_hours: deal.happy_hours.length
         ? groupHappyHourOverrides(deal.happy_hours).map((window) => ({
           id: createId('happy-hour'),
@@ -152,6 +158,8 @@ export const businessWeekdayOptions = weekdayLabels.map((label, weekday) => ({
         custom_deal_type_label: override.deal_type.trim() === 'other' ? (override.custom_deal_type_label ?? '').trim() : '',
         price_text: override.price_text.trim(),
         terms: override.terms.trim(),
+        attachment: normalizeDealAttachment(override.attachment),
+        attachment_upload: normalizeDealAttachmentUpload(override.attachment_upload),
         happy_hours: override.happy_hours
           .flatMap((window) => expandHappyHourOverride(window)
             .map((expandedWindow) => ({
@@ -164,6 +172,40 @@ export const businessWeekdayOptions = weekdayLabels.map((label, weekday) => ({
           .sort((left, right) => left.weekday - right.weekday || left.start_time.localeCompare(right.start_time)),
       }))
       .filter((override) => override.title || override.description || override.price_text || override.terms || override.happy_hours.length);
+  }
+
+  function normalizeDealAttachment(attachment?: BusinessDealAttachment | null) {
+    const url = String(attachment?.url ?? '').trim();
+    if (!url) {
+      return null;
+    }
+
+    const normalizedAttachment: BusinessDealAttachment = {
+      url,
+      name: String(attachment?.name ?? '').trim() || 'deal-attachment',
+    };
+    const contentType = String(attachment?.content_type ?? '').trim().toLowerCase();
+    if (contentType) {
+      normalizedAttachment.content_type = contentType;
+    }
+    if (attachment?.file_size !== undefined && attachment?.file_size !== null) {
+      normalizedAttachment.file_size = attachment.file_size;
+    }
+    return normalizedAttachment;
+  }
+
+  function normalizeDealAttachmentUpload(attachmentUpload?: BusinessAttachmentDraft | null) {
+    if (!attachmentUpload?.uri) {
+      return undefined;
+    }
+
+    return {
+      id: attachmentUpload.id,
+      name: attachmentUpload.name,
+      uri: attachmentUpload.uri,
+      mimeType: attachmentUpload.mimeType,
+      size: attachmentUpload.size,
+    };
   }
 
   function getHappyHourOverrideWeekdays(window: BusinessDealHappyHourOverride | HappyHourWindow) {

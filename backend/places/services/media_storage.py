@@ -8,6 +8,7 @@ from django.core.files.storage import default_storage
 
 MANAGED_MEDIA_PREFIXES = (
 	'business-claim-attachments/',
+	'business-deal-attachments/',
 	'business-profile-photos/',
 )
 
@@ -88,6 +89,11 @@ def get_active_managed_storage_names():
 	}
 	for photo_references in BusinessClaim.objects.values_list('photo_references', flat=True):
 		active_names.update(_collect_managed_storage_names(photo_references))
+	for deal_overrides in BusinessClaim.objects.values_list('deal_overrides', flat=True):
+		for deal in deal_overrides or []:
+			attachment = deal.get('attachment') if isinstance(deal, dict) else None
+			if isinstance(attachment, dict):
+				active_names.update(_collect_managed_storage_names([attachment.get('url')]))
 	return active_names
 
 

@@ -4,6 +4,8 @@
   "main": "index.ts",
   "scripts": {
     "start": "node ./scripts/start-expo.cjs",
+    "start:wifi": "node ./scripts/start-expo.cjs --wifi",
+    "start:ethernet": "node ./scripts/start-expo.cjs --ethernet",
     "test": "jest",
     "test:watch": "jest --watch",
     "android": "expo start --android",

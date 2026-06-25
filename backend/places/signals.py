@@ -11,6 +11,8 @@ def capture_previous_business_claim_photo_references(sender, instance, **kwargs)
 		return
 	previous_references = sender.objects.filter(pk=instance.pk).values_list('photo_references', flat=True).first()
 	instance._previous_photo_references = list(previous_references or [])
+	previous_deal_overrides = sender.objects.filter(pk=instance.pk).values_list('deal_overrides', flat=True).first()
+	instance._previous_deal_attachment_references = _get_deal_attachment_references(previous_deal_overrides)
 
 
 @receiver(post_save, sender=BusinessClaim)
@@ -22,11 +24,16 @@ def cleanup_removed_business_claim_photo_references(sender, instance, created, *
 		return
 	delete_removed_storage_references(previous_references, instance.photo_references or [])
 	delattr(instance, '_previous_photo_references')
+	previous_deal_attachment_references = getattr(instance, '_previous_deal_attachment_references', None)
+	if previous_deal_attachment_references is not None:
+		delete_removed_storage_references(previous_deal_attachment_references, _get_deal_attachment_references(instance.deal_overrides))
+		delattr(instance, '_previous_deal_attachment_references')
 
 
 @receiver(post_delete, sender=BusinessClaim)
 def cleanup_deleted_business_claim_photo_references(sender, instance, **kwargs):
 	delete_storage_references(instance.photo_references or [])
+	delete_storage_references(_get_deal_attachment_references(instance.deal_overrides))
 
 
 @receiver(pre_save, sender=BusinessClaimAttachment)
@@ -54,3 +61,14 @@ def cleanup_deleted_business_claim_attachment_file(sender, instance, **kwargs):
 	file_name = str(getattr(instance.file, 'name', '') or '').strip()
 	if file_name:
 		delete_storage_names([file_name])
+
+
+def _get_deal_attachment_references(deal_overrides):
+	references = []
+	for deal in deal_overrides or []:
+		if not isinstance(deal, dict):
+			continue
+		attachment = deal.get('attachment')
+		if isinstance(attachment, dict) and attachment.get('url'):
+			references.append(attachment['url'])
+	return references

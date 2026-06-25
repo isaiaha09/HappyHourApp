@@ -95,6 +95,16 @@ Current mobile work includes:
 - native map boundary handling for built apps, with a JS fallback for Expo Go
 - modularized screen-level mobile code so auth/profile/dashboard/detail views are no longer all inline in `mobile/App.tsx`
 
+### Mobile Dev Network Modes
+
+When running the mobile app against the local backend, you can now choose network mode:
+
+- Wi-Fi adapter: `npm run start:wifi`
+- Ethernet adapter (LAN cable): `npm run start:ethernet`
+- Auto-detect either adapter: `npm start`
+
+All commands should be run from `mobile/` after the backend is running with `python manage.py runserver 0.0.0.0:8000`.
+
 ### Temporary TestFlight Seed Data Mode
 
 For current TestFlight testing, I am intentionally shipping a built-in mobile seed dataset so first installs can browse business data without requiring a hosted backend.

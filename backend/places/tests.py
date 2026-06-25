@@ -36,6 +36,7 @@ from .services.importers.here_places import HerePlacesImporter
 from .services.importers.openstreetmap_places import HybridPlacesImporter, OpenStreetMapPlacesImporter
 from .services.importers.tomtom_places import TomTomPlacesImporter
 from .services.provider_quota import consume_provider_transaction, get_provider_usage_statuses, select_discovery_provider
+from .services.favorite_notifications import create_notifications_for_business_profile_update
 from .services.importers.yelp_places import YelpFusionPlacesImporter
 from .services.importers.types import ImportedDeal, ImportedHappyHour, ImportedOperatingHour, ImportedPlace
 from .services.source_listings import _build_deal_identity_key, _build_place_payload, get_source_place_payload, get_source_place_payloads
@@ -4734,6 +4735,66 @@ class ProfileSignupApiTests(APITestCase):
 		)
 
 	@patch('places.views.get_source_place_payload')
+	def test_claimed_business_signup_accepts_per_deal_attachment_uploads(self, mock_get_source_place_payload):
+		mock_get_source_place_payload.return_value = {
+			'id': 1,
+			'slug': 'finneys-crafthouse',
+			'name': 'Finney\'s Crafthouse',
+			'city': City.VENTURA,
+			'venue_type': VenueType.RESTAURANT,
+			'address_line_1': '494 E Main St',
+			'address_line_2': '',
+			'neighborhood': 'Downtown',
+			'state': 'CA',
+			'postal_code': '93001',
+			'phone_number': '805-555-0199',
+			'website_url': 'https://example.com/finneys',
+			'locations': [],
+		}
+
+		with TemporaryDirectory() as temp_dir:
+			with override_settings(MEDIA_ROOT=Path(temp_dir)):
+				response = self.client.post(
+					reverse('business-signup'),
+					{
+						'username': 'deal_attachment_owner',
+						'email': 'deal-attachment@example.com',
+						'password': 'test-pass-123',
+						'first_name': 'Pat',
+						'last_name': 'Owner',
+						'business_slug': 'finneys-crafthouse',
+						'contact_name': 'Pat Owner',
+						'job_title': BusinessClaim.JobTitle.MANAGER,
+						'work_email': 'pat@finneys.com',
+						'work_phone': '805-555-0100',
+						'employer_address': '494 E Main St, Ventura, CA 93001',
+						'verification_documents': json.dumps({
+							'business_registration': ['CA business license #123'],
+							'health_permit': ['Ventura County permit #A-55'],
+							'abc_license': [],
+							'proof_of_address_control': [],
+						}),
+						'deal_overrides': json.dumps([{
+							'title': 'Owner Happy Hour',
+							'description': '$2 off cocktails',
+							'deal_type': DealType.HAPPY_HOUR,
+							'price_text': '$2 Off',
+							'terms': 'Dine-in only',
+							'happy_hours': [{'weekday': Weekday.FRIDAY, 'start_time': '16:00', 'end_time': '19:00', 'all_day': False}],
+						}]),
+						'deal_attachment_upload_0': SimpleUploadedFile('happy-hour-flyer.pdf', b'fake-pdf', content_type='application/pdf'),
+						'proof_of_authority_attachments': [SimpleUploadedFile('manager-proof.pdf', b'proof', content_type='application/pdf')],
+					},
+					format='multipart',
+				)
+
+		self.assertEqual(response.status_code, 201)
+		claim = BusinessClaim.objects.get(claimant__username='deal_attachment_owner')
+		self.assertEqual(claim.deal_overrides[0]['attachment']['name'], 'happy-hour-flyer.pdf')
+		self.assertEqual(claim.deal_overrides[0]['attachment']['content_type'], 'application/pdf')
+		self.assertIn('/business-deal-attachments/', claim.deal_overrides[0]['attachment']['url'])
+
+	@patch('places.views.get_source_place_payload')
 	def test_claimed_business_signup_reuses_matching_existing_snapshot_even_when_slug_changes(self, mock_get_source_place_payload):
 		legacy_snapshot = ListingSnapshot.objects.create(
 			name='Yard House',
@@ -6006,6 +6067,80 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertTrue(claim.photo_gallery_overridden)
 		self.assertIn(claim.photo_references[1], response.data['business_contact']['photo_references'])
 
+	def test_profile_dashboard_update_accepts_per_deal_attachment_uploads(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Approved Spot',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='55 Main St',
+			listing_slug='approved-spot',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@approvedspot.com',
+			work_phone='805-555-0200',
+			employer_address='55 Main St, Ventura, CA 93001',
+			verification_summary='I own the business.',
+			status=BusinessClaim.Status.APPROVED,
+			deal_overrides=[{
+				'title': 'Dashboard Happy Hour',
+				'description': 'Half-off starters',
+				'deal_type': DealType.HAPPY_HOUR,
+				'custom_deal_type_label': '',
+				'price_text': '$5 apps',
+				'terms': 'Weekdays only',
+				'attachment': {
+					'url': 'http://testserver/media/business-deal-attachments/1/old-flyer.pdf',
+					'name': 'old-flyer.pdf',
+					'content_type': 'application/pdf',
+				},
+				'happy_hours': [{
+					'weekday': Weekday.FRIDAY,
+					'start_time': '16:00',
+					'end_time': '19:00',
+					'all_day': False,
+				}],
+			}],
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+
+		with TemporaryDirectory() as temp_dir:
+			with override_settings(MEDIA_ROOT=Path(temp_dir)):
+				response = self.client.post(
+					reverse('profile-dashboard'),
+					{
+						'portal': 'business',
+						'username': 'dashboard_user',
+						'email': 'dashboard@example.com',
+						'first_name': 'Dash',
+						'last_name': 'Board',
+						'contact_name': 'Dash Board',
+						'work_email': 'owner@approvedspot.com',
+						'deal_overrides': json.dumps([{
+							'title': 'Dashboard Happy Hour',
+							'description': 'Half-off starters',
+							'deal_type': DealType.HAPPY_HOUR,
+							'price_text': '$5 apps',
+							'terms': 'Weekdays only',
+							'happy_hours': [{'weekday': Weekday.FRIDAY, 'start_time': '16:00', 'end_time': '19:00', 'all_day': False}],
+						}]),
+						'deal_attachment_upload_0': SimpleUploadedFile('new-flyer.png', b'fake-image-bytes', content_type='image/png'),
+					},
+					format='multipart',
+					**self.auth_headers(),
+				)
+
+		self.assertEqual(response.status_code, 200)
+		claim.refresh_from_db()
+		self.assertEqual(claim.deal_overrides[0]['attachment']['name'], 'new-flyer.png')
+		self.assertEqual(claim.deal_overrides[0]['attachment']['content_type'], 'image/png')
+		self.assertIn('/business-deal-attachments/', claim.deal_overrides[0]['attachment']['url'])
+		self.assertEqual(response.data['business_contact']['deal_overrides'][0]['attachment']['name'], 'new-flyer.png')
+		self.assertEqual(response.data['business_contact']['deals'][0]['attachment']['name'], 'new-flyer.png')
+
 	@patch('places.services.source_listings.load_source_records')
 	def test_profile_dashboard_returns_inherited_source_images_until_owner_overrides_gallery(self, mock_load_source_records):
 		mock_load_source_records.return_value = [
@@ -6718,6 +6853,48 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(notification.title, 'New announcement from Favorite Tacos')
 		self.assertEqual(notification.message, 'We just opened the patio for sunset happy hour.')
 
+	def test_profile_dashboard_notifications_auto_trim_oldest_entries_beyond_twenty(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Favorite Tacos',
+			listing_slug='favorite-tacos-ventura',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='123 Main St',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@favoritetacos.com',
+			work_phone='805-555-0200',
+			employer_address='123 Main St, Ventura, CA 93001',
+			verification_summary='I own the business.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+		customer_user = User.objects.create_user(username='favorite_trim_customer', email='favoritetrim@example.com', password='test-pass-123')
+		FavoriteBusiness.objects.create(
+			user=customer_user,
+			listing_slug='favorite-tacos-ventura',
+			name='Favorite Tacos',
+			city=City.VENTURA,
+			city_label='Ventura',
+			venue_type=VenueType.RESTAURANT,
+			venue_type_label='Restaurant',
+			address_line_1='123 Main St',
+			website_url='https://example.com/favorite-tacos',
+		)
+
+		for index in range(25):
+			claim.work_phone = f'805-555-{2000 + index}'
+			claim.save(update_fields=['work_phone', 'updated_at'])
+			create_notifications_for_business_profile_update(claim, {'work_phone'})
+
+		notifications = list(FavoriteBusinessNotification.objects.filter(user=customer_user).order_by('-id'))
+		self.assertEqual(len(notifications), 20)
+		self.assertEqual(notifications[0].message, 'Updated phone number.')
+
 	def test_profile_dashboard_reverts_unverified_email_change_after_24_hours(self):
 		self.profile.email_verified_at = timezone.now()
 		self.profile.save(update_fields=['email_verified_at', 'updated_at'])
@@ -7134,6 +7311,78 @@ class ProfileDashboardApiTests(APITestCase):
 			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
 		)
 		self.assertEqual(blocked_send_response.status_code, 403)
+
+		blocked_threads_response = self.client.get(
+			reverse('profile-direct-messages'),
+			{'portal': 'customer'},
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+		self.assertEqual(blocked_threads_response.status_code, 200)
+		self.assertEqual(blocked_threads_response.data['threads'], [])
+
+		thread_id = send_response.data['thread']['id']
+		blocked_thread_detail = self.client.get(
+			reverse('profile-direct-message-thread-detail', kwargs={'thread_id': thread_id}),
+			{'portal': 'customer'},
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+		self.assertEqual(blocked_thread_detail.status_code, 404)
+
+	def test_customer_existing_direct_message_thread_hidden_when_business_disables_direct_messaging(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Toggle Hidden Thread Cafe',
+			listing_slug='toggle-hidden-thread-cafe',
+			city=City.VENTURA,
+			venue_type=VenueType.CAFE,
+			address_line_1='44 Main St',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@togglehidden.example.com',
+			work_phone='805-555-2020',
+			employer_address='44 Main St, Ventura, CA 93001',
+			verification_summary='I own the business.',
+			status=BusinessClaim.Status.APPROVED,
+			direct_messaging_enabled=True,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+
+		customer_user = User.objects.create_user(username='toggle_hidden_customer', email='toggle_hidden_customer@example.com', password='test-pass-123')
+		customer_token = ProfileAuthToken.objects.create(user=customer_user)
+
+		send_response = self.client.post(
+			reverse('profile-direct-messages'),
+			{
+				'portal': 'customer',
+				'listing_slug': 'toggle-hidden-thread-cafe',
+				'message': 'Starting a conversation before DM is disabled.',
+			},
+			format='json',
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+		self.assertEqual(send_response.status_code, 201)
+		thread_id = send_response.data['thread']['id']
+
+		claim.direct_messaging_enabled = False
+		claim.save(update_fields=['direct_messaging_enabled', 'updated_at'])
+
+		threads_response = self.client.get(
+			reverse('profile-direct-messages'),
+			{'portal': 'customer'},
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+		self.assertEqual(threads_response.status_code, 200)
+		self.assertEqual(threads_response.data['threads'], [])
+
+		thread_detail_response = self.client.get(
+			reverse('profile-direct-message-thread-detail', kwargs={'thread_id': thread_id}),
+			{'portal': 'customer'},
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+		self.assertEqual(thread_detail_response.status_code, 404)
 
 	@patch('places.views.send_push_notifications_for_direct_message')
 	def test_business_direct_message_allows_text_and_image_and_triggers_push_notification(self, mock_send_dm_push):

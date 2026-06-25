@@ -4,6 +4,7 @@ import type {
   BusinessAttachmentDraft,
   BusinessAttachmentBuckets,
   BusinessAttachmentKind,
+  BusinessDealOverride,
   BusinessLocationTrackingPreferenceRequest,
   BusinessLocationUpdateRequest,
   BusinessSignupRequest,
@@ -163,6 +164,8 @@ export async function updateProfileDashboardWithUploads(
       type: photoUpload.mimeType ?? 'image/jpeg',
     } as any);
   });
+
+  appendDealAttachmentUploads(formData, payload.deal_overrides);
 
   return postAuthedMultipartJson<SignupResponse>(baseUrl, '/profiles/me/', authToken, formData);
 }
@@ -419,6 +422,7 @@ function buildBusinessSignupFormData(payload: BusinessSignupRequest | ManualBusi
 
   appendBusinessAttachments(formData, attachments);
   appendBusinessPhotoUploads(formData, photo_uploads);
+  appendDealAttachmentUploads(formData, payload.deal_overrides);
   return formData;
 }
 
@@ -449,6 +453,25 @@ function appendBusinessPhotoUploads(formData: FormData, photoUploads?: BusinessA
       uri: photoUpload.uri,
       name: photoUpload.name,
       type: photoUpload.mimeType ?? 'image/jpeg',
+    } as any);
+  });
+}
+
+function appendDealAttachmentUploads(formData: FormData, dealOverrides?: BusinessDealOverride[]) {
+  if (!dealOverrides?.length) {
+    return;
+  }
+
+  dealOverrides.forEach((dealOverride, index) => {
+    const attachmentUpload = dealOverride.attachment_upload;
+    if (!attachmentUpload?.uri) {
+      return;
+    }
+
+    formData.append(`deal_attachment_upload_${index}`, {
+      uri: attachmentUpload.uri,
+      name: attachmentUpload.name,
+      type: attachmentUpload.mimeType ?? 'application/octet-stream',
     } as any);
   });
 }

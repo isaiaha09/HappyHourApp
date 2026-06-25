@@ -11,6 +11,7 @@ PROFILE_UPDATE_GROUPS = (
 	(('business_website_url', 'social_profiles', 'social_media_links_text'), 'links'),
 	(('contact_name', 'job_title', 'work_email', 'supporting_details'), 'profile details'),
 )
+MAX_NOTIFICATIONS_PER_USER = 20
 
 
 def create_notifications_for_business_profile_update(claim, changed_field_names):
@@ -71,6 +72,7 @@ def _create_notifications(listing_slug, business_name, event_type, title, messag
 		)
 		for user_id in user_ids
 	])
+	_trim_notifications_for_users(user_ids)
 	send_push_notifications_for_favorite_business_event(
 		user_ids,
 		listing_slug=listing_slug,
@@ -79,6 +81,16 @@ def _create_notifications(listing_slug, business_name, event_type, title, messag
 		event_type=event_type,
 	)
 	return len(user_ids)
+
+
+def _trim_notifications_for_users(user_ids):
+	for user_id in set(user_ids):
+		keep_ids = list(
+			FavoriteBusinessNotification.objects
+			.filter(user_id=user_id)
+			.values_list('id', flat=True)[:MAX_NOTIFICATIONS_PER_USER]
+		)
+		FavoriteBusinessNotification.objects.filter(user_id=user_id).exclude(id__in=keep_ids).delete()
 
 
 def _get_profile_update_labels(changed_field_names):

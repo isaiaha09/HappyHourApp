@@ -1718,6 +1718,30 @@ export const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
   },
+  attachmentLightboxHeader: {
+    paddingBottom: 10,
+  },
+  attachmentLightboxTitle: {
+    color: '#fff7ef',
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  attachmentLightboxBody: {
+    flex: 1,
+  },
+  attachmentLightboxImageStage: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 18,
+  },
+  attachmentLightboxLoadingText: {
+    color: '#fff7ef',
+    fontSize: 13,
+    textAlign: 'center',
+  },
   photoLightboxSlide: {
     alignItems: 'center',
     flex: 1,
@@ -1877,6 +1901,7 @@ export const styles = StyleSheet.create({
   linkButtonSecondaryText: {
     color: '#9e5b49',
     fontWeight: '700',
+    
   },
   socialButtonsList: {
     flexDirection: 'row',
@@ -1990,6 +2015,31 @@ export const styles = StyleSheet.create({
     borderRadius: 18,
     marginTop: 14,
     padding: 14,
+  },
+  dealPreviewLabel: {
+    color: '#7d614f',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    marginTop: 14,
+    textTransform: 'uppercase',
+  },
+  dealAttachmentImageFrame: {
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  dealAttachmentImageButton: {
+    borderRadius: 14,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  dealAttachmentImage: {
+    backgroundColor: '#f4e2d0',
+    height: 176,
+    width: '100%',
+  },
+  dealAttachmentPdfCard: {
+    marginTop: 10,
   },
   dealHeaderRow: {
     alignItems: 'center',
@@ -2629,6 +2679,7 @@ export const styles = StyleSheet.create({
     marginTop: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
+    width: '100%',
   },
   dashboardCalloutCard: {
     backgroundColor: '#fff3e5',
@@ -2744,6 +2795,82 @@ export const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     padding: 12,
+  },
+  dashboardNotificationCardSelected: {
+    backgroundColor: '#f5ebe2',
+    borderColor: '#9e5b49',
+  },
+  blockedCustomerSelectableCard: {
+    paddingVertical: 14,
+  },
+  blockedCustomerSelectableContent: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'space-between',
+  },
+  blockedCustomerListScroller: {
+    maxHeight: 430,
+  },
+  blockedCustomerModalListScroller: {
+    maxHeight: 300,
+  },
+  blockedCustomerSelectionIndicator: {
+    alignItems: 'center',
+    borderColor: '#c8a889',
+    borderRadius: 999,
+    borderWidth: 2,
+    height: 24,
+    justifyContent: 'center',
+    width: 24,
+  },
+  blockedCustomerSelectionIndicatorActive: {
+    borderColor: '#9e5b49',
+  },
+  blockedCustomerSelectionIndicatorDot: {
+    backgroundColor: '#9e5b49',
+    borderRadius: 999,
+    height: 10,
+    width: 10,
+  },
+  blockedCustomerConfirmModalCard: {
+    gap: 14,
+    maxHeight: '84%',
+  },
+  blockedCustomerConfirmationRow: {
+    paddingVertical: 14,
+  },
+  dashboardNotificationCardSingle: {
+    alignSelf: 'stretch',
+    width: '100%',
+  },
+  dashboardNotificationList: {
+    gap: 10,
+  },
+  dashboardNotificationListScroller: {
+    maxHeight: 620,
+  },
+  dashboardNotificationSectionHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'space-between',
+  },
+  dashboardNotificationClearButton: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#fff7ef',
+    borderColor: '#9e5b49',
+    borderRadius: 12,
+    borderWidth: 1,
+    flexShrink: 0,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  dashboardNotificationClearButtonText: {
+    color: '#9e5b49',
+    fontSize: 13,
+    fontWeight: '700',
   },
   dashboardNotificationHeader: {
     alignItems: 'flex-start',

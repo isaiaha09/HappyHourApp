@@ -27,10 +27,18 @@ export type Deal = {
   custom_deal_type_label?: string;
   price_text: string;
   terms: string;
+  attachment?: BusinessDealAttachment | null;
   is_active: boolean;
   starts_on: string | null;
   ends_on: string | null;
   happy_hours: HappyHourWindow[];
+};
+
+export type BusinessDealAttachment = {
+  url: string;
+  name: string;
+  content_type?: string;
+  file_size?: number | null;
 };
 
 export type BusinessDealHappyHourOverride = {
@@ -61,6 +69,8 @@ export type BusinessDealOverride = {
   custom_deal_type_label?: string;
   price_text: string;
   terms: string;
+  attachment?: BusinessDealAttachment | null;
+  attachment_upload?: BusinessAttachmentDraft | null;
   happy_hours: BusinessDealHappyHourOverride[];
 };
 

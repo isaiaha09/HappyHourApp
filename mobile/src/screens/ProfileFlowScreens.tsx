@@ -153,13 +153,22 @@ function buildPdfPreviewHtml(base64Document: string, fileName: string) {
               status.textContent = 'Rendering pages...';
               for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
                 const page = await pdf.getPage(pageNumber);
-                const viewport = page.getViewport({ scale: 1.25 });
+                const baseViewport = page.getViewport({ scale: 1 });
+                const availableWidth = Math.max(window.innerWidth - 24, 1);
+                const availableHeight = Math.max(window.innerHeight - 24, 1);
+                const fitScale = Math.min(availableWidth / baseViewport.width, availableHeight / baseViewport.height);
+                const scale = Math.max(Math.min(fitScale, 1), 0.35);
+                const viewport = page.getViewport({ scale });
                 const canvas = document.createElement('canvas');
                 const context = canvas.getContext('2d');
-                canvas.width = viewport.width;
-                canvas.height = viewport.height;
                 const wrapper = document.createElement('div');
                 wrapper.className = 'page';
+                const deviceScale = window.devicePixelRatio || 1;
+                canvas.width = Math.floor(viewport.width * deviceScale);
+                canvas.height = Math.floor(viewport.height * deviceScale);
+                canvas.style.width = viewport.width + 'px';
+                canvas.style.height = viewport.height + 'px';
+                context.scale(deviceScale, deviceScale);
                 wrapper.appendChild(canvas);
                 pages.appendChild(wrapper);
                 await page.render({ canvasContext: context, viewport }).promise;
@@ -1206,6 +1215,7 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
   const [openDropdown, setOpenDropdown] = useState<'city' | 'venue' | 'job' | null>(null);
   const [attachmentPreview, setAttachmentPreview] = useState<AttachmentPreviewState | null>(null);
   const [attachmentPreviewLoading, setAttachmentPreviewLoading] = useState(false);
+  const attachmentPreviewRequestIdRef = useRef(0);
   const { handleFieldFocus, handleScroll, scrollViewRef } = useAutoScrollForm();
   const currentPhotoUrls = dedupeImageUrls(
     form.photo_references_text
@@ -1283,6 +1293,12 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
     Alert.alert('Unable to open file', 'This document could not be opened on this device.');
   }
 
+  function handleCloseAttachmentPreview() {
+    attachmentPreviewRequestIdRef.current += 1;
+    setAttachmentPreviewLoading(false);
+    setAttachmentPreview(null);
+  }
+
   async function handleOpenAttachment(uri: string, mimeType: string | null, attachmentName: string) {
     if (!uri) {
       return;
@@ -1290,14 +1306,21 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
 
     const previewKind = getAttachmentPreviewKind(mimeType, attachmentName);
     if (previewKind === 'image') {
+      setAttachmentPreviewLoading(false);
       setAttachmentPreview({ kind: 'image', name: attachmentName, uri });
       return;
     }
 
     if (previewKind === 'pdf') {
+      const requestId = attachmentPreviewRequestIdRef.current + 1;
+      attachmentPreviewRequestIdRef.current = requestId;
       setAttachmentPreviewLoading(true);
+      setAttachmentPreview(null);
       try {
         const base64Document = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
+        if (attachmentPreviewRequestIdRef.current !== requestId) {
+          return;
+        }
         setAttachmentPreview({
           kind: 'pdf',
           name: attachmentName,
@@ -1305,10 +1328,15 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
         });
         return;
       } catch {
+        if (attachmentPreviewRequestIdRef.current !== requestId) {
+          return;
+        }
         await openAttachmentExternally(uri, mimeType, attachmentName);
         return;
       } finally {
-        setAttachmentPreviewLoading(false);
+        if (attachmentPreviewRequestIdRef.current === requestId) {
+          setAttachmentPreviewLoading(false);
+        }
       }
     }
 
@@ -1400,12 +1428,12 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
 
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
-      <Modal animationType="slide" onRequestClose={() => setAttachmentPreview(null)} transparent visible={attachmentPreview !== null || attachmentPreviewLoading}>
+      <Modal animationType="slide" onRequestClose={handleCloseAttachmentPreview} transparent visible={attachmentPreview !== null || attachmentPreviewLoading}>
         <View style={styles.attachmentPreviewOverlay}>
           <View style={styles.attachmentPreviewSheet}>
             <View style={styles.attachmentPreviewHeader}>
               <Text numberOfLines={1} style={styles.attachmentPreviewTitle}>{attachmentPreview?.name ?? 'Preparing preview...'}</Text>
-              <Pressable onPress={() => setAttachmentPreview(null)} style={styles.attachmentPreviewCloseButton}>
+              <Pressable onPress={handleCloseAttachmentPreview} style={styles.attachmentPreviewCloseButton}>
                 <Text style={styles.attachmentPreviewCloseButtonText}>Close</Text>
               </Pressable>
             </View>

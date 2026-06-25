@@ -2,14 +2,14 @@ import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
-import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 
 import { styles } from '../appStyles';
 import { buildDealOverridesFromDeals, buildNormalizedDealOverrides, buildNormalizedOperatingHourOverrides, buildOperatingHourOverridesFromWindows } from '../businessProfileOverrides';
 import { BusinessDealsEditor, BusinessHoursEditor } from '../components/BusinessProfileStructuredEditors';
 import { SOCIAL_PLATFORM_LABELS, buildSocialProfilesFromInputs, getSocialProfilePreview, getSocialProfileValidationMessage, socialProfilesToInputs } from '../socialProfiles';
 import { dedupeImageUrls, normalizeSearchText } from '../placeHelpers';
-import type { BusinessAttachmentDraft, FavoriteBusinessNotification, ProfileDashboardUpdateRequest, SignupResponse, TwoFactorSetupResponse } from '../types';
+import type { BusinessAttachmentDraft, DirectMessageThread, FavoriteBusinessNotification, ProfileDashboardUpdateRequest, SignupResponse, TwoFactorSetupResponse } from '../types';
 
 export type DashboardScreenProps = {
   errorMessage: string | null;
@@ -52,16 +52,31 @@ export type AccountSettingsScreenProps = {
   onToggleBusinessLocationTracking: (value: boolean) => void;
   onOpenContactSupport: () => void;
   onDeleteAccount: () => void;
+  onOpenBlockedDirectMessageCustomers: () => void;
   onOpenPrivacyPolicy: () => void;
   onOpenTermsOfService: () => void;
   onToggleDirectMessaging: (value: boolean) => void;
   onUnblockCustomerFromDirectMessaging: (blockId: number) => void;
   pendingBusinessLocationTrackingEnabled: boolean | null;
+  pendingDirectMessagingEnabled: boolean | null;
   session: SignupResponse;
   settingsSubmittingAction: 'two-factor-begin' | 'two-factor-confirm' | 'two-factor-disable' | 'business-location' | 'direct-messaging' | 'direct-message-block' | 'delete-account' | null;
   twoFactorDisableCode: string;
   twoFactorSetup: TwoFactorSetupResponse | null;
   twoFactorSetupCode: string;
+};
+
+export type BlockedDirectMessageCustomersScreenProps = Pick<AccountSettingsScreenProps,
+  | 'errorMessage'
+  | 'isLandscape'
+  | 'message'
+  | 'onBack'
+  | 'onUnblockCustomerFromDirectMessaging'
+  | 'session'
+  | 'settingsSubmittingAction'
+> & {
+  onConfirmBlockedDirectMessageCustomers: (usernames: string[]) => Promise<boolean>;
+  onLoadExistingDirectMessageCustomers: () => Promise<DirectMessageThread[]>;
 };
 
 function DashboardDetailRow({ label, value }: { label: string; value: string }) {
@@ -162,13 +177,13 @@ function FavoriteBusinessNotificationCard({
   submitting: boolean;
 }) {
   return (
-    <View style={[styles.dashboardDetailItem, styles.dashboardNotificationCard]}>
+    <View style={[styles.dashboardDetailItem, styles.dashboardNotificationCard, styles.dashboardNotificationCardSingle]}>
       <View style={styles.dashboardNotificationHeader}>
         <View style={styles.dashboardNotificationHeaderCopy}>
           <Text style={styles.dashboardNotificationTitle}>{notification.title}</Text>
           <Text style={styles.dashboardNotificationTimestamp}>{formatDashboardNotificationTimestamp(notification.created_at)}</Text>
         </View>
-        <Pressable onPress={onDismiss} style={[styles.dashboardNotificationDismissButton, submitting ? styles.linkButtonDisabled : null]}>
+        <Pressable disabled={submitting} onPress={onDismiss} style={[styles.dashboardNotificationDismissButton, submitting ? styles.linkButtonDisabled : null]}>
           <Text style={styles.dashboardNotificationDismissButtonText}>{submitting ? '...' : 'Dismiss'}</Text>
         </Pressable>
       </View>
@@ -568,8 +583,6 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
               <Text style={styles.dashboardSupportText}>Changing your email sends a new verification email and marks the new address as unverified until you confirm it.</Text>
             </View>
 
-            <Text style={styles.dashboardSupportText}>Authentication settings, support, privacy, terms, account requests, and logout now live behind the settings icon in the top-right corner.</Text>
-
             {session.profile_type !== 'business' ? (
               <View style={styles.dashboardSection}>
                 <Text style={styles.dashboardSectionTitle}>Business notifications</Text>
@@ -815,7 +828,8 @@ export function FavoriteBusinessNotificationsScreen({
   session: SignupResponse;
   submitting: boolean;
 }) {
-  const favoriteBusinessNotifications = session.favorite_business_notifications ?? [];
+  const favoriteBusinessNotifications = (session.favorite_business_notifications ?? []).slice(0, 20);
+  const hasNotificationOverflow = favoriteBusinessNotifications.length > 5;
 
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
@@ -846,26 +860,45 @@ export function FavoriteBusinessNotificationsScreen({
           ) : null}
 
           <View style={styles.dashboardSection}>
-            <View style={styles.dashboardNotificationHeader}>
-              <Text style={styles.dashboardSectionTitle}>Recent alerts</Text>
+            <View style={styles.dashboardNotificationSectionHeader}>
+              <Text style={styles.dashboardSectionTitle}>Recent Alerts</Text>
               {favoriteBusinessNotifications.length ? (
-                <Pressable onPress={onClear} style={[styles.linkButtonSecondaryWide, styles.dashboardInlineButton, submitting ? styles.linkButtonDisabled : null]}>
-                  <Text style={styles.linkButtonSecondaryText}>{submitting ? 'Clearing...' : 'Clear all'}</Text>
+                <Pressable disabled={submitting} onPress={onClear} style={[styles.dashboardNotificationClearButton, submitting ? styles.linkButtonDisabled : null]}>
+                  <Text style={styles.dashboardNotificationClearButtonText}>{submitting ? 'Clearing...' : 'Clear all'}</Text>
                 </Pressable>
               ) : null}
             </View>
             {favoriteBusinessNotifications.length ? (
-              <View style={styles.dashboardFieldGrid}>
-                {favoriteBusinessNotifications.map((notification) => (
-                  <FavoriteBusinessNotificationCard
-                    key={notification.id}
-                    onDismiss={() => onClearNotification(notification.id)}
-                    notification={notification}
-                    onPress={() => onOpenFavoriteBusiness(notification.slug)}
-                    submitting={submitting}
-                  />
-                ))}
-              </View>
+              hasNotificationOverflow ? (
+                <ScrollView
+                  contentContainerStyle={styles.dashboardNotificationList}
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator={false}
+                  style={styles.dashboardNotificationListScroller}
+                >
+                  {favoriteBusinessNotifications.map((notification) => (
+                    <FavoriteBusinessNotificationCard
+                      key={notification.id}
+                      onDismiss={() => onClearNotification(notification.id)}
+                      notification={notification}
+                      onPress={() => onOpenFavoriteBusiness(notification.slug)}
+                      submitting={submitting}
+                    />
+                  ))}
+                </ScrollView>
+              ) : (
+                <View style={styles.dashboardNotificationList}>
+                  {favoriteBusinessNotifications.map((notification) => (
+                    <FavoriteBusinessNotificationCard
+                      key={notification.id}
+                      onDismiss={() => onClearNotification(notification.id)}
+                      notification={notification}
+                      onPress={() => onOpenFavoriteBusiness(notification.slug)}
+                      submitting={submitting}
+                    />
+                  ))}
+                </View>
+              )
             ) : (
               <Text style={styles.dashboardSupportText}>When a favorited business updates its profile or publishes new content, those alerts will show up here.</Text>
             )}
@@ -1207,7 +1240,6 @@ export function BusinessProfileEditorScreen({
                   <Text style={styles.linkButtonSecondaryText}>View in Map</Text>
                 </Pressable>
               </View>
-              <Text style={styles.dashboardSupportText}>Paste profile URLs or usernames for each platform. DiningDealz stores the full link and the extracted handle separately for public display.</Text>
             </View>
           </View>
         </ScrollView>
@@ -1218,14 +1250,11 @@ export function BusinessProfileEditorScreen({
 
 export function AccountSettingsScreen({
   deleteAccountPassword,
-  directMessageBlockUsername,
   errorMessage,
   isLandscape,
   message,
   onBack,
   onBeginTwoFactorSetup,
-  onBlockCustomerFromDirectMessaging,
-  onChangeDirectMessageBlockUsername,
   onChangeDeleteAccountPassword,
   onChangeTwoFactorDisableCode,
   onChangeTwoFactorSetupCode,
@@ -1235,11 +1264,12 @@ export function AccountSettingsScreen({
   onToggleBusinessLocationTracking,
   onOpenContactSupport,
   onDeleteAccount,
+  onOpenBlockedDirectMessageCustomers,
   onOpenPrivacyPolicy,
   onOpenTermsOfService,
   onToggleDirectMessaging,
-  onUnblockCustomerFromDirectMessaging,
   pendingBusinessLocationTrackingEnabled,
+  pendingDirectMessagingEnabled,
   session,
   settingsSubmittingAction,
   twoFactorDisableCode,
@@ -1252,7 +1282,7 @@ export function AccountSettingsScreen({
   const changingDirectMessageBlocks = settingsSubmittingAction === 'direct-message-block';
   const deletingAccount = settingsSubmittingAction === 'delete-account';
   const displayedBusinessLocationTrackingEnabled = pendingBusinessLocationTrackingEnabled ?? !!session.business_location_tracking_enabled;
-  const displayedDirectMessagingEnabled = !!session.direct_messaging_enabled;
+  const displayedDirectMessagingEnabled = pendingDirectMessagingEnabled ?? !!session.direct_messaging_enabled;
   const blockedCustomerAccounts = session.blocked_customer_accounts ?? [];
 
   return (
@@ -1315,7 +1345,7 @@ export function AccountSettingsScreen({
                       <Text style={styles.dashboardSupportText}>{displayedBusinessLocationTrackingEnabled ? 'On' : 'Off'}</Text>
                     </View>
                     <Switch
-                      disabled={submitting}
+                      disabled={deletingAccount}
                       onValueChange={onToggleBusinessLocationTracking}
                       value={displayedBusinessLocationTrackingEnabled}
                     />
@@ -1335,40 +1365,20 @@ export function AccountSettingsScreen({
                       <Text style={styles.dashboardSupportText}>{displayedDirectMessagingEnabled ? 'On' : 'Off'}</Text>
                     </View>
                     <Switch
-                      disabled={submitting}
+                      disabled={deletingAccount}
                       onValueChange={onToggleDirectMessaging}
                       value={displayedDirectMessagingEnabled}
                     />
                   </View>
-                  <Text style={styles.profileFieldLabel}>Block a customer username</Text>
-                  <TextInput
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    onChangeText={onChangeDirectMessageBlockUsername}
-                    placeholder="customer_username"
-                    placeholderTextColor="#9a7f6c"
-                    style={styles.profileInput}
-                    value={directMessageBlockUsername}
-                  />
                   <Text style={styles.dashboardSupportText}>Blocked customers will no longer see the direct message icon on your business profile.</Text>
-                  <Pressable onPress={onBlockCustomerFromDirectMessaging} style={[styles.linkButtonSecondaryWide, styles.settingsInlineButton, submitting ? styles.linkButtonDisabled : null]}>
-                    <Text style={styles.linkButtonSecondaryText}>{changingDirectMessageBlocks ? 'Saving block...' : 'Block customer from direct messages'}</Text>
+                  <Text style={styles.dashboardSupportText}>
+                    {blockedCustomerAccounts.length
+                      ? `${blockedCustomerAccounts.length} blocked customer${blockedCustomerAccounts.length === 1 ? '' : 's'}`
+                      : 'No blocked customers.'}
+                  </Text>
+                  <Pressable onPress={onOpenBlockedDirectMessageCustomers} style={[styles.linkButtonSecondaryWide, styles.settingsInlineButton, submitting ? styles.linkButtonDisabled : null]}>
+                    <Text style={styles.linkButtonSecondaryText}>{changingDirectMessageBlocks ? 'Updating...' : 'Manage blocked customers'}</Text>
                   </Pressable>
-                  {blockedCustomerAccounts.length ? (
-                    <View>
-                      {blockedCustomerAccounts.map((blockedAccount) => (
-                        <View key={blockedAccount.block_id} style={[styles.dashboardDetailItem, styles.dashboardNotificationCard]}>
-                          <Text style={styles.dashboardDetailValue}>{blockedAccount.username}</Text>
-                          <Text style={styles.dashboardSupportText}>{[blockedAccount.first_name, blockedAccount.last_name].filter(Boolean).join(' ') || 'Customer account'}</Text>
-                          <Pressable onPress={() => onUnblockCustomerFromDirectMessaging(blockedAccount.block_id)} style={[styles.linkButtonSecondaryWide, styles.settingsInlineButton, submitting ? styles.linkButtonDisabled : null]}>
-                            <Text style={styles.linkButtonSecondaryText}>{changingDirectMessageBlocks ? 'Updating...' : 'Unblock customer'}</Text>
-                          </Pressable>
-                        </View>
-                      ))}
-                    </View>
-                  ) : (
-                    <Text style={styles.dashboardSupportText}>No blocked customers.</Text>
-                  )}
                 </View>
                 <View style={styles.settingsItemActions}>
                   {togglingDirectMessaging ? <ActivityIndicator color="#8a4b2a" /> : null}
@@ -1430,6 +1440,270 @@ export function AccountSettingsScreen({
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+    </View>
+  );
+}
+
+export function BlockedDirectMessageCustomersScreen({
+  errorMessage,
+  isLandscape,
+  message,
+  onBack,
+  onConfirmBlockedDirectMessageCustomers,
+  onLoadExistingDirectMessageCustomers,
+  onUnblockCustomerFromDirectMessaging,
+  session,
+  settingsSubmittingAction,
+}: BlockedDirectMessageCustomersScreenProps) {
+  const changingDirectMessageBlocks = settingsSubmittingAction === 'direct-message-block';
+  const blockedCustomerAccounts = session.blocked_customer_accounts ?? [];
+  const [customerKeyword, setCustomerKeyword] = useState('');
+  const [messageFeedCustomers, setMessageFeedCustomers] = useState<DirectMessageThread[]>([]);
+  const [messageFeedCustomersError, setMessageFeedCustomersError] = useState<string | null>(null);
+  const [messageFeedCustomersLoading, setMessageFeedCustomersLoading] = useState(true);
+  const [selectedCustomerUsernames, setSelectedCustomerUsernames] = useState<string[]>([]);
+  const [confirmBlockModalVisible, setConfirmBlockModalVisible] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadMessageFeedCustomers() {
+      setMessageFeedCustomersLoading(true);
+      setMessageFeedCustomersError(null);
+      try {
+        const threads = await onLoadExistingDirectMessageCustomers();
+        if (!mounted) {
+          return;
+        }
+        setMessageFeedCustomers(threads);
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+        setMessageFeedCustomersError(error instanceof Error ? error.message : 'Unable to load customers with direct message feeds.');
+      } finally {
+        if (mounted) {
+          setMessageFeedCustomersLoading(false);
+        }
+      }
+    }
+
+    void loadMessageFeedCustomers();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const blockedCustomerUsernames = new Set(blockedCustomerAccounts.map((account) => account.username.toLowerCase()));
+  const normalizedCustomerKeyword = normalizeSearchText(customerKeyword);
+  const selectableMessageFeedCustomers = Array.from(
+    messageFeedCustomers.reduce((customers, thread) => {
+      if (!thread.customer_username) {
+        return customers;
+      }
+      const normalizedUsername = thread.customer_username.toLowerCase();
+      if (!customers.has(normalizedUsername)) {
+        customers.set(normalizedUsername, thread);
+      }
+      return customers;
+    }, new Map<string, DirectMessageThread>()).values(),
+  )
+    .filter((thread) => !blockedCustomerUsernames.has(thread.customer_username.toLowerCase()))
+    .filter((thread) => {
+      if (!normalizedCustomerKeyword.length) {
+        return true;
+      }
+
+      return normalizeSearchText(thread.customer_username).includes(normalizedCustomerKeyword);
+    });
+  const hasSelectableCustomerOverflow = selectableMessageFeedCustomers.length > 5;
+  const hasSelectedCustomerOverflow = selectedCustomerUsernames.length > 5;
+
+  function handleToggleCustomerSelection(username: string) {
+    setSelectedCustomerUsernames((current) => {
+      const normalizedUsername = username.toLowerCase();
+      return current.some((value) => value.toLowerCase() === normalizedUsername)
+        ? current.filter((value) => value.toLowerCase() !== normalizedUsername)
+        : [...current, username];
+    });
+  }
+
+  function handleCancelConfirmBlock() {
+    if (changingDirectMessageBlocks) {
+      return;
+    }
+    setConfirmBlockModalVisible(false);
+  }
+
+  async function handleConfirmBlockCustomers() {
+    const didConfirm = await onConfirmBlockedDirectMessageCustomers(selectedCustomerUsernames);
+    if (!didConfirm) {
+      return;
+    }
+
+    setConfirmBlockModalVisible(false);
+    setSelectedCustomerUsernames([]);
+  }
+
+  return (
+    <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardAvoidingFill}
+      >
+        <ScrollView
+          contentContainerStyle={styles.dashboardScrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
+            <Pressable onPress={onBack} style={styles.backButton}>
+              <Text style={styles.backButtonText}>Back to Settings</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.dashboardShell}>
+            <Text style={styles.detailCity}>Direct messaging</Text>
+            <Text style={styles.detailTitle}>Blocked customers</Text>
+            <Text style={styles.profileIntroText}>Manage which customer accounts can no longer open direct messages with your business profile.</Text>
+
+            {message ? (
+              <View style={styles.profileSuccessBanner}>
+                <Text style={styles.profileSuccessText}>{message}</Text>
+              </View>
+            ) : null}
+
+            {errorMessage ? (
+              <View style={styles.errorBanner}>
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              </View>
+            ) : null}
+
+            <Text style={styles.dashboardSectionTitle}>Customers with existing message feeds</Text>
+            <Text style={styles.dashboardSupportText}>Filter by keyword, then tap a customer to select or deselect that username for blocking.</Text>
+            <TextInput
+              autoCapitalize="none"
+              autoCorrect={false}
+              onChangeText={setCustomerKeyword}
+              placeholder="Filter by username"
+              placeholderTextColor="#9a7f6c"
+              style={styles.profileInput}
+              value={customerKeyword}
+            />
+            {messageFeedCustomersLoading ? (
+              <ActivityIndicator color="#8a4b2a" />
+            ) : messageFeedCustomersError ? (
+              <Text style={styles.dashboardSupportText}>{messageFeedCustomersError}</Text>
+            ) : selectableMessageFeedCustomers.length ? (
+              <View style={styles.settingsItemBody}>
+                <ScrollView
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator={hasSelectableCustomerOverflow}
+                  style={hasSelectableCustomerOverflow ? styles.blockedCustomerListScroller : null}
+                >
+                  <View style={styles.settingsItemBody}>
+                    {selectableMessageFeedCustomers.map((thread) => {
+                      const selected = selectedCustomerUsernames.some((username) => username.toLowerCase() === thread.customer_username.toLowerCase());
+                      return (
+                        <Pressable
+                          key={thread.id}
+                          onPress={() => handleToggleCustomerSelection(thread.customer_username)}
+                          style={[
+                            styles.dashboardNotificationCard,
+                            styles.blockedCustomerSelectableCard,
+                            selected ? styles.dashboardNotificationCardSelected : null,
+                          ]}
+                        >
+                          <View style={styles.blockedCustomerSelectableContent}>
+                            <View style={styles.dashboardDetailItem}>
+                              <Text style={styles.dashboardDetailValue}>{thread.customer_username}</Text>
+                              <Text style={styles.dashboardSupportText}>{thread.last_message_preview || 'Existing direct message thread'}</Text>
+                            </View>
+                            <View style={[
+                              styles.blockedCustomerSelectionIndicator,
+                              selected ? styles.blockedCustomerSelectionIndicatorActive : null,
+                            ]}>
+                              {selected ? <View style={styles.blockedCustomerSelectionIndicatorDot} /> : null}
+                            </View>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+              </View>
+            ) : (
+              <Text style={styles.dashboardSupportText}>No matching customer accounts with existing message feeds.</Text>
+            )}
+
+            {blockedCustomerAccounts.length ? (
+              <View style={styles.settingsItemBody}>
+                {blockedCustomerAccounts.map((blockedAccount) => (
+                  <View key={blockedAccount.block_id} style={[styles.dashboardDetailItem, styles.dashboardNotificationCard]}>
+                    <Text style={styles.dashboardDetailValue}>{blockedAccount.username}</Text>
+                    <Text style={styles.dashboardSupportText}>{[blockedAccount.first_name, blockedAccount.last_name].filter(Boolean).join(' ') || 'Customer account'}</Text>
+                    <Pressable onPress={() => onUnblockCustomerFromDirectMessaging(blockedAccount.block_id)} style={[styles.linkButtonSecondaryWide, styles.settingsInlineButton, changingDirectMessageBlocks ? styles.linkButtonDisabled : null]}>
+                      <Text style={styles.linkButtonSecondaryText}>{changingDirectMessageBlocks ? 'Updating...' : 'Unblock customer'}</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.dashboardSupportText}>No blocked customers.</Text>
+            )}
+
+            <Text style={styles.dashboardSupportText}>
+              {selectedCustomerUsernames.length
+                ? `${selectedCustomerUsernames.length} customer account${selectedCustomerUsernames.length === 1 ? '' : 's'} selected.`
+                : 'Select customer accounts from the list above to block direct messages.'}
+            </Text>
+            <Pressable
+              disabled={!selectedCustomerUsernames.length || changingDirectMessageBlocks}
+              onPress={() => setConfirmBlockModalVisible(true)}
+              style={[
+                styles.linkButtonSecondaryWide,
+                styles.settingsInlineButton,
+                (!selectedCustomerUsernames.length || changingDirectMessageBlocks) ? styles.linkButtonDisabled : null,
+              ]}
+            >
+              <Text style={styles.linkButtonSecondaryText}>{changingDirectMessageBlocks ? 'Saving block...' : 'Block customer from direct messages'}</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      <Modal animationType="fade" onRequestClose={handleCancelConfirmBlock} transparent visible={confirmBlockModalVisible}>
+        <Pressable onPress={handleCancelConfirmBlock} style={styles.guestFavoriteModalBackdrop}>
+          <Pressable onPress={() => undefined} style={[styles.guestFavoriteModalCard, styles.blockedCustomerConfirmModalCard]}>
+            <Text style={styles.guestFavoriteModalTitle}>Confirm blocked customers</Text>
+            <Text style={styles.guestFavoriteModalText}>Are you sure these are the accounts you want to block from direct messages?</Text>
+            <View style={styles.settingsItemBody}>
+              <ScrollView
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={hasSelectedCustomerOverflow}
+                style={hasSelectedCustomerOverflow ? styles.blockedCustomerModalListScroller : null}
+              >
+                <View style={styles.settingsItemBody}>
+                  {selectedCustomerUsernames.map((username) => (
+                    <View key={username} style={[styles.dashboardNotificationCard, styles.blockedCustomerConfirmationRow]}>
+                      <Text style={styles.dashboardDetailValue}>{username}</Text>
+                    </View>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
+            <View style={styles.guestFavoriteModalActions}>
+              <Pressable onPress={handleCancelConfirmBlock} style={styles.guestFavoriteModalSecondaryButton}>
+                <Text style={styles.guestFavoriteModalSecondaryText}>Cancel</Text>
+              </Pressable>
+              <Pressable onPress={() => void handleConfirmBlockCustomers()} style={[styles.guestFavoriteModalPrimaryButton, changingDirectMessageBlocks ? styles.linkButtonDisabled : null]}>
+                <Text style={styles.guestFavoriteModalPrimaryText}>{changingDirectMessageBlocks ? 'Blocking...' : 'Confirm'}</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }

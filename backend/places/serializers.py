@@ -1,10 +1,13 @@
 import json
+from pathlib import Path
 from urllib.parse import urlparse
+from uuid import uuid4
 
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.files.storage import default_storage
 from django.db import transaction
 from django.utils.text import slugify
 from rest_framework import serializers
@@ -53,6 +56,9 @@ LIST_JSON_FIELD_NAMES = (
 	'deal_overrides',
 	'operating_hour_overrides',
 )
+
+DEAL_ATTACHMENT_FIELD_PREFIX = 'deal_attachment_upload_'
+SUPPORTED_DEAL_ATTACHMENT_SUFFIXES = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.heic', '.heif', '.pdf'}
 
 DICT_JSON_FIELD_NAMES = (
 	'verification_documents',
@@ -192,6 +198,76 @@ def _create_claim_profile_entries(claim, validated_data):
 def _replace_claim_profile_entries(claim, validated_data):
 	claim.profile_entries.filter(entry_kind__in=PROFILE_ENTRY_FIELD_KIND_MAP.values()).delete()
 	_create_claim_profile_entries(claim, validated_data)
+
+
+def merge_uploaded_deal_attachments(request, claim, deal_overrides):
+	if request is None:
+		return list(deal_overrides or [])
+
+	deal_rows = [dict(row) for row in (deal_overrides or [])]
+	indexed_uploads = _collect_uploaded_deal_attachments(request, len(deal_rows))
+	for index, uploaded_file in indexed_uploads:
+		deal_rows[index]['attachment'] = _save_uploaded_deal_attachment(request, claim, uploaded_file)
+	return deal_rows
+
+
+def _collect_uploaded_deal_attachments(request, deal_count):
+	indexed_uploads = []
+	for request_field_name in request.FILES.keys():
+		if not request_field_name.startswith(DEAL_ATTACHMENT_FIELD_PREFIX):
+			continue
+
+		index_text = request_field_name[len(DEAL_ATTACHMENT_FIELD_PREFIX):]
+		try:
+			deal_index = int(index_text)
+		except (TypeError, ValueError):
+			raise serializers.ValidationError({'deal_overrides': [f'Unexpected deal attachment field "{request_field_name}".']})
+
+		if deal_index < 0 or deal_index >= deal_count:
+			raise serializers.ValidationError({'deal_overrides': [f'Deal attachment #{deal_index + 1} does not match an uploaded deal.']})
+
+		uploaded_files = request.FILES.getlist(request_field_name)
+		if len(uploaded_files) != 1:
+			raise serializers.ValidationError({'deal_overrides': [f'Deal override #{deal_index + 1} can only include one attachment.']})
+
+		_validate_uploaded_deal_attachment(uploaded_files[0])
+		indexed_uploads.append((deal_index, uploaded_files[0]))
+
+	return indexed_uploads
+
+
+def _validate_uploaded_deal_attachment(uploaded_file):
+	content_type = str(getattr(uploaded_file, 'content_type', '') or '').strip().lower()
+	file_suffix = Path(getattr(uploaded_file, 'name', '') or '').suffix.lower()
+	if content_type == 'application/pdf' or file_suffix == '.pdf':
+		return
+	if content_type.startswith('image/') or file_suffix in SUPPORTED_DEAL_ATTACHMENT_SUFFIXES:
+		return
+	raise serializers.ValidationError({'deal_overrides': ['Deal attachments must be a photo or PDF file.']})
+
+
+def _save_uploaded_deal_attachment(request, claim, uploaded_file):
+	content_type = str(getattr(uploaded_file, 'content_type', '') or '').strip().lower()
+	file_suffix = Path(getattr(uploaded_file, 'name', '') or '').suffix.lower()
+	if not file_suffix:
+		file_suffix = '.pdf' if content_type == 'application/pdf' else '.jpg'
+
+	filename_root = Path(getattr(uploaded_file, 'name', '') or 'deal-attachment').stem or 'deal-attachment'
+	safe_name = slugify(filename_root) or 'deal-attachment'
+	saved_name = default_storage.save(
+		f'business-deal-attachments/{claim.id}/{uuid4().hex}-{safe_name}{file_suffix}',
+		uploaded_file,
+	)
+	attachment_payload = {
+		'url': request.build_absolute_uri(default_storage.url(saved_name)),
+		'name': getattr(uploaded_file, 'name', '') or f'{safe_name}{file_suffix}',
+	}
+	if content_type:
+		attachment_payload['content_type'] = content_type
+	file_size = getattr(uploaded_file, 'size', None)
+	if file_size not in (None, ''):
+		attachment_payload['file_size'] = int(file_size)
+	return attachment_payload
 
 
 class AccountResponseSerializer(serializers.Serializer):
@@ -725,6 +801,8 @@ class ClaimedBusinessSignupSerializer(CustomerSignupSerializer):
 				status=BusinessClaim.Status.DRAFT,
 				**claim_data,
 			)
+			claim.deal_overrides = merge_uploaded_deal_attachments(request, claim, claim.deal_overrides or [])
+			claim.save(update_fields=['deal_overrides', 'updated_at'])
 			_create_claim_profile_entries(claim, claim_data)
 			_create_claim_attachments(claim, request)
 			try:
@@ -838,6 +916,8 @@ class EstablishedBusinessSignupSerializer(CustomerSignupSerializer):
 				status=BusinessClaim.Status.DRAFT,
 				**claim_data,
 			)
+			claim.deal_overrides = merge_uploaded_deal_attachments(request, claim, claim.deal_overrides or [])
+			claim.save(update_fields=['deal_overrides', 'updated_at'])
 			_create_claim_profile_entries(claim, claim_data)
 			_create_claim_attachments(claim, request)
 			try:
@@ -937,6 +1017,8 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 				verification_summary='Submitted through the small startup and vendor flow.',
 				supporting_details=supporting_details,
 			)
+			claim.deal_overrides = merge_uploaded_deal_attachments(request, claim, claim.deal_overrides or [])
+			claim.save(update_fields=['deal_overrides', 'updated_at'])
 			_create_claim_profile_entries(
 				claim,
 				{
@@ -1058,8 +1140,10 @@ class DealSerializer(serializers.Serializer):
 	description = serializers.CharField()
 	deal_type = serializers.CharField()
 	deal_type_label = serializers.CharField()
+	custom_deal_type_label = serializers.CharField(required=False, allow_blank=True)
 	price_text = serializers.CharField()
 	terms = serializers.CharField()
+	attachment = serializers.DictField(required=False, allow_null=True)
 	is_active = serializers.BooleanField()
 	starts_on = serializers.CharField(allow_null=True)
 	ends_on = serializers.CharField(allow_null=True)

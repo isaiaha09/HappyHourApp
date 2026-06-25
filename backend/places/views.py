@@ -44,6 +44,7 @@ from .serializers import (
 	TwoFactorCodeSerializer,
 	UsernameReminderSerializer,
 	_replace_claim_profile_entries,
+	merge_uploaded_deal_attachments,
 	_normalize_string_list,
 	build_signup_request_data,
 	sync_listing_snapshot_from_place_payload,
@@ -172,6 +173,13 @@ def _build_direct_message_thread_payload(thread, user):
 		'last_message_preview': last_message_preview,
 		'unread_count': unread_query.count(),
 	}
+
+
+def _customer_can_access_direct_message_thread(user, thread):
+	if thread is None:
+		return False
+	can_direct_message, _ = _can_customer_direct_message_claim(user, thread.business_claim)
+	return can_direct_message
 
 
 def _build_direct_message_item_payload(message, request=None):
@@ -653,7 +661,7 @@ class ProfileDashboardView(APIView):
 					changed_business_fields.update({'business_website_url', 'social_profiles', 'social_media_links_text'})
 
 			if 'deal_overrides' in serializer.validated_data:
-				incoming_deal_overrides = serializer.validated_data.get('deal_overrides', [])
+				incoming_deal_overrides = merge_uploaded_deal_attachments(request, claim, serializer.validated_data.get('deal_overrides', []))
 				if list(claim.deal_overrides or []) != list(incoming_deal_overrides or []):
 					claim.deal_overrides = incoming_deal_overrides
 					claim_update_fields.append('deal_overrides')
@@ -916,7 +924,8 @@ class DirectMessageThreadsView(APIView):
 				)
 				.distinct()
 			)
-		return list(queryset.filter(customer=user))
+		threads = list(queryset.filter(customer=user))
+		return [thread for thread in threads if _customer_can_access_direct_message_thread(user, thread)]
 
 	def _get_thread_for_portal(self, user, portal, thread_id):
 		queryset = BusinessDirectMessageThread.objects.select_related(
@@ -929,7 +938,10 @@ class DirectMessageThreadsView(APIView):
 				business_claim__membership__is_active=True,
 				business_claim__membership__user=user,
 			).distinct().first()
-		return queryset.filter(id=thread_id, customer=user).first()
+		thread = queryset.filter(id=thread_id, customer=user).first()
+		if not _customer_can_access_direct_message_thread(user, thread):
+			return None
+		return thread
 
 
 class DirectMessageThreadDetailView(APIView):
@@ -952,6 +964,8 @@ class DirectMessageThreadDetailView(APIView):
 				'business_claim__listing_snapshot',
 				'customer',
 			).filter(id=thread_id, customer=request.user).first()
+			if not _customer_can_access_direct_message_thread(request.user, thread):
+				thread = None
 		if thread is None:
 			return Response({'detail': 'Direct message thread not found.'}, status=status.HTTP_404_NOT_FOUND)
 
