@@ -104,7 +104,6 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -113,6 +112,9 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+if IS_RENDER:
+    MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
 
 ROOT_URLCONF = 'config.urls'
 
@@ -376,6 +378,11 @@ SUPABASE_STORAGE_REGION = get_env('SUPABASE_STORAGE_REGION', ENV_VALUES, 'us-eas
 SUPABASE_STORAGE_ACCESS_KEY = get_env('SUPABASE_STORAGE_ACCESS_KEY', ENV_VALUES, '')
 SUPABASE_STORAGE_SECRET_KEY = get_env('SUPABASE_STORAGE_SECRET_KEY', ENV_VALUES, '')
 SUPABASE_STORAGE_PUBLIC_URL_BASE = get_env('SUPABASE_STORAGE_PUBLIC_URL_BASE', ENV_VALUES, '').rstrip('/')
+STATICFILES_STORAGE_BACKEND = (
+    'whitenoise.storage.CompressedManifestStaticFilesStorage'
+    if IS_RENDER
+    else 'django.contrib.staticfiles.storage.StaticFilesStorage'
+)
 
 STORAGES = {
     'default': {
@@ -385,7 +392,7 @@ STORAGES = {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',
     },
     'staticfiles': {
-        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+        'BACKEND': STATICFILES_STORAGE_BACKEND,
     },
 }
 MEDIA_PUBLIC_BASE_URL = MEDIA_URL
