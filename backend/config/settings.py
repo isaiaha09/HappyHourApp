@@ -14,12 +14,20 @@ from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlparse
 
 from .business_sources import BUSINESS_SOURCE_PAGES
-from .env import get_bool_env, get_env, get_int_env, load_env_file
+from .env import get_bool_env, get_env, get_int_env, get_list_env, load_env_file
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 ENV_VALUES = load_env_file(BASE_DIR)
+
+
+def _is_truthy_env(name):
+    value = str(get_env(name, ENV_VALUES, '')).strip().lower()
+    return value in {'1', 'true', 'yes', 'on'}
+
+
+IS_RENDER = _is_truthy_env('RENDER') or bool(get_env('RENDER_EXTERNAL_HOSTNAME', ENV_VALUES, '').strip())
 
 
 # Quick-start development settings - unsuitable for production
@@ -29,12 +37,55 @@ ENV_VALUES = load_env_file(BASE_DIR)
 SECRET_KEY = get_env('DJANGO_SECRET_KEY', ENV_VALUES, 'django-insecure-change-me-in-production')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = get_bool_env('DJANGO_DEBUG', ENV_VALUES, not IS_RENDER)
 
-if DEBUG:
-    ALLOWED_HOSTS = ['*']
-else:
-    ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+
+def _append_unique(items, value):
+    if value and value not in items:
+        items.append(value)
+
+
+def _build_allowed_hosts(debug):
+    configured_hosts = get_list_env('DJANGO_ALLOWED_HOSTS', ENV_VALUES, '')
+    allowed_hosts = configured_hosts or (['*'] if debug else ['127.0.0.1', 'localhost'])
+
+    render_hostname = get_env('RENDER_EXTERNAL_HOSTNAME', ENV_VALUES, '').strip()
+    _append_unique(allowed_hosts, render_hostname)
+    return allowed_hosts
+
+
+def _build_csrf_trusted_origins():
+    trusted_origins = get_list_env('DJANGO_CSRF_TRUSTED_ORIGINS', ENV_VALUES, '')
+    render_hostname = get_env('RENDER_EXTERNAL_HOSTNAME', ENV_VALUES, '').strip()
+    if render_hostname:
+        _append_unique(trusted_origins, f'https://{render_hostname}')
+    return trusted_origins
+
+
+def _build_cors_allowed_origins(debug):
+    configured_origins = get_list_env('CORS_ALLOWED_ORIGINS', ENV_VALUES, '')
+    if configured_origins:
+        return configured_origins
+
+    if debug:
+        return []
+
+    return [
+        'http://127.0.0.1:3000',
+        'http://localhost:3000',
+        'http://127.0.0.1:8081',
+        'http://localhost:8081',
+    ]
+
+
+ALLOWED_HOSTS = _build_allowed_hosts(DEBUG)
+CSRF_TRUSTED_ORIGINS = _build_csrf_trusted_origins()
+ADMIN_URL_PATH = get_env('ADMIN_URL_PATH', ENV_VALUES, 'admin').strip().strip('/') or 'admin'
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+SECURE_SSL_REDIRECT = get_bool_env('DJANGO_SECURE_SSL_REDIRECT', ENV_VALUES, IS_RENDER)
+SESSION_COOKIE_SECURE = get_bool_env('DJANGO_SESSION_COOKIE_SECURE', ENV_VALUES, IS_RENDER)
+CSRF_COOKIE_SECURE = get_bool_env('DJANGO_CSRF_COOKIE_SECURE', ENV_VALUES, IS_RENDER)
 
 
 # Application definition
@@ -53,6 +104,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -304,11 +356,20 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
-MEDIA_STORAGE_BACKEND = get_env('MEDIA_STORAGE_BACKEND', ENV_VALUES, 'local').strip().lower()
-DIRECT_MESSAGE_MEDIA_STORAGE_BACKEND = get_env('DIRECT_MESSAGE_MEDIA_STORAGE_BACKEND', ENV_VALUES, '').strip().lower()
+MEDIA_STORAGE_BACKEND = (
+    get_env('MEDIA_STORAGE_BACKEND', ENV_VALUES, 'supabase').strip().lower()
+    if IS_RENDER
+    else 'local'
+)
+DIRECT_MESSAGE_MEDIA_STORAGE_BACKEND = (
+    get_env('DIRECT_MESSAGE_MEDIA_STORAGE_BACKEND', ENV_VALUES, '').strip().lower()
+    if IS_RENDER
+    else ''
+)
 SUPABASE_STORAGE_BUCKET = get_env('SUPABASE_STORAGE_BUCKET', ENV_VALUES, '')
 SUPABASE_STORAGE_ENDPOINT = get_env('SUPABASE_STORAGE_ENDPOINT', ENV_VALUES, '')
 SUPABASE_STORAGE_REGION = get_env('SUPABASE_STORAGE_REGION', ENV_VALUES, 'us-east-1')
@@ -324,7 +385,7 @@ STORAGES = {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',
     },
     'staticfiles': {
-        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
     },
 }
 MEDIA_PUBLIC_BASE_URL = MEDIA_URL
@@ -379,12 +440,7 @@ if _direct_message_storage_backend == 'supabase':
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
 else:
-    CORS_ALLOWED_ORIGINS = [
-        'http://127.0.0.1:3000',
-        'http://localhost:3000',
-        'http://127.0.0.1:8081',
-        'http://localhost:8081',
-    ]
+    CORS_ALLOWED_ORIGINS = _build_cors_allowed_origins(DEBUG)
 
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [

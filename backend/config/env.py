@@ -47,3 +47,11 @@ def get_bool_env(name, env_values, default=False):
     if value in {'0', 'false', 'no', 'off'}:
         return False
     return default
+
+
+def get_list_env(name, env_values, default=''):
+    value = get_env(name, env_values, default)
+    if value is None:
+        return []
+
+    return [item.strip() for item in str(value).split(',') if item.strip()]

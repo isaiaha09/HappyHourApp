@@ -21,7 +21,7 @@ from django.urls import include, path
 from places.admin_site import happyhour_admin_site
 
 urlpatterns = [
-    path('admin/', happyhour_admin_site.urls),
+    path(f'{settings.ADMIN_URL_PATH}/', happyhour_admin_site.urls),
     path('api/', include('places.urls')),
 ]
 
