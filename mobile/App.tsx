@@ -30,6 +30,7 @@ import MapView, { Marker, type Region } from 'react-native-maps';
 import {
   beginTwoFactorSetup,
   confirmTwoFactorSetup,
+  deleteBusinessDirectMessageThread,
   createBusinessProfile,
   createCustomerProfile,
   createInformalBusinessProfile,
@@ -2776,6 +2777,26 @@ function AppScreen() {
     });
   }, [apiBaseUrl, authenticatedSession?.auth_token, authenticatedSession?.portal]);
 
+  const handleDeleteDirectMessageConversation = useCallback(async (threadId: number) => {
+    if (!authenticatedSession?.auth_token || authenticatedSession.portal !== 'business') {
+      throw new Error('Only business accounts can delete direct message conversations.');
+    }
+
+    const response = await deleteBusinessDirectMessageThread(apiBaseUrl, authenticatedSession.auth_token, threadId);
+    setProfileMessage(response.detail ?? 'Conversation deleted from your inbox.');
+  }, [apiBaseUrl, authenticatedSession?.auth_token, authenticatedSession?.portal]);
+
+  const handleBlockCustomerFromDirectMessages = useCallback(async (customerUsername: string) => {
+    if (!authenticatedSession?.auth_token || authenticatedSession.portal !== 'business') {
+      throw new Error('Only business accounts can block customer direct messages.');
+    }
+
+    const currentAuthToken = authenticatedSession.auth_token;
+    const response = await blockBusinessDirectMessagesForCustomer(apiBaseUrl, currentAuthToken, customerUsername);
+    setAuthenticatedSessionIfCurrentToken(currentAuthToken, response);
+    setProfileMessage(`Direct messaging blocked for ${customerUsername}.`);
+  }, [apiBaseUrl, authenticatedSession?.auth_token, authenticatedSession?.portal]);
+
   function openDirectMessagesScreen() {
     dismissKeyboardForScreenTransition();
     setProfileEntryOffset(0);
@@ -4648,6 +4669,8 @@ function AppScreen() {
             contextListingSlug={selectedPlaceSlug}
             isLandscape={isLandscape}
             onBack={handleBackFromDirectMessages}
+            onBlockCustomerFromDirectMessaging={(customerUsername) => void handleBlockCustomerFromDirectMessages(customerUsername)}
+            onDeleteConversation={(threadId) => void handleDeleteDirectMessageConversation(threadId)}
             onLoadThreadDetail={handleLoadDirectMessageThreadDetail}
             onRefreshThreads={handleRefreshDirectMessageThreads}
             onSendImageMessage={handleSendImageDirectMessage}

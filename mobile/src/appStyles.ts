@@ -1369,6 +1369,7 @@ export const styles = StyleSheet.create({
   },
   directMessageInboxRow: {
     alignItems: 'center',
+    backgroundColor: '#fff7ef',
     borderBottomColor: '#e3ccb1',
     borderBottomWidth: 1,
     flexDirection: 'row',
@@ -1376,6 +1377,33 @@ export const styles = StyleSheet.create({
     minHeight: 68,
     paddingHorizontal: 2,
     paddingVertical: 10,
+  },
+  directMessageInboxActionTray: {
+    alignItems: 'stretch',
+    flexDirection: 'row',
+    minHeight: 68,
+  },
+  directMessageInboxActionButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 68,
+    paddingHorizontal: 14,
+    width: 112,
+  },
+  directMessageInboxActionButtonBlock: {
+    backgroundColor: '#5674ff',
+  },
+  directMessageInboxActionButtonUnblock: {
+    backgroundColor: '#3fa56c',
+  },
+  directMessageInboxActionButtonDelete: {
+    backgroundColor: '#ff5f5f',
+  },
+  directMessageInboxActionButtonText: {
+    color: '#fffaf4',
+    fontSize: 12,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   directMessageInboxAvatar: {
     alignItems: 'center',
@@ -3484,6 +3512,12 @@ export const styles = StyleSheet.create({
     color: '#fffaf4',
     fontSize: 14,
     fontWeight: '800',
+  },
+  directMessageActionModalHandle: {
+    color: '#2d221a',
+    fontSize: 15,
+    fontWeight: '800',
+    marginTop: 12,
   },
   bottomSheetBackdrop: {
     flex: 1,

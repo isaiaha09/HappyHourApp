@@ -7396,6 +7396,109 @@ class ProfileDashboardApiTests(APITestCase):
 		)
 		self.assertEqual(thread_detail_response.status_code, 404)
 
+	def test_business_can_delete_direct_message_thread_without_affecting_customer(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Delete Thread Diner',
+			listing_slug='delete-thread-diner',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='52 Main St',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@deletethread.example.com',
+			work_phone='805-555-4030',
+			employer_address='52 Main St, Ventura, CA 93001',
+			verification_summary='I own the business.',
+			status=BusinessClaim.Status.APPROVED,
+			direct_messaging_enabled=True,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+
+		customer_user = User.objects.create_user(username='delete_thread_customer', email='delete_thread_customer@example.com', password='test-pass-123')
+		customer_token = ProfileAuthToken.objects.create(user=customer_user)
+
+		send_response = self.client.post(
+			reverse('profile-direct-messages'),
+			{
+				'portal': 'customer',
+				'listing_slug': 'delete-thread-diner',
+				'message': 'Starting a direct message thread to delete later.',
+			},
+			format='json',
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+		self.assertEqual(send_response.status_code, 201)
+		thread_id = send_response.data['thread']['id']
+
+		delete_response = self.client.delete(
+			reverse('profile-direct-message-thread-detail', kwargs={'thread_id': thread_id}),
+			{'portal': 'business'},
+			format='json',
+			**self.auth_headers(),
+		)
+		self.assertEqual(delete_response.status_code, 200)
+
+		thread = BusinessDirectMessageThread.objects.get(pk=thread_id)
+		self.assertIsNotNone(thread.business_hidden_at)
+
+		business_threads_response = self.client.get(
+			reverse('profile-direct-messages'),
+			{'portal': 'business'},
+			**self.auth_headers(),
+		)
+		self.assertEqual(business_threads_response.status_code, 200)
+		self.assertEqual(business_threads_response.data['threads'], [])
+
+		business_detail_response = self.client.get(
+			reverse('profile-direct-message-thread-detail', kwargs={'thread_id': thread_id}),
+			{'portal': 'business'},
+			**self.auth_headers(),
+		)
+		self.assertEqual(business_detail_response.status_code, 404)
+
+		customer_threads_response = self.client.get(
+			reverse('profile-direct-messages'),
+			{'portal': 'customer'},
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+		self.assertEqual(customer_threads_response.status_code, 200)
+		self.assertEqual(len(customer_threads_response.data['threads']), 1)
+		self.assertEqual(customer_threads_response.data['threads'][0]['id'], thread_id)
+
+		customer_detail_response = self.client.get(
+			reverse('profile-direct-message-thread-detail', kwargs={'thread_id': thread_id}),
+			{'portal': 'customer'},
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+		self.assertEqual(customer_detail_response.status_code, 200)
+
+		resend_response = self.client.post(
+			reverse('profile-direct-messages'),
+			{
+				'portal': 'customer',
+				'thread_id': thread_id,
+				'message': 'Sending another message after the business deletes it.',
+			},
+			format='json',
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+		self.assertEqual(resend_response.status_code, 201)
+
+		thread.refresh_from_db()
+		self.assertIsNone(thread.business_hidden_at)
+
+		restored_business_threads_response = self.client.get(
+			reverse('profile-direct-messages'),
+			{'portal': 'business'},
+			**self.auth_headers(),
+		)
+		self.assertEqual(restored_business_threads_response.status_code, 200)
+		self.assertEqual(len(restored_business_threads_response.data['threads']), 1)
+
 	@patch('places.views.send_push_notifications_for_direct_message')
 	def test_business_direct_message_allows_text_and_image_and_triggers_push_notification(self, mock_send_dm_push):
 		valid_png_bytes = (

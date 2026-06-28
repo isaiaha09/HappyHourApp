@@ -1033,6 +1033,7 @@ class AccountProfile(models.Model):
 class BusinessDirectMessageThread(models.Model):
 	business_claim = models.ForeignKey(BusinessClaim, related_name='direct_message_threads', on_delete=models.CASCADE)
 	customer = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='direct_message_threads', on_delete=models.CASCADE)
+	business_hidden_at = models.DateTimeField(null=True, blank=True)
 	last_message_at = models.DateTimeField(default=timezone.now)
 	created_at = models.DateTimeField(auto_now_add=True)
 	updated_at = models.DateTimeField(auto_now=True)

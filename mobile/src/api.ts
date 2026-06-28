@@ -211,6 +211,14 @@ export async function fetchDirectMessageThreadDetail(baseUrl: string, authToken:
   );
 }
 
+export async function deleteBusinessDirectMessageThread(baseUrl: string, authToken: string, threadId: number) {
+  return deleteAuthedJson<{ detail: string }>(
+    baseUrl,
+    `/profiles/direct-messages/threads/${threadId}/?portal=business`,
+    authToken,
+  );
+}
+
 export async function blockBusinessDirectMessagesForCustomer(baseUrl: string, authToken: string, customerUsername: string) {
   return postAuthedJson<SignupResponse>(baseUrl, '/profiles/direct-message-blocks/', authToken, {
     portal: 'business',
