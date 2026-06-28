@@ -240,6 +240,31 @@ If a future Render deployment needs full image OCR, the backend runtime will nee
 
 Until then, the current code safely degrades instead of breaking uploads or claim review.
 
+## Monitoring
+
+The backend already exposes a lightweight health endpoint for uptime checks:
+
+- `GET /api/health/`
+- expected response: `200 {"status":"ok","service":"happyhour-backend"}`
+
+Recommended monitoring setup:
+
+- UptimeRobot: point it at the Render backend health URL, for example `https://your-render-service.onrender.com/api/health/`
+- Backend Sentry: set `SENTRY_DSN` in Render to capture Django runtime errors
+- Frontend Sentry: set `NEXT_PUBLIC_SENTRY_DSN` and `SENTRY_DSN` in Vercel to capture browser and Next.js server errors
+
+Optional Sentry sampling environment variables:
+
+- `SENTRY_ENVIRONMENT`
+- `SENTRY_RELEASE`
+- `SENTRY_TRACES_SAMPLE_RATE`
+- `SENTRY_PROFILES_SAMPLE_RATE`
+- `NEXT_PUBLIC_SENTRY_ENVIRONMENT`
+- `NEXT_PUBLIC_SENTRY_RELEASE`
+- `NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE`
+- `NEXT_PUBLIC_SENTRY_REPLAYS_SESSION_SAMPLE_RATE`
+- `NEXT_PUBLIC_SENTRY_REPLAYS_ON_ERROR_SAMPLE_RATE`
+
 ## Migrating Local SQLite Data To Render Postgres
 
 If I want my admin-edited business rows to survive the move from local development to Render Postgres, I need to migrate both:

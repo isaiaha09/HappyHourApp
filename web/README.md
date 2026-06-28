@@ -21,12 +21,34 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 To enable Cloudflare Turnstile on the dashboard login and contact form, set these values in your local environment:
 
 ```bash
-NEXT_PUBLIC_TURNSTILE_SITE_KEY=your_turnstile_site_key
-TURNSTILE_SECRET_KEY=your_turnstile_secret_key
+CLOUDFLARE_TURNSTILE_SITE_KEY=your_turnstile_site_key
+CLOUDFLARE_TURNSTILE_SECRET_KEY=your_turnstile_secret_key
 NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
 ```
 
-`NEXT_PUBLIC_TURNSTILE_SITE_KEY` is used by the browser widget. `TURNSTILE_SECRET_KEY` is used only by the Next.js server routes that verify each token before login or contact form submission is allowed.
+`CLOUDFLARE_TURNSTILE_SITE_KEY` is used by the browser widget. `CLOUDFLARE_TURNSTILE_SECRET_KEY` is used only by the Next.js server routes that verify each token before login or contact form submission is allowed.
+
+Optional Sentry variables for the Vercel deployment:
+
+```bash
+NEXT_PUBLIC_SENTRY_DSN=your_browser_or_fullstack_dsn
+SENTRY_DSN=your_server_dsn
+NEXT_PUBLIC_SENTRY_ENVIRONMENT=production
+SENTRY_ENVIRONMENT=production
+NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE=0.1
+SENTRY_TRACES_SAMPLE_RATE=0.1
+SENTRY_PROFILES_SAMPLE_RATE=0
+NEXT_PUBLIC_SENTRY_REPLAYS_SESSION_SAMPLE_RATE=0
+NEXT_PUBLIC_SENTRY_REPLAYS_ON_ERROR_SAMPLE_RATE=1
+```
+
+If you want Vercel builds to upload source maps to Sentry, also set:
+
+```bash
+SENTRY_AUTH_TOKEN=your_sentry_auth_token
+SENTRY_ORG=your_sentry_org_slug
+SENTRY_PROJECT=your_sentry_project_slug
+```
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
