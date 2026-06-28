@@ -890,12 +890,8 @@ class DirectMessageThreadsView(APIView):
 		)
 		message.full_clean()
 		message.save()
-		thread_update_fields = ['last_message_at', 'updated_at']
-		if portal == 'customer' and thread.business_hidden_at is not None:
-			thread.business_hidden_at = None
-			thread_update_fields.insert(0, 'business_hidden_at')
 		thread.last_message_at = message.created_at
-		thread.save(update_fields=thread_update_fields)
+		thread.save(update_fields=['last_message_at', 'updated_at'])
 		recipient_id = thread.business_claim.claimant_id if request.user.id == thread.customer_id else thread.customer_id
 		send_push_notifications_for_direct_message(
 			[recipient_id],
@@ -925,7 +921,6 @@ class DirectMessageThreadsView(APIView):
 			return list(
 				queryset
 				.filter(
-					business_hidden_at__isnull=True,
 					business_claim__membership__is_active=True,
 					business_claim__membership__user=user,
 				)
@@ -942,7 +937,6 @@ class DirectMessageThreadsView(APIView):
 		if portal == 'business':
 			return queryset.filter(
 				id=thread_id,
-				business_hidden_at__isnull=True,
 				business_claim__membership__is_active=True,
 				business_claim__membership__user=user,
 			).distinct().first()
@@ -964,7 +958,6 @@ class DirectMessageThreadDetailView(APIView):
 				'customer',
 			).filter(
 				id=thread_id,
-				business_hidden_at__isnull=True,
 				business_claim__membership__is_active=True,
 				business_claim__membership__user=request.user,
 			).distinct().first()
@@ -997,16 +990,14 @@ class DirectMessageThreadDetailView(APIView):
 
 		thread = BusinessDirectMessageThread.objects.filter(
 			id=thread_id,
-			business_hidden_at__isnull=True,
 			business_claim__membership__is_active=True,
 			business_claim__membership__user=request.user,
 		).distinct().first()
 		if thread is None:
 			return Response({'detail': 'Direct message thread not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-		thread.business_hidden_at = timezone.now()
-		thread.save(update_fields=['business_hidden_at', 'updated_at'])
-		return Response({'detail': 'Conversation deleted from your inbox.'})
+		thread.delete()
+		return Response({'detail': 'Conversation permanently deleted.'})
 
 
 class DirectMessageBlocksView(APIView):

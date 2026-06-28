@@ -832,7 +832,7 @@ export function DirectMessagesScreen({
 				<Pressable onPress={() => setPendingDeleteThread(null)} style={styles.guestFavoriteModalBackdrop}>
 					<Pressable onPress={() => undefined} style={styles.guestFavoriteModalCard}>
 						<Text style={styles.guestFavoriteModalTitle}>Delete conversation?</Text>
-						<Text style={styles.guestFavoriteModalText}>This only removes the conversation from your business inbox. The customer will still keep their copy.</Text>
+						<Text style={styles.guestFavoriteModalText}>This permanently deletes the full conversation feed for both your business and the customer.</Text>
 						{pendingDeleteThread ? <Text style={styles.directMessageActionModalHandle}>@{pendingDeleteThread.customer_username}</Text> : null}
 						<View style={styles.guestFavoriteModalActions}>
 							<Pressable onPress={() => setPendingDeleteThread(null)} style={styles.guestFavoriteModalSecondaryButton}>
