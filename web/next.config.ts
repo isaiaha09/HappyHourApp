@@ -17,6 +17,5 @@ export default shouldUploadSourceMaps
       project: process.env.SENTRY_PROJECT,
       authToken: process.env.SENTRY_AUTH_TOKEN,
       silent: !process.env.CI,
-      disableLogger: true,
     })
   : nextConfig;
