@@ -36,26 +36,24 @@ import {
   createManualBusinessProfile,
   clearFavoriteBusinessNotification,
   clearFavoriteBusinessNotifications,
+  fetchDirectMessageThreadDetail,
+  fetchDirectMessageThreads,
   deleteProfileAccount,
   disableTwoFactor,
   fetchProfileDashboard,
-  fetchDirectMessageThreadDetail,
-  fetchDirectMessageThreads,
   fetchPlaceDetail,
   fetchPlaces,
   getDefaultApiBaseUrl,
   loginProfile,
   registerPushDevice,
+  sendDirectMessage,
+  sendDirectMessageImage,
   requestPasswordReset,
   requestUsernameReminder,
   resendVerificationCode,
   resendVerificationEmail,
-  sendDirectMessage,
-  sendDirectMessageImage,
   submitSupportRequest,
   toggleFavoriteBusiness,
-  blockBusinessDirectMessagesForCustomer,
-  unblockBusinessDirectMessagesForCustomer,
   updateProfileDashboard,
   updateProfileDashboardWithUploads,
   updateBusinessLocationTrackingPreference,
@@ -78,16 +76,16 @@ import {
   weekdayFilters,
   type WeekdayFilterValue,
 } from './src/browseConfig';
-import { AccountSettingsScreen, BlockedDirectMessageCustomersScreen, BusinessProfileEditorScreen, DashboardScreen, FavoriteBusinessNotificationsScreen, FavoriteBusinessesScreen } from './src/screens/DashboardScreen';
+import { AccountSettingsScreen, BusinessProfileEditorScreen, DashboardScreen, FavoriteBusinessNotificationsScreen, FavoriteBusinessesScreen } from './src/screens/DashboardScreen';
 import { BrowseControls } from './src/screens/BrowseControls';
 import { PhotoLightbox } from './src/components/PhotoLightbox';
-import { PlaceDetailScreen } from './src/screens/PlaceDetailScreen';
 import { DirectMessagesScreen } from './src/screens/DirectMessagesScreen';
+import { PlaceDetailScreen } from './src/screens/PlaceDetailScreen';
 import { SplashScreen } from './src/screens/SplashScreen';
 import { shouldSkipBrowseMapAutoFit } from './src/mapBrowseState';
 import { buildSocialProfilesFromInputs, socialProfilesToInputs } from './src/socialProfiles';
 import { buildDealOverridesFromDeals, buildNormalizedDealOverrides, buildNormalizedOperatingHourOverrides, buildOperatingHourOverridesFromWindows } from './src/businessProfileOverrides';
-import { extractDirectMessageThreadIdFromNotificationData, extractFavoriteBusinessSlugFromNotificationData, registerForPushNotificationsAsync } from './src/pushNotifications';
+import { extractFavoriteBusinessSlugFromNotificationData, registerForPushNotificationsAsync } from './src/pushNotifications';
 import {
   AuthPortalScreen,
   BusinessClaimReviewPendingScreen,
@@ -134,6 +132,9 @@ import type {
   ProfileDashboardUpdateRequest,
   SignupResponse,
   TwoFactorSetupResponse,
+  DirectMessageSendResponse,
+  DirectMessageThread,
+  DirectMessageThreadDetailResponse,
 } from './src/types';
 
 const initialApiBaseUrl = getDefaultApiBaseUrl();
@@ -183,14 +184,14 @@ const cityMapRegions: Record<Exclude<CityFilterValue, 'all'>, Region> = {
 };
 const mobileBusinessVenueType = 'mobile';
 const multipleAreasBusinessCityValue = multipleAreasBusinessCityOption.value;
-type AppScreenMode = 'splash' | 'auth' | 'browse' | 'profiles' | 'favorite-businesses' | 'business-notifications' | 'direct-messages' | 'blocked-direct-message-customers' | 'business-profile-editor' | 'settings' | 'support' | 'privacy-policy' | 'terms-of-service' | 'business-search' | 'business-claim' | 'manual-business-claim' | 'informal-business-claim' | 'email-verification' | 'business-claim-review-pending';
+type AppScreenMode = 'splash' | 'auth' | 'browse' | 'profiles' | 'favorite-businesses' | 'business-notifications' | 'business-profile-editor' | 'settings' | 'support' | 'privacy-policy' | 'terms-of-service' | 'business-search' | 'business-claim' | 'manual-business-claim' | 'informal-business-claim' | 'email-verification' | 'business-claim-review-pending' | 'direct-messages';
 type OnboardingTransitionDirection = 'forward' | 'backward';
 type TransitionAxis = 'x' | 'y';
 type ClaimReturnDestination = 'business-search' | 'browse-map' | 'profiles';
-type MainShellScreen = 'browse' | 'profiles' | 'favorite-businesses' | 'business-notifications' | 'direct-messages' | 'blocked-direct-message-customers' | 'business-profile-editor' | 'settings' | 'support' | 'privacy-policy' | 'terms-of-service';
+type MainShellScreen = 'browse' | 'profiles' | 'business-profile-editor' | 'settings' | 'support' | 'privacy-policy' | 'terms-of-service';
 type MainShellBottomNavItem = 'map' | 'profile' | 'more';
 type ShellFadeScope = 'browse' | 'profile';
-type SettingsSubmittingAction = 'two-factor-begin' | 'two-factor-confirm' | 'two-factor-disable' | 'business-location' | 'direct-messaging' | 'direct-message-block' | 'delete-account' | null;
+type SettingsSubmittingAction = 'two-factor-begin' | 'two-factor-confirm' | 'two-factor-disable' | 'business-location' | 'delete-account' | null;
 type CustomerBusinessClaimNotice = {
   businessName: string;
   locationLabel: string;
@@ -392,10 +393,6 @@ function normalizeBusinessPhotoUpload(asset: ImagePicker.ImagePickerAsset): Busi
   };
 }
 
-function hasDealAttachmentUploads(dealOverrides?: BusinessDealOverride[]) {
-  return (dealOverrides ?? []).some((dealOverride) => Boolean(dealOverride.attachment_upload?.uri));
-}
-
 function mergeBusinessAttachments(current: BusinessAttachmentDraft[], next: BusinessAttachmentDraft[]) {
   const merged = [...current];
   next.forEach((attachment) => {
@@ -463,7 +460,6 @@ function AppScreen() {
   const authIntroOpacity = useRef(new Animated.Value(1)).current;
   const loginSuccessTransition = useRef(new Animated.Value(1)).current;
   const screenTransition = useRef(new Animated.Value(1)).current;
-  const placeDetailPanelFade = useRef(new Animated.Value(0)).current;
   const profileSceneTransition = useRef(new Animated.Value(1)).current;
   const browseSceneTransition = useRef(new Animated.Value(1)).current;
   const browseModeTransition = useRef(new Animated.Value(0)).current;
@@ -507,7 +503,6 @@ function AppScreen() {
   const [places, setPlaces] = useState<PlaceListItem[]>([]);
   const [selectedPlaceSlug, setSelectedPlaceSlug] = useState<string | null>(null);
   const [selectedPlace, setSelectedPlace] = useState<PlaceDetail | null>(null);
-  const [placeDetailPanel, setPlaceDetailPanel] = useState<'detail' | 'direct-messages'>('detail');
   const [selectedMapPlaceKey, setSelectedMapPlaceKey] = useState<string | null>(null);
   const [selectedMapSearchPreviewPlace, setSelectedMapSearchPreviewPlace] = useState<MapPreviewPlace | null>(null);
   const [displayedMapPreviewPlace, setDisplayedMapPreviewPlace] = useState<MapPreviewPlace | null>(null);
@@ -557,9 +552,7 @@ function AppScreen() {
   const [dashboardSubmitting, setDashboardSubmitting] = useState(false);
   const [settingsSubmittingAction, setSettingsSubmittingAction] = useState<SettingsSubmittingAction>(null);
   const [pendingBusinessLocationTrackingEnabled, setPendingBusinessLocationTrackingEnabled] = useState<boolean | null>(null);
-  const [pendingDirectMessagingEnabled, setPendingDirectMessagingEnabled] = useState<boolean | null>(null);
   const [deleteAccountPassword, setDeleteAccountPassword] = useState('');
-  const [directMessageBlockUsername, setDirectMessageBlockUsername] = useState('');
   const [bottomMoreSheetVisible, setBottomMoreSheetVisible] = useState(false);
   const [shellFadeScope, setShellFadeScope] = useState<ShellFadeScope | null>(null);
   const [profilePlaces, setProfilePlaces] = useState<PlaceListItem[]>([]);
@@ -590,8 +583,6 @@ function AppScreen() {
   const authenticatedSessionRef = useRef<SignupResponse | null>(null);
   const businessLocationWatcherRef = useRef<Location.LocationSubscription | null>(null);
   const userLocationWatcherRef = useRef<Location.LocationSubscription | null>(null);
-  const businessLocationToggleRequestIdRef = useRef(0);
-  const directMessagingToggleRequestIdRef = useRef(0);
   const businessLocationLastReportedRef = useRef<string>('');
   const claimPrefillRequestRef = useRef(0);
   const claimPrefillLoadedKeyRef = useRef('');
@@ -680,19 +671,6 @@ function AppScreen() {
   const selectedPlaceIsFavorited = !!(selectedPlace && authenticatedSession?.favorite_businesses?.some((business) => business.slug === selectedPlace.slug));
   const showFavoriteControl = !authenticatedSession || authenticatedSession.portal === 'customer';
   const showClaimBusinessControl = !!selectedPlace && !selectedPlace.is_claimed && (!authenticatedSession || authenticatedSession.portal === 'customer');
-  const showDirectMessageControl = !!(
-    selectedPlace
-    && authenticatedSession?.auth_token
-    && selectedPlace.is_claimed
-    && (
-      (authenticatedSession.portal === 'customer' && selectedPlace.can_direct_message)
-      || (
-        authenticatedSession.portal === 'business'
-        && authenticatedSession.profile_type === 'business'
-        && !!authenticatedSession.approved_businesses?.some((business) => business.slug === selectedPlace.slug)
-      )
-    )
-  );
   const selectedPlaceIsOwnedByAuthenticatedBusiness = !!(
     selectedPlace
     && authenticatedSession?.profile_type === 'business'
@@ -757,7 +735,7 @@ function AppScreen() {
     const authToken = authenticatedSession?.auth_token ?? '';
     const portal = authenticatedSession?.portal;
 
-    if (!authToken || (portal !== 'customer' && portal !== 'business')) {
+    if (!authToken || portal !== 'customer') {
       pushRegistrationAuthTokenRef.current = '';
       return;
     }
@@ -1305,8 +1283,8 @@ function AppScreen() {
     };
   }, [apiBaseUrl]);
   const availableClaimPlaces = consolidatePlacesBySlug(availableProfilePlaces);
-  const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'favorite-businesses', 'business-notifications', 'direct-messages', 'blocked-direct-message-customers', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service', 'business-search', 'business-claim', 'manual-business-claim', 'informal-business-claim', 'email-verification', 'business-claim-review-pending']);
-  const profileStackTransitionScreens = new Set<AppScreenMode>(['profiles', 'favorite-businesses', 'business-notifications', 'direct-messages', 'blocked-direct-message-customers', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service']);
+  const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service', 'business-search', 'business-claim', 'manual-business-claim', 'informal-business-claim', 'email-verification', 'business-claim-review-pending']);
+  const profileStackTransitionScreens = new Set<AppScreenMode>(['profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service']);
   const currentOnboardingScreen = onboardingScreenKeys.has(screenMode) ? screenMode : null;
   const usesOnboardingSlideTransition = currentOnboardingScreen !== null || incomingOnboardingScreen !== null;
   const usesProfileStackSlideTransition = currentOnboardingScreen !== null
@@ -1381,15 +1359,6 @@ function AppScreen() {
         }),
       },
     ],
-  };
-  const placeDetailPanelDetailStyle = {
-    opacity: placeDetailPanelFade.interpolate({
-      inputRange: [0, 1],
-      outputRange: [1, 0],
-    }),
-  };
-  const placeDetailPanelDirectMessageStyle = {
-    opacity: placeDetailPanelFade,
   };
   const guestBrowseOutgoingStyle = {
     transform: [
@@ -1616,13 +1585,6 @@ function AppScreen() {
     Keyboard.dismiss();
   }
 
-  function dismissKeyboardAfterSuccessfulLogin() {
-    dismissKeyboardForScreenTransition();
-    requestAnimationFrame(() => Keyboard.dismiss());
-    setTimeout(() => Keyboard.dismiss(), 80);
-    setTimeout(() => Keyboard.dismiss(), 180);
-  }
-
   useEffect(() => {
     if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
       UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -1827,7 +1789,7 @@ function AppScreen() {
       return;
     }
 
-    const currentBrowseProfileScreen = ['profiles', 'favorite-businesses', 'business-notifications', 'direct-messages', 'blocked-direct-message-customers', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service'].includes(screenMode)
+    const currentBrowseProfileScreen = ['profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service'].includes(screenMode)
       ? 'profiles'
       : 'browse';
 
@@ -1935,6 +1897,7 @@ function AppScreen() {
 
   function startLoginSuccessTransition() {
     dismissKeyboardForScreenTransition();
+    setShouldAutoFocusLoginField(false);
 
     if (onboardingTransitionFrameRef.current !== null) {
       cancelAnimationFrame(onboardingTransitionFrameRef.current);
@@ -2206,7 +2169,7 @@ function AppScreen() {
       setErrorMessage(null);
 
       try {
-        const detail = await fetchPlaceDetail(apiBaseUrl, placeSlug, authenticatedSession?.auth_token);
+        const detail = await fetchPlaceDetail(apiBaseUrl, placeSlug);
         if (!isMounted) {
           return;
         }
@@ -2237,15 +2200,7 @@ function AppScreen() {
     return () => {
       isMounted = false;
     };
-  }, [apiBaseUrl, authenticatedSession?.auth_token, reloadCount, selectedPlaceSlug]);
-
-  useEffect(() => {
-    if (!selectedPlaceSlug) {
-      setPlaceDetailPanel('detail');
-      placeDetailPanelFade.stopAnimation();
-      placeDetailPanelFade.setValue(0);
-    }
-  }, [placeDetailPanelFade, selectedPlaceSlug]);
+  }, [apiBaseUrl, reloadCount, selectedPlaceSlug]);
 
   useEffect(() => {
     const showSubscription = Keyboard.addListener('keyboardDidShow', (event) => {
@@ -2731,7 +2686,7 @@ function AppScreen() {
     animateShellFade('browse');
   }
 
-  function fadeIntoProfileScreen(nextScreen: 'profiles' | 'business-profile-editor' | 'direct-messages') {
+  function fadeIntoProfileScreen(nextScreen: 'profiles' | 'business-profile-editor') {
     dismissKeyboardForScreenTransition();
     setSelectedPlaceSlug(null);
     setProfileEntryOffset(0);
@@ -2745,6 +2700,71 @@ function AppScreen() {
         useNativeDriver: true,
       }).start();
     });
+  }
+
+  const handleRefreshDirectMessageThreads = useCallback(async () => {
+    if (!authenticatedSession?.auth_token) {
+      return [] as DirectMessageThread[];
+    }
+
+    return fetchDirectMessageThreads(apiBaseUrl, authenticatedSession.auth_token, authenticatedSession.portal);
+  }, [apiBaseUrl, authenticatedSession?.auth_token, authenticatedSession?.portal]);
+
+  const handleLoadDirectMessageThreadDetail = useCallback(async (threadId: number) => {
+    if (!authenticatedSession?.auth_token) {
+      throw new Error('Sign in to load direct messages.');
+    }
+
+    return fetchDirectMessageThreadDetail(apiBaseUrl, authenticatedSession.auth_token, threadId, authenticatedSession.portal);
+  }, [apiBaseUrl, authenticatedSession?.auth_token, authenticatedSession?.portal]);
+
+  const handleSendTextDirectMessage = useCallback(async (payload: { listingSlug?: string; message: string; threadId?: number }) => {
+    if (!authenticatedSession?.auth_token) {
+      throw new Error('Sign in to send direct messages.');
+    }
+
+    return sendDirectMessage(apiBaseUrl, authenticatedSession.auth_token, {
+      portal: authenticatedSession.portal,
+      listing_slug: payload.listingSlug,
+      thread_id: payload.threadId,
+      message: payload.message,
+    });
+  }, [apiBaseUrl, authenticatedSession?.auth_token, authenticatedSession?.portal]);
+
+  const handleSendImageDirectMessage = useCallback(async (threadId: number, image: BusinessAttachmentDraft) => {
+    if (!authenticatedSession?.auth_token) {
+      throw new Error('Sign in to send direct messages.');
+    }
+
+    if (authenticatedSession.portal !== 'business') {
+      throw new Error('Only business accounts can send direct message images.');
+    }
+
+    return sendDirectMessageImage(apiBaseUrl, authenticatedSession.auth_token, {
+      portal: 'business',
+      thread_id: threadId,
+      image,
+    });
+  }, [apiBaseUrl, authenticatedSession?.auth_token, authenticatedSession?.portal]);
+
+  function openDirectMessagesScreen() {
+    dismissKeyboardForScreenTransition();
+    setProfileEntryOffset(0);
+    setScreenMode('direct-messages');
+    profileSceneTransition.stopAnimation();
+    profileSceneTransition.setValue(0);
+    requestAnimationFrame(() => {
+      Animated.timing(profileSceneTransition, {
+        duration: 220,
+        toValue: 1,
+        useNativeDriver: true,
+      }).start();
+    });
+  }
+
+  function handleBackFromDirectMessages() {
+    dismissKeyboardForScreenTransition();
+    setScreenMode(selectedPlaceSlug ? 'browse' : 'profiles');
   }
 
   function resetDirectClaimState() {
@@ -2834,9 +2854,6 @@ function AppScreen() {
     Keyboard.dismiss();
     setErrorMessage(null);
     setDetailLoading(true);
-    setPlaceDetailPanel('detail');
-    placeDetailPanelFade.stopAnimation();
-    placeDetailPanelFade.setValue(0);
     setSelectedMapPlaceKey(null);
     setSelectedLocationId(null);
     setSelectedPlace(null);
@@ -2850,17 +2867,7 @@ function AppScreen() {
     }
 
     lastHandledNotificationResponseIdRef.current = responseId;
-    const notificationData = response.notification.request.content.data;
-    const threadId = extractDirectMessageThreadIdFromNotificationData(notificationData);
-    const slug = extractFavoriteBusinessSlugFromNotificationData(notificationData);
-    if (threadId && slug) {
-      openFavoriteBusinessFromNotificationRef.current(slug);
-      setPlaceDetailPanel('direct-messages');
-      placeDetailPanelFade.stopAnimation();
-      placeDetailPanelFade.setValue(1);
-      return;
-    }
-
+    const slug = extractFavoriteBusinessSlugFromNotificationData(response.notification.request.content.data);
     if (!slug) {
       return;
     }
@@ -3119,9 +3126,6 @@ function AppScreen() {
       setProfileErrorMessage('Sign in again before clearing business notifications.');
       return;
     }
-    if (dashboardSubmitting) {
-      return;
-    }
 
     setDashboardSubmitting(true);
     setProfileErrorMessage(null);
@@ -3141,9 +3145,6 @@ function AppScreen() {
   async function handleClearFavoriteBusinessNotification(notificationId: number) {
     if (!authenticatedSession?.auth_token) {
       setProfileErrorMessage('Sign in again before clearing business notifications.');
-      return;
-    }
-    if (dashboardSubmitting) {
       return;
     }
 
@@ -3166,19 +3167,6 @@ function AppScreen() {
     dismissKeyboardForScreenTransition();
     setProfileErrorMessage(null);
     navigateScreen('profiles', 'backward');
-  }
-
-  function handleBackFromDirectMessages() {
-    dismissKeyboardForScreenTransition();
-    setProfileErrorMessage(null);
-    fadeIntoProfileScreen('profiles');
-  }
-
-  function handleOpenDirectMessagesFromDashboard() {
-    dismissKeyboardForScreenTransition();
-    setProfileErrorMessage(null);
-    setProfileMessage(null);
-    fadeIntoProfileScreen('direct-messages');
   }
 
   function handleBackFromSupport() {
@@ -3241,225 +3229,6 @@ function AppScreen() {
     return response.detail;
   }
 
-  function handleOpenDirectMessagesFromPlaceDetail() {
-    if (!showDirectMessageControl) {
-      return;
-    }
-
-    if (authenticatedSession?.portal === 'business') {
-      handleOpenDirectMessagesFromDashboard();
-      return;
-    }
-
-    if (placeDetailPanel === 'direct-messages') {
-      return;
-    }
-
-    dismissKeyboardForScreenTransition();
-    setPlaceDetailPanel('direct-messages');
-    placeDetailPanelFade.stopAnimation();
-    Animated.timing(placeDetailPanelFade, {
-      duration: 180,
-      easing: Easing.out(Easing.cubic),
-      toValue: 1,
-      useNativeDriver: true,
-    }).start();
-  }
-
-  function handleBackFromDirectMessagesToPlaceDetail() {
-    if (placeDetailPanel === 'detail') {
-      return;
-    }
-
-    dismissKeyboardForScreenTransition();
-    setPlaceDetailPanel('detail');
-    placeDetailPanelFade.stopAnimation();
-    Animated.timing(placeDetailPanelFade, {
-      duration: 180,
-      easing: Easing.out(Easing.cubic),
-      toValue: 0,
-      useNativeDriver: true,
-    }).start();
-  }
-
-  async function handleRefreshDirectMessageThreads() {
-    if (!authenticatedSession?.auth_token) {
-      throw new Error('Sign in to view direct messages.');
-    }
-    return fetchDirectMessageThreads(apiBaseUrl, authenticatedSession.auth_token, authenticatedSession.portal);
-  }
-
-  async function handleLoadDirectMessageThreadDetail(threadId: number) {
-    if (!authenticatedSession?.auth_token) {
-      throw new Error('Sign in to view direct messages.');
-    }
-    return fetchDirectMessageThreadDetail(apiBaseUrl, authenticatedSession.auth_token, threadId, authenticatedSession.portal);
-  }
-
-  async function handleSendTextDirectMessage(payload: { listingSlug?: string; message: string; threadId?: number }) {
-    if (!authenticatedSession?.auth_token) {
-      throw new Error('Sign in to send direct messages.');
-    }
-
-    const normalizedMessage = payload.message.trim();
-    if (!normalizedMessage.length) {
-      throw new Error('Enter a direct message before sending.');
-    }
-
-    return sendDirectMessage(apiBaseUrl, authenticatedSession.auth_token, {
-      portal: authenticatedSession.portal,
-      listing_slug: payload.listingSlug,
-      thread_id: payload.threadId,
-      message: normalizedMessage,
-    });
-  }
-
-  async function handleSendImageDirectMessage(threadId: number, image: BusinessAttachmentDraft) {
-    if (!authenticatedSession?.auth_token || authenticatedSession.portal !== 'business') {
-      throw new Error('Sign in with a business account to send photo direct messages.');
-    }
-
-    return sendDirectMessageImage(apiBaseUrl, authenticatedSession.auth_token, {
-      portal: 'business',
-      thread_id: threadId,
-      image,
-    });
-  }
-
-  function buildBusinessDashboardIdentityPayload() {
-    return {
-      portal: 'business' as const,
-      username: authenticatedSession?.username ?? '',
-      email: authenticatedSession?.email ?? '',
-      first_name: authenticatedSession?.first_name ?? '',
-      last_name: authenticatedSession?.last_name ?? '',
-    };
-  }
-
-  async function handleToggleDirectMessaging(enabled: boolean) {
-    if (!authenticatedSession?.auth_token || authenticatedSession.portal !== 'business') {
-      return;
-    }
-
-    const currentAuthToken = authenticatedSession.auth_token;
-    const previousDirectMessagingValue = pendingDirectMessagingEnabled ?? !!authenticatedSession.direct_messaging_enabled;
-    const requestId = directMessagingToggleRequestIdRef.current + 1;
-    directMessagingToggleRequestIdRef.current = requestId;
-
-    setPendingDirectMessagingEnabled(enabled);
-    setProfileErrorMessage(null);
-
-    try {
-      const response = await updateProfileDashboard(apiBaseUrl, currentAuthToken, {
-        ...buildBusinessDashboardIdentityPayload(),
-        direct_messaging_enabled: enabled,
-      });
-
-      if (requestId !== directMessagingToggleRequestIdRef.current) {
-        return;
-      }
-
-      setAuthenticatedSessionIfCurrentToken(currentAuthToken, response);
-      setProfileMessage(enabled ? 'Direct messaging turned on.' : 'Direct messaging turned off.');
-    } catch (error) {
-      if (requestId !== directMessagingToggleRequestIdRef.current) {
-        return;
-      }
-
-      setPendingDirectMessagingEnabled(previousDirectMessagingValue);
-      setProfileErrorMessage(getErrorMessage(error));
-    } finally {
-      if (requestId !== directMessagingToggleRequestIdRef.current) {
-        return;
-      }
-
-      setPendingDirectMessagingEnabled(null);
-    }
-  }
-
-  async function handleBlockCustomerFromDirectMessaging() {
-    if (!authenticatedSession?.auth_token || authenticatedSession.portal !== 'business') {
-      return;
-    }
-
-    const normalizedUsername = directMessageBlockUsername.trim();
-    if (!normalizedUsername.length) {
-      setProfileErrorMessage('Enter a customer username to block direct messaging.');
-      return;
-    }
-
-    setSettingsSubmittingAction('direct-message-block');
-    setProfileErrorMessage(null);
-
-    try {
-      const response = await blockBusinessDirectMessagesForCustomer(apiBaseUrl, authenticatedSession.auth_token, normalizedUsername);
-      setAuthenticatedSession(response);
-      setDirectMessageBlockUsername('');
-      setProfileMessage(response.detail ?? `Direct messaging blocked for ${normalizedUsername}.`);
-    } catch (error) {
-      setProfileErrorMessage(getErrorMessage(error));
-    } finally {
-      setSettingsSubmittingAction(null);
-    }
-  }
-
-  async function handleBlockCustomersFromDirectMessaging(usernames: string[]) {
-    if (!authenticatedSession?.auth_token || authenticatedSession.portal !== 'business') {
-      return false;
-    }
-
-    const normalizedUsernames = Array.from(new Set(usernames.map((username) => username.trim()).filter(Boolean)));
-    if (!normalizedUsernames.length) {
-      setProfileErrorMessage('Select at least one customer account to block direct messaging.');
-      return false;
-    }
-
-    setSettingsSubmittingAction('direct-message-block');
-    setProfileErrorMessage(null);
-
-    try {
-      let latestResponse: SignupResponse | null = null;
-      for (const username of normalizedUsernames) {
-        latestResponse = await blockBusinessDirectMessagesForCustomer(apiBaseUrl, authenticatedSession.auth_token, username);
-      }
-
-      if (latestResponse) {
-        setAuthenticatedSession(latestResponse);
-      }
-      setDirectMessageBlockUsername('');
-      setProfileMessage(
-        normalizedUsernames.length === 1
-          ? `Direct messaging blocked for ${normalizedUsernames[0]}.`
-          : `Direct messaging blocked for ${normalizedUsernames.length} customer accounts.`,
-      );
-      return true;
-    } catch (error) {
-      setProfileErrorMessage(getErrorMessage(error));
-      return false;
-    } finally {
-      setSettingsSubmittingAction(null);
-    }
-  }
-
-  async function handleUnblockCustomerFromDirectMessaging(blockId: number) {
-    if (!authenticatedSession?.auth_token || authenticatedSession.portal !== 'business') {
-      return;
-    }
-
-    setSettingsSubmittingAction('direct-message-block');
-    setProfileErrorMessage(null);
-
-    try {
-      const response = await unblockBusinessDirectMessagesForCustomer(apiBaseUrl, authenticatedSession.auth_token, blockId);
-      setAuthenticatedSession(response);
-      setProfileMessage(response.detail ?? 'Direct message block removed.');
-    } catch (error) {
-      setProfileErrorMessage(getErrorMessage(error));
-    } finally {
-      setSettingsSubmittingAction(null);
-    }
-  }
-
   function handleOpenSettings() {
     dismissKeyboardForScreenTransition();
     setProfileErrorMessage(null);
@@ -3471,12 +3240,6 @@ function AppScreen() {
     dismissKeyboardForScreenTransition();
     setProfileErrorMessage(null);
     navigateScreen('profiles', 'backward');
-  }
-
-  function handleOpenBlockedDirectMessageCustomers() {
-    dismissKeyboardForScreenTransition();
-    setProfileErrorMessage(null);
-    navigateScreen('blocked-direct-message-customers', 'forward');
   }
 
   function handleOpenPrivacyPolicy() {
@@ -3541,8 +3304,8 @@ function AppScreen() {
     setSelectedLocationId(null);
     setSelectedMapPlaceKey(null);
 
-    if (['favorite-businesses', 'business-notifications', 'direct-messages', 'blocked-direct-message-customers', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service'].includes(screenMode)) {
-      fadeIntoProfileScreen('profiles');
+    if (['favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service'].includes(screenMode)) {
+      navigateScreen('profiles', 'backward');
       return;
     }
 
@@ -3564,9 +3327,6 @@ function AppScreen() {
   }
 
   function clearSelectedPlaceRoute() {
-    setPlaceDetailPanel('detail');
-    placeDetailPanelFade.stopAnimation();
-    placeDetailPanelFade.setValue(0);
     setSelectedPlaceSlug(null);
     setSelectedPlace(null);
     setSelectedLocationId(null);
@@ -3619,22 +3379,6 @@ function AppScreen() {
     }
 
     closeBottomMoreSheet(() => navigateScreen('business-notifications', 'forward'));
-  }
-
-  function handleBottomMenuOpenDirectMessages() {
-    if (screenMode === 'direct-messages') {
-      closeBottomMoreSheet();
-      return;
-    }
-
-    clearSelectedPlaceRoute();
-
-    if (screenMode === 'browse') {
-      closeBottomMoreSheet(() => navigateBrowseProfileTransition('profiles', 'direct-messages'));
-      return;
-    }
-
-    closeBottomMoreSheet(() => fadeIntoProfileScreen('direct-messages'));
   }
 
   function handleBottomMenuOpenSupport() {
@@ -3922,11 +3666,9 @@ function AppScreen() {
       setAuthenticatedSession(response);
       setPendingEmailVerification(null);
       setAuthMessage(null);
-      setShouldAutoFocusLoginField(false);
       setShowLoginTwoFactorCodeField(false);
       setLoginForm(initialLoginFormState);
       setProfileMessage('Signed in successfully.');
-      dismissKeyboardAfterSuccessfulLogin();
       startLoginSuccessTransition();
     } catch (error) {
       const message = getErrorMessage(error);
@@ -4335,20 +4077,13 @@ function AppScreen() {
 
     const currentAuthToken = authenticatedSession.auth_token;
     const approvedBusinessSlugs = new Set((authenticatedSession.approved_businesses ?? []).map((business) => business.slug));
-    const previousBusinessLocationValue = pendingBusinessLocationTrackingEnabled ?? !!authenticatedSession.business_location_tracking_enabled;
-    const requestId = businessLocationToggleRequestIdRef.current + 1;
-    businessLocationToggleRequestIdRef.current = requestId;
 
+    setSettingsSubmittingAction('business-location');
     setPendingBusinessLocationTrackingEnabled(enabled);
     setProfileErrorMessage(null);
 
     try {
       const response = await updateBusinessLocationTrackingPreference(apiBaseUrl, currentAuthToken, { enabled });
-
-      if (requestId !== businessLocationToggleRequestIdRef.current) {
-        return;
-      }
-
       setAuthenticatedSessionIfCurrentToken(currentAuthToken, response);
       if (!enabled && approvedBusinessSlugs.size > 0) {
         setPlaces((current) => current.map((place) => clearTrackedCoordinatesForBusiness(place, approvedBusinessSlugs)));
@@ -4359,18 +4094,10 @@ function AppScreen() {
         ? 'Business location services turned on.'
         : 'Business location services turned off. Live pin updates have stopped.');
     } catch (error) {
-      if (requestId !== businessLocationToggleRequestIdRef.current) {
-        return;
-      }
-
-      setPendingBusinessLocationTrackingEnabled(previousBusinessLocationValue);
       setProfileErrorMessage(getErrorMessage(error));
     } finally {
-      if (requestId !== businessLocationToggleRequestIdRef.current) {
-        return;
-      }
-
       setPendingBusinessLocationTrackingEnabled(null);
+      setSettingsSubmittingAction(null);
     }
   }
 
@@ -4385,7 +4112,7 @@ function AppScreen() {
     setProfileErrorMessage(null);
 
     try {
-      const response = (photoUploads.length || hasDealAttachmentUploads(payload.deal_overrides))
+      const response = photoUploads.length
         ? await updateProfileDashboardWithUploads(apiBaseUrl, currentAuthToken, payload, photoUploads)
         : await updateProfileDashboard(apiBaseUrl, currentAuthToken, payload);
       setAuthenticatedSessionIfCurrentToken(currentAuthToken, response);
@@ -4429,7 +4156,6 @@ function AppScreen() {
       setAuthMessage(response.detail || 'Your account has been permanently deleted.');
       setShouldAutoFocusLoginField(false);
       setDeleteAccountPassword('');
-      setDirectMessageBlockUsername('');
       setTwoFactorSetup(null);
       setTwoFactorSetupCode('');
       setTwoFactorDisableCode('');
@@ -4447,7 +4173,6 @@ function AppScreen() {
     setAuthMessage('You have been signed out.');
     setShouldAutoFocusLoginField(false);
     setDeleteAccountPassword('');
-    setDirectMessageBlockUsername('');
     setTwoFactorSetup(null);
     setTwoFactorSetupCode('');
     setTwoFactorDisableCode('');
@@ -4685,43 +4410,6 @@ function AppScreen() {
       );
     }
 
-    if (targetScreen === 'direct-messages' && profileSession) {
-      return (
-        <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
-          <DirectMessagesScreen
-            backButtonLabel="Back to Profile"
-            contextBusinessName={null}
-            contextListingSlug={null}
-            isLandscape={isLandscape}
-            onBack={handleBackFromDirectMessages}
-            onLoadThreadDetail={handleLoadDirectMessageThreadDetail}
-            onRefreshThreads={handleRefreshDirectMessageThreads}
-            onSendImageMessage={handleSendImageDirectMessage}
-            onSendTextMessage={handleSendTextDirectMessage}
-            session={profileSession}
-          />
-        </SafeAreaView>
-      );
-    }
-
-    if (targetScreen === 'blocked-direct-message-customers' && profileSession?.portal === 'business') {
-      return (
-        <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
-          <BlockedDirectMessageCustomersScreen
-            errorMessage={profileErrorMessage}
-            isLandscape={isLandscape}
-            message={profileMessage}
-            onBack={handleBackToSettings}
-            onConfirmBlockedDirectMessageCustomers={handleBlockCustomersFromDirectMessaging}
-            onLoadExistingDirectMessageCustomers={() => handleRefreshDirectMessageThreads()}
-            onUnblockCustomerFromDirectMessaging={(blockId) => void handleUnblockCustomerFromDirectMessaging(blockId)}
-            session={profileSession}
-            settingsSubmittingAction={settingsSubmittingAction}
-          />
-        </SafeAreaView>
-      );
-    }
-
     if (targetScreen === 'support' && profileSession) {
       return (
         <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
@@ -4761,14 +4449,11 @@ function AppScreen() {
         <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
           <AccountSettingsScreen
             deleteAccountPassword={deleteAccountPassword}
-            directMessageBlockUsername={directMessageBlockUsername}
             errorMessage={profileErrorMessage}
             isLandscape={isLandscape}
             message={profileMessage}
             onBack={handleBackFromSettings}
             onBeginTwoFactorSetup={() => void handleBeginTwoFactorSetup()}
-            onBlockCustomerFromDirectMessaging={() => void handleBlockCustomerFromDirectMessaging()}
-            onChangeDirectMessageBlockUsername={setDirectMessageBlockUsername}
             onChangeDeleteAccountPassword={setDeleteAccountPassword}
             onChangeTwoFactorDisableCode={setTwoFactorDisableCode}
             onChangeTwoFactorSetupCode={setTwoFactorSetupCode}
@@ -4776,15 +4461,11 @@ function AppScreen() {
             onDisableTwoFactor={() => void handleDisableTwoFactor()}
             onDeleteAccount={handleDeleteAccount}
             onLogout={handleLogout}
-            onOpenBlockedDirectMessageCustomers={handleOpenBlockedDirectMessageCustomers}
             onToggleBusinessLocationTracking={(value) => void handleToggleBusinessLocationTracking(value)}
-            onToggleDirectMessaging={(value) => void handleToggleDirectMessaging(value)}
-            onUnblockCustomerFromDirectMessaging={(blockId) => void handleUnblockCustomerFromDirectMessaging(blockId)}
             onOpenContactSupport={handleOpenSupport}
             onOpenPrivacyPolicy={handleOpenPrivacyPolicy}
             onOpenTermsOfService={handleOpenTermsOfService}
             pendingBusinessLocationTrackingEnabled={pendingBusinessLocationTrackingEnabled}
-            pendingDirectMessagingEnabled={pendingDirectMessagingEnabled}
             session={profileSession}
             settingsSubmittingAction={settingsSubmittingAction}
             twoFactorDisableCode={twoFactorDisableCode}
@@ -4812,6 +4493,25 @@ function AppScreen() {
       );
     }
 
+    if (targetScreen === 'direct-messages' && profileSession) {
+      return (
+        <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
+          <DirectMessagesScreen
+            backButtonLabel={selectedPlaceSlug ? 'Back to Profile' : 'Back'}
+            contextBusinessName={selectedPlace?.name ?? null}
+            contextListingSlug={selectedPlaceSlug}
+            isLandscape={isLandscape}
+            onBack={handleBackFromDirectMessages}
+            onLoadThreadDetail={handleLoadDirectMessageThreadDetail}
+            onRefreshThreads={handleRefreshDirectMessageThreads}
+            onSendImageMessage={handleSendImageDirectMessage}
+            onSendTextMessage={handleSendTextDirectMessage}
+            session={profileSession}
+          />
+        </SafeAreaView>
+      );
+    }
+
     return (
       <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
         {profileSession ? (
@@ -4827,7 +4527,7 @@ function AppScreen() {
             onOpenFavoriteBusiness={handleOpenFavoriteBusiness}
             onOpenFavoriteBusinesses={handleOpenFavoriteBusinesses}
             onOpenBusinessNotifications={handleOpenBusinessNotifications}
-            onOpenDirectMessages={handleOpenDirectMessagesFromDashboard}
+            onOpenDirectMessages={openDirectMessagesScreen}
             onOpenPlaces={handleContinueToApp}
             onOpenSettings={handleOpenSettings}
             onRefresh={() => void refreshDashboard()}
@@ -4876,17 +4576,6 @@ function AppScreen() {
     );
   }
 
-  function renderAuthenticatedProfilesLandingShell() {
-    return (
-      <View style={styles.fullScreenRoot}>
-        <View style={styles.screenTransitionLayer}>
-          {renderProfilesScreen(undefined, 'profiles')}
-        </View>
-        {renderBottomNav({ guest: false })}
-      </View>
-    );
-  }
-
   function renderBottomNavIcon(icon: MainShellBottomNavItem, active: boolean) {
     switch (icon) {
       case 'map':
@@ -4920,7 +4609,7 @@ function AppScreen() {
   function renderBottomNav(options: { guest: boolean }) {
     let activeItem: MainShellBottomNavItem = 'map';
     if (!options.guest) {
-      if (['settings', 'support', 'privacy-policy', 'terms-of-service', 'favorite-businesses', 'business-notifications', 'direct-messages', 'blocked-direct-message-customers'].includes(screenMode)) {
+      if (['settings', 'support', 'privacy-policy', 'terms-of-service', 'favorite-businesses', 'business-notifications'].includes(screenMode)) {
         activeItem = 'more';
       } else if (screenMode !== 'browse') {
         activeItem = 'profile';
@@ -5036,7 +4725,7 @@ function AppScreen() {
       && profileStackTransitionScreens.has(currentOnboardingScreen)
       && profileStackTransitionScreens.has(incomingOnboardingScreen);
     const transitionActive = usesBrowseProfileSlideTransition || profileStackTransitionActive;
-    const showingProfile = ['profiles', 'favorite-businesses', 'business-notifications', 'direct-messages', 'blocked-direct-message-customers', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service'].includes(screenMode);
+    const showingProfile = ['profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service', 'direct-messages'].includes(screenMode);
     const incomingProfileScreen = transitionActive && incomingBrowseProfileScreen === 'profiles'
       ? incomingBrowseProfileTargetScreen ?? 'profiles'
       : undefined;
@@ -5137,10 +4826,6 @@ function AppScreen() {
         return renderProfilesScreen(profileSessionOverride, 'favorite-businesses');
       case 'business-notifications':
         return renderProfilesScreen(profileSessionOverride, 'business-notifications');
-      case 'direct-messages':
-        return renderProfilesScreen(profileSessionOverride, 'direct-messages');
-      case 'blocked-direct-message-customers':
-        return renderProfilesScreen(profileSessionOverride, 'blocked-direct-message-customers');
       case 'business-profile-editor':
         return renderProfilesScreen(profileSessionOverride, 'business-profile-editor');
       case 'settings':
@@ -5754,12 +5439,17 @@ function AppScreen() {
       ) : null}
       {showLoginSuccessTransition ? (
         <View style={styles.onboardingTransitionRoot}>
-          {renderAuthenticatedProfilesLandingShell()}
+          <View style={styles.screenTransitionLayer}>
+            {renderOnboardingScreen('profiles')}
+          </View>
           <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, loginSuccessOutgoingStyle]}>
             {renderOnboardingScreen('auth')}
           </Animated.View>
           <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, loginSuccessIncomingStyle]}>
-            {renderAuthenticatedProfilesLandingShell()}
+            <View style={styles.fullScreenRoot}>
+              {renderOnboardingScreen('profiles')}
+              {renderBottomNav({ guest: false })}
+            </View>
           </Animated.View>
         </View>
       ) : showLogoutTransition ? (
@@ -5774,68 +5464,40 @@ function AppScreen() {
             {renderOnboardingScreen('auth')}
           </Animated.View>
         </View>
-      ) : authenticatedSession && !selectedPlaceSlug && (['profiles', 'favorite-businesses', 'business-notifications', 'direct-messages', 'blocked-direct-message-customers', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service', 'browse'].includes(screenMode) || usesBrowseProfileSlideTransition || usesProfileStackSlideTransition) ? (
+      ) : authenticatedSession && (screenMode === 'direct-messages' || (!selectedPlaceSlug && (['profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'support', 'privacy-policy', 'terms-of-service', 'browse'].includes(screenMode) || usesBrowseProfileSlideTransition || usesProfileStackSlideTransition))) ? (
         renderAuthenticatedMainShell()
       ) : !authenticatedSession && !selectedPlaceSlug && (screenMode === 'browse' || currentOnboardingScreen !== null || usesGuestBrowseSlideTransition || incomingOnboardingScreen !== null || returningToSplashScreen !== null) ? (
         renderGuestMainShell()
       ) : selectedPlaceSlug ? (
         <View style={styles.fullScreenRoot}>
           <SafeAreaView edges={['left', 'right', 'bottom']} style={styles.safeArea}>
-            <View style={styles.screenTransitionLayer}>
-              <Animated.View
-                pointerEvents={placeDetailPanel === 'detail' ? 'auto' : 'none'}
-                style={[styles.screenTransitionLayerAbsolute, placeDetailPanelDetailStyle]}
-              >
-                <PlaceDetailScreen
-                  backButtonLabel={screenMode === 'profiles' || screenMode === 'business-profile-editor' ? 'Back to Profile' : 'Back to Places'}
-                  canSubmitPlaceAccuracyReport={!!authenticatedSession?.auth_token}
-                  detailLoading={detailLoading}
-                  errorMessage={errorMessage}
-                  favoriteHelperText={favoriteHelperText}
-                  favoriteSubmitting={favoriteSubmitting}
-                  isLandscape={isLandscape}
-                  isFavorited={selectedPlaceIsFavorited}
-                  onBack={handleBackToBrowse}
-                  onClaimBusiness={handleOpenBusinessClaimFromPlaceDetail}
-                  onOpenDirectMessages={handleOpenDirectMessagesFromPlaceDetail}
-                  onEditBusinessProfile={handleOpenBusinessProfileEditor}
-                  onRequirePlaceAccuracyAccount={() => setShowGuestAccuracyPrompt(true)}
-                  onSelectLocation={setSelectedLocationId}
-                  onSubmitPlaceAccuracyReport={handleSubmitPlaceAccuracyReport}
-                  onToggleFavorite={() => void handleToggleFavoriteBusiness()}
-                  showClaimBusinessControl={showClaimBusinessControl}
-                  showDirectMessageControl={showDirectMessageControl}
-                  showEditBusinessProfileControl={selectedPlaceIsOwnedByAuthenticatedBusiness}
-                  showFavoriteControl={showFavoriteControl}
-                  distanceLabel={selectedPlaceDistanceLabel}
-                  selectedPlace={selectedPlace}
-                  selectedPlaceDeals={selectedPlaceDeals}
-                  selectedPlaceLocation={selectedPlaceLocation}
-                  selectedPlaceOperatingHours={selectedPlaceOperatingHours}
-                />
-              </Animated.View>
-              <Animated.View
-                pointerEvents={placeDetailPanel === 'direct-messages' ? 'auto' : 'none'}
-                style={[styles.screenTransitionLayerAbsolute, placeDetailPanelDirectMessageStyle]}
-              >
-                {authenticatedSession ? (
-                  <DirectMessagesScreen
-                    backButtonLabel="Back to Profile"
-                    contextBusinessName={authenticatedSession.portal === 'customer' ? (selectedPlace?.name ?? null) : null}
-                    contextListingSlug={authenticatedSession.portal === 'customer' ? (selectedPlace?.slug ?? null) : null}
-                    isLandscape={isLandscape}
-                    onBack={handleBackFromDirectMessagesToPlaceDetail}
-                    onLoadThreadDetail={handleLoadDirectMessageThreadDetail}
-                    onRefreshThreads={handleRefreshDirectMessageThreads}
-                    onSendImageMessage={handleSendImageDirectMessage}
-                    onSendTextMessage={handleSendTextDirectMessage}
-                    session={authenticatedSession}
-                  />
-                ) : (
-                  <View style={styles.detailScreenRoot} />
-                )}
-              </Animated.View>
-            </View>
+            <PlaceDetailScreen
+              backButtonLabel={screenMode === 'profiles' || screenMode === 'business-profile-editor' ? 'Back to Profile' : 'Back to Places'}
+              canSubmitPlaceAccuracyReport={!!authenticatedSession?.auth_token}
+              detailLoading={detailLoading}
+              errorMessage={errorMessage}
+              favoriteHelperText={favoriteHelperText}
+              favoriteSubmitting={favoriteSubmitting}
+              isLandscape={isLandscape}
+              isFavorited={selectedPlaceIsFavorited}
+              onBack={handleBackToBrowse}
+              onClaimBusiness={handleOpenBusinessClaimFromPlaceDetail}
+              onEditBusinessProfile={handleOpenBusinessProfileEditor}
+              onOpenDirectMessages={openDirectMessagesScreen}
+              onRequirePlaceAccuracyAccount={() => setShowGuestAccuracyPrompt(true)}
+              onSelectLocation={setSelectedLocationId}
+              onSubmitPlaceAccuracyReport={(subject, message) => handleSubmitPlaceAccuracyReport(subject, message)}
+              onToggleFavorite={() => void handleToggleFavoriteBusiness()}
+              showClaimBusinessControl={showClaimBusinessControl}
+              showDirectMessageControl={!!authenticatedSession}
+              showEditBusinessProfileControl={selectedPlaceIsOwnedByAuthenticatedBusiness}
+              showFavoriteControl={showFavoriteControl}
+              distanceLabel={selectedPlaceDistanceLabel}
+              selectedPlace={selectedPlace}
+              selectedPlaceDeals={selectedPlaceDeals}
+              selectedPlaceLocation={selectedPlaceLocation}
+              selectedPlaceOperatingHours={selectedPlaceOperatingHours}
+            />
           </SafeAreaView>
           {authenticatedSession ? renderBottomNav({ guest: false }) : null}
         </View>
@@ -5902,9 +5564,6 @@ function AppScreen() {
                   </Pressable>
                 </>
               ) : null}
-              <Pressable onPress={handleBottomMenuOpenDirectMessages} style={styles.bottomSheetActionButton}>
-                <Text style={styles.bottomSheetActionText}>Direct Messages</Text>
-              </Pressable>
               <Pressable onPress={handleBottomMenuOpenSettings} style={styles.bottomSheetActionButton}>
                 <Text style={styles.bottomSheetActionText}>Settings</Text>
               </Pressable>

@@ -8,614 +8,624 @@ import { PhotoLightbox } from '../components/PhotoLightbox';
 import type { BusinessAttachmentDraft, DirectMessageItem, DirectMessageThread, DirectMessageThreadDetailResponse, DirectMessageSendResponse, SignupResponse } from '../types';
 
 type DirectMessagesScreenProps = {
-  backButtonLabel?: string;
-  contextBusinessName?: string | null;
-  contextListingSlug?: string | null;
-  isLandscape: boolean;
-  onBack: () => void;
-  onLoadThreadDetail: (threadId: number) => Promise<DirectMessageThreadDetailResponse>;
-  onRefreshThreads: () => Promise<DirectMessageThread[]>;
-  onSendImageMessage: (threadId: number, image: BusinessAttachmentDraft) => Promise<DirectMessageSendResponse>;
-  onSendTextMessage: (payload: { listingSlug?: string; message: string; threadId?: number }) => Promise<DirectMessageSendResponse>;
-  session: SignupResponse;
+	backButtonLabel?: string;
+	contextBusinessName?: string | null;
+	contextListingSlug?: string | null;
+	isLandscape: boolean;
+	onBack: () => void;
+	onLoadThreadDetail: (threadId: number) => Promise<DirectMessageThreadDetailResponse>;
+	onRefreshThreads: () => Promise<DirectMessageThread[]>;
+	onSendImageMessage: (threadId: number, image: BusinessAttachmentDraft) => Promise<DirectMessageSendResponse>;
+	onSendTextMessage: (payload: { listingSlug?: string; message: string; threadId?: number }) => Promise<DirectMessageSendResponse>;
+	session: SignupResponse;
 };
 
 const directMessageThreadCache = new Map<string, DirectMessageThread[]>();
 
 function buildImageDraft(asset: ImagePicker.ImagePickerAsset): BusinessAttachmentDraft {
-  const extension = asset.mimeType?.includes('png') ? 'png' : 'jpg';
-  return {
-    id: `${asset.assetId ?? 'dm-image'}-${Date.now()}`,
-    name: asset.fileName || `direct-message.${extension}`,
-    uri: asset.uri,
-    mimeType: asset.mimeType || 'image/jpeg',
-    size: typeof asset.fileSize === 'number' ? asset.fileSize : null,
-  };
+	const extension = asset.mimeType?.includes('png') ? 'png' : 'jpg';
+	return {
+		id: `${asset.assetId ?? 'dm-image'}-${Date.now()}`,
+		name: asset.fileName || `direct-message.${extension}`,
+		uri: asset.uri,
+		mimeType: asset.mimeType || 'image/jpeg',
+		size: typeof asset.fileSize === 'number' ? asset.fileSize : null,
+	};
 }
 
 function wrapMessageText(value: string, maxCharsPerLine = 30) {
-  return value
-    .split('\n')
-    .map((line) => {
-      if (!line.length) {
-        return '';
-      }
+	return value
+		.split('\n')
+		.map((line) => {
+			if (!line.length) {
+				return '';
+			}
 
-      const wrappedLines: string[] = [];
-      const words = line.split(/\s+/).filter(Boolean);
-      let currentLine = '';
+			const wrappedLines: string[] = [];
+			const words = line.split(/\s+/).filter(Boolean);
+			let currentLine = '';
 
-      for (const word of words) {
-        if (!currentLine.length) {
-          currentLine = word;
-          continue;
-        }
+			for (const word of words) {
+				if (!currentLine.length) {
+					currentLine = word;
+					continue;
+				}
 
-        if (currentLine.length + 1 + word.length <= maxCharsPerLine) {
-          currentLine = `${currentLine} ${word}`;
-          continue;
-        }
+				if (currentLine.length + 1 + word.length <= maxCharsPerLine) {
+					currentLine = `${currentLine} ${word}`;
+					continue;
+				}
 
-        wrappedLines.push(currentLine);
-        currentLine = word;
-      }
+				wrappedLines.push(currentLine);
+				currentLine = word;
+			}
 
-      if (currentLine.length) {
-        wrappedLines.push(currentLine);
-      }
+			if (currentLine.length) {
+				wrappedLines.push(currentLine);
+			}
 
-      return wrappedLines.join('\n');
-    })
-    .join('\n');
+			return wrappedLines.join('\n');
+		})
+		.join('\n');
 }
 
 export function DirectMessagesScreen({
-  backButtonLabel = 'Back',
-  contextBusinessName = null,
-  contextListingSlug = null,
-  isLandscape,
-  onBack,
-  onLoadThreadDetail,
-  onRefreshThreads,
-  onSendImageMessage,
-  onSendTextMessage,
-  session,
+	backButtonLabel = 'Back',
+	contextBusinessName = null,
+	contextListingSlug = null,
+	isLandscape,
+	onBack,
+	onLoadThreadDetail,
+	onRefreshThreads,
+	onSendImageMessage,
+	onSendTextMessage,
+	session,
 }: DirectMessagesScreenProps) {
-  const insets = useSafeAreaInsets();
-  const messageScrollRef = useRef<ScrollView | null>(null);
-  const threadCacheKey = `${session.portal}:${session.id}`;
-  const cachedThreads = directMessageThreadCache.get(threadCacheKey) ?? null;
-  const [threads, setThreads] = useState<DirectMessageThread[]>(() => cachedThreads ?? []);
-  const [loadingThreads, setLoadingThreads] = useState(() => !cachedThreads);
-  const [threadsError, setThreadsError] = useState<string | null>(null);
-  const normalizedContextBusinessName = contextBusinessName?.trim().toLowerCase() ?? '';
-  const hasCustomerContext = session.portal === 'customer' && Boolean(contextListingSlug || normalizedContextBusinessName);
+	const insets = useSafeAreaInsets();
+	const messageScrollRef = useRef<ScrollView | null>(null);
+	const threadCacheKey = `${session.portal}:${session.id}`;
+	const cachedThreads = directMessageThreadCache.get(threadCacheKey) ?? null;
+	const [threads, setThreads] = useState<DirectMessageThread[]>(() => cachedThreads ?? []);
+	const [loadingThreads, setLoadingThreads] = useState(() => !cachedThreads);
+	const [threadsError, setThreadsError] = useState<string | null>(null);
+	const normalizedContextBusinessName = contextBusinessName?.trim().toLowerCase() ?? '';
+	const hasCustomerContext = session.portal === 'customer' && Boolean(contextListingSlug || normalizedContextBusinessName);
 
-  function findPreferredThread(nextThreads: DirectMessageThread[]) {
-    if (!hasCustomerContext) {
-      return null;
-    }
+	function findPreferredThread(nextThreads: DirectMessageThread[]) {
+		if (!hasCustomerContext) {
+			return null;
+		}
 
-    const slugMatch = contextListingSlug
-      ? nextThreads.find((thread) => thread.business_slug === contextListingSlug)
-      : null;
-    if (slugMatch) {
-      return slugMatch;
-    }
+		const slugMatch = contextListingSlug
+			? nextThreads.find((thread) => thread.business_slug === contextListingSlug)
+			: null;
+		if (slugMatch) {
+			return slugMatch;
+		}
 
-    if (!normalizedContextBusinessName) {
-      return null;
-    }
+		if (!normalizedContextBusinessName) {
+			return null;
+		}
 
-    return nextThreads.find((thread) => thread.business_name.trim().toLowerCase() === normalizedContextBusinessName) ?? null;
-  }
+		return nextThreads.find((thread) => thread.business_name.trim().toLowerCase() === normalizedContextBusinessName) ?? null;
+	}
 
-  const [selectedThreadId, setSelectedThreadId] = useState<number | null>(() => {
-    if (cachedThreads?.length) {
-      return findPreferredThread(cachedThreads)?.id ?? null;
-    }
+	const [selectedThreadId, setSelectedThreadId] = useState<number | null>(() => {
+		if (cachedThreads?.length) {
+			return findPreferredThread(cachedThreads)?.id ?? null;
+		}
 
-    return null;
-  });
-  const [loadingMessages, setLoadingMessages] = useState(false);
-  const [messagesError, setMessagesError] = useState<string | null>(null);
-  const [messages, setMessages] = useState<DirectMessageItem[]>([]);
-  const [composerText, setComposerText] = useState('');
-  const [composerImageDraft, setComposerImageDraft] = useState<BusinessAttachmentDraft | null>(null);
-  const [sending, setSending] = useState(false);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [photoLightboxVisible, setPhotoLightboxVisible] = useState(false);
-  const [photoLightboxIndex, setPhotoLightboxIndex] = useState(0);
+		return null;
+	});
+	const [loadingMessages, setLoadingMessages] = useState(false);
+	const [messagesError, setMessagesError] = useState<string | null>(null);
+	const [messages, setMessages] = useState<DirectMessageItem[]>([]);
+	const [composerText, setComposerText] = useState('');
+	const [composerImageDraft, setComposerImageDraft] = useState<BusinessAttachmentDraft | null>(null);
+	const [sending, setSending] = useState(false);
+	const [keyboardVisible, setKeyboardVisible] = useState(false);
+	const [photoLightboxVisible, setPhotoLightboxVisible] = useState(false);
+	const [photoLightboxIndex, setPhotoLightboxIndex] = useState(0);
 
-  const selectedThread = useMemo(
-    () => threads.find((thread) => thread.id === selectedThreadId) ?? null,
-    [selectedThreadId, threads],
-  );
-  const messageImageUrls = useMemo(
-    () => messages
-      .filter((message) => message.message_type === 'image' && Boolean(message.image_url))
-      .map((message) => message.image_url),
-    [messages],
-  );
+	const selectedThread = useMemo(
+		() => threads.find((thread) => thread.id === selectedThreadId) ?? null,
+		[selectedThreadId, threads],
+	);
+	const messageImageUrls = useMemo(
+		() => messages
+			.filter((message) => message.message_type === 'image' && Boolean(message.image_url))
+			.map((message) => message.image_url),
+		[messages],
+	);
 
-  const isBusinessPortal = session.portal === 'business';
-  const launchedFromBusinessProfile = hasCustomerContext;
-  const customerHasContextWithoutThread = !!(hasCustomerContext && !selectedThreadId);
-  const showInboxList = !launchedFromBusinessProfile && !selectedThreadId;
-  const showConversation = launchedFromBusinessProfile || !!selectedThreadId;
-  const inboxFade = useRef(new Animated.Value(showInboxList ? 1 : 0)).current;
+	const isBusinessPortal = session.portal === 'business';
+	const launchedFromBusinessProfile = hasCustomerContext;
+	const customerHasContextWithoutThread = !!(hasCustomerContext && !selectedThreadId);
+	const showInboxList = !launchedFromBusinessProfile && !selectedThreadId;
+	const showConversation = launchedFromBusinessProfile || !!selectedThreadId;
+	const inboxFade = useRef(new Animated.Value(showInboxList ? 1 : 0)).current;
 
-  function formatThreadTimestamp(value: string) {
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) {
-      return '';
-    }
+	function formatThreadTimestamp(value: string) {
+		const parsed = new Date(value);
+		if (Number.isNaN(parsed.getTime())) {
+			return '';
+		}
 
-    const elapsedMs = Date.now() - parsed.getTime();
-    const elapsedMinutes = Math.floor(elapsedMs / 60000);
-    if (elapsedMinutes < 1) {
-      return 'Sent just now';
-    }
-    if (elapsedMinutes < 60) {
-      return `Sent ${elapsedMinutes}m ago`;
-    }
+		const elapsedMs = Date.now() - parsed.getTime();
+		const elapsedMinutes = Math.floor(elapsedMs / 60000);
+		if (elapsedMinutes < 1) {
+			return 'Sent just now';
+		}
+		if (elapsedMinutes < 60) {
+			return `Sent ${elapsedMinutes}m ago`;
+		}
 
-    const elapsedHours = Math.floor(elapsedMinutes / 60);
-    if (elapsedHours < 24) {
-      return `Sent ${elapsedHours}h ago`;
-    }
+		const elapsedHours = Math.floor(elapsedMinutes / 60);
+		if (elapsedHours < 24) {
+			return `Sent ${elapsedHours}h ago`;
+		}
 
-    const elapsedDays = Math.floor(elapsedHours / 24);
-    return `Sent ${elapsedDays}d ago`;
-  }
+		const elapsedDays = Math.floor(elapsedHours / 24);
+		return `Sent ${elapsedDays}d ago`;
+	}
 
-  function buildThreadInitials(name: string) {
-    const tokens = name.trim().split(/\s+/).filter(Boolean);
-    if (!tokens.length) {
-      return '?';
-    }
+	function buildThreadInitials(name: string) {
+		const tokens = name.trim().split(/\s+/).filter(Boolean);
+		if (!tokens.length) {
+			return '?';
+		}
 
-    if (tokens.length === 1) {
-      return tokens[0].slice(0, 2).toUpperCase();
-    }
+		if (tokens.length === 1) {
+			return tokens[0].slice(0, 2).toUpperCase();
+		}
 
-    return `${tokens[0][0]}${tokens[1][0]}`.toUpperCase();
-  }
+		return `${tokens[0][0]}${tokens[1][0]}`.toUpperCase();
+	}
 
-  function handleOpenMessagePhotoLightbox(imageUrl: string) {
-    const imageIndex = messageImageUrls.indexOf(imageUrl);
-    if (imageIndex < 0) {
-      return;
-    }
-    setPhotoLightboxIndex(imageIndex);
-    setPhotoLightboxVisible(true);
-  }
+	function handleOpenMessagePhotoLightbox(imageUrl: string) {
+		const imageIndex = messageImageUrls.indexOf(imageUrl);
+		if (imageIndex < 0) {
+			return;
+		}
+		setPhotoLightboxIndex(imageIndex);
+		setPhotoLightboxVisible(true);
+	}
 
-  function getThreadDisplayName(thread: DirectMessageThread) {
-    if (isBusinessPortal) {
-      return thread.customer_username || 'Customer';
-    }
-    return thread.business_name;
-  }
+	function getThreadDisplayName(thread: DirectMessageThread) {
+		if (isBusinessPortal) {
+			return thread.customer_username || 'Customer';
+		}
+		return thread.business_name;
+	}
 
-  useEffect(() => {
-    let mounted = true;
+	useEffect(() => {
+		let mounted = true;
 
-    async function loadThreads() {
-      const cachedPreferredThread = cachedThreads ? findPreferredThread(cachedThreads) : null;
-      const canUseCachedThreads = Boolean(cachedThreads) && (!hasCustomerContext || Boolean(cachedPreferredThread));
+		async function loadThreads() {
+			const cachedPreferredThread = cachedThreads ? findPreferredThread(cachedThreads) : null;
+			const canUseCachedThreads = Boolean(cachedThreads) && (!hasCustomerContext || Boolean(cachedPreferredThread));
 
-      if (canUseCachedThreads && cachedThreads) {
-        setThreads(cachedThreads);
-        setLoadingThreads(false);
-        setThreadsError(null);
-        if (cachedPreferredThread) {
-          setSelectedThreadId(cachedPreferredThread.id);
-        }
-      } else if (cachedThreads && !hasCustomerContext) {
-        setThreads(cachedThreads);
-        setLoadingThreads(false);
-        setThreadsError(null);
-      }
+			if (canUseCachedThreads && cachedThreads) {
+				setThreads(cachedThreads);
+				setLoadingThreads(false);
+				setThreadsError(null);
+				if (cachedPreferredThread) {
+					setSelectedThreadId(cachedPreferredThread.id);
+				}
+			} else if (cachedThreads && !hasCustomerContext) {
+				setThreads(cachedThreads);
+				setLoadingThreads(false);
+				setThreadsError(null);
+			}
 
-      if (!cachedThreads) {
-        setLoadingThreads(true);
-      }
-      setThreadsError(null);
-      try {
-        const nextThreads = await onRefreshThreads();
-        if (!mounted) {
-          return;
-        }
-        setThreads(nextThreads);
-        directMessageThreadCache.set(threadCacheKey, nextThreads);
+			if (!cachedThreads) {
+				setLoadingThreads(true);
+			}
+			setThreadsError(null);
+			try {
+				const nextThreads = await onRefreshThreads();
+				if (!mounted) {
+					return;
+				}
+				setThreads(nextThreads);
+				directMessageThreadCache.set(threadCacheKey, nextThreads);
 
-        const preferredThread = findPreferredThread(nextThreads);
-        setSelectedThreadId(preferredThread ? preferredThread.id : null);
-      } catch (error) {
-        if (!mounted) {
-          return;
-        }
-        setThreadsError(error instanceof Error ? error.message : 'Unable to load direct message threads.');
-      } finally {
-        if (mounted) {
-          setLoadingThreads(false);
-        }
-      }
-    }
+				const preferredThread = findPreferredThread(nextThreads);
+				setSelectedThreadId((currentThreadId) => {
+					if (preferredThread) {
+						return preferredThread.id;
+					}
 
-    void loadThreads();
+					if (!currentThreadId) {
+						return null;
+					}
 
-    return () => {
-      mounted = false;
-    };
-  }, [cachedThreads, contextListingSlug, hasCustomerContext, normalizedContextBusinessName, onRefreshThreads, threadCacheKey]);
+					return nextThreads.some((thread) => thread.id === currentThreadId) ? currentThreadId : null;
+				});
+			} catch (error) {
+				if (!mounted) {
+					return;
+				}
+				setThreadsError(error instanceof Error ? error.message : 'Unable to load direct message threads.');
+			} finally {
+				if (mounted) {
+					setLoadingThreads(false);
+				}
+			}
+		}
 
-  useEffect(() => {
-    let mounted = true;
+		void loadThreads();
 
-    async function loadMessages() {
-      if (!selectedThreadId) {
-        setMessages([]);
-        setMessagesError(null);
-        return;
-      }
+		return () => {
+			mounted = false;
+		};
+	}, [cachedThreads, contextListingSlug, hasCustomerContext, normalizedContextBusinessName, onRefreshThreads, threadCacheKey]);
 
-      setLoadingMessages(true);
-      setMessagesError(null);
-      try {
-        const detail = await onLoadThreadDetail(selectedThreadId);
-        if (!mounted) {
-          return;
-        }
-        setMessages(detail.messages ?? []);
-      } catch (error) {
-        if (!mounted) {
-          return;
-        }
-        setMessagesError(error instanceof Error ? error.message : 'Unable to load this conversation.');
-      } finally {
-        if (mounted) {
-          setLoadingMessages(false);
-        }
-      }
-    }
+	useEffect(() => {
+		let mounted = true;
 
-    void loadMessages();
+		async function loadMessages() {
+			if (!selectedThreadId) {
+				setMessages([]);
+				setMessagesError(null);
+				return;
+			}
 
-    return () => {
-      mounted = false;
-    };
-  }, [onLoadThreadDetail, selectedThreadId]);
+			setLoadingMessages(true);
+			setMessagesError(null);
+			try {
+				const detail = await onLoadThreadDetail(selectedThreadId);
+				if (!mounted) {
+					return;
+				}
+				setMessages(detail.messages ?? []);
+			} catch (error) {
+				if (!mounted) {
+					return;
+				}
+				setMessagesError(error instanceof Error ? error.message : 'Unable to load this conversation.');
+			} finally {
+				if (mounted) {
+					setLoadingMessages(false);
+				}
+			}
+		}
 
-  async function refreshThreadsAndThread(threadIdToSelect?: number) {
-    const nextThreads = await onRefreshThreads();
-    setThreads(nextThreads);
-    directMessageThreadCache.set(threadCacheKey, nextThreads);
-    if (threadIdToSelect) {
-      setSelectedThreadId(threadIdToSelect);
-      return;
-    }
+		void loadMessages();
 
-    if (selectedThreadId && nextThreads.some((thread) => thread.id === selectedThreadId)) {
-      return;
-    }
+		return () => {
+			mounted = false;
+		};
+	}, [onLoadThreadDetail, selectedThreadId]);
 
-    const nextPreferred = findPreferredThread(nextThreads);
-    setSelectedThreadId(nextPreferred?.id ?? null);
-  }
+	async function refreshThreadsAndThread(threadIdToSelect?: number) {
+		const nextThreads = await onRefreshThreads();
+		setThreads(nextThreads);
+		directMessageThreadCache.set(threadCacheKey, nextThreads);
+		if (threadIdToSelect) {
+			setSelectedThreadId(threadIdToSelect);
+			return;
+		}
 
-  async function handleSendText() {
-    const normalizedMessage = wrapMessageText(composerText.trim());
-    const hasImageDraft = Boolean(composerImageDraft);
+		if (selectedThreadId && nextThreads.some((thread) => thread.id === selectedThreadId)) {
+			return;
+		}
 
-    if (!normalizedMessage && !hasImageDraft) {
-      setMessagesError('Enter a message or add a photo before sending.');
-      return;
-    }
+		const nextPreferred = findPreferredThread(nextThreads);
+		setSelectedThreadId(nextPreferred?.id ?? null);
+	}
 
-    if (!selectedThreadId && !contextListingSlug) {
-      setMessagesError('Choose a conversation before sending a message.');
-      return;
-    }
+	async function handleSendText() {
+		const normalizedMessage = wrapMessageText(composerText.trim());
+		const hasImageDraft = Boolean(composerImageDraft);
 
-    setSending(true);
-    setMessagesError(null);
+		if (!normalizedMessage && !hasImageDraft) {
+			setMessagesError('Enter a message or add a photo before sending.');
+			return;
+		}
 
-    try {
-      let nextThreadId = selectedThreadId ?? null;
+		if (!selectedThreadId && !contextListingSlug) {
+			setMessagesError('Choose a conversation before sending a message.');
+			return;
+		}
 
-      if (hasImageDraft && isBusinessPortal) {
-        if (!nextThreadId) {
-          setMessagesError('Open a conversation before sending a photo.');
-          return;
-        }
-        const imageResponse = await onSendImageMessage(nextThreadId, composerImageDraft as BusinessAttachmentDraft);
-        nextThreadId = imageResponse.thread.id;
-      }
+		setSending(true);
+		setMessagesError(null);
 
-      if (normalizedMessage) {
-        const textResponse = await onSendTextMessage({
-          threadId: nextThreadId ?? undefined,
-          listingSlug: nextThreadId ? undefined : contextListingSlug ?? undefined,
-          message: normalizedMessage,
-        });
-        nextThreadId = textResponse.thread.id;
-      }
+		try {
+			let nextThreadId = selectedThreadId ?? null;
 
-      if (!nextThreadId) {
-        setMessagesError('Choose a conversation before sending a message.');
-        return;
-      }
+			if (hasImageDraft && isBusinessPortal) {
+				if (!nextThreadId) {
+					setMessagesError('Open a conversation before sending a photo.');
+					return;
+				}
+				const imageResponse = await onSendImageMessage(nextThreadId, composerImageDraft as BusinessAttachmentDraft);
+				nextThreadId = imageResponse.thread.id;
+			}
 
-      setComposerText('');
-      setComposerImageDraft(null);
-      await refreshThreadsAndThread(nextThreadId);
-      const detail = await onLoadThreadDetail(nextThreadId);
-      setMessages(detail.messages ?? []);
-    } catch (error) {
-      setMessagesError(error instanceof Error ? error.message : 'Unable to send your message right now.');
-    } finally {
-      setSending(false);
-    }
-  }
+			if (normalizedMessage) {
+				const textResponse = await onSendTextMessage({
+					threadId: nextThreadId ?? undefined,
+					listingSlug: nextThreadId ? undefined : contextListingSlug ?? undefined,
+					message: normalizedMessage,
+				});
+				nextThreadId = textResponse.thread.id;
+			}
 
-  async function handlePickBusinessImage() {
-    if (!selectedThreadId) {
-      setMessagesError('Open a conversation before sending a photo.');
-      return;
-    }
+			if (!nextThreadId) {
+				setMessagesError('Choose a conversation before sending a message.');
+				return;
+			}
 
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setMessagesError('Photo library permission is required to send a direct message image.');
-      return;
-    }
+			setComposerText('');
+			setComposerImageDraft(null);
+			await refreshThreadsAndThread(nextThreadId);
+			const detail = await onLoadThreadDetail(nextThreadId);
+			setMessages(detail.messages ?? []);
+		} catch (error) {
+			setMessagesError(error instanceof Error ? error.message : 'Unable to send your message right now.');
+		} finally {
+			setSending(false);
+		}
+	}
 
-    const picker = await ImagePicker.launchImageLibraryAsync({
-      allowsEditing: true,
-      allowsMultipleSelection: false,
-      mediaTypes: ['images'],
-      quality: 0.8,
-    });
+	async function handlePickBusinessImage() {
+		if (!selectedThreadId) {
+			setMessagesError('Open a conversation before sending a photo.');
+			return;
+		}
 
-    if (picker.canceled || !picker.assets.length) {
-      return;
-    }
+		const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+		if (!permission.granted) {
+			setMessagesError('Photo library permission is required to send a direct message image.');
+			return;
+		}
 
-    setSending(true);
-    setMessagesError(null);
+		const picker = await ImagePicker.launchImageLibraryAsync({
+			allowsEditing: true,
+			allowsMultipleSelection: false,
+			mediaTypes: ['images'],
+			quality: 0.8,
+		});
 
-    try {
-      setComposerImageDraft(buildImageDraft(picker.assets[0]));
-    } catch (error) {
-      setMessagesError(error instanceof Error ? error.message : 'Unable to attach this photo right now.');
-    } finally {
-      setSending(false);
-    }
-  }
+		if (picker.canceled || !picker.assets.length) {
+			return;
+		}
 
-  function scrollMessagesToEnd(animated = true) {
-    requestAnimationFrame(() => {
-      messageScrollRef.current?.scrollToEnd({ animated });
-    });
-  }
+		setSending(true);
+		setMessagesError(null);
 
-  useEffect(() => {
-    if (!loadingMessages) {
-      scrollMessagesToEnd(false);
-    }
-  }, [loadingMessages, selectedThreadId]);
+		try {
+			setComposerImageDraft(buildImageDraft(picker.assets[0]));
+		} catch (error) {
+			setMessagesError(error instanceof Error ? error.message : 'Unable to attach this photo right now.');
+		} finally {
+			setSending(false);
+		}
+	}
 
-  useEffect(() => {
-    Animated.timing(inboxFade, {
-      duration: 180,
-      toValue: showInboxList ? 1 : 0,
-      useNativeDriver: true,
-    }).start();
-  }, [inboxFade, showInboxList]);
+	function scrollMessagesToEnd(animated = true) {
+		requestAnimationFrame(() => {
+			messageScrollRef.current?.scrollToEnd({ animated });
+		});
+	}
 
-  useEffect(() => {
-    const showSubscription = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
-    const hideSubscription = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+	useEffect(() => {
+		if (!loadingMessages) {
+			scrollMessagesToEnd(false);
+		}
+	}, [loadingMessages, selectedThreadId]);
 
-    return () => {
-      showSubscription.remove();
-      hideSubscription.remove();
-    };
-  }, []);
+	useEffect(() => {
+		Animated.timing(inboxFade, {
+			duration: 180,
+			toValue: showInboxList ? 1 : 0,
+			useNativeDriver: true,
+		}).start();
+	}, [inboxFade, showInboxList]);
 
-  return (
-    <KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={0} style={[styles.detailScreenRoot, styles.directMessageScreenRoot, isLandscape ? styles.detailScreenLandscape : null]}>
-      <View style={[styles.screenHeaderBar, styles.screenHeaderBarRow, styles.directMessageScreenHeaderBar]}>
-        {!showInboxList ? (
-          <Pressable
-            onPress={() => {
-              if (launchedFromBusinessProfile) {
-                onBack();
-                return;
-              }
-              setSelectedThreadId(null);
-              setMessages([]);
-              setMessagesError(null);
-            }}
-            style={styles.backButton}
-          >
-            <Text style={styles.backButtonText}>{launchedFromBusinessProfile ? backButtonLabel : 'Inbox'}</Text>
-          </Pressable>
-        ) : (
-          <Pressable onPress={onBack} style={styles.backButton}>
-            <Text style={styles.backButtonText}>{backButtonLabel}</Text>
-          </Pressable>
-        )}
-      </View>
+	useEffect(() => {
+		const showSubscription = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
+		const hideSubscription = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
 
-      <View style={{ flex: 1 }}>
-        <Animated.View
-          pointerEvents={showInboxList ? 'auto' : 'none'}
-          style={{
-            bottom: 0,
-            left: 0,
-            opacity: inboxFade,
-            position: 'absolute',
-            right: 0,
-            top: 0,
-          }}
-        >
-          <ScrollView
-            contentContainerStyle={[
-              styles.directMessageFeed,
-              isLandscape ? styles.directMessageFeedLandscape : null,
-              { paddingBottom: Math.max(insets.bottom + 20, 20) },
-            ]}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={styles.directMessageInboxHeaderBar}>
-              <Text style={styles.directMessageInboxTitle}>Direct Messages</Text>
-            </View>
-            {threadsError ? <Text style={styles.errorText}>{threadsError}</Text> : null}
-            {loadingThreads ? <ActivityIndicator color="#8a4b2a" style={styles.directMessageSpinner} /> : null}
-            {!loadingThreads ? (
-              <View style={styles.directMessageInboxList}>
-                {threads.map((thread) => (
-                  <Pressable key={thread.id} onPress={() => setSelectedThreadId(thread.id)} style={styles.directMessageInboxRow}>
-                    <View style={styles.directMessageInboxAvatar}>
-                      <Text style={styles.directMessageInboxAvatarText}>{buildThreadInitials(getThreadDisplayName(thread))}</Text>
-                    </View>
-                    <View style={styles.directMessageInboxCopy}>
-                      <Text numberOfLines={1} style={styles.directMessageInboxName}>{getThreadDisplayName(thread)}</Text>
-                      <Text numberOfLines={1} style={styles.directMessageInboxPreview}>{thread.last_message_preview || 'Start a conversation'}</Text>
-                      <Text style={styles.directMessageInboxMeta}>{formatThreadTimestamp(thread.last_message_at)}</Text>
-                    </View>
-                    {thread.unread_count ? <Text style={styles.directMessageUnreadBadge}>{thread.unread_count}</Text> : null}
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
-            {!loadingThreads && !threads.length ? (
-              <Text style={styles.dashboardSupportText}>No direct message conversations yet.</Text>
-            ) : null}
-          </ScrollView>
-        </Animated.View>
+		return () => {
+			showSubscription.remove();
+			hideSubscription.remove();
+		};
+	}, []);
 
-        <Animated.View
-          pointerEvents={showConversation ? 'auto' : 'none'}
-          style={{
-            bottom: 0,
-            left: 0,
-            opacity: inboxFade.interpolate({
-              inputRange: [0, 1],
-              outputRange: [1, 0],
-            }),
-            position: 'absolute',
-            right: 0,
-            top: 0,
-          }}
-        >
-          {showConversation ? (
-            <>
-              <View style={styles.directMessageConversationTitleBar}>
-                <Text style={styles.directMessageConversationTitle}>
-                  {selectedThread?.business_name || contextBusinessName || 'Conversation'}
-                </Text>
-              </View>
+	return (
+		<KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={0} style={[styles.detailScreenRoot, styles.directMessageScreenRoot, isLandscape ? styles.detailScreenLandscape : null]}>
+			<View style={[styles.screenHeaderBar, styles.screenHeaderBarRow, styles.directMessageScreenHeaderBar]}>
+				{!showInboxList ? (
+					<Pressable
+						onPress={() => {
+							if (launchedFromBusinessProfile) {
+								onBack();
+								return;
+							}
+							setSelectedThreadId(null);
+							setMessages([]);
+							setMessagesError(null);
+						}}
+						style={styles.backButton}
+					>
+						<Text style={styles.backButtonText}>{launchedFromBusinessProfile ? backButtonLabel : 'Inbox'}</Text>
+					</Pressable>
+				) : (
+					<Pressable onPress={onBack} style={styles.backButton}>
+						<Text style={styles.backButtonText}>{backButtonLabel}</Text>
+					</Pressable>
+				)}
+			</View>
 
-              <ScrollView
-                ref={messageScrollRef}
-                contentContainerStyle={[
-                  styles.directMessageFeed,
-                  isLandscape ? styles.directMessageFeedLandscape : null,
-                  { paddingBottom: Math.max(insets.bottom + 12, 12) },
-                ]}
-                keyboardShouldPersistTaps="handled"
-                onContentSizeChange={() => scrollMessagesToEnd(false)}
-                showsVerticalScrollIndicator={false}
-              >
-                <View style={styles.directMessageConversationSection}>
-                  {messagesError ? <Text style={styles.errorText}>{messagesError}</Text> : null}
-                  {loadingMessages ? <ActivityIndicator color="#8a4b2a" style={styles.directMessageSpinner} /> : null}
-                  <View style={styles.directMessageMessageList}>
-                    {messages.map((message) => {
-                      const isMine = message.sender_id === session.id;
-                      const bubbleText = wrapMessageText(message.message ?? '');
-                      return (
-                        <View key={message.id} style={[styles.directMessageBubbleWrap, isMine ? styles.directMessageBubbleWrapMine : null]}>
-                          {message.message_type === 'image' && message.image_url ? (
-                            <View style={[styles.directMessageImageWrap, isMine ? styles.directMessageImageWrapMine : null]}>
-                              <Pressable onPress={() => handleOpenMessagePhotoLightbox(message.image_url)}>
-                                <Image source={{ uri: message.image_url }} style={styles.directMessageImage} />
-                              </Pressable>
-                            </View>
-                          ) : (
-                            <View style={[styles.directMessageBubble, isMine ? styles.directMessageBubbleMine : null]}>
-                              <Text style={[styles.directMessageBubbleText, isMine ? styles.directMessageBubbleTextMine : null]}>{bubbleText}</Text>
-                            </View>
-                          )}
-                        </View>
-                      );
-                    })}
-                    {!loadingMessages && !messages.length && !customerHasContextWithoutThread ? (
-                      <Text style={styles.dashboardSupportText}>Start the conversation.</Text>
-                    ) : null}
-                    {customerHasContextWithoutThread ? (
-                      <Text style={styles.dashboardSupportText}>Send your first message to start this conversation.</Text>
-                    ) : null}
-                  </View>
-                </View>
-              </ScrollView>
+			<View style={{ flex: 1 }}>
+				<Animated.View
+					pointerEvents={showInboxList ? 'auto' : 'none'}
+					style={{
+						bottom: 0,
+						left: 0,
+						opacity: inboxFade,
+						position: 'absolute',
+						right: 0,
+						top: 0,
+					}}
+				>
+					<ScrollView
+						contentContainerStyle={[
+							styles.directMessageFeed,
+							isLandscape ? styles.directMessageFeedLandscape : null,
+							{ paddingBottom: Math.max(insets.bottom + 20, 20) },
+						]}
+						keyboardShouldPersistTaps="handled"
+						showsVerticalScrollIndicator={false}
+					>
+						<View style={styles.directMessageInboxHeaderBar}>
+							<Text style={styles.directMessageInboxTitle}>Direct Messages</Text>
+						</View>
+						{threadsError ? <Text style={styles.errorText}>{threadsError}</Text> : null}
+						{loadingThreads ? <ActivityIndicator color="#8a4b2a" style={styles.directMessageSpinner} /> : null}
+						{!loadingThreads ? (
+							<View style={styles.directMessageInboxList}>
+								{threads.map((thread) => (
+									<Pressable key={thread.id} onPress={() => setSelectedThreadId(thread.id)} style={styles.directMessageInboxRow}>
+										<View style={styles.directMessageInboxAvatar}>
+											<Text style={styles.directMessageInboxAvatarText}>{buildThreadInitials(getThreadDisplayName(thread))}</Text>
+										</View>
+										<View style={styles.directMessageInboxCopy}>
+											<Text numberOfLines={1} style={styles.directMessageInboxName}>{getThreadDisplayName(thread)}</Text>
+											<Text numberOfLines={1} style={styles.directMessageInboxPreview}>{thread.last_message_preview || 'Start a conversation'}</Text>
+											<Text style={styles.directMessageInboxMeta}>{formatThreadTimestamp(thread.last_message_at)}</Text>
+										</View>
+										{thread.unread_count ? <Text style={styles.directMessageUnreadBadge}>{thread.unread_count}</Text> : null}
+									</Pressable>
+								))}
+							</View>
+						) : null}
+						{!loadingThreads && !threads.length ? (
+							<Text style={styles.dashboardSupportText}>No direct message conversations yet.</Text>
+						) : null}
+					</ScrollView>
+				</Animated.View>
 
-              <View
-                style={[
-                  styles.directMessageComposerDock,
-                  { paddingBottom: keyboardVisible ? Math.max(insets.bottom, 8) : Math.max(insets.bottom, 8) + 56 },
-                ]}
-              >
-                {isBusinessPortal ? (
-                  <Pressable onPress={() => void handlePickBusinessImage()} style={[styles.directMessageComposerIconButton, sending ? styles.linkButtonDisabled : null]}>
-                    <Text style={styles.directMessageComposerIconButtonText}>+</Text>
-                  </Pressable>
-                ) : null}
-                {isBusinessPortal && composerImageDraft ? (
-                  <View style={styles.directMessageComposerImageDraftRow}>
-                    <Image source={{ uri: composerImageDraft.uri }} style={styles.directMessageComposerImageDraft} />
-                    <Pressable
-                      onPress={() => setComposerImageDraft(null)}
-                      style={[styles.directMessageComposerImageRemoveButton, sending ? styles.linkButtonDisabled : null]}
-                    >
-                      <Text style={styles.directMessageComposerImageRemoveButtonText}>Remove</Text>
-                    </Pressable>
-                  </View>
-                ) : null}
-                <View style={styles.directMessageComposerRow}>
-                  <TextInput
-                    onChangeText={(value) => {
-                      setComposerText(value);
-                      setMessagesError(null);
-                    }}
-                    blurOnSubmit={false}
-                    multiline
-                    scrollEnabled
-                    placeholder="Message"
-                    placeholderTextColor="#9a7f6c"
-                    style={[styles.profileInput, styles.directMessageComposerInput]}
-                    value={composerText}
-                  />
-                  <Pressable onPress={() => void handleSendText()} style={[styles.directMessageComposerSendButton, sending ? styles.linkButtonDisabled : null]}>
-                    <Text style={styles.linkButtonSecondaryText}>{sending ? 'Sending...' : 'Send'}</Text>
-                  </Pressable>
-                </View>
-              </View>
-            </>
-          ) : null}
-        </Animated.View>
-      </View>
-      <PhotoLightbox
-        imageUrls={messageImageUrls}
-        initialIndex={photoLightboxIndex}
-        onClose={() => setPhotoLightboxVisible(false)}
-        visible={photoLightboxVisible}
-      />
-    </KeyboardAvoidingView>
-  );
+				<Animated.View
+					pointerEvents={showConversation ? 'auto' : 'none'}
+					style={{
+						bottom: 0,
+						left: 0,
+						opacity: inboxFade.interpolate({
+							inputRange: [0, 1],
+							outputRange: [1, 0],
+						}),
+						position: 'absolute',
+						right: 0,
+						top: 0,
+					}}
+				>
+					{showConversation ? (
+						<>
+							<View style={styles.directMessageConversationTitleBar}>
+								<Text style={styles.directMessageConversationTitle}>
+									{selectedThread?.business_name || contextBusinessName || 'Conversation'}
+								</Text>
+							</View>
+
+							<ScrollView
+								ref={messageScrollRef}
+								contentContainerStyle={[
+									styles.directMessageFeed,
+									isLandscape ? styles.directMessageFeedLandscape : null,
+									{ paddingBottom: Math.max(insets.bottom + 12, 12) },
+								]}
+								keyboardShouldPersistTaps="handled"
+								onContentSizeChange={() => scrollMessagesToEnd(false)}
+								showsVerticalScrollIndicator={false}
+							>
+								<View style={styles.directMessageConversationSection}>
+									{messagesError ? <Text style={styles.errorText}>{messagesError}</Text> : null}
+									{loadingMessages ? <ActivityIndicator color="#8a4b2a" style={styles.directMessageSpinner} /> : null}
+									<View style={styles.directMessageMessageList}>
+										{messages.map((message) => {
+											const isMine = message.sender_id === session.id;
+											const bubbleText = wrapMessageText(message.message ?? '');
+											return (
+												<View key={message.id} style={[styles.directMessageBubbleWrap, isMine ? styles.directMessageBubbleWrapMine : null]}>
+													{message.message_type === 'image' && message.image_url ? (
+														<View style={[styles.directMessageImageWrap, isMine ? styles.directMessageImageWrapMine : null]}>
+															<Pressable onPress={() => handleOpenMessagePhotoLightbox(message.image_url)}>
+																<Image source={{ uri: message.image_url }} style={styles.directMessageImage} />
+															</Pressable>
+														</View>
+													) : (
+														<View style={[styles.directMessageBubble, isMine ? styles.directMessageBubbleMine : null]}>
+															<Text style={[styles.directMessageBubbleText, isMine ? styles.directMessageBubbleTextMine : null]}>{bubbleText}</Text>
+														</View>
+													)}
+												</View>
+											);
+										})}
+										{!loadingMessages && !messages.length && !customerHasContextWithoutThread ? (
+											<Text style={styles.dashboardSupportText}>Start the conversation.</Text>
+										) : null}
+										{customerHasContextWithoutThread ? (
+											<Text style={styles.dashboardSupportText}>Send your first message to start this conversation.</Text>
+										) : null}
+									</View>
+								</View>
+							</ScrollView>
+
+							<View
+								style={[
+									styles.directMessageComposerDock,
+									{ paddingBottom: keyboardVisible ? Math.max(insets.bottom, 8) : Math.max(insets.bottom, 8) + 56 },
+								]}
+							>
+								{isBusinessPortal ? (
+									<Pressable onPress={() => void handlePickBusinessImage()} style={[styles.directMessageComposerIconButton, sending ? styles.linkButtonDisabled : null]}>
+										<Text style={styles.directMessageComposerIconButtonText}>+</Text>
+									</Pressable>
+								) : null}
+								{isBusinessPortal && composerImageDraft ? (
+									<View style={styles.directMessageComposerImageDraftRow}>
+										<Image source={{ uri: composerImageDraft.uri }} style={styles.directMessageComposerImageDraft} />
+										<Pressable
+											onPress={() => setComposerImageDraft(null)}
+											style={[styles.directMessageComposerImageRemoveButton, sending ? styles.linkButtonDisabled : null]}
+										>
+											<Text style={styles.directMessageComposerImageRemoveButtonText}>Remove</Text>
+										</Pressable>
+									</View>
+								) : null}
+								<View style={styles.directMessageComposerRow}>
+									<TextInput
+										onChangeText={(value) => {
+											setComposerText(value);
+											setMessagesError(null);
+										}}
+										blurOnSubmit={false}
+										multiline
+										scrollEnabled
+										placeholder="Message"
+										placeholderTextColor="#9a7f6c"
+										style={[styles.profileInput, styles.directMessageComposerInput]}
+										value={composerText}
+									/>
+									<Pressable onPress={() => void handleSendText()} style={[styles.directMessageComposerSendButton, sending ? styles.linkButtonDisabled : null]}>
+										<Text style={styles.linkButtonSecondaryText}>{sending ? 'Sending...' : 'Send'}</Text>
+									</Pressable>
+								</View>
+							</View>
+						</>
+					) : null}
+				</Animated.View>
+			</View>
+			<PhotoLightbox
+				imageUrls={messageImageUrls}
+				initialIndex={photoLightboxIndex}
+				onClose={() => setPhotoLightboxVisible(false)}
+				visible={photoLightboxVisible}
+			/>
+		</KeyboardAvoidingView>
+	);
 }
