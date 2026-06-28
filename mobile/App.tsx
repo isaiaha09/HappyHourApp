@@ -1781,7 +1781,7 @@ function AppScreen() {
     });
   }
 
-  function navigateBrowseProfileTransition(nextScreen: 'profiles' | 'browse', finalScreenMode?: AppScreenMode) {
+  function navigateBrowseProfileTransition(nextScreen: 'profiles' | 'browse', finalScreenMode?: AppScreenMode, onComplete?: () => void) {
     const resolvedScreenMode = finalScreenMode ?? nextScreen;
 
     if (screenMode === resolvedScreenMode) {
@@ -1791,6 +1791,7 @@ function AppScreen() {
     const currentBrowseProfileScreen = ['profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service'].includes(screenMode)
       ? 'profiles'
       : 'browse';
+    const shouldPrewarmIncomingScreen = currentBrowseProfileScreen === 'browse' && browseMode === 'map' && nextScreen === 'profiles';
 
     if (onboardingTransitionFrameRef.current !== null) {
       cancelAnimationFrame(onboardingTransitionFrameRef.current);
@@ -1812,29 +1813,41 @@ function AppScreen() {
     screenTransition.setValue(0);
     setIncomingBrowseProfileScreen(nextScreen);
     setIncomingBrowseProfileTargetScreen(nextScreen === 'profiles' ? resolvedScreenMode : null);
-    onboardingTransitionFrameRef.current = null;
-    Animated.timing(screenTransition, {
-      duration: onboardingTransitionDuration,
-      toValue: 1,
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (!finished) {
+    const startAnimation = () => {
+      onboardingTransitionFrameRef.current = null;
+      Animated.timing(screenTransition, {
+        duration: onboardingTransitionDuration,
+        toValue: 1,
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (!finished) {
+          setBrowseProfileTransitionFrom(null);
+          setIncomingBrowseProfileScreen(null);
+          setIncomingBrowseProfileTargetScreen(null);
+          return;
+        }
+
+        setScreenMode(resolvedScreenMode);
+        profileSceneTransition.setValue(1);
+        browseSceneTransition.setValue(1);
+        setProfileEntryOffset(0);
+        setBrowseEntryOffset(0);
         setBrowseProfileTransitionFrom(null);
         setIncomingBrowseProfileScreen(null);
         setIncomingBrowseProfileTargetScreen(null);
-        return;
-      }
+        screenTransition.setValue(1);
+        onComplete?.();
+      });
+    };
 
-      setScreenMode(resolvedScreenMode);
-      profileSceneTransition.setValue(1);
-      browseSceneTransition.setValue(1);
-      setProfileEntryOffset(0);
-      setBrowseEntryOffset(0);
-      setBrowseProfileTransitionFrom(null);
-      setIncomingBrowseProfileScreen(null);
-      setIncomingBrowseProfileTargetScreen(null);
-      screenTransition.setValue(1);
-    });
+    if (shouldPrewarmIncomingScreen) {
+      onboardingTransitionFrameRef.current = requestAnimationFrame(() => {
+        startAnimation();
+      });
+      return;
+    }
+
+    startAnimation();
   }
 
   function navigateGuestBrowseTransition(nextScreen: 'splash' | 'browse', onComplete?: () => void) {
@@ -1844,6 +1857,7 @@ function AppScreen() {
     }
 
     const currentGuestBrowseScreen = screenMode === 'splash' ? 'splash' : 'browse';
+  const shouldPrewarmIncomingScreen = currentGuestBrowseScreen === 'browse' && browseMode === 'map' && nextScreen === 'splash';
 
     if (onboardingTransitionFrameRef.current !== null) {
       cancelAnimationFrame(onboardingTransitionFrameRef.current);
@@ -1866,27 +1880,49 @@ function AppScreen() {
     setIncomingGuestBrowseScreen(null);
     screenTransition.setValue(0);
     setIncomingGuestBrowseScreen(nextScreen);
-    onboardingTransitionFrameRef.current = null;
-    Animated.timing(screenTransition, {
-      duration: onboardingTransitionDuration,
-      toValue: 1,
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (!finished) {
+    const startAnimation = () => {
+      onboardingTransitionFrameRef.current = null;
+      Animated.timing(screenTransition, {
+        duration: onboardingTransitionDuration,
+        toValue: 1,
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (!finished) {
+          setGuestBrowseTransitionFrom(null);
+          setIncomingGuestBrowseScreen(null);
+          return;
+        }
+
+        setScreenMode(nextScreen);
+        profileSceneTransition.setValue(1);
+        browseSceneTransition.setValue(1);
+        setProfileEntryOffset(0);
+        setBrowseEntryOffset(0);
         setGuestBrowseTransitionFrom(null);
         setIncomingGuestBrowseScreen(null);
-        return;
-      }
+        screenTransition.setValue(1);
+        onComplete?.();
+      });
+    };
 
-      setScreenMode(nextScreen);
-      profileSceneTransition.setValue(1);
-      browseSceneTransition.setValue(1);
-      setProfileEntryOffset(0);
-      setBrowseEntryOffset(0);
-      setGuestBrowseTransitionFrom(null);
-      setIncomingGuestBrowseScreen(null);
-      screenTransition.setValue(1);
-      onComplete?.();
+    if (shouldPrewarmIncomingScreen) {
+      onboardingTransitionFrameRef.current = requestAnimationFrame(() => {
+        startAnimation();
+      });
+      return;
+    }
+
+    startAnimation();
+  }
+
+  function warmMapShellThen(startTransition: () => void) {
+    if (onboardingTransitionFrameRef.current !== null) {
+      cancelAnimationFrame(onboardingTransitionFrameRef.current);
+    }
+
+    onboardingTransitionFrameRef.current = requestAnimationFrame(() => {
+      onboardingTransitionFrameRef.current = null;
+      startTransition();
     });
   }
 
@@ -3024,7 +3060,7 @@ function AppScreen() {
   function handleOpenMapFromSplash() {
     setGuestBrowseModeLocked(true);
     handleBrowseModeChange('map');
-    navigateGuestBrowseTransition('browse');
+    warmMapShellThen(() => navigateGuestBrowseTransition('browse'));
   }
 
   function handleDismissGuestFavoritePrompt() {
@@ -3278,13 +3314,14 @@ function AppScreen() {
     setSelectedPlace(null);
     setSelectedLocationId(null);
     setSelectedMapPlaceKey(null);
-    setBrowseMode('map');
+    setGuestBrowseModeLocked(false);
     browseModeFadePendingRef.current = false;
     pendingListRevealRef.current = false;
     setListRevealEnabled(false);
     browseModeTransition.stopAnimation();
     browseModeTransition.setValue(1);
-    navigateBrowseProfileTransition('browse');
+    handleBrowseModeChange('map');
+    warmMapShellThen(() => navigateBrowseProfileTransition('browse'));
   }
 
   function handleBottomNavOpenProfile() {
