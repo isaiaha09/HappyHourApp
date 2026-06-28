@@ -7312,6 +7312,18 @@ class ProfileDashboardApiTests(APITestCase):
 		)
 		self.assertEqual(blocked_send_response.status_code, 403)
 
+		business_blocked_reply_response = self.client.post(
+			reverse('profile-direct-messages'),
+			{
+				'portal': 'business',
+				'thread_id': send_response.data['thread']['id'],
+				'message': 'Replying after blocking the customer.',
+			},
+			format='json',
+			**self.auth_headers(),
+		)
+		self.assertEqual(business_blocked_reply_response.status_code, 403)
+
 		blocked_threads_response = self.client.get(
 			reverse('profile-direct-messages'),
 			{'portal': 'customer'},

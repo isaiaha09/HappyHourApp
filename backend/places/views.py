@@ -870,6 +870,8 @@ class DirectMessageThreadsView(APIView):
 					return Response({'detail': 'This business has direct messaging turned off.'}, status=status.HTTP_403_FORBIDDEN)
 				if thread.business_claim.direct_message_blocks.filter(customer=request.user).exists():
 					return Response({'detail': 'This business has restricted direct messaging for your account.'}, status=status.HTTP_403_FORBIDDEN)
+			elif thread.business_claim.direct_message_blocks.filter(customer=thread.customer).exists():
+				return Response({'detail': 'Unblock this customer before sending a direct message.'}, status=status.HTTP_403_FORBIDDEN)
 
 		if portal == 'customer':
 			if not message_text:
