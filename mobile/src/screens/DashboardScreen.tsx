@@ -35,14 +35,11 @@ export type DashboardScreenProps = {
 
 export type AccountSettingsScreenProps = {
   deleteAccountPassword: string;
-  directMessageBlockUsername: string;
   errorMessage: string | null;
   isLandscape: boolean;
   message: string | null;
   onBack: () => void;
   onBeginTwoFactorSetup: () => void;
-  onBlockCustomerFromDirectMessaging: () => void;
-  onChangeDirectMessageBlockUsername: (value: string) => void;
   onChangeTwoFactorDisableCode: (value: string) => void;
   onChangeTwoFactorSetupCode: (value: string) => void;
   onConfirmTwoFactorSetup: () => void;
@@ -56,7 +53,6 @@ export type AccountSettingsScreenProps = {
   onOpenPrivacyPolicy: () => void;
   onOpenTermsOfService: () => void;
   onToggleDirectMessaging: (value: boolean) => void;
-  onUnblockCustomerFromDirectMessaging: (blockId: number) => void;
   pendingBusinessLocationTrackingEnabled: boolean | null;
   pendingDirectMessagingEnabled: boolean | null;
   session: SignupResponse;
@@ -71,10 +67,10 @@ export type BlockedDirectMessageCustomersScreenProps = Pick<AccountSettingsScree
   | 'isLandscape'
   | 'message'
   | 'onBack'
-  | 'onUnblockCustomerFromDirectMessaging'
   | 'session'
   | 'settingsSubmittingAction'
 > & {
+  onUnblockCustomerFromDirectMessaging: (blockId: number) => void;
   onConfirmBlockedDirectMessageCustomers: (usernames: string[]) => Promise<boolean>;
   onLoadExistingDirectMessageCustomers: () => Promise<DirectMessageThread[]>;
 };
