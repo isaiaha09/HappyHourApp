@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { styles } from '../appStyles';
 import type { AuthPortal } from '../appFlowTypes';
 import { venueFilters } from '../browseConfig';
+import { NativeIOSLiquidGlassHeaderButton } from '../components/NativeIOSLiquidGlass';
 import { HomeFeedScreen } from './HomeFeedScreen';
 
 const sloganWords = ['Discover.', 'Eat.', 'Save.'] as const;
@@ -248,13 +249,27 @@ export function SplashScreen({ apiBaseUrl, onCreateAccount, onOpenMap, onSelectP
         ]}
       >
         <View style={styles.screenHeaderBarRow}>
-          <Pressable onPress={onOpenMap} style={[styles.backButton, styles.splashHeaderBackButton]}>
-            <Text style={styles.backButtonText}>Open Map</Text>
-          </Pressable>
+          <NativeIOSLiquidGlassHeaderButton
+            fallback={(
+              <Pressable onPress={onOpenMap} style={[styles.backButton, styles.splashHeaderBackButton]}>
+                <Text style={styles.backButtonText}>Open Map</Text>
+              </Pressable>
+            )}
+            label="Open Map"
+            onPress={onOpenMap}
+            variant="pill"
+          />
           <View pointerEvents="none" style={styles.splashHeaderCenterSlot} />
-          <Pressable onPress={handleOpenSignInModal} style={styles.splashHeaderSignInButton}>
-            <Text style={styles.splashHeaderSignInText}>Sign in</Text>
-          </Pressable>
+          <NativeIOSLiquidGlassHeaderButton
+            fallback={(
+              <Pressable onPress={handleOpenSignInModal} style={styles.splashHeaderSignInButton}>
+                <Text style={styles.splashHeaderSignInText}>Sign in</Text>
+              </Pressable>
+            )}
+            label="Sign in"
+            onPress={handleOpenSignInModal}
+            variant="pill"
+          />
         </View>
       </Animated.View>
 

@@ -6,6 +6,7 @@ import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { styles } from '../appStyles';
+import { NativeIOSLiquidGlassHeaderButton } from '../components/NativeIOSLiquidGlass';
 import { PhotoLightbox } from '../components/PhotoLightbox';
 import type { BusinessAttachmentDraft, DirectMessageItem, DirectMessageThread, DirectMessageThreadDetailResponse, DirectMessageSendResponse, SignupResponse } from '../types';
 
@@ -607,7 +608,24 @@ export function DirectMessagesScreen({
 		<KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={0} style={[styles.detailScreenRoot, styles.directMessageScreenRoot, isLandscape ? styles.detailScreenLandscape : null]}>
 			<View style={[styles.screenHeaderBar, styles.screenHeaderBarRow, styles.directMessageScreenHeaderBar]}>
 				{!showInboxList ? (
-					<Pressable
+					<NativeIOSLiquidGlassHeaderButton
+						fallback={(
+							<Pressable
+								onPress={() => {
+									if (launchedFromBusinessProfile) {
+										onBack();
+										return;
+									}
+									setSelectedThreadId(null);
+									setMessages([]);
+									setMessagesError(null);
+								}}
+								style={styles.backButton}
+							>
+								<Text style={styles.backButtonText}>{launchedFromBusinessProfile ? backButtonLabel : 'Inbox'}</Text>
+							</Pressable>
+						)}
+						label={launchedFromBusinessProfile ? backButtonLabel : 'Inbox'}
 						onPress={() => {
 							if (launchedFromBusinessProfile) {
 								onBack();
@@ -617,14 +635,19 @@ export function DirectMessagesScreen({
 							setMessages([]);
 							setMessagesError(null);
 						}}
-						style={styles.backButton}
-					>
-						<Text style={styles.backButtonText}>{launchedFromBusinessProfile ? backButtonLabel : 'Inbox'}</Text>
-					</Pressable>
+						variant="pill"
+					/>
 				) : (
-					<Pressable onPress={onBack} style={styles.backButton}>
-						<Text style={styles.backButtonText}>{backButtonLabel}</Text>
-					</Pressable>
+					<NativeIOSLiquidGlassHeaderButton
+						fallback={(
+							<Pressable onPress={onBack} style={styles.backButton}>
+								<Text style={styles.backButtonText}>{backButtonLabel}</Text>
+							</Pressable>
+						)}
+						label={backButtonLabel}
+						onPress={onBack}
+						variant="pill"
+					/>
 				)}
 			</View>
 

@@ -7,6 +7,7 @@ import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Modal, Platfor
 import { styles } from '../appStyles';
 import { buildDealOverridesFromDeals, buildNormalizedDealOverrides, buildNormalizedOperatingHourOverrides, buildOperatingHourOverridesFromWindows } from '../businessProfileOverrides';
 import { BusinessDealsEditor, BusinessHoursEditor } from '../components/BusinessProfileStructuredEditors';
+import { NativeIOSLiquidGlassHeaderButton } from '../components/NativeIOSLiquidGlass';
 import { SOCIAL_PLATFORM_LABELS, buildSocialProfilesFromInputs, getSocialProfilePreview, getSocialProfileValidationMessage, socialProfilesToInputs } from '../socialProfiles';
 import { dedupeImageUrls, normalizeSearchText } from '../placeHelpers';
 import type { BusinessAttachmentDraft, DirectMessageThread, FavoriteBusinessNotification, ProfileDashboardUpdateRequest, SignupResponse, TwoFactorSetupResponse } from '../types';
@@ -506,16 +507,39 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
         >
           <View style={styles.screenHeaderBar}>
             <View style={styles.dashboardHeaderRow}>
-              <Pressable onPress={onBack} style={styles.backButton}>
-                <Text style={styles.backButtonText}>Open Map</Text>
-              </Pressable>
+              <NativeIOSLiquidGlassHeaderButton
+                fallback={(
+                  <Pressable onPress={onBack} style={styles.backButton}>
+                    <Text style={styles.backButtonText}>Open Map</Text>
+                  </Pressable>
+                )}
+                label="Open Map"
+                onPress={onBack}
+                variant="pill"
+              />
               <View style={styles.dashboardHeaderActions}>
-                <Pressable accessibilityLabel="Open direct messages" onPress={onOpenDirectMessages} style={styles.settingsIconButton}>
-                  <DirectMessageHeaderIcon />
-                </Pressable>
-                <Pressable accessibilityLabel="Open settings" onPress={onOpenSettings} style={styles.settingsIconButton}>
-                  <SettingsGearIcon />
-                </Pressable>
+                <NativeIOSLiquidGlassHeaderButton
+                  accessibilityLabel="Open direct messages"
+                  fallback={(
+                    <Pressable accessibilityLabel="Open direct messages" onPress={onOpenDirectMessages} style={styles.settingsIconButton}>
+                      <DirectMessageHeaderIcon />
+                    </Pressable>
+                  )}
+                  onPress={onOpenDirectMessages}
+                  systemImage="paperplane"
+                  variant="icon"
+                />
+                <NativeIOSLiquidGlassHeaderButton
+                  accessibilityLabel="Open settings"
+                  fallback={(
+                    <Pressable accessibilityLabel="Open settings" onPress={onOpenSettings} style={styles.settingsIconButton}>
+                      <SettingsGearIcon />
+                    </Pressable>
+                  )}
+                  onPress={onOpenSettings}
+                  systemImage="gearshape"
+                  variant="icon"
+                />
               </View>
             </View>
           </View>

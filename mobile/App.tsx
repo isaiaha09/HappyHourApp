@@ -81,6 +81,7 @@ import {
 } from './src/browseConfig';
 import { AccountSettingsScreen, BlockedDirectMessageCustomersScreen, BusinessProfileEditorScreen, DashboardScreen, FavoriteBusinessNotificationsScreen, FavoriteBusinessesScreen } from './src/screens/DashboardScreen';
 import { BrowseControls } from './src/screens/BrowseControls';
+import { NativeIOSLiquidGlassBottomNav, isNativeIOSLiquidGlassBottomNavAvailable } from './src/components/NativeIOSLiquidGlass';
 import { PhotoLightbox } from './src/components/PhotoLightbox';
 import { DirectMessagesScreen } from './src/screens/DirectMessagesScreen';
 import { PlaceDetailScreen } from './src/screens/PlaceDetailScreen';
@@ -4776,6 +4777,22 @@ function AppScreen() {
     }
   }
 
+  function handleBottomNavSelection(item: MainShellBottomNavItem) {
+    switch (item) {
+      case 'map':
+        handleBottomNavOpenMap();
+        break;
+      case 'profile':
+        handleBottomNavOpenProfile();
+        break;
+      case 'more':
+        handleBottomNavOpenMore();
+        break;
+      default:
+        break;
+    }
+  }
+
   function renderBottomNav(options: { guest: boolean }) {
     let activeItem: MainShellBottomNavItem = 'map';
     if (!options.guest) {
@@ -4784,6 +4801,20 @@ function AppScreen() {
       } else if (screenMode !== 'browse') {
         activeItem = 'profile';
       }
+    }
+
+    if (isNativeIOSLiquidGlassBottomNavAvailable()) {
+      return (
+        <View pointerEvents="box-none" style={styles.bottomNavOverlay}>
+          <NativeIOSLiquidGlassBottomNav
+            activeItem={activeItem}
+            bottomInset={insets.bottom}
+            moreOpen={bottomMoreSheetVisible}
+            onSelect={handleBottomNavSelection}
+            style={{ width: '100%' }}
+          />
+        </View>
+      );
     }
 
     return (

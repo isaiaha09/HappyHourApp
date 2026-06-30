@@ -7,6 +7,7 @@ import MapView, { Marker } from 'react-native-maps';
 import { WebView } from 'react-native-webview';
 
 import { styles } from '../appStyles';
+import { NativeIOSLiquidGlassHeaderButton } from '../components/NativeIOSLiquidGlass';
 import { PhotoLightbox } from '../components/PhotoLightbox';
 import { SocialButton } from '../components/SocialButton';
 import { buildGoogleReviewsUrl, dedupeImageUrls, formatPlaceAddress, getPlacePreviewRegion, openMapsAddress } from '../placeHelpers';
@@ -364,17 +365,32 @@ export function PlaceDetailScreen({
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.screenHeaderBar, styles.screenHeaderBarRow]}>
-          <Pressable onPress={onBack} style={styles.backButton}>
-            <Text style={styles.backButtonText}>{backButtonLabel}</Text>
-          </Pressable>
+          <NativeIOSLiquidGlassHeaderButton
+            fallback={(
+              <Pressable onPress={onBack} style={styles.backButton}>
+                <Text style={styles.backButtonText}>{backButtonLabel}</Text>
+              </Pressable>
+            )}
+            label={backButtonLabel}
+            onPress={onBack}
+            variant="pill"
+          />
           {showDirectMessageControl ? (
-            <Pressable
+            <NativeIOSLiquidGlassHeaderButton
               accessibilityLabel="Open direct messages"
-              onPress={onOpenDirectMessages}
-              style={styles.directMessageHeaderActionButton}
-            >
-              <Ionicons color="#402214" name="paper-plane-outline" size={19} />
-            </Pressable>
+              fallback={(
+                <Pressable
+                  accessibilityLabel="Open direct messages"
+                  onPress={onOpenDirectMessages}
+                  style={styles.directMessageHeaderActionButton}
+                >
+                  <Ionicons color="#402214" name="paper-plane-outline" size={19} />
+                </Pressable>
+              )}
+              onPress={() => onOpenDirectMessages?.()}
+              systemImage="paperplane"
+              variant="icon"
+            />
           ) : null}
         </View>
 
