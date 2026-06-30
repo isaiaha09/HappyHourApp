@@ -54,12 +54,25 @@ type NativeIOSLiquidGlassBackButtonProps = {
 
 const nativeBottomNavViewName = 'DiningDealzLiquidGlassBottomNavView';
 const nativeHeaderButtonViewName = 'DiningDealzLiquidGlassHeaderButtonView';
+const minimumIOSLiquidGlassVersion = 26;
 
 const NativeBottomNavView = requireNativeComponent<NativeBottomNavViewProps>(nativeBottomNavViewName);
 const NativeHeaderButtonView = requireNativeComponent<NativeHeaderButtonViewProps>(nativeHeaderButtonViewName);
 
-function hasNativeViewManager(viewName: string) {
+function isSupportedIOSLiquidGlassRuntime() {
   if (Platform.OS !== 'ios') {
+    return false;
+  }
+
+  const iosVersion = typeof Platform.Version === 'string'
+    ? Number.parseInt(Platform.Version, 10)
+    : Platform.Version;
+
+  return Number.isFinite(iosVersion) && iosVersion >= minimumIOSLiquidGlassVersion;
+}
+
+function hasNativeViewManager(viewName: string) {
+  if (!isSupportedIOSLiquidGlassRuntime()) {
     return false;
   }
 
