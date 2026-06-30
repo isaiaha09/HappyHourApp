@@ -3,7 +3,7 @@ import React
 
 @objc(DiningDealzLiquidGlassBottomNavView)
 final class DiningDealzLiquidGlassBottomNavView: UIView {
-  @objc var onSelect: RCTBubblingEventBlock?
+  @objc var onNavItemSelect: RCTDirectEventBlock?
 
   @objc var activeItem: NSString = "map" {
     didSet {
@@ -228,7 +228,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
       if let finalItem {
         selectedItem = finalItem
         activeItem = finalItem.rawValue as NSString
-        onSelect?(["item": finalItem.rawValue])
+        onNavItemSelect?(["item": finalItem.rawValue])
       }
       hoveredItem = nil
       updateSelection(animated: true)

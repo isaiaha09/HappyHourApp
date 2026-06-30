@@ -6,6 +6,6 @@
 RCT_EXPORT_VIEW_PROPERTY(activeItem, NSString)
 RCT_EXPORT_VIEW_PROPERTY(bottomInset, NSNumber)
 RCT_EXPORT_VIEW_PROPERTY(moreOpen, BOOL)
-RCT_EXPORT_VIEW_PROPERTY(onSelect, RCTBubblingEventBlock)
+RCT_EXPORT_VIEW_PROPERTY(onNavItemSelect, RCTDirectEventBlock)
 
 @end

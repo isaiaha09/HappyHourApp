@@ -3,7 +3,7 @@ import React
 
 @objc(DiningDealzLiquidGlassHeaderButtonView)
 final class DiningDealzLiquidGlassHeaderButtonView: UIView {
-  @objc var onPress: RCTBubblingEventBlock?
+  @objc var onGlassButtonPress: RCTDirectEventBlock?
 
   @objc var label: NSString? {
     didSet {
@@ -121,6 +121,6 @@ final class DiningDealzLiquidGlassHeaderButtonView: UIView {
   }
 
   @objc private func handlePress() {
-    onPress?([:])
+    onGlassButtonPress?([:])
   }
 }

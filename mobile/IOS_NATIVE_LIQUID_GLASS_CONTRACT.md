@@ -48,13 +48,14 @@ They must be exposed to React Native as native UI components, not as a command-o
 | `activeItem` | `'map' \| 'profile' \| 'more'` | yes | Which bottom-nav item should appear active. |
 | `bottomInset` | `number` | yes | Safe-area bottom inset from React Native. |
 | `moreOpen` | `boolean` | no | Whether the More sheet is currently open. Treat this as active state for `more`. |
+| `onNavItemSelect` | direct event | yes | Fires once on completed selection. |
 | `style` | view style | no | Standard RN-applied style. |
 
 ### Events To React Native
 
-Emit one bubbling event:
+Emit one direct event:
 
-- Event prop: `onSelect`
+- Event prop: `onNavItemSelect`
 - Event payload:
 
 ```ts
@@ -98,13 +99,14 @@ The native control must not try to own screen routing itself.
 | `label` | `string` | no | Visible text for `pill` buttons. |
 | `systemImage` | `string` | no | SF Symbol name for `icon` buttons. |
 | `accessibilityLabel` | `string` | no | Accessibility label passed from JS. |
+| `onGlassButtonPress` | direct event | yes | Fires on completed tap. |
 | `style` | view style | no | Standard RN-applied style. |
 
 ### Events To React Native
 
-Emit one bubbling event:
+Emit one direct event:
 
-- Event prop: `onPress`
+- Event prop: `onGlassButtonPress`
 - Event payload:
 
 ```ts
@@ -179,7 +181,7 @@ The RN bridge must expose these prop names exactly so the existing JS code works
 - `activeItem`
 - `bottomInset`
 - `moreOpen`
-- `onSelect`
+- `onNavItemSelect`
 
 ### Header Button Props
 
@@ -187,7 +189,7 @@ The RN bridge must expose these prop names exactly so the existing JS code works
 - `label`
 - `systemImage`
 - `accessibilityLabel`
-- `onPress`
+- `onGlassButtonPress`
 
 ## Fallback Rule
 

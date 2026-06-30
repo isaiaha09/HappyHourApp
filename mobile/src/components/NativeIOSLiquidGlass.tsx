@@ -13,14 +13,14 @@ type NativeBottomNavViewProps = {
   activeItem: NativeLiquidGlassBottomNavItem;
   bottomInset: number;
   moreOpen?: boolean;
-  onSelect?: (event: NativeBottomNavSelectEvent) => void;
+  onNavItemSelect?: (event: NativeBottomNavSelectEvent) => void;
   style?: StyleProp<ViewStyle>;
 };
 
 type NativeHeaderButtonViewProps = {
   accessibilityLabel?: string;
   label?: string;
-  onPress?: (event: NativeHeaderButtonPressEvent) => void;
+  onGlassButtonPress?: (event: NativeHeaderButtonPressEvent) => void;
   systemImage?: string;
   variant: 'pill' | 'icon';
   style?: StyleProp<ViewStyle>;
@@ -77,7 +77,7 @@ export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, moreOpe
       activeItem={activeItem}
       bottomInset={bottomInset}
       moreOpen={moreOpen}
-      onSelect={(event) => onSelect(event.nativeEvent.item)}
+      onNavItemSelect={(event) => onSelect(event.nativeEvent.item)}
       style={style}
     />
   );
@@ -92,7 +92,7 @@ export function NativeIOSLiquidGlassHeaderButton({ accessibilityLabel, fallback,
     <NativeHeaderButtonView
       accessibilityLabel={accessibilityLabel}
       label={label}
-      onPress={() => onPress()}
+      onGlassButtonPress={() => onPress()}
       style={style}
       systemImage={systemImage}
       variant={variant}
