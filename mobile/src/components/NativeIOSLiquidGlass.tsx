@@ -55,8 +55,35 @@ function hasNativeViewManager(viewName: string) {
     return false;
   }
 
-  const getViewManagerConfig = UIManager.getViewManagerConfig?.bind(UIManager);
-  return Boolean(getViewManagerConfig?.(viewName));
+  const nativeUIManager = UIManager as typeof UIManager & {
+    [key: string]: unknown;
+    hasViewManagerConfig?: (name: string) => boolean;
+  };
+  const getViewManagerConfig = nativeUIManager.getViewManagerConfig?.bind(nativeUIManager);
+
+  if (nativeUIManager.hasViewManagerConfig?.(viewName)) {
+    return true;
+  }
+
+  if (getViewManagerConfig?.(viewName) || getViewManagerConfig?.(`${viewName}Manager`)) {
+    return true;
+  }
+
+  return Boolean(nativeUIManager[viewName] || nativeUIManager[`${viewName}Manager`]);
+}
+
+function getBottomNavStyle(bottomInset: number, style?: StyleProp<ViewStyle>) {
+  return [{ width: '100%' as const, height: Math.max(90, 82 + bottomInset) }, style];
+}
+
+function getHeaderButtonStyle(variant: 'pill' | 'icon', label?: string, style?: StyleProp<ViewStyle>) {
+  if (variant === 'icon') {
+    return [{ width: 44, height: 44 }, style];
+  }
+
+  const resolvedLabel = label?.trim() ?? '';
+  const width = Math.max(88, resolvedLabel.length * 9 + 32);
+  return [{ width, height: 44 }, style];
 }
 
 export function isNativeIOSLiquidGlassBottomNavAvailable() {
@@ -78,7 +105,7 @@ export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, moreOpe
       bottomInset={bottomInset}
       moreOpen={moreOpen}
       onNavItemSelect={(event) => onSelect(event.nativeEvent.item)}
-      style={style}
+      style={getBottomNavStyle(bottomInset, style)}
     />
   );
 }
@@ -93,7 +120,7 @@ export function NativeIOSLiquidGlassHeaderButton({ accessibilityLabel, fallback,
       accessibilityLabel={accessibilityLabel}
       label={label}
       onGlassButtonPress={() => onPress()}
-      style={style}
+      style={getHeaderButtonStyle(variant, label, style)}
       systemImage={systemImage}
       variant={variant}
     />
