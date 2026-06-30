@@ -475,6 +475,7 @@ function AppScreen() {
   const bottomMoreSheetProgress = useRef(new Animated.Value(0)).current;
   const bottomMoreSheetDragY = useRef(new Animated.Value(0)).current;
   const bottomMoreSheetClosingRef = useRef(false);
+  const selectedPlaceReturnFade = useRef(new Animated.Value(1)).current;
   const [apiBaseUrl, setApiBaseUrl] = useState(initialApiBaseUrl);
   const [screenMode, setScreenMode] = useState<AppScreenMode>('splash');
   const [onboardingTransitionDirection, setOnboardingTransitionDirection] = useState<OnboardingTransitionDirection>('forward');
@@ -560,6 +561,7 @@ function AppScreen() {
   const [deleteAccountPassword, setDeleteAccountPassword] = useState('');
   const [bottomMoreSheetVisible, setBottomMoreSheetVisible] = useState(false);
   const [shellFadeScope, setShellFadeScope] = useState<ShellFadeScope | null>(null);
+  const [selectedPlaceReturnFadeActive, setSelectedPlaceReturnFadeActive] = useState(false);
   const [profilePlaces, setProfilePlaces] = useState<PlaceListItem[]>([]);
   const [profilePlacesLoading, setProfilePlacesLoading] = useState(false);
   const [businessSearchQuery, setBusinessSearchQuery] = useState('');
@@ -2808,7 +2810,23 @@ function AppScreen() {
     dismissKeyboardForScreenTransition();
 
     if (selectedPlaceSlug) {
-      navigateBrowseProfileTransition('browse');
+      selectedPlaceReturnFade.stopAnimation();
+      selectedPlaceReturnFade.setValue(0);
+      setSelectedPlaceReturnFadeActive(true);
+      setScreenMode('browse');
+      requestAnimationFrame(() => {
+        Animated.timing(selectedPlaceReturnFade, {
+          duration: 220,
+          toValue: 1,
+          useNativeDriver: true,
+        }).start(({ finished }) => {
+          if (!finished) {
+            return;
+          }
+
+          setSelectedPlaceReturnFadeActive(false);
+        });
+      });
       return;
     }
 
@@ -4806,6 +4824,13 @@ function AppScreen() {
     if (isNativeIOSLiquidGlassBottomNavAvailable()) {
       return (
         <View pointerEvents="box-none" style={styles.bottomNavOverlay}>
+          <View
+            pointerEvents="none"
+            style={[
+              styles.bottomNavNativeBackdrop,
+              { height: Math.max(68, insets.bottom + 52) },
+            ]}
+          />
           <NativeIOSLiquidGlassBottomNav
             activeItem={activeItem}
             bottomInset={insets.bottom}
@@ -5663,7 +5688,7 @@ function AppScreen() {
       ) : !authenticatedSession && !selectedPlaceSlug && (screenMode === 'browse' || currentOnboardingScreen !== null || usesGuestBrowseSlideTransition || incomingOnboardingScreen !== null || returningToSplashScreen !== null) ? (
         renderGuestMainShell()
       ) : selectedPlaceSlug ? (
-        <View style={styles.fullScreenRoot}>
+        <Animated.View style={[styles.fullScreenRoot, selectedPlaceReturnFadeActive ? { opacity: selectedPlaceReturnFade } : null]}>
           <SafeAreaView edges={['left', 'right', 'bottom']} style={styles.safeArea}>
             <PlaceDetailScreen
               backButtonLabel={screenMode === 'profiles' || screenMode === 'business-profile-editor' ? 'Back to Profile' : 'Back to Places'}
@@ -5694,7 +5719,7 @@ function AppScreen() {
             />
           </SafeAreaView>
           {authenticatedSession ? renderBottomNav({ guest: false }) : null}
-        </View>
+        </Animated.View>
       ) : usesOnboardingSlideTransition && currentOnboardingScreen ? (
         <View style={styles.onboardingTransitionRoot}>
           <Animated.View

@@ -1,5 +1,11 @@
 import UIKit
 import React
+import SwiftUI
+
+private enum DiningDealzLiquidGlassHeaderVariant: String {
+  case pill
+  case icon
+}
 
 @objc(DiningDealzLiquidGlassHeaderButtonView)
 final class DiningDealzLiquidGlassHeaderButtonView: UIView {
@@ -7,36 +13,34 @@ final class DiningDealzLiquidGlassHeaderButtonView: UIView {
 
   @objc var label: NSString? {
     didSet {
-      updateConfiguration()
       invalidateIntrinsicContentSize()
+      updateRootView()
     }
   }
 
   @objc var systemImage: NSString? {
     didSet {
-      updateConfiguration()
+      updateRootView()
     }
   }
 
   @objc var variant: NSString = "pill" {
     didSet {
-      updateAppearance()
-      updateConfiguration()
       invalidateIntrinsicContentSize()
+      updateRootView()
     }
   }
 
   override var accessibilityLabel: String? {
     didSet {
-      button.accessibilityLabel = accessibilityLabel
+      updateRootView()
     }
   }
 
-  private let blurView = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
-  private let button = UIButton(type: .system)
+  private let hostingController = UIHostingController(rootView: AnyView(EmptyView()))
 
-  private var resolvedVariant: String {
-    variant as String
+  private var resolvedVariant: DiningDealzLiquidGlassHeaderVariant {
+    DiningDealzLiquidGlassHeaderVariant(rawValue: variant as String) ?? .pill
   }
 
   override init(frame: CGRect) {
@@ -50,7 +54,7 @@ final class DiningDealzLiquidGlassHeaderButtonView: UIView {
   }
 
   override var intrinsicContentSize: CGSize {
-    if resolvedVariant == "icon" {
+    if resolvedVariant == .icon {
       return CGSize(width: 44, height: 44)
     }
 
@@ -63,64 +67,115 @@ final class DiningDealzLiquidGlassHeaderButtonView: UIView {
   private func setupView() {
     backgroundColor = .clear
 
-    blurView.translatesAutoresizingMaskIntoConstraints = false
-    blurView.clipsToBounds = true
-    blurView.layer.borderWidth = 1
-    blurView.layer.borderColor = UIColor.white.withAlphaComponent(0.18).cgColor
-    blurView.layer.cornerCurve = .continuous
-
-    button.translatesAutoresizingMaskIntoConstraints = false
-    button.addTarget(self, action: #selector(handlePress), for: .touchUpInside)
-
-    addSubview(blurView)
-    blurView.contentView.addSubview(button)
+    hostingController.view.backgroundColor = .clear
+    hostingController.view.translatesAutoresizingMaskIntoConstraints = false
+    addSubview(hostingController.view)
 
     NSLayoutConstraint.activate([
-      blurView.leadingAnchor.constraint(equalTo: leadingAnchor),
-      blurView.trailingAnchor.constraint(equalTo: trailingAnchor),
-      blurView.topAnchor.constraint(equalTo: topAnchor),
-      blurView.bottomAnchor.constraint(equalTo: bottomAnchor),
-
-      button.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor),
-      button.trailingAnchor.constraint(equalTo: blurView.contentView.trailingAnchor),
-      button.topAnchor.constraint(equalTo: blurView.contentView.topAnchor),
-      button.bottomAnchor.constraint(equalTo: blurView.contentView.bottomAnchor),
+      hostingController.view.leadingAnchor.constraint(equalTo: leadingAnchor),
+      hostingController.view.trailingAnchor.constraint(equalTo: trailingAnchor),
+      hostingController.view.topAnchor.constraint(equalTo: topAnchor),
+      hostingController.view.bottomAnchor.constraint(equalTo: bottomAnchor),
     ])
 
-    updateAppearance()
-    updateConfiguration()
+    updateRootView()
   }
 
-  private func updateAppearance() {
-    let isIcon = resolvedVariant == "icon"
-    blurView.layer.cornerRadius = isIcon ? 22 : 22
-  }
+  private func updateRootView() {
+    let currentLabel = label as String?
+    let currentSystemImage = systemImage as String?
+    let currentAccessibilityLabel = accessibilityLabel
+    let currentVariant = resolvedVariant
 
-  private func updateConfiguration() {
-    let isIcon = resolvedVariant == "icon"
-    var configuration = UIButton.Configuration.plain()
-    configuration.baseForegroundColor = UIColor(red: 0.25, green: 0.13, blue: 0.08, alpha: 1)
-    configuration.contentInsets = .zero
-
-    if isIcon {
-      if let symbolName = systemImage as String? {
-        configuration.image = UIImage(systemName: symbolName)
+    hostingController.rootView = AnyView(
+      Group {
+        if #available(iOS 26.0, *) {
+          DiningDealzLiquidGlassHeaderButtonContent(
+            accessibilityLabel: currentAccessibilityLabel,
+            label: currentLabel,
+            onPress: handlePress,
+            systemImage: currentSystemImage,
+            variant: currentVariant
+          )
+        } else {
+          DiningDealzLegacyHeaderButtonContent(
+            accessibilityLabel: currentAccessibilityLabel,
+            label: currentLabel,
+            onPress: handlePress,
+            systemImage: currentSystemImage,
+            variant: currentVariant
+          )
+        }
       }
-      configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
-    } else {
-      configuration.title = label as String?
-      configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
-        var outgoing = incoming
-        outgoing.font = .systemFont(ofSize: 15, weight: .semibold)
-        return outgoing
-      }
-      configuration.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16)
-    }
-
-    button.configuration = configuration
+    )
   }
 
   @objc private func handlePress() {
     onGlassButtonPress?([:])
+  }
+}
+
+@available(iOS 26.0, *)
+private struct DiningDealzLiquidGlassHeaderButtonContent: View {
+  let accessibilityLabel: String?
+  let label: String?
+  let onPress: () -> Void
+  let systemImage: String?
+  let variant: DiningDealzLiquidGlassHeaderVariant
+
+  var body: some View {
+    Button(action: onPress) {
+      if variant == .icon {
+        Image(systemName: systemImage ?? "questionmark")
+          .font(.system(size: 18, weight: .semibold))
+          .frame(width: 44, height: 44)
+      } else {
+        Text(label ?? "")
+          .font(.system(size: 15, weight: .semibold))
+          .lineLimit(1)
+          .padding(.horizontal, 16)
+          .frame(minHeight: 44)
+      }
+    }
+    .buttonStyle(.glass)
+    .accessibilityLabel(accessibilityLabel ?? label ?? "Button")
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(Color.clear)
+  }
+}
+
+private struct DiningDealzLegacyHeaderButtonContent: View {
+  let accessibilityLabel: String?
+  let label: String?
+  let onPress: () -> Void
+  let systemImage: String?
+  let variant: DiningDealzLiquidGlassHeaderVariant
+
+  var body: some View {
+    Button(action: onPress) {
+      if variant == .icon {
+        Image(systemName: systemImage ?? "questionmark")
+          .font(.system(size: 18, weight: .semibold))
+          .frame(width: 44, height: 44)
+      } else {
+        Text(label ?? "")
+          .font(.system(size: 15, weight: .semibold))
+          .lineLimit(1)
+          .padding(.horizontal, 16)
+          .frame(minHeight: 44)
+      }
+    }
+    .foregroundStyle(Color(red: 0.25, green: 0.13, blue: 0.08))
+    .background(
+      Capsule(style: .continuous)
+        .fill(Color.white.opacity(0.88))
+    )
+    .overlay(
+      Capsule(style: .continuous)
+        .stroke(Color.white.opacity(0.5), lineWidth: 1)
+    )
+    .accessibilityLabel(accessibilityLabel ?? label ?? "Button")
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(Color.clear)
   }
 }

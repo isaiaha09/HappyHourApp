@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines the exact native iOS contract that the Swift implementation must satisfy so the React Native app can use genuine iPhone-native Liquid Glass controls on iOS and keep the current JS navigation as the fallback everywhere else.
+This document defines the exact native iOS contract that the Swift implementation must satisfy so the React Native app can use real SwiftUI Liquid Glass controls on supported iOS releases and keep the current JS navigation as the fallback everywhere else.
 
 ## Current JS Integration Points
 
@@ -66,7 +66,7 @@ Emit one direct event:
 
 ### Required Behavior
 
-- Render genuine iOS-native glass/material styling.
+- Render real SwiftUI Liquid Glass styling on supported iOS releases.
 - Show three items: `map`, `profile`, `more`.
 - Support drag-across selection.
 - Do not emit selection continuously during drag.
@@ -117,7 +117,7 @@ No extra data is required because JS already knows which action the button repre
 
 ### Required Behavior
 
-- Render genuine iOS-native glass/material styling.
+- Render real SwiftUI Liquid Glass styling on supported iOS releases.
 - `variant='pill'` should render a labeled pill control.
 - `variant='icon'` should render a circular icon control using the passed SF Symbol.
 - Respect the assigned RN frame/style.
@@ -169,8 +169,9 @@ Recommended shape:
 Preferred implementation stack:
 
 - Swift
-- UIKit-hosted view managers for React Native compatibility
-- SwiftUI internally if desired for visual implementation
+- UIKit-hosted React Native view managers
+- SwiftUI-hosted controls internally for the actual button and navigation rendering
+- Standard SwiftUI Liquid Glass APIs like `.buttonStyle(.glass)` and `.buttonStyle(.glassProminent)` on the latest iOS SDK/runtime
 
 ## Minimum Native API Surface
 
@@ -197,7 +198,7 @@ Do not remove or break the JS fallback.
 
 The intended runtime behavior is:
 
-- iOS with registered native view manager -> use native glass control
+- iOS with registered native view manager on a supported latest iOS runtime -> use native SwiftUI Liquid Glass control
 - anything else -> render existing React Native control
 
 That fallback logic already exists in `src/components/NativeIOSLiquidGlass.tsx`.

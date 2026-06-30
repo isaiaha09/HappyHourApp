@@ -1,5 +1,36 @@
 import UIKit
 import React
+import SwiftUI
+
+private enum DiningDealzLiquidGlassBottomNavItem: String, CaseIterable, Identifiable {
+  case map
+  case profile
+  case more
+
+  var id: String { rawValue }
+
+  var title: String {
+    switch self {
+    case .map:
+      return "Map"
+    case .profile:
+      return "Profile"
+    case .more:
+      return "More"
+    }
+  }
+
+  var systemImageName: String {
+    switch self {
+    case .map:
+      return "map"
+    case .profile:
+      return "person.crop.circle"
+    case .more:
+      return "line.3.horizontal"
+    }
+  }
+}
 
 @objc(DiningDealzLiquidGlassBottomNavView)
 final class DiningDealzLiquidGlassBottomNavView: UIView {
@@ -7,67 +38,28 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
 
   @objc var activeItem: NSString = "map" {
     didSet {
-      selectedItem = NavItem(rawValue: activeItem as String) ?? .map
-      updateSelection(animated: true)
+      updateRootView()
     }
   }
 
   @objc var bottomInset: NSNumber = 0 {
     didSet {
       invalidateIntrinsicContentSize()
-      updateBottomPadding()
+      updateRootView()
     }
   }
 
   @objc var moreOpen: Bool = false {
     didSet {
-      updateSelection(animated: true)
+      updateRootView()
     }
   }
 
-  private enum NavItem: String, CaseIterable {
-    case map
-    case profile
-    case more
+  private let hostingController = UIHostingController(rootView: AnyView(EmptyView()))
 
-    var title: String {
-      switch self {
-      case .map:
-        return "Map"
-      case .profile:
-        return "Profile"
-      case .more:
-        return "More"
-      }
-    }
-
-    var systemImageName: String {
-      switch self {
-      case .map:
-        return "map"
-      case .profile:
-        return "person.crop.circle"
-      case .more:
-        return "line.3.horizontal"
-      }
-    }
+  private var resolvedActiveItem: DiningDealzLiquidGlassBottomNavItem {
+    DiningDealzLiquidGlassBottomNavItem(rawValue: activeItem as String) ?? .map
   }
-
-  private let blurView = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
-  private let highlightView = UIView()
-  private let stackView = UIStackView()
-  private var itemButtons: [NavItem: UIButton] = [:]
-  private var hoveredItem: NavItem?
-  private var selectedItem: NavItem = .map
-  private var bottomPaddingConstraint: NSLayoutConstraint?
-
-  private lazy var touchRecognizer: UILongPressGestureRecognizer = {
-    let recognizer = UILongPressGestureRecognizer(target: self, action: #selector(handleTouchGesture(_:)))
-    recognizer.minimumPressDuration = 0
-    recognizer.allowableMovement = .greatestFiniteMagnitude
-    recognizer.cancelsTouchesInView = true
-    return recognizer
-  }()
 
   override init(frame: CGRect) {
     super.init(frame: frame)
@@ -83,158 +75,183 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     CGSize(width: UIView.noIntrinsicMetric, height: 82 + CGFloat(truncating: bottomInset))
   }
 
-  override func layoutSubviews() {
-    super.layoutSubviews()
-    updateSelection(animated: false)
-  }
-
   private func setupView() {
     backgroundColor = .clear
 
-    blurView.translatesAutoresizingMaskIntoConstraints = false
-    blurView.clipsToBounds = true
-    blurView.layer.cornerCurve = .continuous
-    blurView.layer.cornerRadius = 28
-    blurView.layer.borderWidth = 1
-    blurView.layer.borderColor = UIColor.white.withAlphaComponent(0.18).cgColor
-
-    highlightView.backgroundColor = UIColor.white.withAlphaComponent(0.16)
-    highlightView.layer.cornerCurve = .continuous
-    highlightView.layer.cornerRadius = 24
-    highlightView.isUserInteractionEnabled = false
-    highlightView.alpha = 0
-    highlightView.translatesAutoresizingMaskIntoConstraints = false
-
-    stackView.axis = .horizontal
-    stackView.alignment = .fill
-    stackView.distribution = .fillEqually
-    stackView.spacing = 8
-    stackView.translatesAutoresizingMaskIntoConstraints = false
-
-    addSubview(blurView)
-    blurView.contentView.addSubview(highlightView)
-    blurView.contentView.addSubview(stackView)
-
-    for item in NavItem.allCases {
-      let button = makeButton(for: item)
-      itemButtons[item] = button
-      stackView.addArrangedSubview(button)
-    }
-
-    addGestureRecognizer(touchRecognizer)
-
-    let bottomPadding = max(8, CGFloat(truncating: bottomInset))
-    bottomPaddingConstraint = blurView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -bottomPadding)
+    hostingController.view.backgroundColor = .clear
+    hostingController.view.translatesAutoresizingMaskIntoConstraints = false
+    addSubview(hostingController.view)
 
     NSLayoutConstraint.activate([
-      blurView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
-      blurView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-      blurView.topAnchor.constraint(equalTo: topAnchor, constant: 0),
-      bottomPaddingConstraint!,
-
-      stackView.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor, constant: 10),
-      stackView.trailingAnchor.constraint(equalTo: blurView.contentView.trailingAnchor, constant: -10),
-      stackView.topAnchor.constraint(equalTo: blurView.contentView.topAnchor, constant: 10),
-      stackView.bottomAnchor.constraint(equalTo: blurView.contentView.bottomAnchor, constant: -10),
+      hostingController.view.leadingAnchor.constraint(equalTo: leadingAnchor),
+      hostingController.view.trailingAnchor.constraint(equalTo: trailingAnchor),
+      hostingController.view.topAnchor.constraint(equalTo: topAnchor),
+      hostingController.view.bottomAnchor.constraint(equalTo: bottomAnchor),
     ])
 
-    selectedItem = .map
-    updateSelection(animated: false)
+    updateRootView()
   }
 
-  private func makeButton(for item: NavItem) -> UIButton {
-    let button = UIButton(type: .system)
-    var configuration = UIButton.Configuration.plain()
-    configuration.title = item.title
-    configuration.image = UIImage(systemName: item.systemImageName)
-    configuration.imagePlacement = .top
-    configuration.imagePadding = 4
-    configuration.baseForegroundColor = UIColor.white.withAlphaComponent(0.88)
-    configuration.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
-    configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
-      var outgoing = incoming
-      outgoing.font = .systemFont(ofSize: 11, weight: .semibold)
-      return outgoing
-    }
-    button.configuration = configuration
-    button.isUserInteractionEnabled = false
-    button.translatesAutoresizingMaskIntoConstraints = false
-    return button
-  }
+  private func updateRootView() {
+    let currentActiveItem = resolvedActiveItem
+    let currentBottomInset = CGFloat(truncating: bottomInset)
+    let currentMoreOpen = moreOpen
 
-  private func updateBottomPadding() {
-    bottomPaddingConstraint?.constant = -max(8, CGFloat(truncating: bottomInset))
-    layoutIfNeeded()
-  }
-
-  private func resolvedActiveItem() -> NavItem {
-    if let hoveredItem {
-      return hoveredItem
-    }
-    if moreOpen {
-      return .more
-    }
-    return selectedItem
-  }
-
-  private func updateSelection(animated: Bool) {
-    let active = resolvedActiveItem()
-
-    for (item, button) in itemButtons {
-      guard var configuration = button.configuration else {
-        continue
+    hostingController.rootView = AnyView(
+      Group {
+        if #available(iOS 26.0, *) {
+          DiningDealzLiquidGlassBottomNavContent(
+            activeItem: currentActiveItem,
+            bottomInset: currentBottomInset,
+            moreOpen: currentMoreOpen,
+            onSelect: handleSelection
+          )
+        } else {
+          DiningDealzLegacyBottomNavContent(
+            activeItem: currentActiveItem,
+            bottomInset: currentBottomInset,
+            moreOpen: currentMoreOpen,
+            onSelect: handleSelection
+          )
+        }
       }
-      configuration.baseForegroundColor = item == active
-        ? UIColor.white
-        : UIColor.white.withAlphaComponent(0.86)
-      button.configuration = configuration
-    }
-
-    guard let activeButton = itemButtons[active] else {
-      return
-    }
-
-    let targetFrame = activeButton.frame.insetBy(dx: 2, dy: 2)
-    let animations = {
-      self.highlightView.frame = targetFrame
-      self.highlightView.alpha = 1
-    }
-
-    if animated {
-      UIView.animate(withDuration: 0.22, delay: 0, usingSpringWithDamping: 0.88, initialSpringVelocity: 0.2, options: [.beginFromCurrentState, .allowUserInteraction], animations: animations)
-    } else {
-      animations()
-    }
+    )
   }
 
-  private func item(at point: CGPoint) -> NavItem? {
-    for (item, button) in itemButtons {
-      let buttonFrame = convert(button.bounds, from: button)
-      if buttonFrame.contains(point) {
-        return item
-      }
-    }
-    return nil
+  private func handleSelection(_ item: DiningDealzLiquidGlassBottomNavItem) {
+    activeItem = item.rawValue as NSString
+    onNavItemSelect?(["item": item.rawValue])
+  }
+}
+
+@available(iOS 26.0, *)
+private struct DiningDealzLiquidGlassBottomNavContent: View {
+  let activeItem: DiningDealzLiquidGlassBottomNavItem
+  let bottomInset: CGFloat
+  let moreOpen: Bool
+  let onSelect: (DiningDealzLiquidGlassBottomNavItem) -> Void
+
+  @State private var hoveredItem: DiningDealzLiquidGlassBottomNavItem?
+
+  private let itemSpacing: CGFloat = 12
+
+  private var displayedActiveItem: DiningDealzLiquidGlassBottomNavItem {
+    hoveredItem ?? (moreOpen ? .more : activeItem)
   }
 
-  @objc private func handleTouchGesture(_ recognizer: UILongPressGestureRecognizer) {
-    let location = recognizer.location(in: self)
-    switch recognizer.state {
-    case .began, .changed:
-      hoveredItem = item(at: location)
-      updateSelection(animated: false)
-    case .ended:
-      let finalItem = item(at: location) ?? hoveredItem
-      if let finalItem {
-        selectedItem = finalItem
-        activeItem = finalItem.rawValue as NSString
-        onNavItemSelect?(["item": finalItem.rawValue])
+  var body: some View {
+    VStack(spacing: 0) {
+      Spacer(minLength: 0)
+
+      GeometryReader { geometry in
+        HStack(spacing: itemSpacing) {
+          ForEach(DiningDealzLiquidGlassBottomNavItem.allCases) { item in
+            Button(action: {
+              onSelect(item)
+            }) {
+              VStack(spacing: 4) {
+                Image(systemName: item.systemImageName)
+                  .font(.system(size: 18, weight: .semibold))
+                  .frame(height: 20)
+                Text(item.title)
+                  .font(.system(size: 11, weight: .semibold))
+                  .lineLimit(1)
+              }
+              .frame(maxWidth: .infinity)
+              .frame(height: 64)
+            }
+            .buttonStyle(displayedActiveItem == item ? .glassProminent : .glass)
+          }
+        }
+        .contentShape(Rectangle())
+        .simultaneousGesture(
+          DragGesture(minimumDistance: 0)
+            .onChanged { value in
+              hoveredItem = item(at: value.location.x, totalWidth: geometry.size.width)
+            }
+            .onEnded { value in
+              let finalItem = item(at: value.location.x, totalWidth: geometry.size.width) ?? hoveredItem
+              hoveredItem = nil
+              if let finalItem {
+                onSelect(finalItem)
+              }
+            }
+        )
       }
-      hoveredItem = nil
-      updateSelection(animated: true)
-    default:
-      hoveredItem = nil
-      updateSelection(animated: true)
+      .frame(height: 74)
+      .padding(.horizontal, 14)
+      .padding(.top, 6)
+      .padding(.bottom, max(8, bottomInset))
     }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    .background(Color.clear)
+  }
+
+  private func item(at x: CGFloat, totalWidth: CGFloat) -> DiningDealzLiquidGlassBottomNavItem? {
+    let items = DiningDealzLiquidGlassBottomNavItem.allCases
+    let itemCount = CGFloat(items.count)
+    let contentWidth = totalWidth - (itemSpacing * (itemCount - 1))
+    guard contentWidth > 0 else {
+      return nil
+    }
+
+    let itemWidth = contentWidth / itemCount
+    guard itemWidth > 0, x >= 0, x <= totalWidth else {
+      return nil
+    }
+
+    let stride = itemWidth + itemSpacing
+    let index = min(Int(x / stride), items.count - 1)
+    let startX = CGFloat(index) * stride
+    if x > startX + itemWidth {
+      return nil
+    }
+
+    return items[index]
+  }
+}
+
+private struct DiningDealzLegacyBottomNavContent: View {
+  let activeItem: DiningDealzLiquidGlassBottomNavItem
+  let bottomInset: CGFloat
+  let moreOpen: Bool
+  let onSelect: (DiningDealzLiquidGlassBottomNavItem) -> Void
+
+  private var displayedActiveItem: DiningDealzLiquidGlassBottomNavItem {
+    moreOpen ? .more : activeItem
+  }
+
+  var body: some View {
+    VStack(spacing: 0) {
+      Spacer(minLength: 0)
+      HStack(spacing: 12) {
+        ForEach(DiningDealzLiquidGlassBottomNavItem.allCases) { item in
+          Button(action: {
+            onSelect(item)
+          }) {
+            VStack(spacing: 4) {
+              Image(systemName: item.systemImageName)
+                .font(.system(size: 18, weight: .semibold))
+                .frame(height: 20)
+              Text(item.title)
+                .font(.system(size: 11, weight: .semibold))
+                .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 64)
+          }
+          .foregroundStyle(Color.white)
+          .background(
+            Capsule(style: .continuous)
+              .fill(displayedActiveItem == item ? Color.white.opacity(0.22) : Color.white.opacity(0.12))
+          )
+        }
+      }
+      .padding(.horizontal, 14)
+      .padding(.top, 6)
+      .padding(.bottom, max(8, bottomInset))
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    .background(Color.clear)
   }
 }

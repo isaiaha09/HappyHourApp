@@ -172,6 +172,7 @@ export function DirectMessagesScreen({
 	const showInboxList = !launchedFromBusinessProfile && !selectedThreadId;
 	const showConversation = launchedFromBusinessProfile || !!selectedThreadId;
 	const inboxFade = useRef(new Animated.Value(showInboxList ? 1 : 0)).current;
+	const screenFade = useRef(new Animated.Value(launchedFromBusinessProfile ? 0 : 1)).current;
 
 	function closeAllSwipeableRows(exceptThreadId?: number) {
 		swipeableRowRefs.current.forEach((row, threadId) => {
@@ -296,7 +297,7 @@ export function DirectMessagesScreen({
 		return () => {
 			mounted = false;
 		};
-	}, [cachedThreads, contextListingSlug, hasCustomerContext, normalizedContextBusinessName, onRefreshThreads, threadCacheKey]);
+	}, [contextListingSlug, hasCustomerContext, normalizedContextBusinessName, onRefreshThreads, threadCacheKey]);
 
 	useEffect(() => {
 		let mounted = true;
@@ -589,6 +590,20 @@ export function DirectMessagesScreen({
 	}, [inboxFade, showInboxList]);
 
 	useEffect(() => {
+		if (!launchedFromBusinessProfile) {
+			screenFade.setValue(1);
+			return;
+		}
+
+		screenFade.setValue(0);
+		Animated.timing(screenFade, {
+			duration: 220,
+			toValue: 1,
+			useNativeDriver: true,
+		}).start();
+	}, [launchedFromBusinessProfile, screenFade]);
+
+	useEffect(() => {
 		const showSubscription = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
 		const hideSubscription = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
 
@@ -606,52 +621,53 @@ export function DirectMessagesScreen({
 
 	return (
 		<KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={0} style={[styles.detailScreenRoot, styles.directMessageScreenRoot, isLandscape ? styles.detailScreenLandscape : null]}>
-			<View style={[styles.screenHeaderBar, styles.screenHeaderBarRow, styles.directMessageScreenHeaderBar]}>
-				{!showInboxList ? (
-					<NativeIOSLiquidGlassHeaderButton
-						fallback={(
-							<Pressable
-								onPress={() => {
-									if (launchedFromBusinessProfile) {
-										onBack();
-										return;
-									}
-									setSelectedThreadId(null);
-									setMessages([]);
-									setMessagesError(null);
-								}}
-								style={styles.backButton}
-							>
-								<Text style={styles.backButtonText}>{launchedFromBusinessProfile ? backButtonLabel : 'Inbox'}</Text>
-							</Pressable>
-						)}
-						label={launchedFromBusinessProfile ? backButtonLabel : 'Inbox'}
-						onPress={() => {
-							if (launchedFromBusinessProfile) {
-								onBack();
-								return;
-							}
-							setSelectedThreadId(null);
-							setMessages([]);
-							setMessagesError(null);
-						}}
-						variant="pill"
-					/>
-				) : (
-					<NativeIOSLiquidGlassHeaderButton
-						fallback={(
-							<Pressable onPress={onBack} style={styles.backButton}>
-								<Text style={styles.backButtonText}>{backButtonLabel}</Text>
-							</Pressable>
-						)}
-						label={backButtonLabel}
-						onPress={onBack}
-						variant="pill"
-					/>
-				)}
-			</View>
+			<Animated.View style={{ flex: 1, opacity: screenFade }}>
+				<View style={[styles.screenHeaderBar, styles.screenHeaderBarRow, styles.directMessageScreenHeaderBar]}>
+					{!showInboxList ? (
+						<NativeIOSLiquidGlassHeaderButton
+							fallback={(
+								<Pressable
+									onPress={() => {
+										if (launchedFromBusinessProfile) {
+											onBack();
+											return;
+										}
+										setSelectedThreadId(null);
+										setMessages([]);
+										setMessagesError(null);
+									}}
+									style={styles.backButton}
+								>
+									<Text style={styles.backButtonText}>{launchedFromBusinessProfile ? backButtonLabel : 'Inbox'}</Text>
+								</Pressable>
+							)}
+							label={launchedFromBusinessProfile ? backButtonLabel : 'Inbox'}
+							onPress={() => {
+								if (launchedFromBusinessProfile) {
+									onBack();
+									return;
+								}
+								setSelectedThreadId(null);
+								setMessages([]);
+								setMessagesError(null);
+							}}
+							variant="pill"
+						/>
+					) : (
+						<NativeIOSLiquidGlassHeaderButton
+							fallback={(
+								<Pressable onPress={onBack} style={styles.backButton}>
+									<Text style={styles.backButtonText}>{backButtonLabel}</Text>
+								</Pressable>
+							)}
+							label={backButtonLabel}
+							onPress={onBack}
+							variant="pill"
+						/>
+					)}
+				</View>
 
-			<View style={{ flex: 1 }}>
+				<View style={{ flex: 1 }}>
 				<Animated.View
 					pointerEvents={showInboxList ? 'auto' : 'none'}
 					style={{
@@ -844,7 +860,8 @@ export function DirectMessagesScreen({
 						</>
 					) : null}
 				</Animated.View>
-			</View>
+				</View>
+			</Animated.View>
 			<PhotoLightbox
 				imageUrls={messageImageUrls}
 				initialIndex={photoLightboxIndex}

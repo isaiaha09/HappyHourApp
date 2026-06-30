@@ -27,6 +27,7 @@ import { WebView } from 'react-native-webview';
 import { styles } from '../appStyles';
 import type { AuthPortal, LoginFormState, ProfileFormState } from '../appFlowTypes';
 import { BusinessDealsEditor, BusinessHoursEditor } from '../components/BusinessProfileStructuredEditors';
+import { NativeIOSLiquidGlassBackButton } from '../components/NativeIOSLiquidGlass';
 import { manualBusinessCityOptions, manualBusinessVenueOptions } from '../browseConfig';
 import { dedupeImageUrls, formatPlaceAddress, getPlaceLocations, normalizeSearchText } from '../placeHelpers';
 import { SOCIAL_PLATFORM_LABELS, getSocialProfilePreview, getSocialProfileValidationMessage } from '../socialProfiles';
@@ -582,9 +583,7 @@ export function AuthPortalScreen({ authMessage, autoFocusIdentifier, errorMessag
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
-            <Pressable onPress={onBackToLanding} style={styles.backButton}>
-              <Text style={styles.backButtonText}>Back</Text>
-            </Pressable>
+            <NativeIOSLiquidGlassBackButton label="Back" onPress={onBackToLanding} />
           </View>
 
           <View style={styles.authFormStack}>
@@ -710,9 +709,7 @@ export function CreateProfileScreen({ errorMessage, form, isLandscape, message, 
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
-            <Pressable onPress={onBack} style={styles.backButton}>
-              <Text style={styles.backButtonText}>Back</Text>
-            </Pressable>
+            <NativeIOSLiquidGlassBackButton label="Back" onPress={onBack} />
           </View>
 
           <View style={styles.profileCard}>
@@ -811,9 +808,7 @@ export function EmailVerificationScreen({ errorMessage, isLandscape, message, on
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
-            <Pressable onPress={onBack} style={styles.backButton}>
-              <Text style={styles.backButtonText}>Back to login</Text>
-            </Pressable>
+            <NativeIOSLiquidGlassBackButton label="Back to login" onPress={onBack} />
           </View>
 
           <View style={styles.profileCard}>
@@ -901,9 +896,7 @@ export function BusinessClaimReviewPendingScreen({ errorMessage, isLandscape, me
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
-            <Pressable onPress={onBack} style={styles.backButton}>
-              <Text style={styles.backButtonText}>Back to login</Text>
-            </Pressable>
+            <NativeIOSLiquidGlassBackButton label="Back to login" onPress={onBack} />
           </View>
 
           <View style={styles.profileCard}>
@@ -966,9 +959,7 @@ export function ContactSupportScreen({ errorMessage, initialMessage = '', initia
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
-            <Pressable onPress={onBack} style={styles.backButton}>
-              <Text style={styles.backButtonText}>Back to Settings</Text>
-            </Pressable>
+            <NativeIOSLiquidGlassBackButton label="Back to Settings" onPress={onBack} />
           </View>
 
           <View style={styles.profileCard}>
@@ -1041,9 +1032,7 @@ function LegalDocumentScreen({ eyebrow, intro, isLandscape, onBack, sections, ti
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
-            <Pressable onPress={onBack} style={styles.backButton}>
-              <Text style={styles.backButtonText}>Back to Settings</Text>
-            </Pressable>
+            <NativeIOSLiquidGlassBackButton label="Back to Settings" onPress={onBack} />
           </View>
 
           <View style={styles.profileCard}>
@@ -1140,9 +1129,7 @@ export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces,
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
-            <Pressable onPress={onBack} style={styles.backButton}>
-              <Text style={styles.backButtonText}>Back to create profile</Text>
-            </Pressable>
+            <NativeIOSLiquidGlassBackButton label="Back to create profile" onPress={onBack} />
           </View>
 
           <View style={styles.profileCard}>
@@ -1463,9 +1450,7 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
-            <Pressable onPress={onBack} style={styles.backButton}>
-              <Text style={styles.backButtonText}>Back</Text>
-            </Pressable>
+            <NativeIOSLiquidGlassBackButton label="Back" onPress={onBack} />
           </View>
 
           <View style={styles.profileCard}>

@@ -7,7 +7,7 @@ import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Modal, Platfor
 import { styles } from '../appStyles';
 import { buildDealOverridesFromDeals, buildNormalizedDealOverrides, buildNormalizedOperatingHourOverrides, buildOperatingHourOverridesFromWindows } from '../businessProfileOverrides';
 import { BusinessDealsEditor, BusinessHoursEditor } from '../components/BusinessProfileStructuredEditors';
-import { NativeIOSLiquidGlassHeaderButton } from '../components/NativeIOSLiquidGlass';
+import { NativeIOSLiquidGlassBackButton, NativeIOSLiquidGlassHeaderButton } from '../components/NativeIOSLiquidGlass';
 import { SOCIAL_PLATFORM_LABELS, buildSocialProfilesFromInputs, getSocialProfilePreview, getSocialProfileValidationMessage, socialProfilesToInputs } from '../socialProfiles';
 import { dedupeImageUrls, normalizeSearchText } from '../placeHelpers';
 import type { BusinessAttachmentDraft, DirectMessageThread, FavoriteBusinessNotification, ProfileDashboardUpdateRequest, SignupResponse, TwoFactorSetupResponse } from '../types';
@@ -780,9 +780,7 @@ export function FavoriteBusinessesScreen({
       <ScrollView contentContainerStyle={styles.dashboardScrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <View style={styles.screenHeaderBar}>
           <View style={styles.dashboardHeaderRow}>
-            <Pressable onPress={onBack} style={styles.backButton}>
-              <Text style={styles.backButtonText}>Back to Profile</Text>
-            </Pressable>
+            <NativeIOSLiquidGlassBackButton label="Back to Profile" onPress={onBack} />
           </View>
         </View>
 
@@ -856,9 +854,7 @@ export function FavoriteBusinessNotificationsScreen({
       <ScrollView contentContainerStyle={styles.dashboardScrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.screenHeaderBar}>
           <View style={styles.dashboardHeaderRow}>
-            <Pressable onPress={onBack} style={styles.backButton}>
-              <Text style={styles.backButtonText}>Back to Profile</Text>
-            </Pressable>
+            <NativeIOSLiquidGlassBackButton label="Back to Profile" onPress={onBack} />
           </View>
         </View>
 
@@ -1139,9 +1135,7 @@ export function BusinessProfileEditorScreen({
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
-            <Pressable onPress={onBack} style={styles.backButton}>
-              <Text style={styles.backButtonText}>Back to Profile</Text>
-            </Pressable>
+            <NativeIOSLiquidGlassBackButton label="Back to Profile" onPress={onBack} />
           </View>
 
           <View style={styles.dashboardShell}>
@@ -1317,9 +1311,7 @@ export function AccountSettingsScreen({
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
-            <Pressable onPress={onBack} style={styles.backButton}>
-              <Text style={styles.backButtonText}>Back to Dashboard</Text>
-            </Pressable>
+            <NativeIOSLiquidGlassBackButton label="Back to Dashboard" onPress={onBack} />
           </View>
 
           <View style={styles.dashboardShell}>
@@ -1578,9 +1570,7 @@ export function BlockedDirectMessageCustomersScreen({
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
-            <Pressable onPress={onBack} style={styles.backButton}>
-              <Text style={styles.backButtonText}>Back to Settings</Text>
-            </Pressable>
+            <NativeIOSLiquidGlassBackButton label="Back to Settings" onPress={onBack} />
           </View>
 
           <View style={styles.dashboardShell}>

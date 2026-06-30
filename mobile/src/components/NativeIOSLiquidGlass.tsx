@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
-import { Platform, UIManager, requireNativeComponent, type NativeSyntheticEvent, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, Pressable, Text, UIManager, requireNativeComponent, type NativeSyntheticEvent, type StyleProp, type ViewStyle } from 'react-native';
+
+import { styles } from '../appStyles';
 
 export type NativeLiquidGlassBottomNavItem = 'map' | 'profile' | 'more';
 
@@ -42,6 +44,12 @@ type NativeIOSLiquidGlassHeaderButtonProps = {
   style?: StyleProp<ViewStyle>;
   systemImage?: string;
   variant: 'pill' | 'icon';
+};
+
+type NativeIOSLiquidGlassBackButtonProps = {
+  label: string;
+  onPress: () => void;
+  style?: StyleProp<ViewStyle>;
 };
 
 const nativeBottomNavViewName = 'DiningDealzLiquidGlassBottomNavView';
@@ -123,6 +131,22 @@ export function NativeIOSLiquidGlassHeaderButton({ accessibilityLabel, fallback,
       style={getHeaderButtonStyle(variant, label, style)}
       systemImage={systemImage}
       variant={variant}
+    />
+  );
+}
+
+export function NativeIOSLiquidGlassBackButton({ label, onPress, style }: NativeIOSLiquidGlassBackButtonProps) {
+  return (
+    <NativeIOSLiquidGlassHeaderButton
+      fallback={(
+        <Pressable onPress={onPress} style={[styles.backButton, style]}>
+          <Text style={styles.backButtonText}>{label}</Text>
+        </Pressable>
+      )}
+      label={label}
+      onPress={onPress}
+      style={style}
+      variant="pill"
     />
   );
 }
