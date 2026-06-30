@@ -146,21 +146,39 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
       GeometryReader { geometry in
         HStack(spacing: itemSpacing) {
           ForEach(DiningDealzLiquidGlassBottomNavItem.allCases) { item in
-            Button(action: {
-              onSelect(item)
-            }) {
-              VStack(spacing: 4) {
-                Image(systemName: item.systemImageName)
-                  .font(.system(size: 18, weight: .semibold))
-                  .frame(height: 20)
-                Text(item.title)
-                  .font(.system(size: 11, weight: .semibold))
-                  .lineLimit(1)
+            if displayedActiveItem == item {
+              Button(action: {
+                onSelect(item)
+              }) {
+                VStack(spacing: 4) {
+                  Image(systemName: item.systemImageName)
+                    .font(.system(size: 18, weight: .semibold))
+                    .frame(height: 20)
+                  Text(item.title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 64)
               }
-              .frame(maxWidth: .infinity)
-              .frame(height: 64)
+              .buttonStyle(GlassProminentButtonStyle.glassProminent)
+            } else {
+              Button(action: {
+                onSelect(item)
+              }) {
+                VStack(spacing: 4) {
+                  Image(systemName: item.systemImageName)
+                    .font(.system(size: 18, weight: .semibold))
+                    .frame(height: 20)
+                  Text(item.title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 64)
+              }
+              .buttonStyle(GlassButtonStyle.glass)
             }
-            .buttonStyle(displayedActiveItem == item ? .glassProminent : .glass)
           }
         }
         .contentShape(Rectangle())

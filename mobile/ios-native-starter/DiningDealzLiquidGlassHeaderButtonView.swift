@@ -137,7 +137,7 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
           .frame(minHeight: 44)
       }
     }
-    .buttonStyle(.glass)
+    .buttonStyle(GlassButtonStyle.glass)
     .accessibilityLabel(accessibilityLabel ?? label ?? "Button")
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(Color.clear)
