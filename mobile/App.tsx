@@ -1469,6 +1469,17 @@ function AppScreen() {
       },
     ],
   };
+  const loginSuccessBottomNavLift = Math.max(0, insets.bottom - 8);
+  const loginSuccessBottomNavStyle = {
+    transform: [
+      {
+        translateY: loginSuccessTransition.interpolate({
+          inputRange: [0, 1],
+          outputRange: [-height - loginSuccessBottomNavLift, -loginSuccessBottomNavLift],
+        }),
+      },
+    ],
+  };
   const logoutOutgoingStyle = {
     transform: [
       {
@@ -5697,7 +5708,7 @@ function AppScreen() {
               {renderOnboardingScreen('profiles')}
             </View>
           </Animated.View>
-          <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, loginSuccessIncomingStyle]}>
+          <Animated.View pointerEvents="none" style={[styles.bottomNavLoginTransitionLayer, loginSuccessBottomNavStyle]}>
             {renderBottomNav({ guest: false })}
           </Animated.View>
         </View>

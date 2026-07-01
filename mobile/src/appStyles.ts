@@ -31,6 +31,10 @@ export const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#f7efe2',
   },
+  bottomNavLoginTransitionLayer: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'transparent',
+  },
   incomingOnboardingOverlay: {
     shadowColor: '#2d221a',
     shadowOffset: { width: 0, height: 10 },
