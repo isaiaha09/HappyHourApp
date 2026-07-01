@@ -2186,7 +2186,7 @@ export const styles = StyleSheet.create({
     
   },
   splashHeaderCenterSlot: {
-    width: 92,
+    width: 84,
   },
   splashHeaderSignInButton: {
     alignItems: 'center',
@@ -3147,7 +3147,7 @@ export const styles = StyleSheet.create({
   dashboardHeaderActions: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 12,
+    gap: 16,
   },
   settingsIconButton: {
     alignItems: 'center',

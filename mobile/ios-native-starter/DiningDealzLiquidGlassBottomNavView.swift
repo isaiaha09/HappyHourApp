@@ -202,9 +202,9 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
 
   private let containerSpacing: CGFloat = 18
   private let itemSpacing: CGFloat = 8
-  private let itemHeight: CGFloat = 44
-  private let horizontalInset: CGFloat = 4
-  private let selectorHeight: CGFloat = 54
+  private let itemHeight: CGFloat = 50
+  private let horizontalInset: CGFloat = 5
+  private let selectorHeight: CGFloat = 52
 
   private var displayedActiveItem: DiningDealzLiquidGlassBottomNavItem {
     hoveredItem ?? (moreOpen ? .more : activeItem)
@@ -221,7 +221,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
           ZStack(alignment: .leading) {
             Capsule(style: .continuous)
               .fill(.clear)
-              .glassEffect(.clear.interactive(false), in: Capsule(style: .continuous))
+              .glassEffect(.regular.tint(Color.white.opacity(0.08)).interactive(false), in: Capsule(style: .continuous))
               .frame(height: itemHeight + (horizontalInset * 2))
 
             Capsule(style: .continuous)
@@ -229,7 +229,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
               .glassEffect(.regular.tint(Color.white.opacity(0.42)).interactive(), in: Capsule(style: .continuous))
               .frame(width: metrics.itemWidth, height: selectorHeight)
               .offset(x: indicatorOffsetX(for: metrics))
-              .offset(y: -3)
+              .offset(y: -1)
               .animation(.spring(response: 0.22, dampingFraction: 0.84), value: displayedActiveItem)
               .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.86), value: dragLocationX)
 
@@ -267,7 +267,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
       .frame(height: itemHeight + (horizontalInset * 2))
       .padding(.horizontal, 12)
       .padding(.top, 2)
-      .padding(.bottom, max(4, bottomInset * 0.22))
+      .padding(.bottom, max(5, bottomInset * 0.2))
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     .background(Color.clear)
@@ -285,7 +285,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
         .minimumScaleFactor(0.72)
         .allowsTightening(true)
     }
-    .foregroundStyle(isActive ? Color.white : Color.white.opacity(0.92))
+    .foregroundStyle(isActive ? Color(red: 0.16, green: 0.11, blue: 0.09) : Color(red: 0.16, green: 0.11, blue: 0.09).opacity(0.96))
   }
 
   private func indicatorOffsetX(for metrics: DiningDealzLiquidGlassBottomNavLayoutMetrics) -> CGFloat {
@@ -406,7 +406,7 @@ private struct DiningDealzLegacyBottomNavContent: View {
       }
       .padding(.horizontal, 14)
       .padding(.top, 2)
-      .padding(.bottom, max(4, bottomInset * 0.22))
+      .padding(.bottom, max(5, bottomInset * 0.2))
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     .background(Color.clear)

@@ -105,7 +105,7 @@ function hasNativeViewManager(viewName: string) {
 }
 
 function getBottomNavStyle(bottomInset: number, style?: StyleProp<ViewStyle>) {
-  return [{ width: '100%' as const, height: Math.max(82, 74 + bottomInset) }, style];
+  return [{ width: '100%' as const, height: Math.max(90, 82 + bottomInset) }, style];
 }
 
 function getHeaderButtonStyle(variant: 'pill' | 'icon', label?: string, style?: StyleProp<ViewStyle>) {

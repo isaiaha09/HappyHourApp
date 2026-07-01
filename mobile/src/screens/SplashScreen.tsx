@@ -257,6 +257,7 @@ export function SplashScreen({ apiBaseUrl, onCreateAccount, onOpenMap, onSelectP
             )}
             label="Open Map"
             onPress={onOpenMap}
+            style={{ marginLeft: -4 }}
             variant="pill"
           />
           <View pointerEvents="none" style={styles.splashHeaderCenterSlot} />
@@ -268,6 +269,7 @@ export function SplashScreen({ apiBaseUrl, onCreateAccount, onOpenMap, onSelectP
             )}
             label="Sign in"
             onPress={handleOpenSignInModal}
+            style={{ marginRight: -4 }}
             variant="pill"
           />
         </View>
