@@ -240,15 +240,16 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
               Capsule(style: .continuous)
                 .fill(.clear)
                 .glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
-                .frame(width: max(0, metrics.itemWidth - (selectorHorizontalInset * 2)), height: selectorHeight)
-                .opacity(0.58)
-                .offset(y: selectorVerticalOffset)
-                .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 2)
-                .animation(.spring(response: 0.22, dampingFraction: 0.84), value: displayedActiveItem)
-                .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.86), value: dragLocationX)
                 .frame(width: max(0, metrics.itemWidth * selectorWidthRatio), height: selectorHeight)
                 .offset(x: indicatorOffsetX(for: metrics) + ((metrics.itemWidth - max(0, metrics.itemWidth * selectorWidthRatio)) / 2))
                 .offset(y: selectorVerticalOffset + selectorLift)
+                .opacity(0.58)
+                .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 2)
+                .animation(.spring(response: 0.22, dampingFraction: 0.84), value: displayedActiveItem)
+                .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.86), value: dragLocationX)
+            }
+            .frame(height: itemHeight + (horizontalInset * 2))
+          }
 
           ZStack(alignment: .leading) {
             if let selectedDisplayItem = displayItem(for: displayedActiveItem) {
