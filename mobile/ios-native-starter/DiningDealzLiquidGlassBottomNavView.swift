@@ -217,22 +217,27 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
       GeometryReader { geometry in
         let metrics = layoutMetrics(totalWidth: geometry.size.width)
 
-        GlassEffectContainer(spacing: containerSpacing) {
+        ZStack(alignment: .leading) {
+          GlassEffectContainer(spacing: containerSpacing) {
+            ZStack(alignment: .leading) {
+              Capsule(style: .continuous)
+                .fill(.clear)
+                .glassEffect(.regular.tint(Color.white.opacity(0.12)).interactive(false), in: Capsule(style: .continuous))
+                .frame(height: itemHeight + (horizontalInset * 2))
+
+              Capsule(style: .continuous)
+                .fill(.clear)
+                .glassEffect(.regular.tint(Color.white.opacity(0.42)).interactive(), in: Capsule(style: .continuous))
+                .frame(width: metrics.itemWidth, height: selectorHeight)
+                .offset(x: indicatorOffsetX(for: metrics))
+                .offset(y: -1)
+                .animation(.spring(response: 0.22, dampingFraction: 0.84), value: displayedActiveItem)
+                .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.86), value: dragLocationX)
+            }
+            .frame(height: itemHeight + (horizontalInset * 2))
+          }
+
           ZStack(alignment: .leading) {
-            Capsule(style: .continuous)
-              .fill(.clear)
-              .glassEffect(.regular.tint(Color.white.opacity(0.12)).interactive(false), in: Capsule(style: .continuous))
-              .frame(height: itemHeight + (horizontalInset * 2))
-
-            Capsule(style: .continuous)
-              .fill(.clear)
-              .glassEffect(.regular.tint(Color.white.opacity(0.42)).interactive(), in: Capsule(style: .continuous))
-              .frame(width: metrics.itemWidth, height: selectorHeight)
-              .offset(x: indicatorOffsetX(for: metrics))
-              .offset(y: -1)
-              .animation(.spring(response: 0.22, dampingFraction: 0.84), value: displayedActiveItem)
-              .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.86), value: dragLocationX)
-
             if let selectedDisplayItem = displayItem(for: displayedActiveItem) {
               navItemContent(selectedDisplayItem, isActive: true)
                 .frame(width: metrics.itemWidth, height: itemHeight)
@@ -325,22 +330,23 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     guard let nearestIndex else {
       return nil
     }
-
-    return items[nearestIndex].item
-  }
-
-  private func layoutMetrics(totalWidth: CGFloat) -> DiningDealzLiquidGlassBottomNavLayoutMetrics {
-    DiningDealzLiquidGlassBottomNavLayoutMetrics(
-      itemCount: items.count,
-      itemSpacing: itemSpacing,
-      leadingInset: horizontalInset,
-      totalWidth: totalWidth
-    )
-  }
-}
-
-private struct DiningDealzLiquidGlassBottomNavLayoutMetrics {
-  let itemCount: Int
+        }
+        .contentShape(Rectangle())
+        .gesture(
+          DragGesture(minimumDistance: 0)
+            .onChanged { value in
+              dragLocationX = value.location.x
+              hoveredItem = nearestItem(at: value.location.x, totalWidth: geometry.size.width)
+            }
+            .onEnded { value in
+              let finalItem = nearestItem(at: value.location.x, totalWidth: geometry.size.width) ?? hoveredItem
+              dragLocationX = nil
+              hoveredItem = nil
+              if let finalItem {
+                onSelect(finalItem)
+              }
+            }
+        )
   let itemSpacing: CGFloat
   let leadingInset: CGFloat
   let totalWidth: CGFloat
