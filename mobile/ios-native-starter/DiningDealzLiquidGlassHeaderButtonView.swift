@@ -123,6 +123,9 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
   let systemImage: String?
   let variant: DiningDealzLiquidGlassHeaderVariant
 
+  @State private var isHovering = false
+  @State private var isPressing = false
+
   var body: some View {
     Button(action: onPress) {
       if variant == .icon {
@@ -184,6 +187,21 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
     }
     .shadow(color: .black.opacity(0.22), radius: 14, x: 0, y: 6)
     .shadow(color: .white.opacity(0.12), radius: 1, x: 0, y: -1)
+    .scaleEffect(isHovering || isPressing ? 1.08 : 1)
+    .animation(.spring(response: 0.22, dampingFraction: 0.82), value: isHovering)
+    .animation(.spring(response: 0.16, dampingFraction: 0.78), value: isPressing)
+    .onHover { hovering in
+      isHovering = hovering
+    }
+    .simultaneousGesture(
+      DragGesture(minimumDistance: 0)
+        .onChanged { _ in
+          isPressing = true
+        }
+        .onEnded { _ in
+          isPressing = false
+        }
+    )
     .accessibilityLabel(accessibilityLabel ?? label ?? "Button")
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(Color.clear)

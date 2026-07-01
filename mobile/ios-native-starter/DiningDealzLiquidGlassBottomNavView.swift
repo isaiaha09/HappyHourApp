@@ -198,18 +198,21 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   let onSelect: (DiningDealzLiquidGlassBottomNavItem) -> Void
 
   @State private var hoveredItem: DiningDealzLiquidGlassBottomNavItem?
-  @State private var dragLocationX: CGFloat?
+  @State private var isContainerHovered = false
 
   private let containerSpacing: CGFloat = 10
   private let itemSpacing: CGFloat = 6
   private let itemHeight: CGFloat = 50
   private let horizontalInset: CGFloat = 7
-  private let selectorHeight: CGFloat = 58
-  private let selectorVerticalOffset: CGFloat = -1
+  private let selectorVerticalOffset: CGFloat = 0
   private let selectorWidthRatio: CGFloat = 0.74
 
+  private var selectorHeight: CGFloat {
+    itemHeight + (horizontalInset * 2)
+  }
+
   private var selectorLift: CGFloat {
-    -3
+    0
   }
 
   private var containerBottomOffset: CGFloat {
@@ -253,7 +256,6 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
                 .shadow(color: .black.opacity(0.12), radius: 2, x: 0, y: 1)
                 .opacity(0.94)
 
-              let indicatorItem = hoveredItem ?? selectedItem
               Capsule(style: .continuous)
                 .fill(Color.black.opacity(0.2))
                 .glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
@@ -262,50 +264,25 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
                   Capsule(style: .continuous)
                     .stroke(Color.white.opacity(0.32), lineWidth: 0.7)
                 )
-                .offset(x: indicatorOffsetX(for: metrics, item: indicatorItem) + ((metrics.itemWidth - max(0, metrics.itemWidth * selectorWidthRatio)) / 2))
+                .offset(x: indicatorOffsetX(for: metrics) + ((metrics.itemWidth - max(0, metrics.itemWidth * selectorWidthRatio)) / 2))
                 .offset(y: selectorVerticalOffset + selectorLift)
                 .shadow(color: .black.opacity(0.20), radius: 12, x: 0, y: 5)
                 .shadow(color: .white.opacity(0.16), radius: 1, x: 0, y: -1)
                 .opacity(hoveredItem == nil ? 0.84 : 0.96)
                 .animation(.spring(response: 0.24, dampingFraction: 0.86), value: selectedItem)
                 .animation(.spring(response: 0.22, dampingFraction: 0.84), value: hoveredItem)
-                .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.86), value: dragLocationX)
-
-              if hoveredItem != nil {
-                Capsule(style: .continuous)
-                  .fill(Color.white.opacity(0.06))
-                  .glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
-                  .frame(width: max(0, metrics.itemWidth * selectorWidthRatio), height: selectorHeight)
-                  .offset(x: hoverIndicatorOffsetX(for: metrics) + ((metrics.itemWidth - max(0, metrics.itemWidth * selectorWidthRatio)) / 2))
-                  .offset(y: selectorVerticalOffset + selectorLift)
-                  .opacity(0.42)
-                  .shadow(color: .white.opacity(0.12), radius: 6, x: 0, y: -1)
-                  .animation(.spring(response: 0.22, dampingFraction: 0.84), value: hoveredItem)
-                  .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.86), value: dragLocationX)
-              }
             }
             .frame(height: itemHeight + (horizontalInset * 2))
           }
 
           ZStack(alignment: .leading) {
-            if let hoveredItem, let hoveredDisplayItem = displayItem(for: hoveredItem) {
-              navItemContent(hoveredDisplayItem, isSelected: false, isHovered: true)
-                .frame(width: metrics.itemWidth, height: itemHeight)
-                .offset(x: hoverIndicatorOffsetX(for: metrics))
-                .offset(y: selectorVerticalOffset + selectorLift)
-                .zIndex(2)
-                .animation(.spring(response: 0.22, dampingFraction: 0.84), value: hoveredItem)
-                .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.86), value: dragLocationX)
-            }
-
             HStack(spacing: itemSpacing) {
               ForEach(items) { displayItem in
-                navItemContent(displayItem, isSelected: displayItem.item == selectedItem, isHovered: false)
+                navItemContent(displayItem, isSelected: displayItem.item == selectedItem, isHovered: displayItem.item == hoveredItem)
                   .frame(width: metrics.itemWidth, height: itemHeight)
                   .contentShape(Rectangle())
                   .accessibilityElement(children: .ignore)
                   .accessibilityLabel(Text(displayItem.title))
-                  .opacity(displayItem.item == hoveredItem ? 0 : 1)
               }
             }
             .padding(.horizontal, horizontalInset)
@@ -316,18 +293,22 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
           .gesture(
             DragGesture(minimumDistance: 0)
               .onChanged { value in
-                dragLocationX = value.location.x
                 hoveredItem = nearestItem(at: value.location.x, totalWidth: geometry.size.width)
               }
               .onEnded { value in
                 let finalItem = nearestItem(at: value.location.x, totalWidth: geometry.size.width) ?? hoveredItem
-                dragLocationX = nil
                 hoveredItem = nil
                 if let finalItem {
                   onSelect(finalItem)
                 }
               }
           )
+        }
+        .scaleEffect(hoveredItem == nil && !isContainerHovered ? 1 : 1.035)
+        .animation(.spring(response: 0.22, dampingFraction: 0.82), value: hoveredItem)
+        .animation(.spring(response: 0.22, dampingFraction: 0.82), value: isContainerHovered)
+        .onHover { hovering in
+          isContainerHovered = hovering
         }
       }
       .frame(height: itemHeight + (horizontalInset * 2))
@@ -357,24 +338,8 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     .opacity(isHovered || isSelected ? 1 : 0.76)
   }
 
-  private func indicatorOffsetX(for metrics: DiningDealzLiquidGlassBottomNavLayoutMetrics, item: DiningDealzLiquidGlassBottomNavItem) -> CGFloat {
-    guard dragLocationX != nil, hoveredItem != nil else {
-      return metrics.offsetX(for: item)
-    }
-
-    return hoverIndicatorOffsetX(for: metrics)
-  }
-
-  private func hoverIndicatorOffsetX(for metrics: DiningDealzLiquidGlassBottomNavLayoutMetrics) -> CGFloat {
-    guard let dragLocationX else {
-      return metrics.offsetX(for: hoveredItem ?? selectedItem)
-    }
-
-    return metrics.clampedOffsetX(for: dragLocationX)
-  }
-
-  private func displayItem(for item: DiningDealzLiquidGlassBottomNavItem) -> DiningDealzLiquidGlassBottomNavDisplayItem? {
-    items.first(where: { $0.item == item })
+  private func indicatorOffsetX(for metrics: DiningDealzLiquidGlassBottomNavLayoutMetrics) -> CGFloat {
+    metrics.offsetX(for: hoveredItem ?? selectedItem)
   }
 
   private func nearestItem(at x: CGFloat, totalWidth: CGFloat) -> DiningDealzLiquidGlassBottomNavItem? {
@@ -438,12 +403,6 @@ private struct DiningDealzLiquidGlassBottomNavLayoutMetrics {
     leadingInset + (CGFloat(index) * (itemWidth + itemSpacing))
   }
 
-  func clampedOffsetX(for dragLocationX: CGFloat) -> CGFloat {
-    let centeredOffset = dragLocationX - (itemWidth / 2)
-    let minimumOffset = offsetX(for: 0)
-    let maximumOffset = offsetX(for: max(itemCount - 1, 0))
-    return min(max(centeredOffset, minimumOffset), maximumOffset)
-  }
 }
 
 private struct DiningDealzLegacyBottomNavContent: View {
