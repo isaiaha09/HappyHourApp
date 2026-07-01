@@ -152,7 +152,7 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
     .background {
       if variant == .icon {
         Circle()
-          .fill(Color.white.opacity(isActive ? 0.13 : 0.055))
+          .fill(.clear)
           .glassEffect(.regular.interactive(false), in: Circle())
           .overlay(
             Circle()
@@ -171,7 +171,7 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
           )
       } else {
         Capsule(style: .continuous)
-          .fill(Color.white.opacity(isActive ? 0.13 : 0.055))
+          .fill(.clear)
           .glassEffect(.regular.interactive(false), in: Capsule(style: .continuous))
           .overlay(
             Capsule(style: .continuous)
@@ -191,10 +191,9 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
       }
     }
     .scaleEffect(isActive ? 1.18 : 1)
-    .shadow(color: .black.opacity(0.14), radius: 12, x: 0, y: 5)
-    .shadow(color: .white.opacity(0.22), radius: 2, x: 0, y: -1)
-    .animation(.spring(response: 0.22, dampingFraction: 0.82), value: isHovering)
-    .animation(.spring(response: 0.16, dampingFraction: 0.78), value: isPressing)
+    
+    .animation(.spring(response: 0.3, dampingFraction: 0.82), value: isHovering)
+    .animation(.spring(response: 0.3, dampingFraction: 0.82), value: isPressing)
     .onHover { hovering in
       isHovering = hovering
     }
@@ -231,7 +230,7 @@ private struct DiningDealzLegacyHeaderButtonContent: View {
           .lineLimit(1)
           .minimumScaleFactor(0.84)
           .allowsTightening(true)
-          .padding(.horizontal, 14)
+          .padding(.horizontal, 18)
           .frame(maxWidth: .infinity, minHeight: 44)
       }
     }
