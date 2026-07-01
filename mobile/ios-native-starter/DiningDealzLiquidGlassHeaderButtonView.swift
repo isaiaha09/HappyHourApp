@@ -149,49 +149,8 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
     .buttonStyle(.plain)
     .foregroundStyle(Color.white.opacity(0.96))
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background {
-      if variant == .icon {
-        Circle()
-          .fill(.clear)
-          .glassEffect(.regular.interactive(false), in: Circle())
-          .overlay(
-            Circle()
-              .stroke(
-                LinearGradient(
-                  colors: [
-                    Color.white.opacity(0.52),
-                    Color.white.opacity(0.2),
-                    Color.white.opacity(0.06),
-                  ],
-                  startPoint: .topLeading,
-                  endPoint: .bottomTrailing
-                ),
-                lineWidth: 0.8
-              )
-          )
-      } else {
-        Capsule(style: .continuous)
-          .fill(.clear)
-          .glassEffect(.regular.interactive(false), in: Capsule(style: .continuous))
-          .overlay(
-            Capsule(style: .continuous)
-              .stroke(
-                LinearGradient(
-                  colors: [
-                    Color.white.opacity(0.52),
-                    Color.white.opacity(0.2),
-                    Color.white.opacity(0.06),
-                  ],
-                  startPoint: .topLeading,
-                  endPoint: .bottomTrailing
-                ),
-                lineWidth: 0.8
-              )
-          )
-      }
-    }
+    .diningDealzHeaderGlassEffect(variant: variant)
     .scaleEffect(isActive ? 1.18 : 1)
-    
     .animation(.spring(response: 0.3, dampingFraction: 0.82), value: isHovering)
     .animation(.spring(response: 0.3, dampingFraction: 0.82), value: isPressing)
     .onHover { hovering in
@@ -208,6 +167,18 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
     )
     .accessibilityLabel(accessibilityLabel ?? label ?? "Button")
     .background(Color.clear)
+  }
+}
+
+@available(iOS 26.0, *)
+private extension View {
+  @ViewBuilder
+  func diningDealzHeaderGlassEffect(variant: DiningDealzLiquidGlassHeaderVariant) -> some View {
+    if variant == .icon {
+      glassEffect(.regular.interactive(), in: Circle())
+    } else {
+      glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
+    }
   }
 }
 
