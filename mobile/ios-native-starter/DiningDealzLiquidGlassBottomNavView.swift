@@ -205,6 +205,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   private let itemHeight: CGFloat = 52
   private let horizontalInset: CGFloat = 6
   private let selectorHeight: CGFloat = 56
+  private let selectorVerticalOffset: CGFloat = 1
 
   private var displayedActiveItem: DiningDealzLiquidGlassBottomNavItem {
     hoveredItem ?? (moreOpen ? .more : activeItem)
@@ -222,15 +223,15 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
             ZStack(alignment: .leading) {
               Capsule(style: .continuous)
                 .fill(.clear)
-                .glassEffect(.regular.tint(Color.white.opacity(0.12)).interactive(false), in: Capsule(style: .continuous))
+                .glassEffect(.regular.tint(Color.white.opacity(0.08)).interactive(false), in: Capsule(style: .continuous))
                 .frame(height: itemHeight + (horizontalInset * 2))
 
               Capsule(style: .continuous)
                 .fill(.clear)
-                .glassEffect(.regular.tint(Color.white.opacity(0.42)).interactive(), in: Capsule(style: .continuous))
+                .glassEffect(.regular.tint(Color.white.opacity(0.24)).interactive(), in: Capsule(style: .continuous))
                 .frame(width: metrics.itemWidth, height: selectorHeight)
                 .offset(x: indicatorOffsetX(for: metrics))
-                .offset(y: -1)
+                .offset(y: selectorVerticalOffset)
                 .animation(.spring(response: 0.22, dampingFraction: 0.84), value: displayedActiveItem)
                 .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.86), value: dragLocationX)
             }
@@ -242,7 +243,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
               navItemContent(selectedDisplayItem, isActive: true)
                 .frame(width: metrics.itemWidth, height: itemHeight)
                 .offset(x: indicatorOffsetX(for: metrics))
-                .offset(y: -1)
+                .offset(y: selectorVerticalOffset)
                 .zIndex(2)
                 .animation(.spring(response: 0.22, dampingFraction: 0.84), value: displayedActiveItem)
                 .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.86), value: dragLocationX)
@@ -283,7 +284,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
       .frame(height: itemHeight + (horizontalInset * 2))
       .padding(.horizontal, 12)
       .padding(.top, 2)
-      .padding(.bottom, max(5, bottomInset * 0.2))
+      .padding(.bottom, max(1, bottomInset * 0.08))
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     .background(Color.clear)

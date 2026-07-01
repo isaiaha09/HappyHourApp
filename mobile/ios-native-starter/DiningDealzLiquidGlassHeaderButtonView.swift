@@ -124,23 +124,33 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
   let variant: DiningDealzLiquidGlassHeaderVariant
 
   var body: some View {
-    Button(action: onPress) {
-      if variant == .icon {
-        Image(systemName: systemImage ?? "questionmark")
-          .font(.system(size: 16, weight: .semibold))
-          .frame(width: 38, height: 38)
-      } else {
-        Text(label ?? "")
-          .font(.system(size: 13, weight: .semibold))
-          .lineLimit(1)
-          .minimumScaleFactor(0.84)
-          .allowsTightening(true)
-          .padding(.horizontal, 13)
-          .frame(minHeight: 38)
+    GlassEffectContainer(spacing: 0) {
+      ZStack {
+        Capsule(style: .continuous)
+          .fill(.clear)
+          .glassEffect(.regular.tint(Color.white.opacity(0.14)).interactive(), in: Capsule(style: .continuous))
+
+        Button(action: onPress) {
+          if variant == .icon {
+            Image(systemName: systemImage ?? "questionmark")
+              .font(.system(size: 16, weight: .semibold))
+              .frame(width: 38, height: 38)
+          } else {
+            Text(label ?? "")
+              .font(.system(size: 13, weight: .semibold))
+              .lineLimit(1)
+              .minimumScaleFactor(0.84)
+              .allowsTightening(true)
+              .padding(.horizontal, 13)
+              .frame(minHeight: 38)
+          }
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(Color(red: 0.16, green: 0.11, blue: 0.09))
+        .contentShape(Capsule(style: .continuous))
+        .accessibilityLabel(accessibilityLabel ?? label ?? "Button")
       }
     }
-    .buttonStyle(GlassButtonStyle.glass)
-    .accessibilityLabel(accessibilityLabel ?? label ?? "Button")
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(Color.clear)
   }
