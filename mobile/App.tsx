@@ -5697,6 +5697,9 @@ function AppScreen() {
               {renderOnboardingScreen('profiles')}
             </View>
           </Animated.View>
+          <View pointerEvents="none" style={styles.screenTransitionLayerAbsolute}>
+            {renderBottomNav({ guest: false })}
+          </View>
         </View>
       ) : showLogoutTransition ? (
         <View style={styles.onboardingTransitionRoot}>
