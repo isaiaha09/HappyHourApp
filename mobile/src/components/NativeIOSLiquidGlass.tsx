@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import { Platform, Pressable, Text, UIManager, requireNativeComponent, type NativeSyntheticEvent, type StyleProp, type ViewStyle } from 'react-native';
 
 import { styles } from '../appStyles';
@@ -71,8 +71,33 @@ const headerPillButtonHeight = 44;
 const headerPillHorizontalPadding = 28;
 const averageHeaderPillCharacterWidth = 7;
 
-const NativeBottomNavView = requireNativeComponent<NativeBottomNavViewProps>(nativeBottomNavViewName);
-const NativeHeaderButtonView = requireNativeComponent<NativeHeaderButtonViewProps>(nativeHeaderButtonViewName);
+const nativeLiquidGlassComponentRegistryKey = '__diningDealzNativeLiquidGlassComponents';
+
+type NativeLiquidGlassComponentRegistry = Partial<Record<typeof nativeBottomNavViewName | typeof nativeHeaderButtonViewName, ComponentType<any>>>;
+
+function getNativeLiquidGlassComponentRegistry() {
+  const globalRegistryOwner = globalThis as typeof globalThis & {
+    [nativeLiquidGlassComponentRegistryKey]?: NativeLiquidGlassComponentRegistry;
+  };
+
+  if (!globalRegistryOwner[nativeLiquidGlassComponentRegistryKey]) {
+    globalRegistryOwner[nativeLiquidGlassComponentRegistryKey] = {};
+  }
+
+  return globalRegistryOwner[nativeLiquidGlassComponentRegistryKey];
+}
+
+function getNativeBottomNavView() {
+  const registry = getNativeLiquidGlassComponentRegistry();
+  registry[nativeBottomNavViewName] ??= requireNativeComponent<NativeBottomNavViewProps>(nativeBottomNavViewName);
+  return registry[nativeBottomNavViewName] as ComponentType<NativeBottomNavViewProps>;
+}
+
+function getNativeHeaderButtonView() {
+  const registry = getNativeLiquidGlassComponentRegistry();
+  registry[nativeHeaderButtonViewName] ??= requireNativeComponent<NativeHeaderButtonViewProps>(nativeHeaderButtonViewName);
+  return registry[nativeHeaderButtonViewName] as ComponentType<NativeHeaderButtonViewProps>;
+}
 
 function isSupportedIOSLiquidGlassRuntime() {
   if (Platform.OS !== 'ios') {
@@ -135,6 +160,8 @@ export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, labels,
     return null;
   }
 
+  const NativeBottomNavView = getNativeBottomNavView();
+
   return (
     <NativeBottomNavView
       activeItem={activeItem}
@@ -156,6 +183,8 @@ export function NativeIOSLiquidGlassHeaderButton({ accessibilityLabel, fallback,
   if (!isNativeIOSLiquidGlassHeaderButtonAvailable()) {
     return <>{fallback}</>;
   }
+
+  const NativeHeaderButtonView = getNativeHeaderButtonView();
 
   return (
     <NativeHeaderButtonView
