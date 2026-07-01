@@ -240,6 +240,10 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     hoveredItem ?? selectedItem
   }
 
+  private var glassTint: Color {
+    Color(red: 0.62, green: 0.36, blue: 0.29).opacity(0.18)
+  }
+
   var body: some View {
     VStack(spacing: 0) {
       Spacer(minLength: 0)
@@ -251,7 +255,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
           GlassEffectContainer(spacing: containerSpacing) {
             Color.clear
               .frame(height: itemHeight + (horizontalInset * 2))
-              .glassEffect(.regular.interactive(false), in: Capsule(style: .continuous))
+              .glassEffect(.regular.tint(glassTint).interactive(false), in: Capsule(style: .continuous))
           }
           .frame(height: itemHeight + (horizontalInset * 2))
           .zIndex(0)

@@ -537,6 +537,8 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
                     </Pressable>
                   )}
                   onPress={onOpenSettings}
+
+                  style={{ marginLeft: 0 }}
                   systemImage="gearshape"
                   variant="icon"
                 />
