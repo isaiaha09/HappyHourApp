@@ -141,6 +141,15 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
     }
     .buttonStyle(GlassButtonStyle.glass)
     .foregroundStyle(.primary)
+    .background {
+      if variant == .icon {
+        Circle()
+          .fill(Color.white.opacity(0.08))
+      } else {
+        Capsule(style: .continuous)
+          .fill(Color.white.opacity(0.08))
+      }
+    }
     .accessibilityLabel(accessibilityLabel ?? label ?? "Button")
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(Color.clear)
