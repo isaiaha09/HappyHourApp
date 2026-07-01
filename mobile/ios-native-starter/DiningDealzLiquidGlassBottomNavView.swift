@@ -96,7 +96,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   }
 
   override var intrinsicContentSize: CGSize {
-    CGSize(width: UIView.noIntrinsicMetric, height: 72 + CGFloat(truncating: bottomInset))
+    CGSize(width: UIView.noIntrinsicMetric, height: 78 + CGFloat(truncating: bottomInset))
   }
 
   private func setupView() {
@@ -200,21 +200,20 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   @State private var hoveredItem: DiningDealzLiquidGlassBottomNavItem?
   @State private var dragLocationX: CGFloat?
 
-  private let containerSpacing: CGFloat = 18
-  private let itemSpacing: CGFloat = 8
-  private let itemHeight: CGFloat = 52
-  private let horizontalInset: CGFloat = 6
-  private let selectorHeight: CGFloat = 62
-  private let selectorVerticalOffset: CGFloat = 0
-  private let selectorWidthRatio: CGFloat = 0.8
+  private let containerSpacing: CGFloat = 10
+  private let itemSpacing: CGFloat = 6
+  private let itemHeight: CGFloat = 50
+  private let horizontalInset: CGFloat = 7
+  private let selectorHeight: CGFloat = 58
+  private let selectorVerticalOffset: CGFloat = -1
+  private let selectorWidthRatio: CGFloat = 0.74
 
   private var selectorLift: CGFloat {
-    -4
+    -3
   }
-  private let selectorHorizontalInset: CGFloat = 4
 
   private var containerBottomOffset: CGFloat {
-    min(max(bottomInset * 0.58, 8), 18)
+    min(max(bottomInset * 0.42, 6), 14)
   }
 
   private var selectedItem: DiningDealzLiquidGlassBottomNavItem {
@@ -232,20 +231,55 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
           GlassEffectContainer(spacing: containerSpacing) {
             ZStack(alignment: .leading) {
               Capsule(style: .continuous)
-                .fill(.clear)
+                .fill(Color.black.opacity(0.28))
                 .glassEffect(.regular.interactive(false), in: Capsule(style: .continuous))
                 .frame(height: itemHeight + (horizontalInset * 2))
-                .opacity(0.78)
+                .overlay(
+                  Capsule(style: .continuous)
+                    .stroke(
+                      LinearGradient(
+                        colors: [
+                          Color.white.opacity(0.34),
+                          Color.white.opacity(0.12),
+                          Color.black.opacity(0.18),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                      ),
+                      lineWidth: 0.8
+                    )
+                )
+                .shadow(color: .black.opacity(0.22), radius: 20, x: 0, y: 8)
+                .shadow(color: .black.opacity(0.12), radius: 2, x: 0, y: 1)
+                .opacity(0.94)
+
+              let indicatorItem = hoveredItem ?? selectedItem
+              Capsule(style: .continuous)
+                .fill(Color.black.opacity(0.2))
+                .glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
+                .frame(width: max(0, metrics.itemWidth * selectorWidthRatio), height: selectorHeight)
+                .overlay(
+                  Capsule(style: .continuous)
+                    .stroke(Color.white.opacity(0.32), lineWidth: 0.7)
+                )
+                .offset(x: indicatorOffsetX(for: metrics, item: indicatorItem) + ((metrics.itemWidth - max(0, metrics.itemWidth * selectorWidthRatio)) / 2))
+                .offset(y: selectorVerticalOffset + selectorLift)
+                .shadow(color: .black.opacity(0.20), radius: 12, x: 0, y: 5)
+                .shadow(color: .white.opacity(0.16), radius: 1, x: 0, y: -1)
+                .opacity(hoveredItem == nil ? 0.84 : 0.96)
+                .animation(.spring(response: 0.24, dampingFraction: 0.86), value: selectedItem)
+                .animation(.spring(response: 0.22, dampingFraction: 0.84), value: hoveredItem)
+                .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.86), value: dragLocationX)
 
               if hoveredItem != nil {
                 Capsule(style: .continuous)
-                  .fill(.clear)
+                  .fill(Color.white.opacity(0.06))
                   .glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
                   .frame(width: max(0, metrics.itemWidth * selectorWidthRatio), height: selectorHeight)
                   .offset(x: hoverIndicatorOffsetX(for: metrics) + ((metrics.itemWidth - max(0, metrics.itemWidth * selectorWidthRatio)) / 2))
                   .offset(y: selectorVerticalOffset + selectorLift)
-                  .opacity(0.58)
-                  .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 2)
+                  .opacity(0.42)
+                  .shadow(color: .white.opacity(0.12), radius: 6, x: 0, y: -1)
                   .animation(.spring(response: 0.22, dampingFraction: 0.84), value: hoveredItem)
                   .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.86), value: dragLocationX)
               }
@@ -310,16 +344,25 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   private func navItemContent(_ displayItem: DiningDealzLiquidGlassBottomNavDisplayItem, isSelected: Bool, isHovered: Bool) -> some View {
     VStack(spacing: 2) {
       Image(systemName: displayItem.systemImageName)
-        .font(.system(size: 16, weight: .semibold))
+        .font(.system(size: 16, weight: isSelected || isHovered ? .bold : .semibold))
         .frame(height: 18)
       Text(displayItem.title)
-        .font(.system(size: 10, weight: .semibold))
+        .font(.system(size: 10, weight: isSelected || isHovered ? .bold : .semibold))
         .lineLimit(1)
         .minimumScaleFactor(0.72)
         .allowsTightening(true)
     }
-    .foregroundStyle(.primary)
-    .opacity(isHovered || isSelected ? 1 : 0.82)
+    .foregroundStyle(isHovered || isSelected ? Color(red: 1, green: 0.18, blue: 0.34) : Color.white.opacity(0.92))
+    .shadow(color: .black.opacity(isHovered || isSelected ? 0.18 : 0.28), radius: 1, x: 0, y: 1)
+    .opacity(isHovered || isSelected ? 1 : 0.76)
+  }
+
+  private func indicatorOffsetX(for metrics: DiningDealzLiquidGlassBottomNavLayoutMetrics, item: DiningDealzLiquidGlassBottomNavItem) -> CGFloat {
+    guard dragLocationX != nil, hoveredItem != nil else {
+      return metrics.offsetX(for: item)
+    }
+
+    return hoverIndicatorOffsetX(for: metrics)
   }
 
   private func hoverIndicatorOffsetX(for metrics: DiningDealzLiquidGlassBottomNavLayoutMetrics) -> CGFloat {

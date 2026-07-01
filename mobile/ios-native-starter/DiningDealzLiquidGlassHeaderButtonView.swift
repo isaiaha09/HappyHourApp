@@ -55,13 +55,13 @@ final class DiningDealzLiquidGlassHeaderButtonView: UIView {
 
   override var intrinsicContentSize: CGSize {
     if resolvedVariant == .icon {
-      return CGSize(width: 40, height: 40)
+      return CGSize(width: 42, height: 42)
     }
 
     let text = (label as String?) ?? ""
     let font = UIFont.systemFont(ofSize: 13, weight: .semibold)
-    let width = max(88, ceil((text as NSString).size(withAttributes: [.font: font]).width + 34))
-    return CGSize(width: width, height: 40)
+    let width = max(92, ceil((text as NSString).size(withAttributes: [.font: font]).width + 38))
+    return CGSize(width: width, height: 42)
   }
 
   private func setupView() {
@@ -128,28 +128,62 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
       if variant == .icon {
         Image(systemName: systemImage ?? "questionmark")
           .font(.system(size: 16, weight: .semibold))
-          .frame(width: 40, height: 40)
+          .frame(width: 42, height: 42)
       } else {
         Text(label ?? "")
           .font(.system(size: 13, weight: .semibold))
           .lineLimit(1)
           .minimumScaleFactor(0.84)
           .allowsTightening(true)
-          .padding(.horizontal, 13)
-          .frame(minHeight: 40)
+          .padding(.horizontal, 15)
+          .frame(minHeight: 42)
       }
     }
-    .buttonStyle(GlassButtonStyle.glass)
-    .foregroundStyle(.primary)
+    .buttonStyle(.plain)
+    .foregroundStyle(Color.white.opacity(0.96))
     .background {
       if variant == .icon {
         Circle()
-          .fill(Color.white.opacity(0.08))
+          .fill(Color.black.opacity(0.26))
+          .glassEffect(.regular.interactive(), in: Circle())
+          .overlay(
+            Circle()
+              .stroke(
+                LinearGradient(
+                  colors: [
+                    Color.white.opacity(0.36),
+                    Color.white.opacity(0.12),
+                    Color.black.opacity(0.2),
+                  ],
+                  startPoint: .topLeading,
+                  endPoint: .bottomTrailing
+                ),
+                lineWidth: 0.8
+              )
+          )
       } else {
         Capsule(style: .continuous)
-          .fill(Color.white.opacity(0.08))
+          .fill(Color.black.opacity(0.26))
+          .glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
+          .overlay(
+            Capsule(style: .continuous)
+              .stroke(
+                LinearGradient(
+                  colors: [
+                    Color.white.opacity(0.36),
+                    Color.white.opacity(0.12),
+                    Color.black.opacity(0.2),
+                  ],
+                  startPoint: .topLeading,
+                  endPoint: .bottomTrailing
+                ),
+                lineWidth: 0.8
+              )
+          )
       }
     }
+    .shadow(color: .black.opacity(0.22), radius: 14, x: 0, y: 6)
+    .shadow(color: .white.opacity(0.12), radius: 1, x: 0, y: -1)
     .accessibilityLabel(accessibilityLabel ?? label ?? "Button")
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(Color.clear)
@@ -179,14 +213,14 @@ private struct DiningDealzLegacyHeaderButtonContent: View {
           .frame(minHeight: 38)
       }
     }
-    .foregroundStyle(Color(red: 0.25, green: 0.13, blue: 0.08))
+    .foregroundStyle(Color.white.opacity(0.96))
     .background(
       Capsule(style: .continuous)
-        .fill(Color.white.opacity(0.88))
+        .fill(Color.black.opacity(0.48))
     )
     .overlay(
       Capsule(style: .continuous)
-        .stroke(Color.white.opacity(0.5), lineWidth: 1)
+        .stroke(Color.white.opacity(0.28), lineWidth: 1)
     )
     .accessibilityLabel(accessibilityLabel ?? label ?? "Button")
     .frame(maxWidth: .infinity, maxHeight: .infinity)

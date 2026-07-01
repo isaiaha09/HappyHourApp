@@ -244,9 +244,9 @@ export const styles = StyleSheet.create({
     zIndex: 70,
   },
   bottomNavNativeBackdrop: {
-    backgroundColor: '#9e5b49',
-    borderTopColor: '#5a3927',
-    borderTopWidth: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.08)',
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+    borderTopWidth: 0,
     bottom: 0,
     left: 0,
     position: 'absolute',
