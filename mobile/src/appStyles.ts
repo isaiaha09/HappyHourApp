@@ -2181,7 +2181,7 @@ export const styles = StyleSheet.create({
     zIndex: 3,
   },
   splashHeaderRow: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 34,
   },
   splashHeaderBackButton: {
     minHeight: 44,

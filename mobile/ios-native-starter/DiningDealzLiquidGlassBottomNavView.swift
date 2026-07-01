@@ -204,8 +204,14 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   private let itemSpacing: CGFloat = 8
   private let itemHeight: CGFloat = 52
   private let horizontalInset: CGFloat = 6
-  private let selectorHeight: CGFloat = 56
+  private let selectorHeight: CGFloat = 62
   private let selectorVerticalOffset: CGFloat = 0
+  private let selectorWidthRatio: CGFloat = 0.8
+
+  private var selectorLift: CGFloat {
+    -4
+  }
+  private let selectorHorizontalInset: CGFloat = 4
 
   private var displayedActiveItem: DiningDealzLiquidGlassBottomNavItem {
     hoveredItem ?? (moreOpen ? .more : activeItem)
@@ -225,25 +231,27 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
                 .fill(.clear)
                 .glassEffect(.regular.interactive(false), in: Capsule(style: .continuous))
                 .frame(height: itemHeight + (horizontalInset * 2))
+                .opacity(0.78)
 
               Capsule(style: .continuous)
                 .fill(.clear)
                 .glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
-                .frame(width: metrics.itemWidth, height: selectorHeight)
-                .offset(x: indicatorOffsetX(for: metrics))
+                .frame(width: max(0, metrics.itemWidth - (selectorHorizontalInset * 2)), height: selectorHeight)
+                .opacity(0.58)
                 .offset(y: selectorVerticalOffset)
+                .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 2)
                 .animation(.spring(response: 0.22, dampingFraction: 0.84), value: displayedActiveItem)
                 .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.86), value: dragLocationX)
-            }
-            .frame(height: itemHeight + (horizontalInset * 2))
-          }
+                .frame(width: max(0, metrics.itemWidth * selectorWidthRatio), height: selectorHeight)
+                .offset(x: indicatorOffsetX(for: metrics) + ((metrics.itemWidth - max(0, metrics.itemWidth * selectorWidthRatio)) / 2))
+                .offset(y: selectorVerticalOffset + selectorLift)
 
           ZStack(alignment: .leading) {
             if let selectedDisplayItem = displayItem(for: displayedActiveItem) {
               navItemContent(selectedDisplayItem, isActive: true)
                 .frame(width: metrics.itemWidth, height: itemHeight)
                 .offset(x: indicatorOffsetX(for: metrics))
-                .offset(y: selectorVerticalOffset)
+                .offset(y: selectorVerticalOffset + selectorLift)
                 .zIndex(2)
                 .animation(.spring(response: 0.22, dampingFraction: 0.84), value: displayedActiveItem)
                 .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.86), value: dragLocationX)
@@ -302,7 +310,8 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
         .minimumScaleFactor(0.72)
         .allowsTightening(true)
     }
-    .foregroundStyle(isActive ? Color(red: 0.16, green: 0.11, blue: 0.09) : Color(red: 0.16, green: 0.11, blue: 0.09).opacity(0.96))
+    .foregroundStyle(.primary)
+    .opacity(isActive ? 1 : 0.88)
   }
 
   private func indicatorOffsetX(for metrics: DiningDealzLiquidGlassBottomNavLayoutMetrics) -> CGFloat {
