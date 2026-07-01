@@ -203,10 +203,10 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   private let containerSpacing: CGFloat = 10
   private let itemSpacing: CGFloat = 8
   private let itemHeight: CGFloat = 50
-  private let horizontalInset: CGFloat = 2
-  private let outerHorizontalPadding: CGFloat = 2
+  private let horizontalInset: CGFloat = 7
+  private let outerHorizontalPadding: CGFloat = 12
   private let selectorVerticalOffset: CGFloat = 0
-  private let selectorWidthRatio: CGFloat = 0.74
+  private let selectorWidthRatio: CGFloat = 0.86
 
   private var selectorHeight: CGFloat {
     itemHeight + (horizontalInset * 2)
@@ -222,6 +222,10 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
 
   private var selectedItem: DiningDealzLiquidGlassBottomNavItem {
     moreOpen ? .more : activeItem
+  }
+
+  private var isContainerActive: Bool {
+    isContainerHovered || hoveredItem != nil
   }
 
   private var visuallyActiveItem: DiningDealzLiquidGlassBottomNavItem {
@@ -316,7 +320,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
         }
         .shadow(color: .black.opacity(0.22), radius: 14, x: 0, y: 6)
         .shadow(color: .white.opacity(0.12), radius: 1, x: 0, y: -1)
-        .scaleEffect(isContainerHovered ? 1.035 : 1)
+        .scaleEffect(isContainerActive ? 1.045 : 1)
         .animation(.spring(response: 0.22, dampingFraction: 0.82), value: hoveredItem)
         .animation(.spring(response: 0.22, dampingFraction: 0.82), value: isContainerHovered)
         .onHover { hovering in
@@ -348,6 +352,8 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     .foregroundStyle(isActive ? Color(red: 1, green: 0.04, blue: 0.06) : Color.white.opacity(0.92))
     .shadow(color: .black.opacity(isActive ? 0.18 : 0.28), radius: 1, x: 0, y: 1)
     .opacity(isActive ? 1 : 0.76)
+    .scaleEffect(isActive ? 1.07 : 1)
+    .animation(.spring(response: 0.2, dampingFraction: 0.82), value: isActive)
   }
 
   private func indicatorOffsetX(for metrics: DiningDealzLiquidGlassBottomNavLayoutMetrics) -> CGFloat {

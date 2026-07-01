@@ -190,6 +190,7 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
           )
       }
     }
+    .scaleEffect(isActive ? 1.18 : 1)
     .shadow(color: .black.opacity(0.22), radius: 14, x: 0, y: 6)
     .shadow(color: .white.opacity(0.12), radius: 1, x: 0, y: -1)
     .animation(.spring(response: 0.22, dampingFraction: 0.82), value: isHovering)

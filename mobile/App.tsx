@@ -4828,7 +4828,7 @@ function AppScreen() {
             pointerEvents="none"
             style={[
               styles.bottomNavNativeBackdrop,
-              { height: Math.max(78, insets.bottom + 78) },
+              { height: Math.max(56, insets.bottom + 56) },
             ]}
           />
           <NativeIOSLiquidGlassBottomNav
