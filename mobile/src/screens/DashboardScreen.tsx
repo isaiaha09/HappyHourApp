@@ -526,6 +526,7 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
                     </Pressable>
                   )}
                   onPress={onOpenDirectMessages}
+                  style={{ marginRight: 12 }}
                   systemImage="paperplane"
                   variant="icon"
                 />
@@ -537,6 +538,7 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
                     </Pressable>
                   )}
                   onPress={onOpenSettings}
+                  style={{ marginLeft: 0 }}
                   systemImage="gearshape"
                   variant="icon"
                 />
@@ -778,10 +780,8 @@ export function FavoriteBusinessesScreen({
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
       <ScrollView contentContainerStyle={styles.dashboardScrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <View style={styles.screenHeaderBar}>
-          <View style={styles.dashboardHeaderRow}>
-            <NativeIOSLiquidGlassBackButton label="Back to Profile" onPress={onBack} />
-          </View>
+        <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
+          <NativeIOSLiquidGlassBackButton label="Back to Profile" onPress={onBack} />
         </View>
 
         <View style={styles.dashboardShell}>
@@ -852,10 +852,8 @@ export function FavoriteBusinessNotificationsScreen({
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
       <ScrollView contentContainerStyle={styles.dashboardScrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.screenHeaderBar}>
-          <View style={styles.dashboardHeaderRow}>
-            <NativeIOSLiquidGlassBackButton label="Back to Profile" onPress={onBack} />
-          </View>
+        <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
+          <NativeIOSLiquidGlassBackButton label="Back to Profile" onPress={onBack} />
         </View>
 
         <View style={styles.dashboardShell}>

@@ -205,7 +205,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   private let itemHeight: CGFloat = 52
   private let horizontalInset: CGFloat = 6
   private let selectorHeight: CGFloat = 56
-  private let selectorVerticalOffset: CGFloat = 4
+  private let selectorVerticalOffset: CGFloat = 0
 
   private var displayedActiveItem: DiningDealzLiquidGlassBottomNavItem {
     hoveredItem ?? (moreOpen ? .more : activeItem)
@@ -223,12 +223,12 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
             ZStack(alignment: .leading) {
               Capsule(style: .continuous)
                 .fill(.clear)
-                .glassEffect(.regular.tint(Color.white.opacity(0.04)).interactive(false), in: Capsule(style: .continuous))
+                .glassEffect(.regular.interactive(false), in: Capsule(style: .continuous))
                 .frame(height: itemHeight + (horizontalInset * 2))
 
               Capsule(style: .continuous)
                 .fill(.clear)
-                .glassEffect(.regular.tint(Color.white.opacity(0.14)).interactive(), in: Capsule(style: .continuous))
+                .glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
                 .frame(width: metrics.itemWidth, height: selectorHeight)
                 .offset(x: indicatorOffsetX(for: metrics))
                 .offset(y: selectorVerticalOffset)

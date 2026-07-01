@@ -55,13 +55,13 @@ final class DiningDealzLiquidGlassHeaderButtonView: UIView {
 
   override var intrinsicContentSize: CGSize {
     if resolvedVariant == .icon {
-      return CGSize(width: 44, height: 44)
+      return CGSize(width: 40, height: 40)
     }
 
     let text = (label as String?) ?? ""
     let font = UIFont.systemFont(ofSize: 13, weight: .semibold)
-    let width = max(92, ceil((text as NSString).size(withAttributes: [.font: font]).width + 38))
-    return CGSize(width: width, height: 44)
+    let width = max(88, ceil((text as NSString).size(withAttributes: [.font: font]).width + 34))
+    return CGSize(width: width, height: 40)
   }
 
   private func setupView() {
@@ -128,15 +128,15 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
       if variant == .icon {
         Image(systemName: systemImage ?? "questionmark")
           .font(.system(size: 16, weight: .semibold))
-          .frame(width: 44, height: 44)
+          .frame(width: 40, height: 40)
       } else {
         Text(label ?? "")
           .font(.system(size: 13, weight: .semibold))
           .lineLimit(1)
           .minimumScaleFactor(0.84)
           .allowsTightening(true)
-          .padding(.horizontal, 15)
-          .frame(minHeight: 44)
+          .padding(.horizontal, 13)
+          .frame(minHeight: 40)
       }
     }
     .buttonStyle(GlassButtonStyle.glass)

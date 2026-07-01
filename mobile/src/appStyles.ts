@@ -1263,18 +1263,20 @@ export const styles = StyleSheet.create({
     marginBottom: 14,
     marginTop: 0,
     minHeight: 96,
-    paddingHorizontal: 18,
+    paddingHorizontal: 0,
     paddingTop: 40,
     paddingBottom: 12,
   },
   screenHeaderBarSingle: {
     alignItems: 'flex-start',
+    paddingHorizontal: 16,
   },
   screenHeaderBarRow: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
     minHeight: 40,
+    paddingHorizontal: 16,
   },
   directMessageScreenHeaderBar: {
     marginHorizontal: 0,
@@ -2179,6 +2181,7 @@ export const styles = StyleSheet.create({
     zIndex: 3,
   },
   splashHeaderRow: {
+    paddingHorizontal: 16,
   },
   splashHeaderBackButton: {
     minHeight: 44,
@@ -3141,6 +3144,7 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
+    paddingHorizontal: 16,
   },
   dashboardHeaderActions: {
     alignItems: 'center',
