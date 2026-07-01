@@ -105,17 +105,17 @@ function hasNativeViewManager(viewName: string) {
 }
 
 function getBottomNavStyle(bottomInset: number, style?: StyleProp<ViewStyle>) {
-  return [{ width: '100%' as const, height: Math.max(80, 72 + bottomInset) }, style];
+  return [{ width: '100%' as const, height: Math.max(82, 74 + bottomInset) }, style];
 }
 
 function getHeaderButtonStyle(variant: 'pill' | 'icon', label?: string, style?: StyleProp<ViewStyle>) {
   if (variant === 'icon') {
-    return [{ width: 40, height: 40 }, style];
+    return [{ width: 38, height: 38 }, style];
   }
 
   const resolvedLabel = label?.trim() ?? '';
-  const width = Math.max(96, resolvedLabel.length * 10 + 40);
-  return [{ width, height: 40 }, style];
+  const width = Math.max(92, resolvedLabel.length * 9.5 + 38);
+  return [{ width, height: 38 }, style];
 }
 
 export function isNativeIOSLiquidGlassBottomNavAvailable() {

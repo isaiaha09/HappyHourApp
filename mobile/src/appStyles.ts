@@ -1274,6 +1274,7 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
+    minHeight: 40,
   },
   directMessageScreenHeaderBar: {
     marginHorizontal: -8,
@@ -1290,9 +1291,9 @@ export const styles = StyleSheet.create({
     borderColor: '#d9c0a4',
     borderRadius: 16,
     borderWidth: 1,
-    height: 43,
+    height: 40,
     justifyContent: 'center',
-    width: 43,
+    width: 40,
   },
   directMessagePlaneIcon: {
     height: 19,
@@ -2185,7 +2186,7 @@ export const styles = StyleSheet.create({
     
   },
   splashHeaderCenterSlot: {
-    width: 88,
+    width: 92,
   },
   splashHeaderSignInButton: {
     alignItems: 'center',
@@ -3146,7 +3147,7 @@ export const styles = StyleSheet.create({
   dashboardHeaderActions: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 8,
+    gap: 12,
   },
   settingsIconButton: {
     alignItems: 'center',
@@ -3154,9 +3155,9 @@ export const styles = StyleSheet.create({
     borderColor: '#ddc4a7',
     borderRadius: 999,
     borderWidth: 1,
-    height: 44,
+    height: 40,
     justifyContent: 'center',
-    width: 44,
+    width: 40,
   },
   directMessageHeaderGlyphIcon: {
     height: 20,

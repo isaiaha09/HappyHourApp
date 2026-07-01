@@ -336,19 +336,19 @@ export function SplashScreen({ apiBaseUrl, onCreateAccount, onOpenMap, onSelectP
       <View pointerEvents="box-none" style={styles.bottomNavOverlay}>
         {isNativeIOSLiquidGlassBottomNavAvailable() ? (
           <>
-            <View
-              pointerEvents="none"
-              style={[
-                styles.bottomNavNativeBackdrop,
-                { height: Math.max(68, insets.bottom + 52) },
-              ]}
-            />
             <Animated.View
               style={{
                 opacity: actionOpacity,
                 transform: [{ translateY: actionTranslateY }],
               }}
             >
+              <View
+                pointerEvents="none"
+                style={[
+                  styles.bottomNavNativeBackdrop,
+                  { height: Math.max(68, insets.bottom + 52) },
+                ]}
+              />
               <NativeIOSLiquidGlassBottomNav
                 activeItem="map"
                 bottomInset={insets.bottom}
