@@ -5695,7 +5695,6 @@ function AppScreen() {
           <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, loginSuccessIncomingStyle]}>
             <View style={styles.fullScreenRoot}>
               {renderOnboardingScreen('profiles')}
-              {renderBottomNav({ guest: false })}
             </View>
           </Animated.View>
         </View>
