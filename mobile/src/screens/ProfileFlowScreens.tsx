@@ -1129,7 +1129,7 @@ export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces,
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
-            <NativeIOSLiquidGlassBackButton label="Back to create profile" onPress={onBack} />
+            <NativeIOSLiquidGlassBackButton label="Back to create profile" onPress={onBack} style={{ marginLeft: -8 }} />
           </View>
 
           <View style={styles.profileCard}>

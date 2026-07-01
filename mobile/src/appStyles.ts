@@ -244,8 +244,8 @@ export const styles = StyleSheet.create({
     zIndex: 70,
   },
   bottomNavNativeBackdrop: {
-    backgroundColor: '#9e5b49',
-    borderTopColor: '#5a3927',
+    backgroundColor: 'rgba(158, 91, 73, 0.68)',
+    borderTopColor: 'rgba(90, 57, 39, 0.42)',
     borderTopWidth: 1,
     bottom: 0,
     left: 0,
@@ -253,7 +253,7 @@ export const styles = StyleSheet.create({
     right: 0,
     shadowColor: '#1c130d',
     shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.14,
+    shadowOpacity: 0.08,
     shadowRadius: 18,
   },
   bottomNavShell: {
@@ -2181,7 +2181,6 @@ export const styles = StyleSheet.create({
     zIndex: 3,
   },
   splashHeaderRow: {
-    paddingHorizontal: 16,
   },
   splashHeaderBackButton: {
     minHeight: 44,

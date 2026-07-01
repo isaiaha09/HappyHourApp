@@ -248,7 +248,7 @@ export function SplashScreen({ apiBaseUrl, onCreateAccount, onOpenMap, onSelectP
           },
         ]}
       >
-        <View style={[styles.screenHeaderBarRow, styles.splashHeaderRow]}>
+        <View style={[styles.dashboardHeaderRow, styles.splashHeaderRow]}>
           <NativeIOSLiquidGlassHeaderButton
             fallback={(
               <Pressable onPress={onOpenMap} style={[styles.backButton, styles.splashHeaderBackButton]}>
@@ -346,7 +346,7 @@ export function SplashScreen({ apiBaseUrl, onCreateAccount, onOpenMap, onSelectP
                 pointerEvents="none"
                 style={[
                   styles.bottomNavNativeBackdrop,
-                  { height: Math.max(74, insets.bottom + 64) },
+                  { height: Math.max(66, insets.bottom + 56) },
                 ]}
               />
               <NativeIOSLiquidGlassBottomNav
