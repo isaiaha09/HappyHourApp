@@ -382,12 +382,13 @@ export function PlaceDetailScreen({
                 <Pressable
                   accessibilityLabel="Open direct messages"
                   onPress={onOpenDirectMessages}
-                  style={styles.directMessageHeaderActionButton}
+                  style={[styles.directMessageHeaderActionButton, { marginRight: 8 }]}
                 >
                   <Ionicons color="#402214" name="paper-plane-outline" size={19} />
                 </Pressable>
               )}
               onPress={() => onOpenDirectMessages?.()}
+              style={{ marginRight: 8 }}
               systemImage="paperplane"
               variant="icon"
             />

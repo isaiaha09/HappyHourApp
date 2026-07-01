@@ -346,7 +346,7 @@ export function SplashScreen({ apiBaseUrl, onCreateAccount, onOpenMap, onSelectP
                 pointerEvents="none"
                 style={[
                   styles.bottomNavNativeBackdrop,
-                  { height: Math.max(68, insets.bottom + 52) },
+                  { height: Math.max(82, insets.bottom + 74) },
                 ]}
               />
               <NativeIOSLiquidGlassBottomNav
