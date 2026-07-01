@@ -2040,11 +2040,14 @@ function AppScreen() {
 
   useEffect(() => {
     if (shouldShowMapResults) {
-      invalidateMapResultsCardTransitions();
       const resultsChanged = (
         mapSearchResultsKey !== renderedMapResultsKey ||
         mapSearchResultPool.length !== renderedMapResultCount
       );
+
+      if (resultsChanged) {
+        invalidateMapResultsCardTransitions();
+      }
 
       if (resultsChanged) {
         const nextVisibleCount = Math.min(5, mapSearchResultPool.length);
