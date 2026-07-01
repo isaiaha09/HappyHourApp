@@ -66,6 +66,10 @@ type NativeIOSLiquidGlassBackButtonProps = {
 const nativeBottomNavViewName = 'DiningDealzLiquidGlassBottomNavView';
 const nativeHeaderButtonViewName = 'DiningDealzLiquidGlassHeaderButtonView';
 const minimumIOSLiquidGlassVersion = 26;
+const headerIconButtonSize = 40;
+const headerPillButtonHeight = 44;
+const headerPillHorizontalPadding = 28;
+const averageHeaderPillCharacterWidth = 7;
 
 const NativeBottomNavView = requireNativeComponent<NativeBottomNavViewProps>(nativeBottomNavViewName);
 const NativeHeaderButtonView = requireNativeComponent<NativeHeaderButtonViewProps>(nativeHeaderButtonViewName);
@@ -105,17 +109,17 @@ function hasNativeViewManager(viewName: string) {
 }
 
 function getBottomNavStyle(bottomInset: number, style?: StyleProp<ViewStyle>) {
-  return [{ width: '100%' as const, height: Math.max(78, 78 + bottomInset) }, style];
+  return [{ width: '100%' as const, height: Math.max(90, 76 + bottomInset) }, style];
 }
 
 function getHeaderButtonStyle(variant: 'pill' | 'icon', label?: string, style?: StyleProp<ViewStyle>) {
   if (variant === 'icon') {
-    return [{ width: 58, height: 58 }, style];
+    return [{ width: headerIconButtonSize, height: headerIconButtonSize }, style];
   }
 
   const resolvedLabel = label?.trim() ?? '';
-  const width = Math.max(116, resolvedLabel.length * 9 + 58);
-  return [{ width, height: 58 }, style];
+  const width = Math.max(headerPillButtonHeight, Math.ceil(resolvedLabel.length * averageHeaderPillCharacterWidth + headerPillHorizontalPadding));
+  return [{ width, height: headerPillButtonHeight }, style];
 }
 
 export function isNativeIOSLiquidGlassBottomNavAvailable() {

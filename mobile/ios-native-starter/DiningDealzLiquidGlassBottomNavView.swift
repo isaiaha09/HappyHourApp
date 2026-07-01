@@ -96,7 +96,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   }
 
   override var intrinsicContentSize: CGSize {
-    CGSize(width: UIView.noIntrinsicMetric, height: 78 + CGFloat(truncating: bottomInset))
+    CGSize(width: UIView.noIntrinsicMetric, height: max(90, 76 + CGFloat(truncating: bottomInset)))
   }
 
   private func setupView() {
@@ -201,9 +201,10 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   @State private var isContainerHovered = false
 
   private let containerSpacing: CGFloat = 10
-  private let itemSpacing: CGFloat = 6
+  private let itemSpacing: CGFloat = 8
   private let itemHeight: CGFloat = 50
-  private let horizontalInset: CGFloat = 7
+  private let horizontalInset: CGFloat = 2
+  private let outerHorizontalPadding: CGFloat = 2
   private let selectorVerticalOffset: CGFloat = 0
   private let selectorWidthRatio: CGFloat = 0.74
 
@@ -323,7 +324,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
         }
       }
       .frame(height: itemHeight + (horizontalInset * 2))
-      .padding(.horizontal, 12)
+      .padding(.horizontal, outerHorizontalPadding)
       .padding(.top, 2)
       .padding(.bottom, 0)
       .offset(y: containerBottomOffset)

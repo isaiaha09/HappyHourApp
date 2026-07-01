@@ -55,13 +55,13 @@ final class DiningDealzLiquidGlassHeaderButtonView: UIView {
 
   override var intrinsicContentSize: CGSize {
     if resolvedVariant == .icon {
-      return CGSize(width: 58, height: 58)
+      return CGSize(width: 40, height: 40)
     }
 
     let text = (label as String?) ?? ""
-    let font = UIFont.systemFont(ofSize: 15, weight: .semibold)
-    let width = max(116, ceil((text as NSString).size(withAttributes: [.font: font]).width + 58))
-    return CGSize(width: width, height: 58)
+    let font = UIFont.systemFont(ofSize: 14, weight: .bold)
+    let width = max(44, ceil((text as NSString).size(withAttributes: [.font: font]).width + 28))
+    return CGSize(width: width, height: 44)
   }
 
   private func setupView() {
@@ -134,20 +134,21 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
     Button(action: onPress) {
       if variant == .icon {
         Image(systemName: systemImage ?? "questionmark")
-          .font(.system(size: isActive ? 20 : 16, weight: .semibold))
-          .frame(width: isActive ? 52 : 42, height: isActive ? 52 : 42)
+          .font(.system(size: isActive ? 18 : 16, weight: .semibold))
+          .frame(width: 40, height: 40)
       } else {
         Text(label ?? "")
-          .font(.system(size: isActive ? 15 : 13, weight: .semibold))
+          .font(.system(size: isActive ? 14 : 13, weight: .semibold))
           .lineLimit(1)
           .minimumScaleFactor(0.84)
           .allowsTightening(true)
-          .padding(.horizontal, isActive ? 19 : 15)
-          .frame(minHeight: isActive ? 52 : 42)
+          .padding(.horizontal, 14)
+          .frame(maxWidth: .infinity, minHeight: 44)
       }
     }
     .buttonStyle(.plain)
     .foregroundStyle(Color.white.opacity(0.96))
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background {
       if variant == .icon {
         Circle()
@@ -206,7 +207,6 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
         }
     )
     .accessibilityLabel(accessibilityLabel ?? label ?? "Button")
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(Color.clear)
   }
 }
@@ -223,18 +223,19 @@ private struct DiningDealzLegacyHeaderButtonContent: View {
       if variant == .icon {
         Image(systemName: systemImage ?? "questionmark")
           .font(.system(size: 16, weight: .semibold))
-          .frame(width: 38, height: 38)
+          .frame(width: 40, height: 40)
       } else {
         Text(label ?? "")
-          .font(.system(size: 13, weight: .semibold))
+          .font(.system(size: 14, weight: .semibold))
           .lineLimit(1)
           .minimumScaleFactor(0.84)
           .allowsTightening(true)
-          .padding(.horizontal, 13)
-          .frame(minHeight: 38)
+          .padding(.horizontal, 14)
+          .frame(maxWidth: .infinity, minHeight: 44)
       }
     }
     .foregroundStyle(Color.white.opacity(0.96))
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(
       Capsule(style: .continuous)
         .fill(Color.black.opacity(0.48))
@@ -244,7 +245,6 @@ private struct DiningDealzLegacyHeaderButtonContent: View {
         .stroke(Color.white.opacity(0.28), lineWidth: 1)
     )
     .accessibilityLabel(accessibilityLabel ?? label ?? "Button")
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(Color.clear)
   }
 }

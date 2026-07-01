@@ -526,7 +526,6 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
                     </Pressable>
                   )}
                   onPress={onOpenDirectMessages}
-                  style={{ marginRight: 16 }}
                   systemImage="paperplane"
                   variant="icon"
                 />
@@ -538,7 +537,6 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
                     </Pressable>
                   )}
                   onPress={onOpenSettings}
-                  style={{ marginLeft: 0 }}
                   systemImage="gearshape"
                   variant="icon"
                 />
