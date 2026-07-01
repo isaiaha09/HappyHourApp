@@ -1662,8 +1662,15 @@ function AppScreen() {
 
   useEffect(() => {
     const shouldPreserveRenderedMapPins = !showMapBrowse && browseMode === 'map' && selectedPlaceSlug !== null;
+    const shouldDelayPinsUntilBrowseScreenSettles = screenMode !== 'browse' && showTransitionMapBrowse;
 
     if (shouldPreserveRenderedMapPins) {
+      mapPinsTransition.stopAnimation();
+      mapPinsTransition.setValue(1);
+      return;
+    }
+
+    if (shouldDelayPinsUntilBrowseScreenSettles) {
       mapPinsTransition.stopAnimation();
       mapPinsTransition.setValue(1);
       return;
@@ -1701,7 +1708,7 @@ function AppScreen() {
         useNativeDriver: true,
       }).start();
     });
-  }, [browseMode, listLoading, mapPinsTransition, mappedPlaceKey, mappedPlaces, normalizedDeferredSearchQuery.length, renderedMappedPlaceKey, renderedMappedPlaces.length, selectedPlaceSlug, showMapBrowse]);
+  }, [browseMode, listLoading, mapPinsTransition, mappedPlaceKey, mappedPlaces, normalizedDeferredSearchQuery.length, renderedMappedPlaceKey, renderedMappedPlaces.length, screenMode, selectedPlaceSlug, showMapBrowse, showTransitionMapBrowse]);
 
   function navigateScreen(
     nextScreen: AppScreenMode,
