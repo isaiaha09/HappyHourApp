@@ -4775,17 +4775,6 @@ function AppScreen() {
     );
   }
 
-  function renderStaticProfilesShellWithBottomNav() {
-    return (
-      <View style={styles.fullScreenRoot}>
-        <View style={styles.screenTransitionLayerAbsolute}>
-          {renderProfilesScreen(undefined, 'profiles')}
-        </View>
-        {renderBottomNav({ guest: false })}
-      </View>
-    );
-  }
-
   function renderBottomNavIcon(icon: MainShellBottomNavItem, active: boolean) {
     switch (icon) {
       case 'map':
@@ -5704,7 +5693,12 @@ function AppScreen() {
             {renderOnboardingScreen('auth')}
           </Animated.View>
           <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, loginSuccessIncomingStyle]}>
-            {renderStaticProfilesShellWithBottomNav()}
+            <View style={styles.fullScreenRoot}>
+              {renderOnboardingScreen('profiles')}
+            </View>
+          </Animated.View>
+          <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, loginSuccessIncomingStyle]}>
+            {renderBottomNav({ guest: false })}
           </Animated.View>
         </View>
       ) : showLogoutTransition ? (
