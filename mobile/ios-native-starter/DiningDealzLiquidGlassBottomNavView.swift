@@ -228,6 +228,10 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     isContainerHovered || hoveredItem != nil
   }
 
+  private var isSelectorActive: Bool {
+    hoveredItem != nil || isContainerHovered
+  }
+
   private var visuallyActiveItem: DiningDealzLiquidGlassBottomNavItem {
     hoveredItem ?? selectedItem
   }
@@ -281,9 +285,11 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
           .frame(width: max(0, metrics.itemWidth * selectorWidthRatio), height: selectorHeight)
           .offset(x: indicatorOffsetX(for: metrics) + ((metrics.itemWidth - max(0, metrics.itemWidth * selectorWidthRatio)) / 2))
           .offset(y: selectorVerticalOffset + selectorLift)
+          .scaleEffect(isSelectorActive ? 1.07 : 1)
           .zIndex(1)
           .animation(.spring(response: 0.24, dampingFraction: 0.86), value: selectedItem)
           .animation(.spring(response: 0.22, dampingFraction: 0.84), value: hoveredItem)
+          .animation(.spring(response: 0.2, dampingFraction: 0.82), value: isSelectorActive)
 
           ZStack(alignment: .leading) {
             HStack(spacing: itemSpacing) {
