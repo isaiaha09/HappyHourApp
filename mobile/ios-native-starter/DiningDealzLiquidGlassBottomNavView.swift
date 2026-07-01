@@ -210,11 +210,11 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   private let selectorWidthRatio: CGFloat = 0.86
 
   private var selectorHeight: CGFloat {
-    itemHeight + (horizontalInset * 2) + (isSelectorActive ? 8 : 0)
+    itemHeight + (horizontalInset * 2) + (isSelectorPressed ? 18 : 0)
   }
 
   private var selectorLift: CGFloat {
-    isSelectorActive ? -4 : 0
+    isSelectorPressed ? -9 : 0
   }
 
   private var containerBottomOffset: CGFloat {
@@ -229,12 +229,28 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     isContainerHovered || hoveredItem != nil || isDraggingAcrossNav
   }
 
-  private var isSelectorActive: Bool {
-    hoveredItem != nil || isDraggingAcrossNav
+  private var isSelectorPressed: Bool {
+    isDraggingAcrossNav
   }
 
   private var selectorWidthMultiplier: CGFloat {
-    isSelectorActive ? 1.08 : 1
+    isSelectorPressed ? 1.18 : 1
+  }
+
+  private var selectorFillOpacity: CGFloat {
+    isSelectorPressed ? 0.34 : 0.2
+  }
+
+  private var selectorStrokeOpacity: CGFloat {
+    isSelectorPressed ? 0.52 : 0.32
+  }
+
+  private var selectorShadowOpacity: Double {
+    isSelectorPressed ? 0.28 : 0.20
+  }
+
+  private var selectorTopGlowOpacity: Double {
+    isSelectorPressed ? 0.22 : 0.16
   }
 
   private var visuallyActiveItem: DiningDealzLiquidGlassBottomNavItem {
@@ -276,16 +292,16 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
 
           GlassEffectContainer(spacing: containerSpacing) {
             Capsule(style: .continuous)
-              .fill(Color.black.opacity(0.2))
+              .fill(Color.white.opacity(selectorFillOpacity))
               .glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
               .frame(width: max(0, metrics.itemWidth * selectorWidthRatio * selectorWidthMultiplier), height: selectorHeight)
               .overlay(
                 Capsule(style: .continuous)
-                  .stroke(Color.white.opacity(0.32), lineWidth: 0.7)
+                  .stroke(Color.white.opacity(selectorStrokeOpacity), lineWidth: isSelectorPressed ? 1.1 : 0.7)
               )
-              .shadow(color: .black.opacity(0.20), radius: 12, x: 0, y: 5)
-              .shadow(color: .white.opacity(0.16), radius: 1, x: 0, y: -1)
-              .opacity(isSelectorActive ? 0.98 : (hoveredItem == nil ? 0.84 : 0.96))
+              .shadow(color: .black.opacity(selectorShadowOpacity), radius: isSelectorPressed ? 18 : 12, x: 0, y: isSelectorPressed ? 8 : 5)
+              .shadow(color: .white.opacity(selectorTopGlowOpacity), radius: isSelectorPressed ? 3 : 1, x: 0, y: -1)
+              .opacity(isSelectorPressed ? 1 : (hoveredItem == nil ? 0.84 : 0.96))
           }
           .frame(width: max(0, metrics.itemWidth * selectorWidthRatio * selectorWidthMultiplier), height: selectorHeight)
           .offset(x: indicatorOffsetX(for: metrics) + ((metrics.itemWidth - max(0, metrics.itemWidth * selectorWidthRatio * selectorWidthMultiplier)) / 2))
@@ -293,7 +309,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
           .zIndex(1)
           .animation(.spring(response: 0.24, dampingFraction: 0.86), value: selectedItem)
           .animation(.spring(response: 0.22, dampingFraction: 0.84), value: hoveredItem)
-          .animation(.spring(response: 0.2, dampingFraction: 0.82), value: isSelectorActive)
+          .animation(.spring(response: 0.2, dampingFraction: 0.82), value: isSelectorPressed)
 
           ZStack(alignment: .leading) {
             HStack(spacing: itemSpacing) {
