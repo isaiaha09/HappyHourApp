@@ -223,6 +223,10 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     moreOpen ? .more : activeItem
   }
 
+  private var visuallyActiveItem: DiningDealzLiquidGlassBottomNavItem {
+    hoveredItem ?? selectedItem
+  }
+
   var body: some View {
     VStack(spacing: 0) {
       Spacer(minLength: 0)
@@ -252,8 +256,8 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
                       lineWidth: 0.8
                     )
                 )
-                .shadow(color: .black.opacity(0.22), radius: 20, x: 0, y: 8)
-                .shadow(color: .black.opacity(0.12), radius: 2, x: 0, y: 1)
+                .shadow(color: .black.opacity(0.22), radius: 14, x: 0, y: 6)
+                .shadow(color: .white.opacity(0.12), radius: 1, x: 0, y: -1)
                 .opacity(0.94)
 
               Capsule(style: .continuous)
@@ -278,7 +282,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
           ZStack(alignment: .leading) {
             HStack(spacing: itemSpacing) {
               ForEach(items) { displayItem in
-                navItemContent(displayItem, isSelected: displayItem.item == selectedItem, isHovered: displayItem.item == hoveredItem)
+                navItemContent(displayItem, isActive: displayItem.item == visuallyActiveItem)
                   .frame(width: metrics.itemWidth, height: itemHeight)
                   .contentShape(Rectangle())
                   .accessibilityElement(children: .ignore)
@@ -322,24 +326,24 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   }
 
   @ViewBuilder
-  private func navItemContent(_ displayItem: DiningDealzLiquidGlassBottomNavDisplayItem, isSelected: Bool, isHovered: Bool) -> some View {
+  private func navItemContent(_ displayItem: DiningDealzLiquidGlassBottomNavDisplayItem, isActive: Bool) -> some View {
     VStack(spacing: 2) {
       Image(systemName: displayItem.systemImageName)
-        .font(.system(size: 16, weight: isSelected || isHovered ? .bold : .semibold))
+        .font(.system(size: 16, weight: isActive ? .bold : .semibold))
         .frame(height: 18)
       Text(displayItem.title)
-        .font(.system(size: 10, weight: isSelected || isHovered ? .bold : .semibold))
+        .font(.system(size: 10, weight: isActive ? .bold : .semibold))
         .lineLimit(1)
         .minimumScaleFactor(0.72)
         .allowsTightening(true)
     }
-    .foregroundStyle(isHovered || isSelected ? Color(red: 1, green: 0.18, blue: 0.34) : Color.white.opacity(0.92))
-    .shadow(color: .black.opacity(isHovered || isSelected ? 0.18 : 0.28), radius: 1, x: 0, y: 1)
-    .opacity(isHovered || isSelected ? 1 : 0.76)
+    .foregroundStyle(isActive ? Color(red: 1, green: 0.04, blue: 0.06) : Color.white.opacity(0.92))
+    .shadow(color: .black.opacity(isActive ? 0.18 : 0.28), radius: 1, x: 0, y: 1)
+    .opacity(isActive ? 1 : 0.76)
   }
 
   private func indicatorOffsetX(for metrics: DiningDealzLiquidGlassBottomNavLayoutMetrics) -> CGFloat {
-    metrics.offsetX(for: hoveredItem ?? selectedItem)
+    metrics.offsetX(for: visuallyActiveItem)
   }
 
   private func nearestItem(at x: CGFloat, totalWidth: CGFloat) -> DiningDealzLiquidGlassBottomNavItem? {

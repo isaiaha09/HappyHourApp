@@ -110,12 +110,12 @@ function getBottomNavStyle(bottomInset: number, style?: StyleProp<ViewStyle>) {
 
 function getHeaderButtonStyle(variant: 'pill' | 'icon', label?: string, style?: StyleProp<ViewStyle>) {
   if (variant === 'icon') {
-    return [{ width: 42, height: 42 }, style];
+    return [{ width: 50, height: 50 }, style];
   }
 
   const resolvedLabel = label?.trim() ?? '';
-  const width = Math.max(92, resolvedLabel.length * 9 + 38);
-  return [{ width, height: 42 }, style];
+  const width = Math.max(100, resolvedLabel.length * 9 + 46);
+  return [{ width, height: 50 }, style];
 }
 
 export function isNativeIOSLiquidGlassBottomNavAvailable() {
