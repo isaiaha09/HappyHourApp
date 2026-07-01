@@ -6,7 +6,7 @@ import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { styles } from '../appStyles';
-import { NativeIOSLiquidGlassHeaderButton } from '../components/NativeIOSLiquidGlass';
+import { NativeIOSLiquidGlassHeaderButton, isNativeIOSLiquidGlassBottomNavAvailable } from '../components/NativeIOSLiquidGlass';
 import { PhotoLightbox } from '../components/PhotoLightbox';
 import type { BusinessAttachmentDraft, DirectMessageItem, DirectMessageThread, DirectMessageThreadDetailResponse, DirectMessageSendResponse, SignupResponse } from '../types';
 
@@ -91,6 +91,8 @@ export function DirectMessagesScreen({
 	session,
 }: DirectMessagesScreenProps) {
 	const insets = useSafeAreaInsets();
+	const nativeGlassBottomNavActive = isNativeIOSLiquidGlassBottomNavAvailable();
+	const directMessageBottomNavOffset = nativeGlassBottomNavActive ? 64 : 56;
 	const messageScrollRef = useRef<ScrollView | null>(null);
 	const swipeableRowRefs = useRef(new Map<number, Swipeable | null>());
 	const threadCacheKey = `${session.portal}:${session.id}`;
@@ -818,7 +820,7 @@ export function DirectMessagesScreen({
 							<View
 								style={[
 									styles.directMessageComposerDock,
-									{ paddingBottom: keyboardVisible ? Math.max(insets.bottom, 8) : Math.max(insets.bottom, 8) + 56 },
+									{ paddingBottom: keyboardVisible ? Math.max(insets.bottom, 8) : Math.max(insets.bottom, 8) + directMessageBottomNavOffset },
 								]}
 							>
 								{isBusinessPortal ? (
