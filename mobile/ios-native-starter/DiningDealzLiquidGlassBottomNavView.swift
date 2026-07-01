@@ -330,23 +330,21 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     guard let nearestIndex else {
       return nil
     }
-        }
-        .contentShape(Rectangle())
-        .gesture(
-          DragGesture(minimumDistance: 0)
-            .onChanged { value in
-              dragLocationX = value.location.x
-              hoveredItem = nearestItem(at: value.location.x, totalWidth: geometry.size.width)
-            }
-            .onEnded { value in
-              let finalItem = nearestItem(at: value.location.x, totalWidth: geometry.size.width) ?? hoveredItem
-              dragLocationX = nil
-              hoveredItem = nil
-              if let finalItem {
-                onSelect(finalItem)
-              }
-            }
-        )
+    return items[nearestIndex].item
+  }
+
+  private func layoutMetrics(totalWidth: CGFloat) -> DiningDealzLiquidGlassBottomNavLayoutMetrics {
+    DiningDealzLiquidGlassBottomNavLayoutMetrics(
+      itemCount: items.count,
+      itemSpacing: itemSpacing,
+      leadingInset: horizontalInset,
+      totalWidth: totalWidth
+    )
+  }
+}
+
+private struct DiningDealzLiquidGlassBottomNavLayoutMetrics {
+  let itemCount: Int
   let itemSpacing: CGFloat
   let leadingInset: CGFloat
   let totalWidth: CGFloat
