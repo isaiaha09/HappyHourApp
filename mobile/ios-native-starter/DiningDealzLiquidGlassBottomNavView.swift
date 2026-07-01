@@ -250,7 +250,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
         ZStack(alignment: .leading) {
           GlassEffectContainer(spacing: containerSpacing) {
             Capsule(style: .continuous)
-              .fill(Color.black.opacity(0.28))
+              .fill(Color.black.opacity(isContainerActive ? 0.16 : 0.11))
               .glassEffect(.regular.interactive(false), in: Capsule(style: .continuous))
               .frame(height: itemHeight + (horizontalInset * 2))
               .overlay(
@@ -258,9 +258,9 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
                   .stroke(
                     LinearGradient(
                       colors: [
-                        Color.white.opacity(0.34),
-                        Color.white.opacity(0.12),
-                        Color.black.opacity(0.18),
+                        Color.white.opacity(0.42),
+                        Color.white.opacity(0.16),
+                        Color.white.opacity(0.05),
                       ],
                       startPoint: .topLeading,
                       endPoint: .bottomTrailing
@@ -268,23 +268,23 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
                     lineWidth: 0.8
                   )
               )
-              .opacity(0.94)
+                  .opacity(0.78)
           }
           .frame(height: itemHeight + (horizontalInset * 2))
           .zIndex(0)
 
           GlassEffectContainer(spacing: containerSpacing) {
             Capsule(style: .continuous)
-              .fill(Color.black.opacity(0.2))
+              .fill(Color.white.opacity(isSelectorActive ? 0.18 : 0.075))
               .glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
               .frame(width: max(0, metrics.itemWidth * selectorWidthRatio * selectorWidthMultiplier), height: selectorHeight)
               .overlay(
                 Capsule(style: .continuous)
-                  .stroke(Color.white.opacity(0.32), lineWidth: 0.7)
+                  .stroke(Color.white.opacity(isSelectorActive ? 0.48 : 0.3), lineWidth: 0.7)
               )
-              .shadow(color: .black.opacity(0.20), radius: 12, x: 0, y: 5)
-              .shadow(color: .white.opacity(0.16), radius: 1, x: 0, y: -1)
-              .opacity(isSelectorActive ? 0.98 : (hoveredItem == nil ? 0.84 : 0.96))
+              .shadow(color: .black.opacity(0.14), radius: 10, x: 0, y: 4)
+              .shadow(color: .white.opacity(0.24), radius: 2, x: 0, y: -1)
+              .opacity(isSelectorActive ? 0.9 : (hoveredItem == nil ? 0.72 : 0.84))
           }
           .frame(width: max(0, metrics.itemWidth * selectorWidthRatio * selectorWidthMultiplier), height: selectorHeight)
           .offset(x: indicatorOffsetX(for: metrics) + ((metrics.itemWidth - max(0, metrics.itemWidth * selectorWidthRatio * selectorWidthMultiplier)) / 2))
@@ -327,8 +327,8 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
               }
           )
         }
-        .shadow(color: .black.opacity(0.22), radius: 14, x: 0, y: 6)
-        .shadow(color: .white.opacity(0.12), radius: 1, x: 0, y: -1)
+        .shadow(color: .black.opacity(0.16), radius: 14, x: 0, y: 6)
+        .shadow(color: .white.opacity(0.18), radius: 2, x: 0, y: -1)
         .scaleEffect(isContainerActive ? 1.045 : 1)
         .animation(.spring(response: 0.22, dampingFraction: 0.82), value: hoveredItem)
         .animation(.spring(response: 0.22, dampingFraction: 0.82), value: isContainerHovered)

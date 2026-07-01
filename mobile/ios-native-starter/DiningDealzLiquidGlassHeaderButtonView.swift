@@ -152,16 +152,16 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
     .background {
       if variant == .icon {
         Circle()
-          .fill(isActive ? Color.white.opacity(0.16) : Color.black.opacity(0.26))
+          .fill(Color.white.opacity(isActive ? 0.13 : 0.055))
           .glassEffect(.regular.interactive(false), in: Circle())
           .overlay(
             Circle()
               .stroke(
                 LinearGradient(
                   colors: [
-                    Color.white.opacity(0.36),
-                    Color.white.opacity(0.12),
-                    Color.black.opacity(0.2),
+                    Color.white.opacity(0.52),
+                    Color.white.opacity(0.2),
+                    Color.white.opacity(0.06),
                   ],
                   startPoint: .topLeading,
                   endPoint: .bottomTrailing
@@ -171,16 +171,16 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
           )
       } else {
         Capsule(style: .continuous)
-          .fill(isActive ? Color.white.opacity(0.16) : Color.black.opacity(0.26))
+          .fill(Color.white.opacity(isActive ? 0.13 : 0.055))
           .glassEffect(.regular.interactive(false), in: Capsule(style: .continuous))
           .overlay(
             Capsule(style: .continuous)
               .stroke(
                 LinearGradient(
                   colors: [
-                    Color.white.opacity(0.36),
-                    Color.white.opacity(0.12),
-                    Color.black.opacity(0.2),
+                    Color.white.opacity(0.52),
+                    Color.white.opacity(0.2),
+                    Color.white.opacity(0.06),
                   ],
                   startPoint: .topLeading,
                   endPoint: .bottomTrailing
@@ -191,8 +191,8 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
       }
     }
     .scaleEffect(isActive ? 1.18 : 1)
-    .shadow(color: .black.opacity(0.22), radius: 14, x: 0, y: 6)
-    .shadow(color: .white.opacity(0.12), radius: 1, x: 0, y: -1)
+    .shadow(color: .black.opacity(0.14), radius: 12, x: 0, y: 5)
+    .shadow(color: .white.opacity(0.22), radius: 2, x: 0, y: -1)
     .animation(.spring(response: 0.22, dampingFraction: 0.82), value: isHovering)
     .animation(.spring(response: 0.16, dampingFraction: 0.78), value: isPressing)
     .onHover { hovering in
