@@ -5615,7 +5615,12 @@ function AppScreen() {
                       </Pressable>
                     )}
                     onPress={handleBottomNavOpenProfile}
-                    style={{ bottom: floatingDashboardButtonOffset, height: 54, position: 'absolute', right: 14, width: 54, zIndex: 40 }}
+                    style={[
+                      styles.floatingDashboardButton,
+                      styles.floatingDashboardButtonMap,
+                      styles.floatingMapNavActionButton,
+                      { bottom: floatingDashboardButtonOffset, right: 14 },
+                    ]}
                     systemImage="arrow.right"
                     variant="icon"
                   />
@@ -5648,7 +5653,12 @@ function AppScreen() {
                       </Pressable>
                     )}
                     onPress={handleExitGuestMap}
-                    style={{ bottom: floatingDashboardButtonOffset, height: 54, position: 'absolute', right: 14, width: 54, zIndex: 40 }}
+                    style={[
+                      styles.floatingDashboardButton,
+                      styles.floatingDashboardButtonMap,
+                      styles.floatingGuestExitButton,
+                      { bottom: floatingDashboardButtonOffset, right: 14 },
+                    ]}
                     systemImage="rectangle.portrait.and.arrow.right"
                     variant="icon"
                   />
