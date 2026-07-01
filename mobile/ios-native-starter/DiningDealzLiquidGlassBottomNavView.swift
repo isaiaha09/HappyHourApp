@@ -202,9 +202,9 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
 
   private let containerSpacing: CGFloat = 18
   private let itemSpacing: CGFloat = 8
-  private let itemHeight: CGFloat = 50
-  private let horizontalInset: CGFloat = 5
-  private let selectorHeight: CGFloat = 52
+  private let itemHeight: CGFloat = 52
+  private let horizontalInset: CGFloat = 6
+  private let selectorHeight: CGFloat = 56
 
   private var displayedActiveItem: DiningDealzLiquidGlassBottomNavItem {
     hoveredItem ?? (moreOpen ? .more : activeItem)
@@ -221,7 +221,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
           ZStack(alignment: .leading) {
             Capsule(style: .continuous)
               .fill(.clear)
-              .glassEffect(.regular.tint(Color.white.opacity(0.08)).interactive(false), in: Capsule(style: .continuous))
+              .glassEffect(.regular.tint(Color.white.opacity(0.12)).interactive(false), in: Capsule(style: .continuous))
               .frame(height: itemHeight + (horizontalInset * 2))
 
             Capsule(style: .continuous)
@@ -233,13 +233,24 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
               .animation(.spring(response: 0.22, dampingFraction: 0.84), value: displayedActiveItem)
               .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.86), value: dragLocationX)
 
+            if let selectedDisplayItem = displayItem(for: displayedActiveItem) {
+              navItemContent(selectedDisplayItem, isActive: true)
+                .frame(width: metrics.itemWidth, height: itemHeight)
+                .offset(x: indicatorOffsetX(for: metrics))
+                .offset(y: -1)
+                .zIndex(2)
+                .animation(.spring(response: 0.22, dampingFraction: 0.84), value: displayedActiveItem)
+                .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.86), value: dragLocationX)
+            }
+
             HStack(spacing: itemSpacing) {
               ForEach(items) { displayItem in
-                navItemContent(displayItem, isActive: displayItem.item == displayedActiveItem)
+                navItemContent(displayItem, isActive: false)
                   .frame(width: metrics.itemWidth, height: itemHeight)
                   .contentShape(Rectangle())
                   .accessibilityElement(children: .ignore)
                   .accessibilityLabel(Text(displayItem.title))
+                  .opacity(displayItem.item == displayedActiveItem ? 0 : 1)
               }
             }
             .padding(.horizontal, horizontalInset)
@@ -294,6 +305,10 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     }
 
     return metrics.clampedOffsetX(for: dragLocationX)
+  }
+
+  private func displayItem(for item: DiningDealzLiquidGlassBottomNavItem) -> DiningDealzLiquidGlassBottomNavDisplayItem? {
+    items.first(where: { $0.item == item })
   }
 
   private func nearestItem(at x: CGFloat, totalWidth: CGFloat) -> DiningDealzLiquidGlassBottomNavItem? {

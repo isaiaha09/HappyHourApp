@@ -248,7 +248,7 @@ export function SplashScreen({ apiBaseUrl, onCreateAccount, onOpenMap, onSelectP
           },
         ]}
       >
-        <View style={styles.screenHeaderBarRow}>
+        <View style={[styles.screenHeaderBarRow, styles.splashHeaderRow]}>
           <NativeIOSLiquidGlassHeaderButton
             fallback={(
               <Pressable onPress={onOpenMap} style={[styles.backButton, styles.splashHeaderBackButton]}>
@@ -257,7 +257,6 @@ export function SplashScreen({ apiBaseUrl, onCreateAccount, onOpenMap, onSelectP
             )}
             label="Open Map"
             onPress={onOpenMap}
-            style={{ marginLeft: -4 }}
             variant="pill"
           />
           <View pointerEvents="none" style={styles.splashHeaderCenterSlot} />
@@ -269,7 +268,6 @@ export function SplashScreen({ apiBaseUrl, onCreateAccount, onOpenMap, onSelectP
             )}
             label="Sign in"
             onPress={handleOpenSignInModal}
-            style={{ marginRight: -4 }}
             variant="pill"
           />
         </View>

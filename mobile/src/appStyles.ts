@@ -2178,6 +2178,9 @@ export const styles = StyleSheet.create({
     paddingTop: 34,
     zIndex: 3,
   },
+  splashHeaderRow: {
+    paddingHorizontal: 12,
+  },
   splashHeaderBackButton: {
     minHeight: 44,
     marginTop: 8,
@@ -2186,7 +2189,7 @@ export const styles = StyleSheet.create({
     
   },
   splashHeaderCenterSlot: {
-    width: 84,
+    width: 64,
   },
   splashHeaderSignInButton: {
     alignItems: 'center',

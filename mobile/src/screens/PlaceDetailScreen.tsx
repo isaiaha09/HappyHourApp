@@ -364,15 +364,16 @@ export function PlaceDetailScreen({
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.screenHeaderBar, styles.screenHeaderBarRow]}>
+        <View style={[styles.screenHeaderBar, styles.screenHeaderBarRow, { paddingLeft: 10, paddingRight: 26 }]}>
           <NativeIOSLiquidGlassHeaderButton
             fallback={(
-              <Pressable onPress={onBack} style={styles.backButton}>
+              <Pressable onPress={onBack} style={[styles.backButton, { marginLeft: -8 }]}>
                 <Text style={styles.backButtonText}>{backButtonLabel}</Text>
               </Pressable>
             )}
             label={backButtonLabel}
             onPress={onBack}
+            style={{ marginLeft: -8 }}
             variant="pill"
           />
           {showDirectMessageControl ? (
@@ -382,13 +383,13 @@ export function PlaceDetailScreen({
                 <Pressable
                   accessibilityLabel="Open direct messages"
                   onPress={onOpenDirectMessages}
-                  style={[styles.directMessageHeaderActionButton, { marginRight: 8 }]}
+                  style={[styles.directMessageHeaderActionButton, { marginRight: 16 }]}
                 >
                   <Ionicons color="#402214" name="paper-plane-outline" size={19} />
                 </Pressable>
               )}
               onPress={() => onOpenDirectMessages?.()}
-              style={{ marginRight: 8 }}
+              style={{ marginRight: 16 }}
               systemImage="paperplane"
               variant="icon"
             />
