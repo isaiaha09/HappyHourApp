@@ -216,7 +216,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   }
 
   private var containerBottomOffset: CGFloat {
-    min(max(bottomInset * 0.42, 6), 14)
+    min(max(bottomInset * 0.32, 4), 11)
   }
 
   private var selectedItem: DiningDealzLiquidGlassBottomNavItem {
@@ -236,48 +236,49 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
 
         ZStack(alignment: .leading) {
           GlassEffectContainer(spacing: containerSpacing) {
-            ZStack(alignment: .leading) {
-              Capsule(style: .continuous)
-                .fill(Color.black.opacity(0.28))
-                .glassEffect(.regular.interactive(false), in: Capsule(style: .continuous))
-                .frame(height: itemHeight + (horizontalInset * 2))
-                .overlay(
-                  Capsule(style: .continuous)
-                    .stroke(
-                      LinearGradient(
-                        colors: [
-                          Color.white.opacity(0.34),
-                          Color.white.opacity(0.12),
-                          Color.black.opacity(0.18),
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                      ),
-                      lineWidth: 0.8
-                    )
-                )
-                .shadow(color: .black.opacity(0.22), radius: 14, x: 0, y: 6)
-                .shadow(color: .white.opacity(0.12), radius: 1, x: 0, y: -1)
-                .opacity(0.94)
-
-              Capsule(style: .continuous)
-                .fill(Color.black.opacity(0.2))
-                .glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
-                .frame(width: max(0, metrics.itemWidth * selectorWidthRatio), height: selectorHeight)
-                .overlay(
-                  Capsule(style: .continuous)
-                    .stroke(Color.white.opacity(0.32), lineWidth: 0.7)
-                )
-                .offset(x: indicatorOffsetX(for: metrics) + ((metrics.itemWidth - max(0, metrics.itemWidth * selectorWidthRatio)) / 2))
-                .offset(y: selectorVerticalOffset + selectorLift)
-                .shadow(color: .black.opacity(0.20), radius: 12, x: 0, y: 5)
-                .shadow(color: .white.opacity(0.16), radius: 1, x: 0, y: -1)
-                .opacity(hoveredItem == nil ? 0.84 : 0.96)
-                .animation(.spring(response: 0.24, dampingFraction: 0.86), value: selectedItem)
-                .animation(.spring(response: 0.22, dampingFraction: 0.84), value: hoveredItem)
-            }
-            .frame(height: itemHeight + (horizontalInset * 2))
+            Capsule(style: .continuous)
+              .fill(Color.black.opacity(0.28))
+              .glassEffect(.regular.interactive(false), in: Capsule(style: .continuous))
+              .frame(height: itemHeight + (horizontalInset * 2))
+              .overlay(
+                Capsule(style: .continuous)
+                  .stroke(
+                    LinearGradient(
+                      colors: [
+                        Color.white.opacity(0.34),
+                        Color.white.opacity(0.12),
+                        Color.black.opacity(0.18),
+                      ],
+                      startPoint: .topLeading,
+                      endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.8
+                  )
+              )
+              .opacity(0.94)
           }
+          .frame(height: itemHeight + (horizontalInset * 2))
+          .zIndex(0)
+
+          GlassEffectContainer(spacing: containerSpacing) {
+            Capsule(style: .continuous)
+              .fill(Color.black.opacity(0.2))
+              .glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
+              .frame(width: max(0, metrics.itemWidth * selectorWidthRatio), height: selectorHeight)
+              .overlay(
+                Capsule(style: .continuous)
+                  .stroke(Color.white.opacity(0.32), lineWidth: 0.7)
+              )
+              .shadow(color: .black.opacity(0.20), radius: 12, x: 0, y: 5)
+              .shadow(color: .white.opacity(0.16), radius: 1, x: 0, y: -1)
+              .opacity(hoveredItem == nil ? 0.84 : 0.96)
+          }
+          .frame(width: max(0, metrics.itemWidth * selectorWidthRatio), height: selectorHeight)
+          .offset(x: indicatorOffsetX(for: metrics) + ((metrics.itemWidth - max(0, metrics.itemWidth * selectorWidthRatio)) / 2))
+          .offset(y: selectorVerticalOffset + selectorLift)
+          .zIndex(1)
+          .animation(.spring(response: 0.24, dampingFraction: 0.86), value: selectedItem)
+          .animation(.spring(response: 0.22, dampingFraction: 0.84), value: hoveredItem)
 
           ZStack(alignment: .leading) {
             HStack(spacing: itemSpacing) {
@@ -294,10 +295,14 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
           }
           .frame(height: itemHeight + (horizontalInset * 2))
           .contentShape(Rectangle())
+          .zIndex(2)
           .gesture(
             DragGesture(minimumDistance: 0)
               .onChanged { value in
-                hoveredItem = nearestItem(at: value.location.x, totalWidth: geometry.size.width)
+                let nextItem = nearestItem(at: value.location.x, totalWidth: geometry.size.width)
+                if hoveredItem != nextItem {
+                  hoveredItem = nextItem
+                }
               }
               .onEnded { value in
                 let finalItem = nearestItem(at: value.location.x, totalWidth: geometry.size.width) ?? hoveredItem
@@ -308,7 +313,9 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
               }
           )
         }
-        .scaleEffect(hoveredItem == nil && !isContainerHovered ? 1 : 1.035)
+        .shadow(color: .black.opacity(0.22), radius: 14, x: 0, y: 6)
+        .shadow(color: .white.opacity(0.12), radius: 1, x: 0, y: -1)
+        .scaleEffect(isContainerHovered ? 1.035 : 1)
         .animation(.spring(response: 0.22, dampingFraction: 0.82), value: hoveredItem)
         .animation(.spring(response: 0.22, dampingFraction: 0.82), value: isContainerHovered)
         .onHover { hovering in

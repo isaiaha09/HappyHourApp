@@ -55,13 +55,13 @@ final class DiningDealzLiquidGlassHeaderButtonView: UIView {
 
   override var intrinsicContentSize: CGSize {
     if resolvedVariant == .icon {
-      return CGSize(width: 50, height: 50)
+      return CGSize(width: 58, height: 58)
     }
 
     let text = (label as String?) ?? ""
-    let font = UIFont.systemFont(ofSize: 13, weight: .semibold)
-    let width = max(100, ceil((text as NSString).size(withAttributes: [.font: font]).width + 46))
-    return CGSize(width: width, height: 50)
+    let font = UIFont.systemFont(ofSize: 15, weight: .semibold)
+    let width = max(116, ceil((text as NSString).size(withAttributes: [.font: font]).width + 58))
+    return CGSize(width: width, height: 58)
   }
 
   private func setupView() {
@@ -126,20 +126,24 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
   @State private var isHovering = false
   @State private var isPressing = false
 
+  private var isActive: Bool {
+    isHovering || isPressing
+  }
+
   var body: some View {
     Button(action: onPress) {
       if variant == .icon {
         Image(systemName: systemImage ?? "questionmark")
-          .font(.system(size: 16, weight: .semibold))
-          .frame(width: 42, height: 42)
+          .font(.system(size: isActive ? 20 : 16, weight: .semibold))
+          .frame(width: isActive ? 52 : 42, height: isActive ? 52 : 42)
       } else {
         Text(label ?? "")
-          .font(.system(size: 13, weight: .semibold))
+          .font(.system(size: isActive ? 15 : 13, weight: .semibold))
           .lineLimit(1)
           .minimumScaleFactor(0.84)
           .allowsTightening(true)
-          .padding(.horizontal, 15)
-          .frame(minHeight: 42)
+          .padding(.horizontal, isActive ? 19 : 15)
+          .frame(minHeight: isActive ? 52 : 42)
       }
     }
     .buttonStyle(.plain)
@@ -147,7 +151,7 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
     .background {
       if variant == .icon {
         Circle()
-          .fill(Color.black.opacity(0.26))
+          .fill(isActive ? Color.white.opacity(0.16) : Color.black.opacity(0.26))
           .glassEffect(.regular.interactive(false), in: Circle())
           .overlay(
             Circle()
@@ -166,7 +170,7 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
           )
       } else {
         Capsule(style: .continuous)
-          .fill(Color.black.opacity(0.26))
+          .fill(isActive ? Color.white.opacity(0.16) : Color.black.opacity(0.26))
           .glassEffect(.regular.interactive(false), in: Capsule(style: .continuous))
           .overlay(
             Capsule(style: .continuous)
@@ -187,7 +191,6 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
     }
     .shadow(color: .black.opacity(0.22), radius: 14, x: 0, y: 6)
     .shadow(color: .white.opacity(0.12), radius: 1, x: 0, y: -1)
-    .scaleEffect(isHovering || isPressing ? 1.08 : 1)
     .animation(.spring(response: 0.22, dampingFraction: 0.82), value: isHovering)
     .animation(.spring(response: 0.16, dampingFraction: 0.78), value: isPressing)
     .onHover { hovering in
