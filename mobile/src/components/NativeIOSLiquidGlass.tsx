@@ -5,6 +5,9 @@ import { styles } from '../appStyles';
 
 export type NativeLiquidGlassBottomNavItem = 'map' | 'profile' | 'more';
 
+type NativeLiquidGlassBottomNavLabels = Partial<Record<NativeLiquidGlassBottomNavItem, string>>;
+type NativeLiquidGlassBottomNavSystemImages = Partial<Record<NativeLiquidGlassBottomNavItem, string>>;
+
 type NativeBottomNavSelectEvent = NativeSyntheticEvent<{
   item: NativeLiquidGlassBottomNavItem;
 }>;
@@ -14,8 +17,14 @@ type NativeHeaderButtonPressEvent = NativeSyntheticEvent<Record<string, never>>;
 type NativeBottomNavViewProps = {
   activeItem: NativeLiquidGlassBottomNavItem;
   bottomInset: number;
+  mapLabel?: string;
+  mapSystemImage?: string;
   moreOpen?: boolean;
+  moreLabel?: string;
+  moreSystemImage?: string;
   onNavItemSelect?: (event: NativeBottomNavSelectEvent) => void;
+  profileLabel?: string;
+  profileSystemImage?: string;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -31,8 +40,10 @@ type NativeHeaderButtonViewProps = {
 type NativeIOSLiquidGlassBottomNavProps = {
   activeItem: NativeLiquidGlassBottomNavItem;
   bottomInset: number;
+  labels?: NativeLiquidGlassBottomNavLabels;
   moreOpen?: boolean;
   onSelect: (item: NativeLiquidGlassBottomNavItem) => void;
+  systemImages?: NativeLiquidGlassBottomNavSystemImages;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -94,17 +105,17 @@ function hasNativeViewManager(viewName: string) {
 }
 
 function getBottomNavStyle(bottomInset: number, style?: StyleProp<ViewStyle>) {
-  return [{ width: '100%' as const, height: Math.max(90, 82 + bottomInset) }, style];
+  return [{ width: '100%' as const, height: Math.max(80, 72 + bottomInset) }, style];
 }
 
 function getHeaderButtonStyle(variant: 'pill' | 'icon', label?: string, style?: StyleProp<ViewStyle>) {
   if (variant === 'icon') {
-    return [{ width: 44, height: 44 }, style];
+    return [{ width: 40, height: 40 }, style];
   }
 
   const resolvedLabel = label?.trim() ?? '';
-  const width = Math.max(88, resolvedLabel.length * 9 + 32);
-  return [{ width, height: 44 }, style];
+  const width = Math.max(96, resolvedLabel.length * 10 + 40);
+  return [{ width, height: 40 }, style];
 }
 
 export function isNativeIOSLiquidGlassBottomNavAvailable() {
@@ -115,7 +126,7 @@ export function isNativeIOSLiquidGlassHeaderButtonAvailable() {
   return hasNativeViewManager(nativeHeaderButtonViewName);
 }
 
-export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, moreOpen = false, onSelect, style }: NativeIOSLiquidGlassBottomNavProps) {
+export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, labels, moreOpen = false, onSelect, style, systemImages }: NativeIOSLiquidGlassBottomNavProps) {
   if (!isNativeIOSLiquidGlassBottomNavAvailable()) {
     return null;
   }
@@ -124,8 +135,14 @@ export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, moreOpe
     <NativeBottomNavView
       activeItem={activeItem}
       bottomInset={bottomInset}
+      mapLabel={labels?.map}
+      mapSystemImage={systemImages?.map}
       moreOpen={moreOpen}
+      moreLabel={labels?.more}
+      moreSystemImage={systemImages?.more}
       onNavItemSelect={(event) => onSelect(event.nativeEvent.item)}
+      profileLabel={labels?.profile}
+      profileSystemImage={systemImages?.profile}
       style={getBottomNavStyle(bottomInset, style)}
     />
   );

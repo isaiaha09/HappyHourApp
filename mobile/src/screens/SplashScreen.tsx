@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { styles } from '../appStyles';
 import type { AuthPortal } from '../appFlowTypes';
 import { venueFilters } from '../browseConfig';
-import { NativeIOSLiquidGlassHeaderButton } from '../components/NativeIOSLiquidGlass';
+import { NativeIOSLiquidGlassBottomNav, NativeIOSLiquidGlassHeaderButton, isNativeIOSLiquidGlassBottomNavAvailable } from '../components/NativeIOSLiquidGlass';
 import { HomeFeedScreen } from './HomeFeedScreen';
 
 const sloganWords = ['Discover.', 'Eat.', 'Save.'] as const;
@@ -334,36 +334,75 @@ export function SplashScreen({ apiBaseUrl, onCreateAccount, onOpenMap, onSelectP
       </View>
 
       <View pointerEvents="box-none" style={styles.bottomNavOverlay}>
-        <Animated.View
-          style={[
-            styles.bottomNavShell,
-            {
-              opacity: actionOpacity,
-              paddingBottom: Math.max(insets.bottom + 10, 14),
-              transform: [{ translateY: actionTranslateY }],
-            },
-          ]}
-        >
-          <View pointerEvents="none" style={styles.bottomNavGlassHighlight} />
-          <Pressable accessibilityLabel="Open customer login" onPress={() => onSelectPortal('customer')} style={styles.bottomNavItem}>
-            <View style={[styles.bottomNavItemIconWrap, styles.bottomNavItemIconWrapActive]}>
-              {renderHomeBottomNavIcon('customer', true)}
-            </View>
-            <Text style={[styles.bottomNavItemLabel, styles.bottomNavItemLabelActive]}>Customer</Text>
-          </Pressable>
-          <Pressable accessibilityLabel="Create a free account" onPress={onCreateAccount} style={styles.bottomNavItem}>
-            <View style={styles.bottomNavItemIconWrap}>
-              {renderHomeBottomNavIcon('signup', false)}
-            </View>
-            <Text style={styles.bottomNavItemLabel}>Sign Up</Text>
-          </Pressable>
-          <Pressable accessibilityLabel="Open business login" onPress={() => onSelectPortal('business')} style={styles.bottomNavItem}>
-            <View style={styles.bottomNavItemIconWrap}>
-              {renderHomeBottomNavIcon('business', false)}
-            </View>
-            <Text style={styles.bottomNavItemLabel}>Business</Text>
-          </Pressable>
-        </Animated.View>
+        {isNativeIOSLiquidGlassBottomNavAvailable() ? (
+          <>
+            <View
+              pointerEvents="none"
+              style={[
+                styles.bottomNavNativeBackdrop,
+                { height: Math.max(68, insets.bottom + 52) },
+              ]}
+            />
+            <Animated.View
+              style={{
+                opacity: actionOpacity,
+                transform: [{ translateY: actionTranslateY }],
+              }}
+            >
+              <NativeIOSLiquidGlassBottomNav
+                activeItem="map"
+                bottomInset={insets.bottom}
+                labels={{ map: 'Customer', profile: 'Sign Up', more: 'Business' }}
+                onSelect={(item) => {
+                  if (item === 'map') {
+                    onSelectPortal('customer');
+                    return;
+                  }
+
+                  if (item === 'profile') {
+                    onCreateAccount();
+                    return;
+                  }
+
+                  onSelectPortal('business');
+                }}
+                style={{ width: '100%' }}
+                systemImages={{ map: 'person.fill', profile: 'plus', more: 'briefcase' }}
+              />
+            </Animated.View>
+          </>
+        ) : (
+          <Animated.View
+            style={[
+              styles.bottomNavShell,
+              {
+                opacity: actionOpacity,
+                paddingBottom: Math.max(insets.bottom + 10, 14),
+                transform: [{ translateY: actionTranslateY }],
+              },
+            ]}
+          >
+            <View pointerEvents="none" style={styles.bottomNavGlassHighlight} />
+            <Pressable accessibilityLabel="Open customer login" onPress={() => onSelectPortal('customer')} style={styles.bottomNavItem}>
+              <View style={[styles.bottomNavItemIconWrap, styles.bottomNavItemIconWrapActive]}>
+                {renderHomeBottomNavIcon('customer', true)}
+              </View>
+              <Text style={[styles.bottomNavItemLabel, styles.bottomNavItemLabelActive]}>Customer</Text>
+            </Pressable>
+            <Pressable accessibilityLabel="Create a free account" onPress={onCreateAccount} style={styles.bottomNavItem}>
+              <View style={styles.bottomNavItemIconWrap}>
+                {renderHomeBottomNavIcon('signup', false)}
+              </View>
+              <Text style={styles.bottomNavItemLabel}>Sign Up</Text>
+            </Pressable>
+            <Pressable accessibilityLabel="Open business login" onPress={() => onSelectPortal('business')} style={styles.bottomNavItem}>
+              <View style={styles.bottomNavItemIconWrap}>
+                {renderHomeBottomNavIcon('business', false)}
+              </View>
+              <Text style={styles.bottomNavItemLabel}>Business</Text>
+            </Pressable>
+          </Animated.View>
+        )}
       </View>
 
       {signInModalMounted ? (

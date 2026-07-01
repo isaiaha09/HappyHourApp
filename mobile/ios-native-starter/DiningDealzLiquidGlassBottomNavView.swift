@@ -8,27 +8,15 @@ private enum DiningDealzLiquidGlassBottomNavItem: String, CaseIterable, Identifi
   case more
 
   var id: String { rawValue }
+}
 
-  var title: String {
-    switch self {
-    case .map:
-      return "Map"
-    case .profile:
-      return "Profile"
-    case .more:
-      return "More"
-    }
-  }
+private struct DiningDealzLiquidGlassBottomNavDisplayItem: Identifiable {
+  let item: DiningDealzLiquidGlassBottomNavItem
+  let systemImageName: String
+  let title: String
 
-  var systemImageName: String {
-    switch self {
-    case .map:
-      return "map"
-    case .profile:
-      return "person.crop.circle"
-    case .more:
-      return "line.3.horizontal"
-    }
+  var id: String {
+    item.rawValue
   }
 }
 
@@ -49,7 +37,43 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     }
   }
 
+  @objc var mapLabel: NSString? {
+    didSet {
+      updateRootView()
+    }
+  }
+
+  @objc var mapSystemImage: NSString? {
+    didSet {
+      updateRootView()
+    }
+  }
+
   @objc var moreOpen: Bool = false {
+    didSet {
+      updateRootView()
+    }
+  }
+
+  @objc var moreLabel: NSString? {
+    didSet {
+      updateRootView()
+    }
+  }
+
+  @objc var moreSystemImage: NSString? {
+    didSet {
+      updateRootView()
+    }
+  }
+
+  @objc var profileLabel: NSString? {
+    didSet {
+      updateRootView()
+    }
+  }
+
+  @objc var profileSystemImage: NSString? {
     didSet {
       updateRootView()
     }
@@ -72,7 +96,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   }
 
   override var intrinsicContentSize: CGSize {
-    CGSize(width: UIView.noIntrinsicMetric, height: 82 + CGFloat(truncating: bottomInset))
+    CGSize(width: UIView.noIntrinsicMetric, height: 72 + CGFloat(truncating: bottomInset))
   }
 
   private func setupView() {
@@ -95,6 +119,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   private func updateRootView() {
     let currentActiveItem = resolvedActiveItem
     let currentBottomInset = CGFloat(truncating: bottomInset)
+    let currentItems = resolvedItems
     let currentMoreOpen = moreOpen
 
     hostingController.rootView = AnyView(
@@ -103,6 +128,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
           DiningDealzLiquidGlassBottomNavContent(
             activeItem: currentActiveItem,
             bottomInset: currentBottomInset,
+            items: currentItems,
             moreOpen: currentMoreOpen,
             onSelect: handleSelection
           )
@@ -110,6 +136,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
           DiningDealzLegacyBottomNavContent(
             activeItem: currentActiveItem,
             bottomInset: currentBottomInset,
+            items: currentItems,
             moreOpen: currentMoreOpen,
             onSelect: handleSelection
           )
@@ -118,9 +145,47 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     )
   }
 
+  private var resolvedItems: [DiningDealzLiquidGlassBottomNavDisplayItem] {
+    DiningDealzLiquidGlassBottomNavItem.allCases.map { item in
+      DiningDealzLiquidGlassBottomNavDisplayItem(
+        item: item,
+        systemImageName: resolvedSystemImage(for: item),
+        title: resolvedTitle(for: item)
+      )
+    }
+  }
+
+  private func resolvedSystemImage(for item: DiningDealzLiquidGlassBottomNavItem) -> String {
+    switch item {
+    case .map:
+      return (mapSystemImage as String?)?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ?? "map"
+    case .profile:
+      return (profileSystemImage as String?)?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ?? "person.crop.circle"
+    case .more:
+      return (moreSystemImage as String?)?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ?? "line.3.horizontal"
+    }
+  }
+
+  private func resolvedTitle(for item: DiningDealzLiquidGlassBottomNavItem) -> String {
+    switch item {
+    case .map:
+      return (mapLabel as String?)?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ?? "Map"
+    case .profile:
+      return (profileLabel as String?)?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ?? "Profile"
+    case .more:
+      return (moreLabel as String?)?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ?? "More"
+    }
+  }
+
   private func handleSelection(_ item: DiningDealzLiquidGlassBottomNavItem) {
     activeItem = item.rawValue as NSString
     onNavItemSelect?(["item": item.rawValue])
+  }
+}
+
+private extension String {
+  var nonEmpty: String? {
+    isEmpty ? nil : self
   }
 }
 
@@ -128,12 +193,16 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
 private struct DiningDealzLiquidGlassBottomNavContent: View {
   let activeItem: DiningDealzLiquidGlassBottomNavItem
   let bottomInset: CGFloat
+  let items: [DiningDealzLiquidGlassBottomNavDisplayItem]
   let moreOpen: Bool
   let onSelect: (DiningDealzLiquidGlassBottomNavItem) -> Void
 
   @State private var hoveredItem: DiningDealzLiquidGlassBottomNavItem?
 
-  private let itemSpacing: CGFloat = 12
+  private let containerSpacing: CGFloat = 22
+  private let itemSpacing: CGFloat = 8
+  private let itemHeight: CGFloat = 50
+  private let horizontalInset: CGFloat = 6
 
   private var displayedActiveItem: DiningDealzLiquidGlassBottomNavItem {
     hoveredItem ?? (moreOpen ? .more : activeItem)
@@ -144,94 +213,140 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
       Spacer(minLength: 0)
 
       GeometryReader { geometry in
-        HStack(spacing: itemSpacing) {
-          ForEach(DiningDealzLiquidGlassBottomNavItem.allCases) { item in
-            if displayedActiveItem == item {
-              Button(action: {
-                onSelect(item)
-              }) {
-                VStack(spacing: 4) {
-                  Image(systemName: item.systemImageName)
-                    .font(.system(size: 18, weight: .semibold))
-                    .frame(height: 20)
-                  Text(item.title)
-                    .font(.system(size: 11, weight: .semibold))
-                    .lineLimit(1)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 64)
+        let metrics = layoutMetrics(totalWidth: geometry.size.width)
+
+        GlassEffectContainer(spacing: containerSpacing) {
+          ZStack(alignment: .leading) {
+            Capsule(style: .continuous)
+              .fill(.clear)
+              .glassEffect(.regular, in: Capsule(style: .continuous))
+
+            Capsule(style: .continuous)
+              .fill(.clear)
+              .glassEffect(.regular.tint(.blue).interactive(), in: Capsule(style: .continuous))
+              .frame(width: metrics.itemWidth, height: itemHeight)
+              .offset(x: metrics.offsetX(for: displayedActiveItem))
+              .padding(.leading, horizontalInset)
+              .padding(.vertical, horizontalInset)
+              .animation(.spring(response: 0.24, dampingFraction: 0.84), value: displayedActiveItem)
+
+            HStack(spacing: itemSpacing) {
+              ForEach(items) { displayItem in
+                navItemContent(displayItem, isActive: displayItem.item == displayedActiveItem)
+                  .frame(width: metrics.itemWidth, height: itemHeight)
+                  .contentShape(Rectangle())
+                  .accessibilityElement(children: .ignore)
+                  .accessibilityLabel(Text(displayItem.title))
               }
-              .buttonStyle(GlassProminentButtonStyle.glassProminent)
-            } else {
-              Button(action: {
-                onSelect(item)
-              }) {
-                VStack(spacing: 4) {
-                  Image(systemName: item.systemImageName)
-                    .font(.system(size: 18, weight: .semibold))
-                    .frame(height: 20)
-                  Text(item.title)
-                    .font(.system(size: 11, weight: .semibold))
-                    .lineLimit(1)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 64)
-              }
-              .buttonStyle(GlassButtonStyle.glass)
             }
           }
-        }
-        .contentShape(Rectangle())
-        .simultaneousGesture(
-          DragGesture(minimumDistance: 0)
-            .onChanged { value in
-              hoveredItem = item(at: value.location.x, totalWidth: geometry.size.width)
-            }
-            .onEnded { value in
-              let finalItem = item(at: value.location.x, totalWidth: geometry.size.width) ?? hoveredItem
-              hoveredItem = nil
-              if let finalItem {
-                onSelect(finalItem)
+          .contentShape(Rectangle())
+          .gesture(
+            DragGesture(minimumDistance: 0)
+              .onChanged { value in
+                hoveredItem = nearestItem(at: value.location.x, totalWidth: geometry.size.width)
               }
-            }
-        )
+              .onEnded { value in
+                let finalItem = nearestItem(at: value.location.x, totalWidth: geometry.size.width) ?? hoveredItem
+                hoveredItem = nil
+                if let finalItem {
+                  onSelect(finalItem)
+                }
+              }
+          )
+        }
       }
-      .frame(height: 74)
-      .padding(.horizontal, 14)
-      .padding(.top, 6)
-      .padding(.bottom, max(8, bottomInset))
+      .frame(height: itemHeight + (horizontalInset * 2))
+      .padding(.horizontal, 12)
+      .padding(.top, 2)
+      .padding(.bottom, max(6, bottomInset))
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     .background(Color.clear)
   }
 
-  private func item(at x: CGFloat, totalWidth: CGFloat) -> DiningDealzLiquidGlassBottomNavItem? {
-    let items = DiningDealzLiquidGlassBottomNavItem.allCases
-    let itemCount = CGFloat(items.count)
-    let contentWidth = totalWidth - (itemSpacing * (itemCount - 1))
-    guard contentWidth > 0 else {
+  @ViewBuilder
+  private func navItemContent(_ displayItem: DiningDealzLiquidGlassBottomNavDisplayItem, isActive: Bool) -> some View {
+    VStack(spacing: 2) {
+      Image(systemName: displayItem.systemImageName)
+        .font(.system(size: 16, weight: .semibold))
+        .frame(height: 18)
+      Text(displayItem.title)
+        .font(.system(size: 10, weight: .semibold))
+        .lineLimit(1)
+        .minimumScaleFactor(0.72)
+        .allowsTightening(true)
+    }
+    .foregroundStyle(isActive ? Color.white : Color(red: 0.21, green: 0.14, blue: 0.12))
+  }
+
+  private func nearestItem(at x: CGFloat, totalWidth: CGFloat) -> DiningDealzLiquidGlassBottomNavItem? {
+    let metrics = layoutMetrics(totalWidth: totalWidth)
+    guard metrics.itemWidth > 0, !items.isEmpty else {
       return nil
     }
 
-    let itemWidth = contentWidth / itemCount
-    guard itemWidth > 0, x >= 0, x <= totalWidth else {
+    let clampedX = min(max(x, 0), totalWidth)
+    let nearestIndex = items.enumerated().min { lhs, rhs in
+      abs(metrics.centerX(for: lhs.offset) - clampedX) < abs(metrics.centerX(for: rhs.offset) - clampedX)
+    }?.offset
+
+    guard let nearestIndex else {
       return nil
     }
 
-    let stride = itemWidth + itemSpacing
-    let index = min(Int(x / stride), items.count - 1)
-    let startX = CGFloat(index) * stride
-    if x > startX + itemWidth {
-      return nil
+    return items[nearestIndex].item
+  }
+
+  private func layoutMetrics(totalWidth: CGFloat) -> DiningDealzLiquidGlassBottomNavLayoutMetrics {
+    DiningDealzLiquidGlassBottomNavLayoutMetrics(
+      itemCount: items.count,
+      itemSpacing: itemSpacing,
+      leadingInset: horizontalInset,
+      totalWidth: totalWidth
+    )
+  }
+}
+
+private struct DiningDealzLiquidGlassBottomNavLayoutMetrics {
+  let itemCount: Int
+  let itemSpacing: CGFloat
+  let leadingInset: CGFloat
+  let totalWidth: CGFloat
+
+  var itemWidth: CGFloat {
+    guard itemCount > 0 else {
+      return 0
     }
 
-    return items[index]
+    let availableWidth = totalWidth - (leadingInset * 2) - (itemSpacing * CGFloat(max(itemCount - 1, 0)))
+    return max(0, availableWidth / CGFloat(itemCount))
+  }
+
+  func centerX(for index: Int) -> CGFloat {
+    offsetX(for: index) + (itemWidth / 2)
+  }
+
+  func offsetX(for item: DiningDealzLiquidGlassBottomNavItem) -> CGFloat {
+    switch item {
+    case .map:
+      return offsetX(for: 0)
+    case .profile:
+      return offsetX(for: 1)
+    case .more:
+      return offsetX(for: 2)
+    }
+  }
+
+  func offsetX(for index: Int) -> CGFloat {
+    leadingInset + (CGFloat(index) * (itemWidth + itemSpacing))
   }
 }
 
 private struct DiningDealzLegacyBottomNavContent: View {
   let activeItem: DiningDealzLiquidGlassBottomNavItem
   let bottomInset: CGFloat
+  let items: [DiningDealzLiquidGlassBottomNavDisplayItem]
   let moreOpen: Bool
   let onSelect: (DiningDealzLiquidGlassBottomNavItem) -> Void
 
@@ -243,31 +358,32 @@ private struct DiningDealzLegacyBottomNavContent: View {
     VStack(spacing: 0) {
       Spacer(minLength: 0)
       HStack(spacing: 12) {
-        ForEach(DiningDealzLiquidGlassBottomNavItem.allCases) { item in
+        ForEach(items) { displayItem in
           Button(action: {
-            onSelect(item)
+            onSelect(displayItem.item)
           }) {
             VStack(spacing: 4) {
-              Image(systemName: item.systemImageName)
+              Image(systemName: displayItem.systemImageName)
                 .font(.system(size: 18, weight: .semibold))
                 .frame(height: 20)
-              Text(item.title)
+              Text(displayItem.title)
                 .font(.system(size: 11, weight: .semibold))
                 .lineLimit(1)
+                .minimumScaleFactor(0.72)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 64)
+            .frame(height: 52)
           }
           .foregroundStyle(Color.white)
           .background(
             Capsule(style: .continuous)
-              .fill(displayedActiveItem == item ? Color.white.opacity(0.22) : Color.white.opacity(0.12))
+              .fill(displayedActiveItem == displayItem.item ? Color.white.opacity(0.22) : Color.white.opacity(0.12))
           )
         }
       }
       .padding(.horizontal, 14)
-      .padding(.top, 6)
-      .padding(.bottom, max(8, bottomInset))
+      .padding(.top, 2)
+      .padding(.bottom, max(6, bottomInset))
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     .background(Color.clear)

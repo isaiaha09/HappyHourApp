@@ -55,13 +55,13 @@ final class DiningDealzLiquidGlassHeaderButtonView: UIView {
 
   override var intrinsicContentSize: CGSize {
     if resolvedVariant == .icon {
-      return CGSize(width: 44, height: 44)
+      return CGSize(width: 40, height: 40)
     }
 
     let text = (label as String?) ?? ""
-    let font = UIFont.systemFont(ofSize: 15, weight: .semibold)
-    let width = max(88, ceil((text as NSString).size(withAttributes: [.font: font]).width + 32))
-    return CGSize(width: width, height: 44)
+    let font = UIFont.systemFont(ofSize: 14, weight: .semibold)
+    let width = max(96, ceil((text as NSString).size(withAttributes: [.font: font]).width + 40))
+    return CGSize(width: width, height: 40)
   }
 
   private func setupView() {
@@ -127,14 +127,16 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
     Button(action: onPress) {
       if variant == .icon {
         Image(systemName: systemImage ?? "questionmark")
-          .font(.system(size: 18, weight: .semibold))
-          .frame(width: 44, height: 44)
+          .font(.system(size: 17, weight: .semibold))
+          .frame(width: 40, height: 40)
       } else {
         Text(label ?? "")
-          .font(.system(size: 15, weight: .semibold))
+          .font(.system(size: 14, weight: .semibold))
           .lineLimit(1)
-          .padding(.horizontal, 16)
-          .frame(minHeight: 44)
+          .minimumScaleFactor(0.84)
+          .allowsTightening(true)
+          .padding(.horizontal, 14)
+          .frame(minHeight: 40)
       }
     }
     .buttonStyle(GlassButtonStyle.glass)
@@ -155,14 +157,16 @@ private struct DiningDealzLegacyHeaderButtonContent: View {
     Button(action: onPress) {
       if variant == .icon {
         Image(systemName: systemImage ?? "questionmark")
-          .font(.system(size: 18, weight: .semibold))
-          .frame(width: 44, height: 44)
+          .font(.system(size: 17, weight: .semibold))
+          .frame(width: 40, height: 40)
       } else {
         Text(label ?? "")
-          .font(.system(size: 15, weight: .semibold))
+          .font(.system(size: 14, weight: .semibold))
           .lineLimit(1)
-          .padding(.horizontal, 16)
-          .frame(minHeight: 44)
+          .minimumScaleFactor(0.84)
+          .allowsTightening(true)
+          .padding(.horizontal, 14)
+          .frame(minHeight: 40)
       }
     }
     .foregroundStyle(Color(red: 0.25, green: 0.13, blue: 0.08))
