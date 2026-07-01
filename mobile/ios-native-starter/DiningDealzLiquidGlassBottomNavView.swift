@@ -205,7 +205,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   private let itemHeight: CGFloat = 52
   private let horizontalInset: CGFloat = 6
   private let selectorHeight: CGFloat = 56
-  private let selectorVerticalOffset: CGFloat = 1
+  private let selectorVerticalOffset: CGFloat = 4
 
   private var displayedActiveItem: DiningDealzLiquidGlassBottomNavItem {
     hoveredItem ?? (moreOpen ? .more : activeItem)
@@ -223,12 +223,12 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
             ZStack(alignment: .leading) {
               Capsule(style: .continuous)
                 .fill(.clear)
-                .glassEffect(.regular.tint(Color.white.opacity(0.08)).interactive(false), in: Capsule(style: .continuous))
+                .glassEffect(.regular.tint(Color.white.opacity(0.04)).interactive(false), in: Capsule(style: .continuous))
                 .frame(height: itemHeight + (horizontalInset * 2))
 
               Capsule(style: .continuous)
                 .fill(.clear)
-                .glassEffect(.regular.tint(Color.white.opacity(0.24)).interactive(), in: Capsule(style: .continuous))
+                .glassEffect(.regular.tint(Color.white.opacity(0.14)).interactive(), in: Capsule(style: .continuous))
                 .frame(width: metrics.itemWidth, height: selectorHeight)
                 .offset(x: indicatorOffsetX(for: metrics))
                 .offset(y: selectorVerticalOffset)
@@ -284,7 +284,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
       .frame(height: itemHeight + (horizontalInset * 2))
       .padding(.horizontal, 12)
       .padding(.top, 2)
-      .padding(.bottom, max(1, bottomInset * 0.08))
+      .padding(.bottom, 0)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     .background(Color.clear)
