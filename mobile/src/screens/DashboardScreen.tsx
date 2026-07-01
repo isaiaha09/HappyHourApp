@@ -515,7 +515,6 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
                 )}
                 label="Open Map"
                 onPress={onBack}
-                style={{ marginLeft: -4 }}
                 variant="pill"
               />
               <View style={styles.dashboardHeaderActions}>
@@ -527,7 +526,6 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
                     </Pressable>
                   )}
                   onPress={onOpenDirectMessages}
-                  style={{ marginRight: 10 }}
                   systemImage="paperplane"
                   variant="icon"
                 />
@@ -539,7 +537,6 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
                     </Pressable>
                   )}
                   onPress={onOpenSettings}
-                  style={{ marginRight: 2 }}
                   systemImage="gearshape"
                   variant="icon"
                 />
@@ -1314,7 +1311,7 @@ export function AccountSettingsScreen({
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
-              <NativeIOSLiquidGlassBackButton label="Back to Dashboard" onPress={onBack} style={{ marginLeft: -6 }} />
+              <NativeIOSLiquidGlassBackButton label="Back to Dashboard" onPress={onBack} />
           </View>
 
           <View style={styles.dashboardShell}>

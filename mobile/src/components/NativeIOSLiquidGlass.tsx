@@ -166,18 +166,16 @@ export function NativeIOSLiquidGlassHeaderButton({ accessibilityLabel, fallback,
 }
 
 export function NativeIOSLiquidGlassBackButton({ label, onPress, style }: NativeIOSLiquidGlassBackButtonProps) {
-  const resolvedStyle = [{ marginLeft: -6 }, style];
-
   return (
     <NativeIOSLiquidGlassHeaderButton
       fallback={(
-        <Pressable onPress={onPress} style={[styles.backButton, resolvedStyle]}>
+        <Pressable onPress={onPress} style={[styles.backButton, style]}>
           <Text style={styles.backButtonText}>{label}</Text>
         </Pressable>
       )}
       label={label}
       onPress={onPress}
-      style={resolvedStyle}
+      style={style}
       variant="pill"
     />
   );

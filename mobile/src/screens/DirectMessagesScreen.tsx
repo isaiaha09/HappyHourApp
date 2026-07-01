@@ -651,7 +651,6 @@ export function DirectMessagesScreen({
 								setMessages([]);
 								setMessagesError(null);
 							}}
-							style={{ marginLeft: -8 }}
 							variant="pill"
 						/>
 					) : (
@@ -663,7 +662,6 @@ export function DirectMessagesScreen({
 							)}
 							label={backButtonLabel}
 							onPress={onBack}
-							style={{ marginLeft: -8 }}
 							variant="pill"
 						/>
 					)}
