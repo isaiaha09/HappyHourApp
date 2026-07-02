@@ -1469,7 +1469,7 @@ function AppScreen() {
       },
     ],
   };
-  const loginSuccessBottomNavLift = Math.max(0, insets.bottom - 2);
+  const loginSuccessBottomNavLift = Math.max(0, insets.bottom - 1);
   const loginSuccessBottomNavStyle = {
     transform: [
       {
