@@ -1204,62 +1204,6 @@ class DisableTwoFactorView(generics.GenericAPIView):
 		return Response(build_account_response(request.user, portal, token=request.auth))
 
 
-class VerifyEmailView(APIView):
-	permission_classes = []
-	authentication_classes = []
-
-	def get(self, request, token):
-		from .models import AccountProfile
-		account_profile = AccountProfile.objects.select_related('user').filter(email_verification_token=token).first()
-		if account_profile is None:
-			failure_redirect_url = str(getattr(settings, 'PROFILE_EMAIL_VERIFICATION_FAILURE_URL', '') or '').strip()
-			if failure_redirect_url:
-				return self._redirect_to(failure_redirect_url)
-			return HttpResponse(self._build_html(
-				title='Verification link is invalid or expired.',
-				message='Request a new verification email from your DiningDealz dashboard and try again.',
-			), status=404)
-		account_profile.mark_email_verified()
-		hold_claim = get_business_access_hold_claim(account_profile.user, infer_portal_for_user(account_profile.user, 'business'))
-		if hold_claim is not None:
-			send_business_claim_received_email(account_profile.user, hold_claim)
-		success_redirect_url = str(getattr(settings, 'PROFILE_EMAIL_VERIFICATION_SUCCESS_URL', '') or '').strip()
-		if success_redirect_url:
-			return self._redirect_to(success_redirect_url)
-		return HttpResponse(self._build_html(
-			title='Email verified successfully.',
-			message='You can return to DiningDealz and refresh your profile dashboard.',
-		))
-
-	def _redirect_to(self, url):
-		response = HttpResponse(status=302)
-		response['Location'] = url
-		return response
-
-	def _build_html(self, title, message):
-		return_url = str(getattr(settings, 'PROFILE_EMAIL_VERIFICATION_RETURN_URL', '') or '').strip()
-		return_link = ''
-		if return_url:
-			return_link = (
-				f'<p style="margin-top:24px;"><a href="{return_url}" '
-				'style="display:inline-block;padding:12px 18px;border-radius:999px;'
-				'background:#c65d1f;color:#fffaf4;text-decoration:none;font-weight:700;">'
-				'Return to DiningDealz</a></p>'
-			)
-		return (
-			'<!doctype html>'
-			'<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
-			'<title>DiningDealz Email Verification</title></head>'
-			'<body style="margin:0;font-family:Arial,sans-serif;background:#f7efe2;color:#2d221a;">'
-			'<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;">'
-			'<div style="max-width:520px;width:100%;background:#fffaf4;border:1px solid #efd8bd;border-radius:24px;padding:32px;box-sizing:border-box;">'
-			f'<h1 style="margin:0 0 12px;font-size:30px;line-height:1.1;">{title}</h1>'
-			f'<p style="margin:0;font-size:16px;line-height:1.5;color:#5d4637;">{message}</p>'
-			f'{return_link}'
-			'</div></div></body></html>'
-		)
-
-
 class PasswordResetView(generics.GenericAPIView):
 	serializer_class = PasswordResetConfirmSerializer
 	permission_classes = []

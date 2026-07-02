@@ -35,7 +35,6 @@ from .views import (
     ToggleTwoFactorView,
     UsernameReminderView,
     VerifyEmailCodeView,
-    VerifyEmailView,
 )
 
 
@@ -71,7 +70,6 @@ urlpatterns = [
     path('profiles/two-factor/confirm/', ConfirmTwoFactorView.as_view(), name='profile-confirm-two-factor'),
     path('profiles/two-factor/disable/', DisableTwoFactorView.as_view(), name='profile-disable-two-factor'),
     path('profiles/verify-email-code/', VerifyEmailCodeView.as_view(), name='profile-verify-email-code'),
-    path('profiles/verify-email/<str:token>/', VerifyEmailView.as_view(), name='profile-verify-email'),
     path('profiles/customer-signup/', CustomerSignupView.as_view(), name='customer-signup'),
     path('profiles/business-signup/', BusinessSignupView.as_view(), name='business-signup'),
     path('profiles/manual-business-signup/', ManualBusinessSignupView.as_view(), name='manual-business-signup'),

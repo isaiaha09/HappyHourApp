@@ -913,11 +913,6 @@ class AccountProfile(models.Model):
 	def __str__(self):
 		return f'Profile for {self.user.username}'
 
-	def ensure_verification_token(self, force=False):
-		if force or not self.email_verification_token:
-			self.email_verification_token = secrets.token_urlsafe(32)
-		return self.email_verification_token
-
 	def issue_email_verification_code(self, force=False):
 		if force or not self.email_verification_code:
 			self.email_verification_code = f'{secrets.randbelow(1000000):06d}'

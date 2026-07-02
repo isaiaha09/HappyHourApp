@@ -4421,10 +4421,7 @@ class BusinessClaimTests(APITestCase):
 
 
 class ProfileSignupApiTests(APITestCase):
-	@override_settings(
-		EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
-		PROFILE_EMAIL_VERIFICATION_URL_BASE='http://testserver/api/profiles/verify-email',
-	)
+	@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
 	def test_customer_signup_creates_customer_account(self):
 		response = self.client.post(
 			reverse('customer-signup'),
@@ -4455,7 +4452,7 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertIn('DiningDealz', mail.outbox[0].subject)
 		self.assertIn('DiningDealz', mail.outbox[0].from_email)
 		self.assertIn(profile.email_verification_code, mail.outbox[0].body)
-		self.assertIn('/api/profiles/verify-email/', mail.outbox[0].body)
+		self.assertNotIn('/api/profiles/verify-email/', mail.outbox[0].body)
 
 	@patch('places.views.get_source_place_payload')
 	def test_business_signup_creates_submitted_claim(self, mock_get_source_place_payload):
@@ -4897,10 +4894,7 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(claim.listing_snapshot.external_id, 'user-new-bistro-owner')
 		self.assertEqual(claim.listing_snapshot.address_line_1, 'Approximate live location')
 
-	@override_settings(
-		EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
-		PROFILE_EMAIL_VERIFICATION_URL_BASE='http://testserver/api/profiles/verify-email',
-	)
+	@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
 	def test_verified_manual_business_claim_remains_pending_until_review(self):
 		signup_response = self.client.post(
 			reverse('manual-business-signup'),
@@ -5068,10 +5062,7 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(claim.listing_snapshot.venue_type, VenueType.MOBILE)
 		self.assertEqual(claim.listing_snapshot.address_line_1, 'Approximate live location')
 
-	@override_settings(
-		EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
-		PROFILE_EMAIL_VERIFICATION_URL_BASE='http://testserver/api/profiles/verify-email',
-	)
+	@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
 	def test_manual_business_signup_reuses_rejected_account_with_same_email(self):
 		rejected_user = User.objects.create_user(
 			username='old_bistro_owner',
@@ -5727,10 +5718,7 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertIn('seconds_remaining', resend_response.data)
 
 
-@override_settings(
-	EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
-	PROFILE_EMAIL_VERIFICATION_URL_BASE='http://testserver/api/profiles/verify-email',
-)
+@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
 class ProfileDashboardApiTests(APITestCase):
 	def setUp(self):
 		self.user = User.objects.create_user(
@@ -7089,7 +7077,9 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertIsNotNone(self.profile.email_verification_sent_at)
 		self.assertEqual(len(mail.outbox), 1)
 		self.assertIn('DiningDealz', mail.outbox[0].from_email)
-		self.assertIn(self.profile.email_verification_token, mail.outbox[0].body)
+		self.assertIn(self.profile.email_verification_code, mail.outbox[0].body)
+		self.assertEqual(self.profile.email_verification_token, '')
+		self.assertNotIn('/api/profiles/verify-email/', mail.outbox[0].body)
 		self.assertIn('text/html', mail.outbox[0].alternatives[0][1])
 
 	def test_recover_username_sends_message(self):
@@ -7201,35 +7191,6 @@ class ProfileDashboardApiTests(APITestCase):
 		self.profile.refresh_from_db()
 		self.assertFalse(self.profile.two_factor_enabled)
 		self.assertEqual(self.profile.two_factor_secret, '')
-
-	@override_settings(PROFILE_EMAIL_VERIFICATION_SUCCESS_URL='')
-	def test_verify_email_marks_profile_as_verified(self):
-		token = self.profile.ensure_verification_token(force=True)
-		self.profile.save(update_fields=['email_verification_token', 'updated_at'])
-
-		response = self.client.get(reverse('profile-verify-email', kwargs={'token': token}))
-
-		self.assertEqual(response.status_code, 200)
-		self.profile.refresh_from_db()
-		self.assertTrue(self.profile.email_is_verified)
-		self.assertEqual(self.profile.email_verification_token, '')
-
-	@override_settings(PROFILE_EMAIL_VERIFICATION_SUCCESS_URL='happyhourapp://verified')
-	def test_verify_email_redirects_when_success_url_is_configured(self):
-		token = self.profile.ensure_verification_token(force=True)
-		self.profile.save(update_fields=['email_verification_token', 'updated_at'])
-
-		response = self.client.get(reverse('profile-verify-email', kwargs={'token': token}))
-
-		self.assertEqual(response.status_code, 302)
-		self.assertEqual(response['Location'], 'happyhourapp://verified')
-
-	@override_settings(PROFILE_EMAIL_VERIFICATION_FAILURE_URL='happyhourapp://verification-error')
-	def test_verify_email_redirects_when_failure_url_is_configured(self):
-		response = self.client.get(reverse('profile-verify-email', kwargs={'token': 'missing-token'}))
-
-		self.assertEqual(response.status_code, 302)
-		self.assertEqual(response['Location'], 'happyhourapp://verification-error')
 
 	def test_customer_direct_message_send_and_business_block_hides_access(self):
 		snapshot = ListingSnapshot.objects.create(
