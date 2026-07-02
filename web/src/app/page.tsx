@@ -38,10 +38,6 @@ export default function Home() {
                 Discover. Eat. Save.
               </p>
 
-            <div className="flex flex-wrap justify-center gap-3 lg:justify-end">
-              <Link href="/login" className="dd-button-secondary">Login</Link>
-              <Link href="/dashboard" className="dd-button-primary">Open dashboard</Link>
-            </div>
           </header>
 
           <div className="mx-auto grid w-full max-w-8xl gap-0 lg:grid-cols-[1.2fr_1fr] lg:items-start">
