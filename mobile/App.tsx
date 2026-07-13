@@ -84,6 +84,7 @@ import { BrowseControls } from './src/screens/BrowseControls';
 import { NativeIOSLiquidGlassBottomNav, NativeIOSLiquidGlassHeaderButton, isNativeIOSLiquidGlassBottomNavAvailable } from './src/components/NativeIOSLiquidGlass';
 import { PhotoLightbox } from './src/components/PhotoLightbox';
 import { DirectMessagesScreen } from './src/screens/DirectMessagesScreen';
+import { HomeFeedScreen } from './src/screens/HomeFeedScreen';
 import { PlaceDetailScreen } from './src/screens/PlaceDetailScreen';
 import { SplashScreen } from './src/screens/SplashScreen';
 import { shouldSkipBrowseMapAutoFit } from './src/mapBrowseState';
@@ -188,12 +189,12 @@ const cityMapRegions: Record<Exclude<CityFilterValue, 'all'>, Region> = {
 };
 const mobileBusinessVenueType = 'mobile';
 const multipleAreasBusinessCityValue = multipleAreasBusinessCityOption.value;
-type AppScreenMode = 'splash' | 'auth' | 'browse' | 'profiles' | 'favorite-businesses' | 'business-notifications' | 'business-profile-editor' | 'settings' | 'blocked-direct-message-customers' | 'support' | 'privacy-policy' | 'terms-of-service' | 'business-search' | 'business-claim' | 'manual-business-claim' | 'informal-business-claim' | 'email-verification' | 'business-claim-review-pending' | 'direct-messages';
+type AppScreenMode = 'splash' | 'auth' | 'browse' | 'home-feed' | 'profiles' | 'favorite-businesses' | 'business-notifications' | 'business-profile-editor' | 'settings' | 'blocked-direct-message-customers' | 'support' | 'privacy-policy' | 'terms-of-service' | 'business-search' | 'business-claim' | 'manual-business-claim' | 'informal-business-claim' | 'email-verification' | 'business-claim-review-pending' | 'direct-messages';
 type OnboardingTransitionDirection = 'forward' | 'backward';
 type TransitionAxis = 'x' | 'y';
 type ClaimReturnDestination = 'business-search' | 'browse-map' | 'profiles';
-type MainShellScreen = 'browse' | 'profiles' | 'business-profile-editor' | 'settings' | 'blocked-direct-message-customers' | 'support' | 'privacy-policy' | 'terms-of-service';
-type MainShellBottomNavItem = 'map' | 'profile' | 'more';
+type MainShellScreen = 'browse' | 'home-feed' | 'profiles' | 'business-profile-editor' | 'settings' | 'blocked-direct-message-customers' | 'support' | 'privacy-policy' | 'terms-of-service';
+type MainShellBottomNavItem = 'home' | 'map' | 'profile' | 'more';
 type ShellFadeScope = 'browse' | 'profile';
 type SettingsSubmittingAction = 'two-factor-begin' | 'two-factor-confirm' | 'two-factor-disable' | 'business-location' | 'direct-messaging' | 'direct-message-block' | 'delete-account' | null;
 type CustomerBusinessClaimNotice = {
@@ -564,6 +565,7 @@ function AppScreen() {
   const [selectedPlaceReturnFadeActive, setSelectedPlaceReturnFadeActive] = useState(false);
   const [profilePlaces, setProfilePlaces] = useState<PlaceListItem[]>([]);
   const [profilePlacesLoading, setProfilePlacesLoading] = useState(false);
+  const allPlacesCacheRef = useRef<{ apiBaseUrl: string; places: PlaceListItem[]; reloadCount: number } | null>(null);
   const [businessSearchQuery, setBusinessSearchQuery] = useState('');
   const [selectedClaimPlace, setSelectedClaimPlace] = useState<PlaceListItem | null>(null);
   const [selectedClaimLocationId, setSelectedClaimLocationId] = useState<number | null>(null);
@@ -767,10 +769,6 @@ function AppScreen() {
           platform: registration.platform,
           portal,
         });
-
-        if (!cancelled) {
-          void refreshDashboard(false);
-        }
       } catch {
         // Leave push registration as a best-effort enhancement.
       }
@@ -1187,7 +1185,7 @@ function AppScreen() {
   }
 
   function fadeIntoMainShellScreen(nextScreen: MainShellScreen) {
-    const scope: ShellFadeScope = nextScreen === 'browse' ? 'browse' : 'profile';
+    const scope: ShellFadeScope = nextScreen === 'browse' || nextScreen === 'home-feed' ? 'browse' : 'profile';
     const navigate = () => {
       setScreenMode(nextScreen);
       animateShellFade(scope);
@@ -1469,13 +1467,12 @@ function AppScreen() {
       },
     ],
   };
-  const loginSuccessBottomNavLift = Math.max(0, insets.bottom - 0);
   const loginSuccessBottomNavStyle = {
     transform: [
       {
         translateY: loginSuccessTransition.interpolate({
           inputRange: [0, 1],
-          outputRange: [-height - loginSuccessBottomNavLift, -loginSuccessBottomNavLift],
+          outputRange: [-height, 0],
         }),
       },
     ],
@@ -1674,6 +1671,7 @@ function AppScreen() {
   useEffect(() => {
     const shouldPreserveRenderedMapPins = !showMapBrowse && browseMode === 'map' && selectedPlaceSlug !== null;
     const shouldDelayPinsUntilBrowseScreenSettles = screenMode !== 'browse' && showTransitionMapBrowse;
+    const shouldDelayPinsUntilBrowseFadeSettles = shellFadeScope === 'browse' && screenMode === 'browse' && showMapBrowse;
 
     if (shouldPreserveRenderedMapPins) {
       mapPinsTransition.stopAnimation();
@@ -1681,7 +1679,11 @@ function AppScreen() {
       return;
     }
 
-    if (shouldDelayPinsUntilBrowseScreenSettles) {
+    if (shouldDelayPinsUntilBrowseScreenSettles || shouldDelayPinsUntilBrowseFadeSettles) {
+      if (renderedMappedPlaces.length || renderedMappedPlaceKey) {
+        setRenderedMappedPlaces([]);
+        setRenderedMappedPlaceKey('');
+      }
       mapPinsTransition.stopAnimation();
       mapPinsTransition.setValue(1);
       return;
@@ -1719,7 +1721,7 @@ function AppScreen() {
         useNativeDriver: true,
       }).start();
     });
-  }, [browseMode, listLoading, mapPinsTransition, mappedPlaceKey, mappedPlaces, normalizedDeferredSearchQuery.length, renderedMappedPlaceKey, renderedMappedPlaces.length, screenMode, selectedPlaceSlug, showMapBrowse, showTransitionMapBrowse]);
+  }, [browseMode, listLoading, mapPinsTransition, mappedPlaceKey, mappedPlaces, normalizedDeferredSearchQuery.length, renderedMappedPlaceKey, renderedMappedPlaces.length, screenMode, selectedPlaceSlug, shellFadeScope, showMapBrowse, showTransitionMapBrowse]);
 
   function navigateScreen(
     nextScreen: AppScreenMode,
@@ -1810,7 +1812,7 @@ function AppScreen() {
       return;
     }
 
-    const currentBrowseProfileScreen = ['profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service'].includes(screenMode)
+    const currentBrowseProfileScreen = ['profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'direct-messages'].includes(screenMode)
       ? 'profiles'
       : 'browse';
     const shouldPrewarmIncomingScreen = currentBrowseProfileScreen === 'browse' && browseMode === 'map' && nextScreen === 'profiles';
@@ -1834,7 +1836,7 @@ function AppScreen() {
     setReturningToSplashScreen(null);
     screenTransition.setValue(0);
     setIncomingBrowseProfileScreen(nextScreen);
-    setIncomingBrowseProfileTargetScreen(nextScreen === 'profiles' ? resolvedScreenMode : null);
+    setIncomingBrowseProfileTargetScreen(resolvedScreenMode);
     const startAnimation = () => {
       onboardingTransitionFrameRef.current = null;
       Animated.timing(screenTransition, {
@@ -2182,6 +2184,13 @@ function AppScreen() {
         }
 
         setPlaces(nextPlaces);
+        if (selectedCity === 'all') {
+          allPlacesCacheRef.current = {
+            apiBaseUrl,
+            places: nextPlaces,
+            reloadCount,
+          };
+        }
       } catch (error) {
         if (!isMounted) {
           return;
@@ -2334,8 +2343,16 @@ function AppScreen() {
       return;
     }
 
+    const cachedAllPlaces = allPlacesCacheRef.current;
+
     if (selectedCity === 'all' && places.length > 0) {
       setProfilePlaces(places);
+      setProfilePlacesLoading(false);
+      return;
+    }
+
+    if (cachedAllPlaces && cachedAllPlaces.apiBaseUrl === apiBaseUrl && cachedAllPlaces.reloadCount === reloadCount) {
+      setProfilePlaces(cachedAllPlaces.places);
       setProfilePlacesLoading(false);
       return;
     }
@@ -2348,6 +2365,11 @@ function AppScreen() {
         return;
       }
 
+      allPlacesCacheRef.current = {
+        apiBaseUrl,
+        places: nextPlaces,
+        reloadCount,
+      };
       setProfilePlaces(nextPlaces);
     }).catch((error) => {
       if (!isMounted) {
@@ -2371,15 +2393,7 @@ function AppScreen() {
     return () => {
       isMounted = false;
     };
-  }, [apiBaseUrl, screenMode]);
-
-  useEffect(() => {
-    if (screenMode !== 'profiles' || !authenticatedSession?.auth_token) {
-      return;
-    }
-
-    void refreshDashboard(false);
-  }, [apiBaseUrl, authenticatedSession?.auth_token, screenMode]);
+  }, [apiBaseUrl, places, reloadCount, screenMode, selectedCity]);
 
   useEffect(() => {
     if (screenMode !== 'business-claim' || !profileForm.business_slug) {
@@ -3358,6 +3372,30 @@ function AppScreen() {
       return;
     }
 
+    if (screenMode === 'home-feed') {
+      const openMap = () => {
+        setBrowseFiltersExpanded(false);
+        clearSelectedPlaceRoute();
+        handleClearMapSelection();
+        setGuestBrowseModeLocked(false);
+        browseModeFadePendingRef.current = false;
+        pendingListRevealRef.current = false;
+        setListRevealEnabled(false);
+        browseModeTransition.stopAnimation();
+        browseModeTransition.setValue(1);
+        handleBrowseModeChange('map');
+        warmMapShellThen(() => fadeIntoMainShellScreen('browse'));
+      };
+
+      if (bottomMoreSheetVisible) {
+        closeBottomMoreSheet(openMap);
+        return;
+      }
+
+      openMap();
+      return;
+    }
+
     if (screenMode === 'browse') {
       if (bottomMoreSheetVisible) {
         closeBottomMoreSheet();
@@ -3385,6 +3423,41 @@ function AppScreen() {
     warmMapShellThen(() => navigateBrowseProfileTransition('browse'));
   }
 
+  function handleBottomNavOpenHomeFeed() {
+    if (!authenticatedSession) {
+      setShowGuestBottomNavPrompt(true);
+      return;
+    }
+
+    if (screenMode === 'home-feed') {
+      if (bottomMoreSheetVisible) {
+        closeBottomMoreSheet();
+      }
+
+      return;
+    }
+
+    clearSelectedPlaceRoute();
+    setBrowseFiltersExpanded(false);
+    handleClearMapSelection();
+
+    if (['profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'direct-messages'].includes(screenMode)) {
+      navigateBrowseProfileTransition('browse', 'home-feed');
+      return;
+    }
+
+    const openHomeFeed = () => {
+      fadeIntoMainShellScreen('home-feed');
+    };
+
+    if (bottomMoreSheetVisible) {
+      closeBottomMoreSheet(openHomeFeed);
+      return;
+    }
+
+    openHomeFeed();
+  }
+
   function handleBottomNavOpenProfile() {
     if (!authenticatedSession) {
       setShowGuestBottomNavPrompt(true);
@@ -3406,6 +3479,11 @@ function AppScreen() {
 
     if (['favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'direct-messages'].includes(screenMode)) {
       navigateScreen('profiles', 'backward');
+      return;
+    }
+
+    if (screenMode === 'home-feed') {
+      navigateBrowseProfileTransition('profiles');
       return;
     }
 
@@ -3441,7 +3519,7 @@ function AppScreen() {
 
     clearSelectedPlaceRoute();
 
-    if (screenMode === 'browse') {
+    if (screenMode === 'browse' || screenMode === 'home-feed') {
       closeBottomMoreSheet(() => navigateBrowseProfileTransition('profiles', 'settings'));
       return;
     }
@@ -3457,7 +3535,7 @@ function AppScreen() {
 
     clearSelectedPlaceRoute();
 
-    if (screenMode === 'browse') {
+    if (screenMode === 'browse' || screenMode === 'home-feed') {
       closeBottomMoreSheet(() => navigateBrowseProfileTransition('profiles', 'favorite-businesses'));
       return;
     }
@@ -3473,7 +3551,7 @@ function AppScreen() {
 
     clearSelectedPlaceRoute();
 
-    if (screenMode === 'browse') {
+    if (screenMode === 'browse' || screenMode === 'home-feed') {
       closeBottomMoreSheet(() => navigateBrowseProfileTransition('profiles', 'business-notifications'));
       return;
     }
@@ -3490,7 +3568,7 @@ function AppScreen() {
 
     clearSelectedPlaceRoute();
 
-    if (screenMode === 'browse') {
+    if (screenMode === 'browse' || screenMode === 'home-feed') {
       closeBottomMoreSheet(() => navigateBrowseProfileTransition('profiles', 'support'));
       return;
     }
@@ -3506,7 +3584,7 @@ function AppScreen() {
 
     clearSelectedPlaceRoute();
 
-    if (screenMode === 'browse') {
+    if (screenMode === 'browse' || screenMode === 'home-feed') {
       closeBottomMoreSheet(() => navigateBrowseProfileTransition('profiles', 'terms-of-service'));
       return;
     }
@@ -3522,7 +3600,7 @@ function AppScreen() {
 
     clearSelectedPlaceRoute();
 
-    if (screenMode === 'browse') {
+    if (screenMode === 'browse' || screenMode === 'home-feed') {
       closeBottomMoreSheet(() => navigateBrowseProfileTransition('profiles', 'privacy-policy'));
       return;
     }
@@ -4786,8 +4864,35 @@ function AppScreen() {
     );
   }
 
+  function renderAuthenticatedHomeFeedScreen() {
+    return (
+      <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
+        <HomeFeedScreen
+          apiBaseUrl={apiBaseUrl}
+          headerContent={<View style={{ height: Math.max(insets.top + 10, 22) }} />}
+          headerHorizontalPadding={18}
+          refreshProgressViewOffset={Math.max(insets.top + 42, 64)}
+          footerContent={<View style={{ height: bottomNavHeight + 16 }} />}
+          isLandscape={isLandscape}
+          reloadToken={reloadCount}
+          searchQuery=""
+          selectedCity="all"
+          selectedVenueTypes={venueFilters.map((filter) => filter.value)}
+        />
+      </SafeAreaView>
+    );
+  }
+
   function renderBottomNavIcon(icon: MainShellBottomNavItem, active: boolean) {
     switch (icon) {
+      case 'home':
+        return (
+          <View style={styles.bottomNavFeedIcon}>
+            <View style={[styles.bottomNavFeedFrame, active ? styles.bottomNavFeedFrameActive : null]} />
+            <View style={[styles.bottomNavFeedLine, styles.bottomNavFeedLineTop, active ? styles.bottomNavIconStrokeActive : null]} />
+            <View style={[styles.bottomNavFeedLine, styles.bottomNavFeedLineBottom, active ? styles.bottomNavIconStrokeActive : null]} />
+          </View>
+        );
       case 'map':
         return (
           <View style={styles.bottomNavMapIcon}>
@@ -4818,6 +4923,9 @@ function AppScreen() {
 
   function handleBottomNavSelection(item: MainShellBottomNavItem) {
     switch (item) {
+      case 'home':
+        handleBottomNavOpenHomeFeed();
+        break;
       case 'map':
         handleBottomNavOpenMap();
         break;
@@ -4835,7 +4943,9 @@ function AppScreen() {
   function renderBottomNav(options: { guest: boolean }) {
     let activeItem: MainShellBottomNavItem = 'map';
     if (!options.guest) {
-      if (['settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'favorite-businesses', 'business-notifications'].includes(screenMode)) {
+      if (screenMode === 'home-feed') {
+        activeItem = 'home';
+      } else if (['settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'favorite-businesses', 'business-notifications'].includes(screenMode)) {
         activeItem = 'more';
       } else if (screenMode !== 'browse') {
         activeItem = 'profile';
@@ -4855,9 +4965,12 @@ function AppScreen() {
           <NativeIOSLiquidGlassBottomNav
             activeItem={activeItem}
             bottomInset={insets.bottom}
+            includeHomeItem={!options.guest}
+            labels={options.guest ? undefined : { home: 'Feed' }}
             moreOpen={bottomMoreSheetVisible}
             onSelect={handleBottomNavSelection}
             style={{ width: '100%' }}
+            systemImages={options.guest ? undefined : { home: 'newspaper' }}
           />
         </View>
       );
@@ -4867,6 +4980,14 @@ function AppScreen() {
       <View pointerEvents="box-none" style={styles.bottomNavOverlay}>
         <View style={[styles.bottomNavShell, { paddingBottom: Math.max(insets.bottom + 10, 14) }]}>
           <View pointerEvents="none" style={styles.bottomNavGlassHighlight} />
+          {!options.guest ? (
+            <Pressable accessibilityLabel="Open home feed" onPress={handleBottomNavOpenHomeFeed} style={styles.bottomNavItem}>
+              <View style={[styles.bottomNavItemIconWrap, activeItem === 'home' ? styles.bottomNavItemIconWrapActive : null]}>
+                {renderBottomNavIcon('home', activeItem === 'home')}
+              </View>
+              <Text style={[styles.bottomNavItemLabel, activeItem === 'home' ? styles.bottomNavItemLabelActive : null]}>Feed</Text>
+            </Pressable>
+          ) : null}
           <Pressable accessibilityLabel="Open map" onPress={handleBottomNavOpenMap} style={styles.bottomNavItem}>
             <View style={[styles.bottomNavItemIconWrap, activeItem === 'map' ? styles.bottomNavItemIconWrapActive : null]}>
               {renderBottomNavIcon('map', activeItem === 'map')}
@@ -4973,6 +5094,9 @@ function AppScreen() {
       && profileStackTransitionScreens.has(incomingOnboardingScreen);
     const transitionActive = usesBrowseProfileSlideTransition || profileStackTransitionActive;
     const showingProfile = ['profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'direct-messages'].includes(screenMode);
+    const incomingBrowseScreen = transitionActive && incomingBrowseProfileScreen === 'browse'
+      ? incomingBrowseProfileTargetScreen ?? 'browse'
+      : null;
     const incomingProfileScreen = transitionActive && incomingBrowseProfileScreen === 'profiles'
       ? incomingBrowseProfileTargetScreen ?? 'profiles'
       : undefined;
@@ -4992,6 +5116,14 @@ function AppScreen() {
         ? { opacity: 0, transform: [{ translateX: -width }] }
         : null;
     const profileLayerContent = renderProfilesScreen(undefined, incomingProfileScreen);
+    const browseLayerContent = (incomingBrowseScreen ?? screenMode) === 'home-feed'
+      ? renderAuthenticatedHomeFeedScreen()
+      : renderBrowseScreen({
+          guestBottomNav: false,
+          suppressBrowseSceneTransitionStyle: true,
+          suppressScreenTransitionStyle: true,
+          suppressTransitionOverlay: true,
+        });
 
     return (
       <View style={[styles.fullScreenRoot, transitionActive ? styles.transitionClipRoot : null]}>
@@ -5014,12 +5146,7 @@ function AppScreen() {
             browseLayerStyle,
           ]}
         >
-          {renderBrowseScreen({
-            guestBottomNav: false,
-            suppressBrowseSceneTransitionStyle: true,
-            suppressScreenTransitionStyle: true,
-            suppressTransitionOverlay: true,
-          })}
+          {browseLayerContent}
         </Animated.View>
         {!transitionActive && !showingProfile && shellFadeScope === 'browse' ? (
           <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, browseShellFadeMaskStyle]} />
@@ -5724,7 +5851,7 @@ function AppScreen() {
             {renderOnboardingScreen('auth')}
           </Animated.View>
         </View>
-      ) : authenticatedSession && (screenMode === 'direct-messages' || (!selectedPlaceSlug && (['profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'browse'].includes(screenMode) || usesBrowseProfileSlideTransition || usesProfileStackSlideTransition))) ? (
+      ) : authenticatedSession && (screenMode === 'direct-messages' || (!selectedPlaceSlug && (['profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'browse', 'home-feed'].includes(screenMode) || usesBrowseProfileSlideTransition || usesProfileStackSlideTransition))) ? (
         renderAuthenticatedMainShell()
       ) : !authenticatedSession && !selectedPlaceSlug && (screenMode === 'browse' || currentOnboardingScreen !== null || usesGuestBrowseSlideTransition || incomingOnboardingScreen !== null || returningToSplashScreen !== null) ? (
         renderGuestMainShell()

@@ -247,6 +247,35 @@ export const appShellStyles = {
   bottomNavItemLabelActive: {
     color: '#fff8f1',
   },
+  bottomNavFeedIcon: {
+    alignItems: 'center',
+    height: 18,
+    justifyContent: 'center',
+    width: 20,
+  },
+  bottomNavFeedFrame: {
+    borderColor: 'rgba(255, 248, 241, 0.68)',
+    borderRadius: 4,
+    borderWidth: 1.8,
+    height: 15,
+    width: 16,
+  },
+  bottomNavFeedFrameActive: {
+    borderColor: '#fff8f1',
+  },
+  bottomNavFeedLine: {
+    backgroundColor: 'rgba(255, 248, 241, 0.68)',
+    borderRadius: 999,
+    height: 1.8,
+    position: 'absolute',
+    width: 8,
+  },
+  bottomNavFeedLineTop: {
+    top: 5,
+  },
+  bottomNavFeedLineBottom: {
+    top: 9,
+  },
   bottomNavMapIcon: {
     alignItems: 'center',
     height: 18,

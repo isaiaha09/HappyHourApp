@@ -3,6 +3,7 @@ import React
 import SwiftUI
 
 private enum DiningDealzLiquidGlassBottomNavItem: String, CaseIterable, Identifiable {
+  case home
   case map
   case profile
   case more
@@ -33,6 +34,24 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   @objc var bottomInset: NSNumber = 0 {
     didSet {
       invalidateIntrinsicContentSize()
+      updateRootView()
+    }
+  }
+
+  @objc var homeLabel: NSString? {
+    didSet {
+      updateRootView()
+    }
+  }
+
+  @objc var homeSystemImage: NSString? {
+    didSet {
+      updateRootView()
+    }
+  }
+
+  @objc var includeHomeItem: Bool = false {
+    didSet {
       updateRootView()
     }
   }
@@ -82,7 +101,8 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   private let hostingController = UIHostingController(rootView: AnyView(EmptyView()))
 
   private var resolvedActiveItem: DiningDealzLiquidGlassBottomNavItem {
-    DiningDealzLiquidGlassBottomNavItem(rawValue: activeItem as String) ?? .map
+    let preferredItem = DiningDealzLiquidGlassBottomNavItem(rawValue: activeItem as String) ?? .map
+    return resolvedItems.contains(where: { $0.item == preferredItem }) ? preferredItem : resolvedItems.first?.item ?? .map
   }
 
   override init(frame: CGRect) {
@@ -146,7 +166,11 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   }
 
   private var resolvedItems: [DiningDealzLiquidGlassBottomNavDisplayItem] {
-    DiningDealzLiquidGlassBottomNavItem.allCases.map { item in
+    let items = includeHomeItem
+      ? DiningDealzLiquidGlassBottomNavItem.allCases
+      : DiningDealzLiquidGlassBottomNavItem.allCases.filter { $0 != .home }
+
+    return items.map { item in
       DiningDealzLiquidGlassBottomNavDisplayItem(
         item: item,
         systemImageName: resolvedSystemImage(for: item),
@@ -157,6 +181,8 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
 
   private func resolvedSystemImage(for item: DiningDealzLiquidGlassBottomNavItem) -> String {
     switch item {
+    case .home:
+      return (homeSystemImage as String?)?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ?? "newspaper"
     case .map:
       return (mapSystemImage as String?)?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ?? "map"
     case .profile:
@@ -168,6 +194,8 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
 
   private func resolvedTitle(for item: DiningDealzLiquidGlassBottomNavItem) -> String {
     switch item {
+    case .home:
+      return (homeLabel as String?)?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ?? "Feed"
     case .map:
       return (mapLabel as String?)?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ?? "Map"
     case .profile:
@@ -366,6 +394,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   private func layoutMetrics(totalWidth: CGFloat) -> DiningDealzLiquidGlassBottomNavLayoutMetrics {
     DiningDealzLiquidGlassBottomNavLayoutMetrics(
       itemCount: items.count,
+      items: items,
       itemSpacing: itemSpacing,
       leadingInset: horizontalInset,
       totalWidth: totalWidth
@@ -375,6 +404,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
 
 private struct DiningDealzLiquidGlassBottomNavLayoutMetrics {
   let itemCount: Int
+  let items: [DiningDealzLiquidGlassBottomNavDisplayItem]
   let itemSpacing: CGFloat
   let leadingInset: CGFloat
   let totalWidth: CGFloat
@@ -393,14 +423,11 @@ private struct DiningDealzLiquidGlassBottomNavLayoutMetrics {
   }
 
   func offsetX(for item: DiningDealzLiquidGlassBottomNavItem) -> CGFloat {
-    switch item {
-    case .map:
+    guard let index = items.firstIndex(where: { $0.item == item }) else {
       return offsetX(for: 0)
-    case .profile:
-      return offsetX(for: 1)
-    case .more:
-      return offsetX(for: 2)
     }
+
+    return offsetX(for: index)
   }
 
   func offsetX(for index: Int) -> CGFloat {

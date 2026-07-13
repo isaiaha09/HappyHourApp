@@ -14,12 +14,22 @@ import { styles } from '../appStyles';
 import { HomeFeedCard } from '../components/HomeFeedCards';
 import type { FeedItem } from '../types';
 
+type FeedCacheEntry = {
+  impressionIds: Record<string, number>;
+  items: FeedItem[];
+  nextPage: number | null;
+  seenImpressionIds: Set<string>;
+  sessionKey: string;
+};
+
 type HomeFeedScreenProps = {
   apiBaseUrl: string;
   feedAnimatedStyle?: object;
   footerContent?: ReactNode;
+  headerHorizontalPadding?: number;
   isLandscape: boolean;
   headerContent?: ReactNode;
+  refreshProgressViewOffset?: number;
   reloadToken: number;
   searchQuery: string;
   selectedCity: string;
@@ -29,6 +39,52 @@ type HomeFeedScreenProps = {
 };
 
 const PAGE_SIZE = 12;
+const feedCache = new Map<string, FeedCacheEntry>();
+
+function createFeedSessionKey() {
+  return `feed-${Date.now()}-${Math.round(Math.random() * 1000000)}`;
+}
+
+function getFeedCacheKey(apiBaseUrl: string, reloadToken: number, selectedCity: string) {
+  return `${apiBaseUrl}::${selectedCity}::${reloadToken}`;
+}
+
+function getOrCreateFeedCacheEntry(cacheKey: string) {
+  const existingEntry = feedCache.get(cacheKey);
+  if (existingEntry) {
+    return existingEntry;
+  }
+
+  const nextEntry: FeedCacheEntry = {
+    impressionIds: {},
+    items: [],
+    nextPage: 1,
+    seenImpressionIds: new Set<string>(),
+    sessionKey: createFeedSessionKey(),
+  };
+  feedCache.set(cacheKey, nextEntry);
+  return nextEntry;
+}
+
+function replaceFeedCacheEntry(cacheKey: string, items: FeedItem[], nextPage: number | null) {
+  const existingEntry = getOrCreateFeedCacheEntry(cacheKey);
+  const nextEntry: FeedCacheEntry = {
+    impressionIds: {},
+    items,
+    nextPage,
+    seenImpressionIds: new Set<string>(),
+    sessionKey: createFeedSessionKey(),
+  };
+
+  if (existingEntry.items.length === items.length && existingEntry.items.every((item, index) => item.id === items[index]?.id)) {
+    nextEntry.impressionIds = existingEntry.impressionIds;
+    nextEntry.seenImpressionIds = existingEntry.seenImpressionIds;
+    nextEntry.sessionKey = existingEntry.sessionKey;
+  }
+
+  feedCache.set(cacheKey, nextEntry);
+  return nextEntry;
+}
 
 function normalizeSearchText(value: string) {
   return value.trim().toLowerCase();
@@ -49,8 +105,10 @@ export function HomeFeedScreen({
   apiBaseUrl,
   feedAnimatedStyle,
   footerContent,
+  headerHorizontalPadding = 0,
   isLandscape,
   headerContent,
+  refreshProgressViewOffset = 0,
   reloadToken,
   searchQuery,
   selectedCity,
@@ -58,27 +116,48 @@ export function HomeFeedScreen({
   onVisibleCountChange,
   showFeedHeader = true,
 }: HomeFeedScreenProps) {
+  const cacheKey = getFeedCacheKey(apiBaseUrl, reloadToken, selectedCity);
+  const cachedEntry = getOrCreateFeedCacheEntry(cacheKey);
   const [items, setItems] = useState<FeedItem[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [initialLoading, setInitialLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(cachedEntry.items.length === 0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [nextPage, setNextPage] = useState<number | null>(1);
-  const impressionIdsRef = useRef<Record<string, number>>({});
-  const seenImpressionsRef = useRef<Set<string>>(new Set());
+  const [nextPage, setNextPage] = useState<number | null>(cachedEntry.items.length > 0 ? cachedEntry.nextPage : 1);
+  const impressionIdsRef = useRef<Record<string, number>>({ ...cachedEntry.impressionIds });
+  const seenImpressionsRef = useRef<Set<string>>(new Set(cachedEntry.seenImpressionIds));
   const apiBaseUrlRef = useRef(apiBaseUrl);
-  const sessionKeyRef = useRef(`feed-${Date.now()}-${Math.round(Math.random() * 1000000)}`);
+  const sessionKeyRef = useRef(cachedEntry.sessionKey);
 
   apiBaseUrlRef.current = apiBaseUrl;
 
   useEffect(() => {
+    const nextCachedEntry = getOrCreateFeedCacheEntry(cacheKey);
+    impressionIdsRef.current = { ...nextCachedEntry.impressionIds };
+    seenImpressionsRef.current = new Set(nextCachedEntry.seenImpressionIds);
+    sessionKeyRef.current = nextCachedEntry.sessionKey;
+    setItems(nextCachedEntry.items);
+    setNextPage(nextCachedEntry.items.length > 0 ? nextCachedEntry.nextPage : 1);
+    setInitialLoading(nextCachedEntry.items.length === 0);
+  }, [cacheKey]);
+
+  useEffect(() => {
     let cancelled = false;
+
+    if (cachedEntry.items.length > 0) {
+      setItems(cachedEntry.items);
+      setNextPage(cachedEntry.nextPage);
+      setInitialLoading(false);
+      setRefreshing(false);
+      setErrorMessage(null);
+      return () => {
+        cancelled = true;
+      };
+    }
 
     async function loadFirstPage() {
       setInitialLoading(true);
       setErrorMessage(null);
-      seenImpressionsRef.current = new Set();
-      impressionIdsRef.current = {};
 
       try {
         const response = await fetchHomeFeed(apiBaseUrl, {
@@ -91,8 +170,13 @@ export function HomeFeedScreen({
           return;
         }
 
-        setItems(dedupeFeedItems(response.results));
-        setNextPage(response.next ? 2 : null);
+        const nextItems = dedupeFeedItems(response.results);
+        const nextCachedEntry = replaceFeedCacheEntry(cacheKey, nextItems, response.next ? 2 : null);
+        impressionIdsRef.current = { ...nextCachedEntry.impressionIds };
+        seenImpressionsRef.current = new Set(nextCachedEntry.seenImpressionIds);
+        sessionKeyRef.current = nextCachedEntry.sessionKey;
+        setItems(nextItems);
+        setNextPage(nextCachedEntry.nextPage);
       } catch (error) {
         if (!cancelled) {
           setErrorMessage(error instanceof Error ? error.message : 'Unable to load the home feed right now.');
@@ -112,7 +196,7 @@ export function HomeFeedScreen({
     return () => {
       cancelled = true;
     };
-  }, [apiBaseUrl, reloadToken, selectedCity]);
+  }, [apiBaseUrl, cacheKey, cachedEntry.items, cachedEntry.nextPage, reloadToken, selectedCity]);
 
   const normalizedQuery = normalizeSearchText(searchQuery);
   const filteredItems = items.filter((item) => {
@@ -142,8 +226,6 @@ export function HomeFeedScreen({
 
   async function handleRefresh() {
     setRefreshing(true);
-    setNextPage(1);
-    setItems([]);
     setErrorMessage(null);
 
     try {
@@ -152,8 +234,13 @@ export function HomeFeedScreen({
         page: 1,
         pageSize: PAGE_SIZE,
       });
-      setItems(dedupeFeedItems(response.results));
-      setNextPage(response.next ? 2 : null);
+      const nextItems = dedupeFeedItems(response.results);
+      const nextCachedEntry = replaceFeedCacheEntry(cacheKey, nextItems, response.next ? 2 : null);
+      impressionIdsRef.current = { ...nextCachedEntry.impressionIds };
+      seenImpressionsRef.current = new Set(nextCachedEntry.seenImpressionIds);
+      sessionKeyRef.current = nextCachedEntry.sessionKey;
+      setItems(nextItems);
+      setNextPage(nextCachedEntry.nextPage);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Unable to refresh the home feed right now.');
     } finally {
@@ -175,8 +262,18 @@ export function HomeFeedScreen({
         pageSize: PAGE_SIZE,
       });
 
-      setItems((currentItems) => dedupeFeedItems([...currentItems, ...response.results]));
-      setNextPage(response.next ? nextPage + 1 : null);
+      setItems((currentItems) => {
+        const nextItems = dedupeFeedItems([...currentItems, ...response.results]);
+        const resolvedNextPage = response.next ? nextPage + 1 : null;
+        const currentCacheEntry = getOrCreateFeedCacheEntry(cacheKey);
+        feedCache.set(cacheKey, {
+          ...currentCacheEntry,
+          items: nextItems,
+          nextPage: resolvedNextPage,
+        });
+        setNextPage(resolvedNextPage);
+        return nextItems;
+      });
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Unable to load more feed items right now.');
     } finally {
@@ -212,6 +309,8 @@ export function HomeFeedScreen({
       }
 
       seenImpressionsRef.current.add(item.id);
+      const currentCacheEntry = getOrCreateFeedCacheEntry(cacheKey);
+      currentCacheEntry.seenImpressionIds.add(item.id);
       void recordFeedImpression(apiBaseUrlRef.current, {
         campaign: item.campaign_id,
         feed_item_id: item.id,
@@ -223,6 +322,8 @@ export function HomeFeedScreen({
         session_key: sessionKeyRef.current,
       }).then((response) => {
         impressionIdsRef.current[item.id] = response.id;
+        const nextCacheEntry = getOrCreateFeedCacheEntry(cacheKey);
+        nextCacheEntry.impressionIds[item.id] = response.id;
       }).catch(() => undefined);
     });
   }).current;
@@ -231,7 +332,7 @@ export function HomeFeedScreen({
 
   const feedHeader = showFeedHeader ? (
     <Animated.View style={[styles.homeFeedHeaderWrap, feedAnimatedStyle]}>
-      <View style={styles.homeFeedHeader}>
+      <View style={[styles.homeFeedHeader, headerHorizontalPadding ? { paddingHorizontal: headerHorizontalPadding } : null]}>
         <Text style={styles.homeFeedEyebrow}>Home Feed</Text>
         <Text style={styles.homeFeedTitle}>What local businesses are posting right now</Text>
         <Text style={styles.homeFeedSubtitle}>Specials, updates, events, stories, and boosted posts are blended into one scrollable feed.</Text>
@@ -283,6 +384,7 @@ export function HomeFeedScreen({
       onEndReachedThreshold={0.45}
       onRefresh={() => void handleRefresh()}
       onViewableItemsChanged={onViewableItemsChanged}
+      progressViewOffset={refreshProgressViewOffset}
       refreshing={refreshing}
       renderItem={({ item, index }) => (
         <Animated.View style={feedAnimatedStyle}>

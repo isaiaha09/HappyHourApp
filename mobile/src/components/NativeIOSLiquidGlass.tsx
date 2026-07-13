@@ -1,10 +1,9 @@
 import type { ReactNode } from 'react';
-import codegenNativeComponent from 'react-native/Libraries/Utilities/codegenNativeComponent';
-import { Platform, Pressable, Text, UIManager, type NativeSyntheticEvent, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, Pressable, Text, UIManager, requireNativeComponent, type NativeSyntheticEvent, type StyleProp, type ViewStyle } from 'react-native';
 
 import { styles } from '../appStyles';
 
-export type NativeLiquidGlassBottomNavItem = 'map' | 'profile' | 'more';
+export type NativeLiquidGlassBottomNavItem = 'home' | 'map' | 'profile' | 'more';
 
 type NativeLiquidGlassBottomNavLabels = Partial<Record<NativeLiquidGlassBottomNavItem, string>>;
 type NativeLiquidGlassBottomNavSystemImages = Partial<Record<NativeLiquidGlassBottomNavItem, string>>;
@@ -18,6 +17,9 @@ type NativeHeaderButtonPressEvent = NativeSyntheticEvent<Record<string, never>>;
 type NativeBottomNavViewProps = {
   activeItem: NativeLiquidGlassBottomNavItem;
   bottomInset: number;
+  homeLabel?: string;
+  homeSystemImage?: string;
+  includeHomeItem?: boolean;
   mapLabel?: string;
   mapSystemImage?: string;
   moreOpen?: boolean;
@@ -41,6 +43,7 @@ type NativeHeaderButtonViewProps = {
 type NativeIOSLiquidGlassBottomNavProps = {
   activeItem: NativeLiquidGlassBottomNavItem;
   bottomInset: number;
+  includeHomeItem?: boolean;
   labels?: NativeLiquidGlassBottomNavLabels;
   moreOpen?: boolean;
   onSelect: (item: NativeLiquidGlassBottomNavItem) => void;
@@ -72,8 +75,8 @@ const headerPillButtonHeight = 44;
 const headerPillHorizontalPadding = 28;
 const averageHeaderPillCharacterWidth = 7;
 
-const NativeBottomNavView = codegenNativeComponent<NativeBottomNavViewProps>(nativeBottomNavViewName);
-const NativeHeaderButtonView = codegenNativeComponent<NativeHeaderButtonViewProps>(nativeHeaderButtonViewName);
+const NativeBottomNavView = requireNativeComponent<NativeBottomNavViewProps>(nativeBottomNavViewName);
+const NativeHeaderButtonView = requireNativeComponent<NativeHeaderButtonViewProps>(nativeHeaderButtonViewName);
 
 function isSupportedIOSLiquidGlassRuntime() {
   if (Platform.OS !== 'ios') {
@@ -131,7 +134,7 @@ export function isNativeIOSLiquidGlassHeaderButtonAvailable() {
   return hasNativeViewManager(nativeHeaderButtonViewName);
 }
 
-export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, labels, moreOpen = false, onSelect, style, systemImages }: NativeIOSLiquidGlassBottomNavProps) {
+export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, includeHomeItem = false, labels, moreOpen = false, onSelect, style, systemImages }: NativeIOSLiquidGlassBottomNavProps) {
   if (!isNativeIOSLiquidGlassBottomNavAvailable()) {
     return null;
   }
@@ -140,6 +143,9 @@ export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, labels,
     <NativeBottomNavView
       activeItem={activeItem}
       bottomInset={bottomInset}
+      homeLabel={labels?.home}
+      homeSystemImage={systemImages?.home}
+      includeHomeItem={includeHomeItem}
       mapLabel={labels?.map}
       mapSystemImage={systemImages?.map}
       moreOpen={moreOpen}
