@@ -464,7 +464,7 @@ function AppScreen() {
   const splashExitOpacity = useRef(new Animated.Value(1)).current;
   const authIntroOpacity = useRef(new Animated.Value(1)).current;
   const loginSuccessTransition = useRef(new Animated.Value(1)).current;
-  const loginSuccessNativeBottomNavOpacity = useRef(new Animated.Value(1)).current;
+  const loginSuccessNativeBottomNavReveal = useRef(new Animated.Value(1)).current;
   const screenTransition = useRef(new Animated.Value(1)).current;
   const profileSceneTransition = useRef(new Animated.Value(1)).current;
   const browseSceneTransition = useRef(new Animated.Value(1)).current;
@@ -1479,7 +1479,15 @@ function AppScreen() {
     ],
   };
   const loginSuccessNativeBottomNavStyle = {
-    opacity: loginSuccessNativeBottomNavOpacity,
+    opacity: loginSuccessNativeBottomNavReveal,
+    transform: [
+      {
+        translateY: loginSuccessNativeBottomNavReveal.interpolate({
+          inputRange: [0, 1],
+          outputRange: [18, 0],
+        }),
+      },
+    ],
   };
   const logoutOutgoingStyle = {
     transform: [
@@ -1967,9 +1975,9 @@ function AppScreen() {
     setIncomingOnboardingScreen(null);
     setShowLoginSuccessTransition(true);
     loginSuccessTransition.stopAnimation();
-    loginSuccessNativeBottomNavOpacity.stopAnimation();
+    loginSuccessNativeBottomNavReveal.stopAnimation();
     loginSuccessTransition.setValue(0);
-    loginSuccessNativeBottomNavOpacity.setValue(shouldFadeNativeBottomNav ? 0 : 1);
+    loginSuccessNativeBottomNavReveal.setValue(shouldFadeNativeBottomNav ? 0 : 1);
     Animated.timing(loginSuccessTransition, {
       duration: onboardingTransitionDuration,
       toValue: 1,
@@ -1986,8 +1994,9 @@ function AppScreen() {
         return;
       }
 
-      Animated.timing(loginSuccessNativeBottomNavOpacity, {
+      Animated.timing(loginSuccessNativeBottomNavReveal, {
         duration: 180,
+        easing: Easing.out(Easing.cubic),
         toValue: 1,
         useNativeDriver: true,
       }).start(({ finished: navFadeFinished }) => {
