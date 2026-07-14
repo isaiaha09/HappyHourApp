@@ -144,7 +144,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
 
     hostingController.rootView = AnyView(
       Group {
-        if #available(iOS 18.0, *) {
+        if #available(iOS 26.0, *) {
           DiningDealzLiquidGlassBottomNavContent(
             activeItem: currentActiveItem,
             bottomInset: currentBottomInset,
@@ -217,7 +217,7 @@ private extension String {
   }
 }
 
-@available(iOS 18.0, *)
+@available(iOS 26.0, *)
 private struct DiningDealzLiquidGlassBottomNavContent: View {
   let activeItem: DiningDealzLiquidGlassBottomNavItem
   let bottomInset: CGFloat
@@ -469,7 +469,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   }
 }
 
-@available(iOS 18.0, *)
+@available(iOS 26.0, *)
 private struct DiningDealzLiquidSelectorShape: Shape {
   var morph: CGFloat
 
@@ -485,7 +485,7 @@ private struct DiningDealzLiquidSelectorShape: Shape {
   }
 }
 
-@available(iOS 18.0, *)
+@available(iOS 26.0, *)
 private struct DiningDealzLiquidSelectorShimmer: View {
   var body: some View {
     TimelineView(.animation) { timeline in
