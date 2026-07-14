@@ -5840,7 +5840,7 @@ function AppScreen() {
             <Animated.View pointerEvents="none" style={[styles.bottomNavLoginTransitionLayer, loginSuccessBottomNavStyle]}>
               {renderBottomNav({ guest: false })}
             </Animated.View>
-          ) : null}
+          ) : renderBottomNav({ guest: false })}
         </View>
       ) : showLogoutTransition ? (
         <View style={styles.onboardingTransitionRoot}>
