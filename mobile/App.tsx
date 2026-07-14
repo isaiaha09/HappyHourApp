@@ -464,6 +464,7 @@ function AppScreen() {
   const splashExitOpacity = useRef(new Animated.Value(1)).current;
   const authIntroOpacity = useRef(new Animated.Value(1)).current;
   const loginSuccessTransition = useRef(new Animated.Value(1)).current;
+  const loginSuccessNativeBottomNavOpacity = useRef(new Animated.Value(1)).current;
   const screenTransition = useRef(new Animated.Value(1)).current;
   const profileSceneTransition = useRef(new Animated.Value(1)).current;
   const browseSceneTransition = useRef(new Animated.Value(1)).current;
@@ -1478,10 +1479,7 @@ function AppScreen() {
     ],
   };
   const loginSuccessNativeBottomNavStyle = {
-    opacity: loginSuccessTransition.interpolate({
-      inputRange: [0, 0.28, 1],
-      outputRange: [0, 0, 1],
-    }),
+    opacity: loginSuccessNativeBottomNavOpacity,
   };
   const logoutOutgoingStyle = {
     transform: [
@@ -1958,6 +1956,7 @@ function AppScreen() {
   function startLoginSuccessTransition() {
     dismissKeyboardForScreenTransition();
     setShouldAutoFocusLoginField(false);
+    const shouldFadeNativeBottomNav = isNativeIOSLiquidGlassBottomNavAvailable();
 
     if (onboardingTransitionFrameRef.current !== null) {
       cancelAnimationFrame(onboardingTransitionFrameRef.current);
@@ -1968,7 +1967,9 @@ function AppScreen() {
     setIncomingOnboardingScreen(null);
     setShowLoginSuccessTransition(true);
     loginSuccessTransition.stopAnimation();
+    loginSuccessNativeBottomNavOpacity.stopAnimation();
     loginSuccessTransition.setValue(0);
+    loginSuccessNativeBottomNavOpacity.setValue(shouldFadeNativeBottomNav ? 0 : 1);
     Animated.timing(loginSuccessTransition, {
       duration: onboardingTransitionDuration,
       toValue: 1,
@@ -1979,8 +1980,24 @@ function AppScreen() {
       }
 
       loginSuccessTransition.setValue(1);
-      setScreenMode('profiles');
-      setShowLoginSuccessTransition(false);
+      if (!shouldFadeNativeBottomNav) {
+        setScreenMode('profiles');
+        setShowLoginSuccessTransition(false);
+        return;
+      }
+
+      Animated.timing(loginSuccessNativeBottomNavOpacity, {
+        duration: 180,
+        toValue: 1,
+        useNativeDriver: true,
+      }).start(({ finished: navFadeFinished }) => {
+        if (!navFadeFinished) {
+          return;
+        }
+
+        setScreenMode('profiles');
+        setShowLoginSuccessTransition(false);
+      });
     });
   }
 
