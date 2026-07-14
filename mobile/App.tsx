@@ -1477,6 +1477,12 @@ function AppScreen() {
       },
     ],
   };
+  const loginSuccessNativeBottomNavStyle = {
+    opacity: loginSuccessTransition.interpolate({
+      inputRange: [0, 0.28, 1],
+      outputRange: [0, 0, 1],
+    }),
+  };
   const logoutOutgoingStyle = {
     transform: [
       {
@@ -5843,7 +5849,12 @@ function AppScreen() {
               {renderOnboardingScreen('profiles')}
             </View>
           </Animated.View>
-          {renderAuthenticatedBottomNavLayer({ interactive: false, transitionStyle: loginSuccessBottomNavStyle })}
+          {renderAuthenticatedBottomNavLayer({
+            interactive: false,
+            transitionStyle: isNativeIOSLiquidGlassBottomNavAvailable()
+              ? loginSuccessNativeBottomNavStyle
+              : loginSuccessBottomNavStyle,
+          })}
         </View>
       ) : showLogoutTransition ? (
         <View style={styles.onboardingTransitionRoot}>
