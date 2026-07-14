@@ -86,6 +86,10 @@ function replaceFeedCacheEntry(cacheKey: string, items: FeedItem[], nextPage: nu
   return nextEntry;
 }
 
+function hasResolvedInitialFeedPage(entry: FeedCacheEntry) {
+  return entry.items.length > 0 || entry.nextPage !== 1;
+}
+
 function normalizeSearchText(value: string) {
   return value.trim().toLowerCase();
 }
@@ -118,12 +122,12 @@ export function HomeFeedScreen({
 }: HomeFeedScreenProps) {
   const cacheKey = getFeedCacheKey(apiBaseUrl, reloadToken, selectedCity);
   const cachedEntry = getOrCreateFeedCacheEntry(cacheKey);
-  const [items, setItems] = useState<FeedItem[]>([]);
+  const [items, setItems] = useState<FeedItem[]>(cachedEntry.items);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [initialLoading, setInitialLoading] = useState(cachedEntry.items.length === 0);
+  const [initialLoading, setInitialLoading] = useState(!hasResolvedInitialFeedPage(cachedEntry));
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [nextPage, setNextPage] = useState<number | null>(cachedEntry.items.length > 0 ? cachedEntry.nextPage : 1);
+  const [nextPage, setNextPage] = useState<number | null>(cachedEntry.nextPage);
   const impressionIdsRef = useRef<Record<string, number>>({ ...cachedEntry.impressionIds });
   const seenImpressionsRef = useRef<Set<string>>(new Set(cachedEntry.seenImpressionIds));
   const apiBaseUrlRef = useRef(apiBaseUrl);
@@ -133,18 +137,20 @@ export function HomeFeedScreen({
 
   useEffect(() => {
     const nextCachedEntry = getOrCreateFeedCacheEntry(cacheKey);
+    const hasResolvedFirstPage = hasResolvedInitialFeedPage(nextCachedEntry);
     impressionIdsRef.current = { ...nextCachedEntry.impressionIds };
     seenImpressionsRef.current = new Set(nextCachedEntry.seenImpressionIds);
     sessionKeyRef.current = nextCachedEntry.sessionKey;
     setItems(nextCachedEntry.items);
-    setNextPage(nextCachedEntry.items.length > 0 ? nextCachedEntry.nextPage : 1);
-    setInitialLoading(nextCachedEntry.items.length === 0);
+    setNextPage(nextCachedEntry.nextPage);
+    setInitialLoading(!hasResolvedFirstPage);
   }, [cacheKey]);
 
   useEffect(() => {
     let cancelled = false;
+    const hasResolvedFirstPage = hasResolvedInitialFeedPage(cachedEntry);
 
-    if (cachedEntry.items.length > 0) {
+    if (hasResolvedFirstPage) {
       setItems(cachedEntry.items);
       setNextPage(cachedEntry.nextPage);
       setInitialLoading(false);

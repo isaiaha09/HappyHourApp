@@ -245,7 +245,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   }
 
   private var containerBottomOffset: CGFloat {
-    min(max(bottomInset * 0.32, 4), 11)
+    items.contains(where: { $0.item == .home }) ? 0 : min(max(bottomInset * 0.32, 4), 11)
   }
 
   private var selectedItem: DiningDealzLiquidGlassBottomNavItem {
