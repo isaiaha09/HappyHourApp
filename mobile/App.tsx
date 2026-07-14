@@ -1510,16 +1510,6 @@ function AppScreen() {
         ],
       }
     : null;
-  const shouldAnimateLoginSuccessBottomNav = !isNativeIOSLiquidGlassBottomNavAvailable();
-  const nativeLoginSuccessProfilesShell = (
-    <View style={styles.fullScreenRoot}>
-      <Animated.View style={styles.screenTransitionLayerAbsolute}>
-        {renderProfilesScreen()}
-      </Animated.View>
-      {renderBottomNav({ guest: false })}
-    </View>
-  );
-
   const shouldShowMapResults = showMapBrowse && !activeMapPreviewPlace && normalizedDeferredSearchQuery.length > 0;
   const isLandscape = width > height;
   const useWideLandscapeLayout = isLandscape && width >= 760;
@@ -5020,6 +5010,18 @@ function AppScreen() {
     );
   }
 
+  function renderAuthenticatedBottomNavLayer(options?: { interactive?: boolean; transitionStyle?: object }) {
+    return (
+      <Animated.View
+        key="authenticated-bottom-nav-layer"
+        pointerEvents={options?.interactive === false ? 'none' : 'box-none'}
+        style={[styles.bottomNavLoginTransitionLayer, options?.transitionStyle]}
+      >
+        {renderBottomNav({ guest: false })}
+      </Animated.View>
+    );
+  }
+
   function renderGuestMainShell() {
     const browseTransitionActive = usesGuestBrowseSlideTransition;
     const currentOverlayScreen = currentOnboardingScreen && currentOnboardingScreen !== 'splash'
@@ -5160,7 +5162,7 @@ function AppScreen() {
         {!transitionActive && !showingProfile && shellFadeScope === 'browse' ? (
           <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, browseShellFadeMaskStyle]} />
         ) : null}
-        {renderBottomNav({ guest: false })}
+        {renderAuthenticatedBottomNavLayer()}
       </View>
     );
   }
@@ -5834,23 +5836,17 @@ function AppScreen() {
       {showLoginSuccessTransition ? (
         <View style={styles.onboardingTransitionRoot}>
           <View style={styles.screenTransitionLayer}>
-            {shouldAnimateLoginSuccessBottomNav ? renderOnboardingScreen('profiles') : nativeLoginSuccessProfilesShell}
+            {renderOnboardingScreen('profiles')}
           </View>
           <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, loginSuccessOutgoingStyle]}>
             {renderOnboardingScreen('auth')}
           </Animated.View>
           <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, loginSuccessIncomingStyle]}>
-            {shouldAnimateLoginSuccessBottomNav ? (
-              <View style={styles.fullScreenRoot}>
-                {renderOnboardingScreen('profiles')}
-              </View>
-            ) : nativeLoginSuccessProfilesShell}
+            <View style={styles.fullScreenRoot}>
+              {renderOnboardingScreen('profiles')}
+            </View>
           </Animated.View>
-          {shouldAnimateLoginSuccessBottomNav ? (
-            <Animated.View pointerEvents="none" style={[styles.bottomNavLoginTransitionLayer, loginSuccessBottomNavStyle]}>
-              {renderBottomNav({ guest: false })}
-            </Animated.View>
-          ) : null}
+          {renderAuthenticatedBottomNavLayer({ interactive: false, transitionStyle: loginSuccessBottomNavStyle })}
         </View>
       ) : showLogoutTransition ? (
         <View style={styles.onboardingTransitionRoot}>
