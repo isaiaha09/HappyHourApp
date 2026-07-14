@@ -317,11 +317,11 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
                 }
                 .overlay(
                   dragShape
-                    .strokeBorder(Color.white.opacity(0.26), lineWidth: 1.1)
+                    .stroke(Color.white.opacity(0.26), lineWidth: 1.1)
                 )
                 .overlay(
                   dragShape
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 5)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 5)
                     .blur(radius: 10)
                 )
             } else {
