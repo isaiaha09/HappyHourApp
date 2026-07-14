@@ -1511,6 +1511,14 @@ function AppScreen() {
       }
     : null;
   const shouldAnimateLoginSuccessBottomNav = !isNativeIOSLiquidGlassBottomNavAvailable();
+  const nativeLoginSuccessProfilesShell = (
+    <View style={styles.fullScreenRoot}>
+      <Animated.View style={styles.screenTransitionLayerAbsolute}>
+        {renderProfilesScreen()}
+      </Animated.View>
+      {renderBottomNav({ guest: false })}
+    </View>
+  );
 
   const shouldShowMapResults = showMapBrowse && !activeMapPreviewPlace && normalizedDeferredSearchQuery.length > 0;
   const isLandscape = width > height;
@@ -5826,16 +5834,17 @@ function AppScreen() {
       {showLoginSuccessTransition ? (
         <View style={styles.onboardingTransitionRoot}>
           <View style={styles.screenTransitionLayer}>
-            {renderOnboardingScreen('profiles')}
+            {shouldAnimateLoginSuccessBottomNav ? renderOnboardingScreen('profiles') : nativeLoginSuccessProfilesShell}
           </View>
           <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, loginSuccessOutgoingStyle]}>
             {renderOnboardingScreen('auth')}
           </Animated.View>
           <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, loginSuccessIncomingStyle]}>
-            <View style={styles.fullScreenRoot}>
-              {renderOnboardingScreen('profiles')}
-              {!shouldAnimateLoginSuccessBottomNav ? renderBottomNav({ guest: false }) : null}
-            </View>
+            {shouldAnimateLoginSuccessBottomNav ? (
+              <View style={styles.fullScreenRoot}>
+                {renderOnboardingScreen('profiles')}
+              </View>
+            ) : nativeLoginSuccessProfilesShell}
           </Animated.View>
           {shouldAnimateLoginSuccessBottomNav ? (
             <Animated.View pointerEvents="none" style={[styles.bottomNavLoginTransitionLayer, loginSuccessBottomNavStyle]}>
