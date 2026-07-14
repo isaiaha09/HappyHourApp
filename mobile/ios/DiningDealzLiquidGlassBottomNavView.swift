@@ -237,10 +237,10 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   private let outerHorizontalPadding: CGFloat = 12
   private let selectorVerticalOffset: CGFloat = 0
   private let restingSelectorWidthRatio: CGFloat = 0.96
-  private let draggingSelectorWidthRatio: CGFloat = 1.42
+  private let draggingSelectorWidthRatio: CGFloat = 1.48
   private let restingSelectorExtraWidth: CGFloat = 0
-  private let draggingSelectorExtraWidth: CGFloat = 30
-  private let draggingSelectorExtraHeight: CGFloat = 0
+  private let draggingSelectorExtraWidth: CGFloat = 34
+  private let draggingSelectorExtraHeight: CGFloat = 12
   private let selectorOverflowAllowance: CGFloat = 14
 
   private var containerHeight: CGFloat {
@@ -252,7 +252,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   }
 
   private var selectorLift: CGFloat {
-    0
+    isDragging ? -5 : 0
   }
 
   private var containerBottomOffset: CGFloat {
@@ -283,6 +283,10 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     Color.white.opacity(0.01)
   }
 
+  private var selectorMorphAmount: CGFloat {
+    isDragging ? 1 : 0
+  }
+
   var body: some View {
     VStack(spacing: 0) {
       Spacer(minLength: 0)
@@ -302,11 +306,23 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
 
           GlassEffectContainer(spacing: containerSpacing) {
             if isDragging {
+              let dragShape = DiningDealzLiquidSelectorShape(morph: selectorMorphAmount)
+
               Color.clear
                 .frame(width: selectorWidth, height: selectorHeight)
+                .glassEffect(.regular.interactive(false), in: dragShape)
+                .overlay {
+                  DiningDealzLiquidSelectorShimmer()
+                    .clipShape(dragShape)
+                }
                 .overlay(
-                  Capsule(style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                  dragShape
+                    .strokeBorder(Color.white.opacity(0.26), lineWidth: 1.1)
+                )
+                .overlay(
+                  dragShape
+                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 5)
+                    .blur(radius: 10)
                 )
             } else {
               Color.clear
@@ -450,6 +466,71 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
       leadingInset: horizontalInset,
       totalWidth: totalWidth
     )
+  }
+}
+
+@available(iOS 26.0, *)
+private struct DiningDealzLiquidSelectorShape: Shape {
+  var morph: CGFloat
+
+  var animatableData: CGFloat {
+    get { morph }
+    set { morph = newValue }
+  }
+
+  func path(in rect: CGRect) -> Path {
+    let clampedMorph = min(max(morph, 0), 1)
+    let radius = min(rect.height / 2, 26 + (10 * clampedMorph))
+    return RoundedRectangle(cornerRadius: radius, style: .continuous).path(in: rect)
+  }
+}
+
+@available(iOS 26.0, *)
+private struct DiningDealzLiquidSelectorShimmer: View {
+  var body: some View {
+    TimelineView(.animation) { timeline in
+      let time = timeline.date.timeIntervalSinceReferenceDate
+      let phase = CGFloat((sin(time * 1.35) + 1) * 0.5)
+
+      GeometryReader { geometry in
+        ZStack {
+          LinearGradient(
+            colors: [
+              Color.white.opacity(0.12),
+              Color.white.opacity(0.03),
+              Color.clear,
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+          )
+
+          RadialGradient(
+            colors: [
+              Color.white.opacity(0.24),
+              Color.white.opacity(0.08),
+              Color.clear,
+            ],
+            center: UnitPoint(x: 0.22 + (0.56 * phase), y: 0.28),
+            startRadius: 4,
+            endRadius: max(18, geometry.size.width * 0.52)
+          )
+          .blendMode(.screen)
+
+          LinearGradient(
+            colors: [
+              Color.clear,
+              Color.white.opacity(0.16),
+              Color.clear,
+            ],
+            startPoint: UnitPoint(x: max(0, phase - 0.2), y: 0.08),
+            endPoint: UnitPoint(x: min(1, phase + 0.22), y: 0.92)
+          )
+          .blur(radius: 8)
+          .opacity(0.8)
+        }
+      }
+    }
+    .allowsHitTesting(false)
   }
 }
 
