@@ -237,10 +237,10 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   private let outerHorizontalPadding: CGFloat = 12
   private let selectorVerticalOffset: CGFloat = 0
   private let restingSelectorWidthRatio: CGFloat = 0.96
-  private let draggingSelectorWidthRatio: CGFloat = 1.48
+  private let draggingSelectorWidthRatio: CGFloat = 1.54
   private let restingSelectorExtraWidth: CGFloat = 0
-  private let draggingSelectorExtraWidth: CGFloat = 34
-  private let draggingSelectorExtraHeight: CGFloat = 12
+  private let draggingSelectorExtraWidth: CGFloat = 42
+  private let draggingSelectorExtraHeight: CGFloat = 16
   private let selectorOverflowAllowance: CGFloat = 14
 
   private var containerHeight: CGFloat {
@@ -252,7 +252,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   }
 
   private var selectorLift: CGFloat {
-    isDragging ? -5 : 0
+    isDragging ? -6 : 0
   }
 
   private var containerBottomOffset: CGFloat {
@@ -312,18 +312,36 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
                 .frame(width: selectorWidth, height: selectorHeight)
                 .glassEffect(.regular.interactive(false), in: dragShape)
                 .overlay {
+                  dragShape
+                    .fill(
+                      LinearGradient(
+                        colors: [
+                          Color.black.opacity(0.28),
+                          Color.black.opacity(0.18),
+                          Color.black.opacity(0.3),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                      )
+                    )
+                    .blendMode(.multiply)
+                }
+                .overlay {
                   DiningDealzLiquidSelectorShimmer()
+                    .clipShape(dragShape)
+                }
+                .overlay {
+                  DiningDealzLiquidSelectorSpecular()
                     .clipShape(dragShape)
                 }
                 .overlay(
                   dragShape
-                    .stroke(Color.white.opacity(0.26), lineWidth: 1.1)
+                    .stroke(Color.white.opacity(0.4), lineWidth: 1.15)
                 )
                 .overlay(
-                  dragShape
-                    .stroke(Color.white.opacity(0.08), lineWidth: 5)
-                    .blur(radius: 10)
+                  DiningDealzLiquidSelectorCausticRing(morph: selectorMorphAmount)
                 )
+                .shadow(color: Color.black.opacity(0.2), radius: 18, x: 0, y: 8)
             } else {
               Color.clear
                 .frame(width: selectorWidth, height: selectorHeight)
@@ -496,8 +514,8 @@ private struct DiningDealzLiquidSelectorShimmer: View {
         ZStack {
           LinearGradient(
             colors: [
-              Color.white.opacity(0.12),
-              Color.white.opacity(0.03),
+              Color.white.opacity(0.06),
+              Color.white.opacity(0.015),
               Color.clear,
             ],
             startPoint: .topLeading,
@@ -506,11 +524,11 @@ private struct DiningDealzLiquidSelectorShimmer: View {
 
           RadialGradient(
             colors: [
-              Color.white.opacity(0.24),
-              Color.white.opacity(0.08),
+              Color.white.opacity(0.2),
+              Color.white.opacity(0.06),
               Color.clear,
             ],
-            center: UnitPoint(x: 0.22 + (0.56 * phase), y: 0.28),
+            center: UnitPoint(x: 0.18 + (0.62 * phase), y: 0.26),
             startRadius: 4,
             endRadius: max(18, geometry.size.width * 0.52)
           )
@@ -519,7 +537,7 @@ private struct DiningDealzLiquidSelectorShimmer: View {
           LinearGradient(
             colors: [
               Color.clear,
-              Color.white.opacity(0.16),
+              Color.white.opacity(0.12),
               Color.clear,
             ],
             startPoint: UnitPoint(x: max(0, phase - 0.2), y: 0.08),
@@ -531,6 +549,90 @@ private struct DiningDealzLiquidSelectorShimmer: View {
       }
     }
     .allowsHitTesting(false)
+  }
+}
+
+@available(iOS 26.0, *)
+private struct DiningDealzLiquidSelectorSpecular: View {
+  var body: some View {
+    TimelineView(.animation) { timeline in
+      let time = timeline.date.timeIntervalSinceReferenceDate
+      let phase = CGFloat((sin(time * 1.05) + 1) * 0.5)
+
+      GeometryReader { geometry in
+        ZStack {
+          Ellipse()
+            .fill(
+              LinearGradient(
+                colors: [
+                  Color.white.opacity(0.42),
+                  Color.white.opacity(0.16),
+                  Color.clear,
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+              )
+            )
+            .frame(width: geometry.size.width * 0.54, height: geometry.size.height * 0.16)
+            .offset(x: geometry.size.width * (phase * 0.06 - 0.03), y: -geometry.size.height * 0.33)
+            .blur(radius: 2.5)
+
+          Circle()
+            .fill(
+              RadialGradient(
+                colors: [
+                  Color.white.opacity(0.34),
+                  Color.white.opacity(0.08),
+                  Color.clear,
+                ],
+                center: .center,
+                startRadius: 1,
+                endRadius: geometry.size.width * 0.18
+              )
+            )
+            .frame(width: geometry.size.width * 0.34, height: geometry.size.width * 0.34)
+            .offset(x: geometry.size.width * (phase * 0.16 - 0.08), y: -geometry.size.height * 0.18)
+            .blur(radius: 5)
+        }
+        .blendMode(.screen)
+      }
+    }
+    .allowsHitTesting(false)
+  }
+}
+
+@available(iOS 26.0, *)
+private struct DiningDealzLiquidSelectorCausticRing: View {
+  let morph: CGFloat
+
+  var body: some View {
+    let shape = DiningDealzLiquidSelectorShape(morph: morph)
+
+    shape
+      .stroke(
+        AngularGradient(
+          colors: [
+            Color.red.opacity(0.55),
+            Color.orange.opacity(0.16),
+            Color.yellow.opacity(0.08),
+            Color.green.opacity(0.34),
+            Color.cyan.opacity(0.18),
+            Color.blue.opacity(0.36),
+            Color.purple.opacity(0.26),
+            Color.red.opacity(0.55),
+          ],
+          center: .center
+        ),
+        lineWidth: 4.5
+      )
+      .blur(radius: 4)
+      .mask(
+        shape
+          .stroke(Color.white.opacity(0.9), lineWidth: 3.2)
+          .blur(radius: 0.8)
+      )
+      .opacity(0.9)
+      .allowsHitTesting(false)
   }
 }
 
