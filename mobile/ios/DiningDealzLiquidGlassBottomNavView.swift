@@ -237,10 +237,10 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   private let outerHorizontalPadding: CGFloat = 12
   private let selectorVerticalOffset: CGFloat = 0
   private let restingSelectorWidthRatio: CGFloat = 0.96
-  private let draggingSelectorWidthRatio: CGFloat = 1.42
+  private let draggingSelectorWidthRatio: CGFloat = 1.5
   private let restingSelectorExtraWidth: CGFloat = 0
-  private let draggingSelectorExtraWidth: CGFloat = 30
-  private let draggingSelectorExtraHeight: CGFloat = 0
+  private let draggingSelectorExtraWidth: CGFloat = 38
+  private let draggingSelectorExtraHeight: CGFloat = 18
   private let selectorOverflowAllowance: CGFloat = 14
 
   private var containerHeight: CGFloat {
@@ -252,7 +252,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   }
 
   private var selectorLift: CGFloat {
-    0
+    isDragging ? -2 : 0
   }
 
   private var containerBottomOffset: CGFloat {
@@ -304,10 +304,13 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
             if isDragging {
               Color.clear
                 .frame(width: selectorWidth, height: selectorHeight)
+                .glassEffect(.regular.interactive(false), in: Capsule(style: .continuous))
                 .overlay(
                   Capsule(style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                    .strokeBorder(Color.white.opacity(0.28), lineWidth: 1.15)
                 )
+                .shadow(color: Color.white.opacity(0.1), radius: 10, x: 0, y: 0)
+                .shadow(color: Color.black.opacity(0.12), radius: 14, x: 0, y: 6)
             } else {
               Color.clear
                 .frame(width: selectorWidth, height: selectorHeight)
