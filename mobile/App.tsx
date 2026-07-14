@@ -1972,11 +1972,9 @@ function AppScreen() {
         return;
       }
 
+      loginSuccessTransition.setValue(1);
       setScreenMode('profiles');
-      requestAnimationFrame(() => {
-        setShowLoginSuccessTransition(false);
-        loginSuccessTransition.setValue(1);
-      });
+      setShowLoginSuccessTransition(false);
     });
   }
 
@@ -5013,7 +5011,6 @@ function AppScreen() {
   function renderAuthenticatedBottomNavLayer(options?: { interactive?: boolean; transitionStyle?: object }) {
     return (
       <Animated.View
-        key="authenticated-bottom-nav-layer"
         pointerEvents={options?.interactive === false ? 'none' : 'box-none'}
         style={[styles.bottomNavLoginTransitionLayer, options?.transitionStyle]}
       >
@@ -5162,7 +5159,7 @@ function AppScreen() {
         {!transitionActive && !showingProfile && shellFadeScope === 'browse' ? (
           <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, browseShellFadeMaskStyle]} />
         ) : null}
-        {renderAuthenticatedBottomNavLayer()}
+        {renderBottomNav({ guest: false })}
       </View>
     );
   }
