@@ -1510,6 +1510,7 @@ function AppScreen() {
         ],
       }
     : null;
+  const shouldAnimateLoginSuccessBottomNav = !isNativeIOSLiquidGlassBottomNavAvailable();
 
   const shouldShowMapResults = showMapBrowse && !activeMapPreviewPlace && normalizedDeferredSearchQuery.length > 0;
   const isLandscape = width > height;
@@ -5835,9 +5836,11 @@ function AppScreen() {
               {renderOnboardingScreen('profiles')}
             </View>
           </Animated.View>
-          <Animated.View pointerEvents="none" style={[styles.bottomNavLoginTransitionLayer, loginSuccessBottomNavStyle]}>
-            {renderBottomNav({ guest: false })}
-          </Animated.View>
+          {shouldAnimateLoginSuccessBottomNav ? (
+            <Animated.View pointerEvents="none" style={[styles.bottomNavLoginTransitionLayer, loginSuccessBottomNavStyle]}>
+              {renderBottomNav({ guest: false })}
+            </Animated.View>
+          ) : null}
         </View>
       ) : showLogoutTransition ? (
         <View style={styles.onboardingTransitionRoot}>
