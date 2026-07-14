@@ -240,8 +240,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   private let draggingSelectorWidthRatio: CGFloat = 1.42
   private let restingSelectorExtraWidth: CGFloat = 0
   private let draggingSelectorExtraWidth: CGFloat = 30
-  private let draggingSelectorExtraHeight: CGFloat = 24
-  private let selectorDragLift: CGFloat = 10
+  private let draggingSelectorExtraHeight: CGFloat = 16
   private let selectorOverflowAllowance: CGFloat = 14
 
   private var containerHeight: CGFloat {
@@ -253,7 +252,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   }
 
   private var selectorLift: CGFloat {
-    isDragging ? -selectorDragLift : 0
+    0
   }
 
   private var containerBottomOffset: CGFloat {
@@ -281,7 +280,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   }
 
   private var selectorTint: Color {
-    Color.white.opacity(isDragging ? 0.028 : 0.01)
+    Color.white.opacity(0.01)
   }
 
   var body: some View {
@@ -302,13 +301,23 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
           .zIndex(0)
 
           GlassEffectContainer(spacing: containerSpacing) {
-            Color.clear
-              .frame(width: selectorWidth, height: selectorHeight)
-              .glassEffect(.regular.tint(selectorTint).interactive(), in: Capsule(style: .continuous))
-              .overlay(
-                Capsule(style: .continuous)
-                  .strokeBorder(Color.white.opacity(isDragging ? 0.24 : 0.1), lineWidth: 1)
-              )
+            if isDragging {
+              Color.clear
+                .frame(width: selectorWidth, height: selectorHeight)
+                .glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
+                .overlay(
+                  Capsule(style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
+                )
+            } else {
+              Color.clear
+                .frame(width: selectorWidth, height: selectorHeight)
+                .glassEffect(.regular.tint(selectorTint).interactive(), in: Capsule(style: .continuous))
+                .overlay(
+                  Capsule(style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
+                )
+            }
           }
           .frame(width: selectorWidth, height: selectorHeight)
           .offset(x: selectorOffsetX(for: metrics, selectorWidth: selectorWidth, totalWidth: geometry.size.width))
