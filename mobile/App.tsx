@@ -5834,13 +5834,14 @@ function AppScreen() {
           <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, loginSuccessIncomingStyle]}>
             <View style={styles.fullScreenRoot}>
               {renderOnboardingScreen('profiles')}
+              {!shouldAnimateLoginSuccessBottomNav ? renderBottomNav({ guest: false }) : null}
             </View>
           </Animated.View>
           {shouldAnimateLoginSuccessBottomNav ? (
             <Animated.View pointerEvents="none" style={[styles.bottomNavLoginTransitionLayer, loginSuccessBottomNavStyle]}>
               {renderBottomNav({ guest: false })}
             </Animated.View>
-          ) : renderBottomNav({ guest: false })}
+          ) : null}
         </View>
       ) : showLogoutTransition ? (
         <View style={styles.onboardingTransitionRoot}>
