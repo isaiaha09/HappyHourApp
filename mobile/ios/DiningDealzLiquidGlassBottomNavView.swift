@@ -327,16 +327,12 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
                     .blendMode(.multiply)
                 }
                 .overlay {
-                  DiningDealzLiquidSelectorShimmer()
-                    .clipShape(dragShape)
-                }
-                .overlay {
                   DiningDealzLiquidSelectorSpecular()
                     .clipShape(dragShape)
                 }
                 .overlay(
                   dragShape
-                    .stroke(Color.white.opacity(0.4), lineWidth: 1.15)
+                    .stroke(Color.white.opacity(0.26), lineWidth: 1.05)
                 )
                 .overlay(
                   DiningDealzLiquidSelectorCausticRing(morph: selectorMorphAmount)
@@ -500,55 +496,6 @@ private struct DiningDealzLiquidSelectorShape: Shape {
     let clampedMorph = min(max(morph, 0), 1)
     let radius = min(rect.height / 2, 26 + (10 * clampedMorph))
     return RoundedRectangle(cornerRadius: radius, style: .continuous).path(in: rect)
-  }
-}
-
-@available(iOS 26.0, *)
-private struct DiningDealzLiquidSelectorShimmer: View {
-  var body: some View {
-    TimelineView(.animation) { timeline in
-      let time = timeline.date.timeIntervalSinceReferenceDate
-      let phase = CGFloat((sin(time * 1.35) + 1) * 0.5)
-
-      GeometryReader { geometry in
-        ZStack {
-          LinearGradient(
-            colors: [
-              Color.white.opacity(0.06),
-              Color.white.opacity(0.015),
-              Color.clear,
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-          )
-
-          RadialGradient(
-            colors: [
-              Color.white.opacity(0.2),
-              Color.white.opacity(0.06),
-              Color.clear,
-            ],
-            center: UnitPoint(x: 0.18 + (0.62 * phase), y: 0.26),
-            startRadius: 4,
-            endRadius: max(18, geometry.size.width * 0.52)
-          )
-          .blendMode(.screen)
-
-          LinearGradient(
-            colors: [
-              Color.clear,
-              Color.white.opacity(0.12),
-              Color.clear,
-            ],
-            startPoint: UnitPoint(x: max(0, phase - 0.2), y: 0.08),
-            endPoint: UnitPoint(x: min(1, phase + 0.22), y: 0.92)
-          )
-          .blur(radius: 8)
-          .opacity(0.8)
-        }
-      }
-    }
-    .allowsHitTesting(false)
   }
 }
 
