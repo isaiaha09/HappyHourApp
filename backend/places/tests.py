@@ -39,7 +39,7 @@ from .services.provider_quota import consume_provider_transaction, get_provider_
 from .services.favorite_notifications import create_notifications_for_business_profile_update
 from .services.importers.yelp_places import YelpFusionPlacesImporter
 from .services.importers.types import ImportedDeal, ImportedHappyHour, ImportedOperatingHour, ImportedPlace
-from .services.source_listings import _build_deal_identity_key, _build_place_payload, get_source_place_payload, get_source_place_payloads
+from .services.source_listings import _build_deal_identity_key, _build_place_payload, get_source_place_payload, get_source_place_payloads, load_source_records
 
 
 User = get_user_model()
@@ -4202,6 +4202,8 @@ class YelpFusionPlacesImporterTests(TestCase):
 	},
 	SOURCE_FETCH_CACHE_ALIAS='source_fetch',
 	SOURCE_FETCH_CACHE_TIMEOUT=60,
+	SOURCE_PLACE_PAYLOAD_CACHE_ALIAS='source_fetch',
+	SOURCE_PLACE_PAYLOAD_CACHE_TIMEOUT=60,
 )
 class SourceFetchCacheTests(TestCase):
 	def setUp(self):
@@ -4223,6 +4225,62 @@ class SourceFetchCacheTests(TestCase):
 		self.assertEqual(first_response, '<html>live source payload</html>')
 		self.assertEqual(second_response, '<html>live source payload</html>')
 		self.assertEqual(len(session.calls), 1)
+
+	def test_load_source_records_reuses_cached_importer_records_until_force_refresh(self):
+		class DummySourceImporter:
+			source_name = 'dummy_source_records'
+			call_count = 0
+
+			def load_records(self):
+				DummySourceImporter.call_count += 1
+				return [f'record-{DummySourceImporter.call_count}']
+
+		with patch.dict('places.services.source_listings.RUNTIME_IMPORTER_REGISTRY', {'dummy_source_records': DummySourceImporter}, clear=False):
+			first_records = load_source_records(source_name='dummy_source_records')
+			second_records = load_source_records(source_name='dummy_source_records')
+			refreshed_records = load_source_records(source_name='dummy_source_records', force_refresh=True)
+
+		self.assertEqual(first_records, ['record-1'])
+		self.assertEqual(second_records, ['record-1'])
+		self.assertEqual(refreshed_records, ['record-2'])
+		self.assertEqual(DummySourceImporter.call_count, 2)
+
+	def test_get_source_place_payloads_reuses_cached_payloads_until_source_refresh(self):
+		class DummyPayloadImporter:
+			source_name = 'dummy_payload_source'
+			call_count = 0
+
+			def load_records(self):
+				DummyPayloadImporter.call_count += 1
+				count = DummyPayloadImporter.call_count
+				return [
+					ImportedPlace(
+						name=f'Cache Place {count}',
+						city=City.OXNARD,
+						venue_type=VenueType.RESTAURANT,
+						address_line_1='123 Main Street',
+						external_id=f'cache-place-{count}',
+						source_name='dummy_payload_source',
+						source_url='https://example.com/cache-place',
+					)
+				]
+
+		with (
+			patch.dict('places.services.source_listings.RUNTIME_IMPORTER_REGISTRY', {'dummy_payload_source': DummyPayloadImporter}, clear=False),
+			patch('places.services.source_listings._get_listing_snapshot_override_payloads', return_value={'by_slug': {}, 'by_source_identity': {}, 'by_location_identity': {}}),
+			patch('places.services.source_listings._get_claimed_listing_slugs', return_value=set()),
+			patch('places.services.source_listings._get_active_business_claims', return_value=[]),
+			patch('places.services.source_listings._get_unclaimed_manual_admin_snapshots', return_value=[]),
+		):
+			first_payloads = get_source_place_payloads(source_name='dummy_payload_source', resolve_missing_coordinates=False)
+			second_payloads = get_source_place_payloads(source_name='dummy_payload_source', resolve_missing_coordinates=False)
+			load_source_records(source_name='dummy_payload_source', force_refresh=True)
+			refreshed_payloads = get_source_place_payloads(source_name='dummy_payload_source', resolve_missing_coordinates=False)
+
+		self.assertEqual(first_payloads[0]['name'], 'Cache Place 1')
+		self.assertEqual(second_payloads[0]['name'], 'Cache Place 1')
+		self.assertEqual(refreshed_payloads[0]['name'], 'Cache Place 2')
+		self.assertEqual(DummyPayloadImporter.call_count, 2)
 
 
 @override_settings(

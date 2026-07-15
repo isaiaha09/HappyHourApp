@@ -43,6 +43,7 @@ import {
   fetchDirectMessageThreads,
   deleteProfileAccount,
   disableTwoFactor,
+  clearPlacesCache,
   fetchProfileDashboard,
   fetchPlaceDetail,
   fetchPlaces,
@@ -3105,6 +3106,7 @@ function AppScreen() {
     animateNextLayout();
     setErrorMessage(null);
     setBrowseFiltersExpanded(false);
+    clearPlacesCache();
     setPlaces([]);
     setProfilePlaces([]);
     setSelectedMapPlaceKey(null);

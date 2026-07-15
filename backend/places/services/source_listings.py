@@ -1,4 +1,5 @@
 import re
+from copy import deepcopy
 from hashlib import sha256
 from urllib.parse import urlparse
 
@@ -53,8 +54,80 @@ def get_listing_importer(source_name=None):
 	return importer_class()
 
 
-def load_source_records(source_name=None):
-	return get_listing_importer(source_name=source_name).load_records()
+def _source_records_cache_key(source_name=None):
+	resolved_source_name = source_name or get_listing_source_name()
+	return f'source-records:{resolved_source_name}'
+
+
+def _source_place_payload_cache_version_key(source_name=None):
+	resolved_source_name = source_name or get_listing_source_name()
+	return f'source-place-payloads-version:{resolved_source_name}'
+
+
+def _get_source_place_payload_cache(source_name=None):
+	cache_alias = getattr(
+		settings,
+		'SOURCE_PLACE_PAYLOAD_CACHE_ALIAS',
+		getattr(settings, 'SOURCE_FETCH_CACHE_ALIAS', 'default'),
+	)
+	return caches[cache_alias]
+
+
+def _get_source_place_payload_cache_timeout():
+	return getattr(settings, 'SOURCE_PLACE_PAYLOAD_CACHE_TIMEOUT', 300)
+
+
+def _get_source_place_payload_cache_version(source_name=None):
+	cache = _get_source_place_payload_cache(source_name=source_name)
+	cache_key = _source_place_payload_cache_version_key(source_name=source_name)
+	version = cache.get(cache_key)
+	if version is None:
+		version = 1
+		cache.set(cache_key, version, None)
+	return version
+
+
+def _bump_source_place_payload_cache_version(source_name=None):
+	cache = _get_source_place_payload_cache(source_name=source_name)
+	cache_key = _source_place_payload_cache_version_key(source_name=source_name)
+	version = (_get_source_place_payload_cache_version(source_name=source_name) or 1) + 1
+	cache.set(cache_key, version, None)
+	return version
+
+
+def _source_place_payload_cache_key(city=None, venue_type=None, source_name=None, has_deals=None, resolve_missing_coordinates=True):
+	resolved_source_name = source_name or get_listing_source_name()
+	version = _get_source_place_payload_cache_version(source_name=resolved_source_name)
+	return ':'.join([
+		'source-place-payloads',
+		resolved_source_name,
+		str(version),
+		sha256(
+			repr({
+				'city': city,
+				'venue_type': venue_type,
+				'has_deals': has_deals,
+				'resolve_missing_coordinates': resolve_missing_coordinates,
+			}).encode('utf-8')
+		).hexdigest(),
+	])
+
+
+def load_source_records(source_name=None, force_refresh=False):
+	cache = caches[getattr(settings, 'SOURCE_FETCH_CACHE_ALIAS', 'default')]
+	cache_key = _source_records_cache_key(source_name=source_name)
+	if force_refresh:
+		_bump_source_place_payload_cache_version(source_name=source_name)
+	if not force_refresh:
+		cached_records = cache.get(cache_key)
+		if cached_records is not None:
+			return cached_records
+
+	records = get_listing_importer(source_name=source_name).load_records()
+	cache_timeout = getattr(settings, 'SOURCE_FETCH_CACHE_TIMEOUT', 0)
+	if cache_timeout and cache_timeout > 0:
+		cache.set(cache_key, records, cache_timeout)
+	return records
 
 
 def load_canonical_source_records(source_name=None):
@@ -75,6 +148,18 @@ def _normalize_structured_override_value(value, cleared=False):
 
 
 def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_deals=None, resolve_missing_coordinates=True):
+	cache = _get_source_place_payload_cache(source_name=source_name)
+	cache_key = _source_place_payload_cache_key(
+		city=city,
+		venue_type=venue_type,
+		source_name=source_name,
+		has_deals=has_deals,
+		resolve_missing_coordinates=resolve_missing_coordinates,
+	)
+	cached_payloads = cache.get(cache_key)
+	if cached_payloads is not None:
+		return deepcopy(cached_payloads)
+
 	payloads_by_slug = {}
 	snapshot_overrides_by_slug = _get_listing_snapshot_override_payloads()
 	claimed_listing_slugs = _get_claimed_listing_slugs()
@@ -146,7 +231,11 @@ def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_
 			continue
 		payloads.append(payload)
 
-	return sorted(payloads, key=lambda payload: (payload['name'], payload['city_label']))
+	sorted_payloads = sorted(payloads, key=lambda payload: (payload['name'], payload['city_label']))
+	cache_timeout = _get_source_place_payload_cache_timeout()
+	if cache_timeout and cache_timeout > 0:
+		cache.set(cache_key, deepcopy(sorted_payloads), cache_timeout)
+	return sorted_payloads
 
 
 def _get_listing_snapshot_override_payloads():

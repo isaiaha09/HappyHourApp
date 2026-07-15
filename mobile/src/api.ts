@@ -34,6 +34,14 @@ import type {
 } from './types';
 
 const FALLBACK_API_BASE_URL = 'http://127.0.0.1:8000/api';
+const placeCacheTtlMs = 5 * 60 * 1000;
+
+type PlaceCacheEntry = {
+  expiresAt: number;
+  places: PlaceListItem[];
+};
+
+const placeCache = new Map<string, PlaceCacheEntry>();
 
 const businessAttachmentFieldNames: Record<BusinessAttachmentKind, string> = {
   social_media: 'social_media_attachments',
@@ -69,7 +77,26 @@ export function normalizeApiBaseUrl(value: string) {
   return withProtocol.endsWith('/api') ? withProtocol : `${withProtocol}/api`;
 }
 
+function getPlaceCacheKey(baseUrl: string, city: string, hasDeals?: boolean) {
+  return JSON.stringify({
+    baseUrl: normalizeApiBaseUrl(baseUrl),
+    city,
+    hasDeals: typeof hasDeals === 'boolean' ? hasDeals : null,
+  });
+}
+
+export function clearPlacesCache() {
+  placeCache.clear();
+}
+
 export async function fetchPlaces(baseUrl: string, city: string, hasDeals?: boolean) {
+  const cacheKey = getPlaceCacheKey(baseUrl, city, hasDeals);
+  const cachedEntry = placeCache.get(cacheKey);
+  const now = Date.now();
+  if (cachedEntry && cachedEntry.expiresAt > now) {
+    return cachedEntry.places;
+  }
+
   const queryParams = new URLSearchParams();
   queryParams.set('page_size', '500');
 
@@ -82,7 +109,12 @@ export async function fetchPlaces(baseUrl: string, city: string, hasDeals?: bool
   }
 
   const query = queryParams.size ? `?${queryParams.toString()}` : '';
-  return fetchAllPaginatedJson<PlaceListItem>(baseUrl, `/places/${query}`);
+  const nextPlaces = await fetchAllPaginatedJson<PlaceListItem>(baseUrl, `/places/${query}`);
+  placeCache.set(cacheKey, {
+    expiresAt: now + placeCacheTtlMs,
+    places: nextPlaces,
+  });
+  return nextPlaces;
 }
 
 export async function fetchPlaceDetail(baseUrl: string, slug: string, authToken?: string) {
