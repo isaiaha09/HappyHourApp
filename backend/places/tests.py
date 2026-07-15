@@ -2101,6 +2101,12 @@ class BusinessWebsiteImporterTests(TestCase):
 
 
 class SourceListingIdentityTests(TestCase):
+	def setUp(self):
+		caches[getattr(settings, 'SOURCE_FETCH_CACHE_ALIAS', 'default')].clear()
+
+	def tearDown(self):
+		caches[getattr(settings, 'SOURCE_FETCH_CACHE_ALIAS', 'default')].clear()
+
 	def test_deal_identity_key_distinguishes_same_title_with_different_content(self):
 		first_deal = ImportedDeal(
 			title='Happy Hour',
@@ -5779,6 +5785,8 @@ class ProfileSignupApiTests(APITestCase):
 @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
 class ProfileDashboardApiTests(APITestCase):
 	def setUp(self):
+		super().setUp()
+		caches[getattr(settings, 'SOURCE_FETCH_CACHE_ALIAS', 'default')].clear()
 		self.user = User.objects.create_user(
 			username='dashboard_user',
 			email='dashboard@example.com',
@@ -5799,6 +5807,10 @@ class ProfileDashboardApiTests(APITestCase):
 			'address_line_1': '123 Main St',
 			'website_url': 'https://example.com/favorite-tacos',
 		}
+
+	def tearDown(self):
+		caches[getattr(settings, 'SOURCE_FETCH_CACHE_ALIAS', 'default')].clear()
+		super().tearDown()
 
 	def auth_headers(self):
 		return {'HTTP_AUTHORIZATION': f'Token {self.token.key}'}
@@ -7657,7 +7669,12 @@ class ProfileDashboardApiTests(APITestCase):
 class AccountProxyTests(APITestCase):
 	def setUp(self):
 		super().setUp()
+		caches[getattr(settings, 'SOURCE_FETCH_CACHE_ALIAS', 'default')].clear()
 		self.admin_user = User.objects.create_superuser(username='account_proxy_admin', email='account_proxy_admin@example.com', password='test-pass-123')
+
+	def tearDown(self):
+		caches[getattr(settings, 'SOURCE_FETCH_CACHE_ALIAS', 'default')].clear()
+		super().tearDown()
 
 	def test_customer_and_business_account_proxies_split_non_staff_users(self):
 		customer = User.objects.create_user(username='regular_customer', email='customer@example.com', password='test-pass-123')

@@ -127,33 +127,6 @@ BUSINESS_SOURCE_PAGES = [
 		'website_url': 'https://www.yolandasmexicancafe.com/',
 	},
 	{
-		'name': 'Lazy Dog Restaurant & Bar',
-		'city': 'oxnard',
-		'venue_type': 'bar',
-		'source_url': 'https://www.lazydogrestaurants.com/pages/locations',
-		'source_documents': [
-			{
-				'url': 'https://www.lazydogrestaurants.com/pages/locations',
-				'roles': ['identity', 'images'],
-			},
-			{
-				'text': 'Happy Hour Mon-Fri: 3pm-6pm. Late Night Sun-Thu: 9pm-11pm.',
-				'roles': ['deals'],
-			},
-			{
-				'text': 'Monday - Thursday: 11:00am - 11:00pm. Friday: 11:00am - 12:00am. Saturday: 10:00am - 12:00am. Sunday: 10:00am - 11:00pm.',
-				'roles': ['hours'],
-			},
-		],
-		'address_line_1': '598 Town Center Dr',
-		'latitude': 34.2393064,
-		'longitude': -119.1786153,
-		'phone_number': '(805) 351-4888',
-		'postal_code': '93036',
-		'geocode_query': 'Lazy Dog Oxnard, CA',
-		'website_url': 'https://www.lazydogrestaurants.com/pages/locations',
-	},
-	{
 		'name': 'The Collection at RiverPark',
 		'city': 'oxnard',
 		'venue_type': 'attraction',

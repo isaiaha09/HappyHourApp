@@ -95,6 +95,17 @@ def _bump_source_place_payload_cache_version(source_name=None):
 	return version
 
 
+def invalidate_source_place_payload_cache(source_name=None, invalidate_all=False):
+	if invalidate_all:
+		resolved_source_names = set(RUNTIME_IMPORTER_REGISTRY.keys())
+		resolved_source_names.add(get_listing_source_name())
+		for resolved_source_name in resolved_source_names:
+			_bump_source_place_payload_cache_version(source_name=resolved_source_name)
+		return
+
+	_bump_source_place_payload_cache_version(source_name=source_name)
+
+
 def _source_place_payload_cache_key(city=None, venue_type=None, source_name=None, has_deals=None, resolve_missing_coordinates=True):
 	resolved_source_name = source_name or get_listing_source_name()
 	version = _get_source_place_payload_cache_version(source_name=resolved_source_name)

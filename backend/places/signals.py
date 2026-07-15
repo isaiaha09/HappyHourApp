@@ -1,8 +1,9 @@
 from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 
-from .models import BusinessClaim, BusinessClaimAttachment
+from .models import BusinessClaim, BusinessClaimAttachment, BusinessMembership, ListingSnapshot
 from .services.media_storage import delete_removed_storage_references, delete_storage_names, delete_storage_references
+from .services.source_listings import invalidate_source_place_payload_cache
 
 
 @receiver(pre_save, sender=BusinessClaim)
@@ -34,6 +35,36 @@ def cleanup_removed_business_claim_photo_references(sender, instance, created, *
 def cleanup_deleted_business_claim_photo_references(sender, instance, **kwargs):
 	delete_storage_references(instance.photo_references or [])
 	delete_storage_references(_get_deal_attachment_references(instance.deal_overrides))
+
+
+@receiver(post_save, sender=ListingSnapshot)
+def invalidate_listing_snapshot_place_payload_cache_on_save(sender, instance, **kwargs):
+	invalidate_source_place_payload_cache(invalidate_all=True)
+
+
+@receiver(post_delete, sender=ListingSnapshot)
+def invalidate_listing_snapshot_place_payload_cache_on_delete(sender, instance, **kwargs):
+	invalidate_source_place_payload_cache(invalidate_all=True)
+
+
+@receiver(post_save, sender=BusinessClaim)
+def invalidate_business_claim_place_payload_cache_on_save(sender, instance, **kwargs):
+	invalidate_source_place_payload_cache(invalidate_all=True)
+
+
+@receiver(post_delete, sender=BusinessClaim)
+def invalidate_business_claim_place_payload_cache_on_delete(sender, instance, **kwargs):
+	invalidate_source_place_payload_cache(invalidate_all=True)
+
+
+@receiver(post_save, sender=BusinessMembership)
+def invalidate_business_membership_place_payload_cache_on_save(sender, instance, **kwargs):
+	invalidate_source_place_payload_cache(invalidate_all=True)
+
+
+@receiver(post_delete, sender=BusinessMembership)
+def invalidate_business_membership_place_payload_cache_on_delete(sender, instance, **kwargs):
+	invalidate_source_place_payload_cache(invalidate_all=True)
 
 
 @receiver(pre_save, sender=BusinessClaimAttachment)
