@@ -53,28 +53,15 @@ export function GuestShellChrome({
   }, [activeModal, interactive, modalOpacity]);
 
   function renderBottomNavIcon(icon: 'customer' | 'signup' | 'business', active: boolean) {
+    const color = active ? '#fff8f1' : 'rgba(255, 248, 241, 0.68)';
+
     switch (icon) {
       case 'customer':
-        return (
-          <View style={styles.bottomNavProfileIcon}>
-            <View style={[styles.bottomNavProfileHead, active ? styles.bottomNavIconFillActive : null]} />
-            <View style={[styles.bottomNavProfileBody, active ? styles.bottomNavIconStrokeActive : null]} />
-          </View>
-        );
+        return <Ionicons color={color} name={active ? 'person' : 'person-outline'} size={20} />;
       case 'signup':
-        return (
-          <View style={styles.bottomNavPlusIcon}>
-            <View style={[styles.bottomNavPlusLineHorizontal, active ? styles.bottomNavIconFillActive : null]} />
-            <View style={[styles.bottomNavPlusLineVertical, active ? styles.bottomNavIconFillActive : null]} />
-          </View>
-        );
+        return <Ionicons color={color} name={active ? 'add-circle' : 'add-circle-outline'} size={20} />;
       case 'business':
-        return (
-          <View style={styles.bottomNavBusinessIcon}>
-            <View style={[styles.bottomNavBusinessHandle, active ? styles.bottomNavIconStrokeActive : null]} />
-            <View style={[styles.bottomNavBusinessBody, active ? styles.bottomNavIconStrokeActive : null]} />
-          </View>
-        );
+        return <Ionicons color={color} name={active ? 'briefcase' : 'briefcase-outline'} size={20} />;
       default:
         return null;
     }

@@ -1,5 +1,6 @@
 import { memo, startTransition, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
@@ -5631,38 +5632,17 @@ function AppScreen() {
   }
 
   function renderBottomNavIcon(icon: MainShellBottomNavItem, active: boolean) {
+    const color = active ? '#fff8f1' : 'rgba(255, 248, 241, 0.68)';
+
     switch (icon) {
       case 'home':
-        return (
-          <View style={styles.bottomNavFeedIcon}>
-            <View style={[styles.bottomNavFeedFrame, active ? styles.bottomNavFeedFrameActive : null]} />
-            <View style={[styles.bottomNavFeedLine, styles.bottomNavFeedLineTop, active ? styles.bottomNavIconStrokeActive : null]} />
-            <View style={[styles.bottomNavFeedLine, styles.bottomNavFeedLineBottom, active ? styles.bottomNavIconStrokeActive : null]} />
-          </View>
-        );
+        return <Ionicons color={color} name={active ? 'newspaper' : 'newspaper-outline'} size={20} />;
       case 'map':
-        return (
-          <View style={styles.bottomNavMapIcon}>
-            <View style={[styles.bottomNavMapPanel, active ? styles.bottomNavMapPanelActive : null]} />
-            <View style={[styles.bottomNavMapPanel, styles.bottomNavMapPanelMiddle, active ? styles.bottomNavMapPanelActive : null]} />
-            <View style={[styles.bottomNavMapPanel, active ? styles.bottomNavMapPanelActive : null]} />
-          </View>
-        );
+        return <Ionicons color={color} name={active ? 'map' : 'map-outline'} size={20} />;
       case 'profile':
-        return (
-          <View style={styles.bottomNavProfileIcon}>
-            <View style={[styles.bottomNavProfileHead, active ? styles.bottomNavIconFillActive : null]} />
-            <View style={[styles.bottomNavProfileBody, active ? styles.bottomNavIconStrokeActive : null]} />
-          </View>
-        );
+        return <Ionicons color={color} name={active ? 'person' : 'person-outline'} size={20} />;
       case 'more':
-        return (
-          <View style={styles.bottomNavMoreIcon}>
-            <View style={[styles.bottomNavMoreLine, active ? styles.bottomNavIconStrokeActive : null]} />
-            <View style={[styles.bottomNavMoreLine, active ? styles.bottomNavIconStrokeActive : null]} />
-            <View style={[styles.bottomNavMoreLine, active ? styles.bottomNavIconStrokeActive : null]} />
-          </View>
-        );
+        return <Ionicons color={color} name={active ? 'menu' : 'menu-outline'} size={20} />;
       default:
         return null;
     }
