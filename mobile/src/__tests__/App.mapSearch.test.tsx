@@ -5,6 +5,8 @@ import { NativeModules } from 'react-native';
 import type { PlaceListItem } from '../types';
 
 const mockFetchPlaces = jest.fn<Promise<PlaceListItem[]>, [string, string]>();
+const mockFetchProfileDashboard = jest.fn();
+const mockLoginProfile = jest.fn();
 
 jest.mock('../api', () => ({
   beginTwoFactorSetup: jest.fn(),
@@ -18,9 +20,9 @@ jest.mock('../api', () => ({
   fetchFeed: jest.fn(),
   fetchPlaceDetail: jest.fn(),
   fetchPlaces: (...args: [string, string]) => mockFetchPlaces(...args),
-  fetchProfileDashboard: jest.fn(),
+  fetchProfileDashboard: (...args: unknown[]) => mockFetchProfileDashboard(...args),
   getDefaultApiBaseUrl: jest.fn(() => 'http://127.0.0.1:8000/api'),
-  loginProfile: jest.fn(),
+  loginProfile: (...args: unknown[]) => mockLoginProfile(...args),
   recordFeedEngagement: jest.fn(),
   recordFeedImpression: jest.fn(),
   requestPasswordReset: jest.fn(),
@@ -79,9 +81,33 @@ jest.mock('../screens/SplashScreen', () => ({
 }));
 
 jest.mock('../screens/DashboardScreen', () => ({
-  AccountSettingsScreen: () => null,
+  AccountSettingsScreen: ({ onLogout }: { onLogout: () => void }) => {
+    const React = require('react');
+    const { Pressable, Text, View } = require('react-native');
+
+    return (
+      <View>
+        <Text>Settings screen</Text>
+        <Pressable accessibilityLabel="Log out" onPress={onLogout}>
+          <Text>Log out</Text>
+        </Pressable>
+      </View>
+    );
+  },
   BusinessProfileEditorScreen: () => null,
-  DashboardScreen: () => null,
+  DashboardScreen: ({ onOpenSettings }: { onOpenSettings: () => void }) => {
+    const React = require('react');
+    const { Pressable, Text, View } = require('react-native');
+
+    return (
+      <View>
+        <Text>Dashboard screen</Text>
+        <Pressable accessibilityLabel="Open settings" onPress={onOpenSettings}>
+          <Text>Open settings</Text>
+        </Pressable>
+      </View>
+    );
+  },
 }));
 
 jest.mock('../screens/PlaceDetailScreen', () => ({
@@ -89,13 +115,17 @@ jest.mock('../screens/PlaceDetailScreen', () => ({
 }));
 
 jest.mock('../screens/ProfileFlowScreens', () => ({
-  AuthPortalScreen: ({ onBackToLanding }: { onBackToLanding: () => void }) => {
+  AuthPortalScreen: ({ autoFocusIdentifier, onBackToLanding, onSubmit }: { autoFocusIdentifier?: boolean; onBackToLanding: () => void; onSubmit: () => void }) => {
     const React = require('react');
     const { Pressable, Text, View } = require('react-native');
 
     return (
       <View>
         <Text>Auth screen</Text>
+        {autoFocusIdentifier ? <Text>Login auto focus enabled</Text> : null}
+        <Pressable accessibilityLabel="Submit login" onPress={onSubmit}>
+          <Text>Submit login</Text>
+        </Pressable>
         <Pressable accessibilityLabel="Back to landing" onPress={onBackToLanding}>
           <Text>Back to landing</Text>
         </Pressable>
@@ -209,6 +239,20 @@ const samplePlace: PlaceListItem = {
 describe('App browse map search', () => {
   beforeEach(() => {
     mockFetchPlaces.mockResolvedValue([samplePlace]);
+    mockFetchProfileDashboard.mockResolvedValue(null);
+    mockLoginProfile.mockResolvedValue({
+      id: 7,
+      username: 'guestfan',
+      email: 'guestfan@example.com',
+      first_name: 'Guest',
+      last_name: 'Fan',
+      auth_token: 'token-123',
+      portal: 'customer',
+      profile_type: 'customer',
+      email_verified: true,
+      two_factor_enabled: false,
+      can_access_places: true,
+    });
     mapsModule.__mock.animateToRegionMock.mockClear();
     mapsModule.__mock.initialRegionMock.mockClear();
     mapsModule.__mock.setMapBoundariesMock.mockClear();
@@ -216,6 +260,8 @@ describe('App browse map search', () => {
 
   afterEach(() => {
     mockFetchPlaces.mockReset();
+    mockFetchProfileDashboard.mockReset();
+    mockLoginProfile.mockReset();
   });
 
   it('does not trigger additional map auto-fit animations for gibberish no-match searches', async () => {
@@ -280,6 +326,8 @@ describe('App browse map search', () => {
     fireEvent.press(screen.getByLabelText('Open customer login'));
     expect(screen.getByText('Auth screen')).toBeTruthy();
     expect(screen.getByTestId('mock-map-view')).toBeTruthy();
+    expect(screen.queryByTestId('complete-splash-intro')).toBeNull();
+    expect(screen.queryByText('Login auto focus enabled')).toBeNull();
 
     fireEvent.press(screen.getByLabelText('Back to landing'));
 
@@ -293,6 +341,7 @@ describe('App browse map search', () => {
     fireEvent.press(screen.getByLabelText('Create a free account'));
     expect(screen.getByText('Create profile screen')).toBeTruthy();
     expect(screen.getByTestId('mock-map-view')).toBeTruthy();
+    expect(screen.queryByTestId('complete-splash-intro')).toBeNull();
 
     fireEvent.press(screen.getByLabelText('Back from profiles'));
 
@@ -372,5 +421,60 @@ describe('App browse map search', () => {
         startAnimatingNodeMock.mockReset();
       }
     }
+  });
+
+  it('returns to the login screen after logout and restores the previous guest map without restarting splash', async () => {
+    const view = render(<App />);
+
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    fireEvent.press(screen.getByLabelText('Open customer login'));
+    fireEvent.press(screen.getByLabelText('Submit login'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(screen.getByText('Dashboard screen')).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('Open settings'));
+    expect(screen.getByText('Settings screen')).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('Log out'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(screen.getByText('Auth screen')).toBeTruthy();
+    expect(screen.queryByText('Settings screen')).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('Back to landing'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(screen.getByTestId('browse-search-input')).toBeTruthy();
+    expect(screen.getByText('Customer')).toBeTruthy();
+    expect(screen.queryByText('Auth screen')).toBeNull();
+    expect(screen.getAllByTestId('mock-map-marker')).toHaveLength(1);
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+
+    view.unmount();
   });
 });

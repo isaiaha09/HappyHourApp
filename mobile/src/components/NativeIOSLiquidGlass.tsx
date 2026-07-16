@@ -180,7 +180,7 @@ export function NativeIOSLiquidGlassBackButton({ label, onPress, style }: Native
   return (
     <NativeIOSLiquidGlassHeaderButton
       fallback={(
-        <Pressable onPress={onPress} style={[styles.backButton, style]}>
+        <Pressable hitSlop={12} onPress={onPress} pressRetentionOffset={12} style={[styles.backButton, style]}>
           <Text style={styles.backButtonText}>{label}</Text>
         </Pressable>
       )}

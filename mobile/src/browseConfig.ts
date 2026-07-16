@@ -37,14 +37,14 @@ export const manualBusinessCityOptions = [...cityFilters.filter((filter) => filt
 export const manualBusinessVenueOptions = venueFilters;
 
 const venueMarkerStyles = {
-  restaurant: { badge: 'R', fill: '#c65d1f', stroke: '#7f461f' },
-  bar: { badge: 'B', fill: '#1f5f5b', stroke: '#143d3a' },
-  fast_food: { badge: 'F', fill: '#d94b3d', stroke: '#8d2500' },
-  mobile: { badge: 'M', fill: '#f0a22e', stroke: '#965f00' },
-  cafe: { badge: 'C', fill: '#8b5e3c', stroke: '#5b3a21' },
-  shop: { badge: 'S', fill: '#5f7cc6', stroke: '#34508c' },
-  attraction: { badge: 'A', fill: '#7b6ad9', stroke: '#4e42a1' },
-  other: { badge: 'O', fill: '#6f5947', stroke: '#43352c' },
+  restaurant: { badge: '🍽️', fill: '#ff7b54', stroke: '#c94d2d' },
+  bar: { badge: '🍸', fill: '#ff5c8a', stroke: '#b6315a' },
+  fast_food: { badge: '🍔', fill: '#ff6647', stroke: '#b93a23' },
+  mobile: { badge: '🚚', fill: '#ffb238', stroke: '#c27a10' },
+  cafe: { badge: '☕', fill: '#ff944d', stroke: '#c1611f' },
+  shop: { badge: '🛍️', fill: '#ff78b2', stroke: '#ba4a80' },
+  attraction: { badge: '🎉', fill: '#9b6dff', stroke: '#6540b5' },
+  other: { badge: '📍', fill: '#ff8f70', stroke: '#c46247' },
 } as const;
 
 export function getVenueMarkerStyle(venueType: string) {

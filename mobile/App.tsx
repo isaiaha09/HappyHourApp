@@ -472,6 +472,8 @@ function AppScreen() {
   const initialMapRegionRef = useRef<Region>(clampRegionToBounds(defaultMapRegion));
   const mapRef = useRef<MapView | null>(null);
   const onboardingTransitionFrameRef = useRef<number | null>(null);
+  const reversingOnboardingEntryRef = useRef(false);
+  const loginSubmissionInFlightRef = useRef(false);
   const interactiveSwipeCleanupFrameRef = useRef<number | null>(null);
   const suppressKeyboardLayoutAnimationUntilRef = useRef(0);
   const browseModeFadePendingRef = useRef(false);
@@ -626,7 +628,7 @@ function AppScreen() {
   const normalizedSearchQuery = normalizeSearchText(searchQuery);
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const normalizedDeferredSearchQuery = normalizeSearchText(deferredSearchQuery);
-  const onboardingTransitionDuration = 680;
+  const onboardingTransitionDuration = 500;
   const showTransitionMapBrowse = browseProfileTransitionFrom !== null
     && incomingBrowseProfileScreen !== null
     && browseProfileTransitionFrom !== incomingBrowseProfileScreen
@@ -659,10 +661,10 @@ function AppScreen() {
       && browseMode === 'map');
   const statusBarStyle = screenMode === 'browse' && !selectedPlaceSlug
     ? (!authenticatedSession && guestBrowseModeLocked
+      ? 'light'
+      : browseMode === 'map' && displayedDarkMapMode
         ? 'light'
-        : browseMode === 'map' && displayedDarkMapMode
-          ? 'light'
-          : 'dark')
+        : 'dark')
     : 'light';
 
   const filteredPlaces = useMemo(() => getFilteredPlaces(places, {
@@ -1361,49 +1363,49 @@ function AppScreen() {
     opacity: onboardingTransitionAxis === 'y'
       ? 1
       : screenTransition.interpolate({
-          inputRange: [0, 0.18, 1],
-          outputRange: [0.94, 0.98, 1],
-        }),
+        inputRange: [0, 0.18, 1],
+        outputRange: [0.94, 0.98, 1],
+      }),
     transform: [
       onboardingTransitionAxis === 'y'
         ? {
-            translateY: screenTransition.interpolate({
-              inputRange: [0, 1],
-              outputRange: [onboardingSlideOffset, 0],
-            }),
-          }
+          translateY: screenTransition.interpolate({
+            inputRange: [0, 1],
+            outputRange: [onboardingSlideOffset, 0],
+          }),
+        }
         : {
-            translateX: screenTransition.interpolate({
-              inputRange: [0, 1],
-              outputRange: [onboardingSlideOffset, 0],
-            }),
-          },
+          translateX: screenTransition.interpolate({
+            inputRange: [0, 1],
+            outputRange: [onboardingSlideOffset, 0],
+          }),
+        },
     ],
   };
   const currentOnboardingTransitionStyle = incomingOnboardingScreen && onboardingTransitionAxis === 'y' && currentOnboardingScreen !== incomingOnboardingScreen
     ? {
-        opacity: 1,
-        transform: [
-          {
-            translateY: screenTransition.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0, height],
-            }),
-          },
-        ],
-      }
+      opacity: 1,
+      transform: [
+        {
+          translateY: screenTransition.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0, height],
+          }),
+        },
+      ],
+    }
     : null;
   const currentHorizontalOnboardingTransitionStyle = incomingOnboardingScreen && onboardingTransitionAxis === 'x' && currentOnboardingScreen !== incomingOnboardingScreen
     ? {
-        transform: [
-          {
-            translateX: screenTransition.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0, onboardingTransitionDirection === 'forward' ? -width : width],
-            }),
-          },
-        ],
-      }
+      transform: [
+        {
+          translateX: screenTransition.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0, onboardingTransitionDirection === 'forward' ? -width : width],
+          }),
+        },
+      ],
+    }
     : null;
   const browseProfileOutgoingStyle = {
     transform: [
@@ -1431,44 +1433,44 @@ function AppScreen() {
   };
   const guestBrowseOutgoingStyle = guestToBrowseTransition
     ? {
-        opacity: 1,
-      }
+      opacity: 1,
+    }
     : {
-        transform: [
-          {
-            translateX: screenTransition.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0, -width],
-            }),
-          },
-        ],
-      };
+      transform: [
+        {
+          translateX: screenTransition.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0, -width],
+          }),
+        },
+      ],
+    };
   const guestBrowseIncomingStyle = guestToBrowseTransition
     ? {
-        opacity: screenTransition.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0, 1],
-        }),
-      }
+      opacity: screenTransition.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0, 1],
+      }),
+    }
     : {
-        opacity: screenTransition.interpolate({
-          inputRange: [0, 0.12, 1],
-          outputRange: [0.96, 0.98, 1],
-        }),
-        transform: [
-          {
-            translateX: screenTransition.interpolate({
-              inputRange: [0, 1],
-              outputRange: [width, 0],
-            }),
-          },
-        ],
-      };
+      opacity: screenTransition.interpolate({
+        inputRange: [0, 0.12, 1],
+        outputRange: [0.96, 0.98, 1],
+      }),
+      transform: [
+        {
+          translateX: screenTransition.interpolate({
+            inputRange: [0, 1],
+            outputRange: [width, 0],
+          }),
+        },
+      ],
+    };
   const guestBrowseHeaderLogoOpacity = guestToBrowseTransition
     ? screenTransition.interpolate({
-        inputRange: [0, 0.94, 1],
-        outputRange: [0, 0, 1],
-      })
+      inputRange: [0, 0.94, 1],
+      outputRange: [0, 0, 1],
+    })
     : 1;
   const mainShellOutgoingStyle = {
     transform: [
@@ -1500,6 +1502,20 @@ function AppScreen() {
         translateX: screenTransition.interpolate({
           inputRange: [0, 1],
           outputRange: [0, width],
+        }),
+      },
+    ],
+  };
+  const splashReturnIncomingStyle = {
+    opacity: screenTransition.interpolate({
+      inputRange: [0, 0.12, 1],
+      outputRange: [0.96, 0.98, 1],
+    }),
+    transform: [
+      {
+        translateX: screenTransition.interpolate({
+          inputRange: [0, 1],
+          outputRange: [-width, 0],
         }),
       },
     ],
@@ -1615,16 +1631,16 @@ function AppScreen() {
   };
   const authIntroStyle = authIntroPending && !incomingOnboardingScreen && currentOnboardingScreen === 'auth'
     ? {
-        opacity: authIntroOpacity,
-        transform: [
-          {
-            translateY: authIntroOpacity.interpolate({
-              inputRange: [0, 1],
-              outputRange: [10, 0],
-            }),
-          },
-        ],
-      }
+      opacity: authIntroOpacity,
+      transform: [
+        {
+          translateY: authIntroOpacity.interpolate({
+            inputRange: [0, 1],
+            outputRange: [10, 0],
+          }),
+        },
+      ],
+    }
     : null;
   const shouldShowMapResults = showMapBrowse && !activeMapPreviewPlace && normalizedDeferredSearchQuery.length > 0;
   const isLandscape = width > height;
@@ -1849,6 +1865,7 @@ function AppScreen() {
     nextScreen: AppScreenMode,
     direction: OnboardingTransitionDirection,
     transitionOverride?: { axis: TransitionAxis; incomingOffset: number },
+    onComplete?: () => void,
   ) {
     const currentScreen = screenMode;
     const shouldAnimateGuestOnboardingEntry = !authenticatedSession
@@ -1889,21 +1906,27 @@ function AppScreen() {
       setIncomingGuestBrowseScreen(null);
       setReturningToSplashScreen(currentScreen);
       screenTransition.setValue(0);
-      onboardingTransitionFrameRef.current = null;
-      Animated.timing(screenTransition, {
-        duration: onboardingTransitionDuration,
-        toValue: 1,
-        useNativeDriver: true,
-      }).start(({ finished }) => {
-        if (!finished) {
-          setReturningToSplashScreen(null);
-          return;
-        }
+      onboardingTransitionFrameRef.current = requestAnimationFrame(() => {
+        onboardingTransitionFrameRef.current = null;
+        Animated.timing(screenTransition, {
+          duration: onboardingTransitionDuration,
+          toValue: 1,
+          useNativeDriver: true,
+        }).start(({ finished }) => {
+          if (!finished) {
+            setReturningToSplashScreen(null);
+            onComplete?.();
+            return;
+          }
 
-        setReturningToSplashScreen(null);
-        setGuestOnboardingOrigin(null);
-        setScreenMode('splash');
-        screenTransition.setValue(1);
+          unstable_batchedUpdates(() => {
+            setReturningToSplashScreen(null);
+            setGuestOnboardingOrigin(null);
+            setScreenMode('splash');
+            screenTransition.setValue(1);
+          });
+          onComplete?.();
+        });
       });
       return;
     }
@@ -1923,14 +1946,18 @@ function AppScreen() {
       }).start(({ finished }) => {
         if (!finished) {
           setIncomingOnboardingScreen(null);
+          onComplete?.();
           return;
         }
 
-        setIncomingOnboardingScreen(null);
-        setGuestOnboardingOrigin(null);
-        setGuestBrowseModeLocked(true);
-        setScreenMode('browse');
-        screenTransition.setValue(1);
+        unstable_batchedUpdates(() => {
+          setIncomingOnboardingScreen(null);
+          setGuestOnboardingOrigin(null);
+          setGuestBrowseModeLocked(true);
+          setScreenMode('browse');
+          screenTransition.setValue(1);
+        });
+        onComplete?.();
       });
       return;
     }
@@ -1943,26 +1970,86 @@ function AppScreen() {
       setReturningToSplashScreen(null);
       screenTransition.setValue(1);
       setScreenMode(nextScreen);
+      onComplete?.();
       return;
     }
+
+    const shouldPrewarmIncomingOnboardingScreen = (transitionOverride?.axis ?? 'x') === 'x';
+    const startOnboardingAnimation = () => {
+      onboardingTransitionFrameRef.current = null;
+      Animated.timing(screenTransition, {
+        duration: onboardingTransitionDuration,
+        toValue: 1,
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (!finished) {
+          onComplete?.();
+          return;
+        }
+
+        unstable_batchedUpdates(() => {
+          setIncomingOnboardingScreen(null);
+          setScreenMode(nextScreen);
+          screenTransition.setValue(1);
+        });
+        onComplete?.();
+      });
+    };
 
     screenTransition.setValue(0);
     setReturningToSplashScreen(null);
     setIncomingOnboardingScreen(nextScreen);
-    onboardingTransitionFrameRef.current = null;
-    Animated.timing(screenTransition, {
-      duration: onboardingTransitionDuration,
-      toValue: 1,
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (!finished) {
-        return;
-      }
+    if (shouldPrewarmIncomingOnboardingScreen) {
+      onboardingTransitionFrameRef.current = requestAnimationFrame(() => {
+        startOnboardingAnimation();
+      });
+      return;
+    }
 
-      setIncomingOnboardingScreen(null);
-      setScreenMode(nextScreen);
-      screenTransition.setValue(1);
+    startOnboardingAnimation();
+  }
+
+  function reversePendingOnboardingEntry(nextScreen: 'browse' | 'splash') {
+    if (incomingOnboardingScreen === null) {
+      return false;
+    }
+
+    if (reversingOnboardingEntryRef.current) {
+      return true;
+    }
+
+    reversingOnboardingEntryRef.current = true;
+
+    const finishReverse = () => {
+      unstable_batchedUpdates(() => {
+        setIncomingOnboardingScreen(null);
+        setReturningToSplashScreen(null);
+        setGuestOnboardingOrigin(null);
+        if (nextScreen === 'browse') {
+          setGuestBrowseModeLocked(true);
+        }
+        setScreenMode(nextScreen);
+        screenTransition.setValue(1);
+      });
+      reversingOnboardingEntryRef.current = false;
+    };
+
+    if (onboardingTransitionFrameRef.current !== null) {
+      cancelAnimationFrame(onboardingTransitionFrameRef.current);
+      onboardingTransitionFrameRef.current = null;
+      finishReverse();
+      return true;
+    }
+
+    screenTransition.stopAnimation((currentProgress) => {
+      Animated.timing(screenTransition, {
+        duration: Math.max(80, Math.round(onboardingTransitionDuration * currentProgress)),
+        toValue: 0,
+        useNativeDriver: true,
+      }).start(finishReverse);
     });
+
+    return true;
   }
 
   function navigateBrowseProfileTransition(nextScreen: 'profiles' | 'browse', finalScreenMode?: AppScreenMode, onComplete?: () => void) {
@@ -2034,406 +2121,406 @@ function AppScreen() {
     startAnimation();
   }
 
-    function getInteractiveBackSwipeConfig(targetScreen: AppScreenMode): InteractiveBackSwipeConfig | null {
-      switch (targetScreen) {
-        case 'splash':
+  function getInteractiveBackSwipeConfig(targetScreen: AppScreenMode): InteractiveBackSwipeConfig | null {
+    switch (targetScreen) {
+      case 'splash':
+        return null;
+      case 'browse':
+        if (browseMode !== 'map' || selectedPlaceSlug) {
           return null;
-        case 'browse':
-          if (browseMode !== 'map' || selectedPlaceSlug) {
-            return null;
-          }
-          return authenticatedSession
-            ? { kind: 'main-shell', nextScreen: 'home-feed' }
-            : null;
-        case 'auth':
-          return { kind: 'onboarding', nextScreen: guestOnboardingOrigin === 'browse' ? 'browse' : 'splash' };
-        case 'profiles':
-          return authenticatedSession
-            ? { kind: 'browse-profile', nextScreen: 'browse' }
-            : { kind: 'onboarding', nextScreen: guestOnboardingOrigin === 'browse' ? 'browse' : 'splash' };
-        case 'favorite-businesses':
-        case 'business-notifications':
-        case 'settings':
-        case 'business-search':
-          return { kind: 'onboarding', nextScreen: 'profiles' };
-        case 'business-claim':
-        case 'manual-business-claim':
-        case 'informal-business-claim':
-          return { kind: 'onboarding', nextScreen: 'business-search' };
-        case 'blocked-direct-message-customers':
-        case 'support':
-        case 'privacy-policy':
-        case 'terms-of-service':
-          return { kind: 'onboarding', nextScreen: 'settings' };
-        case 'email-verification':
-        case 'business-claim-review-pending':
-          return { kind: 'onboarding', nextScreen: 'auth' };
-        case 'direct-messages':
-          return selectedPlaceSlug ? null : { kind: 'onboarding', nextScreen: 'profiles' };
-        default:
-          return null;
-      }
-    }
-
-    function getInteractiveForwardSwipeConfig(targetScreen: AppScreenMode): InteractiveBackSwipeConfig | null {
-      switch (targetScreen) {
-        case 'browse':
-          return null;
-        case 'profiles':
-          return authenticatedSession
-            ? { kind: 'onboarding', nextScreen: 'settings', direction: 'left' }
-            : null;
-        case 'home-feed':
-          return authenticatedSession
-            ? { kind: 'main-shell', nextScreen: 'browse', direction: 'left' }
-            : null;
-        default:
-          return null;
-      }
-    }
-
-    function resetInteractiveBackSwipePreview() {
-      if (interactiveSwipeCleanupFrameRef.current !== null) {
-        cancelAnimationFrame(interactiveSwipeCleanupFrameRef.current);
-        interactiveSwipeCleanupFrameRef.current = null;
-      }
-
-      const activeSwipe = interactiveBackSwipeRef.current;
-      unstable_batchedUpdates(() => {
-        setIncomingOnboardingScreen(null);
-        setReturningToSplashScreen(null);
-        setBrowseProfileTransitionFrom(null);
-        setIncomingBrowseProfileScreen(null);
-        setIncomingBrowseProfileTargetScreen(null);
-        setGuestBrowseTransitionFrom(null);
-        setIncomingGuestBrowseScreen(null);
-        setMainShellTransitionFrom(null);
-        setIncomingMainShellScreen(null);
-        interactiveBackSwipeRef.current = null;
-        interactiveSwipeSettlingRef.current = false;
-      });
-
-      interactiveSwipeCleanupFrameRef.current = requestAnimationFrame(() => {
-        interactiveSwipeCleanupFrameRef.current = null;
-        screenTransition.setValue(1);
-      });
-    }
-
-    function finalizeInteractiveBackSwipe(targetScreen: AppScreenMode, nextScreen: AppScreenMode) {
-      switch (targetScreen) {
-        case 'browse':
-          if (nextScreen === 'splash') {
-            setGuestBrowseModeLocked(true);
-          } else {
-            setSelectedPlaceSlug(null);
-            setSelectedPlace(null);
-            setSelectedLocationId(null);
-            setSelectedMapPlaceKey(null);
-          }
-          break;
-        case 'auth':
-          setShowGuestFavoritePrompt(false);
-          setShowGuestBusinessClaimPrompt(false);
-          setShowCustomerBusinessClaimPrompt(false);
-          setAuthMessage(null);
-          setProfileErrorMessage(null);
-          setShouldAutoFocusLoginField(false);
-          setShowLoginTwoFactorCodeField(false);
-          setLoginForm(initialLoginFormState);
-          break;
-        case 'favorite-businesses':
-        case 'business-notifications':
-        case 'settings':
-        case 'blocked-direct-message-customers':
-        case 'privacy-policy':
-        case 'terms-of-service':
-        case 'business-search':
-        case 'business-claim':
-        case 'manual-business-claim':
-        case 'informal-business-claim':
-        case 'direct-messages':
-          setProfileErrorMessage(null);
-          break;
-        case 'support':
-          setProfileErrorMessage(null);
-          setProfileMessage(null);
-          break;
-        case 'email-verification':
-          setProfileErrorMessage(null);
-          setProfileMessage(null);
-          setEmailVerificationCode('');
-          break;
-        case 'business-claim-review-pending':
-          setAuthenticatedSession(null);
-          setProfileErrorMessage(null);
-          setProfileMessage(null);
-          break;
-        default:
-          break;
-      }
-
-      setScreenMode(nextScreen);
-    }
-
-    function beginInteractiveBackSwipe(targetScreen: AppScreenMode, config: InteractiveBackSwipeConfig) {
-      screenTransition.stopAnimation();
-      interactiveSwipeSettlingRef.current = false;
-
-      if (interactiveSwipeCleanupFrameRef.current !== null) {
-        cancelAnimationFrame(interactiveSwipeCleanupFrameRef.current);
-        interactiveSwipeCleanupFrameRef.current = null;
-      }
-
-      if (onboardingTransitionFrameRef.current !== null) {
-        cancelAnimationFrame(onboardingTransitionFrameRef.current);
-        onboardingTransitionFrameRef.current = null;
-      }
-
-      if (config.kind === 'browse-profile') {
-        profileSceneTransition.stopAnimation();
-        browseSceneTransition.stopAnimation();
-        profileSceneTransition.setValue(1);
-        browseSceneTransition.setValue(1);
-        setProfileEntryOffset(0);
-        setBrowseEntryOffset(0);
-        setIncomingOnboardingScreen(null);
-        setReturningToSplashScreen(null);
-        setGuestBrowseTransitionFrom(null);
-        setIncomingGuestBrowseScreen(null);
-        setMainShellTransitionFrom(null);
-        setIncomingMainShellScreen(null);
-        setBrowseProfileTransitionFrom(targetScreen === 'browse' ? 'browse' : 'profiles');
-        setIncomingBrowseProfileScreen(targetScreen === 'browse' ? 'profiles' : 'browse');
-        setIncomingBrowseProfileTargetScreen(config.nextScreen);
-      } else if (config.kind === 'guest-browse') {
-        setIncomingOnboardingScreen(null);
-        setReturningToSplashScreen(null);
-        setBrowseProfileTransitionFrom(null);
-        setIncomingBrowseProfileScreen(null);
-        setIncomingBrowseProfileTargetScreen(null);
-        setMainShellTransitionFrom(null);
-        setIncomingMainShellScreen(null);
-        if (targetScreen === 'splash') {
-          setGuestBrowseModeLocked(true);
-          browseModeFadePendingRef.current = false;
-          pendingListRevealRef.current = false;
-          setListRevealEnabled(false);
-          browseModeTransition.stopAnimation();
-          browseModeTransition.setValue(1);
-          setBrowseMode('map');
         }
-        setGuestBrowseTransitionFrom(targetScreen === 'splash' ? 'splash' : 'browse');
-        setIncomingGuestBrowseScreen(config.nextScreen === 'splash' ? 'splash' : 'browse');
-      } else if (config.kind === 'main-shell') {
-        setIncomingOnboardingScreen(null);
-        setReturningToSplashScreen(null);
-        setBrowseProfileTransitionFrom(null);
-        setIncomingBrowseProfileScreen(null);
-        setIncomingBrowseProfileTargetScreen(null);
-        setGuestBrowseTransitionFrom(null);
-        setIncomingGuestBrowseScreen(null);
-        if (config.nextScreen === 'browse') {
-          setBrowseFiltersExpanded(false);
+        return authenticatedSession
+          ? { kind: 'main-shell', nextScreen: 'home-feed' }
+          : null;
+      case 'auth':
+        return { kind: 'onboarding', nextScreen: guestOnboardingOrigin === 'browse' ? 'browse' : 'splash' };
+      case 'profiles':
+        return authenticatedSession
+          ? { kind: 'browse-profile', nextScreen: 'browse' }
+          : { kind: 'onboarding', nextScreen: guestOnboardingOrigin === 'browse' ? 'browse' : 'splash' };
+      case 'favorite-businesses':
+      case 'business-notifications':
+      case 'settings':
+      case 'business-search':
+        return { kind: 'onboarding', nextScreen: 'profiles' };
+      case 'business-claim':
+      case 'manual-business-claim':
+      case 'informal-business-claim':
+        return { kind: 'onboarding', nextScreen: 'business-search' };
+      case 'blocked-direct-message-customers':
+      case 'support':
+      case 'privacy-policy':
+      case 'terms-of-service':
+        return { kind: 'onboarding', nextScreen: 'settings' };
+      case 'email-verification':
+      case 'business-claim-review-pending':
+        return { kind: 'onboarding', nextScreen: 'auth' };
+      case 'direct-messages':
+        return selectedPlaceSlug ? null : { kind: 'onboarding', nextScreen: 'profiles' };
+      default:
+        return null;
+    }
+  }
+
+  function getInteractiveForwardSwipeConfig(targetScreen: AppScreenMode): InteractiveBackSwipeConfig | null {
+    switch (targetScreen) {
+      case 'browse':
+        return null;
+      case 'profiles':
+        return authenticatedSession
+          ? { kind: 'onboarding', nextScreen: 'settings', direction: 'left' }
+          : null;
+      case 'home-feed':
+        return authenticatedSession
+          ? { kind: 'main-shell', nextScreen: 'browse', direction: 'left' }
+          : null;
+      default:
+        return null;
+    }
+  }
+
+  function resetInteractiveBackSwipePreview() {
+    if (interactiveSwipeCleanupFrameRef.current !== null) {
+      cancelAnimationFrame(interactiveSwipeCleanupFrameRef.current);
+      interactiveSwipeCleanupFrameRef.current = null;
+    }
+
+    const activeSwipe = interactiveBackSwipeRef.current;
+    unstable_batchedUpdates(() => {
+      setIncomingOnboardingScreen(null);
+      setReturningToSplashScreen(null);
+      setBrowseProfileTransitionFrom(null);
+      setIncomingBrowseProfileScreen(null);
+      setIncomingBrowseProfileTargetScreen(null);
+      setGuestBrowseTransitionFrom(null);
+      setIncomingGuestBrowseScreen(null);
+      setMainShellTransitionFrom(null);
+      setIncomingMainShellScreen(null);
+      interactiveBackSwipeRef.current = null;
+      interactiveSwipeSettlingRef.current = false;
+    });
+
+    interactiveSwipeCleanupFrameRef.current = requestAnimationFrame(() => {
+      interactiveSwipeCleanupFrameRef.current = null;
+      screenTransition.setValue(1);
+    });
+  }
+
+  function finalizeInteractiveBackSwipe(targetScreen: AppScreenMode, nextScreen: AppScreenMode) {
+    switch (targetScreen) {
+      case 'browse':
+        if (nextScreen === 'splash') {
+          setGuestBrowseModeLocked(true);
+        } else {
           setSelectedPlaceSlug(null);
           setSelectedPlace(null);
           setSelectedLocationId(null);
           setSelectedMapPlaceKey(null);
-          setGuestBrowseModeLocked(false);
-          browseModeFadePendingRef.current = false;
-          pendingListRevealRef.current = false;
-          setListRevealEnabled(false);
-          browseModeTransition.stopAnimation();
-          browseModeTransition.setValue(1);
-          setBrowseMode('map');
         }
-        setMainShellTransitionFrom(targetScreen === 'home-feed' ? 'home-feed' : 'browse');
-        setIncomingMainShellScreen(config.nextScreen === 'home-feed' ? 'home-feed' : 'browse');
-      } else {
-        setBrowseProfileTransitionFrom(null);
-        setIncomingBrowseProfileScreen(null);
-        setIncomingBrowseProfileTargetScreen(null);
-        setGuestBrowseTransitionFrom(null);
-        setIncomingGuestBrowseScreen(null);
-        setMainShellTransitionFrom(null);
-        setIncomingMainShellScreen(null);
-        setReturningToSplashScreen(null);
-        setOnboardingTransitionDirection(config.direction === 'left' ? 'forward' : 'backward');
-        setOnboardingTransitionAxis('x');
-        setOnboardingIncomingOffset(config.direction === 'left' ? width : -width);
-        setIncomingOnboardingScreen(config.nextScreen);
-      }
-
-      screenTransition.setValue(0);
-      interactiveBackSwipeRef.current = { ...config, targetScreen };
+        break;
+      case 'auth':
+        setShowGuestFavoritePrompt(false);
+        setShowGuestBusinessClaimPrompt(false);
+        setShowCustomerBusinessClaimPrompt(false);
+        setAuthMessage(null);
+        setProfileErrorMessage(null);
+        setShouldAutoFocusLoginField(false);
+        setShowLoginTwoFactorCodeField(false);
+        setLoginForm(initialLoginFormState);
+        break;
+      case 'favorite-businesses':
+      case 'business-notifications':
+      case 'settings':
+      case 'blocked-direct-message-customers':
+      case 'privacy-policy':
+      case 'terms-of-service':
+      case 'business-search':
+      case 'business-claim':
+      case 'manual-business-claim':
+      case 'informal-business-claim':
+      case 'direct-messages':
+        setProfileErrorMessage(null);
+        break;
+      case 'support':
+        setProfileErrorMessage(null);
+        setProfileMessage(null);
+        break;
+      case 'email-verification':
+        setProfileErrorMessage(null);
+        setProfileMessage(null);
+        setEmailVerificationCode('');
+        break;
+      case 'business-claim-review-pending':
+        setAuthenticatedSession(null);
+        setProfileErrorMessage(null);
+        setProfileMessage(null);
+        break;
+      default:
+        break;
     }
 
-    function updateInteractiveBackSwipe(targetScreen: AppScreenMode, translationX: number) {
-      if (interactiveSwipeSettlingRef.current) {
-        return;
-      }
+    setScreenMode(nextScreen);
+  }
 
-      const activeSwipe = interactiveBackSwipeRef.current;
-      const isContinuingActiveSwipe = activeSwipe?.targetScreen === targetScreen;
+  function beginInteractiveBackSwipe(targetScreen: AppScreenMode, config: InteractiveBackSwipeConfig) {
+    screenTransition.stopAnimation();
+    interactiveSwipeSettlingRef.current = false;
 
-      if (
-        targetScreen !== screenMode
-        || (!isContinuingActiveSwipe && incomingOnboardingScreen !== null)
-        || (!isContinuingActiveSwipe && incomingBrowseProfileScreen !== null)
-        || (!isContinuingActiveSwipe && returningToSplashScreen !== null)
-        || showLoginSuccessTransition
-        || showLogoutTransition
-        || bottomMoreSheetVisible
-      ) {
-        return;
-      }
-
-      const config = isContinuingActiveSwipe
-        ? activeSwipe
-        : translationX < 0
-          ? getInteractiveForwardSwipeConfig(targetScreen)
-          : getInteractiveBackSwipeConfig(targetScreen);
-      if (!config) {
-        return;
-      }
-
-      const directionalTranslation = config.direction === 'left' ? -translationX : translationX;
-      if (interactiveBackSwipeRef.current === null) {
-        if (directionalTranslation <= 0) {
-          return;
-        }
-        beginInteractiveBackSwipe(targetScreen, config);
-      }
-
-      screenTransition.setValue(Math.max(0, Math.min(1, directionalTranslation / width)));
+    if (interactiveSwipeCleanupFrameRef.current !== null) {
+      cancelAnimationFrame(interactiveSwipeCleanupFrameRef.current);
+      interactiveSwipeCleanupFrameRef.current = null;
     }
 
-    function finishInteractiveBackSwipe(state: number, translationX: number, velocityX: number) {
-      const activeSwipe = interactiveBackSwipeRef.current;
-      if (!activeSwipe) {
-        return false;
-      }
-
-      const directionalTranslation = activeSwipe.direction === 'left' ? -translationX : translationX;
-      const directionalVelocity = activeSwipe.direction === 'left' ? -velocityX : velocityX;
-      const progress = Math.max(0, Math.min(1, directionalTranslation / width));
-      const shouldComplete = state === State.END && (progress > interactiveSwipeCompletionProgress || directionalVelocity >= interactiveSwipeMinVelocity);
-      interactiveSwipeSettlingRef.current = true;
-      const remainingDuration = shouldComplete
-        ? Math.max(120, Math.round(onboardingTransitionDuration * (1 - progress)))
-        : Math.max(100, Math.min(190, Math.round(70 + 280 * progress)));
-
-      Animated.timing(screenTransition, {
-        duration: remainingDuration,
-        easing: Easing.out(Easing.cubic),
-        toValue: shouldComplete ? 1 : 0,
-        useNativeDriver: true,
-      }).start(({ finished }) => {
-        if (!finished) {
-          resetInteractiveBackSwipePreview();
-          return;
-        }
-
-        if (!shouldComplete) {
-          resetInteractiveBackSwipePreview();
-          return;
-        }
-
-        const { kind, nextScreen, targetScreen } = activeSwipe;
-        dismissKeyboardForScreenTransition();
-        unstable_batchedUpdates(() => {
-          if (kind === 'browse-profile') {
-            setBrowseProfileTransitionFrom(null);
-            setIncomingBrowseProfileScreen(null);
-            setIncomingBrowseProfileTargetScreen(null);
-          } else if (kind === 'guest-browse') {
-            setGuestBrowseTransitionFrom(null);
-            setIncomingGuestBrowseScreen(null);
-          } else if (kind === 'main-shell') {
-            setMainShellTransitionFrom(null);
-            setIncomingMainShellScreen(null);
-          } else {
-            setIncomingOnboardingScreen(null);
-            setReturningToSplashScreen(null);
-          }
-
-          interactiveBackSwipeRef.current = null;
-          interactiveSwipeSettlingRef.current = false;
-          finalizeInteractiveBackSwipe(targetScreen, nextScreen);
-        });
-      });
-
-      return true;
+    if (onboardingTransitionFrameRef.current !== null) {
+      cancelAnimationFrame(onboardingTransitionFrameRef.current);
+      onboardingTransitionFrameRef.current = null;
     }
 
-    function handleInteractiveBackSwipeStateChange(
-      targetScreen: AppScreenMode,
-      event: { nativeEvent: { oldState: number; state: number; translationX: number; velocityX: number } },
+    if (config.kind === 'browse-profile') {
+      profileSceneTransition.stopAnimation();
+      browseSceneTransition.stopAnimation();
+      profileSceneTransition.setValue(1);
+      browseSceneTransition.setValue(1);
+      setProfileEntryOffset(0);
+      setBrowseEntryOffset(0);
+      setIncomingOnboardingScreen(null);
+      setReturningToSplashScreen(null);
+      setGuestBrowseTransitionFrom(null);
+      setIncomingGuestBrowseScreen(null);
+      setMainShellTransitionFrom(null);
+      setIncomingMainShellScreen(null);
+      setBrowseProfileTransitionFrom(targetScreen === 'browse' ? 'browse' : 'profiles');
+      setIncomingBrowseProfileScreen(targetScreen === 'browse' ? 'profiles' : 'browse');
+      setIncomingBrowseProfileTargetScreen(config.nextScreen);
+    } else if (config.kind === 'guest-browse') {
+      setIncomingOnboardingScreen(null);
+      setReturningToSplashScreen(null);
+      setBrowseProfileTransitionFrom(null);
+      setIncomingBrowseProfileScreen(null);
+      setIncomingBrowseProfileTargetScreen(null);
+      setMainShellTransitionFrom(null);
+      setIncomingMainShellScreen(null);
+      if (targetScreen === 'splash') {
+        setGuestBrowseModeLocked(true);
+        browseModeFadePendingRef.current = false;
+        pendingListRevealRef.current = false;
+        setListRevealEnabled(false);
+        browseModeTransition.stopAnimation();
+        browseModeTransition.setValue(1);
+        setBrowseMode('map');
+      }
+      setGuestBrowseTransitionFrom(targetScreen === 'splash' ? 'splash' : 'browse');
+      setIncomingGuestBrowseScreen(config.nextScreen === 'splash' ? 'splash' : 'browse');
+    } else if (config.kind === 'main-shell') {
+      setIncomingOnboardingScreen(null);
+      setReturningToSplashScreen(null);
+      setBrowseProfileTransitionFrom(null);
+      setIncomingBrowseProfileScreen(null);
+      setIncomingBrowseProfileTargetScreen(null);
+      setGuestBrowseTransitionFrom(null);
+      setIncomingGuestBrowseScreen(null);
+      if (config.nextScreen === 'browse') {
+        setBrowseFiltersExpanded(false);
+        setSelectedPlaceSlug(null);
+        setSelectedPlace(null);
+        setSelectedLocationId(null);
+        setSelectedMapPlaceKey(null);
+        setGuestBrowseModeLocked(false);
+        browseModeFadePendingRef.current = false;
+        pendingListRevealRef.current = false;
+        setListRevealEnabled(false);
+        browseModeTransition.stopAnimation();
+        browseModeTransition.setValue(1);
+        setBrowseMode('map');
+      }
+      setMainShellTransitionFrom(targetScreen === 'home-feed' ? 'home-feed' : 'browse');
+      setIncomingMainShellScreen(config.nextScreen === 'home-feed' ? 'home-feed' : 'browse');
+    } else {
+      setBrowseProfileTransitionFrom(null);
+      setIncomingBrowseProfileScreen(null);
+      setIncomingBrowseProfileTargetScreen(null);
+      setGuestBrowseTransitionFrom(null);
+      setIncomingGuestBrowseScreen(null);
+      setMainShellTransitionFrom(null);
+      setIncomingMainShellScreen(null);
+      setReturningToSplashScreen(null);
+      setOnboardingTransitionDirection(config.direction === 'left' ? 'forward' : 'backward');
+      setOnboardingTransitionAxis('x');
+      setOnboardingIncomingOffset(config.direction === 'left' ? width : -width);
+      setIncomingOnboardingScreen(config.nextScreen);
+    }
+
+    screenTransition.setValue(0);
+    interactiveBackSwipeRef.current = { ...config, targetScreen };
+  }
+
+  function updateInteractiveBackSwipe(targetScreen: AppScreenMode, translationX: number) {
+    if (interactiveSwipeSettlingRef.current) {
+      return;
+    }
+
+    const activeSwipe = interactiveBackSwipeRef.current;
+    const isContinuingActiveSwipe = activeSwipe?.targetScreen === targetScreen;
+
+    if (
+      targetScreen !== screenMode
+      || (!isContinuingActiveSwipe && incomingOnboardingScreen !== null)
+      || (!isContinuingActiveSwipe && incomingBrowseProfileScreen !== null)
+      || (!isContinuingActiveSwipe && returningToSplashScreen !== null)
+      || showLoginSuccessTransition
+      || showLogoutTransition
+      || bottomMoreSheetVisible
     ) {
-      const { oldState, state, translationX, velocityX } = event.nativeEvent;
+      return;
+    }
 
-      if (oldState !== State.ACTIVE) {
+    const config = isContinuingActiveSwipe
+      ? activeSwipe
+      : translationX < 0
+        ? getInteractiveForwardSwipeConfig(targetScreen)
+        : getInteractiveBackSwipeConfig(targetScreen);
+    if (!config) {
+      return;
+    }
+
+    const directionalTranslation = config.direction === 'left' ? -translationX : translationX;
+    if (interactiveBackSwipeRef.current === null) {
+      if (directionalTranslation <= 0) {
+        return;
+      }
+      beginInteractiveBackSwipe(targetScreen, config);
+    }
+
+    screenTransition.setValue(Math.max(0, Math.min(1, directionalTranslation / width)));
+  }
+
+  function finishInteractiveBackSwipe(state: number, translationX: number, velocityX: number) {
+    const activeSwipe = interactiveBackSwipeRef.current;
+    if (!activeSwipe) {
+      return false;
+    }
+
+    const directionalTranslation = activeSwipe.direction === 'left' ? -translationX : translationX;
+    const directionalVelocity = activeSwipe.direction === 'left' ? -velocityX : velocityX;
+    const progress = Math.max(0, Math.min(1, directionalTranslation / width));
+    const shouldComplete = state === State.END && (progress > interactiveSwipeCompletionProgress || directionalVelocity >= interactiveSwipeMinVelocity);
+    interactiveSwipeSettlingRef.current = true;
+    const remainingDuration = shouldComplete
+      ? Math.max(120, Math.round(onboardingTransitionDuration * (1 - progress)))
+      : Math.max(100, Math.min(190, Math.round(70 + 280 * progress)));
+
+    Animated.timing(screenTransition, {
+      duration: remainingDuration,
+      easing: Easing.out(Easing.cubic),
+      toValue: shouldComplete ? 1 : 0,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (!finished) {
+        resetInteractiveBackSwipePreview();
         return;
       }
 
-      if (state !== State.END && state !== State.CANCELLED && state !== State.FAILED) {
+      if (!shouldComplete) {
+        resetInteractiveBackSwipePreview();
         return;
       }
 
-      finishInteractiveBackSwipe(state, translationX, velocityX);
+      const { kind, nextScreen, targetScreen } = activeSwipe;
+      dismissKeyboardForScreenTransition();
+      unstable_batchedUpdates(() => {
+        if (kind === 'browse-profile') {
+          setBrowseProfileTransitionFrom(null);
+          setIncomingBrowseProfileScreen(null);
+          setIncomingBrowseProfileTargetScreen(null);
+        } else if (kind === 'guest-browse') {
+          setGuestBrowseTransitionFrom(null);
+          setIncomingGuestBrowseScreen(null);
+        } else if (kind === 'main-shell') {
+          setMainShellTransitionFrom(null);
+          setIncomingMainShellScreen(null);
+        } else {
+          setIncomingOnboardingScreen(null);
+          setReturningToSplashScreen(null);
+        }
+
+        interactiveBackSwipeRef.current = null;
+        interactiveSwipeSettlingRef.current = false;
+        finalizeInteractiveBackSwipe(targetScreen, nextScreen);
+      });
+    });
+
+    return true;
+  }
+
+  function handleInteractiveBackSwipeStateChange(
+    targetScreen: AppScreenMode,
+    event: { nativeEvent: { oldState: number; state: number; translationX: number; velocityX: number } },
+  ) {
+    const { oldState, state, translationX, velocityX } = event.nativeEvent;
+
+    if (oldState !== State.ACTIVE) {
+      return;
     }
 
-    function wrapScreenWithInteractiveBackSwipe(targetScreen: AppScreenMode | null, content: ReactNode) {
-      const backConfig = targetScreen ? getInteractiveBackSwipeConfig(targetScreen) : null;
-      const forwardConfig = targetScreen ? getInteractiveForwardSwipeConfig(targetScreen) : null;
-      const edgeConfig = backConfig ?? forwardConfig;
-      const enabled = edgeConfig !== null;
-
-      return (
-        <PanGestureHandler
-          activeOffsetX={[-20, 20]}
-          enabled={enabled}
-          failOffsetY={[-14, 14]}
-          hitSlop={targetScreen === 'browse'
-            ? edgeConfig?.direction === 'left'
-              ? { right: 0, width: mapEdgeSwipeWidth + insets.right }
-              : { left: 0, width: mapEdgeSwipeWidth + insets.left }
-            : undefined}
-          onGestureEvent={(event) => {
-            if (targetScreen) {
-              updateInteractiveBackSwipe(targetScreen, event.nativeEvent.translationX);
-            }
-          }}
-          onHandlerStateChange={(event) => {
-            if (targetScreen) {
-              handleInteractiveBackSwipeStateChange(targetScreen, event);
-            }
-          }}
-        >
-          <View style={styles.fullScreenRoot}>
-            {content}
-          </View>
-        </PanGestureHandler>
-      );
+    if (state !== State.END && state !== State.CANCELLED && state !== State.FAILED) {
+      return;
     }
 
-    function renderMapSwipeEdgeShield() {
-      return (
-        <View
-          collapsable={false}
-          pointerEvents="box-only"
-          style={{
-            backgroundColor: 'rgba(0, 0, 0, 0.001)',
-            bottom: bottomNavHeight,
-            elevation: 80,
-            position: 'absolute',
-            right: 0,
-            top: 0,
-            width: mapEdgeSwipeWidth + insets.right,
-            zIndex: 80,
-          }}
-        />
-      );
-    }
+    finishInteractiveBackSwipe(state, translationX, velocityX);
+  }
+
+  function wrapScreenWithInteractiveBackSwipe(targetScreen: AppScreenMode | null, content: ReactNode) {
+    const backConfig = targetScreen ? getInteractiveBackSwipeConfig(targetScreen) : null;
+    const forwardConfig = targetScreen ? getInteractiveForwardSwipeConfig(targetScreen) : null;
+    const edgeConfig = backConfig ?? forwardConfig;
+    const enabled = edgeConfig !== null;
+
+    return (
+      <PanGestureHandler
+        activeOffsetX={[-20, 20]}
+        enabled={enabled}
+        failOffsetY={[-14, 14]}
+        hitSlop={targetScreen === 'browse'
+          ? edgeConfig?.direction === 'left'
+            ? { right: 0, width: mapEdgeSwipeWidth + insets.right }
+            : { left: 0, width: mapEdgeSwipeWidth + insets.left }
+          : undefined}
+        onGestureEvent={(event) => {
+          if (targetScreen) {
+            updateInteractiveBackSwipe(targetScreen, event.nativeEvent.translationX);
+          }
+        }}
+        onHandlerStateChange={(event) => {
+          if (targetScreen) {
+            handleInteractiveBackSwipeStateChange(targetScreen, event);
+          }
+        }}
+      >
+        <View style={styles.fullScreenRoot}>
+          {content}
+        </View>
+      </PanGestureHandler>
+    );
+  }
+
+  function renderMapSwipeEdgeShield() {
+    return (
+      <View
+        collapsable={false}
+        pointerEvents="box-only"
+        style={{
+          backgroundColor: 'rgba(0, 0, 0, 0.001)',
+          bottom: bottomNavHeight,
+          elevation: 80,
+          position: 'absolute',
+          right: 0,
+          top: 0,
+          width: mapEdgeSwipeWidth + insets.right,
+          zIndex: 80,
+        }}
+      />
+    );
+  }
 
   function navigateGuestBrowseTransition(nextScreen: 'splash' | 'browse', onComplete?: () => void) {
     if (screenMode === nextScreen) {
@@ -2442,7 +2529,7 @@ function AppScreen() {
     }
 
     const currentGuestBrowseScreen = screenMode === 'splash' ? 'splash' : 'browse';
-  const shouldPrewarmIncomingScreen = currentGuestBrowseScreen === 'browse' && browseMode === 'map' && nextScreen === 'splash';
+    const shouldPrewarmIncomingScreen = currentGuestBrowseScreen === 'browse' && browseMode === 'map' && nextScreen === 'splash';
 
     if (onboardingTransitionFrameRef.current !== null) {
       cancelAnimationFrame(onboardingTransitionFrameRef.current);
@@ -2518,6 +2605,10 @@ function AppScreen() {
     dismissKeyboardForScreenTransition();
     setShouldAutoFocusLoginField(false);
     const shouldFadeNativeBottomNav = isNativeIOSLiquidGlassBottomNavAvailable();
+    const finishLoginSubmission = () => {
+      loginSubmissionInFlightRef.current = false;
+      setLoginSubmitting(false);
+    };
 
     if (onboardingTransitionFrameRef.current !== null) {
       cancelAnimationFrame(onboardingTransitionFrameRef.current);
@@ -2537,6 +2628,7 @@ function AppScreen() {
       useNativeDriver: true,
     }).start(({ finished }) => {
       if (!finished) {
+        finishLoginSubmission();
         return;
       }
 
@@ -2544,6 +2636,7 @@ function AppScreen() {
       if (!shouldFadeNativeBottomNav) {
         setScreenMode('profiles');
         setShowLoginSuccessTransition(false);
+        finishLoginSubmission();
         return;
       }
 
@@ -2554,17 +2647,20 @@ function AppScreen() {
         useNativeDriver: true,
       }).start(({ finished: navFadeFinished }) => {
         if (!navFadeFinished) {
+          finishLoginSubmission();
           return;
         }
 
         setScreenMode('profiles');
         setShowLoginSuccessTransition(false);
+        finishLoginSubmission();
       });
     });
   }
 
   function startLogoutTransition() {
     if (!authenticatedSession) {
+      setGuestBrowseModeLocked(false);
       setScreenMode('auth');
       return;
     }
@@ -2575,22 +2671,30 @@ function AppScreen() {
     }
 
     screenTransition.stopAnimation();
-  bottomMoreSheetProgress.stopAnimation();
-  bottomMoreSheetProgress.setValue(0);
-  setBottomMoreSheetVisible(false);
-  setShellFadeScope(null);
+    bottomMoreSheetProgress.stopAnimation();
+    bottomMoreSheetProgress.setValue(0);
+    setBottomMoreSheetVisible(false);
+    setShellFadeScope(null);
     setIncomingOnboardingScreen(null);
-  setReturningToSplashScreen(null);
-  setBrowseProfileTransitionFrom(null);
-  setIncomingBrowseProfileScreen(null);
-  setIncomingBrowseProfileTargetScreen(null);
-  setGuestBrowseTransitionFrom(null);
-  setIncomingGuestBrowseScreen(null);
-  setSelectedPlaceSlug(null);
-  setSelectedPlace(null);
-  setSelectedLocationId(null);
-  setSelectedMapPlaceKey(null);
-  setDisplayedMapPreviewPlace(null);
+    setReturningToSplashScreen(null);
+    setBrowseProfileTransitionFrom(null);
+    setIncomingBrowseProfileScreen(null);
+    setIncomingBrowseProfileTargetScreen(null);
+    setGuestBrowseTransitionFrom(null);
+    setIncomingGuestBrowseScreen(null);
+    setSelectedPlaceSlug(null);
+    setSelectedPlace(null);
+    setSelectedLocationId(null);
+    setSelectedMapPlaceKey(null);
+    setSelectedMapSearchPreviewPlace(null);
+    setDisplayedMapPreviewPlace(null);
+    setShowGuestFavoritePrompt(false);
+    setShowGuestBusinessClaimPrompt(false);
+    setShowGuestAccuracyPrompt(false);
+    setShowGuestBottomNavPrompt(false);
+    setShowCustomerBusinessClaimPrompt(false);
+    setBrowseFiltersExpanded(false);
+    setGuestBrowseModeLocked(false);
     setLogoutTransitionSession(authenticatedSession);
     setAuthenticatedSession(null);
     setPendingEmailVerification(null);
@@ -2869,10 +2973,10 @@ function AppScreen() {
       setKeyboardHeight(0);
     });
 
-  return () => {
-    showSubscription.remove();
-    hideSubscription.remove();
-  };
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
   }, []);
 
   useEffect(() => {
@@ -3683,7 +3787,7 @@ function AppScreen() {
     setProfileMessage(null);
     setPendingEmailVerification(null);
     setEmailVerificationCode('');
-    setShouldAutoFocusLoginField(true);
+    setShouldAutoFocusLoginField(false);
     setShowLoginTwoFactorCodeField(false);
     setLoginForm(initialLoginFormState);
     navigateScreen('auth', 'forward');
@@ -3700,16 +3804,17 @@ function AppScreen() {
     setShowLoginTwoFactorCodeField(false);
     setLoginForm(initialLoginFormState);
 
-    if (onboardingTransitionFrameRef.current !== null) {
-      cancelAnimationFrame(onboardingTransitionFrameRef.current);
-      onboardingTransitionFrameRef.current = null;
-    }
-
     if (guestOnboardingOrigin === 'browse') {
+      if (reversePendingOnboardingEntry('browse')) {
+        return;
+      }
       navigateScreen('browse', 'backward');
       return;
     }
 
+    if (reversePendingOnboardingEntry('splash')) {
+      return;
+    }
     navigateScreen('splash', 'backward');
   }
 
@@ -3813,10 +3918,16 @@ function AppScreen() {
     }
 
     if (guestOnboardingOrigin === 'browse') {
+      if (reversePendingOnboardingEntry('browse')) {
+        return;
+      }
       navigateScreen('browse', 'backward');
       return;
     }
 
+    if (reversePendingOnboardingEntry('splash')) {
+      return;
+    }
     navigateScreen('splash', 'backward');
   }
 
@@ -4441,6 +4552,12 @@ function AppScreen() {
   }
 
   async function handleLogin() {
+    if (loginSubmissionInFlightRef.current) {
+      return;
+    }
+
+    loginSubmissionInFlightRef.current = true;
+    let loginTransitionStarted = false;
     setLoginSubmitting(true);
     setProfileErrorMessage(null);
 
@@ -4467,6 +4584,7 @@ function AppScreen() {
       setShowLoginTwoFactorCodeField(false);
       setLoginForm(initialLoginFormState);
       setProfileMessage('Signed in successfully.');
+      loginTransitionStarted = true;
       startLoginSuccessTransition();
     } catch (error) {
       const message = getErrorMessage(error);
@@ -4478,7 +4596,10 @@ function AppScreen() {
 
       setProfileErrorMessage(requiresTwoFactorCode ? message.replace(/^two_factor_code:\s*/i, '') : message);
     } finally {
-      setLoginSubmitting(false);
+      if (!loginTransitionStarted) {
+        loginSubmissionInFlightRef.current = false;
+        setLoginSubmitting(false);
+      }
     }
   }
 
@@ -4544,7 +4665,7 @@ function AppScreen() {
   async function handleForgotUsername(email: string) {
     const normalizedEmail = email.trim();
     if (!normalizedEmail) {
-	  setProfileErrorMessage('Enter the email address for your account.');
+      setProfileErrorMessage('Enter the email address for your account.');
       return;
     }
 
@@ -4564,7 +4685,7 @@ function AppScreen() {
   async function handleForgotPassword(identifier: string) {
     const normalizedIdentifier = identifier.trim();
     if (!normalizedIdentifier) {
-	  setProfileErrorMessage('Enter your username or email for password recovery.');
+      setProfileErrorMessage('Enter your username or email for password recovery.');
       return;
     }
 
@@ -5654,16 +5775,29 @@ function AppScreen() {
       ? currentOnboardingScreen
       : null;
     const overlayScreen = returningToSplashScreen ?? currentOverlayScreen;
+    const settledGuestOverlayScreen = currentOverlayScreen !== null && incomingOnboardingScreen === null && returningToSplashScreen === null;
+    const splashIncomingOverlayScreen = currentOverlayScreen === null
+      && incomingOnboardingScreen !== null
+      && incomingOnboardingScreen !== 'splash'
+      && returningToSplashScreen === null
+      ? incomingOnboardingScreen
+      : null;
+    const persistentOverlayScreen = overlayScreen ?? splashIncomingOverlayScreen;
+    const usesPersistentIncomingOverlay = splashIncomingOverlayScreen !== null;
+    const shouldRenderSplashLayer = !settledGuestOverlayScreen;
+    const guestChromeInteractive = persistentOverlayScreen === null && incomingOnboardingScreen === null && returningToSplashScreen === null;
     const showingBrowse = screenMode === 'browse'
       || (guestOnboardingOrigin === 'browse' && currentOnboardingScreen !== null && returningToSplashScreen === null);
     const showingBrowseUnderSplash = keepGuestMapVisibleOnSplash && !browseTransitionActive && overlayScreen === null && incomingOnboardingScreen === null;
-    const splashLayerStyle = browseTransitionActive
-      ? guestBrowseTransitionFrom === 'splash'
-        ? guestBrowseOutgoingStyle
-        : guestBrowseIncomingStyle
-      : showingBrowse
-        ? { opacity: 0, transform: [{ translateX: width }] }
-        : null;
+    const splashLayerStyle = returningToSplashScreen
+      ? splashReturnIncomingStyle
+      : browseTransitionActive
+        ? guestBrowseTransitionFrom === 'splash'
+          ? guestBrowseOutgoingStyle
+          : guestBrowseIncomingStyle
+        : showingBrowse
+          ? { opacity: 0, transform: [{ translateX: width }] }
+          : null;
     const browseLayerStyle = browseTransitionActive
       ? guestBrowseTransitionFrom === 'browse'
         ? guestBrowseOutgoingStyle
@@ -5671,11 +5805,13 @@ function AppScreen() {
       : (showingBrowse || showingBrowseUnderSplash)
         ? null
         : { opacity: 0, transform: [{ translateX: -width }] };
-    const currentOverlayStyle = returningToSplashScreen
-      ? splashReturnOutgoingStyle
-      : incomingOnboardingScreen && currentOverlayScreen
-        ? (onboardingTransitionAxis === 'x' ? currentHorizontalOnboardingTransitionStyle : currentOnboardingTransitionStyle)
-        : null;
+    const currentOverlayStyle = usesPersistentIncomingOverlay
+      ? incomingScreenTransitionStyle
+      : returningToSplashScreen
+        ? splashReturnOutgoingStyle
+        : incomingOnboardingScreen && currentOverlayScreen
+          ? (onboardingTransitionAxis === 'x' ? currentHorizontalOnboardingTransitionStyle : currentOnboardingTransitionStyle)
+          : null;
     const interactiveSwipeTarget = currentOverlayScreen
       ?? (screenMode === 'splash'
         ? 'splash'
@@ -5690,7 +5826,7 @@ function AppScreen() {
         (browseTransitionActive || incomingOnboardingScreen || returningToSplashScreen) ? styles.transitionClipRoot : null,
       ]}>
         <Animated.View
-          pointerEvents={!showingBrowse && !browseTransitionActive && !overlayScreen && !incomingOnboardingScreen ? 'auto' : 'none'}
+          pointerEvents={shouldRenderSplashLayer && !showingBrowse && !browseTransitionActive && !overlayScreen && !incomingOnboardingScreen ? 'auto' : 'none'}
           style={[
             styles.screenTransitionLayerAbsolute,
             styles.safeAreaTransparent,
@@ -5698,7 +5834,7 @@ function AppScreen() {
             splashLayerStyle,
           ]}
         >
-          {renderOnboardingScreen('splash')}
+          {shouldRenderSplashLayer ? renderOnboardingScreen('splash', null, guestChromeInteractive) : null}
         </Animated.View>
         <Animated.View
           pointerEvents={showingBrowse && !browseTransitionActive ? 'auto' : 'none'}
@@ -5710,6 +5846,7 @@ function AppScreen() {
         >
           {renderBrowseScreen({
             guestChrome: true,
+            guestChromeInteractive,
             suppressBrowseSceneTransitionStyle: true,
             suppressScreenTransitionStyle: true,
             suppressTransitionOverlay: true,
@@ -5718,19 +5855,19 @@ function AppScreen() {
         {!browseTransitionActive && (showingBrowse || showingBrowseUnderSplash) && shellFadeScope === 'browse' ? (
           <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, browseShellFadeMaskStyle]} />
         ) : null}
-        {overlayScreen ? (
+        {persistentOverlayScreen ? (
           <Animated.View
-            pointerEvents={incomingOnboardingScreen || returningToSplashScreen ? 'none' : 'auto'}
+            pointerEvents={incomingOnboardingScreen || returningToSplashScreen || usesPersistentIncomingOverlay ? 'none' : 'auto'}
             style={[
               styles.screenTransitionLayerAbsolute,
-              authIntroStyle && overlayScreen === 'auth' && !incomingOnboardingScreen && !returningToSplashScreen ? authIntroStyle : null,
+              authIntroStyle && persistentOverlayScreen === 'auth' && !incomingOnboardingScreen && !returningToSplashScreen ? authIntroStyle : null,
               currentOverlayStyle,
             ]}
           >
-            {renderOnboardingScreen(overlayScreen)}
+            {renderOnboardingScreen(persistentOverlayScreen)}
           </Animated.View>
         ) : null}
-        {incomingOnboardingScreen && onboardingScreenKeys.has(incomingOnboardingScreen) && incomingOnboardingScreen !== 'splash' ? (
+        {incomingOnboardingScreen && currentOverlayScreen && onboardingScreenKeys.has(incomingOnboardingScreen) && incomingOnboardingScreen !== 'splash' ? (
           <Animated.View testID="incoming-onboarding-screen" style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, incomingScreenTransitionStyle]}>
             {renderOnboardingScreen(incomingOnboardingScreen)}
           </Animated.View>
@@ -5773,10 +5910,10 @@ function AppScreen() {
     const browseLayerContent = (incomingBrowseScreen ?? screenMode) === 'home-feed'
       ? renderAuthenticatedHomeFeedScreen()
       : renderBrowseScreen({
-          suppressBrowseSceneTransitionStyle: true,
-          suppressScreenTransitionStyle: true,
-          suppressTransitionOverlay: true,
-        });
+        suppressBrowseSceneTransitionStyle: true,
+        suppressScreenTransitionStyle: true,
+        suppressTransitionOverlay: true,
+      });
     const interactiveSwipeTarget = showingProfile
       ? screenMode
       : screenMode === 'browse' && browseMode === 'map' && !selectedPlaceSlug
@@ -5815,12 +5952,12 @@ function AppScreen() {
     ));
   }
 
-  function renderOnboardingScreen(targetScreen: AppScreenMode, profileSessionOverride?: SignupResponse | null) {
+  function renderOnboardingScreen(targetScreen: AppScreenMode, profileSessionOverride?: SignupResponse | null, splashChromeInteractive = true) {
     switch (targetScreen) {
       case 'splash':
         return (
           <SafeAreaView edges={['left', 'right']} style={styles.safeAreaTransparent}>
-            <SplashScreen assetsReady={startupImagesReady} onCreateAccount={handleOpenProfiles} onIntroComplete={handleOpenMapFromSplash} onSelectPortal={handleOpenAuthFromLanding} />
+            <SplashScreen assetsReady={startupImagesReady} chromeInteractive={splashChromeInteractive} onCreateAccount={handleOpenProfiles} onIntroComplete={handleOpenMapFromSplash} onSelectPortal={handleOpenAuthFromLanding} />
           </SafeAreaView>
         );
       case 'auth':
@@ -5835,7 +5972,7 @@ function AppScreen() {
               onBackToLanding={handleBackToLanding}
               onChangeField={handleChangeLoginField}
               onForgotPassword={(identifier) => void handleForgotPassword(identifier)}
-	          onForgotUsername={(email) => void handleForgotUsername(email)}
+              onForgotUsername={(email) => void handleForgotUsername(email)}
               onSubmit={handleLogin}
               showTwoFactorCodeField={showLoginTwoFactorCodeField}
               submitting={loginSubmitting}
@@ -5991,6 +6128,7 @@ function AppScreen() {
 
   function renderBrowseScreen(options?: {
     guestChrome?: boolean;
+    guestChromeInteractive?: boolean;
     suppressScreenTransitionStyle?: boolean;
     suppressBrowseSceneTransitionStyle?: boolean;
     suppressTransitionOverlay?: boolean;
@@ -6094,7 +6232,7 @@ function AppScreen() {
                           coordinate={{ latitude: place.markerLatitude, longitude: place.markerLongitude }}
                           key={place.markerKey}
                           onPress={() => handleSelectMapPin(place.markerKey)}
-                            tracksViewChanges={mapMarkersTrackViewChanges}
+                          tracksViewChanges={mapMarkersTrackViewChanges}
                           zIndex={displayedMapPlaces.length - index}
                         >
                           <Animated.View style={[
@@ -6263,107 +6401,107 @@ function AppScreen() {
                       </Animated.View>
                     ) : showMapResultsCard ? (
                       <Animated.View style={{ opacity: mapResultsOpacity }}>
-                        <Animated.View style={[styles.mapResultsCard, { maxHeight: mapResultsCardAnimatedMaxHeight }] }>
-                        <View style={styles.mapResultsHeader}>
-                          <View style={styles.mapResultsHeaderCopy}>
-                            <Text style={styles.mapResultsTitle}>Best matches</Text>
-                            <Text style={styles.mapResultsMeta}>Top {renderedMapSearchResults.length} of {renderedMapResultCount} in view</Text>
-                          </View>
-                          <View style={styles.mapResultsHeaderActions}>
-                            <Pressable
-                              accessibilityLabel={mapResultsCollapsed ? 'Expand best matches' : 'Collapse best matches'}
-                              onPress={handleToggleMapResultsCollapsed}
-                              style={styles.mapResultsCollapseButton}
-                            >
-                              <View style={styles.mapResultsChevronIcon}>
-                                <Animated.View
-                                  style={[
-                                    styles.mapResultsChevronLine,
-                                    styles.mapResultsChevronLineLeft,
-                                    {
-                                      transform: [
-                                        { translateY: mapResultsChevronArmOffset },
-                                        { rotate: mapResultsChevronLeftRotate },
-                                      ],
-                                    },
-                                  ]}
-                                />
-                                <Animated.View
-                                  style={[
-                                    styles.mapResultsChevronLine,
-                                    styles.mapResultsChevronLineRight,
-                                    {
-                                      transform: [
-                                        { translateY: mapResultsChevronArmOffset },
-                                        { rotate: mapResultsChevronRightRotate },
-                                      ],
-                                    },
-                                  ]}
-                                />
-                              </View>
-                            </Pressable>
-                          </View>
-                        </View>
-                        <Animated.View
-                          pointerEvents={mapResultsCollapsed ? 'none' : 'auto'}
-                          style={[
-                            styles.mapResultsContent,
-                            {
-                              maxHeight: mapResultsExpandedProgress.interpolate({
-                                inputRange: [0, 1],
-                                outputRange: [0, Math.max(mapResultsCardMaxHeight - 76, 0)],
-                              }),
-                              opacity: mapResultsContentOpacity,
-                              transform: [{ translateY: mapResultsContentTranslateY }],
-                            },
-                          ]}
-                        >
-                          {renderedMapSearchResults.length ? (
-                            <>
-                            <ScrollView
-                              contentContainerStyle={styles.mapResultsList}
-                              keyboardDismissMode="on-drag"
-                              keyboardShouldPersistTaps="handled"
-                              nestedScrollEnabled
-                              onScrollBeginDrag={Keyboard.dismiss}
-                              showsVerticalScrollIndicator
-                              style={styles.mapResultsScroll}
-                            >
-                              {renderedMapSearchResults.map((place) => (
-                                <Pressable
-                                  key={place.resultKey}
-                                  onPress={() => handleFocusMapResult(place)}
-                                  style={styles.mapResultRow}
-                                >
-                                  <View style={styles.mapResultCopy}>
-                                    <Text numberOfLines={1} style={styles.mapResultTitle}>{place.name}</Text>
-                                    <Text numberOfLines={2} style={styles.mapResultMeta}>
-                                      {place.venue_type_label} • {place.fullAddress}{place.markerKey ? '' : ' • No map pin yet'}
-                                    </Text>
-                                  </View>
-                                  <Text style={styles.mapResultAction}>{place.markerKey ? 'Focus' : 'Preview'}</Text>
-                                </Pressable>
-                              ))}
-                            </ScrollView>
-                            {renderedMapSearchResults.length < renderedMapResultCount ? (
-                              <Pressable disabled={loadingMoreMapResults} onPress={handleShowMoreMapResults} style={styles.mapResultsMoreButton}>
-                                {loadingMoreMapResults ? (
-                                  <View style={styles.mapResultsMoreButtonLoadingContent}>
-                                    <ActivityIndicator color="#1f5f5b" size="small" />
-                                    <Text style={styles.mapResultsMoreButtonText}>Loading...</Text>
-                                  </View>
-                                ) : (
-                                  <Text style={styles.mapResultsMoreButtonText}>
-                                    Show next {Math.min(nextMapResultsIncrement, renderedMapResultCount - renderedMapSearchResults.length)}
-                                  </Text>
-                                )}
+                        <Animated.View style={[styles.mapResultsCard, { maxHeight: mapResultsCardAnimatedMaxHeight }]}>
+                          <View style={styles.mapResultsHeader}>
+                            <View style={styles.mapResultsHeaderCopy}>
+                              <Text style={styles.mapResultsTitle}>Best matches</Text>
+                              <Text style={styles.mapResultsMeta}>Top {renderedMapSearchResults.length} of {renderedMapResultCount} in view</Text>
+                            </View>
+                            <View style={styles.mapResultsHeaderActions}>
+                              <Pressable
+                                accessibilityLabel={mapResultsCollapsed ? 'Expand best matches' : 'Collapse best matches'}
+                                onPress={handleToggleMapResultsCollapsed}
+                                style={styles.mapResultsCollapseButton}
+                              >
+                                <View style={styles.mapResultsChevronIcon}>
+                                  <Animated.View
+                                    style={[
+                                      styles.mapResultsChevronLine,
+                                      styles.mapResultsChevronLineLeft,
+                                      {
+                                        transform: [
+                                          { translateY: mapResultsChevronArmOffset },
+                                          { rotate: mapResultsChevronLeftRotate },
+                                        ],
+                                      },
+                                    ]}
+                                  />
+                                  <Animated.View
+                                    style={[
+                                      styles.mapResultsChevronLine,
+                                      styles.mapResultsChevronLineRight,
+                                      {
+                                        transform: [
+                                          { translateY: mapResultsChevronArmOffset },
+                                          { rotate: mapResultsChevronRightRotate },
+                                        ],
+                                      },
+                                    ]}
+                                  />
+                                </View>
                               </Pressable>
-                            ) : null}
-                          </>
-                        ) : (
-                          <Text style={styles.mapResultEmptyText}>No map matches found for that search yet.</Text>
-                        )}
-                        </Animated.View>
+                            </View>
+                          </View>
+                          <Animated.View
+                            pointerEvents={mapResultsCollapsed ? 'none' : 'auto'}
+                            style={[
+                              styles.mapResultsContent,
+                              {
+                                maxHeight: mapResultsExpandedProgress.interpolate({
+                                  inputRange: [0, 1],
+                                  outputRange: [0, Math.max(mapResultsCardMaxHeight - 76, 0)],
+                                }),
+                                opacity: mapResultsContentOpacity,
+                                transform: [{ translateY: mapResultsContentTranslateY }],
+                              },
+                            ]}
+                          >
+                            {renderedMapSearchResults.length ? (
+                              <>
+                                <ScrollView
+                                  contentContainerStyle={styles.mapResultsList}
+                                  keyboardDismissMode="on-drag"
+                                  keyboardShouldPersistTaps="handled"
+                                  nestedScrollEnabled
+                                  onScrollBeginDrag={Keyboard.dismiss}
+                                  showsVerticalScrollIndicator
+                                  style={styles.mapResultsScroll}
+                                >
+                                  {renderedMapSearchResults.map((place) => (
+                                    <Pressable
+                                      key={place.resultKey}
+                                      onPress={() => handleFocusMapResult(place)}
+                                      style={styles.mapResultRow}
+                                    >
+                                      <View style={styles.mapResultCopy}>
+                                        <Text numberOfLines={1} style={styles.mapResultTitle}>{place.name}</Text>
+                                        <Text numberOfLines={2} style={styles.mapResultMeta}>
+                                          {place.venue_type_label} • {place.fullAddress}{place.markerKey ? '' : ' • No map pin yet'}
+                                        </Text>
+                                      </View>
+                                      <Text style={styles.mapResultAction}>{place.markerKey ? 'Focus' : 'Preview'}</Text>
+                                    </Pressable>
+                                  ))}
+                                </ScrollView>
+                                {renderedMapSearchResults.length < renderedMapResultCount ? (
+                                  <Pressable disabled={loadingMoreMapResults} onPress={handleShowMoreMapResults} style={styles.mapResultsMoreButton}>
+                                    {loadingMoreMapResults ? (
+                                      <View style={styles.mapResultsMoreButtonLoadingContent}>
+                                        <ActivityIndicator color="#1f5f5b" size="small" />
+                                        <Text style={styles.mapResultsMoreButtonText}>Loading...</Text>
+                                      </View>
+                                    ) : (
+                                      <Text style={styles.mapResultsMoreButtonText}>
+                                        Show next {Math.min(nextMapResultsIncrement, renderedMapResultCount - renderedMapSearchResults.length)}
+                                      </Text>
+                                    )}
+                                  </Pressable>
+                                ) : null}
+                              </>
+                            ) : (
+                              <Text style={styles.mapResultEmptyText}>No map matches found for that search yet.</Text>
+                            )}
+                          </Animated.View>
                         </Animated.View>
                       </Animated.View>
                     ) : null}
@@ -6461,6 +6599,7 @@ function AppScreen() {
             </SafeAreaView>
             {options?.guestChrome ? (
               <GuestShellChrome
+                interactive={options.guestChromeInteractive ?? true}
                 logoEntranceOpacity={guestBrowseHeaderLogoOpacity}
                 onCreateAccount={handleOpenProfiles}
                 onSelectPortal={handleOpenAuthFromLanding}
@@ -6565,25 +6704,25 @@ function AppScreen() {
         </Animated.View>
       ) : usesOnboardingSlideTransition && currentOnboardingScreen ? (
         wrapScreenWithInteractiveBackSwipe(currentOnboardingScreen, (
-        <View style={styles.onboardingTransitionRoot}>
-          <Animated.View
-            pointerEvents={incomingOnboardingScreen ? 'none' : 'auto'}
-            style={[
-              incomingOnboardingScreen ? styles.screenTransitionLayerAbsolute : styles.screenTransitionLayer,
-              currentOnboardingScreen === 'profiles' && !incomingOnboardingScreen ? profileSceneTransitionStyle : null,
-              incomingOnboardingScreen && onboardingTransitionAxis === 'x' ? currentHorizontalOnboardingTransitionStyle : null,
-              authIntroStyle,
-              currentOnboardingTransitionStyle,
-            ]}
-          >
-            {renderOnboardingScreen(currentOnboardingScreen)}
-          </Animated.View>
-          {incomingOnboardingScreen ? (
-            <Animated.View style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, incomingScreenTransitionStyle]}>
-              {renderOnboardingScreen(incomingOnboardingScreen)}
+          <View style={styles.onboardingTransitionRoot}>
+            <Animated.View
+              pointerEvents={incomingOnboardingScreen ? 'none' : 'auto'}
+              style={[
+                incomingOnboardingScreen ? styles.screenTransitionLayerAbsolute : styles.screenTransitionLayer,
+                currentOnboardingScreen === 'profiles' && !incomingOnboardingScreen ? profileSceneTransitionStyle : null,
+                incomingOnboardingScreen && onboardingTransitionAxis === 'x' ? currentHorizontalOnboardingTransitionStyle : null,
+                authIntroStyle,
+                currentOnboardingTransitionStyle,
+              ]}
+            >
+              {renderOnboardingScreen(currentOnboardingScreen)}
             </Animated.View>
-          ) : null}
-        </View>
+            {incomingOnboardingScreen ? (
+              <Animated.View style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, incomingScreenTransitionStyle]}>
+                {renderOnboardingScreen(incomingOnboardingScreen)}
+              </Animated.View>
+            ) : null}
+          </View>
         ))
       ) : (
         renderBrowseScreen()
@@ -6595,7 +6734,7 @@ function AppScreen() {
         visible={bottomMoreSheetVisible}
       >
         <View style={styles.bottomSheetBackdrop}>
-          <Animated.View pointerEvents="box-none" style={[styles.bottomSheetBackdropOverlay, { opacity: bottomMoreSheetProgress }]}> 
+          <Animated.View pointerEvents="box-none" style={[styles.bottomSheetBackdropOverlay, { opacity: bottomMoreSheetProgress }]}>
             <Pressable onPress={() => closeBottomMoreSheet()} style={styles.bottomSheetBackdropPressable} />
           </Animated.View>
           <PanGestureHandler
@@ -6988,8 +7127,8 @@ function getDistanceInMiles(
 
   const a = Math.sin(latitudeDeltaRadians / 2) ** 2
     + Math.cos(originLatitudeRadians)
-      * Math.cos(destinationLatitudeRadians)
-      * Math.sin(longitudeDeltaRadians / 2) ** 2;
+    * Math.cos(destinationLatitudeRadians)
+    * Math.sin(longitudeDeltaRadians / 2) ** 2;
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return earthRadiusMiles * c;
 }
@@ -7267,24 +7406,24 @@ function getMapSearchResults(filteredLocations: Array<{ listKey: string; locatio
 
 function getBrowsePlacesForDisplay(filteredLocations: Array<{ listKey: string; location: PlaceLocation; place: PlaceListItem }>): BrowsePlace[] {
   return filteredLocations.map(({ listKey, location, place }) => ({
-      ...place,
-      city: location.city,
-      city_label: location.city_label,
-      address_line_1: location.address_line_1,
-      address_line_2: location.address_line_2,
-      neighborhood: location.neighborhood,
-      state: location.state,
-      postal_code: location.postal_code,
-      latitude: location.latitude,
-      longitude: location.longitude,
-      phone_number: location.phone_number,
-      website_url: location.website_url,
-      image_urls: location.image_urls,
-      fullAddress: getMapPlaceFullAddress(location),
-      locationId: location.id,
-      listKey,
-      locations: [location],
-    }));
+    ...place,
+    city: location.city,
+    city_label: location.city_label,
+    address_line_1: location.address_line_1,
+    address_line_2: location.address_line_2,
+    neighborhood: location.neighborhood,
+    state: location.state,
+    postal_code: location.postal_code,
+    latitude: location.latitude,
+    longitude: location.longitude,
+    phone_number: location.phone_number,
+    website_url: location.website_url,
+    image_urls: location.image_urls,
+    fullAddress: getMapPlaceFullAddress(location),
+    locationId: location.id,
+    listKey,
+    locations: [location],
+  }));
 }
 
 function getMapPlaceFullAddress(location: PlaceLocation) {

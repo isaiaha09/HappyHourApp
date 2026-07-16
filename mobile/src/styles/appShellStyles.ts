@@ -43,11 +43,11 @@ export const appShellStyles = {
     backgroundColor: 'transparent',
   },
   incomingOnboardingOverlay: {
-    shadowColor: '#2d221a',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.16,
-    shadowRadius: 22,
-    elevation: 12,
+    shadowColor: 'transparent',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   safeArea: {
     flex: 1,

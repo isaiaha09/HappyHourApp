@@ -10,7 +10,7 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
-import { SplashScreen } from '../screens/SplashScreen';
+import { resetSplashIntroState, SplashScreen } from '../screens/SplashScreen';
 
 describe('SplashScreen startup flow', () => {
   beforeAll(() => {
@@ -19,6 +19,7 @@ describe('SplashScreen startup flow', () => {
 
   afterEach(() => {
     jest.clearAllTimers();
+    resetSplashIntroState();
   });
 
   afterAll(() => {
@@ -73,5 +74,71 @@ describe('SplashScreen startup flow', () => {
     });
 
     expect(onIntroComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not auto-open the guest map when the splash remounts after the intro already played', () => {
+    const firstIntroComplete = jest.fn();
+
+    const firstView = render(
+      <SplashScreen
+        assetsReady
+        onCreateAccount={jest.fn()}
+        onIntroComplete={firstIntroComplete}
+        onSelectPortal={jest.fn()}
+      />,
+    );
+
+    act(() => {
+      jest.advanceTimersByTime(3400);
+    });
+
+    expect(firstIntroComplete).toHaveBeenCalledTimes(1);
+    firstView.unmount();
+
+    const replayIntroComplete = jest.fn();
+
+    render(
+      <SplashScreen
+        assetsReady
+        onCreateAccount={jest.fn()}
+        onIntroComplete={replayIntroComplete}
+        onSelectPortal={jest.fn()}
+      />,
+    );
+
+    act(() => {
+      jest.advanceTimersByTime(50);
+    });
+
+    expect(replayIntroComplete).not.toHaveBeenCalled();
+  });
+
+  it('disables guest chrome interactions while the splash stays mounted under another screen', () => {
+    const view = render(
+      <SplashScreen
+        assetsReady
+        onCreateAccount={jest.fn()}
+        onIntroComplete={jest.fn()}
+        onSelectPortal={jest.fn()}
+      />,
+    );
+
+    fireEvent.press(screen.getByRole('button', { name: 'Open Home Feed' }));
+    expect(screen.getByText('Coming Soon')).toBeTruthy();
+
+    view.rerender(
+      <SplashScreen
+        assetsReady
+        chromeInteractive={false}
+        onCreateAccount={jest.fn()}
+        onIntroComplete={jest.fn()}
+        onSelectPortal={jest.fn()}
+      />,
+    );
+
+    expect(screen.queryByText('Coming Soon')).toBeNull();
+
+    fireEvent.press(screen.getByRole('button', { name: 'Open Home Feed' }));
+    expect(screen.queryByText('Coming Soon')).toBeNull();
   });
 });

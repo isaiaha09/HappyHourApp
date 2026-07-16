@@ -14,14 +14,19 @@ const sloganCompleteProgress = 0.68;
 const mapHandoffDelay = logoEntranceDuration + sloganRevealDuration + completedSloganHoldDuration;
 let splashIntroState: 'unplayed' | 'playing' | 'played' = 'unplayed';
 
+export function resetSplashIntroState() {
+  splashIntroState = 'unplayed';
+}
+
 type SplashScreenProps = {
   assetsReady?: boolean;
+  chromeInteractive?: boolean;
   onCreateAccount: () => void;
   onIntroComplete: () => void;
   onSelectPortal: (portal: AuthPortal) => void;
 };
 
-export function SplashScreen({ assetsReady = true, onCreateAccount, onIntroComplete, onSelectPortal }: SplashScreenProps) {
+export function SplashScreen({ assetsReady = true, chromeInteractive = true, onCreateAccount, onIntroComplete, onSelectPortal }: SplashScreenProps) {
   const { height } = useWindowDimensions();
   const timeline = useRef(new Animated.Value(splashIntroState === 'unplayed' ? 0 : 1)).current;
   const logoEntranceOpacity = useRef(new Animated.Value(splashIntroState === 'unplayed' ? 0 : 1)).current;
@@ -60,7 +65,6 @@ export function SplashScreen({ assetsReady = true, onCreateAccount, onIntroCompl
       timeline.setValue(1);
       logoEntranceOpacity.setValue(1);
       logoEntranceScale.setValue(1);
-      handoffTimer = setTimeout(beginMapHandoff, 0);
       return () => {
         if (handoffTimer) {
           clearTimeout(handoffTimer);
@@ -236,6 +240,7 @@ export function SplashScreen({ assetsReady = true, onCreateAccount, onIntroCompl
         actionOpacity={actionOpacity}
         actionTranslateY={actionTranslateY}
         headerOpacity={headerOpacity}
+        interactive={chromeInteractive}
         logoEntranceOpacity={logoEntranceOpacity}
         logoEntranceScale={logoEntranceScale}
         logoScale={logoScale}

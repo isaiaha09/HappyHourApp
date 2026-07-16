@@ -576,7 +576,7 @@ export function AuthPortalScreen({ authMessage, autoFocusIdentifier, errorMessag
         <ScrollView
           contentContainerStyle={styles.authScrollContent}
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
           onScroll={handleScroll}
           ref={scrollViewRef}
           scrollEventThrottle={16}
@@ -625,7 +625,7 @@ export function AuthPortalScreen({ authMessage, autoFocusIdentifier, errorMessag
               </>
             ) : null}
 
-            <Pressable onPress={() => void onSubmit()} style={[styles.linkButton, submitting ? styles.linkButtonDisabled : null]}>
+            <Pressable disabled={submitting} onPress={() => void onSubmit()} style={[styles.linkButton, submitting ? styles.linkButtonDisabled : null]}>
               <LoadingButtonLabel
                 color="#effffd"
                 label={loginPortal === 'customer' ? 'Log in as Customer' : 'Log in as Business'}
@@ -702,7 +702,7 @@ export function CreateProfileScreen({ errorMessage, form, isLandscape, message, 
         <ScrollView
           contentContainerStyle={[styles.profileScrollContent, styles.createProfileScrollContent]}
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
           onScroll={handleScroll}
           ref={scrollViewRef}
           scrollEventThrottle={16}
@@ -801,7 +801,7 @@ export function EmailVerificationScreen({ errorMessage, isLandscape, message, on
         <ScrollView
           contentContainerStyle={[styles.profileScrollContent, styles.createProfileScrollContent]}
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
           onScroll={handleScroll}
           ref={scrollViewRef}
           scrollEventThrottle={16}
@@ -892,7 +892,7 @@ export function BusinessClaimReviewPendingScreen({ errorMessage, isLandscape, me
         <ScrollView
           contentContainerStyle={[styles.profileScrollContent, styles.createProfileScrollContent]}
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
@@ -952,7 +952,7 @@ export function ContactSupportScreen({ errorMessage, initialMessage = '', initia
         <ScrollView
           contentContainerStyle={[styles.profileScrollContent, styles.createProfileScrollContent]}
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
           onScroll={handleScroll}
           ref={scrollViewRef}
           scrollEventThrottle={16}
@@ -1028,7 +1028,7 @@ function LegalDocumentScreen({ eyebrow, intro, isLandscape, onBack, sections, ti
       <KeyboardAwareFormScreen>
         <ScrollView
           contentContainerStyle={[styles.profileScrollContent, styles.createProfileScrollContent]}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
@@ -1122,7 +1122,7 @@ export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces,
         <ScrollView
           contentContainerStyle={styles.profileScrollContent}
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
           onScroll={handleScroll}
           ref={scrollViewRef}
           scrollEventThrottle={16}
@@ -1443,7 +1443,7 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
         <ScrollView
           contentContainerStyle={styles.profileScrollContent}
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
           onScroll={handleScroll}
           ref={scrollViewRef}
           scrollEventThrottle={16}

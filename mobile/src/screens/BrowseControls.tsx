@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import {
   cityFilters,
@@ -106,11 +107,11 @@ export function BrowseControls({
   const searchPanelLiftProgress = useRef(new Animated.Value(searchPanelLifted ? 1 : 0)).current;
   const listLabelColor = modeSwitchColorProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: ['#f4fffe', '#5d4637'],
+    outputRange: ['#f5f7fb', '#7d8494'],
   });
   const mapLabelColor = modeSwitchColorProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: ['#5d4637', '#f4fffe'],
+    outputRange: ['#7d8494', '#f5f7fb'],
   });
   const filtersPanelOpacity = filtersPanelProgress.interpolate({
     inputRange: [0, 0.12, 1],
@@ -126,23 +127,23 @@ export function BrowseControls({
   });
   const filtersToggleBackgroundColor = filtersPanelProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: ['#fff7ef', '#402214'],
+    outputRange: ['#1f2026', '#ff695c'],
   });
   const filtersToggleBorderColor = filtersPanelProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: ['#ddc4a7', '#402214'],
+    outputRange: ['rgba(255, 255, 255, 0.08)', '#ff695c'],
   });
   const filtersToggleTextColor = filtersPanelProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: ['#5d4637', '#fff7ef'],
+    outputRange: ['#f5f7fb', '#ffffff'],
   });
   const mapThemeToggleBackgroundColor = mapThemeToggleProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: ['#fff7ef', '#2d403f'],
+    outputRange: ['#1f2026', '#2b3445'],
   });
   const mapThemeToggleBorderColor = mapThemeToggleProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: ['#ddc4a7', '#2d403f'],
+    outputRange: ['rgba(255, 255, 255, 0.08)', '#38506b'],
   });
   const mapThemeToggleSunOpacity = mapThemeToggleProgress.interpolate({
     inputRange: [0, 0.45, 1],
@@ -253,19 +254,22 @@ export function BrowseControls({
             compactLandscapeControls ? styles.searchInputShellLandscape : null,
           ]}
         >
-          <Text style={styles.searchInputIcon}>Find</Text>
+          <View style={styles.searchInputIconBadge}>
+            <Ionicons color="#f5f7fb" name="search" size={18} />
+          </View>
           <TextInput
             accessibilityLabel="Browse search"
+            keyboardAppearance={isDarkMapMode ? 'dark' : 'light'}
             onChangeText={onChangeSearchQuery}
-            placeholder="Search restaurants, bars, etc."
-            placeholderTextColor="#9a7f6c"
+            placeholderTextColor="#7f8597"
+            placeholder="Search restaurants, bars, cafes, etc."
             style={styles.searchInput}
             testID="browse-search-input"
             value={searchQuery}
           />
           {searchQuery.length ? (
             <Pressable accessibilityLabel="Clear search" hitSlop={8} onPress={onClearSearchQuery} style={styles.searchClearButton} testID="browse-search-clear-button">
-              <Text style={styles.searchClearButtonText}>Clear</Text>
+              <Ionicons color="#ff7a68" name="close-circle" size={20} />
             </Pressable>
           ) : null}
         </View>
@@ -371,7 +375,7 @@ export function BrowseControls({
               </Pressable>
             ) : null}
             <Pressable accessibilityLabel="Refresh places" onPress={onReload} style={styles.reloadButton}>
-              <Text style={styles.reloadButtonText}>↻</Text>
+              <Ionicons color="#f5f7fb" name="refresh" size={18} />
             </Pressable>
             <Pressable
               accessibilityLabel={filtersExpanded ? 'Hide filters' : 'Show filters'}
@@ -396,6 +400,9 @@ export function BrowseControls({
                 >
                   {filtersExpanded ? 'Hide filters' : 'Filters'}
                 </Animated.Text>
+                <Animated.View style={styles.filtersToggleIconWrap}>
+                  <Ionicons color="#f5f7fb" name="options-outline" size={17} />
+                </Animated.View>
               </Animated.View>
             </Pressable>
           </View>
@@ -564,11 +571,12 @@ export function BrowseControls({
           onPress={onToggleSearchPanelLift}
           style={styles.searchCurtainToggleInline}
         >
-          <View style={styles.mapResultsChevronIcon}>
+          <View style={[styles.mapResultsChevronIcon, styles.searchCurtainChevronIcon]}>
             <Animated.View
               style={[
                 styles.mapResultsChevronLine,
                 styles.mapResultsChevronLineLeft,
+                styles.searchCurtainChevronLine,
                 {
                   transform: [
                     { translateY: searchPanelChevronArmOffset },
@@ -581,6 +589,7 @@ export function BrowseControls({
               style={[
                 styles.mapResultsChevronLine,
                 styles.mapResultsChevronLineRight,
+                styles.searchCurtainChevronLine,
                 {
                   transform: [
                     { translateY: searchPanelChevronArmOffset },
