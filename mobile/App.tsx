@@ -83,6 +83,7 @@ import {
 } from './src/browseConfig';
 import { AccountSettingsScreen, BlockedDirectMessageCustomersScreen, BusinessProfileEditorScreen, DashboardScreen, FavoriteBusinessNotificationsScreen, FavoriteBusinessesScreen } from './src/screens/DashboardScreen';
 import { BrowseControls } from './src/screens/BrowseControls';
+import { GuestShellChrome } from './src/components/GuestShellChrome';
 import { NativeIOSLiquidGlassBottomNav, NativeIOSLiquidGlassHeaderButton, isNativeIOSLiquidGlassBottomNavAvailable } from './src/components/NativeIOSLiquidGlass';
 import { PhotoLightbox } from './src/components/PhotoLightbox';
 import { DirectMessagesScreen } from './src/screens/DirectMessagesScreen';
@@ -509,8 +510,8 @@ function AppScreen() {
   const [browseMode, setBrowseMode] = useState<BrowseMode>('list');
   const [browseFiltersExpanded, setBrowseFiltersExpanded] = useState(false);
   const [mapSearchPanelLifted, setMapSearchPanelLifted] = useState(false);
-  const [darkMapMode, setDarkMapMode] = useState(false);
-  const [displayedDarkMapMode, setDisplayedDarkMapMode] = useState(false);
+  const [darkMapMode, setDarkMapMode] = useState(true);
+  const [displayedDarkMapMode, setDisplayedDarkMapMode] = useState(true);
   const [transitioningMapTheme, setTransitioningMapTheme] = useState<boolean | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCity, setSelectedCity] = useState<(typeof cityFilters)[number]['value']>('all');
@@ -531,6 +532,7 @@ function AppScreen() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [favoriteSubmitting, setFavoriteSubmitting] = useState(false);
   const [guestBrowseModeLocked, setGuestBrowseModeLocked] = useState(false);
+  const [guestOnboardingOrigin, setGuestOnboardingOrigin] = useState<'browse' | 'splash' | null>(null);
   const [showGuestFavoritePrompt, setShowGuestFavoritePrompt] = useState(false);
   const [showGuestBusinessClaimPrompt, setShowGuestBusinessClaimPrompt] = useState(false);
   const [showGuestAccuracyPrompt, setShowGuestAccuracyPrompt] = useState(false);
@@ -556,6 +558,7 @@ function AppScreen() {
   const showMoreMapResultsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoFitMapRegionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mapMarkersTrackViewChangesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasSettledInitialMapRegionRef = useRef(false);
   const mapResultsCardTransitionVersionRef = useRef(0);
   const pendingImmediateMapPinsRefreshRef = useRef(false);
   const pendingListRevealRef = useRef(false);
@@ -597,6 +600,7 @@ function AppScreen() {
   const [showLogoutTransition, setShowLogoutTransition] = useState(false);
   const [authIntroPending, setAuthIntroPending] = useState(false);
   const [splashExiting, setSplashExiting] = useState(false);
+  const [splashMapHandoffPending, setSplashMapHandoffPending] = useState(true);
   const [startupImagesReady, setStartupImagesReady] = useState(false);
   const [profileEntryOffset, setProfileEntryOffset] = useState(0);
   const [browseEntryOffset, setBrowseEntryOffset] = useState(0);
@@ -622,21 +626,44 @@ function AppScreen() {
   const normalizedSearchQuery = normalizeSearchText(searchQuery);
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const normalizedDeferredSearchQuery = normalizeSearchText(deferredSearchQuery);
-  const onboardingTransitionDuration = 480;
+  const onboardingTransitionDuration = 680;
   const showTransitionMapBrowse = browseProfileTransitionFrom !== null
     && incomingBrowseProfileScreen !== null
     && browseProfileTransitionFrom !== incomingBrowseProfileScreen
     && !selectedPlaceSlug
     && browseMode === 'map'
     && (browseProfileTransitionFrom === 'browse' || incomingBrowseProfileScreen === 'browse');
+  const showGuestTransitionMap = guestBrowseTransitionFrom !== null
+    && incomingGuestBrowseScreen === 'browse'
+    && !selectedPlaceSlug
+    && browseMode === 'map';
+  const keepGuestMapVisibleDuringGuestOnboarding = !authenticatedSession
+    && guestOnboardingOrigin === 'browse'
+    && screenMode !== 'browse'
+    && screenMode !== 'splash'
+    && !selectedPlaceSlug
+    && browseMode === 'map';
+  const keepGuestMapVisibleOnSplash = !authenticatedSession
+    && screenMode === 'splash'
+    && guestBrowseModeLocked
+    && hasSettledInitialMapRegionRef.current
+    && !selectedPlaceSlug
+    && browseMode === 'map';
   const showMainShellTransitionMap = mainShellTransitionFrom === 'browse' || incomingMainShellScreen === 'browse';
-  const showMapBrowse = (screenMode === 'browse' && !selectedPlaceSlug && browseMode === 'map') || showTransitionMapBrowse || showMainShellTransitionMap;
+  const showMapBrowse = (screenMode === 'browse' && !selectedPlaceSlug && browseMode === 'map') || keepGuestMapVisibleDuringGuestOnboarding || keepGuestMapVisibleOnSplash || showGuestTransitionMap || showTransitionMapBrowse || showMainShellTransitionMap;
   const shouldTrackUserLocation = screenMode === 'browse' || selectedPlaceSlug !== null;
   const translucentStatusBar = (screenMode === 'browse' && !selectedPlaceSlug && browseMode === 'map')
     || (browseProfileTransitionFrom === 'profiles'
       && incomingBrowseProfileScreen === 'browse'
       && !selectedPlaceSlug
       && browseMode === 'map');
+  const statusBarStyle = screenMode === 'browse' && !selectedPlaceSlug
+    ? (!authenticatedSession && guestBrowseModeLocked
+        ? 'light'
+        : browseMode === 'map' && displayedDarkMapMode
+          ? 'light'
+          : 'dark')
+    : 'light';
 
   const filteredPlaces = useMemo(() => getFilteredPlaces(places, {
     confirmedDealsOnly,
@@ -675,7 +702,8 @@ function AppScreen() {
   ]);
   const displayedBrowsePlaces = useMemo(() => getBrowsePlacesForDisplay(filteredBrowseLocations), [filteredBrowseLocations]);
 
-  const mappedPlaces = useMemo(() => (showMapBrowse ? getMappedPlacesForBrowse(filteredBrowseLocations) : []), [filteredBrowseLocations, showMapBrowse]);
+  const precomputedMappedPlaces = useMemo(() => getMappedPlacesForBrowse(filteredBrowseLocations), [filteredBrowseLocations]);
+  const mappedPlaces = useMemo(() => (showMapBrowse ? precomputedMappedPlaces : []), [precomputedMappedPlaces, showMapBrowse]);
   const browseResultCount = displayedBrowsePlaces.length;
   const mappedPlaceKey = useMemo(() => mappedPlaces.map((place) => place.markerKey).join('|'), [mappedPlaces]);
   const displayedMapPlaces = showMapBrowse
@@ -696,6 +724,7 @@ function AppScreen() {
   const selectedPlaceOperatingHours = selectedPlaceLocation?.operating_hours ?? selectedPlace?.operating_hours ?? [];
   const selectedPlaceDistanceLabel = getDistanceAwayLabel(userCoordinates, selectedPlaceLocation ?? selectedPlace);
   const guestMapOnlyMode = guestBrowseModeLocked && !authenticatedSession;
+  const startupGuestMapRegion = useMemo(() => clampRegionToBounds(getBrowseMapRegion(selectedCity, precomputedMappedPlaces)), [precomputedMappedPlaces, selectedCity]);
   const selectedPlaceIsFavorited = !!(selectedPlace && authenticatedSession?.favorite_businesses?.some((business) => business.slug === selectedPlace.slug));
   const showFavoriteControl = !authenticatedSession || authenticatedSession.portal === 'customer';
   const showClaimBusinessControl = !!selectedPlace && !selectedPlace.is_claimed && (!authenticatedSession || authenticatedSession.portal === 'customer');
@@ -1400,30 +1429,47 @@ function AppScreen() {
       },
     ],
   };
-  const guestBrowseOutgoingStyle = {
-    transform: [
-      {
-        translateX: screenTransition.interpolate({
+  const guestBrowseOutgoingStyle = guestToBrowseTransition
+    ? {
+        opacity: 1,
+      }
+    : {
+        transform: [
+          {
+            translateX: screenTransition.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, -width],
+            }),
+          },
+        ],
+      };
+  const guestBrowseIncomingStyle = guestToBrowseTransition
+    ? {
+        opacity: screenTransition.interpolate({
           inputRange: [0, 1],
-          outputRange: [0, guestToBrowseTransition ? width : -width],
+          outputRange: [0, 1],
         }),
-      },
-    ],
-  };
-  const guestBrowseIncomingStyle = {
-    opacity: screenTransition.interpolate({
-      inputRange: [0, 0.12, 1],
-      outputRange: [0.96, 0.98, 1],
-    }),
-    transform: [
-      {
-        translateX: screenTransition.interpolate({
-          inputRange: [0, 1],
-          outputRange: [guestToBrowseTransition ? -width : width, 0],
+      }
+    : {
+        opacity: screenTransition.interpolate({
+          inputRange: [0, 0.12, 1],
+          outputRange: [0.96, 0.98, 1],
         }),
-      },
-    ],
-  };
+        transform: [
+          {
+            translateX: screenTransition.interpolate({
+              inputRange: [0, 1],
+              outputRange: [width, 0],
+            }),
+          },
+        ],
+      };
+  const guestBrowseHeaderLogoOpacity = guestToBrowseTransition
+    ? screenTransition.interpolate({
+        inputRange: [0, 0.94, 1],
+        outputRange: [0, 0, 1],
+      })
+    : 1;
   const mainShellOutgoingStyle = {
     transform: [
       {
@@ -1744,6 +1790,10 @@ function AppScreen() {
     const shouldPreserveRenderedMapPins = !showMapBrowse && browseMode === 'map' && selectedPlaceSlug !== null;
     const shouldDelayPinsUntilBrowseScreenSettles = screenMode !== 'browse' && showTransitionMapBrowse;
     const shouldDelayPinsUntilBrowseFadeSettles = shellFadeScope === 'browse' && screenMode === 'browse' && showMapBrowse;
+    const shouldDelayPinsUntilSplashFadeSettles = splashMapHandoffPending
+      && !authenticatedSession
+      && guestBrowseModeLocked
+      && showMapBrowse;
 
     if (shouldPreserveRenderedMapPins) {
       mapPinsTransition.stopAnimation();
@@ -1751,7 +1801,7 @@ function AppScreen() {
       return;
     }
 
-    if (shouldDelayPinsUntilBrowseScreenSettles || shouldDelayPinsUntilBrowseFadeSettles) {
+    if (shouldDelayPinsUntilBrowseScreenSettles || shouldDelayPinsUntilBrowseFadeSettles || shouldDelayPinsUntilSplashFadeSettles) {
       if (renderedMappedPlaces.length || renderedMappedPlaceKey) {
         setRenderedMappedPlaces([]);
         setRenderedMappedPlaceKey('');
@@ -1793,7 +1843,7 @@ function AppScreen() {
         useNativeDriver: true,
       }).start();
     });
-  }, [browseMode, listLoading, mapPinsTransition, mappedPlaceKey, mappedPlaces, normalizedDeferredSearchQuery.length, renderedMappedPlaceKey, renderedMappedPlaces.length, screenMode, selectedPlaceSlug, shellFadeScope, showMapBrowse, showTransitionMapBrowse]);
+  }, [authenticatedSession, browseMode, guestBrowseModeLocked, listLoading, mapPinsTransition, mappedPlaceKey, mappedPlaces, normalizedDeferredSearchQuery.length, renderedMappedPlaceKey, renderedMappedPlaces.length, screenMode, selectedPlaceSlug, shellFadeScope, showMapBrowse, showTransitionMapBrowse, splashMapHandoffPending]);
 
   function navigateScreen(
     nextScreen: AppScreenMode,
@@ -1801,12 +1851,22 @@ function AppScreen() {
     transitionOverride?: { axis: TransitionAxis; incomingOffset: number },
   ) {
     const currentScreen = screenMode;
+    const shouldAnimateGuestOnboardingEntry = !authenticatedSession
+      && !selectedPlaceSlug
+      && currentScreen === 'browse'
+      && onboardingScreenKeys.has(nextScreen)
+      && nextScreen !== 'splash';
+    const shouldAnimateGuestReturnToBrowse = !authenticatedSession
+      && !selectedPlaceSlug
+      && nextScreen === 'browse'
+      && onboardingScreenKeys.has(currentScreen)
+      && guestOnboardingOrigin === 'browse';
     const shouldAnimateSplashReturn = nextScreen === 'splash'
       && !authenticatedSession
       && !selectedPlaceSlug
       && onboardingScreenKeys.has(currentScreen)
       && currentScreen !== 'splash';
-    const shouldAnimateOnboarding = onboardingScreenKeys.has(currentScreen)
+    const shouldAnimateOnboarding = (onboardingScreenKeys.has(currentScreen) || shouldAnimateGuestOnboardingEntry)
       && onboardingScreenKeys.has(nextScreen)
       && currentScreen !== nextScreen;
 
@@ -1841,7 +1901,35 @@ function AppScreen() {
         }
 
         setReturningToSplashScreen(null);
+        setGuestOnboardingOrigin(null);
         setScreenMode('splash');
+        screenTransition.setValue(1);
+      });
+      return;
+    }
+
+    if (shouldAnimateGuestReturnToBrowse) {
+      setBrowseProfileTransitionFrom(null);
+      setIncomingBrowseProfileScreen(null);
+      setIncomingBrowseProfileTargetScreen(null);
+      setReturningToSplashScreen(null);
+      screenTransition.setValue(0);
+      setIncomingOnboardingScreen('splash');
+      onboardingTransitionFrameRef.current = null;
+      Animated.timing(screenTransition, {
+        duration: onboardingTransitionDuration,
+        toValue: 1,
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (!finished) {
+          setIncomingOnboardingScreen(null);
+          return;
+        }
+
+        setIncomingOnboardingScreen(null);
+        setGuestOnboardingOrigin(null);
+        setGuestBrowseModeLocked(true);
+        setScreenMode('browse');
         screenTransition.setValue(1);
       });
       return;
@@ -1949,7 +2037,7 @@ function AppScreen() {
     function getInteractiveBackSwipeConfig(targetScreen: AppScreenMode): InteractiveBackSwipeConfig | null {
       switch (targetScreen) {
         case 'splash':
-          return authenticatedSession ? null : { kind: 'guest-browse', nextScreen: 'browse' };
+          return null;
         case 'browse':
           if (browseMode !== 'map' || selectedPlaceSlug) {
             return null;
@@ -1958,11 +2046,11 @@ function AppScreen() {
             ? { kind: 'main-shell', nextScreen: 'home-feed' }
             : null;
         case 'auth':
-          return { kind: 'onboarding', nextScreen: 'splash' };
+          return { kind: 'onboarding', nextScreen: guestOnboardingOrigin === 'browse' ? 'browse' : 'splash' };
         case 'profiles':
           return authenticatedSession
             ? { kind: 'browse-profile', nextScreen: 'browse' }
-            : { kind: 'onboarding', nextScreen: 'splash' };
+            : { kind: 'onboarding', nextScreen: guestOnboardingOrigin === 'browse' ? 'browse' : 'splash' };
         case 'favorite-businesses':
         case 'business-notifications':
         case 'settings':
@@ -1990,9 +2078,7 @@ function AppScreen() {
     function getInteractiveForwardSwipeConfig(targetScreen: AppScreenMode): InteractiveBackSwipeConfig | null {
       switch (targetScreen) {
         case 'browse':
-          return !authenticatedSession && browseMode === 'map' && !selectedPlaceSlug
-            ? { kind: 'guest-browse', nextScreen: 'splash', direction: 'left' }
-            : null;
+          return null;
         case 'profiles':
           return authenticatedSession
             ? { kind: 'onboarding', nextScreen: 'settings', direction: 'left' }
@@ -2025,9 +2111,6 @@ function AppScreen() {
         setIncomingMainShellScreen(null);
         interactiveBackSwipeRef.current = null;
         interactiveSwipeSettlingRef.current = false;
-        if (activeSwipe?.kind === 'guest-browse' && activeSwipe.targetScreen === 'splash') {
-          resetGuestMapAfterExit();
-        }
       });
 
       interactiveSwipeCleanupFrameRef.current = requestAnimationFrame(() => {
@@ -2040,7 +2123,7 @@ function AppScreen() {
       switch (targetScreen) {
         case 'browse':
           if (nextScreen === 'splash') {
-            resetGuestMapAfterExit();
+            setGuestBrowseModeLocked(true);
           } else {
             setSelectedPlaceSlug(null);
             setSelectedPlace(null);
@@ -2395,6 +2478,9 @@ function AppScreen() {
           return;
         }
 
+        if (currentGuestBrowseScreen === 'splash' && nextScreen === 'browse') {
+          setSplashMapHandoffPending(false);
+        }
         setScreenMode(nextScreen);
         profileSceneTransition.setValue(1);
         browseSceneTransition.setValue(1);
@@ -2802,6 +2888,20 @@ function AppScreen() {
 
     const nextRegion = getBrowseMapRegion(selectedCity, mappedPlaces);
     const boundedRegion = clampRegionToBounds(nextRegion);
+
+    if (
+      !hasSettledInitialMapRegionRef.current
+      && selectedCity === 'all'
+      && normalizedDeferredSearchQuery.length === 0
+    ) {
+      hasSettledInitialMapRegionRef.current = true;
+      clearAutoFitMapRegionTimer();
+      mapRegionRef.current = boundedRegion;
+      setMapRegion((currentRegion) => (
+        areRegionsEqual(currentRegion, boundedRegion) ? currentRegion : boundedRegion
+      ));
+      return;
+    }
 
     if (areRegionsEqual(mapRegionRef.current, boundedRegion)) {
       clearAutoFitMapRegionTimer();
@@ -3547,7 +3647,11 @@ function AppScreen() {
 
   function handleOpenProfiles() {
     dismissKeyboardForScreenTransition();
-    setGuestBrowseModeLocked(false);
+    const openingFromGuestBrowse = !authenticatedSession && screenMode === 'browse' && !selectedPlaceSlug;
+    setGuestOnboardingOrigin(openingFromGuestBrowse ? 'browse' : 'splash');
+    if (!openingFromGuestBrowse) {
+      setGuestBrowseModeLocked(false);
+    }
     setShowGuestFavoritePrompt(false);
     setShowGuestBusinessClaimPrompt(false);
     setShowCustomerBusinessClaimPrompt(false);
@@ -3567,7 +3671,11 @@ function AppScreen() {
 
   function handleOpenAuthFromLanding(portal: AuthPortal) {
     dismissKeyboardForScreenTransition();
-    setGuestBrowseModeLocked(false);
+    const openingFromGuestBrowse = !authenticatedSession && screenMode === 'browse' && !selectedPlaceSlug;
+    setGuestOnboardingOrigin(openingFromGuestBrowse ? 'browse' : 'splash');
+    if (!openingFromGuestBrowse) {
+      setGuestBrowseModeLocked(false);
+    }
     setShowGuestFavoritePrompt(false);
     setAuthPortal(portal);
     setAuthMessage(null);
@@ -3597,6 +3705,11 @@ function AppScreen() {
       onboardingTransitionFrameRef.current = null;
     }
 
+    if (guestOnboardingOrigin === 'browse') {
+      navigateScreen('browse', 'backward');
+      return;
+    }
+
     navigateScreen('splash', 'backward');
   }
 
@@ -3610,6 +3723,7 @@ function AppScreen() {
     setSelectedPlaceSlug(null);
     setSelectedLocationId(null);
     setGuestBrowseModeLocked(false);
+    hasSettledInitialMapRegionRef.current = false;
     pendingListRevealRef.current = false;
     browseModeFadePendingRef.current = false;
     browseModeTransition.stopAnimation();
@@ -3620,7 +3734,7 @@ function AppScreen() {
 
   function handleExitGuestMap() {
     dismissKeyboardForScreenTransition();
-    navigateGuestBrowseTransition('splash', resetGuestMapAfterExit);
+    navigateGuestBrowseTransition('splash');
   }
 
   function handleContinueToApp() {
@@ -3637,7 +3751,9 @@ function AppScreen() {
   }
 
   function handleOpenMapFromSplash() {
+    setGuestOnboardingOrigin(null);
     setGuestBrowseModeLocked(true);
+    setSplashMapHandoffPending(true);
     handleBrowseModeChange('map');
     warmMapShellThen(() => navigateGuestBrowseTransition('browse'));
   }
@@ -3695,6 +3811,12 @@ function AppScreen() {
       navigateBrowseProfileTransition('browse');
       return;
     }
+
+    if (guestOnboardingOrigin === 'browse') {
+      navigateScreen('browse', 'backward');
+      return;
+    }
+
     navigateScreen('splash', 'backward');
   }
 
@@ -5532,7 +5654,9 @@ function AppScreen() {
       ? currentOnboardingScreen
       : null;
     const overlayScreen = returningToSplashScreen ?? currentOverlayScreen;
-    const showingBrowse = screenMode === 'browse';
+    const showingBrowse = screenMode === 'browse'
+      || (guestOnboardingOrigin === 'browse' && currentOnboardingScreen !== null && returningToSplashScreen === null);
+    const showingBrowseUnderSplash = keepGuestMapVisibleOnSplash && !browseTransitionActive && overlayScreen === null && incomingOnboardingScreen === null;
     const splashLayerStyle = browseTransitionActive
       ? guestBrowseTransitionFrom === 'splash'
         ? guestBrowseOutgoingStyle
@@ -5544,7 +5668,7 @@ function AppScreen() {
       ? guestBrowseTransitionFrom === 'browse'
         ? guestBrowseOutgoingStyle
         : guestBrowseIncomingStyle
-      : showingBrowse
+      : (showingBrowse || showingBrowseUnderSplash)
         ? null
         : { opacity: 0, transform: [{ translateX: -width }] };
     const currentOverlayStyle = returningToSplashScreen
@@ -5560,10 +5684,19 @@ function AppScreen() {
           : null);
 
     return wrapScreenWithInteractiveBackSwipe(interactiveSwipeTarget, (
-      <View style={[styles.fullScreenRoot, (browseTransitionActive || incomingOnboardingScreen || returningToSplashScreen) ? styles.transitionClipRoot : null]}>
+      <View style={[
+        styles.fullScreenRoot,
+        guestToBrowseTransition ? styles.guestSplashTransitionRoot : null,
+        (browseTransitionActive || incomingOnboardingScreen || returningToSplashScreen) ? styles.transitionClipRoot : null,
+      ]}>
         <Animated.View
           pointerEvents={!showingBrowse && !browseTransitionActive && !overlayScreen && !incomingOnboardingScreen ? 'auto' : 'none'}
-          style={[styles.screenTransitionLayerAbsolute, splashLayerStyle]}
+          style={[
+            styles.screenTransitionLayerAbsolute,
+            styles.safeAreaTransparent,
+            guestToBrowseTransition ? styles.guestSplashTransitionForeground : null,
+            splashLayerStyle,
+          ]}
         >
           {renderOnboardingScreen('splash')}
         </Animated.View>
@@ -5571,19 +5704,18 @@ function AppScreen() {
           pointerEvents={showingBrowse && !browseTransitionActive ? 'auto' : 'none'}
           style={[
             styles.screenTransitionLayerAbsolute,
-            !browseTransitionActive && showingBrowse && shellFadeScope === 'browse' ? browseSceneTransitionStyle : null,
+            !browseTransitionActive && (showingBrowse || showingBrowseUnderSplash) && shellFadeScope === 'browse' ? browseSceneTransitionStyle : null,
             browseLayerStyle,
           ]}
         >
           {renderBrowseScreen({
-            guestBottomNav: true,
-            includeBottomNav: true,
+            guestChrome: true,
             suppressBrowseSceneTransitionStyle: true,
             suppressScreenTransitionStyle: true,
             suppressTransitionOverlay: true,
           })}
         </Animated.View>
-        {!browseTransitionActive && showingBrowse && shellFadeScope === 'browse' ? (
+        {!browseTransitionActive && (showingBrowse || showingBrowseUnderSplash) && shellFadeScope === 'browse' ? (
           <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, browseShellFadeMaskStyle]} />
         ) : null}
         {overlayScreen ? (
@@ -5598,8 +5730,8 @@ function AppScreen() {
             {renderOnboardingScreen(overlayScreen)}
           </Animated.View>
         ) : null}
-        {incomingOnboardingScreen && incomingOnboardingScreen !== 'splash' ? (
-          <Animated.View style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, incomingScreenTransitionStyle]}>
+        {incomingOnboardingScreen && onboardingScreenKeys.has(incomingOnboardingScreen) && incomingOnboardingScreen !== 'splash' ? (
+          <Animated.View testID="incoming-onboarding-screen" style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, incomingScreenTransitionStyle]}>
             {renderOnboardingScreen(incomingOnboardingScreen)}
           </Animated.View>
         ) : null}
@@ -5641,7 +5773,6 @@ function AppScreen() {
     const browseLayerContent = (incomingBrowseScreen ?? screenMode) === 'home-feed'
       ? renderAuthenticatedHomeFeedScreen()
       : renderBrowseScreen({
-          guestBottomNav: false,
           suppressBrowseSceneTransitionStyle: true,
           suppressScreenTransitionStyle: true,
           suppressTransitionOverlay: true,
@@ -5688,8 +5819,8 @@ function AppScreen() {
     switch (targetScreen) {
       case 'splash':
         return (
-          <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
-            <SplashScreen apiBaseUrl={apiBaseUrl} onCreateAccount={handleOpenProfiles} onOpenMap={handleOpenMapFromSplash} onSelectPortal={handleOpenAuthFromLanding} />
+          <SafeAreaView edges={['left', 'right']} style={styles.safeAreaTransparent}>
+            <SplashScreen assetsReady={startupImagesReady} onCreateAccount={handleOpenProfiles} onIntroComplete={handleOpenMapFromSplash} onSelectPortal={handleOpenAuthFromLanding} />
           </SafeAreaView>
         );
       case 'auth':
@@ -5859,12 +5990,15 @@ function AppScreen() {
   }
 
   function renderBrowseScreen(options?: {
-    guestBottomNav?: boolean;
-    includeBottomNav?: boolean;
+    guestChrome?: boolean;
     suppressScreenTransitionStyle?: boolean;
     suppressBrowseSceneTransitionStyle?: boolean;
     suppressTransitionOverlay?: boolean;
   }) {
+    const shouldRenderMapView = browseMode === 'map' && showMapBrowse;
+    const mapInitialRegion = !hasSettledInitialMapRegionRef.current && selectedCity === 'all' && normalizedDeferredSearchQuery.length === 0
+      ? startupGuestMapRegion
+      : mapRegionRef.current;
     const shouldShowProfileOverlay = !options?.suppressTransitionOverlay
       && usesBrowseProfileSlideTransition
       && browseProfileTransitionFrom === 'browse'
@@ -5884,96 +6018,100 @@ function AppScreen() {
           <View style={styles.fullScreenRoot}>
             <Animated.View pointerEvents={browseMode === 'map' ? 'auto' : 'none'} style={[styles.mapModeContentLayer, browseModeTransitionStyle]}>
               <View style={styles.mapScreen}>
-                <MapView
-                  initialRegion={mapRegionRef.current}
-                  maxDelta={maxMapGestureDelta}
-                  minDelta={minLatitudeDelta}
-                  userInterfaceStyle={Platform.OS === 'ios' ? (displayedDarkMapMode ? 'dark' : 'light') : undefined}
-                  rotateEnabled={false}
-                  mapType="standard"
-                  onMapReady={() => {
-                    if (!shouldUseNativeMapBoundaries || !mapRef.current) {
-                      return;
-                    }
-
-                    mapRef.current.setMapBoundaries(
-                      { latitude: mapAreaBounds.maxLatitude, longitude: mapAreaBounds.maxLongitude },
-                      { latitude: mapAreaBounds.minLatitude, longitude: mapAreaBounds.minLongitude },
-                    );
-                  }}
-                  onRegionChangeComplete={(nextRegion, details) => {
-                    const isGesture = !!details?.isGesture;
-                    const normalizedRegion = normalizeRegion(nextRegion);
-                    const boundedRegion = shouldUseNativeMapBoundaries
-                      ? normalizedRegion
-                      : clampRegionToBounds(normalizedRegion);
-
-                    if (isGesture) {
-                      clearAutoFitMapRegionTimer();
-                    }
-
-                    if (isGesture) {
-                      const shouldSnapToBounds = !shouldUseNativeMapBoundaries && shouldSnapRegionToBounds(normalizedRegion);
-                      const nextControlledRegion = shouldSnapToBounds ? boundedRegion : normalizedRegion;
-
-                      mapRegionRef.current = nextControlledRegion;
-                      setMapRegion((currentRegion) => (
-                        areRegionsEqual(currentRegion, nextControlledRegion) ? currentRegion : nextControlledRegion
-                      ));
-
-                      if (shouldSnapToBounds) {
-                        mapRef.current?.animateToRegion(boundedRegion, 180);
+                {shouldRenderMapView ? (
+                  <MapView
+                    initialRegion={mapInitialRegion}
+                    maxDelta={maxMapGestureDelta}
+                    minDelta={minLatitudeDelta}
+                    userInterfaceStyle={Platform.OS === 'ios' ? (displayedDarkMapMode ? 'dark' : 'light') : undefined}
+                    rotateEnabled={false}
+                    mapType="standard"
+                    onMapReady={() => {
+                      if (!shouldUseNativeMapBoundaries || !mapRef.current) {
+                        return;
                       }
 
-                      return;
-                    }
+                      mapRef.current.setMapBoundaries(
+                        { latitude: mapAreaBounds.maxLatitude, longitude: mapAreaBounds.maxLongitude },
+                        { latitude: mapAreaBounds.minLatitude, longitude: mapAreaBounds.minLongitude },
+                      );
+                    }}
+                    onRegionChangeComplete={(nextRegion, details) => {
+                      const isGesture = !!details?.isGesture;
+                      const normalizedRegion = normalizeRegion(nextRegion);
+                      const boundedRegion = shouldUseNativeMapBoundaries
+                        ? normalizedRegion
+                        : clampRegionToBounds(normalizedRegion);
 
-                    mapRegionRef.current = boundedRegion;
+                      if (isGesture) {
+                        clearAutoFitMapRegionTimer();
+                      }
 
-                    setMapRegion((currentRegion) => (
-                      areRegionsEqual(currentRegion, boundedRegion) ? currentRegion : boundedRegion
-                    ));
+                      if (isGesture) {
+                        const shouldSnapToBounds = !shouldUseNativeMapBoundaries && shouldSnapRegionToBounds(normalizedRegion);
+                        const nextControlledRegion = shouldSnapToBounds ? boundedRegion : normalizedRegion;
 
-                    if (!shouldUseNativeMapBoundaries && shouldSnapRegionToBounds(nextRegion)) {
-                      mapRef.current?.animateToRegion(boundedRegion, 180);
-                    }
-                  }}
-                  onPress={(event) => {
-                    Keyboard.dismiss();
-                    if (event.nativeEvent.action === 'marker-press') {
-                      return;
-                    }
+                        mapRegionRef.current = nextControlledRegion;
+                        setMapRegion((currentRegion) => (
+                          areRegionsEqual(currentRegion, nextControlledRegion) ? currentRegion : nextControlledRegion
+                        ));
 
-                    handleClearMapSelection();
-                  }}
-                  ref={mapRef}
-                  style={styles.mapBackground}
-                >
-                  {displayedMapPlaces.map((place, index) => {
-                    const markerStyle = getVenueMarkerStyle(place.venue_type);
-                    const animatedMarkerStyle = getAnimatedMapMarkerStyle(place, mapRegion, width, height, mapPinsTransition);
+                        if (shouldSnapToBounds) {
+                          mapRef.current?.animateToRegion(boundedRegion, 180);
+                        }
 
-                    return (
-                      <Marker
-                        anchor={{ x: 0.5, y: 0.5 }}
-                        coordinate={{ latitude: place.markerLatitude, longitude: place.markerLongitude }}
-                        key={place.markerKey}
-                        onPress={() => handleSelectMapPin(place.markerKey)}
-                          tracksViewChanges={mapMarkersTrackViewChanges}
-                        zIndex={displayedMapPlaces.length - index}
-                      >
-                        <Animated.View style={[
-                          animatedMarkerStyle,
-                          styles.mapMarker,
-                          { backgroundColor: markerStyle.fill, borderColor: markerStyle.stroke },
-                          selectedMapPlaceKey === place.markerKey ? styles.mapMarkerActive : null,
-                        ]}>
-                          <Text style={styles.mapMarkerText}>{markerStyle.badge}</Text>
-                        </Animated.View>
-                      </Marker>
-                    );
-                  })}
-                </MapView>
+                        return;
+                      }
+
+                      mapRegionRef.current = boundedRegion;
+
+                      setMapRegion((currentRegion) => (
+                        areRegionsEqual(currentRegion, boundedRegion) ? currentRegion : boundedRegion
+                      ));
+
+                      if (!shouldUseNativeMapBoundaries && shouldSnapRegionToBounds(nextRegion)) {
+                        mapRef.current?.animateToRegion(boundedRegion, 180);
+                      }
+                    }}
+                    onPress={(event) => {
+                      Keyboard.dismiss();
+                      if (event.nativeEvent.action === 'marker-press') {
+                        return;
+                      }
+
+                      handleClearMapSelection();
+                    }}
+                    ref={mapRef}
+                    style={styles.mapBackground}
+                  >
+                    {displayedMapPlaces.map((place, index) => {
+                      const markerStyle = getVenueMarkerStyle(place.venue_type);
+                      const animatedMarkerStyle = getAnimatedMapMarkerStyle(place, mapRegion, width, height, mapPinsTransition);
+
+                      return (
+                        <Marker
+                          anchor={{ x: 0.5, y: 0.5 }}
+                          coordinate={{ latitude: place.markerLatitude, longitude: place.markerLongitude }}
+                          key={place.markerKey}
+                          onPress={() => handleSelectMapPin(place.markerKey)}
+                            tracksViewChanges={mapMarkersTrackViewChanges}
+                          zIndex={displayedMapPlaces.length - index}
+                        >
+                          <Animated.View style={[
+                            animatedMarkerStyle,
+                            styles.mapMarker,
+                            { backgroundColor: markerStyle.fill, borderColor: markerStyle.stroke },
+                            selectedMapPlaceKey === place.markerKey ? styles.mapMarkerActive : null,
+                          ]}>
+                            <Text style={styles.mapMarkerText}>{markerStyle.badge}</Text>
+                          </Animated.View>
+                        </Marker>
+                      );
+                    })}
+                  </MapView>
+                ) : (
+                  <View style={styles.mapBackground} />
+                )}
 
                 {Platform.OS === 'ios' && transitioningMapTheme !== null ? (
                   <Animated.View pointerEvents="none" style={[styles.mapThemeTransitionLayer, { opacity: mapThemeFade }]}>
@@ -6019,7 +6157,7 @@ function AppScreen() {
             </Animated.View>
 
             <SafeAreaView edges={['top', 'left', 'right']} pointerEvents="box-none" style={styles.safeAreaTransparent}>
-              <View pointerEvents="box-none" style={[styles.screen, isLandscape ? styles.screenLandscape : null]}>
+              <View pointerEvents="box-none" style={[styles.screen, options?.guestChrome ? styles.screenWithGuestChrome : null, isLandscape ? styles.screenLandscape : null]}>
                 <BrowseControls
                   browseMode={browseMode}
                   confirmedDealsOnly={confirmedDealsOnly}
@@ -6285,7 +6423,7 @@ function AppScreen() {
                     systemImage="arrow.right"
                     variant="icon"
                   />
-                ) : guestMapOnlyMode && browseMode === 'map' ? (
+                ) : guestMapOnlyMode && browseMode === 'map' && !options?.guestChrome ? (
                   <NativeIOSLiquidGlassHeaderButton
                     accessibilityLabel="Exit guest map"
                     fallback={(
@@ -6319,9 +6457,15 @@ function AppScreen() {
                     variant="icon"
                   />
                 ) : null}
-                {options?.includeBottomNav ? renderBottomNav({ guest: options.guestBottomNav ?? false }) : null}
               </View>
             </SafeAreaView>
+            {options?.guestChrome ? (
+              <GuestShellChrome
+                logoEntranceOpacity={guestBrowseHeaderLogoOpacity}
+                onCreateAccount={handleOpenProfiles}
+                onSelectPortal={handleOpenAuthFromLanding}
+              />
+            ) : null}
           </View>
         </Animated.View>
         {shouldShowProfileOverlay ? (
@@ -6335,7 +6479,7 @@ function AppScreen() {
 
   return (
     <>
-      <StatusBar backgroundColor="transparent" style="dark" translucent={translucentStatusBar} />
+      <StatusBar backgroundColor="transparent" style={statusBarStyle} translucent={translucentStatusBar} />
       {!startupImagesReady ? (
         <View pointerEvents="none" style={styles.startupImagePreloadLayer}>
           {startupImageSources.map((source, index) => (

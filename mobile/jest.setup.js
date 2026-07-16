@@ -11,10 +11,10 @@ jest.mock('react-native-gesture-handler', () => ({
     const { View } = require('react-native');
     return React.createElement(View, null, children);
   },
-  PanGestureHandler: ({ children }) => {
+  PanGestureHandler: ({ children, ...props }) => {
     const React = require('react');
     const { View } = require('react-native');
-    return React.createElement(View, null, children);
+    return React.createElement(View, { ...props, testID: 'mock-pan-gesture-handler' }, children);
   },
   State: {
     UNDETERMINED: 0,

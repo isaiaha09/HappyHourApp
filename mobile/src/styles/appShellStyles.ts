@@ -19,6 +19,12 @@ export const appShellStyles = {
   transitionClipRoot: {
     overflow: 'hidden',
   },
+  guestSplashTransitionForeground: {
+    zIndex: 1,
+  },
+  guestSplashTransitionRoot: {
+    backgroundColor: '#080101',
+  },
   onboardingTransitionRoot: {
     flex: 1,
     backgroundColor: '#f7efe2',
@@ -56,6 +62,9 @@ export const appShellStyles = {
     paddingHorizontal: 18,
     paddingVertical: 14,
     gap: 14,
+  },
+  screenWithGuestChrome: {
+    paddingTop: 70,
   },
   screenLandscape: {
     alignSelf: 'center',
@@ -196,8 +205,8 @@ export const appShellStyles = {
   },
   bottomNavShell: {
     alignItems: 'center',
-    backgroundColor: '#9e5b49',
-    borderTopColor: '#5a3927',
+    backgroundColor: 'rgba(8, 1, 1, 0.9)',
+    borderTopColor: 'rgba(255, 255, 255, 0.12)',
     borderTopWidth: 1,
     flexDirection: 'row',
     gap: 8,
@@ -384,13 +393,13 @@ export const appShellStyles = {
   },
   screenHeaderBar: {
     alignSelf: 'stretch',
-    backgroundColor: '#9e5b49',
-    borderBottomColor: '#7f4636',
+    backgroundColor: 'rgba(8, 1, 1, 0.88)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.12)',
     borderBottomWidth: 1,
     borderLeftWidth: 0,
     borderRadius: 0,
     borderRightWidth: 0,
-    borderTopColor: '#b96d58',
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
     borderTopWidth: 1,
     marginHorizontal: -18,
     marginBottom: 14,
@@ -410,6 +419,10 @@ export const appShellStyles = {
     justifyContent: 'space-between',
     minHeight: 40,
     paddingHorizontal: 16,
+  },
+  guestShellChrome: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 80,
   },
   keyboardAvoidingFill: {
     flex: 1,

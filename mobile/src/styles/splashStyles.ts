@@ -4,7 +4,11 @@ import { StyleSheet } from 'react-native';
 export const splashStyles = {
   splashScreen: {
     flex: 1,
-    backgroundColor: '#f6ead8',
+    backgroundColor: 'transparent',
+  },
+  splashBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#080101',
   },
   splashHeaderBar: {
     marginBottom: 0,
@@ -57,6 +61,7 @@ export const splashStyles = {
   splashIntroContent: {
     alignItems: 'center',
     flex: 1,
+    paddingHorizontal: 16,
     width: '100%',
   },
   splashFloatingLogo: {
@@ -90,7 +95,7 @@ export const splashStyles = {
     justifyContent: 'center',
   },
   splashSloganWord: {
-    color: '#2d221a',
+    color: '#fff9f3',
     fontSize: 28,
     fontWeight: '800',
     textAlign: 'center',
