@@ -121,7 +121,7 @@ function hasNativeViewManager(viewName: string) {
 }
 
 function getBottomNavStyle(bottomInset: number, style?: StyleProp<ViewStyle>) {
-  return [{ width: '100%' as const, backgroundColor: 'transparent', height: 52, overflow: 'visible' as const }, style];
+  return [{ width: '100%' as const, backgroundColor: 'transparent', height: Math.max(52 + bottomInset, 52), overflow: 'visible' as const }, style];
 }
 
 function getHeaderButtonStyle(variant: 'pill' | 'icon', label?: string, style?: StyleProp<ViewStyle>) {
