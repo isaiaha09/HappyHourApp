@@ -246,7 +246,7 @@ private extension String {
   }
 }
 
-// MARK: — iOS 26 Liquid Glass Nav (Apple-native pattern)
+// MARK: — iOS 26 Native TabView (system liquid glass)
 
 @available(iOS 26.0, *)
 private struct DiningDealzLiquidGlassBottomNavContent: View {
@@ -257,297 +257,29 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   let themeVariant: DiningDealzLiquidGlassThemeVariant
   let onSelect: (DiningDealzLiquidGlassBottomNavItem) -> Void
 
-  @State private var hoveredItem: DiningDealzLiquidGlassBottomNavItem?
-  @State private var dragLocationX: CGFloat?
-  @State private var dragVelocityX: CGFloat = 0
-  @State private var isDragging = false
-
-  private let itemSpacing: CGFloat = 8
-  private let itemHeight: CGFloat = 50
-  private let horizontalInset: CGFloat = 7
-  private let outerHorizontalPadding: CGFloat = 12
-  private let selectorOverflowAllowance: CGFloat = 20
-
-  private var containerHeight: CGFloat {
-    itemHeight + (horizontalInset * 2)
-  }
-
-  private var containerBottomOffset: CGFloat {
-    items.contains(where: { $0.item == .home }) ? 0 : min(max(bottomInset * 0.32, 4), 11)
-  }
-
-  private var selectedItem: DiningDealzLiquidGlassBottomNavItem {
+  private var selectedTab: DiningDealzLiquidGlassBottomNavItem {
     moreOpen ? .more : activeItem
   }
 
-  private var visuallyActiveItem: DiningDealzLiquidGlassBottomNavItem {
-    hoveredItem ?? selectedItem
-  }
-
-  private var activeForegroundColor: Color {
+  private var accentColor: Color {
     Color(red: 1, green: 0.3, blue: 0.38)
   }
 
-  private var inactiveForegroundColor: Color {
-    switch themeVariant {
-    case .mapLight:
-      return Color(red: 0.14, green: 0.18, blue: 0.25).opacity(0.88)
-    case .defaultDark, .mapDark:
-      return Color.white.opacity(0.92)
-    }
-  }
-
-  // Apple Music-style bouncy spring — lower damping gives the fluid overshoot
-  private var tabSpring: Animation {
-    .spring(response: 0.4, dampingFraction: 0.72, blendDuration: 0)
-  }
-
   var body: some View {
-    VStack(spacing: 0) {
-      Spacer(minLength: 0)
-
-      GeometryReader { geometry in
-        let metrics = layoutMetrics(totalWidth: geometry.size.width)
-
-        // Two-state selector: snug at rest, expanded bubble while dragging
-        let restWidth = metrics.itemWidth + 4
-        let restHeight = containerHeight - 6
-        let dragWidth = metrics.itemWidth + (horizontalInset * 2) + 18
-        let dragHeight = containerHeight + 12
-        let selectorWidth = isDragging ? dragWidth : restWidth
-        let selectorHeight = isDragging ? dragHeight : restHeight
-
-        // Drag intensity for bubble deformation (0...1)
-        let dragIntensity = min(abs(dragVelocityX) / 600, 1.0)
-        let dragDirection: CGFloat = dragVelocityX > 0 ? 1 : (dragVelocityX < 0 ? -1 : 0)
-
-        ZStack(alignment: .topLeading) {
-          // Container glass — non-interactive backdrop capsule
-          GlassEffectContainer {
-            Color.clear
-              .frame(height: containerHeight)
-              .glassEffect(.regular.interactive(false), in: Capsule(style: .continuous))
-          }
-          .frame(height: containerHeight)
-          .offset(y: 7)
-          .zIndex(0)
-
-          // Selector glass — refractive bubble
-          selectorBubble(
-            width: selectorWidth,
-            height: selectorHeight,
-            dragIntensity: dragIntensity,
-            dragDirection: dragDirection
-          )
-          .frame(width: selectorWidth + (isDragging ? dragIntensity * 8 : 0), height: selectorHeight)
-          .offset(
-            x: selectorOffsetX(for: metrics, selectorWidth: selectorWidth, totalWidth: geometry.size.width),
-            y: isDragging ? 7 - ((selectorHeight - containerHeight) / 2) : 7 + ((containerHeight - selectorHeight) / 2)
-          )
-          .zIndex(1)
-          .animation(tabSpring, value: visuallyActiveItem)
-          .animation(tabSpring, value: dragLocationX)
-          .animation(tabSpring, value: isDragging)
-
-          // Tab item labels
-          HStack(spacing: itemSpacing) {
-            ForEach(items) { displayItem in
-              navItemContent(displayItem, isActive: displayItem.item == visuallyActiveItem)
-                .frame(width: metrics.itemWidth, height: itemHeight)
-                .contentShape(Rectangle())
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(Text(displayItem.title))
-            }
-          }
-          .padding(.horizontal, horizontalInset)
-          .padding(.vertical, horizontalInset)
-          .frame(height: containerHeight)
-          .offset(y: 7)
-          .contentShape(Rectangle())
-          .zIndex(2)
-          .gesture(
-            DragGesture(minimumDistance: 0)
-              .onChanged { value in
-                dragLocationX = value.location.x
-                dragVelocityX = value.velocity.width
-                isDragging = true
-                let nextItem = nearestItem(at: value.location.x, totalWidth: geometry.size.width)
-                if hoveredItem != nextItem {
-                  hoveredItem = nextItem
-                }
-              }
-              .onEnded { value in
-                let finalItem = nearestItem(at: value.predictedEndLocation.x, totalWidth: geometry.size.width)
-                  ?? nearestItem(at: value.location.x, totalWidth: geometry.size.width)
-                  ?? hoveredItem
-                dragLocationX = nil
-                dragVelocityX = 0
-                isDragging = false
-                hoveredItem = nil
-                if let finalItem {
-                  onSelect(finalItem)
-                }
-              }
-          )
+    TabView(selection: Binding(
+      get: { selectedTab },
+      set: { onSelect($0) }
+    )) {
+      ForEach(items) { displayItem in
+        Tab(displayItem.title, systemImage: displayItem.systemImageName, value: displayItem.item) {
+          Color.clear
         }
       }
-      .frame(height: containerHeight + 14)
-      .padding(.horizontal, outerHorizontalPadding)
-      .padding(.top, 0)
-      .padding(.bottom, 0)
-      .offset(y: containerBottomOffset)
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-    .background(Color.clear)
-  }
-
-  // MARK: — Selector Bubble
-
-  @ViewBuilder
-  private func selectorBubble(
-    width: CGFloat,
-    height: CGFloat,
-    dragIntensity: CGFloat,
-    dragDirection: CGFloat
-  ) -> some View {
-    if isDragging {
-      // Asymmetric radii: trailing side stretches, leading side compresses
-      let baseRadius = height / 2
-      let leadingStretch = dragDirection < 0 ? dragIntensity * 12 : -dragIntensity * 4
-      let trailingStretch = dragDirection > 0 ? dragIntensity * 12 : -dragIntensity * 4
-      let topLeading = max(baseRadius + leadingStretch - (dragDirection > 0 ? dragIntensity * 6 : 0), 16)
-      let bottomLeading = max(baseRadius + leadingStretch + (dragDirection > 0 ? dragIntensity * 4 : 0), 16)
-      let topTrailing = max(baseRadius + trailingStretch - (dragDirection < 0 ? dragIntensity * 6 : 0), 16)
-      let bottomTrailing = max(baseRadius + trailingStretch + (dragDirection < 0 ? dragIntensity * 4 : 0), 16)
-
-      let bubbleShape = UnevenRoundedRectangle(
-        cornerRadii: .init(
-          topLeading: topLeading,
-          bottomLeading: bottomLeading,
-          bottomTrailing: bottomTrailing,
-          topTrailing: topTrailing
-        ),
-        style: .continuous
-      )
-
-      Color.clear
-        .frame(width: width + (dragIntensity * 8), height: height)
-        .glassEffect(.regular.interactive(), in: bubbleShape)
-        .scaleEffect(x: 1 + (dragIntensity * 0.04), y: 1 - (dragIntensity * 0.02))
-        .rotationEffect(.degrees(Double(dragDirection * dragIntensity * 2.5)))
-    } else {
-      Color.clear
-        .frame(width: width, height: height)
-        .glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
+    .tint(accentColor)
+    .tabViewBottomAccessory {
+      EmptyView()
     }
-  }
-
-  @ViewBuilder
-  private func navItemContent(_ displayItem: DiningDealzLiquidGlassBottomNavDisplayItem, isActive: Bool) -> some View {
-    // Magnify only while dragging; at rest the active item sits normally inside the selector
-    let isMagnified = isActive && isDragging
-    VStack(spacing: 2) {
-      Image(systemName: displayItem.systemImageName)
-        .font(.system(size: isMagnified ? 20 : 16, weight: isActive ? .bold : .semibold))
-        .symbolEffect(.bounce, value: isActive)
-        .frame(height: 20)
-      Text(displayItem.title)
-        .font(.system(size: isMagnified ? 11 : 10, weight: isActive ? .bold : .semibold))
-        .lineLimit(1)
-        .minimumScaleFactor(0.72)
-        .allowsTightening(true)
-    }
-    .foregroundStyle(isActive ? activeForegroundColor : inactiveForegroundColor)
-    .opacity(isActive ? 1 : 0.65)
-    .scaleEffect(isMagnified ? 1.15 : (isActive ? 1.04 : 0.94))
-    .animation(tabSpring, value: isActive)
-    .animation(tabSpring, value: isDragging)
-  }
-
-  // MARK: — Layout
-
-  private func selectorOffsetX(
-    for metrics: DiningDealzLiquidGlassBottomNavLayoutMetrics,
-    selectorWidth: CGFloat,
-    totalWidth: CGFloat
-  ) -> CGFloat {
-    if let dragLocationX {
-      // Free drag: selector follows finger across the full container width
-      let minX: CGFloat = -4
-      let maxX = max(0, totalWidth - selectorWidth + 4)
-      let rawX = dragLocationX - (selectorWidth / 2)
-      return rubberBandClamp(rawX, min: minX, max: maxX)
-    }
-    // At rest: center on the active item
-    let itemCenterX = metrics.centerX(for: visuallyActiveItem)
-    return itemCenterX - (selectorWidth / 2)
-  }
-
-  private func rubberBandClamp(_ value: CGFloat, min minValue: CGFloat, max maxValue: CGFloat) -> CGFloat {
-    if value < minValue {
-      let overshoot = minValue - value
-      return minValue - rubberBandDistance(overshoot)
-    }
-    if value > maxValue {
-      let overshoot = value - maxValue
-      return maxValue + rubberBandDistance(overshoot)
-    }
-    return value
-  }
-
-  private func rubberBandDistance(_ distance: CGFloat) -> CGFloat {
-    // Generous rubber-band: allows significant overshoot before capping
-    let coefficient: CGFloat = 0.45
-    let dimension: CGFloat = 40.0
-    return (1 - (1 / ((distance * coefficient / dimension) + 1))) * dimension
-  }
-
-  private func nearestItem(at x: CGFloat, totalWidth: CGFloat) -> DiningDealzLiquidGlassBottomNavItem? {
-    let metrics = layoutMetrics(totalWidth: totalWidth)
-    guard metrics.itemWidth > 0, !items.isEmpty else { return nil }
-    let clampedX = min(max(x, 0), totalWidth)
-    let nearestIndex = items.enumerated().min { lhs, rhs in
-      abs(metrics.centerX(for: lhs.offset) - clampedX) < abs(metrics.centerX(for: rhs.offset) - clampedX)
-    }?.offset
-    guard let nearestIndex else { return nil }
-    return items[nearestIndex].item
-  }
-
-  private func layoutMetrics(totalWidth: CGFloat) -> DiningDealzLiquidGlassBottomNavLayoutMetrics {
-    DiningDealzLiquidGlassBottomNavLayoutMetrics(
-      itemCount: items.count,
-      items: items,
-      itemSpacing: itemSpacing,
-      leadingInset: horizontalInset,
-      totalWidth: totalWidth
-    )
-  }
-}
-
-// MARK: — Layout Metrics
-
-private struct DiningDealzLiquidGlassBottomNavLayoutMetrics {
-  let itemCount: Int
-  let items: [DiningDealzLiquidGlassBottomNavDisplayItem]
-  let itemSpacing: CGFloat
-  let leadingInset: CGFloat
-  let totalWidth: CGFloat
-
-  var itemWidth: CGFloat {
-    guard itemCount > 0 else { return 0 }
-    let availableWidth = totalWidth - (leadingInset * 2) - (itemSpacing * CGFloat(max(itemCount - 1, 0)))
-    return max(0, availableWidth / CGFloat(itemCount))
-  }
-
-  func centerX(for index: Int) -> CGFloat {
-    leadingInset + (CGFloat(index) * (itemWidth + itemSpacing)) + (itemWidth / 2)
-  }
-
-  func centerX(for item: DiningDealzLiquidGlassBottomNavItem) -> CGFloat {
-    guard let index = items.firstIndex(where: { $0.item == item }) else {
-      return centerX(for: 0)
-    }
-    return centerX(for: index)
   }
 }
 
