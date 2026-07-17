@@ -121,7 +121,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   }
 
   override var intrinsicContentSize: CGSize {
-    CGSize(width: UIView.noIntrinsicMetric, height: 52 + CGFloat(truncating: bottomInset))
+    CGSize(width: UIView.noIntrinsicMetric, height: 52)
   }
 
   private func setupView() {
