@@ -296,9 +296,9 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     }
   }
 
-  // Apple uses a single clean spring for all tab bar animations
+  // Apple Music-style bouncy spring — lower damping gives the fluid overshoot
   private var tabSpring: Animation {
-    .spring(response: 0.35, dampingFraction: 0.86, blendDuration: 0)
+    .spring(response: 0.4, dampingFraction: 0.72, blendDuration: 0)
   }
 
   var body: some View {
@@ -307,7 +307,9 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
 
       GeometryReader { geometry in
         let metrics = layoutMetrics(totalWidth: geometry.size.width)
-        let selectorWidth = metrics.itemWidth + (horizontalInset * 2)
+        // Selector is wider than a single item — creates the bubble/oval shape
+        let selectorWidth = metrics.itemWidth + (horizontalInset * 2) + 12
+        let selectorHeight = containerHeight + 6
 
         ZStack(alignment: .leading) {
           // Container glass — non-interactive backdrop capsule
@@ -319,18 +321,18 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
           .frame(height: containerHeight)
           .zIndex(0)
 
-          // Selector glass — interactive capsule that follows the active tab
+          // Selector glass — interactive bubble that floats over the active tab
           GlassEffectContainer {
             Color.clear
-              .frame(width: selectorWidth, height: containerHeight - 4)
-              .glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
+              .frame(width: selectorWidth, height: selectorHeight)
+              .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: selectorHeight / 2, style: .continuous))
           }
-          .frame(width: selectorWidth, height: containerHeight - 4)
+          .frame(width: selectorWidth, height: selectorHeight)
           .offset(
             x: selectorOffsetX(for: metrics, selectorWidth: selectorWidth, totalWidth: geometry.size.width),
-            y: 0
+            y: -((selectorHeight - containerHeight) / 2)
           )
-          .scaleEffect(isDragging ? 1.03 : 1.0)
+          .scaleEffect(isDragging ? 1.05 : 1.0)
           .zIndex(1)
           .animation(tabSpring, value: visuallyActiveItem)
           .animation(tabSpring, value: dragLocationX)
@@ -389,18 +391,18 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   private func navItemContent(_ displayItem: DiningDealzLiquidGlassBottomNavDisplayItem, isActive: Bool) -> some View {
     VStack(spacing: 2) {
       Image(systemName: displayItem.systemImageName)
-        .font(.system(size: 16, weight: isActive ? .bold : .semibold))
+        .font(.system(size: isActive ? 20 : 16, weight: isActive ? .bold : .semibold))
         .symbolEffect(.bounce, value: isActive)
-        .frame(height: 18)
+        .frame(height: 22)
       Text(displayItem.title)
-        .font(.system(size: 10, weight: isActive ? .bold : .semibold))
+        .font(.system(size: isActive ? 11 : 10, weight: isActive ? .bold : .semibold))
         .lineLimit(1)
         .minimumScaleFactor(0.72)
         .allowsTightening(true)
     }
     .foregroundStyle(isActive ? activeForegroundColor : inactiveForegroundColor)
-    .opacity(isActive ? 1 : 0.72)
-    .scaleEffect(isActive ? 1.05 : 1)
+    .opacity(isActive ? 1 : 0.65)
+    .scaleEffect(isActive ? 1.18 : 0.92)
     .animation(tabSpring, value: isActive)
   }
 
