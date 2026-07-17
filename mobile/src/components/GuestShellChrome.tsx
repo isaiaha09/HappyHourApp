@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { Animated, Easing, Image, Platform, Pressable, Text, View } from 'react-native';
+import { Animated, Easing, Image, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { AuthPortal } from '../appFlowTypes';
 import { styles } from '../appStyles';
-import { NativeIOSLiquidGlassBottomNav, NativeIOSLiquidGlassHeaderButton, isNativeIOSLiquidGlassBottomNavAvailable, isSupportedIOSLiquidGlassRuntime } from './NativeIOSLiquidGlass';
+import { NativeIOSLiquidGlassBottomNav, NativeIOSLiquidGlassHeaderButton, isNativeIOSLiquidGlassBottomNavAvailable } from './NativeIOSLiquidGlass';
 
 type AnimatedNumber = Animated.Value | Animated.AnimatedInterpolation<number> | number;
 
@@ -45,7 +45,6 @@ export function GuestShellChrome({
   const modalOpacity = useRef(new Animated.Value(0)).current;
   const touchTargetHitSlop = 12;
   const touchTargetPressRetentionOffset = 12;
-  const nativeGlassExpected = Platform.OS === 'ios' && isSupportedIOSLiquidGlassRuntime();
 
   useEffect(() => {
     if (interactive || activeModal === null) {
@@ -147,7 +146,6 @@ export function GuestShellChrome({
         <NativeIOSLiquidGlassHeaderButton
           accessibilityLabel="Open Home Feed"
           fallback={homeFeedFallback}
-          hideFallbackWhenNativeUnavailable={nativeGlassExpected}
           onPress={() => openModal('home-feed')}
           systemImage="newspaper.fill"
           style={{ marginTop: 8 }}
@@ -160,7 +158,6 @@ export function GuestShellChrome({
         <NativeIOSLiquidGlassHeaderButton
           accessibilityLabel="Sign in"
           fallback={signInFallback}
-          hideFallbackWhenNativeUnavailable={nativeGlassExpected}
           onPress={() => openModal('sign-in')}
           systemImage="person.crop.circle"
           style={{ marginTop: 8 }}
@@ -262,7 +259,7 @@ export function GuestShellChrome({
               themeVariant={themeVariant}
             />
           </Animated.View>
-        ) : interactive && nativeGlassExpected ? null : (
+        ) : (
           <Animated.View
             style={[
               styles.bottomNavShell,

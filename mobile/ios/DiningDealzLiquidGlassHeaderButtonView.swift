@@ -7,6 +7,12 @@ private enum DiningDealzLiquidGlassHeaderVariant: String {
   case icon
 }
 
+private enum DiningDealzLiquidGlassThemeVariant: String {
+  case defaultDark = "default-dark"
+  case mapDark = "map-dark"
+  case mapLight = "map-light"
+}
+
 @objc(DiningDealzLiquidGlassHeaderButtonView)
 final class DiningDealzLiquidGlassHeaderButtonView: UIView {
   @objc var onGlassButtonPress: RCTDirectEventBlock?

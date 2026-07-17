@@ -16,5 +16,6 @@ RCT_EXPORT_VIEW_PROPERTY(moreSystemImage, NSString)
 RCT_EXPORT_VIEW_PROPERTY(onNavItemSelect, RCTDirectEventBlock)
 RCT_EXPORT_VIEW_PROPERTY(profileLabel, NSString)
 RCT_EXPORT_VIEW_PROPERTY(profileSystemImage, NSString)
+RCT_EXPORT_VIEW_PROPERTY(themeVariant, NSString)
 
 @end

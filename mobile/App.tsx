@@ -5649,7 +5649,6 @@ function AppScreen() {
 
   function renderBottomNav(options: { guest: boolean }) {
     const mapScreenActive = screenMode === 'browse' && browseMode === 'map' && !selectedPlaceSlug;
-    const nativeMapGlassExpected = mapScreenActive && isSupportedIOSLiquidGlassRuntime();
     const bottomNavThemeVariant = mapScreenActive
       ? (displayedDarkMapMode ? 'map-dark' : 'map-light')
       : 'default-dark';
@@ -5687,10 +5686,6 @@ function AppScreen() {
           />
         </View>
       );
-    }
-
-    if (nativeMapGlassExpected) {
-      return null;
     }
 
     return (
@@ -6548,7 +6543,6 @@ function AppScreen() {
                         <Text style={styles.floatingMapNavActionArrow}>→</Text>
                       </Pressable>
                     )}
-                    hideFallbackWhenNativeUnavailable={isSupportedIOSLiquidGlassRuntime()}
                     onPress={handleBottomNavOpenProfile}
                     style={{ bottom: floatingDashboardButtonOffset, height: 54, position: 'absolute', right: 14, width: 54, zIndex: 40 }}
                     systemImage="arrow.right"
@@ -6583,7 +6577,6 @@ function AppScreen() {
                         </View>
                       </Pressable>
                     )}
-                    hideFallbackWhenNativeUnavailable={isSupportedIOSLiquidGlassRuntime()}
                     onPress={handleExitGuestMap}
                     style={{ bottom: floatingDashboardButtonOffset, height: 54, position: 'absolute', right: 14, width: 54, zIndex: 40 }}
                     systemImage="rectangle.portrait.and.arrow.right"
