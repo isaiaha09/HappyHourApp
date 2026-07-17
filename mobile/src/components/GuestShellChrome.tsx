@@ -141,6 +141,35 @@ export function GuestShellChrome({
       <Ionicons color="#f3f6fb" name="person-circle-outline" size={19} />
     </Pressable>
   );
+  const headerControls = (
+    <View style={[styles.dashboardHeaderRow, styles.splashHeaderRow]}>
+      {interactive ? (
+        <NativeIOSLiquidGlassHeaderButton
+          accessibilityLabel="Open Home Feed"
+          fallback={homeFeedFallback}
+          hideFallbackWhenNativeUnavailable={nativeGlassExpected}
+          onPress={() => openModal('home-feed')}
+          systemImage="newspaper.fill"
+          style={{ marginTop: 8 }}
+          themeVariant={themeVariant}
+          variant="icon"
+        />
+      ) : homeFeedFallback}
+      <View pointerEvents="none" style={styles.splashHeaderCenterSlot} />
+      {interactive ? (
+        <NativeIOSLiquidGlassHeaderButton
+          accessibilityLabel="Sign in"
+          fallback={signInFallback}
+          hideFallbackWhenNativeUnavailable={nativeGlassExpected}
+          onPress={() => openModal('sign-in')}
+          systemImage="person.crop.circle"
+          style={{ marginTop: 8 }}
+          themeVariant={themeVariant}
+          variant="icon"
+        />
+      ) : signInFallback}
+    </View>
+  );
 
   return (
     <View pointerEvents="box-none" style={styles.guestShellChrome}>
@@ -153,33 +182,21 @@ export function GuestShellChrome({
             { opacity: headerOpacity },
           ]}
         >
-          <View style={[styles.dashboardHeaderRow, styles.splashHeaderRow]}>
-            {interactive ? (
-              <NativeIOSLiquidGlassHeaderButton
-                accessibilityLabel="Open Home Feed"
-                fallback={homeFeedFallback}
-                hideFallbackWhenNativeUnavailable={nativeGlassExpected}
-                onPress={() => openModal('home-feed')}
-                systemImage="newspaper.fill"
-                style={{ marginTop: 8 }}
-                themeVariant={themeVariant}
-                variant="icon"
-              />
-            ) : homeFeedFallback}
-            <View pointerEvents="none" style={styles.splashHeaderCenterSlot} />
-            {interactive ? (
-              <NativeIOSLiquidGlassHeaderButton
-                accessibilityLabel="Sign in"
-                fallback={signInFallback}
-                hideFallbackWhenNativeUnavailable={nativeGlassExpected}
-                onPress={() => openModal('sign-in')}
-                systemImage="person.crop.circle"
-                style={{ marginTop: 8 }}
-                themeVariant={themeVariant}
-                variant="icon"
-              />
-            ) : signInFallback}
-          </View>
+          {headerControls}
+        </Animated.View>
+      ) : interactive ? (
+        <Animated.View
+          pointerEvents="box-none"
+          style={{
+            left: 0,
+            opacity: headerOpacity,
+            position: 'absolute',
+            right: 0,
+            top: Math.max(insets.top, 14),
+            zIndex: 81,
+          }}
+        >
+          {headerControls}
         </Animated.View>
       ) : null}
 
