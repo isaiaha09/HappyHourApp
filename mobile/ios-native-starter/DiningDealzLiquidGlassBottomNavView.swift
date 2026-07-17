@@ -246,69 +246,7 @@ private extension String {
   }
 }
 
-//
-// MARK: — APPLE LIQUID GLASS MODIFIER
-//
-
-extension View {
-    func appleLiquidGlass(
-        shape: some Shape,
-        theme: DiningDealzLiquidGlassThemeVariant,
-        isActive: Bool,
-        dragIntensity: CGFloat
-    ) -> some View {
-        self
-            .glassEffect(.regular.interactive(), in: shape)
-
-            .overlay(
-                shape.fill(
-                    LinearGradient(
-                        colors: theme == .mapLight
-                            ? [
-                                Color.white.opacity(0.18 + dragIntensity * 0.1),
-                                Color.white.opacity(0.06)
-                              ]
-                            : [
-                                Color.white.opacity(0.08 + dragIntensity * 0.1),
-                                Color.white.opacity(0.02)
-                              ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-            )
-
-            .overlay(
-                shape.stroke(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(isActive ? 0.32 : 0.18),
-                            Color.white.opacity(0.06)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: isActive ? 1.4 : 1
-                )
-            )
-
-            .overlay(
-                shape.stroke(Color.white.opacity(0.08), lineWidth: 0.6)
-                    .blur(radius: 1.2)
-            )
-
-            .shadow(
-                color: Color.white.opacity(isActive ? 0.22 : 0.12),
-                radius: isActive ? 12 : 8,
-                x: 0,
-                y: 0
-            )
-    }
-}
-
-//
-// MARK: — iOS 26 LIQUID NAV CONTENT
-//
+// MARK: — iOS 26 Liquid Glass Nav (Apple-native pattern)
 
 @available(iOS 26.0, *)
 private struct DiningDealzLiquidGlassBottomNavContent: View {
@@ -321,52 +259,16 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
 
   @State private var hoveredItem: DiningDealzLiquidGlassBottomNavItem?
   @State private var dragLocationX: CGFloat?
-  @State private var dragTranslation: CGSize = .zero
   @State private var isDragging = false
-  @State private var isContainerHovered = false
 
-  private let containerSpacing: CGFloat = 10
   private let itemSpacing: CGFloat = 8
   private let itemHeight: CGFloat = 50
   private let horizontalInset: CGFloat = 7
   private let outerHorizontalPadding: CGFloat = 12
-  private let restingSelectorWidthRatio: CGFloat = 0.96
-  private let draggingSelectorWidthRatio: CGFloat = 1.14
-  private let restingSelectorExtraWidth: CGFloat = 0
-  private let draggingSelectorExtraWidth: CGFloat = 18
-  private let draggingSelectorExtraHeight: CGFloat = 4
-  private let selectorOverflowAllowance: CGFloat = 24
+  private let selectorOverflowAllowance: CGFloat = 20
 
   private var containerHeight: CGFloat {
     itemHeight + (horizontalInset * 2)
-  }
-
-  private var selectorHeight: CGFloat {
-    isDragging ? containerHeight + draggingSelectorExtraHeight : containerHeight - 4
-  }
-
-  private var dragIntensity: CGFloat {
-    min(max(abs(dragTranslation.width) / 84, 0), 1)
-  }
-
-  private var dragDirection: CGFloat {
-    if dragTranslation.width > 0 { return 1 }
-    if dragTranslation.width < 0 { return -1 }
-    return 0
-  }
-
-  private var selectorVerticalOffset: CGFloat {
-    if isDragging {
-      return -((draggingSelectorExtraHeight * 0.5) + (dragIntensity * 2))
-    }
-    return 0
-  }
-
-  private var selectorLift: CGFloat {
-    if isDragging {
-      return -(6 + (dragIntensity * 4))
-    }
-    return isSelectorActive ? -2 : 0
   }
 
   private var containerBottomOffset: CGFloat {
@@ -377,20 +279,8 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     moreOpen ? .more : activeItem
   }
 
-  private var isContainerActive: Bool {
-    isContainerHovered || hoveredItem != nil
-  }
-
-  private var isSelectorActive: Bool {
-    hoveredItem != nil || isContainerHovered
-  }
-
   private var visuallyActiveItem: DiningDealzLiquidGlassBottomNavItem {
     hoveredItem ?? selectedItem
-  }
-
-  private var liquidGlassTint: Color {
-    .clear
   }
 
   private var activeForegroundColor: Color {
@@ -406,16 +296,22 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     }
   }
 
+  // Apple uses a single clean spring for all tab bar animations
+  private var tabSpring: Animation {
+    .spring(response: 0.35, dampingFraction: 0.86, blendDuration: 0)
+  }
+
   var body: some View {
     VStack(spacing: 0) {
       Spacer(minLength: 0)
 
       GeometryReader { geometry in
         let metrics = layoutMetrics(totalWidth: geometry.size.width)
-        let selectorWidth = selectorWidth(for: metrics)
+        let selectorWidth = metrics.itemWidth + (horizontalInset * 2)
 
         ZStack(alignment: .leading) {
-          GlassEffectContainer(spacing: containerSpacing) {
+          // Container glass — non-interactive backdrop capsule
+          GlassEffectContainer {
             Color.clear
               .frame(height: containerHeight)
               .glassEffect(.regular.interactive(false), in: Capsule(style: .continuous))
@@ -423,40 +319,42 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
           .frame(height: containerHeight)
           .zIndex(0)
 
-          GlassEffectContainer(spacing: containerSpacing) {
-            selectorGlassShape(width: selectorWidth, height: selectorHeight)
+          // Selector glass — interactive capsule that follows the active tab
+          GlassEffectContainer {
+            Color.clear
+              .frame(width: selectorWidth, height: containerHeight - 4)
+              .glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
           }
-          .frame(width: selectorWidth, height: selectorHeight)
-          .offset(x: selectorOffsetX(for: metrics, selectorWidth: selectorWidth, totalWidth: geometry.size.width))
-          .offset(y: selectorVerticalOffset + selectorLift)
+          .frame(width: selectorWidth, height: containerHeight - 4)
+          .offset(
+            x: selectorOffsetX(for: metrics, selectorWidth: selectorWidth, totalWidth: geometry.size.width),
+            y: 0
+          )
+          .scaleEffect(isDragging ? 1.03 : 1.0)
           .zIndex(1)
-          .animation(.interactiveSpring(response: 0.24, dampingFraction: 0.82, blendDuration: 0.12), value: selectedItem)
-          .animation(.interactiveSpring(response: 0.2, dampingFraction: 0.78, blendDuration: 0.12), value: hoveredItem)
-          .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.76, blendDuration: 0.12), value: dragLocationX)
-          .animation(.interactiveSpring(response: 0.22, dampingFraction: 0.8, blendDuration: 0.12), value: isDragging)
-          .animation(.interactiveSpring(response: 0.2, dampingFraction: 0.82, blendDuration: 0.12), value: isSelectorActive)
+          .animation(tabSpring, value: visuallyActiveItem)
+          .animation(tabSpring, value: dragLocationX)
+          .animation(tabSpring, value: isDragging)
 
-          ZStack(alignment: .leading) {
-            HStack(spacing: itemSpacing) {
-              ForEach(items) { displayItem in
-                navItemContent(displayItem, isActive: displayItem.item == visuallyActiveItem)
-                  .frame(width: metrics.itemWidth, height: itemHeight)
-                  .contentShape(Rectangle())
-                  .accessibilityElement(children: .ignore)
-                  .accessibilityLabel(Text(displayItem.title))
-              }
+          // Tab item labels
+          HStack(spacing: itemSpacing) {
+            ForEach(items) { displayItem in
+              navItemContent(displayItem, isActive: displayItem.item == visuallyActiveItem)
+                .frame(width: metrics.itemWidth, height: itemHeight)
+                .contentShape(Rectangle())
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(displayItem.title))
             }
-            .padding(.horizontal, horizontalInset)
-            .padding(.vertical, horizontalInset)
           }
-          .frame(height: itemHeight + (horizontalInset * 2))
+          .padding(.horizontal, horizontalInset)
+          .padding(.vertical, horizontalInset)
+          .frame(height: containerHeight)
           .contentShape(Rectangle())
           .zIndex(2)
           .gesture(
             DragGesture(minimumDistance: 0)
               .onChanged { value in
                 dragLocationX = value.location.x
-                dragTranslation = value.translation
                 isDragging = true
                 let nextItem = nearestItem(at: value.location.x, totalWidth: geometry.size.width)
                 if hoveredItem != nextItem {
@@ -464,12 +362,10 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
                 }
               }
               .onEnded { value in
-                let projectedX = value.predictedEndLocation.x
-                let finalItem = nearestItem(at: projectedX, totalWidth: geometry.size.width)
+                let finalItem = nearestItem(at: value.predictedEndLocation.x, totalWidth: geometry.size.width)
                   ?? nearestItem(at: value.location.x, totalWidth: geometry.size.width)
                   ?? hoveredItem
                 dragLocationX = nil
-                dragTranslation = .zero
                 isDragging = false
                 hoveredItem = nil
                 if let finalItem {
@@ -477,12 +373,6 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
                 }
               }
           )
-        }
-        .animation(.interactiveSpring(response: 0.22, dampingFraction: 0.82, blendDuration: 0.12), value: hoveredItem)
-        .animation(.interactiveSpring(response: 0.22, dampingFraction: 0.82, blendDuration: 0.12), value: isContainerHovered)
-        .animation(.interactiveSpring(response: 0.22, dampingFraction: 0.78, blendDuration: 0.12), value: isDragging)
-        .onHover { hovering in
-          isContainerHovered = hovering
         }
       }
       .frame(height: containerHeight)
@@ -500,6 +390,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     VStack(spacing: 2) {
       Image(systemName: displayItem.systemImageName)
         .font(.system(size: 16, weight: isActive ? .bold : .semibold))
+        .symbolEffect(.bounce, value: isActive)
         .frame(height: 18)
       Text(displayItem.title)
         .font(.system(size: 10, weight: isActive ? .bold : .semibold))
@@ -508,14 +399,167 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
         .allowsTightening(true)
     }
     .foregroundStyle(isActive ? activeForegroundColor : inactiveForegroundColor)
-    .shadow(color: .black.opacity(isActive ? 0.18 : 0.28), radius: 1, x: 0, y: 1)
-    .opacity(isActive ? 1 : 0.76)
-    .scaleEffect(isActive ? 1.07 : 1)
-    .animation(.spring(response: 0.2, dampingFraction: 0.82), value: isActive)
+    .opacity(isActive ? 1 : 0.72)
+    .scaleEffect(isActive ? 1.05 : 1)
+    .animation(tabSpring, value: isActive)
   }
 
-  @ViewBuilder
-  private func selectorGlassShape(width: CGFloat, height: CGFloat) -> some View {
-    if isDragging {
-      let leadingRadius = max((height * 0.48) + (dragDirection < 0 ? dragIntensity * 10 : dragIntensity * 3), 18)
-      let trailingRadius = max((height *
+  // MARK: — Layout
+
+  private func selectorOffsetX(
+    for metrics: DiningDealzLiquidGlassBottomNavLayoutMetrics,
+    selectorWidth: CGFloat,
+    totalWidth: CGFloat
+  ) -> CGFloat {
+    if let dragLocationX {
+      // During drag: track finger position with rubber-band at edges
+      let minX: CGFloat = 0
+      let maxX = max(0, totalWidth - (outerHorizontalPadding * 2) - selectorWidth)
+      let rawX = dragLocationX - (selectorWidth / 2)
+      return rubberBandClamp(rawX, min: minX, max: maxX)
+    }
+    // At rest: center on the active item
+    let itemCenterX = metrics.centerX(for: visuallyActiveItem)
+    return itemCenterX - (selectorWidth / 2)
+  }
+
+  private func rubberBandClamp(_ value: CGFloat, min minValue: CGFloat, max maxValue: CGFloat) -> CGFloat {
+    if value < minValue {
+      let overshoot = minValue - value
+      return minValue - rubberBandDistance(overshoot)
+    }
+    if value > maxValue {
+      let overshoot = value - maxValue
+      return maxValue + rubberBandDistance(overshoot)
+    }
+    return value
+  }
+
+  private func rubberBandDistance(_ distance: CGFloat) -> CGFloat {
+    // Apple's rubber-band formula: diminishing returns past the boundary
+    let coefficient: CGFloat = 0.55
+    let dimension: CGFloat = max(selectorOverflowAllowance, 1)
+    return (1 - (1 / ((distance * coefficient / dimension) + 1))) * dimension
+  }
+
+  private func nearestItem(at x: CGFloat, totalWidth: CGFloat) -> DiningDealzLiquidGlassBottomNavItem? {
+    let metrics = layoutMetrics(totalWidth: totalWidth)
+    guard metrics.itemWidth > 0, !items.isEmpty else { return nil }
+    let clampedX = min(max(x, 0), totalWidth)
+    let nearestIndex = items.enumerated().min { lhs, rhs in
+      abs(metrics.centerX(for: lhs.offset) - clampedX) < abs(metrics.centerX(for: rhs.offset) - clampedX)
+    }?.offset
+    guard let nearestIndex else { return nil }
+    return items[nearestIndex].item
+  }
+
+  private func layoutMetrics(totalWidth: CGFloat) -> DiningDealzLiquidGlassBottomNavLayoutMetrics {
+    DiningDealzLiquidGlassBottomNavLayoutMetrics(
+      itemCount: items.count,
+      items: items,
+      itemSpacing: itemSpacing,
+      leadingInset: horizontalInset,
+      totalWidth: totalWidth
+    )
+  }
+}
+
+// MARK: — Layout Metrics
+
+private struct DiningDealzLiquidGlassBottomNavLayoutMetrics {
+  let itemCount: Int
+  let items: [DiningDealzLiquidGlassBottomNavDisplayItem]
+  let itemSpacing: CGFloat
+  let leadingInset: CGFloat
+  let totalWidth: CGFloat
+
+  var itemWidth: CGFloat {
+    guard itemCount > 0 else { return 0 }
+    let availableWidth = totalWidth - (leadingInset * 2) - (itemSpacing * CGFloat(max(itemCount - 1, 0)))
+    return max(0, availableWidth / CGFloat(itemCount))
+  }
+
+  func centerX(for index: Int) -> CGFloat {
+    leadingInset + (CGFloat(index) * (itemWidth + itemSpacing)) + (itemWidth / 2)
+  }
+
+  func centerX(for item: DiningDealzLiquidGlassBottomNavItem) -> CGFloat {
+    guard let index = items.firstIndex(where: { $0.item == item }) else {
+      return centerX(for: 0)
+    }
+    return centerX(for: index)
+  }
+}
+
+// MARK: — Legacy Fallback (pre-iOS 26)
+
+private struct DiningDealzLegacyBottomNavContent: View {
+  let activeItem: DiningDealzLiquidGlassBottomNavItem
+  let bottomInset: CGFloat
+  let items: [DiningDealzLiquidGlassBottomNavDisplayItem]
+  let moreOpen: Bool
+  let themeVariant: DiningDealzLiquidGlassThemeVariant
+  let onSelect: (DiningDealzLiquidGlassBottomNavItem) -> Void
+
+  private var displayedActiveItem: DiningDealzLiquidGlassBottomNavItem {
+    moreOpen ? .more : activeItem
+  }
+
+  private var inactiveForegroundColor: Color {
+    switch themeVariant {
+    case .mapLight:
+      return Color(red: 0.14, green: 0.18, blue: 0.25).opacity(0.82)
+    case .defaultDark, .mapDark:
+      return Color.white
+    }
+  }
+
+  private var selectorFillColor: Color {
+    switch themeVariant {
+    case .mapLight:
+      return Color.white.opacity(displayedActiveItem == .map ? 0.5 : 0.22)
+    case .defaultDark, .mapDark:
+      return displayedActiveItem == .map ? Color.white.opacity(0.22) : Color.white.opacity(0.12)
+    }
+  }
+
+  var body: some View {
+    VStack(spacing: 0) {
+      Spacer(minLength: 0)
+      HStack(spacing: 6) {
+        ForEach(items) { displayItem in
+          Button {
+            onSelect(displayItem.item)
+          } label: {
+            VStack(spacing: 2) {
+              Image(systemName: displayItem.systemImageName)
+                .font(.system(size: 16, weight: displayItem.item == displayedActiveItem ? .bold : .semibold))
+                .frame(height: 18)
+              Text(displayItem.title)
+                .font(.system(size: 10, weight: displayItem.item == displayedActiveItem ? .bold : .medium))
+                .lineLimit(1)
+            }
+            .foregroundStyle(displayItem.item == displayedActiveItem ? Color(red: 1, green: 0.3, blue: 0.38) : inactiveForegroundColor)
+            .frame(maxWidth: .infinity, minHeight: 50)
+            .background(
+              displayItem.item == displayedActiveItem
+                ? Capsule().fill(selectorFillColor)
+                : nil
+            )
+          }
+          .buttonStyle(.plain)
+        }
+      }
+      .padding(.horizontal, 7)
+      .padding(.vertical, 7)
+      .background(
+        Capsule()
+          .fill(.ultraThinMaterial)
+      )
+      .padding(.horizontal, 12)
+      .padding(.bottom, max(bottomInset * 0.32, 4))
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    .background(Color.clear)
+  }
+}
