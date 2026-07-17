@@ -48,7 +48,7 @@ function OnboardingBackButton({ label, onPress, style }: { label: string; onPres
       onPress={onPress}
       style={resolvedStyle}
       textStyle={styles.onboardingBackButtonText}
-      themeVariant="map-light"
+      themeVariant="default-dark"
     />
   );
 }

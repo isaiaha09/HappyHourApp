@@ -219,7 +219,7 @@ export function GuestShellChrome({
         </Animated.View>
       ) : null}
 
-      <View pointerEvents={interactive ? 'box-none' : 'none'} style={styles.bottomNavOverlay}>
+      <View pointerEvents="box-none" style={styles.bottomNavOverlay}>
         {isNativeIOSLiquidGlassBottomNavAvailable() ? (
           <Animated.View
             style={{
