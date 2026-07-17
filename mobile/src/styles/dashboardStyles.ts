@@ -1,3 +1,5 @@
+import { theme } from './theme';
+
 // Dashboard, settings, notifications, campaigns, and 2FA management styles.
 export const dashboardStyles = {
   dashboardMultilineInput: {
@@ -12,8 +14,8 @@ export const dashboardStyles = {
     paddingBottom: 132,
   },
   dashboardCard: {
-    backgroundColor: '#fffaf4',
-    borderColor: '#efd8bd',
+    backgroundColor: theme.bgRaised,
+    borderColor: theme.border,
     borderRadius: 24,
     borderWidth: 1,
     gap: 14,
@@ -26,8 +28,8 @@ export const dashboardStyles = {
     paddingBottom: 12,
   },
   dashboardCalloutCard: {
-    backgroundColor: '#fff3e5',
-    borderColor: '#efd8bd',
+    backgroundColor: theme.bgSoft,
+    borderColor: theme.borderStrong,
     borderRadius: 18,
     borderWidth: 1,
     gap: 10,
@@ -35,20 +37,20 @@ export const dashboardStyles = {
     padding: 14,
   },
   dashboardVerifiedCard: {
-    backgroundColor: '#f5ebe2',
-    borderColor: '#dfc3af',
+    backgroundColor: theme.successSoft,
+    borderColor: theme.success,
     borderRadius: 18,
     borderWidth: 1,
     gap: 8,
     padding: 14,
   },
   dashboardVerifiedTitle: {
-    color: '#8d6042',
+    color: theme.success,
     fontSize: 16,
     fontWeight: '800',
   },
   dashboardVerifiedText: {
-    color: '#8d6042',
+    color: theme.textSecondary,
     fontSize: 13,
     lineHeight: 18,
   },
@@ -56,8 +58,8 @@ export const dashboardStyles = {
     gap: 10,
   },
   dashboardSectionCard: {
-    backgroundColor: '#fff7ef',
-    borderColor: '#efd8bd',
+    backgroundColor: theme.bgElevated,
+    borderColor: theme.border,
     borderRadius: 18,
     borderWidth: 1,
     gap: 10,
@@ -67,12 +69,12 @@ export const dashboardStyles = {
     gap: 10,
   },
   dashboardSectionTitle: {
-    color: '#402214',
+    color: theme.textPrimary,
     fontSize: 16,
     fontWeight: '800',
   },
   dashboardSupportText: {
-    color: '#6c5443',
+    color: theme.textSecondary,
     fontSize: 13,
     lineHeight: 18,
   },
@@ -99,22 +101,22 @@ export const dashboardStyles = {
     minWidth: 160,
   },
   dashboardFavoriteBusinessCard: {
-    backgroundColor: '#fff7ef',
-    borderColor: '#efd8bd',
+    backgroundColor: theme.bgElevated,
+    borderColor: theme.border,
     borderRadius: 16,
     borderWidth: 1,
     padding: 12,
   },
   dashboardNotificationCard: {
-    backgroundColor: '#fffaf4',
-    borderColor: '#efd8bd',
+    backgroundColor: theme.bgRaised,
+    borderColor: theme.border,
     borderRadius: 16,
     borderWidth: 1,
     padding: 12,
   },
   dashboardNotificationCardSelected: {
-    backgroundColor: '#f5ebe2',
-    borderColor: '#9e5b49',
+    backgroundColor: theme.accentSoft,
+    borderColor: theme.accent,
   },
   blockedCustomerSelectableCard: {
     paddingVertical: 14,
@@ -133,7 +135,7 @@ export const dashboardStyles = {
   },
   blockedCustomerSelectionIndicator: {
     alignItems: 'center',
-    borderColor: '#c8a889',
+    borderColor: theme.border,
     borderRadius: 999,
     borderWidth: 2,
     height: 24,
@@ -141,10 +143,10 @@ export const dashboardStyles = {
     width: 24,
   },
   blockedCustomerSelectionIndicatorActive: {
-    borderColor: '#9e5b49',
+    borderColor: theme.accent,
   },
   blockedCustomerSelectionIndicatorDot: {
-    backgroundColor: '#9e5b49',
+    backgroundColor: theme.accent,
     borderRadius: 999,
     height: 10,
     width: 10,
@@ -175,8 +177,8 @@ export const dashboardStyles = {
   dashboardNotificationClearButton: {
     alignItems: 'center',
     alignSelf: 'flex-start',
-    backgroundColor: '#fff7ef',
-    borderColor: '#9e5b49',
+    backgroundColor: theme.bgElevated,
+    borderColor: theme.accent,
     borderRadius: 12,
     borderWidth: 1,
     flexShrink: 0,
@@ -184,7 +186,7 @@ export const dashboardStyles = {
     paddingVertical: 8,
   },
   dashboardNotificationClearButtonText: {
-    color: '#9e5b49',
+    color: theme.accent,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -199,33 +201,33 @@ export const dashboardStyles = {
     gap: 4,
   },
   dashboardNotificationTitle: {
-    color: '#2d221a',
+    color: theme.textPrimary,
     flex: 1,
     fontSize: 14,
     fontWeight: '800',
     lineHeight: 18,
   },
   dashboardNotificationTimestamp: {
-    color: '#8b6c59',
+    color: theme.textMuted,
     fontSize: 11,
     fontWeight: '700',
     textAlign: 'left',
   },
   dashboardNotificationDismissButton: {
-    backgroundColor: '#fff1ed',
-    borderColor: '#efb1a7',
+    backgroundColor: theme.dangerSoft,
+    borderColor: theme.danger,
     borderRadius: 999,
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
   dashboardNotificationDismissButtonText: {
-    color: '#8d2500',
+    color: theme.danger,
     fontSize: 11,
     fontWeight: '800',
   },
   dashboardFavoriteBusinessAction: {
-    color: '#9e5b49',
+    color: theme.accent,
     fontSize: 12,
     fontWeight: '700',
     marginTop: 4,
@@ -245,31 +247,31 @@ export const dashboardStyles = {
     gap: 4,
   },
   dashboardCampaignStatusBadge: {
-    backgroundColor: '#f4e5d7',
+    backgroundColor: theme.warningSoft,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
   dashboardCampaignStatusBadgeActive: {
-    backgroundColor: '#e4f3e8',
+    backgroundColor: theme.successSoft,
   },
   dashboardCampaignStatusBadgeText: {
-    color: '#7a4d2f',
+    color: theme.warning,
     fontSize: 11,
     fontWeight: '800',
     textTransform: 'uppercase',
   },
   dashboardCampaignStatusBadgeTextActive: {
-    color: '#22623d',
+    color: theme.success,
   },
   dashboardDetailLabel: {
-    color: '#7a4d2f',
+    color: theme.textMuted,
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
   },
   dashboardDetailValue: {
-    color: '#2d221a',
+    color: theme.textPrimary,
     fontSize: 15,
     lineHeight: 20,
   },
@@ -315,8 +317,8 @@ export const dashboardStyles = {
     gap: 2,
   },
   dashboardCodeCard: {
-    backgroundColor: '#fff3e5',
-    borderColor: '#efd8bd',
+    backgroundColor: theme.bgSoft,
+    borderColor: theme.border,
     borderRadius: 16,
     borderWidth: 1,
     gap: 6,
@@ -324,21 +326,21 @@ export const dashboardStyles = {
     paddingVertical: 12,
   },
   dashboardCodeLabel: {
-    color: '#7a4d2f',
+    color: theme.textMuted,
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
   },
   dashboardCodeValue: {
-    color: '#2d221a',
+    color: theme.textPrimary,
     fontSize: 18,
     fontWeight: '800',
     letterSpacing: 1.2,
   },
   dashboardCodeActionButton: {
     alignSelf: 'flex-start',
-    backgroundColor: '#fff7ef',
-    borderColor: '#ddc4a7',
+    backgroundColor: theme.bgElevated,
+    borderColor: theme.border,
     borderRadius: 999,
     borderWidth: 1,
     marginTop: 10,
@@ -346,20 +348,20 @@ export const dashboardStyles = {
     paddingVertical: 8,
   },
   dashboardCodeActionText: {
-    color: '#5d4637',
+    color: theme.textPrimary,
     fontSize: 13,
     fontWeight: '700',
   },
   dashboardCodeHelpText: {
-    color: '#6c5443',
+    color: theme.textSecondary,
     fontSize: 12,
     lineHeight: 17,
     marginTop: 10,
   },
   dashboardQrCard: {
     alignItems: 'center',
-    backgroundColor: '#fffaf4',
-    borderColor: '#efd8bd',
+    backgroundColor: theme.bgRaised,
+    borderColor: theme.border,
     borderRadius: 18,
     borderWidth: 1,
     gap: 12,
@@ -375,14 +377,14 @@ export const dashboardStyles = {
   },
   dashboardQrMatrix: {
     alignItems: 'stretch',
-    backgroundColor: '#fffaf4',
+    backgroundColor: theme.bgRaised,
     padding: 8,
   },
   dashboardQrMatrixRow: {
     flexDirection: 'row',
   },
   dashboardQrMatrixCell: {
-    backgroundColor: '#fffaf4',
+    backgroundColor: theme.bgRaised,
   },
   dashboardQrLoadingState: {
     alignItems: 'center',
@@ -396,13 +398,13 @@ export const dashboardStyles = {
     gap: 4,
   },
   dashboardQrTitle: {
-    color: '#2d221a',
+    color: theme.textPrimary,
     fontSize: 15,
     fontWeight: '800',
     textAlign: 'center',
   },
   dashboardQrSubtitle: {
-    color: '#6c5443',
+    color: theme.textSecondary,
     fontSize: 13,
     lineHeight: 18,
     textAlign: 'center',
@@ -426,8 +428,8 @@ export const dashboardStyles = {
   },
   settingsIconButton: {
     alignItems: 'center',
-    backgroundColor: '#fff7ef',
-    borderColor: '#ddc4a7',
+    backgroundColor: theme.bgElevated,
+    borderColor: theme.borderStrong,
     borderRadius: 999,
     borderWidth: 1,
     height: 40,
@@ -442,7 +444,7 @@ export const dashboardStyles = {
     width: 20,
   },
   settingsGearTooth: {
-    backgroundColor: '#402214',
+    backgroundColor: theme.textPrimary,
     borderRadius: 1,
     height: 4,
     position: 'absolute',
@@ -484,7 +486,7 @@ export const dashboardStyles = {
   },
   settingsGearOuterRing: {
     alignItems: 'center',
-    borderColor: '#402214',
+    borderColor: theme.textPrimary,
     borderRadius: 999,
     borderWidth: 2,
     height: 14,
@@ -492,16 +494,16 @@ export const dashboardStyles = {
     width: 14,
   },
   settingsGearInnerHole: {
-    backgroundColor: '#fff7ef',
+    backgroundColor: theme.bgElevated,
     borderRadius: 999,
-    borderColor: '#402214',
+    borderColor: theme.textPrimary,
     borderWidth: 1.5,
     height: 5,
     width: 5,
   },
   legalSectionCard: {
-    backgroundColor: '#fff7ef',
-    borderColor: '#efd8bd',
+    backgroundColor: theme.bgElevated,
+    borderColor: theme.border,
     borderRadius: 18,
     borderWidth: 1,
     gap: 8,
@@ -510,8 +512,8 @@ export const dashboardStyles = {
   destructiveButton: {
     alignItems: 'center',
     alignSelf: 'stretch',
-    backgroundColor: '#ffe8e1',
-    borderColor: '#c85b37',
+    backgroundColor: theme.dangerSoft,
+    borderColor: theme.danger,
     borderRadius: 14,
     borderWidth: 1,
     marginTop: 10,
@@ -519,13 +521,13 @@ export const dashboardStyles = {
     paddingVertical: 12,
   },
   destructiveButtonText: {
-    color: '#8d2500',
+    color: theme.danger,
     fontWeight: '700',
   },
   toggleChip: {
     alignSelf: 'flex-start',
-    backgroundColor: '#fff7ef',
-    borderColor: '#caa98d',
+    backgroundColor: theme.bgElevated,
+    borderColor: theme.border,
     borderRadius: 999,
     borderWidth: 1,
     marginTop: 4,
@@ -533,16 +535,16 @@ export const dashboardStyles = {
     paddingVertical: 8,
   },
   toggleChipActive: {
-    backgroundColor: '#9e5b49',
-    borderColor: '#9e5b49',
+    backgroundColor: theme.accent,
+    borderColor: theme.accent,
   },
   toggleChipText: {
-    color: '#7a4d2f',
+    color: theme.textSecondary,
     fontSize: 13,
     fontWeight: '700',
   },
   toggleChipTextActive: {
-    color: '#effffd',
+    color: theme.textOnAccent,
   },
 } as const;
 

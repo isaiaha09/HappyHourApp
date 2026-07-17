@@ -6650,7 +6650,8 @@ function AppScreen() {
       ) : !authenticatedSession && !selectedPlaceSlug && (screenMode === 'browse' || currentOnboardingScreen !== null || usesGuestBrowseSlideTransition || incomingOnboardingScreen !== null || returningToSplashScreen !== null) ? (
         renderGuestMainShell()
       ) : selectedPlaceSlug ? (
-        <Animated.View style={[styles.fullScreenRoot, selectedPlaceReturnFadeActive ? { opacity: selectedPlaceReturnFade } : null]}>
+        <View style={styles.fullScreenRoot}>
+          <Animated.View style={[styles.fullScreenRoot, selectedPlaceReturnFadeActive ? { opacity: selectedPlaceReturnFade } : null]}>
           <SafeAreaView edges={['left', 'right', 'bottom']} style={styles.safeArea}>
             <PlaceDetailScreen
               backButtonLabel={screenMode === 'profiles' || screenMode === 'business-profile-editor' ? 'Back to Profile' : 'Back to Places'}
@@ -6681,7 +6682,8 @@ function AppScreen() {
             />
           </SafeAreaView>
           {authenticatedSession ? renderBottomNav({ guest: false }) : null}
-        </Animated.View>
+          </Animated.View>
+        </View>
       ) : usesOnboardingSlideTransition && currentOnboardingScreen ? (
         wrapScreenWithInteractiveBackSwipe(currentOnboardingScreen, (
           <View style={styles.onboardingTransitionRoot}>

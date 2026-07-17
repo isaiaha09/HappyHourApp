@@ -1,10 +1,11 @@
 import { StyleSheet } from 'react-native';
+import { theme } from './theme';
 
 // App shell, shared layout, transitions, and bottom navigation primitives.
 export const appShellStyles = {
   fullScreenRoot: {
     flex: 1,
-    backgroundColor: '#f7efe2',
+    backgroundColor: theme.bgApp,
   },
   startupImagePreloadLayer: {
     ...StyleSheet.absoluteFillObject,
@@ -27,16 +28,16 @@ export const appShellStyles = {
   },
   onboardingTransitionRoot: {
     flex: 1,
-    backgroundColor: '#f7efe2',
+    backgroundColor: theme.bgApp,
     overflow: 'hidden',
   },
   screenTransitionLayer: {
     flex: 1,
-    backgroundColor: '#f7efe2',
+    backgroundColor: theme.bgApp,
   },
   screenTransitionLayerAbsolute: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#f7efe2',
+    backgroundColor: theme.bgApp,
   },
   bottomNavLoginTransitionLayer: {
     ...StyleSheet.absoluteFillObject,
@@ -51,7 +52,7 @@ export const appShellStyles = {
   },
   safeArea: {
     flex: 1,
-    backgroundColor: '#f7efe2',
+    backgroundColor: theme.bgApp,
   },
   safeAreaTransparent: {
     flex: 1,
@@ -75,8 +76,8 @@ export const appShellStyles = {
   },
   floatingDashboardButton: {
     alignItems: 'center',
-    backgroundColor: '#fff8f1',
-    borderColor: '#d9c1a8',
+    backgroundColor: theme.bgRaised,
+    borderColor: theme.borderStrong,
     borderRadius: 18,
     borderWidth: 1,
     bottom: 0,
@@ -87,7 +88,7 @@ export const appShellStyles = {
     paddingVertical: 12,
     position: 'absolute',
     right: 0,
-    shadowColor: '#2d221a',
+    shadowColor: theme.shadow,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.18,
     shadowRadius: 16,
@@ -112,7 +113,7 @@ export const appShellStyles = {
     paddingVertical: 0,
   },
   floatingMapNavActionArrow: {
-    color: '#17110c',
+    color: theme.textPrimary,
     fontSize: 28,
     fontWeight: '700',
     lineHeight: 30,
@@ -126,7 +127,7 @@ export const appShellStyles = {
     width: 28,
   },
   exitIconDoor: {
-    backgroundColor: '#17110c',
+    backgroundColor: theme.textPrimary,
     borderRadius: 2,
     height: 22,
     transform: [{ skewY: '-12deg' }],
@@ -139,7 +140,7 @@ export const appShellStyles = {
     width: 8,
   },
   exitIconFrameTop: {
-    backgroundColor: '#17110c',
+    backgroundColor: theme.textPrimary,
     height: 3,
     position: 'absolute',
     right: 0,
@@ -147,7 +148,7 @@ export const appShellStyles = {
     width: 8,
   },
   exitIconFrameSide: {
-    backgroundColor: '#17110c',
+    backgroundColor: theme.textPrimary,
     height: 18,
     position: 'absolute',
     right: 0,
@@ -155,7 +156,7 @@ export const appShellStyles = {
     width: 3,
   },
   exitIconFrameBottom: {
-    backgroundColor: '#17110c',
+    backgroundColor: theme.textPrimary,
     bottom: 0,
     height: 3,
     position: 'absolute',
@@ -168,20 +169,20 @@ export const appShellStyles = {
     marginLeft: 2,
   },
   exitIconArrowShaft: {
-    backgroundColor: '#17110c',
+    backgroundColor: theme.textPrimary,
     height: 4,
     width: 7,
   },
   exitIconArrowHead: {
     borderBottomColor: 'transparent',
     borderBottomWidth: 5,
-    borderLeftColor: '#17110c',
+    borderLeftColor: theme.textPrimary,
     borderLeftWidth: 8,
     borderTopColor: 'transparent',
     borderTopWidth: 5,
   },
   floatingDashboardButtonText: {
-    color: '#5d4637',
+    color: theme.textPrimary,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -205,8 +206,8 @@ export const appShellStyles = {
   },
   bottomNavShell: {
     alignItems: 'center',
-    backgroundColor: 'rgba(8, 1, 1, 0.9)',
-    borderTopColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: theme.bgOverlayHeavy,
+    borderTopColor: theme.borderStrong,
     borderTopWidth: 1,
     flexDirection: 'row',
     gap: 8,
@@ -215,14 +216,14 @@ export const appShellStyles = {
     paddingHorizontal: 2,
     paddingTop: 40,
     height: 40,
-    shadowColor: '#1c130d',
+    shadowColor: theme.shadow,
     shadowOffset: { width: 0, height: -8 },
     shadowOpacity: 0.14,
     shadowRadius: 18,
     width: '100%',
   },
   bottomNavGlassHighlight: {
-    backgroundColor: 'rgba(255, 248, 241, 0.08)',
+    backgroundColor: theme.borderStrong,
     height: 1,
     left: 0,
     position: 'absolute',
@@ -245,16 +246,16 @@ export const appShellStyles = {
     width: 46,
   },
   bottomNavItemIconWrapActive: {
-    backgroundColor: 'rgba(255, 248, 241, 0.12)',
+    backgroundColor: theme.accentSoft,
   },
   bottomNavItemLabel: {
-    color: 'rgba(255, 248, 241, 0.7)',
+    color: theme.textMuted,
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0.3,
   },
   bottomNavItemLabelActive: {
-    color: '#fff8f1',
+    color: theme.textPrimary,
   },
   bottomNavFeedIcon: {
     alignItems: 'center',
@@ -393,13 +394,13 @@ export const appShellStyles = {
   },
   screenHeaderBar: {
     alignSelf: 'stretch',
-    backgroundColor: 'rgba(8, 1, 1, 0.88)',
-    borderBottomColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: theme.bgOverlayHeavy,
+    borderBottomColor: theme.borderStrong,
     borderBottomWidth: 1,
     borderLeftWidth: 0,
     borderRadius: 0,
     borderRightWidth: 0,
-    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+    borderTopColor: theme.borderStrong,
     borderTopWidth: 1,
     marginHorizontal: -18,
     marginBottom: 14,

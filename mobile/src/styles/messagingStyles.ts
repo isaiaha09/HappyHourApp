@@ -1,18 +1,20 @@
+import { theme } from './theme';
+
 // Direct messages inbox, thread, composer, and header action styles.
 export const messagingStyles = {
   directMessageScreenHeaderBar: {
     marginHorizontal: 0,
   },
   directMessageHeaderTitle: {
-    color: '#fff7ef',
+    color: theme.textPrimary,
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 12,
   },
   directMessageHeaderActionButton: {
     alignItems: 'center',
-    backgroundColor: '#fff8f0',
-    borderColor: '#d9c0a4',
+    backgroundColor: theme.bgElevated,
+    borderColor: theme.borderStrong,
     borderRadius: 16,
     borderWidth: 1,
     height: 40,
@@ -54,7 +56,7 @@ export const messagingStyles = {
     width: 9,
   },
   directMessageScreenRoot: {
-    backgroundColor: '#f3eadf',
+    backgroundColor: theme.bgApp,
   },
   directMessageFeed: {
     flexGrow: 1,
@@ -65,22 +67,22 @@ export const messagingStyles = {
     paddingHorizontal: 8,
   },
   directMessageConversationTitleBar: {
-    backgroundColor: '#f3eadf',
-    borderBottomColor: '#dfc5ab',
+    backgroundColor: theme.bgApp,
+    borderBottomColor: theme.border,
     borderBottomWidth: 1,
     paddingHorizontal: 12,
     paddingBottom: 10,
     paddingTop: 8,
   },
   directMessageInboxHeaderBar: {
-    borderBottomColor: '#dfc5ab',
+    borderBottomColor: theme.border,
     borderBottomWidth: 1,
     marginBottom: 8,
     paddingBottom: 8,
     paddingHorizontal: 4,
   },
   directMessageInboxTitle: {
-    color: '#2d221a',
+    color: theme.textPrimary,
     fontSize: 22,
     fontWeight: '800',
   },
@@ -89,8 +91,8 @@ export const messagingStyles = {
   },
   directMessageInboxRow: {
     alignItems: 'center',
-    backgroundColor: '#fff7ef',
-    borderBottomColor: '#e3ccb1',
+    backgroundColor: theme.bgElevated,
+    borderBottomColor: theme.border,
     borderBottomWidth: 1,
     flexDirection: 'row',
     gap: 10,
@@ -127,14 +129,14 @@ export const messagingStyles = {
   },
   directMessageInboxAvatar: {
     alignItems: 'center',
-    backgroundColor: '#d1b596',
+    backgroundColor: theme.bgMuted,
     borderRadius: 999,
     height: 46,
     justifyContent: 'center',
     width: 46,
   },
   directMessageInboxAvatarText: {
-    color: '#2d221a',
+    color: theme.textPrimary,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -143,17 +145,17 @@ export const messagingStyles = {
     minWidth: 0,
   },
   directMessageInboxName: {
-    color: '#2d221a',
+    color: theme.textPrimary,
     fontSize: 16,
     fontWeight: '700',
   },
   directMessageInboxPreview: {
-    color: '#4f3d31',
+    color: theme.textSecondary,
     fontSize: 14,
     marginTop: 1,
   },
   directMessageInboxMeta: {
-    color: '#6d5544',
+    color: theme.textMuted,
     fontSize: 12,
     marginTop: 2,
   },
@@ -161,19 +163,19 @@ export const messagingStyles = {
     marginBottom: 18,
   },
   directMessageSectionLabel: {
-    color: '#2d221a',
+    color: theme.textPrimary,
     fontSize: 14,
     fontWeight: '700',
     marginBottom: 8,
   },
   directMessageThreadRowInline: {
-    borderBottomColor: '#e6cdb0',
+    borderBottomColor: theme.border,
     borderBottomWidth: 1,
     paddingVertical: 10,
   },
   directMessageThreadRowInlineActive: {
-    backgroundColor: '#f8ead5',
-    borderBottomColor: '#d9af81',
+    backgroundColor: theme.accentSoft,
+    borderBottomColor: theme.accent,
   },
   directMessageThreadInlineHeadingRow: {
     alignItems: 'center',
@@ -186,32 +188,32 @@ export const messagingStyles = {
     paddingTop: 6,
   },
   directMessageConversationTitle: {
-    color: '#2d221a',
+    color: theme.textPrimary,
     fontSize: 18,
     fontWeight: '800',
     marginTop: 0,
     textAlign: 'center',
   },
   directMessageThreadTitle: {
-    color: '#2d221a',
+    color: theme.textPrimary,
     fontSize: 15,
     fontWeight: '700',
     
   },
   directMessageThreadPreview: {
-    color: '#6a5444',
+    color: theme.textSecondary,
     fontSize: 13,
     marginTop: 2,
   },
   directMessageThreadMeta: {
-    color: '#7f6453',
+    color: theme.textMuted,
     fontSize: 11,
     marginTop: 4,
   },
   directMessageUnreadBadge: {
-    backgroundColor: '#8c5b48',
+    backgroundColor: theme.accent,
     borderRadius: 999,
-    color: '#fffaf4',
+    color: theme.textOnAccent,
     fontSize: 11,
     fontWeight: '700',
     minWidth: 22,
@@ -289,8 +291,8 @@ export const messagingStyles = {
   directMessageComposerSendButton: {
     alignItems: 'center',
     alignSelf: 'flex-end',
-    backgroundColor: '#fff7ef',
-    borderColor: '#9e5b49',
+    backgroundColor: theme.bgElevated,
+    borderColor: theme.accent,
     borderRadius: 14,
     borderWidth: 1,
     height: 48,
@@ -300,8 +302,8 @@ export const messagingStyles = {
     width: 86,
   },
   directMessageComposerDock: {
-    backgroundColor: '#f3eadf',
-    borderTopColor: '#dfc5ab',
+    backgroundColor: theme.bgApp,
+    borderTopColor: theme.border,
     borderTopWidth: 1,
     gap: 6,
     paddingHorizontal: 12,
@@ -309,8 +311,8 @@ export const messagingStyles = {
   },
   directMessageComposerIconButton: {
     alignItems: 'center',
-    backgroundColor: '#fff8f0',
-    borderColor: '#d9c0a4',
+    backgroundColor: theme.bgElevated,
+    borderColor: theme.border,
     borderRadius: 999,
     borderWidth: 1,
     height: 40,
@@ -318,7 +320,7 @@ export const messagingStyles = {
     width: 40,
   },
   directMessageComposerIconButtonText: {
-    color: '#6b4a3a',
+    color: theme.textPrimary,
     fontSize: 24,
     fontWeight: '700',
     lineHeight: 26,
@@ -335,8 +337,8 @@ export const messagingStyles = {
   },
   directMessageComposerImageRemoveButton: {
     alignItems: 'center',
-    backgroundColor: '#fff7ef',
-    borderColor: '#cfb39a',
+    backgroundColor: theme.bgElevated,
+    borderColor: theme.border,
     borderRadius: 10,
     borderWidth: 1,
     height: 34,
@@ -344,12 +346,12 @@ export const messagingStyles = {
     paddingHorizontal: 12,
   },
   directMessageComposerImageRemoveButtonText: {
-    color: '#7a4a34',
+    color: theme.textPrimary,
     fontSize: 13,
     fontWeight: '700',
   },
   directMessageComposerHint: {
-    color: '#6d5446',
+    color: theme.textMuted,
     fontSize: 12,
     paddingBottom: 2,
   },
@@ -362,7 +364,7 @@ export const messagingStyles = {
     width: 20,
   },
   directMessageHeaderGlyphEdgeTop: {
-    backgroundColor: '#402214',
+    backgroundColor: theme.textPrimary,
     borderRadius: 2,
     height: 2.6,
     left: 2,
@@ -371,7 +373,7 @@ export const messagingStyles = {
     width: 16,
   },
   directMessageHeaderGlyphEdgeLeft: {
-    backgroundColor: '#402214',
+    backgroundColor: theme.textPrimary,
     borderRadius: 2,
     height: 2.6,
     left: 0,
@@ -381,7 +383,7 @@ export const messagingStyles = {
     width: 14,
   },
   directMessageHeaderGlyphEdgeRight: {
-    backgroundColor: '#402214',
+    backgroundColor: theme.textPrimary,
     borderRadius: 2,
     height: 2.6,
     left: 8,
@@ -391,7 +393,7 @@ export const messagingStyles = {
     width: 14,
   },
   directMessageHeaderGlyphSeam: {
-    backgroundColor: '#402214',
+    backgroundColor: theme.textPrimary,
     borderRadius: 2,
     height: 2.6,
     left: 9,
@@ -401,7 +403,7 @@ export const messagingStyles = {
     width: 10,
   },
   directMessageActionModalHandle: {
-    color: '#2d221a',
+    color: theme.textPrimary,
     fontSize: 15,
     fontWeight: '800',
     marginTop: 12,

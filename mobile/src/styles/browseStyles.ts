@@ -1,10 +1,11 @@
 import { StyleSheet } from 'react-native';
+import { theme } from './theme';
 
 // Browse and map surfaces, filters, chips, result cards, and marker styles.
 export const browseStyles = {
   browseHeaderCard: {
     backgroundColor: 'rgba(20, 20, 24, 0.94)',
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: theme.borderStrong,
     borderRadius: 28,
     borderWidth: 1,
     gap: 10,
@@ -58,7 +59,7 @@ export const browseStyles = {
     ...StyleSheet.absoluteFillObject,
   },
   appTitle: {
-    color: '#2d221a',
+    color: theme.textPrimary,
     fontSize: 24,
     fontWeight: '800',
   },
@@ -90,7 +91,7 @@ export const browseStyles = {
   },
   mapTopPanel: {
     backgroundColor: 'rgba(20, 20, 24, 0.9)',
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: theme.borderStrong,
     borderRadius: 28,
     borderWidth: 1,
     gap: 10,
@@ -110,15 +111,15 @@ export const browseStyles = {
   mapLoadingOverlay: {
     alignItems: 'center',
     alignSelf: 'center',
-    backgroundColor: 'rgba(255, 250, 244, 0.94)',
+    backgroundColor: 'rgba(18, 22, 30, 0.96)',
     borderRadius: 20,
     gap: 10,
     paddingHorizontal: 20,
     paddingVertical: 18,
   },
   mapPreviewCard: {
-    backgroundColor: 'rgba(255, 250, 244, 0.97)',
-    borderColor: '#efd8bd',
+    backgroundColor: 'rgba(23, 28, 37, 0.97)',
+    borderColor: theme.border,
     borderRadius: 24,
     borderWidth: 1,
     gap: 14,
@@ -132,8 +133,8 @@ export const browseStyles = {
     width: '100%',
   },
   mapResultsCard: {
-    backgroundColor: 'rgba(255, 250, 244, 0.97)',
-    borderColor: '#efd8bd',
+    backgroundColor: 'rgba(23, 28, 37, 0.97)',
+    borderColor: theme.border,
     borderRadius: 24,
     borderWidth: 1,
     gap: 12,
@@ -156,12 +157,12 @@ export const browseStyles = {
     marginLeft: 12,
   },
   mapResultsTitle: {
-    color: '#2d221a',
+    color: theme.textPrimary,
     fontSize: 18,
     fontWeight: '800',
   },
   mapResultsMeta: {
-    color: '#7b6350',
+    color: theme.textMuted,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -175,8 +176,8 @@ export const browseStyles = {
   mapResultsMoreButton: {
     alignItems: 'center',
     alignSelf: 'center',
-    backgroundColor: '#fff7ef',
-    borderColor: '#ddc4a7',
+    backgroundColor: theme.bgElevated,
+    borderColor: theme.borderStrong,
     borderRadius: 999,
     borderWidth: 1,
     paddingHorizontal: 14,
@@ -188,14 +189,14 @@ export const browseStyles = {
     gap: 8,
   },
   mapResultsMoreButtonText: {
-    color: '#1f5f5b',
+    color: theme.accentBlue,
     fontSize: 13,
     fontWeight: '800',
   },
   mapResultsCollapseButton: {
     alignItems: 'center',
-    backgroundColor: '#fff7ef',
-    borderColor: '#ddc4a7',
+    backgroundColor: theme.bgElevated,
+    borderColor: theme.border,
     borderRadius: 12,
     borderWidth: 1,
     height: 32,
@@ -208,7 +209,7 @@ export const browseStyles = {
     width: 16,
   },
   mapResultsChevronLine: {
-    backgroundColor: '#5d4637',
+    backgroundColor: theme.textPrimary,
     borderRadius: 999,
     height: 2.5,
     position: 'absolute',
@@ -230,8 +231,8 @@ export const browseStyles = {
   },
   mapResultRow: {
     alignItems: 'center',
-    backgroundColor: '#fff7ef',
-    borderColor: '#efd8bd',
+    backgroundColor: theme.bgElevated,
+    borderColor: theme.border,
     borderRadius: 18,
     borderWidth: 1,
     flexDirection: 'row',
@@ -245,17 +246,17 @@ export const browseStyles = {
     gap: 4,
   },
   mapResultTitle: {
-    color: '#2d221a',
+    color: theme.textPrimary,
     fontSize: 15,
     fontWeight: '800',
   },
   mapResultMeta: {
-    color: '#725947',
+    color: theme.textSecondary,
     fontSize: 12,
     lineHeight: 17,
   },
   mapResultAction: {
-    color: '#1f5f5b',
+    color: theme.accentBlue,
     fontSize: 12,
     fontWeight: '800',
   },

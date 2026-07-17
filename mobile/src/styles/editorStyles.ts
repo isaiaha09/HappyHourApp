@@ -1,3 +1,5 @@
+import { theme } from './theme';
+
 // Structured editor and social preview helper styles.
 export const editorStyles = {
   socialPreviewList: {
@@ -5,8 +7,8 @@ export const editorStyles = {
     marginTop: 2,
   },
   socialPreviewCard: {
-    backgroundColor: '#fff7ef',
-    borderColor: '#ddc4a7',
+    backgroundColor: theme.bgElevated,
+    borderColor: theme.border,
     borderRadius: 14,
     borderWidth: 1,
     gap: 4,
@@ -17,12 +19,12 @@ export const editorStyles = {
     opacity: 0.7,
   },
   socialPreviewLink: {
-    color: '#3b2a1f',
+    color: theme.textPrimary,
     fontSize: 13,
     fontWeight: '700',
   },
   socialPreviewAction: {
-    color: '#9e5b49',
+    color: theme.accent,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -38,18 +40,18 @@ export const editorStyles = {
     flex: 1,
   },
   structuredEntryAddButton: {
-    backgroundColor: '#9e5b49',
+    backgroundColor: theme.accent,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   structuredEntryAddButtonText: {
-    color: '#effffd',
+    color: theme.textOnAccent,
     fontSize: 12,
     fontWeight: '700',
   },
   structuredEntryErrorText: {
-    color: '#8d2500',
+    color: theme.danger,
     fontSize: 12,
     fontWeight: '700',
     marginTop: -2,
@@ -59,8 +61,8 @@ export const editorStyles = {
   },
   structuredEntryCard: {
     alignItems: 'center',
-    backgroundColor: '#fff7ef',
-    borderColor: '#ddc4a7',
+    backgroundColor: theme.bgElevated,
+    borderColor: theme.border,
     borderRadius: 14,
     borderWidth: 1,
     flexDirection: 'row',
@@ -70,19 +72,19 @@ export const editorStyles = {
     paddingVertical: 10,
   },
   structuredEntryText: {
-    color: '#3b2a1f',
+    color: theme.textPrimary,
     flex: 1,
     fontSize: 13,
     fontWeight: '700',
   },
   structuredEntryRemoveButton: {
-    backgroundColor: '#fde7dd',
+    backgroundColor: theme.dangerSoft,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
   structuredEntryRemoveButtonText: {
-    color: '#8d2500',
+    color: theme.danger,
     fontSize: 12,
     fontWeight: '700',
   },

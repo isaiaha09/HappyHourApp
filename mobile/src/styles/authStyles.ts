@@ -1,9 +1,11 @@
+import { theme } from './theme';
+
 // Authentication, profile flow, and business-claim form styles.
 export const authStyles = {
   authPortalButton: {
     alignItems: 'center',
-    backgroundColor: '#fff7ef',
-    borderColor: '#ddc4a7',
+    backgroundColor: theme.bgRaised,
+    borderColor: theme.border,
     borderRadius: 14,
     borderWidth: 1,
     flex: 1,
@@ -13,16 +15,16 @@ export const authStyles = {
     paddingVertical: 12,
   },
   authPortalButtonActive: {
-    backgroundColor: '#9e5b49',
-    borderColor: '#9e5b49',
+    backgroundColor: theme.accent,
+    borderColor: theme.accent,
   },
   authPortalButtonText: {
-    color: '#5d4637',
+    color: theme.textSecondary,
     fontSize: 15,
     fontWeight: '700',
   },
   authPortalButtonTextActive: {
-    color: '#f4fffe',
+    color: theme.textOnAccent,
   },
   authScreen: {
     flex: 1,
@@ -65,14 +67,14 @@ export const authStyles = {
     paddingVertical: 8,
   },
   authRecoveryButtonText: {
-    color: '#9e5b49',
+    color: theme.accent,
     fontSize: 13,
     fontWeight: '700',
     textAlign: 'center',
   },
   authRecoveryPanel: {
-    backgroundColor: '#fff7ef',
-    borderColor: '#efd8bd',
+    backgroundColor: theme.bgRaised,
+    borderColor: theme.border,
     borderRadius: 18,
     borderWidth: 1,
     gap: 10,
@@ -87,13 +89,13 @@ export const authStyles = {
     paddingVertical: 6,
   },
   authRecoveryDismissText: {
-    color: '#9e5b49',
+    color: theme.accent,
     fontSize: 13,
     fontWeight: '700',
     textAlign: 'center',
   },
   authLinkText: {
-    color: '#9e5b49',
+    color: theme.accent,
     fontSize: 14,
     fontWeight: '700',
     textAlign: 'center',
@@ -113,8 +115,8 @@ export const authStyles = {
     paddingBottom: 132,
   },
   profileCard: {
-    backgroundColor: '#fffaf4',
-    borderColor: '#efd8bd',
+    backgroundColor: theme.bgRaised,
+    borderColor: theme.border,
     borderRadius: 24,
     borderWidth: 1,
     gap: 14,
@@ -122,20 +124,20 @@ export const authStyles = {
     padding: 18,
   },
   profileIntroText: {
-    color: '#6c5443',
+    color: theme.textSecondary,
     fontSize: 14,
     lineHeight: 20,
   },
   profileSuccessBanner: {
-    backgroundColor: '#f5ebe2',
-    borderColor: '#dfc3af',
+    backgroundColor: theme.successSoft,
+    borderColor: theme.success,
     borderRadius: 16,
     borderWidth: 1,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   profileSuccessText: {
-    color: '#8d6042',
+    color: theme.success,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -143,16 +145,16 @@ export const authStyles = {
     gap: 10,
   },
   profileFieldLabel: {
-    color: '#402214',
+    color: theme.textSecondary,
     fontSize: 13,
     fontWeight: '700',
   },
   profileInput: {
-    backgroundColor: '#f8efe3',
-    borderColor: '#ead6bf',
+    backgroundColor: theme.bgInput,
+    borderColor: theme.borderStrong,
     borderRadius: 14,
     borderWidth: 1,
-    color: '#2d221a',
+    color: theme.textPrimary,
     fontSize: 15,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -181,7 +183,7 @@ export const authStyles = {
   },
   passwordEyeOutline: {
     alignItems: 'center',
-    borderColor: '#9e5b49',
+    borderColor: theme.accent,
     borderRadius: 999,
     borderWidth: 1.6,
     height: 12,
@@ -189,13 +191,13 @@ export const authStyles = {
     width: 18,
   },
   passwordEyePupil: {
-    backgroundColor: '#9e5b49',
+    backgroundColor: theme.accent,
     borderRadius: 999,
     height: 4,
     width: 4,
   },
   passwordEyeSlash: {
-    backgroundColor: '#9e5b49',
+    backgroundColor: theme.accent,
     borderRadius: 999,
     height: 1.8,
     position: 'absolute',
@@ -206,8 +208,8 @@ export const authStyles = {
     gap: 6,
   },
   compactDropdownButton: {
-    backgroundColor: '#f8efe3',
-    borderColor: '#ead6bf',
+    backgroundColor: theme.bgInput,
+    borderColor: theme.border,
     borderRadius: 12,
     borderWidth: 1,
     flexDirection: 'row',
@@ -217,25 +219,25 @@ export const authStyles = {
     paddingVertical: 9,
   },
   compactDropdownButtonOpen: {
-    borderColor: '#9e5b49',
+    borderColor: theme.accent,
   },
   compactDropdownText: {
-    color: '#2d221a',
+    color: theme.textPrimary,
     fontSize: 14,
     lineHeight: 18,
   },
   compactDropdownPlaceholder: {
-    color: '#8a705d',
+    color: theme.textMuted,
   },
   compactDropdownCaret: {
-    color: '#6c5443',
+    color: theme.textMuted,
     fontSize: 14,
     fontWeight: '700',
     marginLeft: 12,
   },
   compactDropdownMenu: {
-    backgroundColor: '#fffaf4',
-    borderColor: '#ead6bf',
+    backgroundColor: theme.bgRaised,
+    borderColor: theme.border,
     borderRadius: 12,
     borderWidth: 1,
     overflow: 'hidden',
@@ -245,19 +247,19 @@ export const authStyles = {
     paddingVertical: 8,
   },
   compactDropdownOptionSelected: {
-    backgroundColor: '#f5ebe2',
+    backgroundColor: theme.accentSoft,
   },
   compactDropdownOptionText: {
-    color: '#2d221a',
+    color: theme.textPrimary,
     fontSize: 14,
     lineHeight: 18,
   },
   compactDropdownOptionTextSelected: {
-    color: '#8d6042',
+    color: theme.accentStrong,
     fontWeight: '700',
   },
   profileSupportText: {
-    color: '#7d614f',
+    color: theme.textMuted,
     fontSize: 12,
     lineHeight: 18,
     marginTop: -2,
@@ -269,7 +271,7 @@ export const authStyles = {
     textAlign: 'center',
   },
   verificationCountdownText: {
-    color: '#8d6042',
+    color: theme.accentStrong,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -282,14 +284,14 @@ export const authStyles = {
     marginTop: 8,
   },
   claimResultCard: {
-    backgroundColor: '#fff3e5',
-    borderColor: '#efd8bd',
+    backgroundColor: theme.bgSoft,
+    borderColor: theme.border,
     borderRadius: 18,
     borderWidth: 1,
     padding: 14,
   },
   claimBusinessHint: {
-    color: '#6c5443',
+    color: theme.textSecondary,
     fontSize: 13,
     lineHeight: 18,
   },
@@ -298,8 +300,8 @@ export const authStyles = {
     marginTop: 6,
   },
   claimLocationButton: {
-    backgroundColor: '#fffaf4',
-    borderColor: '#ddc4a7',
+    backgroundColor: theme.bgRaised,
+    borderColor: theme.border,
     borderRadius: 14,
     borderWidth: 1,
     gap: 4,
@@ -307,12 +309,12 @@ export const authStyles = {
     paddingVertical: 10,
   },
   claimLocationButtonTitle: {
-    color: '#402214',
+    color: theme.textPrimary,
     fontSize: 13,
     fontWeight: '700',
   },
   claimLocationButtonText: {
-    color: '#5f4b3d',
+    color: theme.textSecondary,
     fontSize: 13,
     lineHeight: 18,
   },

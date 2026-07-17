@@ -1,4 +1,5 @@
 import { StyleSheet } from 'react-native';
+import { theme } from './theme';
 
 // Splash and landing experience surfaces.
 export const splashStyles = {
@@ -27,7 +28,7 @@ export const splashStyles = {
   splashHeaderPillButton: {
     alignItems: 'center',
     backgroundColor: 'rgba(21, 23, 29, 0.94)',
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: theme.borderStrong,
     borderRadius: 999,
     borderWidth: 1,
     justifyContent: 'center',
@@ -40,7 +41,7 @@ export const splashStyles = {
   splashHeaderIconButton: {
     alignItems: 'center',
     backgroundColor: 'rgba(21, 23, 29, 0.94)',
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: theme.borderStrong,
     borderRadius: 999,
     borderWidth: 1,
     height: 44,
@@ -66,7 +67,7 @@ export const splashStyles = {
   splashHeaderSignInButton: {
     alignItems: 'center',
     backgroundColor: 'rgba(21, 23, 29, 0.94)',
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: theme.borderStrong,
     borderRadius: 999,
     borderWidth: 1,
     justifyContent: 'center',
@@ -115,7 +116,7 @@ export const splashStyles = {
   },
   splashLogoRevealMask: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#f6ead8',
+    backgroundColor: theme.bgApp,
   },
   splashSloganBlock: {
     alignItems: 'center',
@@ -153,8 +154,8 @@ export const splashStyles = {
   },
   splashPortalButton: {
     alignItems: 'center',
-    backgroundColor: '#fffaf4',
-    borderColor: '#d7b48c',
+    backgroundColor: theme.bgRaised,
+    borderColor: theme.borderStrong,
     borderRadius: 18,
     borderWidth: 1,
     flex: 1,
@@ -162,14 +163,14 @@ export const splashStyles = {
     minHeight: 58,
     paddingHorizontal: 18,
     paddingVertical: 14,
-    shadowColor: '#5b3b25',
+    shadowColor: theme.shadow,
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.12,
     shadowRadius: 18,
     elevation: 6,
   },
   splashPortalButtonText: {
-    color: '#5d4637',
+    color: theme.textPrimary,
     fontSize: 16,
     fontWeight: '800',
     textAlign: 'center',
@@ -180,7 +181,7 @@ export const splashStyles = {
     paddingVertical: 8,
   },
   splashCreateAccountText: {
-    color: '#9e5b49',
+    color: theme.accent,
     fontSize: 15,
     fontWeight: '800',
     textAlign: 'center',
@@ -193,7 +194,7 @@ export const splashStyles = {
   },
   splashSignInModalBackdropPressable: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(45, 34, 26, 0.58)',
+    backgroundColor: theme.bgOverlay,
   },
   splashSignInModalCardWrap: {
     alignItems: 'center',
@@ -201,8 +202,8 @@ export const splashStyles = {
     padding: 20,
   },
   splashSignInModalCard: {
-    backgroundColor: '#fff8f1',
-    borderColor: '#edd4b8',
+    backgroundColor: theme.bgCanvas,
+    borderColor: theme.borderStrong,
     borderRadius: 28,
     borderWidth: 1,
     gap: 14,
@@ -225,8 +226,8 @@ export const splashStyles = {
   splashSignInModalCloseButton: {
     alignItems: 'center',
     alignSelf: 'flex-end',
-    backgroundColor: '#fff7ef',
-    borderColor: '#ddc4a7',
+    backgroundColor: theme.bgElevated,
+    borderColor: theme.border,
     borderRadius: 999,
     borderWidth: 1,
     height: 30,
@@ -234,18 +235,18 @@ export const splashStyles = {
     width: 30,
   },
   splashSignInModalCloseButtonText: {
-    color: '#5d4637',
+    color: theme.textPrimary,
     fontSize: 13,
     fontWeight: '800',
   },
   splashSignInModalTitle: {
-    color: '#402214',
+    color: theme.textPrimary,
     fontSize: 18,
     fontWeight: '800',
     lineHeight: 22,
   },
   splashSignInModalText: {
-    color: '#6c5443',
+    color: theme.textSecondary,
     fontSize: 14,
     lineHeight: 21,
   },
@@ -255,7 +256,7 @@ export const splashStyles = {
   },
   splashSignInPrimaryButton: {
     alignItems: 'center',
-    backgroundColor: '#a86550',
+    backgroundColor: theme.accent,
     borderRadius: 14,
     minHeight: 54,
     justifyContent: 'center',
@@ -263,14 +264,14 @@ export const splashStyles = {
     paddingVertical: 13,
   },
   splashSignInPrimaryButtonText: {
-    color: '#fffaf4',
+    color: theme.textOnAccent,
     fontSize: 15,
     fontWeight: '800',
   },
   splashSignInSecondaryButton: {
     alignItems: 'center',
-    backgroundColor: '#fff8f1',
-    borderColor: '#e4c6a7',
+    backgroundColor: theme.bgElevated,
+    borderColor: theme.border,
     borderRadius: 14,
     borderWidth: 1,
     minHeight: 54,
@@ -279,7 +280,7 @@ export const splashStyles = {
     paddingVertical: 13,
   },
   splashSignInSecondaryButtonText: {
-    color: '#6a4e3d',
+    color: theme.textPrimary,
     fontSize: 15,
     fontWeight: '700',
   },
@@ -291,7 +292,7 @@ export const splashStyles = {
     paddingVertical: 10,
   },
   splashSignInTertiaryButtonText: {
-    color: '#9e5b49',
+    color: theme.accent,
     fontSize: 14,
     fontWeight: '800',
     textDecorationLine: 'underline',

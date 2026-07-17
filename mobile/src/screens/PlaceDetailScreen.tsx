@@ -12,6 +12,7 @@ import { PhotoLightbox } from '../components/PhotoLightbox';
 import { SocialButton } from '../components/SocialButton';
 import { buildGoogleReviewsUrl, dedupeImageUrls, formatPlaceAddress, getPlacePreviewRegion, openMapsAddress } from '../placeHelpers';
 import { getSocialProfilesForDisplay } from '../socialProfiles';
+import { theme } from '../styles/theme';
 import type { Deal, HappyHourWindow, OperatingHourWindow, PlaceDetail, PlaceLocationDetail } from '../types';
 
 type AttachmentPreviewState =
@@ -384,7 +385,7 @@ export function PlaceDetailScreen({
                   onPress={onOpenDirectMessages}
                   style={[styles.directMessageHeaderActionButton, { marginRight: 16 }]}
                 >
-                  <Ionicons color="#402214" name="paper-plane-outline" size={19} />
+                  <Ionicons color={theme.accentStrong} name="paper-plane" size={19} />
                 </Pressable>
               )}
               onPress={() => onOpenDirectMessages?.()}

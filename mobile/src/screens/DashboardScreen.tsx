@@ -9,6 +9,7 @@ import { buildDealOverridesFromDeals, buildNormalizedDealOverrides, buildNormali
 import { BusinessDealsEditor, BusinessHoursEditor } from '../components/BusinessProfileStructuredEditors';
 import { NativeIOSLiquidGlassBackButton, NativeIOSLiquidGlassHeaderButton } from '../components/NativeIOSLiquidGlass';
 import { SOCIAL_PLATFORM_LABELS, buildSocialProfilesFromInputs, getSocialProfilePreview, getSocialProfileValidationMessage, socialProfilesToInputs } from '../socialProfiles';
+import { theme } from '../styles/theme';
 import { dedupeImageUrls, normalizeSearchText } from '../placeHelpers';
 import type { BusinessAttachmentDraft, DirectMessageThread, FavoriteBusinessNotification, ProfileDashboardUpdateRequest, SignupResponse, TwoFactorSetupResponse } from '../types';
 
@@ -254,7 +255,7 @@ function SettingsGearIcon() {
 }
 
 function DirectMessageHeaderIcon() {
-  return <Ionicons color="#402214" name="paper-plane-outline" size={19} />;
+  return <Ionicons color={theme.accentStrong} name="paper-plane" size={19} />;
 }
 
 function SecuritySettingsSection({
