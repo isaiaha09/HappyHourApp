@@ -11,6 +11,15 @@ private enum DiningDealzLiquidGlassThemeVariant: String {
   case defaultDark = "default-dark"
   case mapDark = "map-dark"
   case mapLight = "map-light"
+
+  var interfaceStyle: UIUserInterfaceStyle {
+    switch self {
+    case .mapLight:
+      return .light
+    case .defaultDark, .mapDark:
+      return .dark
+    }
+  }
 }
 
 @objc(DiningDealzLiquidGlassHeaderButtonView)
@@ -98,6 +107,8 @@ final class DiningDealzLiquidGlassHeaderButtonView: UIView {
     let currentAccessibilityLabel = accessibilityLabel
     let currentVariant = resolvedVariant
     let currentThemeVariant = resolvedThemeVariant
+
+    hostingController.overrideUserInterfaceStyle = currentThemeVariant.interfaceStyle
 
     hostingController.rootView = AnyView(
       Group {

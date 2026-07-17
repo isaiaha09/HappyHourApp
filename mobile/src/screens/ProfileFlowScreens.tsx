@@ -40,11 +40,11 @@ const onboardingPlaceholderTextColor = theme.textDarkMuted;
 function OnboardingBackButton({ label, onPress, style }: { label: string; onPress: () => void; style?: any }) {
   return (
     <NativeIOSLiquidGlassBackButton
-      forceFallback
       label={label}
       onPress={onPress}
       style={[styles.onboardingBackButton, style]}
       textStyle={styles.onboardingBackButtonText}
+      themeVariant="map-light"
     />
   );
 }

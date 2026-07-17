@@ -148,6 +148,8 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     let currentMoreOpen = moreOpen
     let currentThemeVariant = resolvedThemeVariant
 
+    hostingController.overrideUserInterfaceStyle = currentThemeVariant.interfaceStyle
+
     hostingController.rootView = AnyView(
       Group {
         if #available(iOS 26.0, *) {
@@ -227,6 +229,15 @@ private enum DiningDealzLiquidGlassThemeVariant: String {
   case defaultDark = "default-dark"
   case mapDark = "map-dark"
   case mapLight = "map-light"
+
+  var interfaceStyle: UIUserInterfaceStyle {
+    switch self {
+    case .mapLight:
+      return .light
+    case .defaultDark, .mapDark:
+      return .dark
+    }
+  }
 }
 
 private extension String {

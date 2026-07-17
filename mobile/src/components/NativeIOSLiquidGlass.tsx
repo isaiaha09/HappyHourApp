@@ -72,6 +72,7 @@ type NativeIOSLiquidGlassBackButtonProps = {
   onPress: () => void;
   style?: StyleProp<ViewStyle>;
   textStyle?: StyleProp<TextStyle>;
+  themeVariant?: 'default-dark' | 'map-dark' | 'map-light';
 };
 
 const nativeBottomNavViewName = 'DiningDealzLiquidGlassBottomNavView';
@@ -189,7 +190,7 @@ export function NativeIOSLiquidGlassHeaderButton({ accessibilityLabel, fallback,
   );
 }
 
-export function NativeIOSLiquidGlassBackButton({ forceFallback = false, label, onPress, style, textStyle }: NativeIOSLiquidGlassBackButtonProps) {
+export function NativeIOSLiquidGlassBackButton({ forceFallback = false, label, onPress, style, textStyle, themeVariant = 'default-dark' }: NativeIOSLiquidGlassBackButtonProps) {
   const fallback = (
     <Pressable hitSlop={12} onPress={onPress} pressRetentionOffset={12} style={[styles.backButton, style]}>
       <Text style={[styles.backButtonText, textStyle]}>{label}</Text>
@@ -206,6 +207,7 @@ export function NativeIOSLiquidGlassBackButton({ forceFallback = false, label, o
       label={label}
       onPress={onPress}
       style={style}
+      themeVariant={themeVariant}
       variant="pill"
     />
   );
