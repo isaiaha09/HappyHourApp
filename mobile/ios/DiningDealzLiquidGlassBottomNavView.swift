@@ -121,7 +121,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   }
 
   override var intrinsicContentSize: CGSize {
-    CGSize(width: UIView.noIntrinsicMetric, height: 52)
+    CGSize(width: UIView.noIntrinsicMetric, height: 52 + CGFloat(truncating: bottomInset))
   }
 
   private func setupView() {
@@ -270,25 +270,18 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   }
 
   var body: some View {
-    VStack(spacing: 0) {
-      Spacer(minLength: 0)
-
-      TabView(selection: Binding(
-        get: { selectedTab },
-        set: { onSelect($0) }
-      )) {
-        ForEach(items) { displayItem in
-          Tab(displayItem.title, systemImage: displayItem.systemImageName, value: displayItem.item) {
-            Color.clear
-          }
+    TabView(selection: Binding(
+      get: { selectedTab },
+      set: { onSelect($0) }
+    )) {
+      ForEach(items) { displayItem in
+        Tab(displayItem.title, systemImage: displayItem.systemImageName, value: displayItem.item) {
+          Color.clear
         }
       }
-      .background(Color.clear)
-      .offset(y: max(bottomInset, 0))
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     .background(Color.clear)
-    .ignoresSafeArea(.container, edges: .bottom)
+    .containerBackground(Color.clear, for: .tabView)
     .tabViewStyle(.tabBarOnly)
     .tint(accentColor)
   }
