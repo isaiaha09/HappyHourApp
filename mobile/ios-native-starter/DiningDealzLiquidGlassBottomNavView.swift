@@ -246,6 +246,70 @@ private extension String {
   }
 }
 
+//
+// MARK: — APPLE LIQUID GLASS MODIFIER
+//
+
+extension View {
+    func appleLiquidGlass(
+        shape: some Shape,
+        theme: DiningDealzLiquidGlassThemeVariant,
+        isActive: Bool,
+        dragIntensity: CGFloat
+    ) -> some View {
+        self
+            .glassEffect(.regular.interactive(), in: shape)
+
+            .overlay(
+                shape.fill(
+                    LinearGradient(
+                        colors: theme == .mapLight
+                            ? [
+                                Color.white.opacity(0.18 + dragIntensity * 0.1),
+                                Color.white.opacity(0.06)
+                              ]
+                            : [
+                                Color.white.opacity(0.08 + dragIntensity * 0.1),
+                                Color.white.opacity(0.02)
+                              ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+            )
+
+            .overlay(
+                shape.stroke(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(isActive ? 0.32 : 0.18),
+                            Color.white.opacity(0.06)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: isActive ? 1.4 : 1
+                )
+            )
+
+            .overlay(
+                shape.stroke(Color.white.opacity(0.08), lineWidth: 0.6)
+                    .blur(radius: 1.2)
+            )
+
+            .shadow(
+                color: Color.white.opacity(isActive ? 0.22 : 0.12),
+                radius: isActive ? 12 : 8,
+                x: 0,
+                y: 0
+            )
+    }
+}
+
+//
+// MARK: — iOS 26 LIQUID NAV CONTENT
+//
+
 @available(iOS 26.0, *)
 private struct DiningDealzLiquidGlassBottomNavContent: View {
   let activeItem: DiningDealzLiquidGlassBottomNavItem
@@ -286,14 +350,8 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   }
 
   private var dragDirection: CGFloat {
-    if dragTranslation.width > 0 {
-      return 1
-    }
-
-    if dragTranslation.width < 0 {
-      return -1
-    }
-
+    if dragTranslation.width > 0 { return 1 }
+    if dragTranslation.width < 0 { return -1 }
     return 0
   }
 
@@ -301,7 +359,6 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     if isDragging {
       return -((draggingSelectorExtraHeight * 0.5) + (dragIntensity * 2))
     }
-
     return 0
   }
 
@@ -309,7 +366,6 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     if isDragging {
       return -(6 + (dragIntensity * 4))
     }
-
     return isSelectorActive ? -2 : 0
   }
 
@@ -462,206 +518,4 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   private func selectorGlassShape(width: CGFloat, height: CGFloat) -> some View {
     if isDragging {
       let leadingRadius = max((height * 0.48) + (dragDirection < 0 ? dragIntensity * 10 : dragIntensity * 3), 18)
-      let trailingRadius = max((height * 0.48) + (dragDirection > 0 ? dragIntensity * 10 : dragIntensity * 3), 18)
-      let topLeadingRadius = max(leadingRadius - (dragDirection > 0 ? dragIntensity * 6 : 0), 16)
-      let bottomLeadingRadius = max(leadingRadius + (dragDirection > 0 ? dragIntensity * 8 : dragIntensity * 2), 18)
-      let bottomTrailingRadius = max(trailingRadius + (dragDirection < 0 ? dragIntensity * 8 : dragIntensity * 2), 18)
-      let topTrailingRadius = max(trailingRadius - (dragDirection < 0 ? dragIntensity * 6 : 0), 16)
-      let blobShape = UnevenRoundedRectangle(
-        cornerRadii: .init(
-          topLeading: topLeadingRadius,
-          bottomLeading: bottomLeadingRadius,
-          bottomTrailing: bottomTrailingRadius,
-          topTrailing: topTrailingRadius
-        ),
-        style: .continuous
-      )
-
-      Color.clear
-        .frame(width: width, height: height)
-        .glassEffect(.regular.interactive(), in: blobShape)
-        .scaleEffect(x: 1 + (dragIntensity * 0.035), y: 1 - (dragIntensity * 0.02))
-        .rotationEffect(.degrees(Double(dragDirection * dragIntensity * 4)))
-        .overlay(
-          blobShape
-            .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
-        )
-    } else {
-      Color.clear
-        .frame(width: width, height: height)
-        .glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
-        .overlay(
-          Capsule(style: .continuous)
-            .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
-        )
-    }
-  }
-
-  private func indicatorOffsetX(for metrics: DiningDealzLiquidGlassBottomNavLayoutMetrics) -> CGFloat {
-    metrics.offsetX(for: visuallyActiveItem)
-  }
-
-  private func selectorWidth(for metrics: DiningDealzLiquidGlassBottomNavLayoutMetrics) -> CGFloat {
-    let ratio = isDragging ? draggingSelectorWidthRatio : restingSelectorWidthRatio
-    let extraWidth = isDragging ? draggingSelectorExtraWidth : restingSelectorExtraWidth
-    return max(0, max(metrics.itemWidth * ratio, metrics.itemWidth + extraWidth))
-  }
-
-  private func selectorOffsetX(
-    for metrics: DiningDealzLiquidGlassBottomNavLayoutMetrics,
-    selectorWidth: CGFloat,
-    totalWidth: CGFloat
-  ) -> CGFloat {
-    if let dragLocationX {
-      let minX = metrics.leadingInset - selectorOverflowAllowance
-      let maxX = max(minX, totalWidth - metrics.leadingInset - selectorWidth + selectorOverflowAllowance)
-      return rubberBandClamp(dragLocationX - (selectorWidth / 2), min: minX, max: maxX)
-    }
-
-    return indicatorOffsetX(for: metrics) + ((metrics.itemWidth - selectorWidth) / 2)
-  }
-
-  private func rubberBandClamp(_ value: CGFloat, min minValue: CGFloat, max maxValue: CGFloat) -> CGFloat {
-    if value < minValue {
-      return minValue - rubberBandDistance(minValue - value)
-    }
-
-    if value > maxValue {
-      return maxValue + rubberBandDistance(value - maxValue)
-    }
-
-    return value
-  }
-
-  private func rubberBandDistance(_ distance: CGFloat) -> CGFloat {
-    let dimension = max(selectorOverflowAllowance, 1)
-    return (1 - (1 / ((distance * 0.08 / dimension) + 1))) * dimension
-  }
-
-  private func nearestItem(at x: CGFloat, totalWidth: CGFloat) -> DiningDealzLiquidGlassBottomNavItem? {
-    let metrics = layoutMetrics(totalWidth: totalWidth)
-    guard metrics.itemWidth > 0, !items.isEmpty else {
-      return nil
-    }
-
-    let clampedX = min(max(x, 0), totalWidth)
-    let nearestIndex = items.enumerated().min { lhs, rhs in
-      abs(metrics.centerX(for: lhs.offset) - clampedX) < abs(metrics.centerX(for: rhs.offset) - clampedX)
-    }?.offset
-
-    guard let nearestIndex else {
-      return nil
-    }
-    return items[nearestIndex].item
-  }
-
-  private func layoutMetrics(totalWidth: CGFloat) -> DiningDealzLiquidGlassBottomNavLayoutMetrics {
-    DiningDealzLiquidGlassBottomNavLayoutMetrics(
-      itemCount: items.count,
-      items: items,
-      itemSpacing: itemSpacing,
-      leadingInset: horizontalInset,
-      totalWidth: totalWidth
-    )
-  }
-}
-
-private struct DiningDealzLiquidGlassBottomNavLayoutMetrics {
-  let itemCount: Int
-  let items: [DiningDealzLiquidGlassBottomNavDisplayItem]
-  let itemSpacing: CGFloat
-  let leadingInset: CGFloat
-  let totalWidth: CGFloat
-
-  var itemWidth: CGFloat {
-    guard itemCount > 0 else {
-      return 0
-    }
-
-    let availableWidth = totalWidth - (leadingInset * 2) - (itemSpacing * CGFloat(max(itemCount - 1, 0)))
-    return max(0, availableWidth / CGFloat(itemCount))
-  }
-
-  func centerX(for index: Int) -> CGFloat {
-    offsetX(for: index) + (itemWidth / 2)
-  }
-
-  func offsetX(for item: DiningDealzLiquidGlassBottomNavItem) -> CGFloat {
-    guard let index = items.firstIndex(where: { $0.item == item }) else {
-      return offsetX(for: 0)
-    }
-
-    return offsetX(for: index)
-  }
-
-  func offsetX(for index: Int) -> CGFloat {
-    leadingInset + (CGFloat(index) * (itemWidth + itemSpacing))
-  }
-
-}
-
-private struct DiningDealzLegacyBottomNavContent: View {
-  let activeItem: DiningDealzLiquidGlassBottomNavItem
-  let bottomInset: CGFloat
-  let items: [DiningDealzLiquidGlassBottomNavDisplayItem]
-  let moreOpen: Bool
-  let themeVariant: DiningDealzLiquidGlassThemeVariant
-  let onSelect: (DiningDealzLiquidGlassBottomNavItem) -> Void
-
-  private var displayedActiveItem: DiningDealzLiquidGlassBottomNavItem {
-    moreOpen ? .more : activeItem
-  }
-
-  private var inactiveForegroundColor: Color {
-    switch themeVariant {
-    case .mapLight:
-      return Color(red: 0.14, green: 0.18, blue: 0.25).opacity(0.82)
-    case .defaultDark, .mapDark:
-      return Color.white
-    }
-  }
-
-  private var selectorFillColor: Color {
-    switch themeVariant {
-    case .mapLight:
-      return Color(red: 1, green: 1, blue: 1).opacity(displayedActiveItem == .map ? 0.5 : 0.22)
-    case .defaultDark, .mapDark:
-      return displayedActiveItem == .map ? Color.white.opacity(0.22) : Color.white.opacity(0.12)
-    }
-  }
-
-  var body: some View {
-    VStack(spacing: 0) {
-      Spacer(minLength: 0)
-      HStack(spacing: 12) {
-        ForEach(items) { displayItem in
-          Button(action: {
-            onSelect(displayItem.item)
-          }) {
-            VStack(spacing: 4) {
-              Image(systemName: displayItem.systemImageName)
-                .font(.system(size: 18, weight: .semibold))
-                .frame(height: 20)
-              Text(displayItem.title)
-                .font(.system(size: 10, weight: .semibold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 48)
-          }
-          .foregroundStyle(displayItem.item == displayedActiveItem ? Color(red: 1, green: 0.3, blue: 0.38) : inactiveForegroundColor)
-          .background(
-            Capsule(style: .continuous)
-              .fill(displayedActiveItem == displayItem.item ? selectorFillColor : selectorFillColor.opacity(0.7))
-          )
-        }
-      }
-      .padding(.horizontal, 14)
-      .padding(.top, 2)
-      .padding(.bottom, max(5, bottomInset * 0.2))
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-    .background(Color.clear)
-  }
-}
+      let trailingRadius = max((height *
