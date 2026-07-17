@@ -24,6 +24,11 @@ private struct DiningDealzLiquidGlassBottomNavDisplayItem: Identifiable {
 @objc(DiningDealzLiquidGlassBottomNavView)
 final class DiningDealzLiquidGlassBottomNavView: UIView {
   @objc var onNavItemSelect: RCTDirectEventBlock?
+  @objc var themeVariant: NSString = "default-dark" {
+    didSet {
+      updateRootView()
+    }
+  }
 
   @objc var activeItem: NSString = "map" {
     didSet {
@@ -141,6 +146,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     let currentBottomInset = CGFloat(truncating: bottomInset)
     let currentItems = resolvedItems
     let currentMoreOpen = moreOpen
+    let currentThemeVariant = resolvedThemeVariant
 
     hostingController.rootView = AnyView(
       Group {
@@ -150,6 +156,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
             bottomInset: currentBottomInset,
             items: currentItems,
             moreOpen: currentMoreOpen,
+            themeVariant: currentThemeVariant,
             onSelect: handleSelection
           )
         } else {
@@ -158,11 +165,16 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
             bottomInset: currentBottomInset,
             items: currentItems,
             moreOpen: currentMoreOpen,
+            themeVariant: currentThemeVariant,
             onSelect: handleSelection
           )
         }
       }
     )
+  }
+
+  private var resolvedThemeVariant: DiningDealzLiquidGlassThemeVariant {
+    DiningDealzLiquidGlassThemeVariant(rawValue: themeVariant as String) ?? .defaultDark
   }
 
   private var resolvedItems: [DiningDealzLiquidGlassBottomNavDisplayItem] {
@@ -211,6 +223,12 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   }
 }
 
+private enum DiningDealzLiquidGlassThemeVariant: String {
+  case defaultDark = "default-dark"
+  case mapDark = "map-dark"
+  case mapLight = "map-light"
+}
+
 private extension String {
   var nonEmpty: String? {
     isEmpty ? nil : self
@@ -223,6 +241,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   let bottomInset: CGFloat
   let items: [DiningDealzLiquidGlassBottomNavDisplayItem]
   let moreOpen: Bool
+  let themeVariant: DiningDealzLiquidGlassThemeVariant
   let onSelect: (DiningDealzLiquidGlassBottomNavItem) -> Void
 
   @State private var hoveredItem: DiningDealzLiquidGlassBottomNavItem?
@@ -276,11 +295,36 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   }
 
   private var liquidGlassTint: Color {
-    Color(red: 0.62, green: 0.36, blue: 0.29).opacity(0.18)
+    switch themeVariant {
+    case .defaultDark:
+      return Color(red: 0.62, green: 0.36, blue: 0.29).opacity(0.18)
+    case .mapDark:
+      return Color(red: 0.12, green: 0.16, blue: 0.22).opacity(0.34)
+    case .mapLight:
+      return Color.white.opacity(0.52)
+    }
   }
 
   private var selectorTint: Color {
-    Color.white.opacity(0.01)
+    switch themeVariant {
+    case .defaultDark, .mapDark:
+      return Color.white.opacity(0.02)
+    case .mapLight:
+      return Color.white.opacity(0.16)
+    }
+  }
+
+  private var activeForegroundColor: Color {
+    Color(red: 1, green: 0.3, blue: 0.38)
+  }
+
+  private var inactiveForegroundColor: Color {
+    switch themeVariant {
+    case .mapLight:
+      return Color(red: 0.14, green: 0.18, blue: 0.25).opacity(0.88)
+    case .defaultDark, .mapDark:
+      return Color.white.opacity(0.92)
+    }
   }
 
   var body: some View {
@@ -394,7 +438,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
         .minimumScaleFactor(0.72)
         .allowsTightening(true)
     }
-    .foregroundStyle(isActive ? Color(red: 1, green: 0.04, blue: 0.06) : Color.white.opacity(0.92))
+    .foregroundStyle(isActive ? activeForegroundColor : inactiveForegroundColor)
     .shadow(color: .black.opacity(isActive ? 0.18 : 0.28), radius: 1, x: 0, y: 1)
     .opacity(isActive ? 1 : 0.76)
     .scaleEffect(isActive ? 1.07 : 1)
@@ -492,10 +536,29 @@ private struct DiningDealzLegacyBottomNavContent: View {
   let bottomInset: CGFloat
   let items: [DiningDealzLiquidGlassBottomNavDisplayItem]
   let moreOpen: Bool
+  let themeVariant: DiningDealzLiquidGlassThemeVariant
   let onSelect: (DiningDealzLiquidGlassBottomNavItem) -> Void
 
   private var displayedActiveItem: DiningDealzLiquidGlassBottomNavItem {
     moreOpen ? .more : activeItem
+  }
+
+  private var inactiveForegroundColor: Color {
+    switch themeVariant {
+    case .mapLight:
+      return Color(red: 0.14, green: 0.18, blue: 0.25).opacity(0.82)
+    case .defaultDark, .mapDark:
+      return Color.white
+    }
+  }
+
+  private var selectorFillColor: Color {
+    switch themeVariant {
+    case .mapLight:
+      return Color(red: 1, green: 1, blue: 1).opacity(displayedActiveItem == .map ? 0.5 : 0.22)
+    case .defaultDark, .mapDark:
+      return displayedActiveItem == .map ? Color.white.opacity(0.22) : Color.white.opacity(0.12)
+    }
   }
 
   var body: some View {
@@ -518,10 +581,10 @@ private struct DiningDealzLegacyBottomNavContent: View {
             .frame(maxWidth: .infinity)
             .frame(height: 48)
           }
-          .foregroundStyle(Color.white)
+          .foregroundStyle(displayItem.item == displayedActiveItem ? Color(red: 1, green: 0.3, blue: 0.38) : inactiveForegroundColor)
           .background(
             Capsule(style: .continuous)
-              .fill(displayedActiveItem == displayItem.item ? Color.white.opacity(0.22) : Color.white.opacity(0.12))
+              .fill(displayedActiveItem == displayItem.item ? selectorFillColor : selectorFillColor.opacity(0.7))
           )
         }
       }

@@ -85,7 +85,7 @@ import {
 import { AccountSettingsScreen, BlockedDirectMessageCustomersScreen, BusinessProfileEditorScreen, DashboardScreen, FavoriteBusinessNotificationsScreen, FavoriteBusinessesScreen } from './src/screens/DashboardScreen';
 import { BrowseControls } from './src/screens/BrowseControls';
 import { GuestShellChrome } from './src/components/GuestShellChrome';
-import { NativeIOSLiquidGlassBottomNav, NativeIOSLiquidGlassHeaderButton, isNativeIOSLiquidGlassBottomNavAvailable } from './src/components/NativeIOSLiquidGlass';
+import { NativeIOSLiquidGlassBottomNav, NativeIOSLiquidGlassHeaderButton, isNativeIOSLiquidGlassBottomNavAvailable, isSupportedIOSLiquidGlassRuntime } from './src/components/NativeIOSLiquidGlass';
 import { PhotoLightbox } from './src/components/PhotoLightbox';
 import { DirectMessagesScreen } from './src/screens/DirectMessagesScreen';
 import { HomeFeedScreen } from './src/screens/HomeFeedScreen';
@@ -540,6 +540,7 @@ function AppScreen() {
   const [showGuestBusinessClaimPrompt, setShowGuestBusinessClaimPrompt] = useState(false);
   const [showGuestAccuracyPrompt, setShowGuestAccuracyPrompt] = useState(false);
   const [showGuestBottomNavPrompt, setShowGuestBottomNavPrompt] = useState(false);
+  const [showAuthenticatedHomeFeedPrompt, setShowAuthenticatedHomeFeedPrompt] = useState(false);
   const [showCustomerBusinessClaimPrompt, setShowCustomerBusinessClaimPrompt] = useState(false);
   const [customerBusinessClaimNotice, setCustomerBusinessClaimNotice] = useState<CustomerBusinessClaimNotice | null>(null);
   const [claimReturnDestination, setClaimReturnDestination] = useState<ClaimReturnDestination>('business-search');
@@ -4167,33 +4168,12 @@ function AppScreen() {
       return;
     }
 
-    if (screenMode === 'home-feed') {
-      if (bottomMoreSheetVisible) {
-        closeBottomMoreSheet();
-      }
-
-      return;
-    }
-
-    clearSelectedPlaceRoute();
-    setBrowseFiltersExpanded(false);
-    handleClearMapSelection();
-
-    if (['profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'direct-messages'].includes(screenMode)) {
-      navigateBrowseProfileTransition('browse', 'home-feed');
-      return;
-    }
-
-    const openHomeFeed = () => {
-      fadeIntoMainShellScreen('home-feed');
-    };
-
     if (bottomMoreSheetVisible) {
-      closeBottomMoreSheet(openHomeFeed);
+      closeBottomMoreSheet(() => setShowAuthenticatedHomeFeedPrompt(true));
       return;
     }
 
-    openHomeFeed();
+    setShowAuthenticatedHomeFeedPrompt(true);
   }
 
   function handleBottomNavOpenProfile() {
@@ -5668,6 +5648,11 @@ function AppScreen() {
   }
 
   function renderBottomNav(options: { guest: boolean }) {
+    const mapScreenActive = screenMode === 'browse' && browseMode === 'map' && !selectedPlaceSlug;
+    const nativeMapGlassExpected = mapScreenActive && isSupportedIOSLiquidGlassRuntime();
+    const bottomNavThemeVariant = mapScreenActive
+      ? (displayedDarkMapMode ? 'map-dark' : 'map-light')
+      : 'default-dark';
     let activeItem: MainShellBottomNavItem = 'map';
     if (!options.guest) {
       if (screenMode === 'home-feed') {
@@ -5698,9 +5683,14 @@ function AppScreen() {
             onSelect={handleBottomNavSelection}
             style={{ width: '100%' }}
             systemImages={options.guest ? undefined : { home: 'newspaper' }}
+            themeVariant={bottomNavThemeVariant}
           />
         </View>
       );
+    }
+
+    if (nativeMapGlassExpected) {
+      return null;
     }
 
     return (
@@ -6536,9 +6526,11 @@ function AppScreen() {
                         <Text style={styles.floatingMapNavActionArrow}>→</Text>
                       </Pressable>
                     )}
+                    hideFallbackWhenNativeUnavailable={isSupportedIOSLiquidGlassRuntime()}
                     onPress={handleBottomNavOpenProfile}
                     style={{ bottom: floatingDashboardButtonOffset, height: 54, position: 'absolute', right: 14, width: 54, zIndex: 40 }}
                     systemImage="arrow.right"
+                    themeVariant={displayedDarkMapMode ? 'map-dark' : 'map-light'}
                     variant="icon"
                   />
                 ) : guestMapOnlyMode && browseMode === 'map' && !options?.guestChrome ? (
@@ -6569,9 +6561,11 @@ function AppScreen() {
                         </View>
                       </Pressable>
                     )}
+                    hideFallbackWhenNativeUnavailable={isSupportedIOSLiquidGlassRuntime()}
                     onPress={handleExitGuestMap}
                     style={{ bottom: floatingDashboardButtonOffset, height: 54, position: 'absolute', right: 14, width: 54, zIndex: 40 }}
                     systemImage="rectangle.portrait.and.arrow.right"
+                    themeVariant={displayedDarkMapMode ? 'map-dark' : 'map-light'}
                     variant="icon"
                   />
                 ) : null}
@@ -6583,6 +6577,8 @@ function AppScreen() {
                 logoEntranceOpacity={guestBrowseHeaderLogoOpacity}
                 onCreateAccount={handleOpenProfiles}
                 onSelectPortal={handleOpenAuthFromLanding}
+                showHeader={browseMode !== 'map'}
+                themeVariant={displayedDarkMapMode ? 'map-dark' : 'map-light'}
               />
             ) : null}
           </View>
@@ -6790,6 +6786,27 @@ function AppScreen() {
               </Pressable>
               <Pressable onPress={handleCreateBusinessAccountFromGuestBottomNav} style={styles.guestFavoriteModalSecondaryButton}>
                 <Text style={styles.guestFavoriteModalSecondaryText}>Business</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      <Modal
+        animationType="fade"
+        onRequestClose={() => setShowAuthenticatedHomeFeedPrompt(false)}
+        transparent
+        visible={showAuthenticatedHomeFeedPrompt}
+      >
+        <View style={styles.guestFavoriteModalBackdrop}>
+          <View style={styles.guestFavoriteModalCard}>
+            <Pressable accessibilityLabel="Close Home Feed message" onPress={() => setShowAuthenticatedHomeFeedPrompt(false)} style={styles.guestBottomNavCloseButton}>
+              <Text style={styles.guestBottomNavCloseButtonText}>X</Text>
+            </Pressable>
+            <Text style={styles.guestFavoriteModalTitle}>Coming Soon</Text>
+            <Text style={styles.guestFavoriteModalText}>The DiningDealz Home Feed is on the way.</Text>
+            <View style={styles.guestFavoriteModalActions}>
+              <Pressable onPress={() => setShowAuthenticatedHomeFeedPrompt(false)} style={styles.guestFavoriteModalPrimaryButton}>
+                <Text style={styles.guestFavoriteModalPrimaryText}>Close</Text>
               </Pressable>
             </View>
           </View>

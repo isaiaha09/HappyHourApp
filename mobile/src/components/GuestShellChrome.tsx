@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { Animated, Easing, Image, Pressable, Text, View } from 'react-native';
+import { Animated, Easing, Image, Platform, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { AuthPortal } from '../appFlowTypes';
 import { styles } from '../appStyles';
-import { NativeIOSLiquidGlassBottomNav, NativeIOSLiquidGlassHeaderButton, isNativeIOSLiquidGlassBottomNavAvailable } from './NativeIOSLiquidGlass';
+import { NativeIOSLiquidGlassBottomNav, NativeIOSLiquidGlassHeaderButton, isNativeIOSLiquidGlassBottomNavAvailable, isSupportedIOSLiquidGlassRuntime } from './NativeIOSLiquidGlass';
 
 type AnimatedNumber = Animated.Value | Animated.AnimatedInterpolation<number> | number;
 
@@ -20,7 +20,9 @@ type GuestShellChromeProps = {
   logoTranslateY?: AnimatedNumber;
   onCreateAccount: () => void;
   onSelectPortal: (portal: AuthPortal) => void;
+  showHeader?: boolean;
   showLogo?: boolean;
+  themeVariant?: 'default-dark' | 'map-dark' | 'map-light';
 };
 
 export function GuestShellChrome({
@@ -34,13 +36,16 @@ export function GuestShellChrome({
   logoTranslateY = 0,
   onCreateAccount,
   onSelectPortal,
+  showHeader = true,
   showLogo = true,
+  themeVariant = 'default-dark',
 }: GuestShellChromeProps) {
   const insets = useSafeAreaInsets();
   const [activeModal, setActiveModal] = useState<'home-feed' | 'sign-in' | null>(null);
   const modalOpacity = useRef(new Animated.Value(0)).current;
   const touchTargetHitSlop = 12;
   const touchTargetPressRetentionOffset = 12;
+  const nativeGlassExpected = Platform.OS === 'ios' && isSupportedIOSLiquidGlassRuntime();
 
   useEffect(() => {
     if (interactive || activeModal === null) {
@@ -139,38 +144,44 @@ export function GuestShellChrome({
 
   return (
     <View pointerEvents="box-none" style={styles.guestShellChrome}>
-      <Animated.View
-        pointerEvents={interactive ? 'auto' : 'none'}
-        style={[
-          styles.screenHeaderBar,
-          styles.splashHeaderBar,
-          { opacity: headerOpacity },
-        ]}
-      >
-        <View style={[styles.dashboardHeaderRow, styles.splashHeaderRow]}>
-          {interactive ? (
-            <NativeIOSLiquidGlassHeaderButton
-              accessibilityLabel="Open Home Feed"
-              fallback={homeFeedFallback}
-              onPress={() => openModal('home-feed')}
-              systemImage="newspaper.fill"
-              style={{ marginTop: 8 }}
-              variant="icon"
-            />
-          ) : homeFeedFallback}
-          <View pointerEvents="none" style={styles.splashHeaderCenterSlot} />
-          {interactive ? (
-            <NativeIOSLiquidGlassHeaderButton
-              accessibilityLabel="Sign in"
-              fallback={signInFallback}
-              onPress={() => openModal('sign-in')}
-              systemImage="person.crop.circle"
-              style={{ marginTop: 8 }}
-              variant="icon"
-            />
-          ) : signInFallback}
-        </View>
-      </Animated.View>
+      {showHeader ? (
+        <Animated.View
+          pointerEvents={interactive ? 'auto' : 'none'}
+          style={[
+            styles.screenHeaderBar,
+            styles.splashHeaderBar,
+            { opacity: headerOpacity },
+          ]}
+        >
+          <View style={[styles.dashboardHeaderRow, styles.splashHeaderRow]}>
+            {interactive ? (
+              <NativeIOSLiquidGlassHeaderButton
+                accessibilityLabel="Open Home Feed"
+                fallback={homeFeedFallback}
+                hideFallbackWhenNativeUnavailable={nativeGlassExpected}
+                onPress={() => openModal('home-feed')}
+                systemImage="newspaper.fill"
+                style={{ marginTop: 8 }}
+                themeVariant={themeVariant}
+                variant="icon"
+              />
+            ) : homeFeedFallback}
+            <View pointerEvents="none" style={styles.splashHeaderCenterSlot} />
+            {interactive ? (
+              <NativeIOSLiquidGlassHeaderButton
+                accessibilityLabel="Sign in"
+                fallback={signInFallback}
+                hideFallbackWhenNativeUnavailable={nativeGlassExpected}
+                onPress={() => openModal('sign-in')}
+                systemImage="person.crop.circle"
+                style={{ marginTop: 8 }}
+                themeVariant={themeVariant}
+                variant="icon"
+              />
+            ) : signInFallback}
+          </View>
+        </Animated.View>
+      ) : null}
 
       {showLogo ? (
         <Animated.View
@@ -231,9 +242,10 @@ export function GuestShellChrome({
               }}
               style={{ width: '100%' }}
               systemImages={{ map: 'person.fill', profile: 'plus', more: 'briefcase' }}
+              themeVariant={themeVariant}
             />
           </Animated.View>
-        ) : (
+        ) : interactive && nativeGlassExpected ? null : (
           <Animated.View
             style={[
               styles.bottomNavShell,

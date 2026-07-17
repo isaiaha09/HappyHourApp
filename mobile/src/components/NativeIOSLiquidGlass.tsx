@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Platform, Pressable, Text, UIManager, requireNativeComponent, type NativeSyntheticEvent, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, Pressable, Text, UIManager, requireNativeComponent, type NativeSyntheticEvent, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 
 import { styles } from '../appStyles';
 
@@ -29,6 +29,7 @@ type NativeBottomNavViewProps = {
   profileLabel?: string;
   profileSystemImage?: string;
   style?: StyleProp<ViewStyle>;
+  themeVariant?: 'default-dark' | 'map-dark' | 'map-light';
 };
 
 type NativeHeaderButtonViewProps = {
@@ -38,6 +39,7 @@ type NativeHeaderButtonViewProps = {
   systemImage?: string;
   variant: 'pill' | 'icon';
   style?: StyleProp<ViewStyle>;
+  themeVariant?: 'default-dark' | 'map-dark' | 'map-light';
 };
 
 type NativeIOSLiquidGlassBottomNavProps = {
@@ -49,22 +51,27 @@ type NativeIOSLiquidGlassBottomNavProps = {
   onSelect: (item: NativeLiquidGlassBottomNavItem) => void;
   systemImages?: NativeLiquidGlassBottomNavSystemImages;
   style?: StyleProp<ViewStyle>;
+  themeVariant?: 'default-dark' | 'map-dark' | 'map-light';
 };
 
 type NativeIOSLiquidGlassHeaderButtonProps = {
   accessibilityLabel?: string;
   fallback: ReactNode;
+  hideFallbackWhenNativeUnavailable?: boolean;
   label?: string;
   onPress: () => void;
   style?: StyleProp<ViewStyle>;
   systemImage?: string;
+  themeVariant?: 'default-dark' | 'map-dark' | 'map-light';
   variant: 'pill' | 'icon';
 };
 
 type NativeIOSLiquidGlassBackButtonProps = {
+  forceFallback?: boolean;
   label: string;
   onPress: () => void;
   style?: StyleProp<ViewStyle>;
+  textStyle?: StyleProp<TextStyle>;
 };
 
 const nativeBottomNavViewName = 'DiningDealzLiquidGlassBottomNavView';
@@ -78,7 +85,7 @@ const averageHeaderPillCharacterWidth = 7;
 const NativeBottomNavView = requireNativeComponent<NativeBottomNavViewProps>(nativeBottomNavViewName);
 const NativeHeaderButtonView = requireNativeComponent<NativeHeaderButtonViewProps>(nativeHeaderButtonViewName);
 
-function isSupportedIOSLiquidGlassRuntime() {
+export function isSupportedIOSLiquidGlassRuntime() {
   if (Platform.OS !== 'ios') {
     return false;
   }
@@ -134,7 +141,7 @@ export function isNativeIOSLiquidGlassHeaderButtonAvailable() {
   return hasNativeViewManager(nativeHeaderButtonViewName);
 }
 
-export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, includeHomeItem = false, labels, moreOpen = false, onSelect, style, systemImages }: NativeIOSLiquidGlassBottomNavProps) {
+export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, includeHomeItem = false, labels, moreOpen = false, onSelect, style, systemImages, themeVariant = 'default-dark' }: NativeIOSLiquidGlassBottomNavProps) {
   if (!isNativeIOSLiquidGlassBottomNavAvailable()) {
     return null;
   }
@@ -155,12 +162,17 @@ export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, include
       profileLabel={labels?.profile}
       profileSystemImage={systemImages?.profile}
       style={getBottomNavStyle(bottomInset, style)}
+      themeVariant={themeVariant}
     />
   );
 }
 
-export function NativeIOSLiquidGlassHeaderButton({ accessibilityLabel, fallback, label, onPress, style, systemImage, variant }: NativeIOSLiquidGlassHeaderButtonProps) {
+export function NativeIOSLiquidGlassHeaderButton({ accessibilityLabel, fallback, hideFallbackWhenNativeUnavailable = false, label, onPress, style, systemImage, themeVariant = 'default-dark', variant }: NativeIOSLiquidGlassHeaderButtonProps) {
   if (!isNativeIOSLiquidGlassHeaderButtonAvailable()) {
+    if (hideFallbackWhenNativeUnavailable && isSupportedIOSLiquidGlassRuntime()) {
+      return null;
+    }
+
     return <>{fallback}</>;
   }
 
@@ -171,19 +183,26 @@ export function NativeIOSLiquidGlassHeaderButton({ accessibilityLabel, fallback,
       onGlassButtonPress={() => onPress()}
       style={getHeaderButtonStyle(variant, label, style)}
       systemImage={systemImage}
+      themeVariant={themeVariant}
       variant={variant}
     />
   );
 }
 
-export function NativeIOSLiquidGlassBackButton({ label, onPress, style }: NativeIOSLiquidGlassBackButtonProps) {
+export function NativeIOSLiquidGlassBackButton({ forceFallback = false, label, onPress, style, textStyle }: NativeIOSLiquidGlassBackButtonProps) {
+  const fallback = (
+    <Pressable hitSlop={12} onPress={onPress} pressRetentionOffset={12} style={[styles.backButton, style]}>
+      <Text style={[styles.backButtonText, textStyle]}>{label}</Text>
+    </Pressable>
+  );
+
+  if (forceFallback) {
+    return fallback;
+  }
+
   return (
     <NativeIOSLiquidGlassHeaderButton
-      fallback={(
-        <Pressable hitSlop={12} onPress={onPress} pressRetentionOffset={12} style={[styles.backButton, style]}>
-          <Text style={styles.backButtonText}>{label}</Text>
-        </Pressable>
-      )}
+      fallback={fallback}
       label={label}
       onPress={onPress}
       style={style}

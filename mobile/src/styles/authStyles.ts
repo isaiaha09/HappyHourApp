@@ -322,5 +322,96 @@ export const authStyles = {
     minHeight: 96,
     textAlignVertical: 'top',
   },
+  onboardingCard: {
+    backgroundColor: theme.surfaceLight,
+    borderColor: theme.surfaceLightBorder,
+  },
+  onboardingRecoveryPanel: {
+    backgroundColor: theme.surfaceLightAlt,
+    borderColor: theme.surfaceLightBorder,
+  },
+  onboardingEyebrow: {
+    color: theme.accent,
+  },
+  onboardingHeading: {
+    color: theme.textDark,
+  },
+  onboardingBodyText: {
+    color: theme.textDarkSoft,
+  },
+  onboardingLabel: {
+    color: theme.textDarkSoft,
+  },
+  onboardingInput: {
+    backgroundColor: theme.surfaceLightAlt,
+    borderColor: theme.surfaceLightBorder,
+    color: theme.textDark,
+  },
+  onboardingPrimaryButton: {
+    backgroundColor: theme.surfaceLightAlt,
+    borderColor: theme.surfaceLightBorder,
+    borderWidth: 1,
+  },
+  onboardingPrimaryButtonText: {
+    color: theme.textDark,
+  },
+  onboardingSecondaryButton: {
+    backgroundColor: theme.surfaceLightAlt,
+    borderColor: theme.surfaceLightBorder,
+  },
+  onboardingSecondaryButtonText: {
+    color: theme.textDark,
+  },
+  onboardingBackButton: {
+    backgroundColor: theme.surfaceLightAlt,
+    borderColor: theme.surfaceLightBorder,
+    borderWidth: 1,
+  },
+  onboardingBackButtonText: {
+    color: theme.textDark,
+  },
+  onboardingInfoCard: {
+    backgroundColor: theme.surfaceLightAlt,
+    borderColor: theme.surfaceLightBorder,
+  },
+  onboardingInfoTitle: {
+    color: theme.textDark,
+  },
+  onboardingInfoText: {
+    color: theme.textDarkSoft,
+  },
+  onboardingInfoTextMuted: {
+    color: theme.textDarkMuted,
+  },
+  onboardingDropdownButton: {
+    backgroundColor: theme.surfaceLightAlt,
+    borderColor: theme.surfaceLightBorder,
+  },
+  onboardingDropdownButtonOpen: {
+    borderColor: theme.accent,
+  },
+  onboardingDropdownText: {
+    color: theme.textDark,
+  },
+  onboardingDropdownPlaceholder: {
+    color: theme.textDarkMuted,
+  },
+  onboardingDropdownCaret: {
+    color: theme.textDarkMuted,
+  },
+  onboardingDropdownMenu: {
+    backgroundColor: theme.surfaceLightAlt,
+    borderColor: theme.surfaceLightBorder,
+  },
+  onboardingDropdownOptionSelected: {
+    backgroundColor: '#dde5ef',
+  },
+  onboardingChip: {
+    backgroundColor: theme.surfaceLightAlt,
+    borderColor: theme.surfaceLightBorder,
+  },
+  onboardingChipText: {
+    color: theme.textDark,
+  },
 } as const;
 

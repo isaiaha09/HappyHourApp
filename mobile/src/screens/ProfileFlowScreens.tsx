@@ -31,9 +31,23 @@ import { NativeIOSLiquidGlassBackButton } from '../components/NativeIOSLiquidGla
 import { manualBusinessCityOptions, manualBusinessVenueOptions } from '../browseConfig';
 import { dedupeImageUrls, formatPlaceAddress, getPlaceLocations, normalizeSearchText } from '../placeHelpers';
 import { SOCIAL_PLATFORM_LABELS, getSocialProfilePreview, getSocialProfileValidationMessage } from '../socialProfiles';
+import { theme } from '../styles/theme';
 import type { BusinessAttachmentBuckets, BusinessAttachmentDraft, BusinessAttachmentKind, EmailVerificationChallengeResponse, PlaceListItem, PlaceLocation, SignupResponse } from '../types';
 
 const SUPPORT_EMAIL = 'support@diningdealz.com';
+const onboardingPlaceholderTextColor = theme.textDarkMuted;
+
+function OnboardingBackButton({ label, onPress, style }: { label: string; onPress: () => void; style?: any }) {
+  return (
+    <NativeIOSLiquidGlassBackButton
+      forceFallback
+      label={label}
+      onPress={onPress}
+      style={[styles.onboardingBackButton, style]}
+      textStyle={styles.onboardingBackButtonText}
+    />
+  );
+}
 
 type CompactDropdownProps = {
   onSelect: (value: string) => void;
@@ -336,6 +350,7 @@ type AutoScrollFormController = {
 };
 
 type PasswordFieldProps = {
+  inputStyle?: any;
   onBeforeAutoScroll?: () => void;
   onChangeText: (value: string) => void;
   scrollViewRef: RefObject<ScrollView | null>;
@@ -426,7 +441,7 @@ function PasswordToggleIcon({ isVisible }: { isVisible: boolean }) {
   );
 }
 
-function PasswordField({ onBeforeAutoScroll, onChangeText, scrollViewRef, value }: PasswordFieldProps) {
+function PasswordField({ inputStyle, onBeforeAutoScroll, onChangeText, scrollViewRef, value }: PasswordFieldProps) {
   const [isVisible, setIsVisible] = useState(false);
 
   return (
@@ -436,7 +451,7 @@ function PasswordField({ onBeforeAutoScroll, onChangeText, scrollViewRef, value 
         onChangeText={onChangeText}
         scrollViewRef={scrollViewRef}
         secureTextEntry={!isVisible}
-        style={[styles.profileInput, styles.passwordFieldInput]}
+        style={[styles.profileInput, styles.passwordFieldInput, inputStyle]}
         value={value}
       />
       <Pressable
@@ -482,12 +497,12 @@ function CompactDropdown({ onSelect, open, options, placeholder, selectedValue, 
 
   return (
     <View style={styles.compactDropdownWrap}>
-      <Pressable onPress={handleToggle} style={[styles.compactDropdownButton, open ? styles.compactDropdownButtonOpen : null]}>
-        <Text style={[styles.compactDropdownText, selectedValue.length === 0 ? styles.compactDropdownPlaceholder : null]}>{selectedLabel}</Text>
-        <Text style={styles.compactDropdownCaret}>{open ? '^' : 'v'}</Text>
+      <Pressable onPress={handleToggle} style={[styles.compactDropdownButton, styles.onboardingDropdownButton, open ? styles.compactDropdownButtonOpen : null, open ? styles.onboardingDropdownButtonOpen : null]}>
+        <Text style={[styles.compactDropdownText, styles.onboardingDropdownText, selectedValue.length === 0 ? styles.compactDropdownPlaceholder : null, selectedValue.length === 0 ? styles.onboardingDropdownPlaceholder : null]}>{selectedLabel}</Text>
+        <Text style={[styles.compactDropdownCaret, styles.onboardingDropdownCaret]}>{open ? '^' : 'v'}</Text>
       </Pressable>
       {open ? (
-        <View style={styles.compactDropdownMenu}>
+        <View style={[styles.compactDropdownMenu, styles.onboardingDropdownMenu]}>
           {options.map((option) => {
             const isSelected = option.value === selectedValue;
 
@@ -495,9 +510,9 @@ function CompactDropdown({ onSelect, open, options, placeholder, selectedValue, 
               <Pressable
                 key={option.value}
                 onPress={() => handleSelect(option.value)}
-                style={[styles.compactDropdownOption, isSelected ? styles.compactDropdownOptionSelected : null]}
+                style={[styles.compactDropdownOption, isSelected ? styles.compactDropdownOptionSelected : null, isSelected ? styles.onboardingDropdownOptionSelected : null]}
               >
-                <Text style={[styles.compactDropdownOptionText, isSelected ? styles.compactDropdownOptionTextSelected : null]}>{option.label}</Text>
+                <Text style={[styles.compactDropdownOptionText, styles.onboardingDropdownText, isSelected ? styles.compactDropdownOptionTextSelected : null]}>{option.label}</Text>
               </Pressable>
             );
           })}
@@ -583,109 +598,112 @@ export function AuthPortalScreen({ authMessage, autoFocusIdentifier, errorMessag
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
-            <NativeIOSLiquidGlassBackButton label="Back" onPress={onBackToLanding} />
+            <OnboardingBackButton label="Back" onPress={onBackToLanding} />
           </View>
 
           <View style={styles.authFormStack}>
-            <Text style={styles.detailCity}>{loginPortal === 'customer' ? 'Customer Login' : 'Business Login'}</Text>
-            <Text style={styles.detailTitle}>Welcome back</Text>
-            <Text style={styles.profileIntroText}>Enter your username and password to continue.</Text>
+            <View style={[styles.profileCard, styles.onboardingCard]}>
+              <Text style={[styles.detailCity, styles.onboardingEyebrow]}>{loginPortal === 'customer' ? 'Customer Login' : 'Business Login'}</Text>
+              <Text style={[styles.detailTitle, styles.onboardingHeading]}>Welcome back</Text>
+              <Text style={[styles.profileIntroText, styles.onboardingBodyText]}>Enter your username and password to continue.</Text>
 
-            {authMessage ? (
-              <View style={styles.profileSuccessBanner}>
-                <Text style={styles.profileSuccessText}>{authMessage}</Text>
-              </View>
-            ) : null}
-
-            {errorMessage ? (
-              <View style={styles.errorBanner}>
-                <Text style={styles.errorText}>{errorMessage}</Text>
-              </View>
-            ) : null}
-
-            <Text style={styles.profileFieldLabel}>Username</Text>
-            <AutoScrollTextInput autoCapitalize="none" autoFocus={autoFocusIdentifier} onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('identifier', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={loginForm.identifier} />
-
-            <Text style={styles.profileFieldLabel}>Password</Text>
-            <PasswordField onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('password', value)} scrollViewRef={scrollViewRef} value={loginForm.password} />
-
-            {showTwoFactorCodeField ? (
-              <>
-                <Text style={styles.profileFieldLabel}>Authenticator Code</Text>
-                <AutoScrollTextInput
-                  autoCapitalize="none"
-                  keyboardType="number-pad"
-                  onBeforeAutoScroll={handleFieldFocus}
-                  onChangeText={(value) => onChangeField('two_factor_code', value)}
-                  scrollViewRef={scrollViewRef}
-                  style={styles.profileInput}
-                  value={loginForm.two_factor_code}
-                />
-                <Text style={styles.profileSupportText}>Enter the 6-digit code from your authenticator app to finish signing in.</Text>
-              </>
-            ) : null}
-
-            <Pressable disabled={submitting} onPress={() => void onSubmit()} style={[styles.linkButton, submitting ? styles.linkButtonDisabled : null]}>
-              <LoadingButtonLabel
-                color="#effffd"
-                label={loginPortal === 'customer' ? 'Log in as Customer' : 'Log in as Business'}
-                loading={submitting}
-                textStyle={styles.linkButtonText}
-              />
-            </Pressable>
-
-            <View style={styles.authRecoveryRow}>
-              <Pressable onPress={() => handleOpenRecovery('username')} style={[styles.authRecoveryButton, submitting ? styles.linkButtonDisabled : null]}>
-                <Text style={styles.authRecoveryButtonText}>Forgot username?</Text>
-              </Pressable>
-              <Pressable onPress={() => handleOpenRecovery('password')} style={[styles.authRecoveryButton, submitting ? styles.linkButtonDisabled : null]}>
-                <Text style={styles.authRecoveryButtonText}>Forgot password?</Text>
-              </Pressable>
-            </View>
-
-            {recoveryMode ? (
-              <Animated.View
-                style={[
-                  styles.authRecoveryPanel,
-                  {
-                    opacity: recoveryFade,
-                    transform: [{ translateY: recoveryTranslateY }],
-                  },
-                ]}
-              >
-                <Text style={styles.profileFieldLabel}>{recoveryMode === 'username' ? 'Account email' : 'Username or email'}</Text>
-                <AutoScrollTextInput
-                  autoCapitalize="none"
-                  autoFocus
-                  keyboardType={recoveryMode === 'username' ? 'email-address' : 'default'}
-                  onBeforeAutoScroll={handleFieldFocus}
-                  onChangeText={setRecoveryValue}
-                  placeholder={recoveryMode === 'username' ? 'Enter your account email' : 'Enter your username or email'}
-                  placeholderTextColor="#9a7f6c"
-                  scrollViewRef={scrollViewRef}
-                  style={styles.profileInput}
-                  value={recoveryValue}
-                />
-                <Text style={styles.profileSupportText}>
-                  {recoveryMode === 'username'
-                    ? 'We will email the username tied to this account.'
-                    : 'We will send a password reset link if that account exists.'}
-                </Text>
-                <View style={styles.authRecoveryPanelActions}>
-                  <Pressable onPress={handleSubmitRecovery} style={[styles.linkButtonSecondaryWide, submitting ? styles.linkButtonDisabled : null]}>
-                    <LoadingButtonLabel
-                      color="#9e5b49"
-                      label={recoveryMode === 'username' ? 'Email my username' : 'Send password reset link'}
-                      loading={submitting}
-                      textStyle={styles.linkButtonSecondaryText}
-                    />
-                  </Pressable>
-                  <Pressable onPress={handleCloseRecovery} style={styles.authRecoveryDismissButton}>
-                    <Text style={styles.authRecoveryDismissText}>Cancel</Text>
-                  </Pressable>
+              {authMessage ? (
+                <View style={styles.profileSuccessBanner}>
+                  <Text style={styles.profileSuccessText}>{authMessage}</Text>
                 </View>
-              </Animated.View>
-            ) : null}
+              ) : null}
+
+              {errorMessage ? (
+                <View style={styles.errorBanner}>
+                  <Text style={styles.errorText}>{errorMessage}</Text>
+                </View>
+              ) : null}
+
+              <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Username</Text>
+              <AutoScrollTextInput autoCapitalize="none" autoFocus={autoFocusIdentifier} onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('identifier', value)} scrollViewRef={scrollViewRef} style={[styles.profileInput, styles.onboardingInput]} value={loginForm.identifier} />
+
+              <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Password</Text>
+              <PasswordField inputStyle={styles.onboardingInput} onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('password', value)} scrollViewRef={scrollViewRef} value={loginForm.password} />
+
+              {showTwoFactorCodeField ? (
+                <>
+                  <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Authenticator Code</Text>
+                  <AutoScrollTextInput
+                    autoCapitalize="none"
+                    keyboardType="number-pad"
+                    onBeforeAutoScroll={handleFieldFocus}
+                    onChangeText={(value) => onChangeField('two_factor_code', value)}
+                    scrollViewRef={scrollViewRef}
+                    style={[styles.profileInput, styles.onboardingInput]}
+                    value={loginForm.two_factor_code}
+                  />
+                  <Text style={[styles.profileSupportText, styles.onboardingBodyText]}>Enter the 6-digit code from your authenticator app to finish signing in.</Text>
+                </>
+              ) : null}
+
+              <Pressable disabled={submitting} onPress={() => void onSubmit()} style={[styles.linkButton, styles.onboardingPrimaryButton, submitting ? styles.linkButtonDisabled : null]}>
+                <LoadingButtonLabel
+                  color={theme.textDark}
+                  label={loginPortal === 'customer' ? 'Log in as Customer' : 'Log in as Business'}
+                  loading={submitting}
+                  textStyle={[styles.linkButtonText, styles.onboardingPrimaryButtonText]}
+                />
+              </Pressable>
+
+              <View style={styles.authRecoveryRow}>
+                <Pressable onPress={() => handleOpenRecovery('username')} style={[styles.authRecoveryButton, submitting ? styles.linkButtonDisabled : null]}>
+                  <Text style={styles.authRecoveryButtonText}>Forgot username?</Text>
+                </Pressable>
+                <Pressable onPress={() => handleOpenRecovery('password')} style={[styles.authRecoveryButton, submitting ? styles.linkButtonDisabled : null]}>
+                  <Text style={styles.authRecoveryButtonText}>Forgot password?</Text>
+                </Pressable>
+              </View>
+
+              {recoveryMode ? (
+                <Animated.View
+                  style={[
+                    styles.authRecoveryPanel,
+                    styles.onboardingRecoveryPanel,
+                    {
+                      opacity: recoveryFade,
+                      transform: [{ translateY: recoveryTranslateY }],
+                    },
+                  ]}
+                >
+                  <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>{recoveryMode === 'username' ? 'Account email' : 'Username or email'}</Text>
+                  <AutoScrollTextInput
+                    autoCapitalize="none"
+                    autoFocus
+                    keyboardType={recoveryMode === 'username' ? 'email-address' : 'default'}
+                    onBeforeAutoScroll={handleFieldFocus}
+                    onChangeText={setRecoveryValue}
+                    placeholder={recoveryMode === 'username' ? 'Enter your account email' : 'Enter your username or email'}
+                    placeholderTextColor={onboardingPlaceholderTextColor}
+                    scrollViewRef={scrollViewRef}
+                    style={[styles.profileInput, styles.onboardingInput]}
+                    value={recoveryValue}
+                  />
+                  <Text style={[styles.profileSupportText, styles.onboardingBodyText]}>
+                    {recoveryMode === 'username'
+                      ? 'We will email the username tied to this account.'
+                      : 'We will send a password reset link if that account exists.'}
+                  </Text>
+                  <View style={styles.authRecoveryPanelActions}>
+                    <Pressable onPress={handleSubmitRecovery} style={[styles.linkButtonSecondaryWide, styles.onboardingSecondaryButton, submitting ? styles.linkButtonDisabled : null]}>
+                      <LoadingButtonLabel
+                        color={theme.textDark}
+                        label={recoveryMode === 'username' ? 'Email my username' : 'Send password reset link'}
+                        loading={submitting}
+                        textStyle={[styles.linkButtonSecondaryText, styles.onboardingSecondaryButtonText]}
+                      />
+                    </Pressable>
+                    <Pressable onPress={handleCloseRecovery} style={styles.authRecoveryDismissButton}>
+                      <Text style={styles.authRecoveryDismissText}>Cancel</Text>
+                    </Pressable>
+                  </View>
+                </Animated.View>
+              ) : null}
+            </View>
           </View>
         </ScrollView>
       </KeyboardAwareFormScreen>
@@ -709,13 +727,13 @@ export function CreateProfileScreen({ errorMessage, form, isLandscape, message, 
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
-            <NativeIOSLiquidGlassBackButton label="Back" onPress={onBack} />
+            <OnboardingBackButton label="Back" onPress={onBack} />
           </View>
 
-          <View style={styles.profileCard}>
-            <Text style={styles.detailCity}>Create Profile</Text>
-            <Text style={styles.detailTitle}>Create a customer account</Text>
-            <Text style={styles.profileIntroText}>Customer accounts now move into a short email code check after signup before the dashboard unlocks.</Text>
+          <View style={[styles.profileCard, styles.onboardingCard]}>
+            <Text style={[styles.detailCity, styles.onboardingEyebrow]}>Create Profile</Text>
+            <Text style={[styles.detailTitle, styles.onboardingHeading]}>Create a customer account</Text>
+            <Text style={[styles.profileIntroText, styles.onboardingBodyText]}>Customer accounts now move into a short email code check after signup before the dashboard unlocks.</Text>
 
             {message ? (
               <View style={styles.profileSuccessBanner}>
@@ -730,31 +748,31 @@ export function CreateProfileScreen({ errorMessage, form, isLandscape, message, 
             ) : null}
 
             <View style={styles.profileFormSection}>
-              <Text style={styles.profileFieldLabel}>Username</Text>
-              <AutoScrollTextInput autoCapitalize="none" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('username', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.username} />
+              <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Username</Text>
+              <AutoScrollTextInput autoCapitalize="none" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('username', value)} scrollViewRef={scrollViewRef} style={[styles.profileInput, styles.onboardingInput]} value={form.username} />
 
-              <Text style={styles.profileFieldLabel}>Email</Text>
-              <AutoScrollTextInput autoCapitalize="none" keyboardType="email-address" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('email', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.email} />
+              <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Email</Text>
+              <AutoScrollTextInput autoCapitalize="none" keyboardType="email-address" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('email', value)} scrollViewRef={scrollViewRef} style={[styles.profileInput, styles.onboardingInput]} value={form.email} />
 
-              <Text style={styles.profileFieldLabel}>Password</Text>
-              <PasswordField onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('password', value)} scrollViewRef={scrollViewRef} value={form.password} />
+              <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Password</Text>
+              <PasswordField inputStyle={styles.onboardingInput} onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('password', value)} scrollViewRef={scrollViewRef} value={form.password} />
 
-              <Text style={styles.profileFieldLabel}>Confirm password</Text>
-              <PasswordField onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('confirm_password', value)} scrollViewRef={scrollViewRef} value={form.confirm_password} />
+              <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Confirm password</Text>
+              <PasswordField inputStyle={styles.onboardingInput} onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('confirm_password', value)} scrollViewRef={scrollViewRef} value={form.confirm_password} />
 
-              <Text style={styles.profileFieldLabel}>First name</Text>
-              <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('first_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.first_name} />
+              <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>First name</Text>
+              <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('first_name', value)} scrollViewRef={scrollViewRef} style={[styles.profileInput, styles.onboardingInput]} value={form.first_name} />
 
-              <Text style={styles.profileFieldLabel}>Last name</Text>
-              <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('last_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.last_name} />
+              <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Last name</Text>
+              <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('last_name', value)} scrollViewRef={scrollViewRef} style={[styles.profileInput, styles.onboardingInput]} value={form.last_name} />
             </View>
 
-            <Pressable onPress={() => void onSubmit()} style={[styles.linkButton, submitting ? styles.linkButtonDisabled : null]}>
-              <LoadingButtonLabel color="#effffd" label="Create customer profile" loading={submitting} textStyle={styles.linkButtonText} />
+            <Pressable onPress={() => void onSubmit()} style={[styles.linkButton, styles.onboardingPrimaryButton, submitting ? styles.linkButtonDisabled : null]}>
+              <LoadingButtonLabel color={theme.textDark} label="Create customer profile" loading={submitting} textStyle={[styles.linkButtonText, styles.onboardingPrimaryButtonText]} />
             </Pressable>
 
-            <Pressable onPress={onOpenBusinessClaim} style={styles.linkButtonSecondaryWide}>
-              <Text style={styles.linkButtonSecondaryText}>Claim a Business</Text>
+            <Pressable onPress={onOpenBusinessClaim} style={[styles.linkButtonSecondaryWide, styles.onboardingSecondaryButton]}>
+              <Text style={[styles.linkButtonSecondaryText, styles.onboardingSecondaryButtonText]}>Claim a Business</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -808,13 +826,13 @@ export function EmailVerificationScreen({ errorMessage, isLandscape, message, on
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
-            <NativeIOSLiquidGlassBackButton label="Back to login" onPress={onBack} />
+            <OnboardingBackButton label="Back to login" onPress={onBack} />
           </View>
 
-          <View style={styles.profileCard}>
-            <Text style={styles.detailCity}>Email Verification</Text>
-            <Text style={styles.detailTitle}>Enter your 6-digit code</Text>
-            <Text style={styles.profileIntroText}>
+          <View style={[styles.profileCard, styles.onboardingCard]}>
+            <Text style={[styles.detailCity, styles.onboardingEyebrow]}>Email Verification</Text>
+            <Text style={[styles.detailTitle, styles.onboardingHeading]}>Enter your 6-digit code</Text>
+            <Text style={[styles.profileIntroText, styles.onboardingBodyText]}>
               {pendingVerification?.email
                 ? `We sent a code to ${pendingVerification.email}. Enter it before it expires to unlock your dashboard.`
                 : 'We sent a code to your email. Enter it before it expires to unlock your dashboard.'}
@@ -833,7 +851,7 @@ export function EmailVerificationScreen({ errorMessage, isLandscape, message, on
             ) : null}
 
             <View style={styles.profileFormSection}>
-              <Text style={styles.profileFieldLabel}>Verification code</Text>
+              <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Verification code</Text>
               <AutoScrollTextInput
                 autoCapitalize="none"
                 autoComplete="one-time-code"
@@ -842,9 +860,9 @@ export function EmailVerificationScreen({ errorMessage, isLandscape, message, on
                 onBeforeAutoScroll={handleFieldFocus}
                 onChangeText={(value) => onChangeCode(value.replace(/[^0-9]/g, ''))}
                 placeholder="000000"
-                placeholderTextColor="#9a7f6c"
+                placeholderTextColor={onboardingPlaceholderTextColor}
                 scrollViewRef={scrollViewRef}
-                style={[styles.profileInput, styles.verificationCodeInput]}
+                style={[styles.profileInput, styles.verificationCodeInput, styles.onboardingInput]}
                 textContentType="oneTimeCode"
                 value={verificationCode}
               />
@@ -854,24 +872,24 @@ export function EmailVerificationScreen({ errorMessage, isLandscape, message, on
                   Code expires in {formatVerificationCountdown(secondsRemaining)}
                 </Text>
               ) : (
-                <Text style={styles.profileSupportText}>Your last code expired. Request a new one to continue.</Text>
+                <Text style={[styles.profileSupportText, styles.onboardingBodyText]}>Your last code expired. Request a new one to continue.</Text>
               )}
 
-              <Text style={styles.profileSupportText}>
+              <Text style={[styles.profileSupportText, styles.onboardingBodyText]}>
                 Username: {pendingVerification?.username ?? 'Unavailable'}
               </Text>
             </View>
 
-            <Pressable onPress={() => void onSubmit()} style={[styles.linkButton, submitting ? styles.linkButtonDisabled : null]}>
-              <LoadingButtonLabel color="#effffd" label="Verify email and continue" loading={submitting} textStyle={styles.linkButtonText} />
+            <Pressable onPress={() => void onSubmit()} style={[styles.linkButton, styles.onboardingPrimaryButton, submitting ? styles.linkButtonDisabled : null]}>
+              <LoadingButtonLabel color={theme.textDark} label="Verify email and continue" loading={submitting} textStyle={[styles.linkButtonText, styles.onboardingPrimaryButtonText]} />
             </Pressable>
 
             <Pressable
               disabled={secondsRemaining > 0 || submitting}
               onPress={() => void onResend()}
-              style={[styles.linkButtonSecondaryWide, secondsRemaining > 0 || submitting ? styles.linkButtonDisabled : null]}
+              style={[styles.linkButtonSecondaryWide, styles.onboardingSecondaryButton, secondsRemaining > 0 || submitting ? styles.linkButtonDisabled : null]}
             >
-              <Text style={styles.linkButtonSecondaryText}>Resend verification code</Text>
+              <Text style={[styles.linkButtonSecondaryText, styles.onboardingSecondaryButtonText]}>Resend verification code</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -896,13 +914,13 @@ export function BusinessClaimReviewPendingScreen({ errorMessage, isLandscape, me
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
-            <NativeIOSLiquidGlassBackButton label="Back to login" onPress={onBack} />
+            <OnboardingBackButton label="Back to login" onPress={onBack} />
           </View>
 
-          <View style={styles.profileCard}>
-            <Text style={styles.detailCity}>Business claim status</Text>
-            <Text style={styles.detailTitle}>{reviewTitle}</Text>
-            <Text style={styles.profileIntroText}>{reviewMessage}</Text>
+          <View style={[styles.profileCard, styles.onboardingCard]}>
+            <Text style={[styles.detailCity, styles.onboardingEyebrow]}>Business claim status</Text>
+            <Text style={[styles.detailTitle, styles.onboardingHeading]}>{reviewTitle}</Text>
+            <Text style={[styles.profileIntroText, styles.onboardingBodyText]}>{reviewMessage}</Text>
 
             {errorMessage ? (
               <View style={styles.errorBanner}>
@@ -910,21 +928,21 @@ export function BusinessClaimReviewPendingScreen({ errorMessage, isLandscape, me
               </View>
             ) : null}
 
-            <View style={styles.dashboardSectionCard}>
-              <Text style={styles.dashboardSectionTitle}>Review details</Text>
-              <Text style={styles.dashboardSupportText}>Business: {businessName}</Text>
-              <Text style={styles.dashboardSupportText}>Claim status: {reviewStatus}</Text>
-              <Text style={styles.dashboardSupportText}>Account email: {session?.email || 'Unavailable'}</Text>
+            <View style={[styles.dashboardSectionCard, styles.onboardingInfoCard]}>
+              <Text style={[styles.dashboardSectionTitle, styles.onboardingInfoTitle]}>Review details</Text>
+              <Text style={[styles.dashboardSupportText, styles.onboardingInfoText]}>Business: {businessName}</Text>
+              <Text style={[styles.dashboardSupportText, styles.onboardingInfoText]}>Claim status: {reviewStatus}</Text>
+              <Text style={[styles.dashboardSupportText, styles.onboardingInfoText]}>Account email: {session?.email || 'Unavailable'}</Text>
             </View>
 
-            <View style={styles.dashboardCalloutCard}>
-              <Text style={styles.dashboardSectionTitle}>What happens next</Text>
-              <Text style={styles.dashboardSupportText}>DiningDealz will send an approval or rejection email after manual review is complete.</Text>
-              <Text style={styles.dashboardSupportText}>Business dashboard access stays locked until the claim is approved.</Text>
+            <View style={[styles.dashboardCalloutCard, styles.onboardingInfoCard]}>
+              <Text style={[styles.dashboardSectionTitle, styles.onboardingInfoTitle]}>What happens next</Text>
+              <Text style={[styles.dashboardSupportText, styles.onboardingInfoText]}>DiningDealz will send an approval or rejection email after manual review is complete.</Text>
+              <Text style={[styles.dashboardSupportText, styles.onboardingInfoText]}>Business dashboard access stays locked until the claim is approved.</Text>
             </View>
 
-            <Pressable onPress={onBack} style={styles.linkButton}>
-              <Text style={styles.linkButtonText}>Return to login</Text>
+            <Pressable onPress={onBack} style={[styles.linkButton, styles.onboardingPrimaryButton]}>
+              <Text style={[styles.linkButtonText, styles.onboardingPrimaryButtonText]}>Return to login</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -959,13 +977,13 @@ export function ContactSupportScreen({ errorMessage, initialMessage = '', initia
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
-            <NativeIOSLiquidGlassBackButton label="Back to Settings" onPress={onBack} />
+            <OnboardingBackButton label="Back to Settings" onPress={onBack} />
           </View>
 
-          <View style={styles.profileCard}>
-            <Text style={styles.detailCity}>Contact Support</Text>
-            <Text style={styles.detailTitle}>Reach the DiningDealz support team</Text>
-            <Text style={styles.profileIntroText}>Send a support message directly from the app. Your name, username, email, and account type will be attached automatically.</Text>
+          <View style={[styles.profileCard, styles.onboardingCard]}>
+            <Text style={[styles.detailCity, styles.onboardingEyebrow]}>Contact Support</Text>
+            <Text style={[styles.detailTitle, styles.onboardingHeading]}>Reach the DiningDealz support team</Text>
+            <Text style={[styles.profileIntroText, styles.onboardingBodyText]}>Send a support message directly from the app. Your name, username, email, and account type will be attached automatically.</Text>
 
             {successMessage ? (
               <View style={styles.profileSuccessBanner}>
@@ -979,41 +997,41 @@ export function ContactSupportScreen({ errorMessage, initialMessage = '', initia
               </View>
             ) : null}
 
-            <View style={styles.dashboardSectionCard}>
-              <Text style={styles.dashboardSectionTitle}>Direct email</Text>
-              <Text style={styles.dashboardDetailValue}>{SUPPORT_EMAIL}</Text>
-              <Text style={styles.dashboardSupportText}>Best for account help, business onboarding, verification issues, billing questions, or general app support.</Text>
+            <View style={[styles.dashboardSectionCard, styles.onboardingInfoCard]}>
+              <Text style={[styles.dashboardSectionTitle, styles.onboardingInfoTitle]}>Direct email</Text>
+              <Text style={[styles.dashboardDetailValue, styles.onboardingInfoTitle]}>{SUPPORT_EMAIL}</Text>
+              <Text style={[styles.dashboardSupportText, styles.onboardingInfoText]}>Best for account help, business onboarding, verification issues, billing questions, or general app support.</Text>
             </View>
 
             <View style={styles.profileFormSection}>
-              <Text style={styles.profileFieldLabel}>Subject</Text>
+              <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Subject</Text>
               <AutoScrollTextInput
                 onBeforeAutoScroll={handleFieldFocus}
                 onChangeText={setSubject}
                 scrollViewRef={scrollViewRef}
-                style={styles.profileInput}
+                style={[styles.profileInput, styles.onboardingInput]}
                 value={subject}
               />
 
-              <Text style={styles.profileFieldLabel}>Message</Text>
+              <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Message</Text>
               <AutoScrollTextInput
                 multiline
                 numberOfLines={7}
                 onBeforeAutoScroll={handleFieldFocus}
                 onChangeText={setMessage}
                 placeholder="Tell us what you need help with."
-                placeholderTextColor="#9a7f6c"
+                placeholderTextColor={onboardingPlaceholderTextColor}
                 scrollViewRef={scrollViewRef}
-                style={[styles.profileInput, styles.supportMessageInput]}
+                style={[styles.profileInput, styles.supportMessageInput, styles.onboardingInput]}
                 textAlignVertical="top"
                 value={message}
               />
 
-              <Text style={styles.profileSupportText}>Your name, username, email, and account type will be included automatically when this message is sent.</Text>
+              <Text style={[styles.profileSupportText, styles.onboardingBodyText]}>Your name, username, email, and account type will be included automatically when this message is sent.</Text>
             </View>
 
-            <Pressable onPress={() => onSubmit(subject, message)} style={[styles.linkButton, submitting ? styles.linkButtonDisabled : null]}>
-              <LoadingButtonLabel color="#effffd" label="Send message" loading={submitting} textStyle={styles.linkButtonText} />
+            <Pressable onPress={() => onSubmit(subject, message)} style={[styles.linkButton, styles.onboardingPrimaryButton, submitting ? styles.linkButtonDisabled : null]}>
+              <LoadingButtonLabel color={theme.textDark} label="Send message" loading={submitting} textStyle={[styles.linkButtonText, styles.onboardingPrimaryButtonText]} />
             </Pressable>
           </View>
         </ScrollView>
@@ -1032,18 +1050,18 @@ function LegalDocumentScreen({ eyebrow, intro, isLandscape, onBack, sections, ti
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
-            <NativeIOSLiquidGlassBackButton label="Back to Settings" onPress={onBack} />
+            <OnboardingBackButton label="Back to Settings" onPress={onBack} />
           </View>
 
-          <View style={styles.profileCard}>
-            <Text style={styles.detailCity}>{eyebrow}</Text>
-            <Text style={styles.detailTitle}>{title}</Text>
-            <Text style={styles.profileIntroText}>{intro}</Text>
+          <View style={[styles.profileCard, styles.onboardingCard]}>
+            <Text style={[styles.detailCity, styles.onboardingEyebrow]}>{eyebrow}</Text>
+            <Text style={[styles.detailTitle, styles.onboardingHeading]}>{title}</Text>
+            <Text style={[styles.profileIntroText, styles.onboardingBodyText]}>{intro}</Text>
 
             {sections.map((section) => (
-              <View key={section.title} style={styles.legalSectionCard}>
-                <Text style={styles.dashboardSectionTitle}>{section.title}</Text>
-                <Text style={styles.dashboardSupportText}>{section.body}</Text>
+              <View key={section.title} style={[styles.legalSectionCard, styles.onboardingInfoCard]}>
+                <Text style={[styles.dashboardSectionTitle, styles.onboardingInfoTitle]}>{section.title}</Text>
+                <Text style={[styles.dashboardSupportText, styles.onboardingInfoText]}>{section.body}</Text>
               </View>
             ))}
           </View>
@@ -1129,12 +1147,12 @@ export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces,
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
-            <NativeIOSLiquidGlassBackButton label="Back to create profile" onPress={onBack} style={{ marginLeft: -8 }} />
+            <OnboardingBackButton label="Back to create profile" onPress={onBack} style={{ marginLeft: -8 }} />
           </View>
 
-          <View style={styles.profileCard}>
-            <Text style={styles.detailCity}>Claim a Business</Text>
-            <Text style={styles.detailTitle}>Search your business</Text>
+          <View style={[styles.profileCard, styles.onboardingCard]}>
+            <Text style={[styles.detailCity, styles.onboardingEyebrow]}>Claim a Business</Text>
+            <Text style={[styles.detailTitle, styles.onboardingHeading]}>Search your business</Text>
 
             {errorMessage ? (
               <View style={styles.errorBanner}>
@@ -1142,20 +1160,20 @@ export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces,
               </View>
             ) : null}
 
-            <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} placeholder="Search by business name" placeholderTextColor="#9a7f6c" onChangeText={onChangeSearchQuery} scrollViewRef={scrollViewRef} style={styles.profileInput} value={searchQuery} />
+            <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} placeholder="Search by business name" placeholderTextColor={onboardingPlaceholderTextColor} onChangeText={onChangeSearchQuery} scrollViewRef={scrollViewRef} style={[styles.profileInput, styles.onboardingInput]} value={searchQuery} />
 
             {normalizeSearchText(searchQuery).length === 0 ? (
-              <Text style={styles.centerStateText}>Start typing to search for your business.</Text>
+              <Text style={[styles.centerStateText, styles.onboardingInfoTextMuted]}>Start typing to search for your business.</Text>
             ) : loadingPlaces ? (
-              <Text style={styles.centerStateText}>Loading businesses...</Text>
+              <Text style={[styles.centerStateText, styles.onboardingInfoTextMuted]}>Loading businesses...</Text>
             ) : (
               <View style={styles.claimResultsList}>
                 {results.length ? (
                   results.map((place) => (
-                    <View key={place.slug} style={styles.claimResultCard}>
+                    <View key={place.slug} style={[styles.claimResultCard, styles.onboardingInfoCard]}>
                       <Text style={styles.placeTitle}>{place.name}</Text>
                       <Text style={styles.placeMeta}>{place.venue_type_label}</Text>
-                      <Text style={styles.claimBusinessHint}>
+                      <Text style={[styles.claimBusinessHint, styles.onboardingInfoText]}>
                         {getPlaceLocations(place).length > 1 ? 'Choose the specific address to verify this claim.' : 'Choose this address to continue to verification.'}
                       </Text>
                       <View style={styles.claimLocationList}>
@@ -1163,17 +1181,17 @@ export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces,
                           <Pressable
                             key={location.id}
                             onPress={() => onSelectBusiness(place, location.id)}
-                            style={styles.claimLocationButton}
+                            style={[styles.claimLocationButton, styles.onboardingSecondaryButton]}
                           >
-                            <Text style={styles.claimLocationButtonTitle}>{location.city_label}</Text>
-                            <Text style={styles.claimLocationButtonText}>{formatPlaceAddress(location)}</Text>
+                            <Text style={[styles.claimLocationButtonTitle, styles.onboardingInfoTitle]}>{location.city_label}</Text>
+                            <Text style={[styles.claimLocationButtonText, styles.onboardingInfoText]}>{formatPlaceAddress(location)}</Text>
                           </Pressable>
                         ))}
                       </View>
                     </View>
                   ))
                 ) : (
-                  <Text style={styles.centerStateText}>No matching businesses found yet.</Text>
+                  <Text style={[styles.centerStateText, styles.onboardingInfoTextMuted]}>No matching businesses found yet.</Text>
                 )}
               </View>
             )}
@@ -1333,19 +1351,19 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
   function renderMultilineField(field: keyof ProfileFormState, label: string, value: string, options?: { placeholder?: string; support?: string }) {
     return (
       <>
-        <Text style={styles.profileFieldLabel}>{label}</Text>
+        <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>{label}</Text>
         <AutoScrollTextInput
           multiline
           onBeforeAutoScroll={handleFieldFocus}
           onChangeText={(nextValue) => onChangeField(field, nextValue)}
           placeholder={options?.placeholder}
-          placeholderTextColor="#9a7f6c"
+          placeholderTextColor={onboardingPlaceholderTextColor}
           scrollViewRef={scrollViewRef}
-          style={[styles.profileInput, styles.profileTextarea]}
+          style={[styles.profileInput, styles.profileTextarea, styles.onboardingInput]}
           textAlignVertical="top"
           value={value}
         />
-        {options?.support ? <Text style={styles.profileSupportText}>{options.support}</Text> : null}
+        {options?.support ? <Text style={[styles.profileSupportText, styles.onboardingBodyText]}>{options.support}</Text> : null}
       </>
     );
   }
@@ -1358,19 +1376,19 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
 
     return (
       <View key={field} style={styles.dashboardFieldColumn}>
-        <Text style={styles.profileFieldLabel}>{SOCIAL_PLATFORM_LABELS[platform]}</Text>
+        <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>{SOCIAL_PLATFORM_LABELS[platform]}</Text>
         <AutoScrollTextInput
           autoCapitalize="none"
           onBeforeAutoScroll={handleFieldFocus}
           onChangeText={(value) => onChangeField(field, value)}
           placeholder={placeholder}
-          placeholderTextColor="#9a7f6c"
+          placeholderTextColor={onboardingPlaceholderTextColor}
           scrollViewRef={scrollViewRef}
-          style={styles.profileInput}
+          style={[styles.profileInput, styles.onboardingInput]}
           value={fieldValue}
         />
         {fieldError ? <Text style={styles.structuredEntryErrorText}>{fieldError}</Text> : null}
-        {!fieldError && preview ? <Text style={styles.profileSupportText}>{`Displays as ${preview}`}</Text> : null}
+        {!fieldError && preview ? <Text style={[styles.profileSupportText, styles.onboardingBodyText]}>{`Displays as ${preview}`}</Text> : null}
       </View>
     );
   }
@@ -1388,18 +1406,18 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
 
     return (
       <View style={styles.attachmentSection}>
-        <Pressable onPress={() => onAddAttachments(kind)} style={[styles.linkButtonSecondary, styles.attachmentPickerButton]}>
-          <Text style={styles.linkButtonSecondaryText}>{selectedAttachments.length ? `Add more to ${label}` : `Attach files to ${label}`}</Text>
+        <Pressable onPress={() => onAddAttachments(kind)} style={[styles.linkButtonSecondary, styles.onboardingSecondaryButton, styles.attachmentPickerButton]}>
+          <Text style={[styles.linkButtonSecondaryText, styles.onboardingSecondaryButtonText]}>{selectedAttachments.length ? `Add more to ${label}` : `Attach files to ${label}`}</Text>
         </Pressable>
-        {support ? <Text style={[styles.profileSupportText, styles.attachmentSupportText]}>{support}</Text> : null}
+        {support ? <Text style={[styles.profileSupportText, styles.onboardingBodyText, styles.attachmentSupportText]}>{support}</Text> : null}
         {selectedAttachments.length ? (
           <View style={styles.attachmentList}>
             {selectedAttachments.map((attachment) => (
-              <View key={attachment.id} style={styles.attachmentCard}>
+              <View key={attachment.id} style={[styles.attachmentCard, styles.onboardingInfoCard]}>
                 <Pressable onPress={() => void handleOpenAttachment(attachment.uri, attachment.mimeType, attachment.name)} style={styles.attachmentPreviewButton}>
                   <View style={styles.attachmentMeta}>
-                    <Text numberOfLines={1} style={styles.attachmentName}>{attachment.name}</Text>
-                    <Text style={styles.attachmentDetail}>{attachment.size ? `${Math.max(1, Math.round(attachment.size / 1024))} KB • Tap to view` : 'Selected file • Tap to view'}</Text>
+                    <Text numberOfLines={1} style={[styles.attachmentName, styles.onboardingInfoTitle]}>{attachment.name}</Text>
+                    <Text style={[styles.attachmentDetail, styles.onboardingInfoText]}>{attachment.size ? `${Math.max(1, Math.round(attachment.size / 1024))} KB • Tap to view` : 'Selected file • Tap to view'}</Text>
                   </View>
                 </Pressable>
                 <Pressable onPress={() => onRemoveAttachment(kind, attachment.id)} style={styles.attachmentRemoveButton}>
@@ -1450,22 +1468,22 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
-            <NativeIOSLiquidGlassBackButton label="Back" onPress={onBack} />
+            <OnboardingBackButton label="Back" onPress={onBack} />
           </View>
 
-          <View style={styles.profileCard}>
-            <Text style={styles.detailCity}>Verification</Text>
-            <Text style={styles.detailTitle}>{verificationTitle}</Text>
-            <Text style={styles.profileIntroText}>{verificationIntro}</Text>
+          <View style={[styles.profileCard, styles.onboardingCard]}>
+            <Text style={[styles.detailCity, styles.onboardingEyebrow]}>Verification</Text>
+            <Text style={[styles.detailTitle, styles.onboardingHeading]}>{verificationTitle}</Text>
+            <Text style={[styles.profileIntroText, styles.onboardingBodyText]}>{verificationIntro}</Text>
 
             {isClaimed && selectedPlace ? (
-              <View style={styles.claimResultCard}>
+              <View style={[styles.claimResultCard, styles.onboardingInfoCard]}>
                 <Text style={styles.placeTitle}>{selectedPlace.name}</Text>
                 <Text style={styles.placeMeta}>{selectedPlace.venue_type_label}</Text>
                 {selectedLocation ? (
                   <>
-                    <Text style={styles.claimBusinessHint}>Selected address</Text>
-                    <Text style={styles.claimLocationButtonText}>{formatPlaceAddress(selectedLocation)}</Text>
+                    <Text style={[styles.claimBusinessHint, styles.onboardingInfoText]}>Selected address</Text>
+                    <Text style={[styles.claimLocationButtonText, styles.onboardingInfoText]}>{formatPlaceAddress(selectedLocation)}</Text>
                   </>
                 ) : null}
               </View>
@@ -1480,10 +1498,10 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
             <View style={styles.profileFormSection}>
               {!isClaimed ? (
                 <>
-                  <Text style={styles.profileFieldLabel}>Business name</Text>
-                  <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('business_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.business_name} />
+                  <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Business name</Text>
+                  <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('business_name', value)} scrollViewRef={scrollViewRef} style={[styles.profileInput, styles.onboardingInput]} value={form.business_name} />
 
-                  <Text style={styles.profileFieldLabel}>City</Text>
+                  <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>City</Text>
                   <CompactDropdown
                     onSelect={(value) => handleSelectDropdownValue('business_city', value)}
                     onToggle={() => setOpenDropdown((current) => current === 'city' ? null : 'city')}
@@ -1493,7 +1511,7 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
                     selectedValue={form.business_city}
                   />
 
-                  <Text style={styles.profileFieldLabel}>Business type</Text>
+                  <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Business type</Text>
                   <CompactDropdown
                     onSelect={(value) => handleSelectDropdownValue('business_venue_type', value)}
                     onToggle={() => setOpenDropdown((current) => current === 'venue' ? null : 'venue')}
@@ -1504,40 +1522,40 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
                   />
 
                   {servesMultipleAreas ? (
-                    <Text style={styles.profileSupportText}>It is highly recommend for small startups and vendors that do not have a dedicated business address to turn on location services for DiningDealz after account is verified so you have can a business pin on the map.</Text>
+                    <Text style={[styles.profileSupportText, styles.onboardingBodyText]}>It is highly recommend for small startups and vendors that do not have a dedicated business address to turn on location services for DiningDealz after account is verified so you have can a business pin on the map.</Text>
                   ) : null}
 
                 </>
               ) : null}
 
               {lockAccountIdentityFields ? (
-                <Text style={styles.profileSupportText}>Your username, email, and name are locked because this claim is attached to your existing customer account.</Text>
+                <Text style={[styles.profileSupportText, styles.onboardingBodyText]}>Your username, email, and name are locked because this claim is attached to your existing customer account.</Text>
               ) : null}
 
-              <Text style={styles.profileFieldLabel}>Username</Text>
-              <AutoScrollTextInput autoCapitalize="none" editable={!lockAccountIdentityFields} onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('username', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.username} />
+              <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Username</Text>
+              <AutoScrollTextInput autoCapitalize="none" editable={!lockAccountIdentityFields} onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('username', value)} scrollViewRef={scrollViewRef} style={[styles.profileInput, styles.onboardingInput]} value={form.username} />
 
-              <Text style={styles.profileFieldLabel}>Email</Text>
-              <AutoScrollTextInput autoCapitalize="none" editable={!lockAccountIdentityFields} keyboardType="email-address" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('email', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.email} />
+              <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Email</Text>
+              <AutoScrollTextInput autoCapitalize="none" editable={!lockAccountIdentityFields} keyboardType="email-address" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('email', value)} scrollViewRef={scrollViewRef} style={[styles.profileInput, styles.onboardingInput]} value={form.email} />
 
-              <Text style={styles.profileFieldLabel}>Password</Text>
-              <PasswordField onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('password', value)} scrollViewRef={scrollViewRef} value={form.password} />
+              <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Password</Text>
+              <PasswordField inputStyle={styles.onboardingInput} onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('password', value)} scrollViewRef={scrollViewRef} value={form.password} />
 
-              <Text style={styles.profileFieldLabel}>Confirm password</Text>
-              <PasswordField onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('confirm_password', value)} scrollViewRef={scrollViewRef} value={form.confirm_password} />
+              <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Confirm password</Text>
+              <PasswordField inputStyle={styles.onboardingInput} onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('confirm_password', value)} scrollViewRef={scrollViewRef} value={form.confirm_password} />
 
-              <Text style={styles.profileFieldLabel}>First name</Text>
-              <AutoScrollTextInput editable={!lockAccountIdentityFields} onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('first_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.first_name} />
+              <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>First name</Text>
+              <AutoScrollTextInput editable={!lockAccountIdentityFields} onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('first_name', value)} scrollViewRef={scrollViewRef} style={[styles.profileInput, styles.onboardingInput]} value={form.first_name} />
 
-              <Text style={styles.profileFieldLabel}>Last name</Text>
-              <AutoScrollTextInput editable={!lockAccountIdentityFields} onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('last_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.last_name} />
+              <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Last name</Text>
+              <AutoScrollTextInput editable={!lockAccountIdentityFields} onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('last_name', value)} scrollViewRef={scrollViewRef} style={[styles.profileInput, styles.onboardingInput]} value={form.last_name} />
 
               {!isInformal ? (
                 <>
-                  <Text style={styles.profileFieldLabel}>Contact name</Text>
-                  <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('contact_name', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.contact_name} />
+                  <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Contact name</Text>
+                  <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('contact_name', value)} scrollViewRef={scrollViewRef} style={[styles.profileInput, styles.onboardingInput]} value={form.contact_name} />
 
-                  <Text style={styles.profileFieldLabel}>Role</Text>
+                  <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Role</Text>
                   <CompactDropdown
                     onSelect={(value) => {
                       onChangeField('job_title', value);
@@ -1550,40 +1568,40 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
                     selectedValue={form.job_title}
                   />
 
-                  <Text style={styles.profileFieldLabel}>Employer email</Text>
-                  <AutoScrollTextInput autoCapitalize="none" keyboardType="email-address" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('work_email', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.work_email} />
+                  <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Employer email</Text>
+                  <AutoScrollTextInput autoCapitalize="none" keyboardType="email-address" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('work_email', value)} scrollViewRef={scrollViewRef} style={[styles.profileInput, styles.onboardingInput]} value={form.work_email} />
 
-                  <Text style={styles.profileFieldLabel}>Employer phone</Text>
-                  <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('work_phone', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.work_phone} />
+                  <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Employer phone</Text>
+                  <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('work_phone', value)} scrollViewRef={scrollViewRef} style={[styles.profileInput, styles.onboardingInput]} value={form.work_phone} />
 
-                  <Text style={styles.profileFieldLabel}>{isEstablished && servesMultipleAreas ? 'Business address (optional for multi-area businesses)' : 'Business address'}</Text>
-                  <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('employer_address', value)} scrollViewRef={scrollViewRef} style={styles.profileInput} value={form.employer_address} />
+                  <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>{isEstablished && servesMultipleAreas ? 'Business address (optional for multi-area businesses)' : 'Business address'}</Text>
+                  <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('employer_address', value)} scrollViewRef={scrollViewRef} style={[styles.profileInput, styles.onboardingInput]} value={form.employer_address} />
 
                   {isEstablished && servesMultipleAreas ? (
-                    <Pressable onPress={() => onToggleAddressNotApplicable(!form.address_not_applicable)} style={[styles.toggleChip, form.address_not_applicable ? styles.toggleChipActive : null]}>
-                      <Text style={[styles.toggleChipText, form.address_not_applicable ? styles.toggleChipTextActive : null]}>Address Not Applicable</Text>
+                    <Pressable onPress={() => onToggleAddressNotApplicable(!form.address_not_applicable)} style={[styles.toggleChip, styles.onboardingChip, form.address_not_applicable ? styles.toggleChipActive : null]}>
+                      <Text style={[styles.toggleChipText, styles.onboardingChipText, form.address_not_applicable ? styles.toggleChipTextActive : null]}>Address Not Applicable</Text>
                     </Pressable>
                   ) : null}
                 </>
               ) : null}
 
               <View style={styles.profileFormSection}>
-                <Text style={styles.profileFieldLabel}>Website</Text>
+                <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Website</Text>
                 <AutoScrollTextInput
                   autoCapitalize="none"
                   onBeforeAutoScroll={handleFieldFocus}
                   onChangeText={(value) => onChangeField('business_website_url', value)}
                   placeholder="yourbusiness.com"
-                  placeholderTextColor="#9a7f6c"
+                  placeholderTextColor={onboardingPlaceholderTextColor}
                   scrollViewRef={scrollViewRef}
-                  style={styles.profileInput}
+                  style={[styles.profileInput, styles.onboardingInput]}
                   value={form.business_website_url}
                 />
                 {socialFieldErrors.website ? <Text style={styles.structuredEntryErrorText}>{socialFieldErrors.website}</Text> : null}
                 {!socialFieldErrors.website && getSocialProfilePreview('website', form.business_website_url) ? (
-                  <Text style={styles.profileSupportText}>{`Displays as ${getSocialProfilePreview('website', form.business_website_url)}`}</Text>
+                  <Text style={[styles.profileSupportText, styles.onboardingBodyText]}>{`Displays as ${getSocialProfilePreview('website', form.business_website_url)}`}</Text>
                 ) : (
-                  <Text style={styles.profileSupportText}>Paste a full website URL or domain. The public profile shows the site domain instead of the raw link.</Text>
+                  <Text style={[styles.profileSupportText, styles.onboardingBodyText]}>Paste a full website URL or domain. The public profile shows the site domain instead of the raw link.</Text>
                 )}
                 {businessSocialFieldDefinitions.map((definition) => renderSocialProfileField(definition.field, definition.platform))}
               </View>
@@ -1607,24 +1625,24 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
               />
 
               <View style={styles.attachmentSection}>
-                <Text style={styles.profileFieldLabel}>Business photos</Text>
+                <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Business photos</Text>
                 <Pressable
                   disabled={remainingPhotoSlots <= 0}
                   onPress={onAddPhotoUploads}
-                  style={[styles.linkButtonSecondary, styles.attachmentPickerButton, remainingPhotoSlots <= 0 ? styles.linkButtonDisabled : null]}
+                  style={[styles.linkButtonSecondary, styles.onboardingSecondaryButton, styles.attachmentPickerButton, remainingPhotoSlots <= 0 ? styles.linkButtonDisabled : null]}
                 >
-                  <Text style={styles.linkButtonSecondaryText}>
+                  <Text style={[styles.linkButtonSecondaryText, styles.onboardingSecondaryButtonText]}>
                     {currentPhotoUrls.length || photoUploads.length ? 'Add more photos from Photo Library' : 'Select photos from Photo Library'}
                   </Text>
                 </Pressable>
-                <Text style={[styles.profileSupportText, styles.attachmentSupportText]}>
+                <Text style={[styles.profileSupportText, styles.onboardingBodyText, styles.attachmentSupportText]}>
                   {isClaimed
                     ? 'Existing business photos prefill here when available. You can remove them or add up to 8 total photos from the photo library.'
                     : 'Upload up to 8 business photos from the photo library. Camera capture is not used here.'}
                 </Text>
                 {currentPhotoUrls.length ? (
                   <>
-                    <Text style={styles.attachmentGalleryLabel}>Current public photos</Text>
+                    <Text style={[styles.attachmentGalleryLabel, styles.onboardingLabel]}>Current public photos</Text>
                     <ScrollView
                       contentContainerStyle={styles.photoGalleryRow}
                       horizontal
@@ -1644,7 +1662,7 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
                 ) : null}
                 {photoUploads.length ? (
                   <>
-                    <Text style={styles.attachmentGalleryLabel}>Selected photos</Text>
+                    <Text style={[styles.attachmentGalleryLabel, styles.onboardingLabel]}>Selected photos</Text>
                     <ScrollView
                       contentContainerStyle={styles.photoGalleryRow}
                       horizontal
@@ -1658,8 +1676,8 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
                             <Text style={styles.photoGalleryDismissButtonText}>X</Text>
                           </Pressable>
                           <View style={styles.photoGalleryMeta}>
-                            <Text numberOfLines={1} style={styles.attachmentName}>{attachment.name}</Text>
-                            <Text style={styles.attachmentDetail}>{formatAttachmentSize(attachment.size)}</Text>
+                            <Text numberOfLines={1} style={[styles.attachmentName, styles.onboardingInfoTitle]}>{attachment.name}</Text>
+                            <Text style={[styles.attachmentDetail, styles.onboardingInfoText]}>{formatAttachmentSize(attachment.size)}</Text>
                           </View>
                         </View>
                       ))}
@@ -1670,19 +1688,19 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
 
               {!isInformal ? (
                 <>
-                  <Text style={styles.profileFieldLabel}>Business registration documents</Text>
+                  <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Business registration documents</Text>
                   {renderAttachmentPicker('business_registration', 'business registration documents', 'Attach one or more business registration files.')}
 
-                  <Text style={styles.profileFieldLabel}>Proof of authority</Text>
+                  <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Proof of authority</Text>
                   {renderAttachmentPicker('proof_of_authority', 'proof of authority', 'Attach a work badge, payroll stub, authorization letter, or similar proof that you represent this business.')}
 
-                  <Text style={styles.profileFieldLabel}>{requiresHealthPermit ? 'Health permit documents' : 'Health permit documents (if applicable)'}</Text>
+                  <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>{requiresHealthPermit ? 'Health permit documents' : 'Health permit documents (if applicable)'}</Text>
                   {renderAttachmentPicker('health_permit', 'health permit documents', 'Attach one or more health permit files when they apply to this business type.')}
 
-                  <Text style={styles.profileFieldLabel}>{requiresAbcLicense ? 'ABC license documents' : 'ABC license documents (bars only)'}</Text>
+                  <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>{requiresAbcLicense ? 'ABC license documents' : 'ABC license documents (bars only)'}</Text>
                   {renderAttachmentPicker('abc_license', 'ABC license documents', 'Attach one or more ABC license files when required.')}
 
-                  <Text style={styles.profileFieldLabel}>Proof of address control (optional)</Text>
+                  <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Proof of address control (optional)</Text>
                   {renderAttachmentPicker('proof_of_address_control', 'proof of address control', 'Attach leases, utility documents, or similar supporting files if needed.')}
 
                   {renderMultilineField(
@@ -1707,8 +1725,8 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
               ) : null}
             </View>
 
-            <Pressable onPress={() => void handleSubmitVerification()} style={[styles.linkButton, submitting ? styles.linkButtonDisabled : null]}>
-              <LoadingButtonLabel color="#effffd" label={submitLabel} loading={submitting} textStyle={styles.linkButtonText} />
+            <Pressable onPress={() => void handleSubmitVerification()} style={[styles.linkButton, styles.onboardingPrimaryButton, submitting ? styles.linkButtonDisabled : null]}>
+              <LoadingButtonLabel color={theme.textDark} label={submitLabel} loading={submitting} textStyle={[styles.linkButtonText, styles.onboardingPrimaryButtonText]} />
             </Pressable>
           </View>
         </ScrollView>

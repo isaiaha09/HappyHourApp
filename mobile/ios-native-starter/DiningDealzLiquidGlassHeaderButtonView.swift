@@ -10,6 +10,11 @@ private enum DiningDealzLiquidGlassHeaderVariant: String {
 @objc(DiningDealzLiquidGlassHeaderButtonView)
 final class DiningDealzLiquidGlassHeaderButtonView: UIView {
   @objc var onGlassButtonPress: RCTDirectEventBlock?
+  @objc var themeVariant: NSString = "default-dark" {
+    didSet {
+      updateRootView()
+    }
+  }
 
   @objc var label: NSString? {
     didSet {
@@ -86,6 +91,7 @@ final class DiningDealzLiquidGlassHeaderButtonView: UIView {
     let currentSystemImage = systemImage as String?
     let currentAccessibilityLabel = accessibilityLabel
     let currentVariant = resolvedVariant
+    let currentThemeVariant = resolvedThemeVariant
 
     hostingController.rootView = AnyView(
       Group {
@@ -95,6 +101,7 @@ final class DiningDealzLiquidGlassHeaderButtonView: UIView {
             label: currentLabel,
             onPress: handlePress,
             systemImage: currentSystemImage,
+            themeVariant: currentThemeVariant,
             variant: currentVariant
           )
         } else {
@@ -103,11 +110,16 @@ final class DiningDealzLiquidGlassHeaderButtonView: UIView {
             label: currentLabel,
             onPress: handlePress,
             systemImage: currentSystemImage,
+            themeVariant: currentThemeVariant,
             variant: currentVariant
           )
         }
       }
     )
+  }
+
+  private var resolvedThemeVariant: DiningDealzLiquidGlassThemeVariant {
+    DiningDealzLiquidGlassThemeVariant(rawValue: themeVariant as String) ?? .defaultDark
   }
 
   @objc private func handlePress() {
@@ -121,6 +133,7 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
   let label: String?
   let onPress: () -> Void
   let systemImage: String?
+  let themeVariant: DiningDealzLiquidGlassThemeVariant
   let variant: DiningDealzLiquidGlassHeaderVariant
 
   @State private var isHovering = false
@@ -128,6 +141,15 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
 
   private var isActive: Bool {
     isHovering || isPressing
+  }
+
+  private var foregroundColor: Color {
+    switch themeVariant {
+    case .mapLight:
+      return Color(red: 0.11, green: 0.15, blue: 0.22).opacity(0.96)
+    case .defaultDark, .mapDark:
+      return Color.white.opacity(0.96)
+    }
   }
 
   var body: some View {
@@ -147,9 +169,9 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
       }
     }
     .buttonStyle(.plain)
-    .foregroundStyle(Color.white.opacity(0.96))
+    .foregroundStyle(foregroundColor)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .diningDealzHeaderGlassEffect(variant: variant)
+    .diningDealzHeaderGlassEffect(themeVariant: themeVariant, variant: variant)
     .scaleEffect(isActive ? 1.18 : 1)
     .animation(.spring(response: 0.3, dampingFraction: 0.82), value: isHovering)
     .animation(.spring(response: 0.3, dampingFraction: 0.82), value: isPressing)
@@ -173,8 +195,17 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
 @available(iOS 26.0, *)
 private extension View {
   @ViewBuilder
-  func diningDealzHeaderGlassEffect(variant: DiningDealzLiquidGlassHeaderVariant) -> some View {
-    let liquidGlassTint = Color(red: 0.62, green: 0.36, blue: 0.29).opacity(0.18)
+  func diningDealzHeaderGlassEffect(themeVariant: DiningDealzLiquidGlassThemeVariant, variant: DiningDealzLiquidGlassHeaderVariant) -> some View {
+    let liquidGlassTint: Color = {
+      switch themeVariant {
+      case .defaultDark:
+        return Color(red: 0.62, green: 0.36, blue: 0.29).opacity(0.18)
+      case .mapDark:
+        return Color(red: 0.12, green: 0.16, blue: 0.22).opacity(0.34)
+      case .mapLight:
+        return Color.white.opacity(0.52)
+      }
+    }()
 
     if variant == .icon {
       glassEffect(.regular.tint(liquidGlassTint).interactive(), in: Circle())
@@ -189,7 +220,35 @@ private struct DiningDealzLegacyHeaderButtonContent: View {
   let label: String?
   let onPress: () -> Void
   let systemImage: String?
+  let themeVariant: DiningDealzLiquidGlassThemeVariant
   let variant: DiningDealzLiquidGlassHeaderVariant
+
+  private var foregroundColor: Color {
+    switch themeVariant {
+    case .mapLight:
+      return Color(red: 0.11, green: 0.15, blue: 0.22).opacity(0.96)
+    case .defaultDark, .mapDark:
+      return Color.white.opacity(0.96)
+    }
+  }
+
+  private var backgroundColor: Color {
+    switch themeVariant {
+    case .mapLight:
+      return Color.white.opacity(0.62)
+    case .defaultDark, .mapDark:
+      return Color.black.opacity(0.48)
+    }
+  }
+
+  private var borderColor: Color {
+    switch themeVariant {
+    case .mapLight:
+      return Color(red: 0.82, green: 0.86, blue: 0.92).opacity(0.9)
+    case .defaultDark, .mapDark:
+      return Color.white.opacity(0.28)
+    }
+  }
 
   var body: some View {
     Button(action: onPress) {
@@ -207,15 +266,15 @@ private struct DiningDealzLegacyHeaderButtonContent: View {
           .frame(maxWidth: .infinity, minHeight: 44)
       }
     }
-    .foregroundStyle(Color.white.opacity(0.96))
+    .foregroundStyle(foregroundColor)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(
       Capsule(style: .continuous)
-        .fill(Color.black.opacity(0.48))
+        .fill(backgroundColor)
     )
     .overlay(
       Capsule(style: .continuous)
-        .stroke(Color.white.opacity(0.28), lineWidth: 1)
+        .stroke(borderColor, lineWidth: 1)
     )
     .accessibilityLabel(accessibilityLabel ?? label ?? "Button")
     .background(Color.clear)
