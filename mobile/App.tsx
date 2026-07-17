@@ -1086,7 +1086,8 @@ function AppScreen() {
 
   const mapSearchResultPool = normalizedDeferredSearchQuery.length ? getMapSearchResults(filteredBrowseLocations) : [];
   const mapSearchResultsKey = mapSearchResultPool.map((place) => place.resultKey).join('|');
-  const bottomNavHeight = Math.max(insets.bottom + 76, 90);
+  const nativeBottomNavActive = isNativeIOSLiquidGlassBottomNavAvailable();
+  const bottomNavHeight = nativeBottomNavActive ? 52 + insets.bottom : Math.max(insets.bottom + 76, 90);
   const mapOverlayBottomPadding = bottomNavHeight + 18;
   const floatingDashboardButtonOffset = bottomNavHeight + 16;
   const mapResultsCardMaxHeight = Math.max(
