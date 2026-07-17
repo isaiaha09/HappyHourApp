@@ -259,6 +259,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
 
   @State private var hoveredItem: DiningDealzLiquidGlassBottomNavItem?
   @State private var dragLocationX: CGFloat?
+  @State private var dragVelocityX: CGFloat = 0
   @State private var isDragging = false
 
   private let itemSpacing: CGFloat = 8
@@ -308,15 +309,17 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
       GeometryReader { geometry in
         let metrics = layoutMetrics(totalWidth: geometry.size.width)
 
-        // Two-state selector: compact at rest, expanded bubble while dragging
+        // Two-state selector: snug at rest, expanded bubble while dragging
         let restWidth = metrics.itemWidth + 4
         let restHeight = containerHeight - 6
-        let dragWidth = metrics.itemWidth + (horizontalInset * 2) + 16
-        let dragHeight = containerHeight + 10
+        let dragWidth = metrics.itemWidth + (horizontalInset * 2) + 18
+        let dragHeight = containerHeight + 12
         let selectorWidth = isDragging ? dragWidth : restWidth
         let selectorHeight = isDragging ? dragHeight : restHeight
-        let selectorCornerRadius = selectorHeight / 2
-        let selectorYOffset = isDragging ? -((dragHeight - containerHeight) / 2) : 0.0
+
+        // Drag intensity for bubble deformation (0...1)
+        let dragIntensity = min(abs(dragVelocityX) / 600, 1.0)
+        let dragDirection: CGFloat = dragVelocityX > 0 ? 1 : (dragVelocityX < 0 ? -1 : 0)
 
         ZStack(alignment: .leading) {
           // Container glass — non-interactive backdrop capsule
@@ -328,16 +331,17 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
           .frame(height: containerHeight)
           .zIndex(0)
 
-          // Selector glass — clear interactive glass (magnifying-glass look)
-          GlassEffectContainer {
-            Color.clear
-              .frame(width: selectorWidth, height: selectorHeight)
-              .glassEffect(.clear.interactive(), in: RoundedRectangle(cornerRadius: selectorCornerRadius, style: .continuous))
-          }
-          .frame(width: selectorWidth, height: selectorHeight)
+          // Selector glass — refractive bubble
+          selectorBubble(
+            width: selectorWidth,
+            height: selectorHeight,
+            dragIntensity: dragIntensity,
+            dragDirection: dragDirection
+          )
+          .frame(width: selectorWidth + (isDragging ? dragIntensity * 8 : 0), height: selectorHeight)
           .offset(
             x: selectorOffsetX(for: metrics, selectorWidth: selectorWidth, totalWidth: geometry.size.width),
-            y: selectorYOffset
+            y: 0
           )
           .zIndex(1)
           .animation(tabSpring, value: visuallyActiveItem)
@@ -363,6 +367,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
             DragGesture(minimumDistance: 0)
               .onChanged { value in
                 dragLocationX = value.location.x
+                dragVelocityX = value.velocity.width
                 isDragging = true
                 let nextItem = nearestItem(at: value.location.x, totalWidth: geometry.size.width)
                 if hoveredItem != nextItem {
@@ -374,6 +379,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
                   ?? nearestItem(at: value.location.x, totalWidth: geometry.size.width)
                   ?? hoveredItem
                 dragLocationX = nil
+                dragVelocityX = 0
                 isDragging = false
                 hoveredItem = nil
                 if let finalItem {
@@ -383,14 +389,55 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
           )
         }
       }
-      .frame(height: containerHeight)
+      .frame(height: containerHeight + 14)
       .padding(.horizontal, outerHorizontalPadding)
-      .padding(.top, 2)
+      .padding(.top, 0)
       .padding(.bottom, 0)
       .offset(y: containerBottomOffset)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     .background(Color.clear)
+  }
+
+  // MARK: — Selector Bubble
+
+  @ViewBuilder
+  private func selectorBubble(
+    width: CGFloat,
+    height: CGFloat,
+    dragIntensity: CGFloat,
+    dragDirection: CGFloat
+  ) -> some View {
+    if isDragging {
+      // Asymmetric radii: trailing side stretches, leading side compresses
+      let baseRadius = height / 2
+      let leadingStretch = dragDirection < 0 ? dragIntensity * 12 : -dragIntensity * 4
+      let trailingStretch = dragDirection > 0 ? dragIntensity * 12 : -dragIntensity * 4
+      let topLeading = max(baseRadius + leadingStretch - (dragDirection > 0 ? dragIntensity * 6 : 0), 16)
+      let bottomLeading = max(baseRadius + leadingStretch + (dragDirection > 0 ? dragIntensity * 4 : 0), 16)
+      let topTrailing = max(baseRadius + trailingStretch - (dragDirection < 0 ? dragIntensity * 6 : 0), 16)
+      let bottomTrailing = max(baseRadius + trailingStretch + (dragDirection < 0 ? dragIntensity * 4 : 0), 16)
+
+      let bubbleShape = UnevenRoundedRectangle(
+        cornerRadii: .init(
+          topLeading: topLeading,
+          bottomLeading: bottomLeading,
+          bottomTrailing: bottomTrailing,
+          topTrailing: topTrailing
+        ),
+        style: .continuous
+      )
+
+      Color.clear
+        .frame(width: width + (dragIntensity * 8), height: height)
+        .glassEffect(.regular.interactive(), in: bubbleShape)
+        .scaleEffect(x: 1 + (dragIntensity * 0.04), y: 1 - (dragIntensity * 0.02))
+        .rotationEffect(.degrees(Double(dragDirection * dragIntensity * 2.5)))
+    } else {
+      Color.clear
+        .frame(width: width, height: height)
+        .glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
+    }
   }
 
   @ViewBuilder
@@ -423,9 +470,9 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     totalWidth: CGFloat
   ) -> CGFloat {
     if let dragLocationX {
-      // During drag: track finger position with rubber-band at edges
-      let minX: CGFloat = 0
-      let maxX = max(0, totalWidth - (outerHorizontalPadding * 2) - selectorWidth)
+      // Free drag: selector follows finger across the full container width
+      let minX: CGFloat = -4
+      let maxX = max(0, totalWidth - selectorWidth + 4)
       let rawX = dragLocationX - (selectorWidth / 2)
       return rubberBandClamp(rawX, min: minX, max: maxX)
     }
@@ -447,9 +494,9 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   }
 
   private func rubberBandDistance(_ distance: CGFloat) -> CGFloat {
-    // Apple's rubber-band formula: diminishing returns past the boundary
-    let coefficient: CGFloat = 0.55
-    let dimension: CGFloat = max(selectorOverflowAllowance, 1)
+    // Generous rubber-band: allows significant overshoot before capping
+    let coefficient: CGFloat = 0.45
+    let dimension: CGFloat = 40.0
     return (1 - (1 / ((distance * coefficient / dimension) + 1))) * dimension
   }
 
