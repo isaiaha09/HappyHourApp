@@ -266,12 +266,11 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   private let itemHeight: CGFloat = 50
   private let horizontalInset: CGFloat = 7
   private let outerHorizontalPadding: CGFloat = 12
-  private let selectorVerticalOffset: CGFloat = 0
   private let restingSelectorWidthRatio: CGFloat = 0.96
   private let draggingSelectorWidthRatio: CGFloat = 1.14
   private let restingSelectorExtraWidth: CGFloat = 0
   private let draggingSelectorExtraWidth: CGFloat = 18
-  private let draggingSelectorExtraHeight: CGFloat = 6
+  private let draggingSelectorExtraHeight: CGFloat = 4
   private let selectorOverflowAllowance: CGFloat = 24
 
   private var containerHeight: CGFloat {
@@ -282,9 +281,33 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     isDragging ? containerHeight + draggingSelectorExtraHeight : containerHeight - 4
   }
 
+  private var dragIntensity: CGFloat {
+    min(max(abs(dragTranslation.width) / 84, 0), 1)
+  }
+
+  private var dragDirection: CGFloat {
+    if dragTranslation.width > 0 {
+      return 1
+    }
+
+    if dragTranslation.width < 0 {
+      return -1
+    }
+
+    return 0
+  }
+
+  private var selectorVerticalOffset: CGFloat {
+    if isDragging {
+      return -((draggingSelectorExtraHeight * 0.5) + (dragIntensity * 2))
+    }
+
+    return 0
+  }
+
   private var selectorLift: CGFloat {
     if isDragging {
-      return -8
+      return -(6 + (dragIntensity * 4))
     }
 
     return isSelectorActive ? -2 : 0
@@ -345,13 +368,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
           .zIndex(0)
 
           GlassEffectContainer(spacing: containerSpacing) {
-            Color.clear
-              .frame(width: selectorWidth, height: selectorHeight)
-              .glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
-              .overlay(
-                Capsule(style: .continuous)
-                  .strokeBorder(Color.white.opacity(isDragging ? 0.16 : 0.1), lineWidth: 1)
-              )
+            selectorGlassShape(width: selectorWidth, height: selectorHeight)
           }
           .frame(width: selectorWidth, height: selectorHeight)
           .offset(x: selectorOffsetX(for: metrics, selectorWidth: selectorWidth, totalWidth: geometry.size.width))
@@ -439,6 +456,45 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     .opacity(isActive ? 1 : 0.76)
     .scaleEffect(isActive ? 1.07 : 1)
     .animation(.spring(response: 0.2, dampingFraction: 0.82), value: isActive)
+  }
+
+  @ViewBuilder
+  private func selectorGlassShape(width: CGFloat, height: CGFloat) -> some View {
+    if isDragging {
+      let leadingRadius = max((height * 0.48) + (dragDirection < 0 ? dragIntensity * 10 : dragIntensity * 3), 18)
+      let trailingRadius = max((height * 0.48) + (dragDirection > 0 ? dragIntensity * 10 : dragIntensity * 3), 18)
+      let topLeadingRadius = max(leadingRadius - (dragDirection > 0 ? dragIntensity * 6 : 0), 16)
+      let bottomLeadingRadius = max(leadingRadius + (dragDirection > 0 ? dragIntensity * 8 : dragIntensity * 2), 18)
+      let bottomTrailingRadius = max(trailingRadius + (dragDirection < 0 ? dragIntensity * 8 : dragIntensity * 2), 18)
+      let topTrailingRadius = max(trailingRadius - (dragDirection < 0 ? dragIntensity * 6 : 0), 16)
+      let blobShape = UnevenRoundedRectangle(
+        cornerRadii: .init(
+          topLeading: topLeadingRadius,
+          bottomLeading: bottomLeadingRadius,
+          bottomTrailing: bottomTrailingRadius,
+          topTrailing: topTrailingRadius
+        ),
+        style: .continuous
+      )
+
+      Color.clear
+        .frame(width: width, height: height)
+        .glassEffect(.regular.interactive(), in: blobShape)
+        .scaleEffect(x: 1 + (dragIntensity * 0.035), y: 1 - (dragIntensity * 0.02))
+        .rotationEffect(.degrees(Double(dragDirection * dragIntensity * 4)))
+        .overlay(
+          blobShape
+            .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
+        )
+    } else {
+      Color.clear
+        .frame(width: width, height: height)
+        .glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
+        .overlay(
+          Capsule(style: .continuous)
+            .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
+        )
+    }
   }
 
   private func indicatorOffsetX(for metrics: DiningDealzLiquidGlassBottomNavLayoutMetrics) -> CGFloat {
