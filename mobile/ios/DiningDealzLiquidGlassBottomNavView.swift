@@ -270,22 +270,26 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   }
 
   var body: some View {
-    TabView(selection: Binding(
-      get: { selectedTab },
-      set: { onSelect($0) }
-    )) {
-      ForEach(items) { displayItem in
-        Tab(displayItem.title, systemImage: displayItem.systemImageName, value: displayItem.item) {
-          EmptyView()
+    VStack(spacing: 0) {
+      Spacer(minLength: 0)
+
+      TabView(selection: Binding(
+        get: { selectedTab },
+        set: { onSelect($0) }
+      )) {
+        ForEach(items) { displayItem in
+          Tab(displayItem.title, systemImage: displayItem.systemImageName, value: displayItem.item) {
+            Color.clear
+          }
         }
       }
+      .background(Color.clear)
     }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    .background(Color.clear)
+    .ignoresSafeArea(.container, edges: .bottom)
     .tabViewStyle(.tabBarOnly)
     .tint(accentColor)
-    .frame(maxWidth: .infinity)
-    .frame(height: 52, alignment: .bottom)
-    .clipped()
-    .background(Color.clear)
   }
 }
 
