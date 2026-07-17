@@ -5804,7 +5804,15 @@ function AppScreen() {
             splashLayerStyle,
           ]}
         >
-          {shouldRenderSplashLayer ? renderOnboardingScreen('splash', null, guestChromeInteractive) : null}
+          {shouldRenderSplashLayer ? renderOnboardingScreen(
+            'splash',
+            null,
+            guestChromeInteractive,
+            !(guestBrowseModeLocked || splashMapHandoffPending || showingBrowse || showingBrowseUnderSplash),
+            guestBrowseModeLocked || splashMapHandoffPending || showingBrowse || showingBrowseUnderSplash
+              ? (displayedDarkMapMode ? 'map-dark' : 'map-light')
+              : 'default-dark',
+          ) : null}
         </Animated.View>
         <Animated.View
           pointerEvents={showingBrowse && !browseTransitionActive ? 'auto' : 'none'}
@@ -5922,12 +5930,26 @@ function AppScreen() {
     ));
   }
 
-  function renderOnboardingScreen(targetScreen: AppScreenMode, profileSessionOverride?: SignupResponse | null, splashChromeInteractive = true) {
+  function renderOnboardingScreen(
+    targetScreen: AppScreenMode,
+    profileSessionOverride?: SignupResponse | null,
+    splashChromeInteractive = true,
+    splashHeaderVisible = true,
+    splashThemeVariant: 'default-dark' | 'map-dark' | 'map-light' = 'default-dark',
+  ) {
     switch (targetScreen) {
       case 'splash':
         return (
           <SafeAreaView edges={['left', 'right']} style={styles.safeAreaTransparent}>
-            <SplashScreen assetsReady={startupImagesReady} chromeInteractive={splashChromeInteractive} onCreateAccount={handleOpenProfiles} onIntroComplete={handleOpenMapFromSplash} onSelectPortal={handleOpenAuthFromLanding} />
+            <SplashScreen
+              assetsReady={startupImagesReady}
+              chromeInteractive={splashChromeInteractive}
+              onCreateAccount={handleOpenProfiles}
+              onIntroComplete={handleOpenMapFromSplash}
+              onSelectPortal={handleOpenAuthFromLanding}
+              showHeader={splashHeaderVisible}
+              themeVariant={splashThemeVariant}
+            />
           </SafeAreaView>
         );
       case 'auth':
