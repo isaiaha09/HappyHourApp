@@ -276,10 +276,8 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
         }
       }
     }
+    .tabViewStyle(.tabBarOnly)
     .tint(accentColor)
-    .tabViewBottomAccessory {
-      EmptyView()
-    }
   }
 }
 
