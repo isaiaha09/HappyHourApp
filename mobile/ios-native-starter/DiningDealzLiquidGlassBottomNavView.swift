@@ -281,7 +281,6 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
       }
     }
     .background(Color.clear)
-    .containerBackground(Color.clear, for: .tabView)
     .tabViewStyle(.tabBarOnly)
     .tint(accentColor)
   }
