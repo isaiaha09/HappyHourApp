@@ -321,7 +321,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
         let dragIntensity = min(abs(dragVelocityX) / 600, 1.0)
         let dragDirection: CGFloat = dragVelocityX > 0 ? 1 : (dragVelocityX < 0 ? -1 : 0)
 
-        ZStack(alignment: .leading) {
+        ZStack(alignment: .topLeading) {
           // Container glass — non-interactive backdrop capsule
           GlassEffectContainer {
             Color.clear
@@ -329,6 +329,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
               .glassEffect(.regular.interactive(false), in: Capsule(style: .continuous))
           }
           .frame(height: containerHeight)
+          .offset(y: 7)
           .zIndex(0)
 
           // Selector glass — refractive bubble
@@ -341,7 +342,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
           .frame(width: selectorWidth + (isDragging ? dragIntensity * 8 : 0), height: selectorHeight)
           .offset(
             x: selectorOffsetX(for: metrics, selectorWidth: selectorWidth, totalWidth: geometry.size.width),
-            y: 0
+            y: isDragging ? 7 - ((selectorHeight - containerHeight) / 2) : 7 + ((containerHeight - selectorHeight) / 2)
           )
           .zIndex(1)
           .animation(tabSpring, value: visuallyActiveItem)
@@ -361,6 +362,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
           .padding(.horizontal, horizontalInset)
           .padding(.vertical, horizontalInset)
           .frame(height: containerHeight)
+          .offset(y: 7)
           .contentShape(Rectangle())
           .zIndex(2)
           .gesture(
