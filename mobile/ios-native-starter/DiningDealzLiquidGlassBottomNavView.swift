@@ -23,8 +23,6 @@ private struct DiningDealzLiquidGlassBottomNavDisplayItem: Identifiable {
 
 @objc(DiningDealzLiquidGlassBottomNavView)
 final class DiningDealzLiquidGlassBottomNavView: UIView {
-  private let baseHeight: CGFloat = 52
-
   @objc var onNavItemSelect: RCTDirectEventBlock?
   @objc var themeVariant: NSString = "default-dark" {
     didSet {
@@ -123,11 +121,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   }
 
   override var intrinsicContentSize: CGSize {
-    CGSize(width: UIView.noIntrinsicMetric, height: resolvedHeight)
-  }
-
-  private var resolvedHeight: CGFloat {
-    baseHeight + max(CGFloat(truncating: bottomInset), 0)
+    CGSize(width: UIView.noIntrinsicMetric, height: 52)
   }
 
   private func setupView() {
@@ -290,6 +284,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
         }
       }
       .background(Color.clear)
+      .offset(y: max(bottomInset, 0))
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     .background(Color.clear)
