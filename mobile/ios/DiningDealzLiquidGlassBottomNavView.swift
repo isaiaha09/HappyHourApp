@@ -295,23 +295,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   }
 
   private var liquidGlassTint: Color {
-    switch themeVariant {
-    case .defaultDark:
-      return Color(red: 0.62, green: 0.36, blue: 0.29).opacity(0.18)
-    case .mapDark:
-      return Color(red: 0.12, green: 0.16, blue: 0.22).opacity(0.34)
-    case .mapLight:
-      return Color.white.opacity(0.52)
-    }
-  }
-
-  private var selectorTint: Color {
-    switch themeVariant {
-    case .defaultDark, .mapDark:
-      return Color.white.opacity(0.02)
-    case .mapLight:
-      return Color.white.opacity(0.16)
-    }
+    .clear
   }
 
   private var activeForegroundColor: Color {
@@ -339,7 +323,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
           GlassEffectContainer(spacing: containerSpacing) {
             Color.clear
               .frame(height: containerHeight)
-              .glassEffect(.regular.tint(liquidGlassTint).interactive(false), in: Capsule(style: .continuous))
+              .glassEffect(.regular.interactive(false), in: Capsule(style: .continuous))
           }
           .frame(height: containerHeight)
           .zIndex(0)
@@ -355,7 +339,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
             } else {
               Color.clear
                 .frame(width: selectorWidth, height: selectorHeight)
-                .glassEffect(.regular.tint(selectorTint).interactive(), in: Capsule(style: .continuous))
+                .glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
                 .overlay(
                   Capsule(style: .continuous)
                     .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)

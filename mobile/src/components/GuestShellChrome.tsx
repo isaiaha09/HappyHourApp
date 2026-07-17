@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { AuthPortal } from '../appFlowTypes';
 import { styles } from '../appStyles';
-import { NativeIOSLiquidGlassBottomNav, NativeIOSLiquidGlassHeaderButton, isNativeIOSLiquidGlassBottomNavAvailable } from './NativeIOSLiquidGlass';
+import { NativeIOSLiquidGlassBottomNav, NativeIOSLiquidGlassHeaderButton, isNativeIOSLiquidGlassBottomNavAvailable, isNativeIOSLiquidGlassHeaderButtonAvailable } from './NativeIOSLiquidGlass';
 
 type AnimatedNumber = Animated.Value | Animated.AnimatedInterpolation<number> | number;
 
@@ -45,6 +45,7 @@ export function GuestShellChrome({
   const modalOpacity = useRef(new Animated.Value(0)).current;
   const touchTargetHitSlop = 12;
   const touchTargetPressRetentionOffset = 12;
+  const shouldFloatHeaderControls = !showHeader && isNativeIOSLiquidGlassHeaderButtonAvailable();
 
   useEffect(() => {
     if (interactive || activeModal === null) {
@@ -170,7 +171,7 @@ export function GuestShellChrome({
 
   return (
     <View pointerEvents="box-none" style={styles.guestShellChrome}>
-      {showHeader ? (
+      {showHeader || !shouldFloatHeaderControls ? (
         <Animated.View
           pointerEvents={interactive ? 'auto' : 'none'}
           style={[

@@ -202,21 +202,10 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
 private extension View {
   @ViewBuilder
   func diningDealzHeaderGlassEffect(themeVariant: DiningDealzLiquidGlassThemeVariant, variant: DiningDealzLiquidGlassHeaderVariant) -> some View {
-    let liquidGlassTint: Color = {
-      switch themeVariant {
-      case .defaultDark:
-        return Color(red: 0.62, green: 0.36, blue: 0.29).opacity(0.18)
-      case .mapDark:
-        return Color(red: 0.12, green: 0.16, blue: 0.22).opacity(0.34)
-      case .mapLight:
-        return Color.white.opacity(0.52)
-      }
-    }()
-
     if variant == .icon {
-      glassEffect(.regular.tint(liquidGlassTint).interactive(), in: Circle())
+      glassEffect(.regular.interactive(), in: Circle())
     } else {
-      glassEffect(.regular.tint(liquidGlassTint).interactive(), in: Capsule(style: .continuous))
+      glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
     }
   }
 }
