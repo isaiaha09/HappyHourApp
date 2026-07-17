@@ -124,6 +124,11 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     CGSize(width: UIView.noIntrinsicMetric, height: 52 + CGFloat(truncating: bottomInset))
   }
 
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    clearTabViewBackingBackgrounds(in: hostingController.view)
+  }
+
   private func setupView() {
     backgroundColor = .clear
     isOpaque = false
@@ -177,6 +182,21 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
         }
       }
     )
+
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.clearTabViewBackingBackgrounds(in: self.hostingController.view)
+    }
+  }
+
+  private func clearTabViewBackingBackgrounds(in view: UIView) {
+    if view is UITabBar || view is UIVisualEffectView {
+      return
+    }
+
+    view.backgroundColor = .clear
+    view.isOpaque = false
+    view.subviews.forEach(clearTabViewBackingBackgrounds)
   }
 
   private var resolvedThemeVariant: DiningDealzLiquidGlassThemeVariant {
