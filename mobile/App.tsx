@@ -5666,13 +5666,6 @@ function AppScreen() {
     if (isNativeIOSLiquidGlassBottomNavAvailable()) {
       return (
         <View pointerEvents="box-none" style={styles.bottomNavOverlay}>
-          <View
-            pointerEvents="none"
-            style={[
-              styles.bottomNavNativeBackdrop,
-              { height: Math.max(56, insets.bottom + 56) },
-            ]}
-          />
           <NativeIOSLiquidGlassBottomNav
             activeItem={activeItem}
             bottomInset={insets.bottom}

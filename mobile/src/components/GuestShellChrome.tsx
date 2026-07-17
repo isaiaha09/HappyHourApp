@@ -227,13 +227,6 @@ export function GuestShellChrome({
               transform: [{ translateY: actionTranslateY }],
             }}
           >
-            <View
-              pointerEvents="none"
-              style={[
-                styles.bottomNavNativeBackdrop,
-                { height: Math.max(56, insets.bottom + 56) },
-              ]}
-            />
             <NativeIOSLiquidGlassBottomNav
               activeItem="map"
               bottomInset={insets.bottom}
