@@ -27,7 +27,7 @@ import { WebView } from 'react-native-webview';
 import { styles } from '../appStyles';
 import type { AuthPortal, LoginFormState, ProfileFormState } from '../appFlowTypes';
 import { BusinessDealsEditor, BusinessHoursEditor } from '../components/BusinessProfileStructuredEditors';
-import { NativeIOSLiquidGlassBackButton } from '../components/NativeIOSLiquidGlass';
+import { NativeIOSLiquidGlassBackButton, isNativeIOSLiquidGlassHeaderButtonAvailable } from '../components/NativeIOSLiquidGlass';
 import { manualBusinessCityOptions, manualBusinessVenueOptions } from '../browseConfig';
 import { dedupeImageUrls, formatPlaceAddress, getPlaceLocations, normalizeSearchText } from '../placeHelpers';
 import { SOCIAL_PLATFORM_LABELS, getSocialProfilePreview, getSocialProfileValidationMessage } from '../socialProfiles';
@@ -38,11 +38,15 @@ const SUPPORT_EMAIL = 'support@diningdealz.com';
 const onboardingPlaceholderTextColor = theme.textDarkMuted;
 
 function OnboardingBackButton({ label, onPress, style }: { label: string; onPress: () => void; style?: any }) {
+  const resolvedStyle = isNativeIOSLiquidGlassHeaderButtonAvailable()
+    ? style
+    : [styles.onboardingBackButton, style];
+
   return (
     <NativeIOSLiquidGlassBackButton
       label={label}
       onPress={onPress}
-      style={[styles.onboardingBackButton, style]}
+      style={resolvedStyle}
       textStyle={styles.onboardingBackButtonText}
       themeVariant="map-light"
     />
