@@ -6577,7 +6577,7 @@ function AppScreen() {
                 logoEntranceOpacity={guestBrowseHeaderLogoOpacity}
                 onCreateAccount={handleOpenProfiles}
                 onSelectPortal={handleOpenAuthFromLanding}
-                showHeader={browseMode !== 'map'}
+                showHeader={!guestMapOnlyMode && browseMode !== 'map'}
                 themeVariant={displayedDarkMapMode ? 'map-dark' : 'map-light'}
               />
             ) : null}
