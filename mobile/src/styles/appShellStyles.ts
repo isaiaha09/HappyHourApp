@@ -187,8 +187,10 @@ export const appShellStyles = {
     fontWeight: '700',
   },
   bottomNavOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'flex-end',
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    right: 0,
     zIndex: 70,
   },
   bottomNavNativeBackdrop: {
