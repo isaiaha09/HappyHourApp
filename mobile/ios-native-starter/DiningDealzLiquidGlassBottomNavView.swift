@@ -257,6 +257,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
 
   @State private var hoveredItem: DiningDealzLiquidGlassBottomNavItem?
   @State private var dragLocationX: CGFloat?
+  @State private var dragTranslation: CGSize = .zero
   @State private var isDragging = false
   @State private var isContainerHovered = false
 
@@ -267,11 +268,11 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   private let outerHorizontalPadding: CGFloat = 12
   private let selectorVerticalOffset: CGFloat = 0
   private let restingSelectorWidthRatio: CGFloat = 0.96
-  private let draggingSelectorWidthRatio: CGFloat = 1.42
+  private let draggingSelectorWidthRatio: CGFloat = 1.14
   private let restingSelectorExtraWidth: CGFloat = 0
-  private let draggingSelectorExtraWidth: CGFloat = 30
-  private let draggingSelectorExtraHeight: CGFloat = 0
-  private let selectorOverflowAllowance: CGFloat = 14
+  private let draggingSelectorExtraWidth: CGFloat = 18
+  private let draggingSelectorExtraHeight: CGFloat = 6
+  private let selectorOverflowAllowance: CGFloat = 24
 
   private var containerHeight: CGFloat {
     itemHeight + (horizontalInset * 2)
@@ -282,7 +283,11 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   }
 
   private var selectorLift: CGFloat {
-    0
+    if isDragging {
+      return -8
+    }
+
+    return isSelectorActive ? -2 : 0
   }
 
   private var containerBottomOffset: CGFloat {
@@ -340,22 +345,13 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
           .zIndex(0)
 
           GlassEffectContainer(spacing: containerSpacing) {
-            if isDragging {
-              Color.clear
-                .frame(width: selectorWidth, height: selectorHeight)
-                .overlay(
-                  Capsule(style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
-                )
-            } else {
-              Color.clear
-                .frame(width: selectorWidth, height: selectorHeight)
-                .glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
-                .overlay(
-                  Capsule(style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
-                )
-            }
+            Color.clear
+              .frame(width: selectorWidth, height: selectorHeight)
+              .glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
+              .overlay(
+                Capsule(style: .continuous)
+                  .strokeBorder(Color.white.opacity(isDragging ? 0.16 : 0.1), lineWidth: 1)
+              )
           }
           .frame(width: selectorWidth, height: selectorHeight)
           .offset(x: selectorOffsetX(for: metrics, selectorWidth: selectorWidth, totalWidth: geometry.size.width))
@@ -387,6 +383,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
             DragGesture(minimumDistance: 0)
               .onChanged { value in
                 dragLocationX = value.location.x
+                dragTranslation = value.translation
                 isDragging = true
                 let nextItem = nearestItem(at: value.location.x, totalWidth: geometry.size.width)
                 if hoveredItem != nextItem {
@@ -394,8 +391,12 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
                 }
               }
               .onEnded { value in
-                let finalItem = nearestItem(at: value.location.x, totalWidth: geometry.size.width) ?? hoveredItem
+                let projectedX = value.predictedEndLocation.x
+                let finalItem = nearestItem(at: projectedX, totalWidth: geometry.size.width)
+                  ?? nearestItem(at: value.location.x, totalWidth: geometry.size.width)
+                  ?? hoveredItem
                 dragLocationX = nil
+                dragTranslation = .zero
                 isDragging = false
                 hoveredItem = nil
                 if let finalItem {
@@ -458,10 +459,27 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     if let dragLocationX {
       let minX = metrics.leadingInset - selectorOverflowAllowance
       let maxX = max(minX, totalWidth - metrics.leadingInset - selectorWidth + selectorOverflowAllowance)
-      return min(max(dragLocationX - (selectorWidth / 2), minX), maxX)
+      return rubberBandClamp(dragLocationX - (selectorWidth / 2), min: minX, max: maxX)
     }
 
     return indicatorOffsetX(for: metrics) + ((metrics.itemWidth - selectorWidth) / 2)
+  }
+
+  private func rubberBandClamp(_ value: CGFloat, min minValue: CGFloat, max maxValue: CGFloat) -> CGFloat {
+    if value < minValue {
+      return minValue - rubberBandDistance(minValue - value)
+    }
+
+    if value > maxValue {
+      return maxValue + rubberBandDistance(value - maxValue)
+    }
+
+    return value
+  }
+
+  private func rubberBandDistance(_ distance: CGFloat) -> CGFloat {
+    let dimension = max(selectorOverflowAllowance, 1)
+    return (1 - (1 / ((distance * 0.08 / dimension) + 1))) * dimension
   }
 
   private func nearestItem(at x: CGFloat, totalWidth: CGFloat) -> DiningDealzLiquidGlassBottomNavItem? {
