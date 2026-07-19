@@ -194,6 +194,12 @@ const cityMapRegions: Record<Exclude<CityFilterValue, 'all'>, Region> = {
     longitudeDelta: 0.13,
   },
 };
+const allCitiesInitialMapRegion: Region = {
+  latitude: (cityMapRegions.ventura.latitude + cityMapRegions.oxnard.latitude + cityMapRegions.camarillo.latitude) / 3,
+  longitude: (cityMapRegions.ventura.longitude + cityMapRegions.oxnard.longitude + cityMapRegions.camarillo.longitude) / 3,
+  latitudeDelta: 0.18,
+  longitudeDelta: maxLongitudeDelta,
+};
 const mobileBusinessVenueType = 'mobile';
 const multipleAreasBusinessCityValue = multipleAreasBusinessCityOption.value;
 type AppScreenMode = 'splash' | 'auth' | 'browse' | 'home-feed' | 'profiles' | 'favorite-businesses' | 'business-notifications' | 'business-profile-editor' | 'settings' | 'blocked-direct-message-customers' | 'support' | 'privacy-policy' | 'terms-of-service' | 'business-search' | 'business-claim' | 'manual-business-claim' | 'informal-business-claim' | 'email-verification' | 'business-claim-review-pending' | 'direct-messages';
@@ -470,7 +476,7 @@ export default function App() {
 function AppScreen() {
   const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
-  const initialMapRegionRef = useRef<Region>(clampRegionToBounds(defaultMapRegion));
+  const initialMapRegionRef = useRef<Region>(clampRegionToBounds(allCitiesInitialMapRegion));
   const mapRef = useRef<MapView | null>(null);
   const onboardingTransitionFrameRef = useRef<number | null>(null);
   const reversingOnboardingEntryRef = useRef(false);
@@ -728,7 +734,11 @@ function AppScreen() {
   const selectedPlaceOperatingHours = selectedPlaceLocation?.operating_hours ?? selectedPlace?.operating_hours ?? [];
   const selectedPlaceDistanceLabel = getDistanceAwayLabel(userCoordinates, selectedPlaceLocation ?? selectedPlace);
   const guestMapOnlyMode = guestBrowseModeLocked && !authenticatedSession;
-  const startupGuestMapRegion = useMemo(() => clampRegionToBounds(getBrowseMapRegion(selectedCity, precomputedMappedPlaces)), [precomputedMappedPlaces, selectedCity]);
+  const startupGuestMapRegion = useMemo(() => (
+    selectedCity === 'all'
+      ? clampRegionToBounds(allCitiesInitialMapRegion)
+      : clampRegionToBounds(getBrowseMapRegion(selectedCity, precomputedMappedPlaces))
+  ), [precomputedMappedPlaces, selectedCity]);
   const selectedPlaceIsFavorited = !!(selectedPlace && authenticatedSession?.favorite_businesses?.some((business) => business.slug === selectedPlace.slug));
   const showFavoriteControl = !authenticatedSession || authenticatedSession.portal === 'customer';
   const showClaimBusinessControl = !!selectedPlace && !selectedPlace.is_claimed && (!authenticatedSession || authenticatedSession.portal === 'customer');
@@ -2992,14 +3002,15 @@ function AppScreen() {
       return;
     }
 
-    const nextRegion = getBrowseMapRegion(selectedCity, mappedPlaces);
+    const useAllCitiesInitialRegion = !hasSettledInitialMapRegionRef.current
+      && selectedCity === 'all'
+      && normalizedDeferredSearchQuery.length === 0;
+    const nextRegion = useAllCitiesInitialRegion
+      ? allCitiesInitialMapRegion
+      : getBrowseMapRegion(selectedCity, mappedPlaces);
     const boundedRegion = clampRegionToBounds(nextRegion);
 
-    if (
-      !hasSettledInitialMapRegionRef.current
-      && selectedCity === 'all'
-      && normalizedDeferredSearchQuery.length === 0
-    ) {
+    if (useAllCitiesInitialRegion) {
       hasSettledInitialMapRegionRef.current = true;
       clearAutoFitMapRegionTimer();
       mapRegionRef.current = boundedRegion;
@@ -6287,7 +6298,6 @@ function AppScreen() {
                   onChangeSearchQuery={handleChangeSearchQuery}
                   onClearSearchQuery={handleClearSearchQuery}
                   onBrowseModeChange={handleBrowseModeChange}
-                  onOpenDashboard={authenticatedSession && browseMode === 'list' ? handleOpenProfiles : undefined}
                   onReload={handleRefreshPlaces}
                   onSelectAllVenueTypes={handleSelectAllVenueTypes}
                   onSelectCity={setSelectedCity}

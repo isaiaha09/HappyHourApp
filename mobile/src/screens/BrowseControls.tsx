@@ -378,7 +378,7 @@ export function BrowseControls({
               <Ionicons color="#f5f7fb" name="refresh" size={18} />
             </Pressable>
             <Pressable
-              accessibilityLabel={filtersExpanded ? 'Hide filters' : 'Show filters'}
+              accessibilityLabel={filtersExpanded ? 'Hide' : 'Show filters'}
               onPress={onToggleFilters}
               testID="browse-filters-toggle"
               style={styles.filtersToggleButtonPressable}
@@ -398,7 +398,7 @@ export function BrowseControls({
                   numberOfLines={1}
                   style={[styles.filtersToggleText, styles.filtersToggleTextInline, { color: filtersToggleTextColor }]}
                 >
-                  {filtersExpanded ? 'Hide filters' : 'Filters'}
+                  {filtersExpanded ? 'Hide' : 'Filters'}
                 </Animated.Text>
                 <Animated.View style={styles.filtersToggleIconWrap}>
                   <Ionicons color="#f5f7fb" name="options-outline" size={17} />
