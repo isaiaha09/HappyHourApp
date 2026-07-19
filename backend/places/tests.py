@@ -3002,6 +3002,28 @@ class SourceListingIdentityTests(TestCase):
 
 	@patch('places.services.source_listings._get_place_coordinates')
 	@patch('places.services.source_listings.load_source_records')
+	def test_public_place_payload_includes_admin_manual_submission_images(self, mock_load_source_records, mock_get_place_coordinates):
+		mock_get_place_coordinates.return_value = (34.2001, -119.1806)
+		mock_load_source_records.return_value = []
+		ListingSnapshot.objects.create(
+			name='Lazy Dog Restaurant & Bar',
+			listing_slug='lazy-dog-restaurant-bar-oxnard',
+			city=City.OXNARD,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='598 Town Center Dr',
+			state='CA',
+			postal_code='93036',
+			source_name=BusinessClaim.ADMIN_SOURCE_NAME,
+			imported_image_urls=['https://images.example.com/lazy-dog-front.webp'],
+		)
+
+		payload = get_source_place_payload('lazy-dog-restaurant-bar-oxnard')
+
+		self.assertEqual(payload['image_urls'], ['https://images.example.com/lazy-dog-front.webp'])
+		self.assertEqual(payload['locations'][0]['image_urls'], ['https://images.example.com/lazy-dog-front.webp'])
+
+	@patch('places.services.source_listings._get_place_coordinates')
+	@patch('places.services.source_listings.load_source_records')
 	def test_public_place_payload_applies_unclaimed_listing_snapshot_website_override_when_snapshot_slug_differs(self, mock_load_source_records, mock_get_place_coordinates):
 		mock_get_place_coordinates.return_value = (34.21681, -119.04423)
 		mock_load_source_records.return_value = [

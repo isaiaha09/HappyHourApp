@@ -4926,7 +4926,7 @@ function AppScreen() {
       const response = await beginTwoFactorSetup(apiBaseUrl, authenticatedSession.auth_token);
       setTwoFactorSetup(response);
       setTwoFactorSetupCode('');
-      setProfileMessage(response.detail);
+      setProfileMessage(null);
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
     } finally {

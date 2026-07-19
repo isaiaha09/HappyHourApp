@@ -619,6 +619,7 @@ def _build_manual_admin_snapshot_payload(snapshot, resolve_missing_coordinates=T
 		longitude=snapshot.tracked_location_longitude if is_live_location_business else None,
 		phone_number=snapshot.phone_number,
 		website_url=snapshot.website_url,
+		image_urls=list(snapshot.imported_image_urls or []),
 		external_id=snapshot.external_id or snapshot.listing_slug or f'listing-snapshot-{snapshot.pk}',
 		source_name=BusinessClaim.ADMIN_SOURCE_NAME,
 		source_url=snapshot.source_url,
