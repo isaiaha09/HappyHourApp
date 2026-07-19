@@ -169,6 +169,8 @@ export function DirectMessagesScreen({
 	const isBusinessPortal = session.portal === 'business';
 	const blockedCustomerAccount = useMemo(() => getBlockedCustomerAccountForThread(selectedThread), [selectedThread, blockedCustomerAccounts, isBusinessPortal]);
 	const businessThreadBlocked = Boolean(blockedCustomerAccount);
+	const threadReadOnly = Boolean(selectedThread?.read_only);
+	const threadReadOnlyReason = selectedThread?.read_only_reason || 'This conversation is now read-only.';
 	const launchedFromBusinessProfile = hasCustomerContext;
 	const customerHasContextWithoutThread = !!(hasCustomerContext && !selectedThreadId);
 	const showInboxList = !launchedFromBusinessProfile && !selectedThreadId;
@@ -364,6 +366,11 @@ export function DirectMessagesScreen({
 		const normalizedMessage = wrapMessageText(composerText.trim());
 		const hasImageDraft = Boolean(composerImageDraft);
 
+		if (threadReadOnly) {
+			setMessagesError(threadReadOnlyReason);
+			return;
+		}
+
 		if (businessThreadBlocked) {
 			setMessagesError('Unblock this customer before sending new direct messages.');
 			return;
@@ -421,6 +428,11 @@ export function DirectMessagesScreen({
 	}
 
 	async function handlePickBusinessImage() {
+		if (threadReadOnly) {
+			setMessagesError(threadReadOnlyReason);
+			return;
+		}
+
 		if (businessThreadBlocked) {
 			setMessagesError('Unblock this customer before sending a photo.');
 			return;
@@ -783,14 +795,21 @@ export function DirectMessagesScreen({
 										{messages.map((message) => {
 											const isMine = message.sender_id === session.id;
 											const bubbleText = wrapMessageText(message.message ?? '');
+											const imageFallbackText = bubbleText || (message.image_expired ? 'Photo expired.' : 'Photo unavailable.');
 											return (
 												<View key={message.id} style={[styles.directMessageBubbleWrap, isMine ? styles.directMessageBubbleWrapMine : null]}>
-													{message.message_type === 'image' && message.image_url ? (
-														<View style={[styles.directMessageImageWrap, isMine ? styles.directMessageImageWrapMine : null]}>
-															<Pressable onPress={() => handleOpenMessagePhotoLightbox(message.image_url)}>
-																<Image source={{ uri: message.image_url }} style={styles.directMessageImage} />
-															</Pressable>
-														</View>
+													{message.message_type === 'image' ? (
+														message.image_url ? (
+															<View style={[styles.directMessageImageWrap, isMine ? styles.directMessageImageWrapMine : null]}>
+																<Pressable onPress={() => handleOpenMessagePhotoLightbox(message.image_url)}>
+																	<Image source={{ uri: message.image_url }} style={styles.directMessageImage} />
+																</Pressable>
+															</View>
+														) : (
+															<View style={[styles.directMessageBubble, isMine ? styles.directMessageBubbleMine : null]}>
+																<Text style={[styles.directMessageBubbleText, isMine ? styles.directMessageBubbleTextMine : null]}>{imageFallbackText}</Text>
+															</View>
+														)
 													) : (
 														<View style={[styles.directMessageBubble, isMine ? styles.directMessageBubbleMine : null]}>
 															<Text style={[styles.directMessageBubbleText, isMine ? styles.directMessageBubbleTextMine : null]}>{bubbleText}</Text>
@@ -804,6 +823,11 @@ export function DirectMessagesScreen({
 										) : null}
 										{customerHasContextWithoutThread ? (
 											<Text style={styles.dashboardSupportText}>Send your first message to start this conversation.</Text>
+										) : null}
+										{threadReadOnly ? (
+											<View style={styles.errorBanner}>
+												<Text style={styles.errorText}>{threadReadOnlyReason}</Text>
+											</View>
 										) : null}
 										{businessThreadBlocked ? (
 											<View style={styles.errorBanner}>
@@ -824,7 +848,7 @@ export function DirectMessagesScreen({
 								]}
 							>
 								{isBusinessPortal ? (
-									<Pressable onPress={() => void handlePickBusinessImage()} style={[styles.directMessageComposerIconButton, sending || businessThreadBlocked ? styles.linkButtonDisabled : null]}>
+									<Pressable disabled={sending || businessThreadBlocked || threadReadOnly} onPress={() => void handlePickBusinessImage()} style={[styles.directMessageComposerIconButton, sending || businessThreadBlocked || threadReadOnly ? styles.linkButtonDisabled : null]}>
 										<Text style={styles.directMessageComposerIconButtonText}>+</Text>
 									</Pressable>
 								) : null}
@@ -845,16 +869,16 @@ export function DirectMessagesScreen({
 											setComposerText(value);
 											setMessagesError(null);
 										}}
-										editable={!businessThreadBlocked}
+										editable={!businessThreadBlocked && !threadReadOnly}
 										blurOnSubmit={false}
 										multiline
 										scrollEnabled
-										placeholder={businessThreadBlocked ? 'Unblock this customer to reply' : 'Message'}
+										placeholder={threadReadOnly ? 'This conversation is read-only' : businessThreadBlocked ? 'Unblock this customer to reply' : 'Message'}
 										placeholderTextColor="#9a7f6c"
 										style={[styles.profileInput, styles.directMessageComposerInput]}
 										value={composerText}
 									/>
-									<Pressable onPress={() => void handleSendText()} style={[styles.directMessageComposerSendButton, sending || businessThreadBlocked ? styles.linkButtonDisabled : null]}>
+									<Pressable disabled={sending || businessThreadBlocked || threadReadOnly} onPress={() => void handleSendText()} style={[styles.directMessageComposerSendButton, sending || businessThreadBlocked || threadReadOnly ? styles.linkButtonDisabled : null]}>
 										<Text style={styles.linkButtonSecondaryText}>{sending ? 'Sending...' : 'Send'}</Text>
 									</Pressable>
 								</View>

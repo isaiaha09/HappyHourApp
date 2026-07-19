@@ -7233,8 +7233,11 @@ class ProfileDashboardApiTests(APITestCase):
 
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response.data['detail'], 'Account permanently deleted.')
-		self.assertFalse(User.objects.filter(pk=self.user.pk).exists())
-		self.assertFalse(AccountProfile.objects.filter(pk=self.profile.pk).exists())
+		self.user.refresh_from_db()
+		self.profile.refresh_from_db()
+		self.assertTrue(User.objects.filter(pk=self.user.pk).exists())
+		self.assertFalse(self.user.is_active)
+		self.assertTrue(bool(self.profile.deleted_at))
 		self.assertEqual(ProfileAuthToken.objects.filter(user_id=self.user.pk).count(), 0)
 		self.assertEqual(FavoriteBusiness.objects.filter(user_id=self.user.pk).count(), 0)
 
@@ -7599,7 +7602,226 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(image_send_response.status_code, 201)
 		self.assertEqual(image_send_response.data['message']['message_type'], 'image')
 		self.assertTrue(bool(image_send_response.data['message']['image_url']))
+		self.assertFalse(image_send_response.data['message']['image_expired'])
 		self.assertGreaterEqual(mock_send_dm_push.call_count, 2)
+
+	def test_expired_direct_message_image_is_hidden_after_24_hours(self):
+		valid_png_bytes = (
+			b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89'
+			b'\x00\x00\x00\x0cIDATx\x9cc```\x00\x00\x00\x04\x00\x01\xf6\x178U\x00\x00\x00\x00IEND\xaeB`\x82'
+		)
+		snapshot = ListingSnapshot.objects.create(
+			name='Expiring Image Bistro',
+			listing_slug='expiring-image-bistro',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='100 Main St',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@expiring-image.example.com',
+			work_phone='805-555-1212',
+			employer_address='100 Main St, Ventura, CA 93001',
+			verification_summary='I own the business.',
+			status=BusinessClaim.Status.APPROVED,
+			direct_messaging_enabled=True,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+
+		customer_user = User.objects.create_user(username='expiring_image_customer', email='expiring_image_customer@example.com', password='test-pass-123')
+		customer_token = ProfileAuthToken.objects.create(user=customer_user)
+
+		thread_response = self.client.post(
+			reverse('profile-direct-messages'),
+			{
+				'portal': 'customer',
+				'listing_slug': 'expiring-image-bistro',
+				'message': 'Hello there.',
+			},
+			format='json',
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+		self.assertEqual(thread_response.status_code, 201)
+
+		image_send_response = self.client.post(
+			reverse('profile-direct-messages'),
+			{
+				'portal': 'business',
+				'thread_id': thread_response.data['thread']['id'],
+				'image': SimpleUploadedFile('expiring-photo.png', valid_png_bytes, content_type='image/png'),
+			},
+			format='multipart',
+			**self.auth_headers(),
+		)
+		self.assertEqual(image_send_response.status_code, 201)
+		message_id = image_send_response.data['message']['id']
+		BusinessDirectMessage.objects.filter(pk=message_id).update(created_at=timezone.now() - timedelta(hours=25))
+		expired_message_record = BusinessDirectMessage.objects.get(pk=message_id)
+		self.assertTrue(expired_message_record.image.storage.exists(expired_message_record.image.name))
+
+		thread_detail_response = self.client.get(
+			reverse('profile-direct-message-thread-detail', kwargs={'thread_id': thread_response.data['thread']['id']}),
+			{'portal': 'customer'},
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+		self.assertEqual(thread_detail_response.status_code, 200)
+		expired_message = next(message for message in thread_detail_response.data['messages'] if message['id'] == message_id)
+		self.assertEqual(expired_message['message_type'], 'image')
+		self.assertEqual(expired_message['image_url'], '')
+		self.assertTrue(expired_message['image_expired'])
+		self.assertEqual(thread_detail_response.data['thread']['last_message_preview'], 'Photo expired')
+		expired_message_record.refresh_from_db()
+		self.assertFalse(expired_message_record.image.storage.exists(expired_message_record.image.name))
+
+	def test_delete_account_preserves_direct_message_thread_for_other_business_as_read_only(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Read Only Customer Cafe',
+			listing_slug='read-only-customer-cafe',
+			city=City.VENTURA,
+			venue_type=VenueType.CAFE,
+			address_line_1='101 Main St',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@readonlycustomer.example.com',
+			work_phone='805-555-3434',
+			employer_address='101 Main St, Ventura, CA 93001',
+			verification_summary='I own the business.',
+			status=BusinessClaim.Status.APPROVED,
+			direct_messaging_enabled=True,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+
+		customer_user = User.objects.create_user(username='readonly_customer', email='readonly_customer@example.com', password='test-pass-123')
+		customer_token = ProfileAuthToken.objects.create(user=customer_user)
+
+		send_response = self.client.post(
+			reverse('profile-direct-messages'),
+			{
+				'portal': 'customer',
+				'listing_slug': 'read-only-customer-cafe',
+				'message': 'Please keep this receipt.',
+			},
+			format='json',
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+		self.assertEqual(send_response.status_code, 201)
+		thread_id = send_response.data['thread']['id']
+
+		delete_response = self.client.post(
+			reverse('profile-delete-account'),
+			{'password': 'test-pass-123'},
+			format='json',
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+		self.assertEqual(delete_response.status_code, 200)
+
+		business_threads_response = self.client.get(
+			reverse('profile-direct-messages'),
+			{'portal': 'business'},
+			**self.auth_headers(),
+		)
+		self.assertEqual(business_threads_response.status_code, 200)
+		self.assertEqual(len(business_threads_response.data['threads']), 1)
+		self.assertTrue(business_threads_response.data['threads'][0]['read_only'])
+		self.assertEqual(business_threads_response.data['threads'][0]['customer_username'], 'Deleted account')
+
+		blocked_send_response = self.client.post(
+			reverse('profile-direct-messages'),
+			{
+				'portal': 'business',
+				'thread_id': thread_id,
+				'message': 'This should be blocked.',
+			},
+			format='json',
+			**self.auth_headers(),
+		)
+		self.assertEqual(blocked_send_response.status_code, 403)
+		self.assertEqual(blocked_send_response.data['detail'], 'This conversation is now read-only because the customer account was deleted.')
+
+	def test_delete_business_account_preserves_customer_thread_as_read_only(self):
+		business_user = User.objects.create_user(username='deleted_business_owner', email='deleted_business_owner@example.com', password='test-pass-123')
+		business_token = ProfileAuthToken.objects.create(user=business_user)
+		snapshot = ListingSnapshot.objects.create(
+			name='Read Only Business Diner',
+			listing_slug='read-only-business-diner',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='102 Main St',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=business_user,
+			listing_snapshot=snapshot,
+			contact_name='Deleted Owner',
+			job_title='Owner',
+			work_email='owner@readonlybusiness.example.com',
+			work_phone='805-555-5656',
+			employer_address='102 Main St, Ventura, CA 93001',
+			verification_summary='I own the business.',
+			status=BusinessClaim.Status.APPROVED,
+			direct_messaging_enabled=True,
+		)
+		BusinessMembership.objects.create(claim=claim, user=business_user, is_active=True)
+
+		customer_user = User.objects.create_user(username='readonly_business_customer', email='readonly_business_customer@example.com', password='test-pass-123')
+		customer_token = ProfileAuthToken.objects.create(user=customer_user)
+
+		send_response = self.client.post(
+			reverse('profile-direct-messages'),
+			{
+				'portal': 'customer',
+				'listing_slug': 'read-only-business-diner',
+				'message': 'Please keep this business receipt.',
+			},
+			format='json',
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+		self.assertEqual(send_response.status_code, 201)
+		thread_id = send_response.data['thread']['id']
+
+		delete_response = self.client.post(
+			reverse('profile-delete-account'),
+			{'password': 'test-pass-123'},
+			format='json',
+			HTTP_AUTHORIZATION=f'Token {business_token.key}',
+		)
+		self.assertEqual(delete_response.status_code, 200)
+
+		customer_threads_response = self.client.get(
+			reverse('profile-direct-messages'),
+			{'portal': 'customer'},
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+		self.assertEqual(customer_threads_response.status_code, 200)
+		self.assertEqual(len(customer_threads_response.data['threads']), 1)
+		self.assertTrue(customer_threads_response.data['threads'][0]['read_only'])
+
+		thread_detail_response = self.client.get(
+			reverse('profile-direct-message-thread-detail', kwargs={'thread_id': thread_id}),
+			{'portal': 'customer'},
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+		self.assertEqual(thread_detail_response.status_code, 200)
+		self.assertTrue(thread_detail_response.data['thread']['read_only'])
+
+		blocked_send_response = self.client.post(
+			reverse('profile-direct-messages'),
+			{
+				'portal': 'customer',
+				'thread_id': thread_id,
+				'message': 'This should be blocked too.',
+			},
+			format='json',
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+		self.assertEqual(blocked_send_response.status_code, 403)
+		self.assertEqual(blocked_send_response.data['detail'], 'This conversation is now read-only because the business account was deleted.')
 
 	def test_customer_direct_message_rejects_image_payload(self):
 		valid_png_bytes = (

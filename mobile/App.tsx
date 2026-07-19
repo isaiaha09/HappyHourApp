@@ -4574,6 +4574,21 @@ function AppScreen() {
       return;
     }
 
+    if (!loginForm.identifier.trim()) {
+      setProfileErrorMessage('Enter your username.');
+      return;
+    }
+
+    if (!loginForm.password) {
+      setProfileErrorMessage('Enter your password.');
+      return;
+    }
+
+    if (showLoginTwoFactorCodeField && loginForm.two_factor_code.trim().length !== 6) {
+      setProfileErrorMessage('Enter the 6-digit authenticator code.');
+      return;
+    }
+
     loginSubmissionInFlightRef.current = true;
     let loginTransitionStarted = false;
     setLoginSubmitting(true);

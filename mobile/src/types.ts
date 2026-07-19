@@ -372,6 +372,8 @@ export type DirectMessageThread = {
   last_message_at: string;
   last_message_preview: string;
   unread_count: number;
+  read_only: boolean;
+  read_only_reason: string;
 };
 
 export type DirectMessageItem = {
@@ -381,6 +383,7 @@ export type DirectMessageItem = {
   message: string;
   message_type: 'text' | 'image';
   image_url: string;
+  image_expired: boolean;
   created_at: string;
   read_at: string | null;
 };

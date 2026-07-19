@@ -1,7 +1,7 @@
 from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 
-from .models import BusinessClaim, BusinessClaimAttachment, BusinessMembership, ListingSnapshot
+from .models import BusinessClaim, BusinessClaimAttachment, BusinessDirectMessage, BusinessMembership, ListingSnapshot
 from .services.media_storage import delete_removed_storage_references, delete_storage_names, delete_storage_references
 from .services.source_listings import invalidate_source_place_payload_cache
 
@@ -92,6 +92,13 @@ def cleanup_deleted_business_claim_attachment_file(sender, instance, **kwargs):
 	file_name = str(getattr(instance.file, 'name', '') or '').strip()
 	if file_name:
 		delete_storage_names([file_name])
+
+
+@receiver(post_delete, sender=BusinessDirectMessage)
+def cleanup_deleted_direct_message_image(sender, instance, **kwargs):
+	file_name = str(getattr(instance.image, 'name', '') or '').strip()
+	if file_name:
+		instance.image.storage.delete(file_name)
 
 
 def _get_deal_attachment_references(deal_overrides):

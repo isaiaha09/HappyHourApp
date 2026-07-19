@@ -1,9 +1,11 @@
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Count, Q
 from django.core.mail import send_mail
 from django.utils.html import escape
 from django.utils import timezone
 from email.utils import formataddr, parseaddr
+from uuid import uuid4
 
 from places.models import AccountProfile, BusinessClaim, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, ProfileAuthToken, SponsoredCampaign, VenueType
 from places.services.business_profile_overrides import build_deal_payloads, build_operating_hour_payloads
@@ -109,6 +111,72 @@ def get_or_create_account_profile(user):
 	if reconcile_expired_email_change(user, profile=profile):
 		profile.refresh_from_db()
 	return profile
+
+
+def is_deleted_account(user):
+	if user is None:
+		return True
+	try:
+		profile = user.account_profile
+	except AccountProfile.DoesNotExist:
+		return not bool(getattr(user, 'is_active', False))
+	return bool(profile.deleted_at)
+
+
+@transaction.atomic
+def deactivate_account_for_retained_direct_messages(user):
+	profile = get_or_create_account_profile(user)
+	deleted_at = timezone.now()
+	deleted_username = f'deleted-account-{user.pk}-{uuid4().hex[:12]}'
+
+	ProfileAuthToken.objects.filter(user=user).delete()
+	FavoriteBusiness.objects.filter(user=user).delete()
+	FavoriteBusinessNotification.objects.filter(user=user).delete()
+	FavoriteBusinessPushDevice.objects.filter(user=user).delete()
+	user.blocked_business_direct_messages.all().delete()
+
+	user.business_memberships.filter(is_active=True).update(is_active=False, updated_at=deleted_at)
+	user.business_claims.filter(direct_messaging_enabled=True).update(direct_messaging_enabled=False, updated_at=deleted_at)
+
+	user.username = deleted_username[:150]
+	user.first_name = ''
+	user.last_name = ''
+	user.email = ''
+	user.is_active = False
+	user.set_unusable_password()
+	user.save(update_fields=['username', 'first_name', 'last_name', 'email', 'is_active', 'password'])
+
+	profile.deleted_at = deleted_at
+	profile.pending_email = ''
+	profile.previous_verified_email = ''
+	profile.email_verification_token = ''
+	profile.email_verification_code = ''
+	profile.email_verification_code_sent_at = None
+	profile.email_verification_sent_at = None
+	profile.email_verified_at = None
+	profile.email_change_requested_at = None
+	profile.two_factor_enabled = False
+	profile.two_factor_secret = ''
+	profile.two_factor_pending_secret = ''
+	profile.password_reset_token = ''
+	profile.password_reset_sent_at = None
+	profile.save(update_fields=[
+		'deleted_at',
+		'pending_email',
+		'previous_verified_email',
+		'email_verification_token',
+		'email_verification_code',
+		'email_verification_code_sent_at',
+		'email_verification_sent_at',
+		'email_verified_at',
+		'email_change_requested_at',
+		'two_factor_enabled',
+		'two_factor_secret',
+		'two_factor_pending_secret',
+		'password_reset_token',
+		'password_reset_sent_at',
+		'updated_at',
+	])
 
 
 def get_or_create_profile_token(user):

@@ -49,7 +49,7 @@ from .serializers import (
 	build_signup_request_data,
 	sync_listing_snapshot_from_place_payload,
 )
-from .services.account_profiles import build_account_response, build_email_verification_challenge, get_business_access_hold_claim, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, send_business_claim_received_email, send_password_reset_email, send_support_contact_email, send_username_reminder_email, send_verification_email
+from .services.account_profiles import build_account_response, build_email_verification_challenge, deactivate_account_for_retained_direct_messages, get_business_access_hold_claim, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, is_deleted_account, send_business_claim_received_email, send_password_reset_email, send_support_contact_email, send_username_reminder_email, send_verification_email
 from .models import BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedImpression, VenueType
 from .services.favorite_notifications import create_notifications_for_business_profile_update
 from .services.direct_message_push import send_push_notifications_for_direct_message
@@ -159,32 +159,80 @@ def _build_direct_message_thread_payload(thread, user):
 	last_message = thread.messages.select_related('sender').order_by('-created_at', '-id').first()
 	unread_query = thread.messages.exclude(sender_id=user.id).filter(read_at__isnull=True)
 	if last_message is not None and last_message.image:
-		last_message_preview = 'Sent a photo'
+		last_message_preview = 'Photo expired' if last_message.image_has_expired() else 'Sent a photo'
 	elif last_message is not None:
 		last_message_preview = last_message.body[:160]
 	else:
 		last_message_preview = ''
+	read_only_reason = _get_direct_message_thread_read_only_reason(thread)
 	return {
 		'id': thread.id,
 		'business_slug': thread.business_claim.listing_snapshot.listing_slug,
 		'business_name': thread.business_claim.listing_snapshot.name,
-		'customer_username': thread.customer.username,
+		'customer_username': _get_direct_message_display_name_for_user(thread.customer),
 		'last_message_at': thread.last_message_at,
 		'last_message_preview': last_message_preview,
 		'unread_count': unread_query.count(),
+		'read_only': bool(read_only_reason),
+		'read_only_reason': read_only_reason,
 	}
 
 
 def _customer_can_access_direct_message_thread(user, thread):
 	if thread is None:
 		return False
+	if is_deleted_account(user):
+		return False
+	if not _thread_has_active_business_participant(thread):
+		return True
 	can_direct_message, _ = _can_customer_direct_message_claim(user, thread.business_claim)
 	return can_direct_message
 
 
+def _get_direct_message_display_name_for_user(user):
+	if is_deleted_account(user):
+		return 'Deleted account'
+	return user.username
+
+
+def _thread_has_active_business_participant(thread):
+	try:
+		membership = thread.business_claim.membership
+	except BusinessMembership.DoesNotExist:
+		return False
+	if not membership.is_active:
+		return False
+	return not is_deleted_account(thread.business_claim.claimant)
+
+
+def _thread_has_active_customer_participant(thread):
+	return not is_deleted_account(thread.customer)
+
+
+def _get_direct_message_thread_read_only_reason(thread):
+	if not _thread_has_active_customer_participant(thread):
+		return 'This conversation is now read-only because the customer account was deleted.'
+	if not _thread_has_active_business_participant(thread):
+		return 'This conversation is now read-only because the business account was deleted.'
+	return ''
+
+
+def _delete_expired_direct_message_image(message):
+	if not message.image or not message.image_has_expired():
+		return False
+	storage_name = str(getattr(message.image, 'name', '') or '').strip()
+	if not storage_name:
+		return False
+	message.image.storage.delete(storage_name)
+	return True
+
+
 def _build_direct_message_item_payload(message, request=None):
+	image_expired = bool(message.image and message.image_has_expired())
+	if image_expired:
+		_delete_expired_direct_message_image(message)
 	image_url = ''
-	if message.image:
+	if message.image and not image_expired:
 		try:
 			image_url = message.image.url
 		except ValueError:
@@ -194,10 +242,11 @@ def _build_direct_message_item_payload(message, request=None):
 	return {
 		'id': message.id,
 		'sender_id': message.sender_id,
-		'sender_username': message.sender.username,
+		'sender_username': _get_direct_message_display_name_for_user(message.sender),
 		'message': message.body,
 		'message_type': 'image' if message.image else 'text',
 		'image_url': image_url,
+		'image_expired': image_expired,
 		'created_at': message.created_at,
 		'read_at': message.read_at,
 	}
@@ -865,6 +914,9 @@ class DirectMessageThreadsView(APIView):
 			thread = self._get_thread_for_portal(request.user, portal, thread_id)
 			if thread is None:
 				return Response({'detail': 'Direct message thread not found.'}, status=status.HTTP_404_NOT_FOUND)
+			read_only_reason = _get_direct_message_thread_read_only_reason(thread)
+			if read_only_reason:
+				return Response({'detail': read_only_reason}, status=status.HTTP_403_FORBIDDEN)
 			if portal == 'customer':
 				if not thread.business_claim.direct_messaging_enabled:
 					return Response({'detail': 'This business has direct messaging turned off.'}, status=status.HTTP_403_FORBIDDEN)
@@ -915,6 +967,8 @@ class DirectMessageThreadsView(APIView):
 	def _get_threads_for_portal(self, user, portal):
 		queryset = BusinessDirectMessageThread.objects.select_related(
 			'business_claim__listing_snapshot',
+			'business_claim__claimant',
+			'business_claim__membership',
 			'customer',
 		).prefetch_related('messages__sender')
 		if portal == 'business':
@@ -932,6 +986,8 @@ class DirectMessageThreadsView(APIView):
 	def _get_thread_for_portal(self, user, portal, thread_id):
 		queryset = BusinessDirectMessageThread.objects.select_related(
 			'business_claim__listing_snapshot',
+			'business_claim__claimant',
+			'business_claim__membership',
 			'customer',
 		).prefetch_related('messages__sender')
 		if portal == 'business':
@@ -955,6 +1011,8 @@ class DirectMessageThreadDetailView(APIView):
 		if portal == 'business':
 			thread = BusinessDirectMessageThread.objects.select_related(
 				'business_claim__listing_snapshot',
+				'business_claim__claimant',
+				'business_claim__membership',
 				'customer',
 			).filter(
 				id=thread_id,
@@ -964,6 +1022,8 @@ class DirectMessageThreadDetailView(APIView):
 		else:
 			thread = BusinessDirectMessageThread.objects.select_related(
 				'business_claim__listing_snapshot',
+				'business_claim__claimant',
+				'business_claim__membership',
 				'customer',
 			).filter(id=thread_id, customer=request.user).first()
 			if not _customer_can_access_direct_message_thread(request.user, thread):
@@ -1143,7 +1203,7 @@ class DeleteAccountView(generics.GenericAPIView):
 		serializer = self.get_serializer(data=request.data, context={'request': request})
 		serializer.is_valid(raise_exception=True)
 		user = request.user
-		user.delete()
+		deactivate_account_for_retained_direct_messages(user)
 		return Response({'detail': 'Account permanently deleted.'})
 
 

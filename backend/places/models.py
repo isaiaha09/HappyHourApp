@@ -887,6 +887,7 @@ class BusinessAccount(User):
 
 class AccountProfile(models.Model):
 	user = models.OneToOneField(settings.AUTH_USER_MODEL, related_name='account_profile', on_delete=models.CASCADE)
+	deleted_at = models.DateTimeField(null=True, blank=True)
 	email_verification_token = models.CharField(max_length=64, blank=True)
 	email_verification_code = models.CharField(max_length=6, blank=True)
 	email_verification_code_sent_at = models.DateTimeField(null=True, blank=True)
@@ -1060,6 +1061,17 @@ class BusinessDirectMessage(models.Model):
 
 	def __str__(self):
 		return f'DM #{self.pk} in thread {self.thread_id}'
+
+	def get_image_expires_at(self):
+		if not self.image:
+			return None
+		return self.created_at + timedelta(hours=24)
+
+	def image_has_expired(self):
+		image_expires_at = self.get_image_expires_at()
+		if image_expires_at is None:
+			return False
+		return timezone.now() >= image_expires_at
 
 	def clean(self):
 		valid_sender_ids = {

@@ -339,7 +339,7 @@ async function fetchJson<T>(baseUrl: string, path: string): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new Error(`Backend request failed with status ${response.status}.`);
+    throw new Error(buildFriendlyApiFallbackMessage(path, response.status));
   }
 
   return response.json() as Promise<T>;
@@ -359,7 +359,7 @@ async function postJson<T>(baseUrl: string, path: string, payload: object): Prom
     const errorPayload = await response.json().catch(() => null);
     const message = errorPayload && typeof errorPayload === 'object'
       ? flattenApiError(errorPayload)
-      : `Backend request failed with status ${response.status}.`;
+      : buildFriendlyApiFallbackMessage(path, response.status);
     throw new Error(message);
   }
 
@@ -380,7 +380,7 @@ async function postMultipartJson<T>(baseUrl: string, path: string, payload: Form
     const errorPayload = await response.json().catch(() => null);
     const message = errorPayload && typeof errorPayload === 'object'
       ? flattenApiError(errorPayload)
-      : `Backend request failed with status ${response.status}.`;
+      : buildFriendlyApiFallbackMessage(path, response.status);
     throw new Error(message);
   }
 
@@ -400,7 +400,7 @@ async function deleteAuthedJson<T>(baseUrl: string, path: string, authToken: str
     const errorPayload = await response.json().catch(() => null);
     const message = errorPayload && typeof errorPayload === 'object'
       ? flattenApiError(errorPayload)
-      : `Backend request failed with status ${response.status}.`;
+      : buildFriendlyApiFallbackMessage(path, response.status);
     throw new Error(message);
   }
 
@@ -419,7 +419,7 @@ async function fetchAllPaginatedJson<T>(baseUrl: string, path: string): Promise<
     });
 
     if (!response.ok) {
-      throw new Error(`Backend request failed with status ${response.status}.`);
+      throw new Error(buildFriendlyApiFallbackMessage(path, response.status));
     }
 
     const payload = await response.json() as PaginatedResponse<T>;
@@ -438,7 +438,7 @@ async function fetchPagedJson<T>(baseUrl: string, path: string): Promise<Paginat
   });
 
   if (!response.ok) {
-    throw new Error(`Backend request failed with status ${response.status}.`);
+    throw new Error(buildFriendlyApiFallbackMessage(path, response.status));
   }
 
   return response.json() as Promise<PaginatedResponse<T>>;
@@ -518,21 +518,21 @@ function appendDealAttachmentUploads(formData: FormData, dealOverrides?: Busines
 
 function flattenApiError(value: unknown): string {
   if (Array.isArray(value)) {
-    return value.map((entry) => flattenApiError(entry)).join(' ');
+    return value.map((entry) => flattenApiError(entry)).filter(Boolean).join('\n');
   }
 
   if (value && typeof value === 'object') {
     return Object.entries(value as Record<string, unknown>)
       .map(([key, entry]) => formatApiErrorEntry(key, entry))
       .filter(Boolean)
-      .join(' ');
+      .join('\n');
   }
 
   return typeof value === 'string' ? value : 'Unable to complete the request.';
 }
 
 function formatApiErrorEntry(key: string, entry: unknown) {
-  const message = flattenApiError(entry).trim();
+  const message = sanitizeApiErrorMessage(key, flattenApiError(entry).trim());
   if (!message) {
     return '';
   }
@@ -545,12 +545,59 @@ function formatApiErrorEntry(key: string, entry: unknown) {
 }
 
 function formatApiErrorLabel(key: string) {
+  const friendlyLabels: Record<string, string> = {
+    identifier: 'Username',
+    username: 'Username',
+    email: 'Email',
+    password: 'Password',
+    confirm_password: 'Confirm password',
+    first_name: 'First name',
+    last_name: 'Last name',
+    business_name: 'Business name',
+    business_city: 'Business city',
+    business_venue_type: 'Business type',
+    contact_name: 'Contact name',
+    job_title: 'Role',
+    work_email: 'Employer email',
+    work_phone: 'Work phone',
+    employer_address: 'Employer address',
+    verification_summary: 'Verification summary',
+    supporting_details: 'Supporting details',
+    business_slug: 'Business',
+    code: 'Verification code',
+    two_factor_code: 'Authenticator code',
+  };
+  const friendlyLabel = friendlyLabels[key];
+  if (friendlyLabel) {
+    return friendlyLabel;
+  }
+
   const normalizedKey = key.replace(/_/g, ' ').trim();
   if (!normalizedKey) {
     return 'Error';
   }
 
   return normalizedKey.charAt(0).toUpperCase() + normalizedKey.slice(1);
+}
+
+function sanitizeApiErrorMessage(key: string, message: string) {
+  if (!message) {
+    return '';
+  }
+
+  const label = formatApiErrorLabel(key);
+  const lowerLabel = label.charAt(0).toLowerCase() + label.slice(1);
+  const normalizedMessage = message.replace(/\s+/g, ' ').trim();
+
+  if (normalizedMessage === 'This field may not be blank.' || normalizedMessage === 'This field is required.') {
+    return `Enter ${lowerLabel}.`;
+  }
+
+  if (/^"" is not a valid choice\.$/.test(normalizedMessage)) {
+    return `Select ${lowerLabel}.`;
+  }
+
+  return normalizedMessage;
 }
 
 function getMetroHost() {
@@ -632,4 +679,50 @@ function appendMultipartValue(formData: FormData, key: string, value: unknown) {
   }
 
   formData.append(key, String(value));
+}
+
+function buildFriendlyApiFallbackMessage(path: string, status: number) {
+  const normalizedPath = path.split('?')[0];
+
+  if (normalizedPath === '/profiles/login/') {
+    return 'We could not sign you in with those credentials. Check your username and password and try again.';
+  }
+
+  if (normalizedPath === '/profiles/customer-signup/') {
+    return 'We could not create your customer account. Check your username, email, and password and try again.';
+  }
+
+  if (
+    normalizedPath === '/profiles/business-signup/'
+    || normalizedPath === '/profiles/manual-business-signup/'
+    || normalizedPath === '/profiles/informal-business-signup/'
+  ) {
+    return 'We could not finish creating this business account. Check the information you entered and try again.';
+  }
+
+  if (normalizedPath === '/profiles/verify-email-code/') {
+    return 'We could not verify that code. Check the 6-digit code and try again.';
+  }
+
+  if (normalizedPath === '/profiles/resend-verification-code/') {
+    return 'We could not send a new verification code right now. Try again in a moment.';
+  }
+
+  if (normalizedPath === '/profiles/recover-username/') {
+    return 'We could not process that email address right now. Check it and try again.';
+  }
+
+  if (normalizedPath === '/profiles/password-reset-request/') {
+    return 'We could not process that username or email right now. Check it and try again.';
+  }
+
+  if (normalizedPath === '/profiles/delete-account/') {
+    return 'We could not verify your password right now. Check it and try again.';
+  }
+
+  if (status >= 500) {
+    return 'Something went wrong on our side. Please try again.';
+  }
+
+  return 'We could not complete that request. Check the information you entered and try again.';
 }

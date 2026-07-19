@@ -458,6 +458,8 @@ class DirectMessageThreadListSerializer(serializers.Serializer):
 	last_message_at = serializers.DateTimeField()
 	last_message_preview = serializers.CharField()
 	unread_count = serializers.IntegerField()
+	read_only = serializers.BooleanField(required=False, default=False)
+	read_only_reason = serializers.CharField(required=False, allow_blank=True, default='')
 
 
 class DirectMessageItemSerializer(serializers.Serializer):
@@ -467,6 +469,7 @@ class DirectMessageItemSerializer(serializers.Serializer):
 	message = serializers.CharField()
 	message_type = serializers.ChoiceField(choices=['text', 'image'])
 	image_url = serializers.CharField(allow_blank=True)
+	image_expired = serializers.BooleanField(required=False, default=False)
 	created_at = serializers.DateTimeField()
 	read_at = serializers.DateTimeField(allow_null=True)
 
