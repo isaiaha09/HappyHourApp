@@ -772,6 +772,10 @@ def business_claim_attachment_upload_to(instance, filename):
 	return f'business-claim-attachments/{instance.claim_id}/{instance.attachment_kind}/{safe_name}{filename_suffix}'
 
 
+def get_private_media_storage():
+	return storages['private_media']
+
+
 class BusinessClaimAttachment(models.Model):
 	class AttachmentKind(models.TextChoices):
 		SOCIAL_MEDIA = 'social_media', 'Social Media Attachment'
@@ -783,7 +787,7 @@ class BusinessClaimAttachment(models.Model):
 
 	claim = models.ForeignKey(BusinessClaim, related_name='attachments', on_delete=models.CASCADE)
 	attachment_kind = models.CharField(max_length=40, choices=AttachmentKind.choices)
-	file = models.FileField(upload_to=business_claim_attachment_upload_to)
+	file = models.FileField(upload_to=business_claim_attachment_upload_to, storage=get_private_media_storage)
 	original_filename = models.CharField(max_length=255)
 	content_type = models.CharField(max_length=120, blank=True)
 	file_size = models.PositiveIntegerField(default=0)

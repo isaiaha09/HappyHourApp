@@ -441,22 +441,29 @@ For this repo, Postgres is not the whole story.
 
 ## Media Storage
 
-Business claim attachments and uploaded business profile photos now go through Django's `default_storage`, so media can be switched from local disk to Supabase Storage without changing claim/profile code paths.
+Uploaded business profile photos use public media storage because they are displayed on business profiles. Sensitive uploads, including business claim attachments and direct-message images, use private media storage with signed URLs.
 
 For local development, no extra setup is required and uploads still use `backend/media`.
 
 ### Supabase Bucket Setup
 
-Create one Supabase Storage bucket for app-managed uploads.
+Create two Supabase Storage buckets for app-managed uploads.
 
-Recommended bucket settings:
+Public bucket settings:
 
 - Bucket name: `business-media`
 - Public bucket: `Yes`
 - File size limit: set this to whatever max upload size you want enforced at the storage layer
-- Allowed MIME types: optional, but if you want to restrict it, include common image and document types your app accepts such as `image/jpeg`, `image/png`, `image/webp`, `image/heic`, `application/pdf`
+- Allowed MIME types: optional, but this bucket only needs public profile image types such as `image/jpeg`, `image/png`, `image/webp`, and `image/heic`
 
-Why public: this backend currently stores public URLs for uploaded business profile photos and serves attachment/profile-photo URLs directly from storage.
+Private bucket settings:
+
+- Bucket name: `business-private-media`
+- Public bucket: `No`
+- File size limit: set this to whatever max upload size you want enforced at the storage layer
+- Allowed MIME types: optional, but include the private file types the app accepts, such as `image/jpeg`, `image/png`, `image/webp`, `image/heic`, and `application/pdf`
+
+Why split buckets: public profile photos need stable public URLs, while claim documents and direct-message images should not be publicly listable or fetchable without a signed URL.
 
 In Supabase, the bucket should end up with public object URLs in this format:
 
@@ -469,11 +476,14 @@ https://<your-project-ref>.supabase.co/storage/v1/object/public/business-media/<
 To switch media uploads to Supabase Storage, set these backend environment variables exactly like this:
 
 - `MEDIA_STORAGE_BACKEND=supabase`
+- `PRIVATE_MEDIA_STORAGE_BACKEND=supabase`
 - `SUPABASE_STORAGE_BUCKET=business-media`
+- `SUPABASE_PRIVATE_STORAGE_BUCKET=business-private-media`
 - `SUPABASE_STORAGE_ENDPOINT=https://<your-project-ref>.supabase.co/storage/v1/s3`
 - `SUPABASE_STORAGE_ACCESS_KEY=<your-supabase-s3-access-key>`
 - `SUPABASE_STORAGE_SECRET_KEY=<your-supabase-s3-secret-key>`
 - `SUPABASE_STORAGE_PUBLIC_URL_BASE=https://<your-project-ref>.supabase.co/storage/v1/object/public/business-media`
+- optional: `SUPABASE_PRIVATE_STORAGE_SIGNED_URL_EXPIRE_SECONDS` (defaults to `3600`)
 - optional: `SUPABASE_STORAGE_REGION` (defaults to `us-east-1`)
 
 If you want to set the optional region explicitly, use:
@@ -483,20 +493,25 @@ If you want to set the optional region explicitly, use:
 ### What Each Value Means
 
 - `SUPABASE_STORAGE_BUCKET`: the exact Supabase bucket name
+- `SUPABASE_PRIVATE_STORAGE_BUCKET`: the exact private Supabase bucket name for claim attachments and direct-message images
 - `SUPABASE_STORAGE_ENDPOINT`: the S3-compatible Supabase storage endpoint, not the public object URL
 - `SUPABASE_STORAGE_ACCESS_KEY`: the S3 access key from Supabase
 - `SUPABASE_STORAGE_SECRET_KEY`: the S3 secret key from Supabase
 - `SUPABASE_STORAGE_PUBLIC_URL_BASE`: the public base URL for objects inside that bucket
+- `SUPABASE_PRIVATE_STORAGE_SIGNED_URL_EXPIRE_SECONDS`: how long private media URLs should remain usable after the API returns them
 
 ### Example Render Env Block
 
 ```text
 MEDIA_STORAGE_BACKEND=supabase
+PRIVATE_MEDIA_STORAGE_BACKEND=supabase
 SUPABASE_STORAGE_BUCKET=business-media
+SUPABASE_PRIVATE_STORAGE_BUCKET=business-private-media
 SUPABASE_STORAGE_ENDPOINT=https://abcd1234.supabase.co/storage/v1/s3
 SUPABASE_STORAGE_ACCESS_KEY=your-s3-access-key
 SUPABASE_STORAGE_SECRET_KEY=your-s3-secret-key
 SUPABASE_STORAGE_PUBLIC_URL_BASE=https://abcd1234.supabase.co/storage/v1/object/public/business-media
+SUPABASE_PRIVATE_STORAGE_SIGNED_URL_EXPIRE_SECONDS=3600
 SUPABASE_STORAGE_REGION=us-east-1
 ```
 
@@ -506,12 +521,14 @@ Once Supabase is configured and enabled, app-managed uploads stored under these 
 
 - `business-claim-attachments/...`
 - `business-profile-photos/...`
+- `direct-message-images/...`
 
 will be deleted from storage when:
 
 - the related `BusinessClaimAttachment` record is deleted
 - a `BusinessClaim` is deleted from admin or elsewhere in the backend
 - uploaded profile photos are removed from a business profile and no longer referenced
+- an expired direct-message image is lazily cleaned up after its 24-hour display window
 
 This cleanup does not apply to external image URLs that were never uploaded by the backend.
 

@@ -15,3 +15,9 @@ class SupabaseMediaStorage(S3Storage):
 			normalized_name = quote(str(name or '').lstrip('/')).replace('%2F', '/')
 			return f'{public_base}/{normalized_name}'
 		return super().url(name, parameters=parameters, expire=expire, http_method=http_method)
+
+
+class SupabasePrivateMediaStorage(S3Storage):
+	default_acl = 'private'
+	file_overwrite = False
+	querystring_auth = True

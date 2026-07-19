@@ -386,12 +386,19 @@ DIRECT_MESSAGE_MEDIA_STORAGE_BACKEND = (
     if IS_RENDER
     else ''
 )
+PRIVATE_MEDIA_STORAGE_BACKEND = (
+    get_env('PRIVATE_MEDIA_STORAGE_BACKEND', ENV_VALUES, 'supabase').strip().lower()
+    if IS_RENDER
+    else 'local'
+)
 SUPABASE_STORAGE_BUCKET = get_env('SUPABASE_STORAGE_BUCKET', ENV_VALUES, '')
+SUPABASE_PRIVATE_STORAGE_BUCKET = get_env('SUPABASE_PRIVATE_STORAGE_BUCKET', ENV_VALUES, '')
 SUPABASE_STORAGE_ENDPOINT = get_env('SUPABASE_STORAGE_ENDPOINT', ENV_VALUES, '')
 SUPABASE_STORAGE_REGION = get_env('SUPABASE_STORAGE_REGION', ENV_VALUES, 'us-east-1')
 SUPABASE_STORAGE_ACCESS_KEY = get_env('SUPABASE_STORAGE_ACCESS_KEY', ENV_VALUES, '')
 SUPABASE_STORAGE_SECRET_KEY = get_env('SUPABASE_STORAGE_SECRET_KEY', ENV_VALUES, '')
 SUPABASE_STORAGE_PUBLIC_URL_BASE = get_env('SUPABASE_STORAGE_PUBLIC_URL_BASE', ENV_VALUES, '').rstrip('/')
+SUPABASE_PRIVATE_STORAGE_SIGNED_URL_EXPIRE_SECONDS = get_int_env('SUPABASE_PRIVATE_STORAGE_SIGNED_URL_EXPIRE_SECONDS', ENV_VALUES, 3600)
 STATICFILES_STORAGE_BACKEND = (
     'whitenoise.storage.CompressedManifestStaticFilesStorage'
     if IS_RENDER
@@ -402,6 +409,9 @@ STORAGES = {
     'default': {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',
     },
+    'private_media': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
     'direct_messages': {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',
     },
@@ -410,7 +420,7 @@ STORAGES = {
     },
 }
 MEDIA_PUBLIC_BASE_URL = MEDIA_URL
-_direct_message_storage_backend = DIRECT_MESSAGE_MEDIA_STORAGE_BACKEND or MEDIA_STORAGE_BACKEND
+_direct_message_storage_backend = DIRECT_MESSAGE_MEDIA_STORAGE_BACKEND or PRIVATE_MEDIA_STORAGE_BACKEND
 
 if MEDIA_STORAGE_BACKEND == 'supabase':
     missing_supabase_settings = [
@@ -443,20 +453,38 @@ if MEDIA_STORAGE_BACKEND == 'supabase':
     }
     MEDIA_PUBLIC_BASE_URL = SUPABASE_STORAGE_PUBLIC_URL_BASE
 
-if _direct_message_storage_backend == 'supabase':
-    STORAGES['direct_messages'] = {
-        'BACKEND': 'config.storage.SupabaseMediaStorage',
+if PRIVATE_MEDIA_STORAGE_BACKEND == 'supabase':
+    missing_private_supabase_settings = [
+        setting_name
+        for setting_name, setting_value in (
+            ('SUPABASE_PRIVATE_STORAGE_BUCKET', SUPABASE_PRIVATE_STORAGE_BUCKET),
+            ('SUPABASE_STORAGE_ENDPOINT', SUPABASE_STORAGE_ENDPOINT),
+            ('SUPABASE_STORAGE_ACCESS_KEY', SUPABASE_STORAGE_ACCESS_KEY),
+            ('SUPABASE_STORAGE_SECRET_KEY', SUPABASE_STORAGE_SECRET_KEY),
+        )
+        if not setting_value
+    ]
+    if missing_private_supabase_settings:
+        missing_list = ', '.join(missing_private_supabase_settings)
+        raise ValueError(f'Supabase private media storage is enabled but missing: {missing_list}')
+
+    STORAGES['private_media'] = {
+        'BACKEND': 'config.storage.SupabasePrivateMediaStorage',
         'OPTIONS': {
-            'bucket_name': SUPABASE_STORAGE_BUCKET,
+            'bucket_name': SUPABASE_PRIVATE_STORAGE_BUCKET,
             'access_key': SUPABASE_STORAGE_ACCESS_KEY,
             'secret_key': SUPABASE_STORAGE_SECRET_KEY,
             'endpoint_url': SUPABASE_STORAGE_ENDPOINT,
             'region_name': SUPABASE_STORAGE_REGION,
-            'default_acl': 'public-read',
-            'querystring_auth': False,
+            'default_acl': 'private',
+            'querystring_auth': True,
+            'querystring_expire': SUPABASE_PRIVATE_STORAGE_SIGNED_URL_EXPIRE_SECONDS,
             'file_overwrite': False,
         },
     }
+
+if _direct_message_storage_backend == 'supabase':
+    STORAGES['direct_messages'] = STORAGES['private_media']
 
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True

@@ -157,7 +157,7 @@ def _apply_direct_message_access(payload, user=None):
 
 
 def _build_direct_message_thread_payload(thread, user):
-	last_message = thread.messages.select_related('sender').order_by('-created_at', '-id').first()
+	last_message = thread.messages.select_related('sender').order_by('-id').first()
 	unread_query = thread.messages.exclude(sender_id=user.id).filter(read_at__isnull=True)
 	if last_message is not None and last_message.image:
 		last_message_preview = 'Photo expired' if last_message.image_has_expired() else 'Sent a photo'
