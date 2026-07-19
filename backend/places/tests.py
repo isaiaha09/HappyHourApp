@@ -4507,6 +4507,29 @@ class BusinessClaimTests(APITestCase):
 
 
 class ProfileSignupApiTests(APITestCase):
+	@override_settings(REST_FRAMEWORK={'DEFAULT_THROTTLE_RATES': {'profile_login': '2/minute'}})
+	def test_login_is_rate_limited_after_repeated_attempts(self):
+		caches['default'].clear()
+		user = User.objects.create_user(
+			username='throttled_user',
+			email='throttled@example.com',
+			password='correct-pass-123',
+		)
+		AccountProfile.objects.create(user=user, email_verified_at=timezone.now())
+		payload = {
+			'portal': 'customer',
+			'identifier': 'throttled_user',
+			'password': 'wrong-pass-123',
+		}
+
+		first_response = self.client.post(reverse('profile-login'), payload, format='json')
+		second_response = self.client.post(reverse('profile-login'), payload, format='json')
+		third_response = self.client.post(reverse('profile-login'), payload, format='json')
+
+		self.assertEqual(first_response.status_code, 400)
+		self.assertEqual(second_response.status_code, 400)
+		self.assertEqual(third_response.status_code, 429)
+
 	@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
 	def test_customer_signup_creates_customer_account(self):
 		response = self.client.post(

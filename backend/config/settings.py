@@ -222,16 +222,28 @@ def _build_discovery_json_path(base_dir, database_config):
     return base_dir / 'config' / 'discovered_places.json'
 
 
+REDIS_URL = get_env('REDIS_URL', ENV_VALUES, '').strip()
+
 CACHES = {
-	'default': {
-		'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-		'LOCATION': 'happyhourapp-default-cache',
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'happyhourapp-default-cache',
     },
     'source_fetch': {
         'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
         'LOCATION': str(BASE_DIR / '.django_cache' / 'source_fetch'),
     },
 }
+
+if REDIS_URL:
+    CACHES['default'] = {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': REDIS_URL,
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        },
+        'KEY_PREFIX': get_env('CACHE_KEY_PREFIX', ENV_VALUES, 'happyhourapp'),
+    }
 
 SOURCE_FETCH_CACHE_ALIAS = 'source_fetch'
 SOURCE_FETCH_CACHE_TIMEOUT = 43200
@@ -457,6 +469,16 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
+    'DEFAULT_THROTTLE_RATES': {
+        'profile_login': get_env('THROTTLE_PROFILE_LOGIN', ENV_VALUES, '10/minute'),
+        'profile_signup': get_env('THROTTLE_PROFILE_SIGNUP', ENV_VALUES, '300/hour'),
+        'profile_email_verification': get_env('THROTTLE_PROFILE_EMAIL_VERIFICATION', ENV_VALUES, '10/minute'),
+        'profile_email_verification_resend': get_env('THROTTLE_PROFILE_EMAIL_VERIFICATION_RESEND', ENV_VALUES, '3/minute'),
+        'profile_password_recovery': get_env('THROTTLE_PROFILE_PASSWORD_RECOVERY', ENV_VALUES, '10/hour'),
+        'profile_support_contact': get_env('THROTTLE_PROFILE_SUPPORT_CONTACT', ENV_VALUES, '10/hour'),
+        'profile_user_mutation': get_env('THROTTLE_PROFILE_USER_MUTATION', ENV_VALUES, '120/minute'),
+        'direct_message_send': get_env('THROTTLE_DIRECT_MESSAGE_SEND', ENV_VALUES, '30/minute'),
+    },
 }
 
 EMAIL_BACKEND = get_env('EMAIL_BACKEND', ENV_VALUES, 'django.core.mail.backends.console.EmailBackend')

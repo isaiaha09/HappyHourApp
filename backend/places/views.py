@@ -56,6 +56,7 @@ from .services.direct_message_push import send_push_notifications_for_direct_mes
 from .services.home_feed import get_feed_interval, get_feed_queryset, get_organic_page_size, get_ranked_campaigns, get_requested_feed_page_size, mix_feed_items, record_campaign_served
 from .services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
 from .services.source_listings import get_source_deal_payloads, get_source_place_payload, get_source_place_payloads, load_source_records
+from .throttles import DirectMessageSendRateThrottle, EmailVerificationRateThrottle, EmailVerificationResendRateThrottle, LoginRateThrottle, PasswordRecoveryRateThrottle, SignupRateThrottle, SupportContactRateThrottle, UserMutationRateThrottle
 
 
 class SourcePlacePagination(PageNumberPagination):
@@ -395,6 +396,7 @@ class HomeFeedView(generics.GenericAPIView):
 
 class FeedImpressionView(generics.GenericAPIView):
 	serializer_class = FeedImpressionWriteSerializer
+	throttle_classes = [UserMutationRateThrottle]
 
 	def post(self, request):
 		serializer = self.get_serializer(data=request.data)
@@ -407,6 +409,7 @@ class FeedImpressionView(generics.GenericAPIView):
 
 class FeedEngagementView(generics.GenericAPIView):
 	serializer_class = FeedEngagementWriteSerializer
+	throttle_classes = [UserMutationRateThrottle]
 
 	def post(self, request):
 		serializer = self.get_serializer(data=request.data)
@@ -417,6 +420,7 @@ class FeedEngagementView(generics.GenericAPIView):
 
 class CustomerSignupView(generics.GenericAPIView):
 	serializer_class = CustomerSignupSerializer
+	throttle_classes = [SignupRateThrottle]
 
 	def post(self, request):
 		serializer = self.get_serializer(data=request.data)
@@ -427,6 +431,7 @@ class CustomerSignupView(generics.GenericAPIView):
 
 class LoginView(generics.GenericAPIView):
 	serializer_class = LoginSerializer
+	throttle_classes = [LoginRateThrottle]
 
 	def post(self, request):
 		serializer = self.get_serializer(data=request.data)
@@ -446,6 +451,7 @@ class LoginView(generics.GenericAPIView):
 
 class UsernameReminderView(generics.GenericAPIView):
 	serializer_class = UsernameReminderSerializer
+	throttle_classes = [PasswordRecoveryRateThrottle]
 
 	def post(self, request):
 		serializer = self.get_serializer(data=request.data)
@@ -458,6 +464,7 @@ class UsernameReminderView(generics.GenericAPIView):
 
 class PasswordResetRequestView(generics.GenericAPIView):
 	serializer_class = PasswordResetRequestSerializer
+	throttle_classes = [PasswordRecoveryRateThrottle]
 
 	def post(self, request):
 		serializer = self.get_serializer(data=request.data)
@@ -481,6 +488,7 @@ class BusinessSignupView(generics.GenericAPIView):
 	parser_classes = [MultiPartParser, FormParser, JSONParser]
 	authentication_classes = [ProfileTokenAuthentication]
 	permission_classes = []
+	throttle_classes = [SignupRateThrottle]
 
 	def post(self, request):
 		payload = build_signup_request_data(request.data)
@@ -508,6 +516,7 @@ class BusinessSignupView(generics.GenericAPIView):
 class ManualBusinessSignupView(generics.GenericAPIView):
 	serializer_class = ManualBusinessSignupSerializer
 	parser_classes = [MultiPartParser, FormParser, JSONParser]
+	throttle_classes = [SignupRateThrottle]
 
 	def post(self, request):
 		serializer = self.get_serializer(data=build_signup_request_data(request.data))
@@ -527,6 +536,7 @@ class ManualBusinessSignupView(generics.GenericAPIView):
 class InformalBusinessSignupView(generics.GenericAPIView):
 	serializer_class = InformalBusinessSignupSerializer
 	parser_classes = [MultiPartParser, FormParser, JSONParser]
+	throttle_classes = [SignupRateThrottle]
 
 	def post(self, request):
 		serializer = self.get_serializer(data=build_signup_request_data(request.data))
@@ -545,6 +555,7 @@ class InformalBusinessSignupView(generics.GenericAPIView):
 
 class VerifyEmailCodeView(generics.GenericAPIView):
 	serializer_class = EmailVerificationCodeSerializer
+	throttle_classes = [EmailVerificationRateThrottle]
 
 	def post(self, request):
 		serializer = self.get_serializer(data=request.data)
@@ -573,6 +584,7 @@ class VerifyEmailCodeView(generics.GenericAPIView):
 
 class ResendEmailVerificationCodeView(generics.GenericAPIView):
 	serializer_class = ResendEmailVerificationCodeSerializer
+	throttle_classes = [EmailVerificationResendRateThrottle]
 
 	def post(self, request):
 		serializer = self.get_serializer(data=request.data)
@@ -599,6 +611,7 @@ class ResendEmailVerificationCodeView(generics.GenericAPIView):
 class ProfileDashboardView(APIView):
 	authentication_classes = [ProfileTokenAuthentication]
 	permission_classes = [IsAuthenticated]
+	throttle_classes = [UserMutationRateThrottle]
 
 	def get(self, request):
 		portal = infer_portal_for_user(request.user, request.query_params.get('portal'))
@@ -768,6 +781,7 @@ class BusinessLocationUpdateView(generics.GenericAPIView):
 	serializer_class = BusinessLocationUpdateSerializer
 	authentication_classes = [ProfileTokenAuthentication]
 	permission_classes = [IsAuthenticated]
+	throttle_classes = [UserMutationRateThrottle]
 
 	def post(self, request):
 		serializer = self.get_serializer(data=request.data)
@@ -795,6 +809,7 @@ class BusinessLocationTrackingPreferenceView(generics.GenericAPIView):
 	serializer_class = BusinessLocationTrackingPreferenceSerializer
 	authentication_classes = [ProfileTokenAuthentication]
 	permission_classes = [IsAuthenticated]
+	throttle_classes = [UserMutationRateThrottle]
 
 	def post(self, request):
 		serializer = self.get_serializer(data=request.data)
@@ -825,6 +840,7 @@ class BusinessLocationTrackingPreferenceView(generics.GenericAPIView):
 class ResendVerificationEmailView(APIView):
 	authentication_classes = [ProfileTokenAuthentication]
 	permission_classes = [IsAuthenticated]
+	throttle_classes = [EmailVerificationResendRateThrottle]
 
 	def post(self, request):
 		profile = get_or_create_account_profile(request.user)
@@ -837,6 +853,7 @@ class ResendVerificationEmailView(APIView):
 class FavoriteBusinessView(APIView):
 	authentication_classes = [ProfileTokenAuthentication]
 	permission_classes = [IsAuthenticated]
+	throttle_classes = [UserMutationRateThrottle]
 
 	def post(self, request):
 		serializer = FavoriteBusinessToggleSerializer(data=request.data)
@@ -875,6 +892,7 @@ class FavoriteBusinessView(APIView):
 class DirectMessageThreadsView(APIView):
 	authentication_classes = [ProfileTokenAuthentication]
 	permission_classes = [IsAuthenticated]
+	throttle_classes = [DirectMessageSendRateThrottle]
 
 	def get(self, request):
 		portal = infer_portal_for_user(request.user, request.query_params.get('portal'))

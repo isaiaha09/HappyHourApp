@@ -265,6 +265,28 @@ Optional Sentry sampling environment variables:
 - `NEXT_PUBLIC_SENTRY_REPLAYS_SESSION_SAMPLE_RATE`
 - `NEXT_PUBLIC_SENTRY_REPLAYS_ON_ERROR_SAMPLE_RATE`
 
+## Production Rate Limiting
+
+The backend applies scoped DRF throttles to login, signup, verification-code, password-recovery, support, direct-message, favorite, feed-write, and profile mutation endpoints.
+
+For a single local development process, the default in-memory cache is enough. For Render production, set `REDIS_URL` so throttles and cache counters are shared across workers and deploy instances.
+
+Recommended production env vars:
+
+- `REDIS_URL=<your-render-redis-internal-url>`
+- optional: `CACHE_KEY_PREFIX=happyhourapp-prod`
+
+Throttle rates can be tuned without code changes:
+
+- `THROTTLE_PROFILE_LOGIN` defaults to `10/minute`
+- `THROTTLE_PROFILE_SIGNUP` defaults to `300/hour`
+- `THROTTLE_PROFILE_EMAIL_VERIFICATION` defaults to `10/minute`
+- `THROTTLE_PROFILE_EMAIL_VERIFICATION_RESEND` defaults to `3/minute`
+- `THROTTLE_PROFILE_PASSWORD_RECOVERY` defaults to `10/hour`
+- `THROTTLE_PROFILE_SUPPORT_CONTACT` defaults to `10/hour`
+- `THROTTLE_PROFILE_USER_MUTATION` defaults to `120/minute`
+- `THROTTLE_DIRECT_MESSAGE_SEND` defaults to `30/minute`
+
 ## Migrating Local SQLite Data To Render Postgres
 
 If I want my admin-edited business rows to survive the move from local development to Render Postgres, I need to migrate both:
