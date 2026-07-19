@@ -39,7 +39,7 @@ const onboardingPlaceholderTextColor = theme.textDarkMuted;
 
 function OnboardingBackButton({ label, onPress, style }: { label: string; onPress: () => void; style?: any }) {
   const resolvedStyle = isNativeIOSLiquidGlassHeaderButtonAvailable()
-    ? style
+    ? [styles.onboardingNativeBackButton, style]
     : [styles.onboardingBackButton, style];
 
   return (

@@ -367,6 +367,9 @@ export const authStyles = {
     borderColor: theme.surfaceLightBorder,
     borderWidth: 1,
   },
+  onboardingNativeBackButton: {
+    minWidth: 104,
+  },
   onboardingBackButtonText: {
     color: theme.textDark,
   },

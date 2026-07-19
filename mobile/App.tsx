@@ -479,6 +479,8 @@ function AppScreen() {
   const initialMapRegionRef = useRef<Region>(clampRegionToBounds(allCitiesInitialMapRegion));
   const mapRef = useRef<MapView | null>(null);
   const onboardingTransitionFrameRef = useRef<number | null>(null);
+  const pendingOnboardingTransitionRef = useRef<{ onComplete?: () => void; targetScreen: AppScreenMode } | null>(null);
+  const onboardingNavigationInFlightRef = useRef(false);
   const reversingOnboardingEntryRef = useRef(false);
   const loginSubmissionInFlightRef = useRef(false);
   const interactiveSwipeCleanupFrameRef = useRef<number | null>(null);
@@ -1370,6 +1372,36 @@ function AppScreen() {
     && incomingMainShellScreen !== null
     && mainShellTransitionFrom !== incomingMainShellScreen;
   const homeToBrowseTransition = mainShellTransitionFrom === 'home-feed' && incomingMainShellScreen === 'browse';
+
+  useEffect(() => {
+    const pendingTransition = pendingOnboardingTransitionRef.current;
+    if (!pendingTransition || incomingOnboardingScreen !== pendingTransition.targetScreen) {
+      return;
+    }
+
+    pendingOnboardingTransitionRef.current = null;
+    onboardingTransitionFrameRef.current = null;
+    Animated.timing(screenTransition, {
+      duration: onboardingTransitionDuration,
+      toValue: 1,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (!finished) {
+        onboardingNavigationInFlightRef.current = false;
+        pendingTransition.onComplete?.();
+        return;
+      }
+
+      unstable_batchedUpdates(() => {
+        setIncomingOnboardingScreen(null);
+        setScreenMode(pendingTransition.targetScreen);
+        screenTransition.setValue(1);
+      });
+      onboardingNavigationInFlightRef.current = false;
+      pendingTransition.onComplete?.();
+    });
+  }, [incomingOnboardingScreen, onboardingTransitionDuration, screenTransition]);
+
   const onboardingSlideOffset = onboardingIncomingOffset || (onboardingTransitionDirection === 'forward' ? width : -width);
   const incomingScreenTransitionStyle = {
     opacity: onboardingTransitionAxis === 'y'
@@ -1754,6 +1786,7 @@ function AppScreen() {
       if (onboardingTransitionFrameRef.current !== null) {
         cancelAnimationFrame(onboardingTransitionFrameRef.current);
       }
+      pendingOnboardingTransitionRef.current = null;
       if (interactiveSwipeCleanupFrameRef.current !== null) {
         cancelAnimationFrame(interactiveSwipeCleanupFrameRef.current);
       }
@@ -1890,14 +1923,15 @@ function AppScreen() {
       && nextScreen === 'browse'
       && onboardingScreenKeys.has(currentScreen)
       && guestOnboardingOrigin === 'browse';
-    const shouldAnimateSplashReturn = nextScreen === 'splash'
-      && !authenticatedSession
-      && !selectedPlaceSlug
-      && onboardingScreenKeys.has(currentScreen)
-      && currentScreen !== 'splash';
+    const shouldAnimateSplashReturn = false;
     const shouldAnimateOnboarding = (onboardingScreenKeys.has(currentScreen) || shouldAnimateGuestOnboardingEntry)
       && onboardingScreenKeys.has(nextScreen)
       && currentScreen !== nextScreen;
+
+    const willAnimateOnboardingTransition = shouldAnimateSplashReturn || shouldAnimateGuestReturnToBrowse || shouldAnimateOnboarding;
+    if (willAnimateOnboardingTransition && onboardingNavigationInFlightRef.current) {
+      return;
+    }
 
     setOnboardingTransitionDirection(direction);
     setOnboardingTransitionAxis(transitionOverride?.axis ?? 'x');
@@ -1909,6 +1943,17 @@ function AppScreen() {
       onboardingTransitionFrameRef.current = null;
     }
 
+    const startOnNextFrame = (startAnimation: () => void) => {
+      onboardingTransitionFrameRef.current = requestAnimationFrame(() => {
+        onboardingTransitionFrameRef.current = null;
+        startAnimation();
+      });
+    };
+
+    if (willAnimateOnboardingTransition) {
+      onboardingNavigationInFlightRef.current = true;
+    }
+
     if (shouldAnimateSplashReturn) {
       setBrowseProfileTransitionFrom(null);
       setIncomingBrowseProfileScreen(null);
@@ -1918,8 +1963,7 @@ function AppScreen() {
       setIncomingGuestBrowseScreen(null);
       setReturningToSplashScreen(currentScreen);
       screenTransition.setValue(0);
-      onboardingTransitionFrameRef.current = requestAnimationFrame(() => {
-        onboardingTransitionFrameRef.current = null;
+      startOnNextFrame(() => {
         Animated.timing(screenTransition, {
           duration: onboardingTransitionDuration,
           toValue: 1,
@@ -1927,6 +1971,7 @@ function AppScreen() {
         }).start(({ finished }) => {
           if (!finished) {
             setReturningToSplashScreen(null);
+            onboardingNavigationInFlightRef.current = false;
             onComplete?.();
             return;
           }
@@ -1937,6 +1982,7 @@ function AppScreen() {
             setScreenMode('splash');
             screenTransition.setValue(1);
           });
+          onboardingNavigationInFlightRef.current = false;
           onComplete?.();
         });
       });
@@ -1950,26 +1996,29 @@ function AppScreen() {
       setReturningToSplashScreen(null);
       screenTransition.setValue(0);
       setIncomingOnboardingScreen('splash');
-      onboardingTransitionFrameRef.current = null;
-      Animated.timing(screenTransition, {
-        duration: onboardingTransitionDuration,
-        toValue: 1,
-        useNativeDriver: true,
-      }).start(({ finished }) => {
-        if (!finished) {
-          setIncomingOnboardingScreen(null);
-          onComplete?.();
-          return;
-        }
+      startOnNextFrame(() => {
+        Animated.timing(screenTransition, {
+          duration: onboardingTransitionDuration,
+          toValue: 1,
+          useNativeDriver: true,
+        }).start(({ finished }) => {
+          if (!finished) {
+            setIncomingOnboardingScreen(null);
+            onboardingNavigationInFlightRef.current = false;
+            onComplete?.();
+            return;
+          }
 
-        unstable_batchedUpdates(() => {
-          setIncomingOnboardingScreen(null);
-          setGuestOnboardingOrigin(null);
-          setGuestBrowseModeLocked(true);
-          setScreenMode('browse');
-          screenTransition.setValue(1);
+          unstable_batchedUpdates(() => {
+            setIncomingOnboardingScreen(null);
+            setGuestOnboardingOrigin(null);
+            setGuestBrowseModeLocked(true);
+            setScreenMode('browse');
+            screenTransition.setValue(1);
+          });
+          onboardingNavigationInFlightRef.current = false;
+          onComplete?.();
         });
-        onComplete?.();
       });
       return;
     }
@@ -1980,50 +2029,26 @@ function AppScreen() {
       setIncomingBrowseProfileTargetScreen(null);
       setIncomingOnboardingScreen(null);
       setReturningToSplashScreen(null);
+      onboardingNavigationInFlightRef.current = false;
       screenTransition.setValue(1);
       setScreenMode(nextScreen);
       onComplete?.();
       return;
     }
 
-    const shouldPrewarmIncomingOnboardingScreen = (transitionOverride?.axis ?? 'x') === 'x';
-    const startOnboardingAnimation = () => {
-      onboardingTransitionFrameRef.current = null;
-      Animated.timing(screenTransition, {
-        duration: onboardingTransitionDuration,
-        toValue: 1,
-        useNativeDriver: true,
-      }).start(({ finished }) => {
-        if (!finished) {
-          onComplete?.();
-          return;
-        }
-
-        unstable_batchedUpdates(() => {
-          setIncomingOnboardingScreen(null);
-          setScreenMode(nextScreen);
-          screenTransition.setValue(1);
-        });
-        onComplete?.();
-      });
-    };
-
     screenTransition.setValue(0);
     setReturningToSplashScreen(null);
+    pendingOnboardingTransitionRef.current = { onComplete, targetScreen: nextScreen };
     setIncomingOnboardingScreen(nextScreen);
-    if (shouldPrewarmIncomingOnboardingScreen) {
-      onboardingTransitionFrameRef.current = requestAnimationFrame(() => {
-        startOnboardingAnimation();
-      });
-      return;
-    }
-
-    startOnboardingAnimation();
   }
 
   function reversePendingOnboardingEntry(nextScreen: 'browse' | 'splash') {
     if (incomingOnboardingScreen === null) {
       return false;
+    }
+
+    if (onboardingNavigationInFlightRef.current) {
+      return true;
     }
 
     if (reversingOnboardingEntryRef.current) {
@@ -2043,6 +2068,7 @@ function AppScreen() {
         setScreenMode(nextScreen);
         screenTransition.setValue(1);
       });
+      onboardingNavigationInFlightRef.current = false;
       reversingOnboardingEntryRef.current = false;
     };
 
