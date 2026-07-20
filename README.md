@@ -253,6 +253,27 @@ Recommended monitoring setup:
 - Backend Sentry: set `SENTRY_DSN` in Render to capture Django runtime errors
 - Frontend Sentry: set `NEXT_PUBLIC_SENTRY_DSN` and `SENTRY_DSN` in Vercel to capture browser and Next.js server errors
 
+## HTTPS And HSTS
+
+The backend already supports HTTPS redirect and secure cookies on Render. HSTS is also env-driven now, but it defaults to off until the production domain is final.
+
+Recommended Render env vars after HTTPS is confirmed on the final production domain:
+
+- `DJANGO_SECURE_SSL_REDIRECT=true`
+- `DJANGO_SESSION_COOKIE_SECURE=true`
+- `DJANGO_CSRF_COOKIE_SECURE=true`
+- `DJANGO_SECURE_HSTS_SECONDS=31536000`
+- `DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS=true`
+- `DJANGO_SECURE_HSTS_PRELOAD=true`
+
+If you want a safer rollout first, start with:
+
+- `DJANGO_SECURE_HSTS_SECONDS=3600`
+- `DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS=false`
+- `DJANGO_SECURE_HSTS_PRELOAD=false`
+
+Once that looks good in production, move to the one-year HSTS values above.
+
 Optional Sentry sampling environment variables:
 
 - `SENTRY_ENVIRONMENT`
@@ -298,6 +319,21 @@ The backend now supports Postgres through either:
 
 - `DATABASE_URL`
 - standard Postgres env vars such as `PGDATABASE`, `PGUSER`, `PGPASSWORD`, `PGHOST`, and `PGPORT`
+
+For Render, the simplest production setup is usually a single `DATABASE_URL` from the Render Postgres service plus an optional connection lifetime override:
+
+- `DATABASE_URL=<your-render-postgres-internal-database-url>`
+- optional: `DATABASE_CONN_MAX_AGE=600`
+
+If you prefer individual env vars instead of `DATABASE_URL`, set:
+
+- `PGDATABASE=<database-name>`
+- `PGUSER=<database-user>`
+- `PGPASSWORD=<database-password>`
+- `PGHOST=<database-host>`
+- `PGPORT=5432`
+- optional: `PGSSLMODE=require`
+- optional: `DATABASE_CONN_MAX_AGE=600`
 
 If none of those are set, it still falls back to local SQLite in [backend/config/settings.py](c:/dev/HappyHourApp/backend/config/settings.py).
 
