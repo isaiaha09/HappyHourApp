@@ -49,6 +49,7 @@ import {
   fetchPlaceDetail,
   fetchPlaces,
   getDefaultApiBaseUrl,
+  isMissingProductionApiBaseUrlError,
   loginProfile,
   registerPushDevice,
   sendDirectMessage,
@@ -2920,6 +2921,12 @@ function AppScreen() {
           return;
         }
 
+        if (isMissingProductionApiBaseUrlError(error)) {
+          setErrorMessage(getErrorMessage(error));
+          setPlaces([]);
+          return;
+        }
+
         const seededPlaces = getSeededPlaces(selectedCity);
         if (seededPlacesAvailable() && seededPlaces.length > 0) {
           setErrorMessage(seedDataFallbackMessage);
@@ -2966,6 +2973,12 @@ function AppScreen() {
         setSelectedPlace(detail);
       } catch (error) {
         if (!isMounted) {
+          return;
+        }
+
+        if (isMissingProductionApiBaseUrlError(error)) {
+          setErrorMessage(getErrorMessage(error));
+          setSelectedPlace(null);
           return;
         }
 
@@ -3115,6 +3128,12 @@ function AppScreen() {
         return;
       }
 
+      if (isMissingProductionApiBaseUrlError(error)) {
+        setProfileErrorMessage(getErrorMessage(error));
+        setProfilePlaces([]);
+        return;
+      }
+
       const seededPlaces = getSeededPlaces('all');
       if (seededPlacesAvailable() && seededPlaces.length > 0) {
         setProfileErrorMessage(seedDataFallbackMessage);
@@ -3181,8 +3200,13 @@ function AppScreen() {
           });
         });
       })
-      .catch(() => {
+      .catch((error) => {
         if (!isMounted || claimPrefillRequestRef.current !== requestId) {
+          return;
+        }
+
+        if (isMissingProductionApiBaseUrlError(error)) {
+          setProfileErrorMessage(getErrorMessage(error));
           return;
         }
 

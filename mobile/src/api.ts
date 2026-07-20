@@ -34,6 +34,7 @@ import type {
 } from './types';
 
 const FALLBACK_API_BASE_URL = 'http://127.0.0.1:8000/api';
+const MISSING_PRODUCTION_API_BASE_URL_MESSAGE = 'This build is missing the live backend URL. Set EXPO_PUBLIC_API_BASE_URL for production builds.';
 const placeCacheTtlMs = 5 * 60 * 1000;
 
 type PlaceCacheEntry = {
@@ -53,9 +54,13 @@ const businessAttachmentFieldNames: Record<BusinessAttachmentKind, string> = {
 };
 
 export function getDefaultApiBaseUrl() {
-  const configured = process.env.EXPO_PUBLIC_API_BASE_URL;
+  const configured = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
   if (configured) {
     return normalizeApiBaseUrl(configured);
+  }
+
+  if (!__DEV__) {
+    return '';
   }
 
   const metroHost = getMetroHost();
@@ -70,11 +75,15 @@ export function normalizeApiBaseUrl(value: string) {
   const trimmed = value.trim().replace(/\/+$/, '');
 
   if (!trimmed) {
-    return FALLBACK_API_BASE_URL;
+    return '';
   }
 
   const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
   return withProtocol.endsWith('/api') ? withProtocol : `${withProtocol}/api`;
+}
+
+export function isMissingProductionApiBaseUrlError(error: unknown) {
+  return error instanceof Error && error.message === MISSING_PRODUCTION_API_BASE_URL_MESSAGE;
 }
 
 function getPlaceCacheKey(baseUrl: string, city: string, hasDeals?: boolean) {
@@ -445,7 +454,11 @@ async function fetchPagedJson<T>(baseUrl: string, path: string): Promise<Paginat
 }
 
 function buildApiUrl(baseUrl: string, path: string) {
-  return `${normalizeApiBaseUrl(baseUrl)}${path}`;
+  const normalizedBaseUrl = normalizeApiBaseUrl(baseUrl);
+  if (!normalizedBaseUrl) {
+    throw new Error(MISSING_PRODUCTION_API_BASE_URL_MESSAGE);
+  }
+  return `${normalizedBaseUrl}${path}`;
 }
 
 function buildBusinessSignupFormData(payload: BusinessSignupRequest | ManualBusinessSignupRequest | InformalBusinessSignupRequest) {
