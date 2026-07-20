@@ -1131,25 +1131,37 @@ export function PrivacyPolicyScreen({ isLandscape, onBack }: Pick<LegalDocumentS
   return (
     <LegalDocumentScreen
       eyebrow="Privacy Policy"
-      intro="This page outlines the types of information DiningDealz may collect, how that information supports the service, and the controls users have over their data."
+      intro="This Privacy Policy explains what information DiningDealz collects, how that information is used, when it may be shared, and what choices users have when using the DiningDealz app, website, and related services."
       isLandscape={isLandscape}
       onBack={onBack}
       sections={[
         {
-          title: 'Information we collect',
-          body: 'DiningDealz may collect account details such as usernames, email addresses, profile type, verification state, and business information submitted through signup, claims, contact requests, or dashboard features.',
+          title: 'Information you provide',
+          body: 'DiningDealz collects the information users submit directly, including account details such as username, email address, password, portal type, and profile edits. Business users may also submit claim and onboarding materials such as contact details, work information, verification summaries, social links, public business profile content, uploaded photos, and supporting documents. Users may also send support messages and direct messages, including business-sent direct message images.',
         },
         {
-          title: 'How information is used',
-          body: 'Information is used to operate the app and website, authenticate users, send account-related messages, respond to support requests, improve listings, and support business features such as verification and billing access.',
+          title: 'Information collected through use of the service',
+          body: 'DiningDealz creates and stores service data needed to run the platform, including authentication tokens, email verification status, password reset and two-factor authentication state, favorite businesses, business notification history, direct message threads and receipts, business claim status, feed impression and engagement records, sponsored campaign delivery metrics, and push-device registration details. If an approved service-area or mobile business enables live location features, DiningDealz also stores the business location updates sent from that account.',
         },
         {
-          title: 'Sharing and disclosure',
-          body: 'DiningDealz does not sell personal information as part of the standard product experience. Information may be shared with service providers that support operations such as hosting, email delivery, analytics, payment processing, or security, but only as needed to run the platform.',
+          title: 'Website, device, and technical information',
+          body: 'The website may process browser and request data needed to secure and operate the service. Web login and contact forms use Cloudflare Turnstile to reduce abuse. The web dashboard stores the signed-in session token in browser localStorage on that device. DiningDealz may also receive technical diagnostics, error reports, IP-related request information, and device or app identifiers from hosting, storage, security, and monitoring providers used to operate the platform.',
         },
         {
-          title: 'Your choices',
-          body: 'Users may contact DiningDealz to request account help, update certain information, or ask privacy-related questions. Where applicable, users may also manage their own account details from the product interface.',
+          title: 'How DiningDealz uses information',
+          body: 'DiningDealz uses information to create and manage accounts, authenticate sign-ins, send verification and password-reset messages, provide business claim review and account support, operate direct messaging, deliver push notifications, power favorites and feed features, review abuse or misuse, maintain billing-related access where applicable, and improve the reliability and safety of the app and website.',
+        },
+        {
+          title: 'How information may be shared',
+          body: 'DiningDealz does not sell personal information as part of the standard product experience. Information may be shared with service providers that help operate the platform, such as hosting, database, media storage, email delivery, bot-protection, error-monitoring, mapping, and push-notification providers. Information may also be disclosed when reasonably necessary to enforce the service rules, protect users or businesses, respond to legal requests, or address fraud, security, or safety issues.',
+        },
+        {
+          title: 'Retention, deletion, and direct-message records',
+          body: 'DiningDealz keeps information for as long as reasonably needed to operate the service, support business records, resolve disputes, enforce policies, and meet legal obligations. If an account is deleted, certain information may be removed or anonymized, but some records may be retained to preserve service integrity. For example, direct message threads and receipts may remain available in read-only form for the other participant after one account is deleted. Business direct-message images are designed to disappear from the conversation feed after about 24 hours and may be deleted from storage after they expire.',
+        },
+        {
+          title: 'Your choices and contact options',
+          body: 'Users can update certain profile details from the product interface, manage direct-messaging settings where available, control device permissions such as notifications or business location access through the device or app settings, and request account deletion from inside the app. Users can also contact DiningDealz support for account, privacy, or policy questions.',
         },
       ]}
       title="How DiningDealz collects and uses information."
@@ -1161,25 +1173,37 @@ export function TermsOfServiceScreen({ isLandscape, onBack }: Pick<LegalDocument
   return (
     <LegalDocumentScreen
       eyebrow="Terms of Service & Agreements"
-      intro="These terms describe the baseline expectations for customers, businesses, and visitors using the DiningDealz app, website, and related services."
+      intro="These Terms of Service and Agreements govern use of the DiningDealz app, website, and related services by customers, business users, and other visitors."
       isLandscape={isLandscape}
       onBack={onBack}
       sections={[
         {
-          title: 'Use of the platform',
-          body: 'DiningDealz may be used only for lawful purposes and in a way that does not interfere with the service, other users, or participating businesses. Account holders are responsible for activity performed through their account credentials.',
+          title: 'Eligibility and account responsibility',
+          body: 'Users are responsible for the accuracy of the information they submit and for activity that occurs through their account credentials. Users must use DiningDealz only for lawful purposes and in a way that does not interfere with the service, other users, or participating businesses.',
         },
         {
-          title: 'Business listings and offers',
-          body: 'Business information, offers, hours, and promotional details may change. DiningDealz does not guarantee uninterrupted availability of any specific deal, listing, reservation option, or billing feature. Businesses remain responsible for the accuracy of their submitted information and the fulfillment of their published offers.',
+          title: 'Listings, offers, and business content',
+          body: 'DiningDealz displays business listings, deals, hours, profile information, notifications, and promotional content, but those details can change. DiningDealz does not guarantee uninterrupted availability, accuracy, or redemption of every listing, offer, or feature. Businesses remain responsible for the accuracy of the information they submit and for honoring the offers and public content they publish through the service.',
         },
         {
-          title: 'Accounts and billing',
-          body: 'Some features are available only to verified or subscribed business accounts. If billing features are enabled, recurring charges, renewal timing, cancellation terms, and related account controls will be presented within the applicable billing flow or business dashboard.',
+          title: 'Direct messages, uploads, and user content',
+          body: 'Customers and businesses may use direct messaging only as allowed by the product rules in effect at the time of use. Business accounts may send approved direct-message images, and those images are intended to disappear from the message feed after about 24 hours. Users must not submit unlawful, abusive, infringing, deceptive, or harmful content. By submitting content through DiningDealz, users authorize DiningDealz to host, process, display, transmit, and moderate that content as needed to operate and protect the service.',
         },
         {
-          title: 'Changes to the service',
-          body: 'DiningDealz may modify, suspend, or retire features as the platform evolves. Continued use of the service after an update takes effect constitutes acceptance of the revised terms to the extent permitted by law.',
+          title: 'Business claims, verification, and location features',
+          body: 'Business users must submit accurate claim, contact, and verification information and may only claim or manage businesses they are authorized to represent. DiningDealz may review, request more information about, approve, reject, limit, or remove claims or related content. If a business uses service-area or mobile location features, the business is responsible for sending accurate location updates and for using those features only with proper permission and authority.',
+        },
+        {
+          title: 'Notifications, billing, and paid features',
+          body: 'DiningDealz may send account, support, verification, favorite-business, business-post, or direct-message related notifications. Some business features may be limited to approved or paid accounts. If paid offerings, billing portals, subscriptions, boosted content, or campaign tools are enabled, the pricing, renewal, cancellation, and feature-specific terms presented for that offering will control in addition to these Terms.',
+        },
+        {
+          title: 'Suspension, termination, and retained records',
+          body: 'DiningDealz may suspend, restrict, or terminate access when necessary to protect the service or enforce these Terms. Users may also delete their own accounts through supported product flows. Even after deletion or termination, DiningDealz may retain records reasonably necessary to preserve conversation history for the remaining participant, maintain business records, investigate misuse, enforce agreements, or comply with legal obligations.',
+        },
+        {
+          title: 'Disclaimers, liability limits, and changes',
+          body: 'DiningDealz is provided on an as-available basis to the extent permitted by law. To the fullest extent permitted by law, DiningDealz disclaims warranties not expressly made and is not responsible for indirect, incidental, or consequential losses arising from use of the service, participating businesses, third-party providers, or changing deal availability. DiningDealz may modify, suspend, or retire features or update these Terms as the platform evolves, and continued use after an update takes effect constitutes acceptance of the revised Terms to the extent permitted by law.',
         },
       ]}
       title="Rules for using DiningDealz services."
