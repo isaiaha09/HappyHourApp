@@ -1,5 +1,36 @@
 import Link from "next/link";
 
+const termsSections = [
+  {
+    title: "Eligibility and account responsibility",
+    body: "Users are responsible for the accuracy of the information they submit and for activity that occurs through their account credentials. Users must use DiningDealz only for lawful purposes and in a way that does not interfere with the service, other users, or participating businesses.",
+  },
+  {
+    title: "Listings, offers, and business content",
+    body: "DiningDealz displays business listings, deals, hours, profile information, notifications, and promotional content, but those details can change. DiningDealz does not guarantee uninterrupted availability, accuracy, or redemption of every listing, offer, or feature. Businesses remain responsible for the accuracy of the information they submit and for honoring the offers and public content they publish through the service.",
+  },
+  {
+    title: "Direct messages, uploads, and user content",
+    body: "Customers and businesses may use direct messaging only as allowed by the product rules in effect at the time of use. Business accounts may send approved direct-message images, and those images are intended to disappear from the message feed after about 24 hours. Users must not submit unlawful, abusive, infringing, deceptive, or harmful content. By submitting content through DiningDealz, users authorize DiningDealz to host, process, display, transmit, and moderate that content as needed to operate and protect the service.",
+  },
+  {
+    title: "Business claims, verification, and location features",
+    body: "Business users must submit accurate claim, contact, and verification information and may only claim or manage businesses they are authorized to represent. DiningDealz may review, request more information about, approve, reject, limit, or remove claims or related content. If a business uses service-area or mobile location features, the business is responsible for sending accurate location updates and for using those features only with proper permission and authority.",
+  },
+  {
+    title: "Notifications, billing, and paid features",
+    body: "DiningDealz may send account, support, verification, favorite-business, business-post, or direct-message related notifications. Some business features may be limited to approved or paid accounts. If paid offerings, billing portals, subscriptions, boosted content, or campaign tools are enabled, the pricing, renewal, cancellation, and feature-specific terms presented for that offering will control in addition to these Terms.",
+  },
+  {
+    title: "Suspension, termination, and retained records",
+    body: "DiningDealz may suspend, restrict, or terminate access when necessary to protect the service or enforce these Terms. Users may also delete their own accounts through supported product flows. Even after deletion or termination, DiningDealz may retain records reasonably necessary to preserve conversation history for the remaining participant, maintain business records, investigate misuse, enforce agreements, or comply with legal obligations.",
+  },
+  {
+    title: "Disclaimers, liability limits, and changes",
+    body: "DiningDealz is provided on an as-available basis to the extent permitted by law. To the fullest extent permitted by law, DiningDealz disclaims warranties not expressly made and is not responsible for indirect, incidental, or consequential losses arising from use of the service, participating businesses, third-party providers, or changing deal availability. DiningDealz may modify, suspend, or retire features or update these Terms as the platform evolves, and continued use after an update takes effect constitutes acceptance of the revised Terms to the extent permitted by law.",
+  },
+] as const;
+
 export default function TermsPage() {
   return (
     <main className="dd-site-shell px-6 py-10 lg:px-10 lg:py-14">
@@ -14,26 +45,13 @@ export default function TermsPage() {
             <p className="dd-kicker">Terms of Service &amp; Agreements</p>
             <h1 className="text-4xl font-semibold leading-tight text-white sm:text-5xl">Rules for using DiningDealz services.</h1>
             <p className="text-base leading-8 text-[#f6d6c5]">
-              These terms describe the baseline expectations for customers, businesses, and visitors using the DiningDealz app, website, and related services.
+              These Terms of Service and Agreements govern use of the DiningDealz app, website, and related services by customers, business users, and other visitors.
             </p>
           </div>
 
-          <LegalSection
-            title="Use of the platform"
-            body="DiningDealz may be used only for lawful purposes and in a way that does not interfere with the service, other users, or participating businesses. Account holders are responsible for activity performed through their account credentials."
-          />
-          <LegalSection
-            title="Business listings and offers"
-            body="Business information, offers, hours, and promotional details may change. DiningDealz does not guarantee uninterrupted availability of any specific deal, listing, reservation option, or billing feature. Businesses remain responsible for the accuracy of their submitted information and the fulfillment of their published offers."
-          />
-          <LegalSection
-            title="Accounts and billing"
-            body="Some features are available only to verified or subscribed business accounts. If billing features are enabled, recurring charges, renewal timing, cancellation terms, and related account controls will be presented within the applicable billing flow or business dashboard."
-          />
-          <LegalSection
-            title="Changes to the service"
-            body="DiningDealz may modify, suspend, or retire features as the platform evolves. Continued use of the service after an update takes effect constitutes acceptance of the revised terms to the extent permitted by law."
-          />
+          {termsSections.map((section) => (
+            <LegalSection key={section.title} title={section.title} body={section.body} />
+          ))}
         </section>
       </div>
     </main>
