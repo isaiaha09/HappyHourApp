@@ -6786,7 +6786,7 @@ function AppScreen() {
               selectedPlaceOperatingHours={selectedPlaceOperatingHours}
             />
           </SafeAreaView>
-          {renderBottomNav({ guest: !authenticatedSession })}
+          {authenticatedSession ? renderBottomNav({ guest: false }) : null}
           </Animated.View>
         </View>
       ) : usesOnboardingSlideTransition && currentOnboardingScreen ? (
