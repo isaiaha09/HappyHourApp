@@ -65,7 +65,6 @@ function parseCliOptions(rawArgs) {
     adapter: 'any',
     hostIp: process.env.MOBILE_HOST_IP || null,
     expoArgs: [],
-    developmentBuild: false,
     networkMode: 'lan',
   };
 
@@ -90,11 +89,6 @@ function parseCliOptions(rawArgs) {
 
     if (arg === '--tunnel' || arg === 'tunnel') {
       options.networkMode = 'tunnel';
-      continue;
-    }
-
-    if (arg === '--dev-client' || arg === '--development-build' || arg === 'dev-client') {
-      options.developmentBuild = true;
       continue;
     }
 
@@ -141,10 +135,6 @@ function parseCliOptions(rawArgs) {
     }
 
     options.expoArgs.push(arg);
-  }
-
-  if (options.developmentBuild && !options.expoArgs.includes('--dev-client')) {
-    options.expoArgs.unshift('--dev-client');
   }
 
   return options;
@@ -201,16 +191,23 @@ function getLanIpAddress(adapterPreference) {
   }
 
   const interfaces = os.networkInterfaces();
+  const candidates = [];
 
-  for (const addresses of Object.values(interfaces)) {
+  for (const [name, addresses] of Object.entries(interfaces)) {
     const ip = extractPrivateIpv4(addresses);
 
-    if (ip) {
-      return ip;
+    if (!ip) {
+      continue;
     }
+
+    candidates.push({
+      ip,
+      score: scoreInterface(name, adapterPreference),
+    });
   }
 
-  return null;
+  candidates.sort((left, right) => right.score - left.score);
+  return candidates[0]?.ip ?? null;
 }
 
 function findMatchingInterface(adapterPreference) {
@@ -254,6 +251,45 @@ function extractPrivateIpv4(addresses) {
   }
 
   return null;
+}
+
+function scoreInterface(name, adapterPreference) {
+  const lowered = String(name || '').toLowerCase();
+  let score = 0;
+
+  if (matchesPreferredAdapter(lowered, adapterPreference)) {
+    score += 100;
+  }
+
+  if (isLikelyPhysicalInterface(lowered)) {
+    score += 25;
+  }
+
+  if (isLikelyVirtualInterface(lowered)) {
+    score -= 100;
+  }
+
+  return score;
+}
+
+function matchesPreferredAdapter(loweredName, adapterPreference) {
+  if (adapterPreference === 'wifi') {
+    return /wi-?fi|wlan|wireless/.test(loweredName);
+  }
+
+  if (adapterPreference === 'ethernet') {
+    return /ethernet|eth|en\d/.test(loweredName);
+  }
+
+  return false;
+}
+
+function isLikelyPhysicalInterface(loweredName) {
+  return /ethernet|wi-?fi|wlan|wireless|en\d|eth\d/.test(loweredName);
+}
+
+function isLikelyVirtualInterface(loweredName) {
+  return /loopback|local area connection\*|vmware|virtualbox|hyper-v|vethernet|wsl|docker|tun|tap|vpn/.test(loweredName);
 }
 
 function isPrivateIpv4(address) {
