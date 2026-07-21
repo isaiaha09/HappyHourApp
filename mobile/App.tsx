@@ -6757,37 +6757,37 @@ function AppScreen() {
       ) : selectedPlaceSlug ? (
         <View style={styles.fullScreenRoot}>
           <Animated.View style={[styles.fullScreenRoot, selectedPlaceReturnFadeActive ? { opacity: selectedPlaceReturnFade } : null]}>
-          <SafeAreaView edges={['left', 'right', 'bottom']} style={styles.safeArea}>
-            <PlaceDetailScreen
-              backButtonLabel={screenMode === 'profiles' || screenMode === 'business-profile-editor' ? 'Back to Profile' : 'Back to Places'}
-              canSubmitPlaceAccuracyReport={!!authenticatedSession?.auth_token}
-              detailLoading={detailLoading}
-              errorMessage={errorMessage}
-              favoriteHelperText={favoriteHelperText}
-              favoriteSubmitting={favoriteSubmitting}
-              isLandscape={isLandscape}
-              isFavorited={selectedPlaceIsFavorited}
-              onBack={handleBackToBrowse}
-              onClaimBusiness={handleOpenBusinessClaimFromPlaceDetail}
-              onEditBusinessProfile={handleOpenBusinessProfileEditor}
-              onOpenDirectMessages={openDirectMessagesScreen}
-              onRequirePlaceAccuracyAccount={() => setShowGuestAccuracyPrompt(true)}
-              onSelectLocation={setSelectedLocationId}
-              onSubmitPlaceAccuracyReport={(subject, message) => handleSubmitPlaceAccuracyReport(subject, message)}
-              onToggleFavorite={() => void handleToggleFavoriteBusiness()}
-              showClaimBusinessControl={showClaimBusinessControl}
-              showDirectMessageControl={showDirectMessageControl}
-              showEditBusinessProfileControl={selectedPlaceIsOwnedByAuthenticatedBusiness}
-              showFavoriteControl={showFavoriteControl}
-              distanceLabel={selectedPlaceDistanceLabel}
-              selectedPlace={selectedPlace}
-              selectedPlaceDeals={selectedPlaceDeals}
-              selectedPlaceLocation={selectedPlaceLocation}
-              selectedPlaceOperatingHours={selectedPlaceOperatingHours}
-            />
-          </SafeAreaView>
-          {authenticatedSession ? renderBottomNav({ guest: false }) : null}
+            <SafeAreaView edges={['left', 'right', 'bottom']} style={styles.safeArea}>
+              <PlaceDetailScreen
+                backButtonLabel={screenMode === 'profiles' || screenMode === 'business-profile-editor' ? 'Back to Profile' : 'Back to Places'}
+                canSubmitPlaceAccuracyReport={!!authenticatedSession?.auth_token}
+                detailLoading={detailLoading}
+                errorMessage={errorMessage}
+                favoriteHelperText={favoriteHelperText}
+                favoriteSubmitting={favoriteSubmitting}
+                isLandscape={isLandscape}
+                isFavorited={selectedPlaceIsFavorited}
+                onBack={handleBackToBrowse}
+                onClaimBusiness={handleOpenBusinessClaimFromPlaceDetail}
+                onEditBusinessProfile={handleOpenBusinessProfileEditor}
+                onOpenDirectMessages={openDirectMessagesScreen}
+                onRequirePlaceAccuracyAccount={() => setShowGuestAccuracyPrompt(true)}
+                onSelectLocation={setSelectedLocationId}
+                onSubmitPlaceAccuracyReport={(subject, message) => handleSubmitPlaceAccuracyReport(subject, message)}
+                onToggleFavorite={() => void handleToggleFavoriteBusiness()}
+                showClaimBusinessControl={showClaimBusinessControl}
+                showDirectMessageControl={showDirectMessageControl}
+                showEditBusinessProfileControl={selectedPlaceIsOwnedByAuthenticatedBusiness}
+                showFavoriteControl={showFavoriteControl}
+                distanceLabel={selectedPlaceDistanceLabel}
+                selectedPlace={selectedPlace}
+                selectedPlaceDeals={selectedPlaceDeals}
+                selectedPlaceLocation={selectedPlaceLocation}
+                selectedPlaceOperatingHours={selectedPlaceOperatingHours}
+              />
+            </SafeAreaView>
           </Animated.View>
+          {renderBottomNav({ guest: !authenticatedSession })}
         </View>
       ) : usesOnboardingSlideTransition && currentOnboardingScreen ? (
         wrapScreenWithInteractiveBackSwipe(currentOnboardingScreen, (
