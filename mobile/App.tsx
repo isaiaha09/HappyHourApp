@@ -2666,7 +2666,6 @@ function AppScreen() {
   function startLoginSuccessTransition() {
     dismissKeyboardForScreenTransition();
     setShouldAutoFocusLoginField(false);
-    const shouldFadeNativeBottomNav = nativeBottomNavAvailable;
     const finishLoginSubmission = () => {
       loginSubmissionInFlightRef.current = false;
       setLoginSubmitting(false);
@@ -2683,7 +2682,7 @@ function AppScreen() {
     loginSuccessTransition.stopAnimation();
     loginSuccessNativeBottomNavReveal.stopAnimation();
     loginSuccessTransition.setValue(0);
-    loginSuccessNativeBottomNavReveal.setValue(shouldFadeNativeBottomNav ? 0 : 1);
+    loginSuccessNativeBottomNavReveal.setValue(1);
     Animated.timing(loginSuccessTransition, {
       duration: onboardingTransitionDuration,
       toValue: 1,
@@ -2695,28 +2694,9 @@ function AppScreen() {
       }
 
       loginSuccessTransition.setValue(1);
-      if (!shouldFadeNativeBottomNav) {
-        setScreenMode('profiles');
-        setShowLoginSuccessTransition(false);
-        finishLoginSubmission();
-        return;
-      }
-
-      Animated.timing(loginSuccessNativeBottomNavReveal, {
-        duration: 180,
-        easing: Easing.out(Easing.cubic),
-        toValue: 1,
-        useNativeDriver: true,
-      }).start(({ finished: navFadeFinished }) => {
-        if (!navFadeFinished) {
-          finishLoginSubmission();
-          return;
-        }
-
-        setScreenMode('profiles');
-        setShowLoginSuccessTransition(false);
-        finishLoginSubmission();
-      });
+      setScreenMode('profiles');
+      setShowLoginSuccessTransition(false);
+      finishLoginSubmission();
     });
   }
 
