@@ -2744,8 +2744,6 @@ function AppScreen() {
     setIncomingBrowseProfileTargetScreen(null);
     setGuestBrowseTransitionFrom(null);
     setIncomingGuestBrowseScreen(null);
-    setMainShellTransitionFrom(null);
-    setIncomingMainShellScreen(null);
     setSelectedPlaceSlug(null);
     setSelectedPlace(null);
     setSelectedLocationId(null);
@@ -2758,7 +2756,6 @@ function AppScreen() {
     setShowGuestBottomNavPrompt(false);
     setShowCustomerBusinessClaimPrompt(false);
     setBrowseFiltersExpanded(false);
-    setGuestOnboardingOrigin(null);
     setGuestBrowseModeLocked(false);
     setLogoutTransitionSession(authenticatedSession);
     setAuthenticatedSession(null);
