@@ -2756,6 +2756,8 @@ function AppScreen() {
     setShowGuestBottomNavPrompt(false);
     setShowCustomerBusinessClaimPrompt(false);
     setBrowseFiltersExpanded(false);
+    setGuestOnboardingOrigin(null);
+    setSplashMapHandoffPending(true);
     setGuestBrowseModeLocked(false);
     setLogoutTransitionSession(authenticatedSession);
     setAuthenticatedSession(null);
