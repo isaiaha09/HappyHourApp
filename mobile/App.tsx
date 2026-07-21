@@ -6213,6 +6213,7 @@ function AppScreen() {
     suppressTransitionOverlay?: boolean;
   }) {
     const shouldRenderMapView = browseMode === 'map' && showMapBrowse;
+    const showsGuestBrowseControls = !authenticatedSession && (options?.guestChrome || guestMapOnlyMode);
     const mapInitialRegion = !hasSettledInitialMapRegionRef.current && selectedCity === 'all' && normalizedDeferredSearchQuery.length === 0
       ? startupGuestMapRegion
       : mapRegionRef.current;
@@ -6382,7 +6383,7 @@ function AppScreen() {
                   filtersExpanded={browseFiltersExpanded}
                   informalBusinessesOnly={informalBusinessesOnly}
                   isDarkMapMode={darkMapMode}
-                  listModeEnabled={!guestMapOnlyMode}
+                  listModeEnabled={!showsGuestBrowseControls}
                   onChangeSearchQuery={handleChangeSearchQuery}
                   onClearSearchQuery={handleClearSearchQuery}
                   onBrowseModeChange={handleBrowseModeChange}
