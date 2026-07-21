@@ -54,7 +54,7 @@ public class AppDelegate: ExpoAppDelegate {
 
 class ReactNativeDelegate: ExpoReactNativeFactoryDelegate {
   // Extension point for config-plugins
-  private let debugBundleRoot = "index"
+  private let debugBundleRoot = ".expo/.virtual-metro-entry"
 
   override func sourceURL(for bridge: RCTBridge) -> URL? {
     // needed to return the correct URL for expo-dev-client.
