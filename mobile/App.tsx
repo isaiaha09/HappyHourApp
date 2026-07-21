@@ -5730,6 +5730,21 @@ function AppScreen() {
   }
 
   function handleBottomNavSelection(item: MainShellBottomNavItem) {
+    if (!authenticatedSession) {
+      if (item === 'map') {
+        handleOpenAuthFromLanding('customer');
+        return;
+      }
+
+      if (item === 'profile') {
+        handleOpenProfiles();
+        return;
+      }
+
+      handleOpenAuthFromLanding('business');
+      return;
+    }
+
     switch (item) {
       case 'home':
         handleBottomNavOpenHomeFeed();
@@ -5771,11 +5786,11 @@ function AppScreen() {
             activeItem={activeItem}
             bottomInset={insets.bottom}
             includeHomeItem={!options.guest}
-            labels={options.guest ? undefined : { home: 'Feed' }}
+            labels={options.guest ? { map: 'Customer', profile: 'Sign Up', more: 'Business' } : { home: 'Feed' }}
             moreOpen={bottomMoreSheetVisible}
             onSelect={handleBottomNavSelection}
             style={{ width: '100%' }}
-            systemImages={options.guest ? undefined : { home: 'newspaper' }}
+            systemImages={options.guest ? { map: 'person.fill', profile: 'plus', more: 'briefcase' } : { home: 'newspaper' }}
             themeVariant={bottomNavThemeVariant}
           />
         </View>
@@ -6757,7 +6772,7 @@ function AppScreen() {
       ) : selectedPlaceSlug ? (
         <View style={styles.fullScreenRoot}>
           <Animated.View style={[styles.fullScreenRoot, selectedPlaceReturnFadeActive ? { opacity: selectedPlaceReturnFade } : null]}>
-            <SafeAreaView edges={['left', 'right', 'bottom']} style={styles.safeArea}>
+            <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
               <PlaceDetailScreen
                 backButtonLabel={screenMode === 'profiles' || screenMode === 'business-profile-editor' ? 'Back to Profile' : 'Back to Places'}
                 canSubmitPlaceAccuracyReport={!!authenticatedSession?.auth_token}
