@@ -20,6 +20,7 @@ type GuestShellChromeProps = {
   logoTranslateY?: AnimatedNumber;
   onCreateAccount: () => void;
   onSelectPortal: (portal: AuthPortal) => void;
+  showBottomNav?: boolean;
   showHeader?: boolean;
   showLogo?: boolean;
   themeVariant?: 'default-dark' | 'map-dark' | 'map-light';
@@ -36,6 +37,7 @@ export function GuestShellChrome({
   logoTranslateY = 0,
   onCreateAccount,
   onSelectPortal,
+  showBottomNav = true,
   showHeader = true,
   showLogo = true,
   themeVariant = 'default-dark',
@@ -227,7 +229,7 @@ export function GuestShellChrome({
         </Animated.View>
       ) : null}
 
-      <View pointerEvents="box-none" style={styles.bottomNavOverlay}>
+      {showBottomNav ? <View pointerEvents="box-none" style={styles.bottomNavOverlay}>
         {isNativeIOSLiquidGlassBottomNavAvailable() ? (
           <Animated.View
             style={{
@@ -315,7 +317,7 @@ export function GuestShellChrome({
             </Pressable>
           </Animated.View>
         )}
-      </View>
+      </View> : null}
 
       {interactive && activeModal ? (
         <Animated.View pointerEvents="box-none" style={[styles.splashSignInOverlay, { opacity: modalOpacity }]}>

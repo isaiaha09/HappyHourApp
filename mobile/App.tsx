@@ -5768,8 +5768,6 @@ function AppScreen() {
     const bottomNavThemeVariant = mapScreenActive
       ? (displayedDarkMapMode ? 'map-dark' : 'map-light')
       : 'default-dark';
-    const bottomNavRouteContext = selectedPlaceSlug ? 'place-detail' : screenMode;
-    const bottomNavInstanceKey = `${options.guest ? 'guest' : 'auth'}:${bottomNavRouteContext}:${bottomNavThemeVariant}`;
     let activeItem: MainShellBottomNavItem = 'map';
     if (!options.guest) {
       if (screenMode === 'home-feed') {
@@ -5788,7 +5786,6 @@ function AppScreen() {
             activeItem={activeItem}
             bottomInset={insets.bottom}
             includeHomeItem={!options.guest}
-            key={bottomNavInstanceKey}
             labels={options.guest ? { map: 'Customer', profile: 'Sign Up', more: 'Business' } : { home: 'Feed' }}
             moreOpen={bottomMoreSheetVisible}
             onSelect={handleBottomNavSelection}
@@ -6031,7 +6028,6 @@ function AppScreen() {
         {!transitionActive && !showingProfile && shellFadeScope === 'browse' ? (
           <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, browseShellFadeMaskStyle]} />
         ) : null}
-        {renderBottomNav({ guest: false })}
         {screenMode === 'browse' && browseMode === 'map' && !selectedPlaceSlug ? renderMapSwipeEdgeShield() : null}
       </View>
     ));
@@ -6704,6 +6700,7 @@ function AppScreen() {
                 logoEntranceOpacity={guestBrowseHeaderLogoOpacity}
                 onCreateAccount={handleOpenProfiles}
                 onSelectPortal={handleOpenAuthFromLanding}
+                showBottomNav={false}
                 showHeader={!guestMapOnlyMode && browseMode !== 'map'}
                 themeVariant={displayedDarkMapMode ? 'map-dark' : 'map-light'}
               />
@@ -6718,6 +6715,31 @@ function AppScreen() {
       </View>
     );
   }
+
+  const authenticatedBottomNavScreens: AppScreenMode[] = [
+    'profiles',
+    'favorite-businesses',
+    'business-notifications',
+    'business-profile-editor',
+    'settings',
+    'blocked-direct-message-customers',
+    'support',
+    'privacy-policy',
+    'terms-of-service',
+    'direct-messages',
+    'browse',
+    'home-feed',
+  ];
+  const shouldRenderPersistentBottomNav = !showLoginSuccessTransition && !showLogoutTransition && (
+    authenticatedSession
+      ? selectedPlaceSlug !== null || authenticatedBottomNavScreens.includes(screenMode)
+      : selectedPlaceSlug !== null || (
+        screenMode === 'browse'
+        && currentOnboardingScreen === null
+        && incomingOnboardingScreen === null
+        && returningToSplashScreen === null
+      )
+  );
 
   return (
     <>
@@ -6805,7 +6827,6 @@ function AppScreen() {
               />
             </SafeAreaView>
           </Animated.View>
-          {renderBottomNav({ guest: !authenticatedSession })}
         </View>
       ) : usesOnboardingSlideTransition && currentOnboardingScreen ? (
         wrapScreenWithInteractiveBackSwipe(currentOnboardingScreen, (
@@ -6832,6 +6853,7 @@ function AppScreen() {
       ) : (
         renderBrowseScreen()
       )}
+      {shouldRenderPersistentBottomNav ? renderBottomNav({ guest: !authenticatedSession }) : null}
       <Modal
         animationType="none"
         onRequestClose={() => closeBottomMoreSheet()}
