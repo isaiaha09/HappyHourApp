@@ -126,10 +126,10 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
 
   override func layoutSubviews() {
     super.layoutSubviews()
-    clearTabViewBackingBackgrounds(in: hostingController.view)
+    clearLegacyHostingBackgroundsIfNeeded()
     DispatchQueue.main.async { [weak self] in
       guard let self else { return }
-      self.clearTabViewBackingBackgrounds(in: self.hostingController.view)
+      self.clearLegacyHostingBackgroundsIfNeeded()
     }
   }
 
@@ -189,18 +189,26 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
 
     DispatchQueue.main.async { [weak self] in
       guard let self else { return }
-      self.clearTabViewBackingBackgrounds(in: self.hostingController.view)
+      self.clearLegacyHostingBackgroundsIfNeeded()
     }
   }
 
-  private func clearTabViewBackingBackgrounds(in view: UIView) {
+  private func clearLegacyHostingBackgroundsIfNeeded() {
+    if #available(iOS 26.0, *) {
+      return
+    }
+
+    clearHostingBackgrounds(in: hostingController.view)
+  }
+
+  private func clearHostingBackgrounds(in view: UIView) {
     if view is UITabBar || view is UIVisualEffectView {
       return
     }
 
     view.backgroundColor = .clear
     view.isOpaque = false
-    view.subviews.forEach(clearTabViewBackingBackgrounds)
+    view.subviews.forEach(clearHostingBackgrounds)
   }
 
   private var resolvedThemeVariant: DiningDealzLiquidGlassThemeVariant {

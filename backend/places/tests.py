@@ -7473,6 +7473,51 @@ class ProfileDashboardApiTests(APITestCase):
 			{'portal': 'customer'},
 			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
 		)
+
+	def test_customer_direct_message_unavailable_without_active_business_membership(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Unstaffed Claimed Cafe',
+			listing_slug='unstaffed-claimed-cafe',
+			city=City.VENTURA,
+			venue_type=VenueType.CAFE,
+			address_line_1='55 Main St',
+		)
+		BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@unstaffed.example.com',
+			work_phone='805-555-5500',
+			employer_address='55 Main St, Ventura, CA 93001',
+			verification_summary='Approved claim without an active business user.',
+			status=BusinessClaim.Status.APPROVED,
+			direct_messaging_enabled=True,
+		)
+
+		customer_user = User.objects.create_user(username='unstaffed_dm_customer', email='unstaffed_dm_customer@example.com', password='test-pass-123')
+		customer_token = ProfileAuthToken.objects.create(user=customer_user)
+
+		detail_response = self.client.get(
+			reverse('place-detail', kwargs={'slug': 'unstaffed-claimed-cafe'}),
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+		self.assertEqual(detail_response.status_code, 200)
+		self.assertFalse(detail_response.data['direct_messaging_enabled'])
+		self.assertFalse(detail_response.data['direct_message_restricted'])
+		self.assertFalse(detail_response.data['can_direct_message'])
+
+		send_response = self.client.post(
+			reverse('profile-direct-messages'),
+			{
+				'portal': 'customer',
+				'listing_slug': 'unstaffed-claimed-cafe',
+				'message': 'Anyone there?',
+			},
+			format='json',
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+		self.assertEqual(send_response.status_code, 404)
 		self.assertEqual(thread_detail_response.status_code, 404)
 
 	def test_business_can_delete_direct_message_thread_for_both_users(self):

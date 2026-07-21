@@ -746,6 +746,7 @@ function AppScreen() {
   const selectedPlaceIsFavorited = !!(selectedPlace && authenticatedSession?.favorite_businesses?.some((business) => business.slug === selectedPlace.slug));
   const showFavoriteControl = !authenticatedSession || authenticatedSession.portal === 'customer';
   const showClaimBusinessControl = !!selectedPlace && !selectedPlace.is_claimed && (!authenticatedSession || authenticatedSession.portal === 'customer');
+  const showDirectMessageControl = !!(authenticatedSession && selectedPlace?.can_direct_message);
   const selectedPlaceIsOwnedByAuthenticatedBusiness = !!(
     selectedPlace
     && authenticatedSession?.profile_type === 'business'
@@ -2988,7 +2989,7 @@ function AppScreen() {
       setErrorMessage(null);
 
       try {
-        const detail = await fetchPlaceDetail(apiBaseUrl, placeSlug);
+        const detail = await fetchPlaceDetail(apiBaseUrl, placeSlug, authenticatedSession?.auth_token);
         if (!isMounted) {
           return;
         }
@@ -3025,7 +3026,7 @@ function AppScreen() {
     return () => {
       isMounted = false;
     };
-  }, [apiBaseUrl, reloadCount, selectedPlaceSlug]);
+  }, [apiBaseUrl, authenticatedSession?.auth_token, reloadCount, selectedPlaceSlug]);
 
   useEffect(() => {
     const showSubscription = Keyboard.addListener('keyboardDidShow', (event) => {
@@ -5610,6 +5611,7 @@ function AppScreen() {
         <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
           <DirectMessagesScreen
             backButtonLabel={selectedPlaceSlug ? 'Back to Profile' : 'Back'}
+            bottomNavOffset={bottomNavHeight}
             contextBusinessName={selectedPlace?.name ?? null}
             contextListingSlug={selectedPlaceSlug}
             isLandscape={isLandscape}
@@ -6774,7 +6776,7 @@ function AppScreen() {
               onSubmitPlaceAccuracyReport={(subject, message) => handleSubmitPlaceAccuracyReport(subject, message)}
               onToggleFavorite={() => void handleToggleFavoriteBusiness()}
               showClaimBusinessControl={showClaimBusinessControl}
-              showDirectMessageControl={!!authenticatedSession}
+              showDirectMessageControl={showDirectMessageControl}
               showEditBusinessProfileControl={selectedPlaceIsOwnedByAuthenticatedBusiness}
               showFavoriteControl={showFavoriteControl}
               distanceLabel={selectedPlaceDistanceLabel}
@@ -6784,7 +6786,7 @@ function AppScreen() {
               selectedPlaceOperatingHours={selectedPlaceOperatingHours}
             />
           </SafeAreaView>
-          {authenticatedSession ? renderBottomNav({ guest: false }) : null}
+          {renderBottomNav({ guest: !authenticatedSession })}
           </Animated.View>
         </View>
       ) : usesOnboardingSlideTransition && currentOnboardingScreen ? (

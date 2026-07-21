@@ -12,6 +12,7 @@ import type { BusinessAttachmentDraft, DirectMessageItem, DirectMessageThread, D
 
 type DirectMessagesScreenProps = {
 	backButtonLabel?: string;
+	bottomNavOffset?: number;
 	contextBusinessName?: string | null;
 	contextListingSlug?: string | null;
 	isLandscape: boolean;
@@ -77,6 +78,7 @@ function wrapMessageText(value: string, maxCharsPerLine = 30) {
 
 export function DirectMessagesScreen({
 	backButtonLabel = 'Back',
+	bottomNavOffset = 0,
 	contextBusinessName = null,
 	contextListingSlug = null,
 	isLandscape,
@@ -91,8 +93,6 @@ export function DirectMessagesScreen({
 	session,
 }: DirectMessagesScreenProps) {
 	const insets = useSafeAreaInsets();
-	const nativeGlassBottomNavActive = isNativeIOSLiquidGlassBottomNavAvailable();
-	const directMessageBottomNavOffset = nativeGlassBottomNavActive ? 64 : 56;
 	const messageScrollRef = useRef<ScrollView | null>(null);
 	const swipeableRowRefs = useRef(new Map<number, Swipeable | null>());
 	const threadCacheKey = `${session.portal}:${session.id}`;
@@ -844,7 +844,7 @@ export function DirectMessagesScreen({
 							<View
 								style={[
 									styles.directMessageComposerDock,
-									{ paddingBottom: keyboardVisible ? Math.max(insets.bottom, 8) : Math.max(insets.bottom, 8) + directMessageBottomNavOffset },
+									{ paddingBottom: keyboardVisible ? Math.max(insets.bottom, 8) : Math.max(insets.bottom, 8) + bottomNavOffset },
 								]}
 							>
 								{isBusinessPortal ? (
