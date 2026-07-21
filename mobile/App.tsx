@@ -737,7 +737,7 @@ function AppScreen() {
   const selectedPlaceDeals = selectedPlaceLocation?.deals ?? selectedPlace?.deals ?? [];
   const selectedPlaceOperatingHours = selectedPlaceLocation?.operating_hours ?? selectedPlace?.operating_hours ?? [];
   const selectedPlaceDistanceLabel = getDistanceAwayLabel(userCoordinates, selectedPlaceLocation ?? selectedPlace);
-  const guestMapOnlyMode = guestBrowseModeLocked && !authenticatedSession;
+  const guestMapOnlyMode = !authenticatedSession && (guestBrowseModeLocked || screenMode === 'browse');
   const startupGuestMapRegion = useMemo(() => (
     selectedCity === 'all'
       ? clampRegionToBounds(allCitiesInitialMapRegion)
