@@ -194,7 +194,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   }
 
   private func clearTabViewBackingBackgrounds(in view: UIView) {
-    if view is UIVisualEffectView {
+    if view is UITabBar || view is UIVisualEffectView {
       return
     }
 
@@ -305,7 +305,6 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
       }
     }
     .background(Color.clear)
-    .toolbarBackground(.hidden, for: .tabBar)
     .tabViewStyle(.tabBarOnly)
     .tint(accentColor)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
