@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import { NativeModules } from 'react-native';
 
 import type {
@@ -615,12 +616,65 @@ function sanitizeApiErrorMessage(key: string, message: string) {
 
 function getMetroHost() {
   const scriptUrl = NativeModules.SourceCode?.scriptURL;
-  if (typeof scriptUrl !== 'string') {
+  const hostFromScriptUrl = extractHostFromUrl(scriptUrl);
+  if (hostFromScriptUrl) {
+    return hostFromScriptUrl;
+  }
+
+  const expoConstants = Constants as typeof Constants & {
+    experienceUrl?: string | null;
+    expoConfig?: {
+      hostUri?: string | null;
+    } | null;
+    linkingUri?: string | null;
+    manifest2?: {
+      extra?: {
+        expoClient?: {
+          hostUri?: string | null;
+        } | null;
+      } | null;
+    } | null;
+  };
+
+  const hostCandidates = [
+    expoConstants.expoConfig?.hostUri,
+    expoConstants.manifest2?.extra?.expoClient?.hostUri,
+    expoConstants.linkingUri,
+    expoConstants.experienceUrl,
+  ];
+
+  for (const candidate of hostCandidates) {
+    const resolvedHost = extractHostFromUrl(candidate) ?? extractHostFromHostUri(candidate);
+    if (resolvedHost) {
+      return resolvedHost;
+    }
+  }
+
+  return null;
+}
+
+function extractHostFromUrl(value: unknown) {
+  if (typeof value !== 'string') {
     return null;
   }
 
-  const match = scriptUrl.match(/^https?:\/\/([^/:]+)/i);
+  const match = value.match(/^https?:\/\/([^/:]+)/i);
   return match ? match[1] : null;
+}
+
+function extractHostFromHostUri(value: unknown) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const withoutProtocol = trimmed.replace(/^[a-z]+:\/\//i, '');
+  const host = withoutProtocol.split(/[/:]/, 1)[0];
+  return host || null;
 }
 
 async function fetchAuthedJson<T>(baseUrl: string, path: string, authToken: string): Promise<T> {
