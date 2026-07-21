@@ -55,6 +55,8 @@
 	<string>Allow $(PRODUCT_NAME) to access your location</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>DiningDealz uses your location so approved mobile or multi-area business accounts can update their live map location and service area in the app.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>DiningDealz connects to the local development server while you test the app from Xcode.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Allow $(PRODUCT_NAME) to access your microphone</string>
 	<key>NSPhotoLibraryUsageDescription</key>
