@@ -5796,7 +5796,7 @@ function AppScreen() {
     return (
       <Animated.View
         pointerEvents={options?.interactive === false ? 'none' : 'box-none'}
-        style={[styles.bottomNavLoginTransitionLayer, options?.transitionStyle]}
+        style={[styles.bottomNavLoginTransitionLayer, { height: bottomNavHeight }, options?.transitionStyle]}
       >
         {renderBottomNav({ guest: false })}
       </Animated.View>

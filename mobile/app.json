@@ -8,7 +8,6 @@
     "icon": "./assets/DiningDealz-Icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/DiningDealz-Logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#080101"
     },

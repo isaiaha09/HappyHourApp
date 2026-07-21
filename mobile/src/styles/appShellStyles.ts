@@ -40,8 +40,10 @@ export const appShellStyles = {
     backgroundColor: theme.bgApp,
   },
   bottomNavLoginTransitionLayer: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'transparent',
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    right: 0,
   },
   incomingOnboardingOverlay: {
     shadowColor: 'transparent',
@@ -216,8 +218,8 @@ export const appShellStyles = {
     justifyContent: 'space-between',
     overflow: 'hidden',
     paddingHorizontal: 2,
-    paddingTop: 40,
-    height: 40,
+    paddingTop: 8,
+    minHeight: 54,
     shadowColor: theme.shadow,
     shadowOffset: { width: 0, height: -8 },
     shadowOpacity: 0.14,

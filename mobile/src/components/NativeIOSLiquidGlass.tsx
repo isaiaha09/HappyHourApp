@@ -80,7 +80,7 @@ const nativeHeaderButtonViewName = 'DiningDealzLiquidGlassHeaderButtonView';
 const minimumIOSLiquidGlassVersion = 26;
 const headerIconButtonSize = 40;
 const headerPillButtonHeight = 44;
-const headerPillHorizontalPadding = 28;
+const headerPillHorizontalPadding = 22;
 const averageHeaderPillCharacterWidth = 7;
 
 const NativeBottomNavView = requireNativeComponent<NativeBottomNavViewProps>(nativeBottomNavViewName);
