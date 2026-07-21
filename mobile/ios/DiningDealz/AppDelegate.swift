@@ -2,6 +2,13 @@ import Expo
 import React
 import ReactAppDependencyProvider
 
+private let diningDealzLaunchBackgroundColor = UIColor(
+  red: 8.0 / 255.0,
+  green: 1.0 / 255.0,
+  blue: 1.0 / 255.0,
+  alpha: 1
+)
+
 @UIApplicationMain
 public class AppDelegate: ExpoAppDelegate {
   var window: UIWindow?
@@ -23,10 +30,13 @@ public class AppDelegate: ExpoAppDelegate {
 
 #if os(iOS) || os(tvOS)
     window = UIWindow(frame: UIScreen.main.bounds)
+  window?.backgroundColor = diningDealzLaunchBackgroundColor
     factory.startReactNative(
       withModuleName: "main",
       in: window,
       launchOptions: launchOptions)
+  window?.rootViewController?.view.backgroundColor = diningDealzLaunchBackgroundColor
+  window?.rootViewController?.view.isOpaque = true
 #endif
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
