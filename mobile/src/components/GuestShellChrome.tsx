@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { Animated, Easing, Image, Pressable, Text, View } from 'react-native';
+import { Animated, Easing, Image, Platform, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { AuthPortal } from '../appFlowTypes';
@@ -46,6 +46,7 @@ export function GuestShellChrome({
   const touchTargetHitSlop = 12;
   const touchTargetPressRetentionOffset = 12;
   const shouldFloatHeaderControls = !showHeader && isNativeIOSLiquidGlassHeaderButtonAvailable();
+  const shouldUseTransparentIOSHeaderBar = Platform.OS === 'ios' && isNativeIOSLiquidGlassHeaderButtonAvailable();
 
   useEffect(() => {
     if (interactive || activeModal === null) {
@@ -177,6 +178,13 @@ export function GuestShellChrome({
           style={[
             styles.screenHeaderBar,
             styles.splashHeaderBar,
+            shouldUseTransparentIOSHeaderBar
+              ? {
+                  backgroundColor: 'transparent',
+                  borderBottomWidth: 0,
+                  borderTopWidth: 0,
+                }
+              : null,
             { opacity: headerOpacity },
           ]}
         >
