@@ -2761,7 +2761,10 @@ function AppScreen() {
     setAuthenticatedSession(null);
     setPendingEmailVerification(null);
     setEmailVerificationCode('');
-    setScreenMode('auth');
+    handleBrowseModeChange('map');
+    setGuestBrowseModeLocked(true);
+    setGuestOnboardingOrigin(null);
+    setScreenMode('browse');
     setAuthIntroPending(false);
     setShowLogoutTransition(true);
     loginSuccessTransition.stopAnimation();
