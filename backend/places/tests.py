@@ -4563,6 +4563,48 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertIn(profile.email_verification_code, mail.outbox[0].body)
 		self.assertNotIn('/api/profiles/verify-email/', mail.outbox[0].body)
 
+	@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+	def test_customer_signup_can_reuse_username_and_email_after_account_deletion(self):
+		deleted_user = User.objects.create_user(
+			username='reusable_account',
+			email='reusable@example.com',
+			password='test-pass-123',
+			first_name='Reusable',
+			last_name='Account',
+		)
+		AccountProfile.objects.create(user=deleted_user, email_verified_at=timezone.now())
+		deleted_token = ProfileAuthToken.objects.create(user=deleted_user)
+
+		delete_response = self.client.post(
+			reverse('profile-delete-account'),
+			{'password': 'test-pass-123'},
+			format='json',
+			HTTP_AUTHORIZATION=f'Token {deleted_token.key}',
+		)
+
+		self.assertEqual(delete_response.status_code, 200)
+		deleted_user.refresh_from_db()
+		self.assertFalse(deleted_user.is_active)
+		self.assertTrue(deleted_user.username.startswith('deleted-account-'))
+		self.assertEqual(deleted_user.email, '')
+
+		response = self.client.post(
+			reverse('customer-signup'),
+			{
+				'username': 'reusable_account',
+				'email': 'reusable@example.com',
+				'password': 'new-pass-123',
+				'first_name': 'New',
+				'last_name': 'Owner',
+			},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, 201)
+		new_user = User.objects.get(username='reusable_account')
+		self.assertNotEqual(new_user.pk, deleted_user.pk)
+		self.assertEqual(new_user.email, 'reusable@example.com')
+
 	@patch('places.views.get_source_place_payload')
 	def test_business_signup_creates_submitted_claim(self, mock_get_source_place_payload):
 		mock_get_source_place_payload.return_value = {
@@ -5418,6 +5460,32 @@ class ProfileSignupApiTests(APITestCase):
 			claim.get_profile_entry_values(BusinessClaim.ProfileEntryKind.OFFER),
 			['2 tacos for $5'],
 		)
+
+	@patch('places.services.account_profiles.send_mail', side_effect=RuntimeError('SMTP unavailable'))
+	def test_informal_business_signup_rolls_back_when_verification_email_fails(self, mock_send_mail):
+		response = self.client.post(
+			reverse('informal-business-signup'),
+			{
+				'username': 'email_failure_vendor',
+				'email': 'email-failure-vendor@example.com',
+				'password': 'test-pass-123',
+				'first_name': 'Riley',
+				'last_name': 'Vendor',
+				'business_name': 'Email Failure Snacks',
+				'business_city': BusinessClaim.MULTIPLE_AREAS_VALUE,
+				'business_venue_type': VenueType.FAST_FOOD,
+				'business_website_url': 'https://example.com/email-failure-snacks',
+				'supporting_details': 'I operate this snack stand at weekend events and night markets.',
+			},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, 503)
+		self.assertEqual(response.data['detail'], 'We could not send the verification email. No business claim was submitted. Check your email address and try again.')
+		self.assertFalse(User.objects.filter(username='email_failure_vendor').exists())
+		self.assertFalse(BusinessClaim.objects.filter(listing_snapshot__name='Email Failure Snacks').exists())
+		self.assertFalse(ListingSnapshot.objects.filter(name='Email Failure Snacks').exists())
+		mock_send_mail.assert_called_once()
 
 	def test_informal_business_signup_accepts_uploaded_business_photos(self):
 		with TemporaryDirectory() as temp_dir:

@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.files.storage import default_storage
+from django.db import transaction
 from django.http import Http404, HttpResponse
 from django.utils.text import slugify
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -504,18 +505,28 @@ class BusinessSignupView(generics.GenericAPIView):
 
 		serializer = self.get_serializer(data=payload)
 		serializer.is_valid(raise_exception=True)
-		serializer.validated_data['listing_snapshot'] = sync_listing_snapshot_from_place_payload(place_payload)
-		user = serializer.save()
-		claim = getattr(user, '_created_business_claim', None)
-		_append_uploaded_profile_photos_to_claim(request, claim)
-		profile = get_or_create_account_profile(user)
-		response_token = request.auth if getattr(request.user, 'is_authenticated', False) and request.user.pk == user.pk else None
-		if getattr(user, '_signup_reused_existing_user', False) and profile.email_is_verified:
-			send_business_claim_received_email(user, claim)
-			payload = build_account_response(user, 'business', claim=claim, token=response_token)
-			payload['detail'] = payload.get('claim_review_message') or ''
+		with transaction.atomic():
+			serializer.validated_data['listing_snapshot'] = sync_listing_snapshot_from_place_payload(place_payload)
+			user = serializer.save()
+			claim = getattr(user, '_created_business_claim', None)
+			_append_uploaded_profile_photos_to_claim(request, claim)
+			profile = get_or_create_account_profile(user)
+			response_token = request.auth if getattr(request.user, 'is_authenticated', False) and request.user.pk == user.pk else None
+			if getattr(user, '_signup_reused_existing_user', False) and profile.email_is_verified:
+				try:
+					send_business_claim_received_email(user, claim)
+				except Exception:
+					transaction.set_rollback(True)
+					return Response({'detail': 'We could not send the verification email. No business claim was submitted. Check your email address and try again.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+				payload = build_account_response(user, 'business', claim=claim, token=response_token)
+				payload['detail'] = payload.get('claim_review_message') or ''
+				return Response(payload, status=status.HTTP_201_CREATED)
+			try:
+				payload = build_email_verification_challenge(user, 'business', claim=claim)
+			except Exception:
+				transaction.set_rollback(True)
+				return Response({'detail': 'We could not send the verification email. No business claim was submitted. Check your email address and try again.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 			return Response(payload, status=status.HTTP_201_CREATED)
-		return Response(build_email_verification_challenge(user, 'business', claim=claim), status=status.HTTP_201_CREATED)
 
 
 class ManualBusinessSignupView(generics.GenericAPIView):
@@ -526,16 +537,26 @@ class ManualBusinessSignupView(generics.GenericAPIView):
 	def post(self, request):
 		serializer = self.get_serializer(data=build_signup_request_data(request.data))
 		serializer.is_valid(raise_exception=True)
-		user = serializer.save()
-		claim = getattr(user, '_created_business_claim', None)
-		_append_uploaded_profile_photos_to_claim(request, claim)
-		profile = get_or_create_account_profile(user)
-		if getattr(user, '_signup_reused_existing_user', False) and profile.email_is_verified:
-			send_business_claim_received_email(user, claim)
-			payload = build_account_response(user, 'business', claim=claim, token=None)
-			payload['detail'] = payload.get('claim_review_message') or ''
+		with transaction.atomic():
+			user = serializer.save()
+			claim = getattr(user, '_created_business_claim', None)
+			_append_uploaded_profile_photos_to_claim(request, claim)
+			profile = get_or_create_account_profile(user)
+			if getattr(user, '_signup_reused_existing_user', False) and profile.email_is_verified:
+				try:
+					send_business_claim_received_email(user, claim)
+				except Exception:
+					transaction.set_rollback(True)
+					return Response({'detail': 'We could not send the verification email. No business claim was submitted. Check your email address and try again.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+				payload = build_account_response(user, 'business', claim=claim, token=None)
+				payload['detail'] = payload.get('claim_review_message') or ''
+				return Response(payload, status=status.HTTP_201_CREATED)
+			try:
+				payload = build_email_verification_challenge(user, 'business', claim=claim)
+			except Exception:
+				transaction.set_rollback(True)
+				return Response({'detail': 'We could not send the verification email. No business claim was submitted. Check your email address and try again.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 			return Response(payload, status=status.HTTP_201_CREATED)
-		return Response(build_email_verification_challenge(user, 'business', claim=claim), status=status.HTTP_201_CREATED)
 
 
 class InformalBusinessSignupView(generics.GenericAPIView):
@@ -546,16 +567,26 @@ class InformalBusinessSignupView(generics.GenericAPIView):
 	def post(self, request):
 		serializer = self.get_serializer(data=build_signup_request_data(request.data))
 		serializer.is_valid(raise_exception=True)
-		user = serializer.save()
-		claim = getattr(user, '_created_business_claim', None)
-		_append_uploaded_profile_photos_to_claim(request, claim)
-		profile = get_or_create_account_profile(user)
-		if getattr(user, '_signup_reused_existing_user', False) and profile.email_is_verified:
-			send_business_claim_received_email(user, claim)
-			payload = build_account_response(user, 'business', claim=claim, token=None)
-			payload['detail'] = payload.get('claim_review_message') or ''
+		with transaction.atomic():
+			user = serializer.save()
+			claim = getattr(user, '_created_business_claim', None)
+			_append_uploaded_profile_photos_to_claim(request, claim)
+			profile = get_or_create_account_profile(user)
+			if getattr(user, '_signup_reused_existing_user', False) and profile.email_is_verified:
+				try:
+					send_business_claim_received_email(user, claim)
+				except Exception:
+					transaction.set_rollback(True)
+					return Response({'detail': 'We could not send the verification email. No business claim was submitted. Check your email address and try again.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+				payload = build_account_response(user, 'business', claim=claim, token=None)
+				payload['detail'] = payload.get('claim_review_message') or ''
+				return Response(payload, status=status.HTTP_201_CREATED)
+			try:
+				payload = build_email_verification_challenge(user, 'business', claim=claim)
+			except Exception:
+				transaction.set_rollback(True)
+				return Response({'detail': 'We could not send the verification email. No business claim was submitted. Check your email address and try again.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 			return Response(payload, status=status.HTTP_201_CREATED)
-		return Response(build_email_verification_challenge(user, 'business', claim=claim), status=status.HTTP_201_CREATED)
 
 
 class VerifyEmailCodeView(generics.GenericAPIView):
