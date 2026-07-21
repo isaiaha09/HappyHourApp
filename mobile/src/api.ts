@@ -764,7 +764,11 @@ function buildFriendlyApiFallbackMessage(path: string, status: number) {
     || normalizedPath === '/profiles/manual-business-signup/'
     || normalizedPath === '/profiles/informal-business-signup/'
   ) {
-    return 'We could not finish creating this business account. Check the information you entered and try again.';
+    if (status >= 500) {
+      return 'We could not send the verification email, so no business claim was submitted. Try again in a moment.';
+    }
+
+    return 'We could not finish creating this business account. Check the highlighted fields and try again.';
   }
 
   if (normalizedPath === '/profiles/verify-email-code/') {

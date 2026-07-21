@@ -399,6 +399,82 @@ function buildSharedBusinessDetails(form: ProfileFormState) {
   };
 }
 
+function getBusinessSignupValidationMessage(form: ProfileFormState, mode: 'claimed' | 'manual' | 'informal') {
+  const missingFields: string[] = [];
+
+  if (mode !== 'claimed') {
+    if (!form.business_name.trim()) {
+      missingFields.push('business name');
+    }
+    if (!form.business_city.trim()) {
+      missingFields.push('city or service area');
+    }
+    if (!form.business_venue_type.trim()) {
+      missingFields.push('business type');
+    }
+  } else if (!form.business_slug.trim()) {
+    missingFields.push('selected business');
+  }
+
+  if (!form.username.trim()) {
+    missingFields.push('username');
+  }
+  if (!form.email.trim()) {
+    missingFields.push('email');
+  }
+  if (!form.password) {
+    missingFields.push('password');
+  }
+  if (!form.confirm_password) {
+    missingFields.push('confirm password');
+  }
+
+  if (mode !== 'informal') {
+    if (!form.contact_name.trim()) {
+      missingFields.push('contact name');
+    }
+    if (!form.job_title.trim()) {
+      missingFields.push('role');
+    }
+    if (!form.work_email.trim()) {
+      missingFields.push('employer email');
+    }
+    if (!form.work_phone.trim()) {
+      missingFields.push('employer phone');
+    }
+    if (!form.address_not_applicable && !form.employer_address.trim()) {
+      missingFields.push('business address');
+    }
+  }
+
+  if (mode === 'informal') {
+    const hasVerificationSignal = Boolean(
+      form.business_website_url.trim()
+      || form.instagram_profile.trim()
+      || form.facebook_profile.trim()
+      || form.tiktok_profile.trim()
+      || form.youtube_profile.trim()
+      || form.photo_references_text.trim(),
+    );
+    if (!form.supporting_details.trim()) {
+      missingFields.push('business summary');
+    }
+    if (!hasVerificationSignal) {
+      missingFields.push('website, social link, or business photo');
+    }
+  }
+
+  if (missingFields.length) {
+    return `Please complete: ${missingFields.join(', ')}.`;
+  }
+
+  if (form.password !== form.confirm_password) {
+    return 'Password and confirm password must match.';
+  }
+
+  return null;
+}
+
 function normalizeBusinessAttachment(asset: DocumentPicker.DocumentPickerAsset): BusinessAttachmentDraft {
   return {
     id: `${asset.uri}::${asset.name}::${asset.size ?? 0}`,
@@ -4813,8 +4889,9 @@ function AppScreen() {
   }
 
   async function handleSubmitClaimedBusinessProfile() {
-    if (profileForm.password !== profileForm.confirm_password) {
-      setProfileErrorMessage('Password and confirm password must match.');
+    const validationMessage = getBusinessSignupValidationMessage(profileForm, 'claimed');
+    if (validationMessage) {
+      setProfileErrorMessage(validationMessage);
       setProfileMessage(null);
       return;
     }
@@ -4871,8 +4948,9 @@ function AppScreen() {
   }
 
   async function handleSubmitManualBusinessProfile() {
-    if (profileForm.password !== profileForm.confirm_password) {
-      setProfileErrorMessage('Password and confirm password must match.');
+    const validationMessage = getBusinessSignupValidationMessage(profileForm, 'manual');
+    if (validationMessage) {
+      setProfileErrorMessage(validationMessage);
       setProfileMessage(null);
       return;
     }
@@ -4920,8 +4998,9 @@ function AppScreen() {
   }
 
   async function handleSubmitInformalBusinessProfile() {
-    if (profileForm.password !== profileForm.confirm_password) {
-      setProfileErrorMessage('Password and confirm password must match.');
+    const validationMessage = getBusinessSignupValidationMessage(profileForm, 'informal');
+    if (validationMessage) {
+      setProfileErrorMessage(validationMessage);
       setProfileMessage(null);
       return;
     }

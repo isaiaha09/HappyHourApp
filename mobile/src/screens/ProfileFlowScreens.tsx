@@ -376,10 +376,6 @@ function useAutoScrollForm(): AutoScrollFormController {
     });
     const hideSubscription = Keyboard.addListener(keyboardHideEvent, () => {
       keyboardVisibleRef.current = false;
-      scrollViewRef.current?.scrollTo({
-        animated: true,
-        y: restoreScrollOffsetRef.current,
-      });
     });
 
     return () => {
@@ -1303,7 +1299,6 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
   const [attachmentPreviewLoading, setAttachmentPreviewLoading] = useState(false);
   const attachmentPreviewRequestIdRef = useRef(0);
   const { handleFieldFocus, handleScroll, scrollToTop, scrollViewRef } = useAutoScrollForm();
-  useScrollToTopOnError(errorMessage, scrollToTop);
   const currentPhotoUrls = dedupeImageUrls(
     form.photo_references_text
       .split(/\r?\n/)
@@ -1544,8 +1539,10 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
         <ScrollView
           contentContainerStyle={styles.profileScrollContent}
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-          keyboardShouldPersistTaps="always"
+          keyboardShouldPersistTaps="handled"
           onScroll={handleScroll}
+          onScrollBeginDrag={Keyboard.dismiss}
+          onTouchStart={Keyboard.dismiss}
           ref={scrollViewRef}
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
