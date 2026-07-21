@@ -7518,7 +7518,8 @@ class ProfileDashboardApiTests(APITestCase):
 			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
 		)
 		self.assertEqual(send_response.status_code, 404)
-		self.assertEqual(thread_detail_response.status_code, 404)
+		self.assertEqual(BusinessDirectMessageThread.objects.count(), 0)
+		self.assertEqual(BusinessDirectMessage.objects.count(), 0)
 
 	def test_business_can_delete_direct_message_thread_for_both_users(self):
 		snapshot = ListingSnapshot.objects.create(

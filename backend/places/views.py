@@ -144,7 +144,12 @@ def _can_customer_direct_message_claim(user, claim):
 def _apply_direct_message_access(payload, user=None):
 	is_claimed = bool(payload.get('is_claimed'))
 	claim = _get_active_business_claim_by_slug(payload.get('slug')) if is_claimed else None
-	direct_messaging_enabled = bool(claim.direct_messaging_enabled) if claim is not None else bool(payload.get('direct_messaging_enabled', False))
+	if claim is not None:
+		direct_messaging_enabled = bool(claim.direct_messaging_enabled)
+	elif is_claimed:
+		direct_messaging_enabled = False
+	else:
+		direct_messaging_enabled = bool(payload.get('direct_messaging_enabled', False))
 	can_direct_message = False
 	direct_message_restricted = False
 	if claim is not None:
