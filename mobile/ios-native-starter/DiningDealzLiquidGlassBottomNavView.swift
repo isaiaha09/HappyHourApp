@@ -164,27 +164,14 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     hostingController.overrideUserInterfaceStyle = currentThemeVariant.interfaceStyle
 
     hostingController.rootView = AnyView(
-      Group {
-        if #available(iOS 26.0, *) {
-          DiningDealzLiquidGlassBottomNavContent(
-            activeItem: currentActiveItem,
-            bottomInset: currentBottomInset,
-            items: currentItems,
-            moreOpen: currentMoreOpen,
-            themeVariant: currentThemeVariant,
-            onSelect: handleSelection
-          )
-        } else {
-          DiningDealzLegacyBottomNavContent(
-            activeItem: currentActiveItem,
-            bottomInset: currentBottomInset,
-            items: currentItems,
-            moreOpen: currentMoreOpen,
-            themeVariant: currentThemeVariant,
-            onSelect: handleSelection
-          )
-        }
-      }
+      DiningDealzLegacyBottomNavContent(
+        activeItem: currentActiveItem,
+        bottomInset: currentBottomInset,
+        items: currentItems,
+        moreOpen: currentMoreOpen,
+        themeVariant: currentThemeVariant,
+        onSelect: handleSelection
+      )
     )
 
     DispatchQueue.main.async { [weak self] in
@@ -194,10 +181,6 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   }
 
   private func clearLegacyHostingBackgroundsIfNeeded() {
-    if #available(iOS 26.0, *) {
-      return
-    }
-
     clearHostingBackgrounds(in: hostingController.view)
   }
 
