@@ -63,9 +63,85 @@ class ReactNativeDelegate: ExpoReactNativeFactoryDelegate {
 
   override func bundleURL() -> URL? {
 #if DEBUG
-    RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: debugBundleRoot)
+    let provider = RCTBundleURLProvider.sharedSettings()
+    if let detectedURL = provider.jsBundleURL(forBundleRoot: debugBundleRoot) {
+      return detectedURL
+    }
+
+    return explicitMetroBundleURL()
 #else
     return Bundle.main.url(forResource: "main", withExtension: "jsbundle")
 #endif
+  }
+
+  private func explicitMetroBundleURL() -> URL? {
+#if DEBUG
+    guard let host = debugMetroHost() else {
+      return nil
+    }
+
+    var components = URLComponents()
+    components.scheme = "http"
+    components.host = host.name
+    components.port = host.port
+    components.path = "/\(debugBundleRoot).bundle"
+    components.queryItems = [
+      URLQueryItem(name: "platform", value: "ios"),
+      URLQueryItem(name: "dev", value: "true"),
+      URLQueryItem(name: "lazy", value: "true"),
+      URLQueryItem(name: "minify", value: "false"),
+      URLQueryItem(name: "inlineSourceMap", value: "false"),
+      URLQueryItem(name: "modulesOnly", value: "false"),
+      URLQueryItem(name: "runModule", value: "true"),
+    ]
+    return components.url
+#else
+    return nil
+#endif
+  }
+
+  private func debugMetroHost() -> (name: String, port: Int)? {
+#if targetEnvironment(simulator)
+    return ("localhost", 8081)
+#else
+    if let bundledHost = bundledMetroHost() {
+      return bundledHost
+    }
+
+    if let configuredHost = configuredMetroHost() {
+      return configuredHost
+    }
+
+    return nil
+#endif
+  }
+
+  private func bundledMetroHost() -> (name: String, port: Int)? {
+    guard let ipPath = Bundle.main.path(forResource: "ip", ofType: "txt"),
+          let rawHost = try? String(contentsOfFile: ipPath, encoding: .utf8) else {
+      return nil
+    }
+
+    return parseMetroHost(rawHost)
+  }
+
+  private func configuredMetroHost() -> (name: String, port: Int)? {
+    guard let rawHost = Bundle.main.object(forInfoDictionaryKey: "DDMetroHost") as? String else {
+      return nil
+    }
+
+    return parseMetroHost(rawHost)
+  }
+
+  private func parseMetroHost(_ value: String) -> (name: String, port: Int)? {
+    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    if trimmed.isEmpty || trimmed.contains("$(") {
+      return nil
+    }
+
+    let parts = trimmed.split(separator: ":", maxSplits: 1).map(String.init)
+    let host = parts[0]
+    let port = parts.count > 1 ? Int(parts[1]) ?? 8081 : 8081
+    return (host, port)
   }
 }
