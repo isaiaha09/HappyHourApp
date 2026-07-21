@@ -589,6 +589,7 @@ function AppScreen() {
   const [settingsSubmittingAction, setSettingsSubmittingAction] = useState<SettingsSubmittingAction>(null);
   const [pendingBusinessLocationTrackingEnabled, setPendingBusinessLocationTrackingEnabled] = useState<boolean | null>(null);
   const [pendingDirectMessagingEnabled, setPendingDirectMessagingEnabled] = useState<boolean | null>(null);
+  const [nativeBottomNavAvailable, setNativeBottomNavAvailable] = useState(() => isNativeIOSLiquidGlassBottomNavAvailable());
   const [deleteAccountPassword, setDeleteAccountPassword] = useState('');
   const [bottomMoreSheetVisible, setBottomMoreSheetVisible] = useState(false);
   const [shellFadeScope, setShellFadeScope] = useState<ShellFadeScope | null>(null);
@@ -1096,6 +1097,28 @@ function AppScreen() {
       clearTimeout(fallbackId);
     };
   }, [startupImagesReady]);
+
+  useEffect(() => {
+    if (nativeBottomNavAvailable) {
+      return;
+    }
+
+    let cancelled = false;
+    const timers = [0, 120, 360].map((delay) => setTimeout(() => {
+      if (cancelled) {
+        return;
+      }
+
+      if (isNativeIOSLiquidGlassBottomNavAvailable()) {
+        setNativeBottomNavAvailable(true);
+      }
+    }, delay));
+
+    return () => {
+      cancelled = true;
+      timers.forEach((timer) => clearTimeout(timer));
+    };
+  }, [authenticatedSession?.auth_token, nativeBottomNavAvailable, showLoginSuccessTransition]);
 
   const mapSearchResultPool = normalizedDeferredSearchQuery.length ? getMapSearchResults(filteredBrowseLocations) : [];
   const mapSearchResultsKey = mapSearchResultPool.map((place) => place.resultKey).join('|');
@@ -2643,7 +2666,7 @@ function AppScreen() {
   function startLoginSuccessTransition() {
     dismissKeyboardForScreenTransition();
     setShouldAutoFocusLoginField(false);
-    const shouldFadeNativeBottomNav = isNativeIOSLiquidGlassBottomNavAvailable();
+    const shouldFadeNativeBottomNav = nativeBottomNavAvailable;
     const finishLoginSubmission = () => {
       loginSubmissionInFlightRef.current = false;
       setLoginSubmitting(false);
@@ -5739,7 +5762,7 @@ function AppScreen() {
       }
     }
 
-    if (isNativeIOSLiquidGlassBottomNavAvailable()) {
+    if (nativeBottomNavAvailable) {
       return (
         <View pointerEvents="box-none" style={styles.bottomNavOverlay}>
           <NativeIOSLiquidGlassBottomNav
@@ -6707,7 +6730,7 @@ function AppScreen() {
           </Animated.View>
           {renderAuthenticatedBottomNavLayer({
             interactive: false,
-            transitionStyle: isNativeIOSLiquidGlassBottomNavAvailable()
+            transitionStyle: nativeBottomNavAvailable
               ? loginSuccessNativeBottomNavStyle
               : loginSuccessBottomNavStyle,
           })}

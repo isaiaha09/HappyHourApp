@@ -418,12 +418,14 @@ export const dashboardStyles = {
   dashboardHeaderRow: {
     alignItems: 'center',
     flexDirection: 'row',
+    gap: 12,
     justifyContent: 'space-between',
     paddingHorizontal: 16,
   },
   dashboardHeaderActions: {
     alignItems: 'center',
     flexDirection: 'row',
+    flexShrink: 0,
     gap: 10,
   },
   settingsIconButton: {
