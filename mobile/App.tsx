@@ -5768,6 +5768,8 @@ function AppScreen() {
     const bottomNavThemeVariant = mapScreenActive
       ? (displayedDarkMapMode ? 'map-dark' : 'map-light')
       : 'default-dark';
+    const bottomNavRouteContext = selectedPlaceSlug ? 'place-detail' : screenMode;
+    const bottomNavInstanceKey = `${options.guest ? 'guest' : 'auth'}:${bottomNavRouteContext}:${bottomNavThemeVariant}`;
     let activeItem: MainShellBottomNavItem = 'map';
     if (!options.guest) {
       if (screenMode === 'home-feed') {
@@ -5786,6 +5788,7 @@ function AppScreen() {
             activeItem={activeItem}
             bottomInset={insets.bottom}
             includeHomeItem={!options.guest}
+            key={bottomNavInstanceKey}
             labels={options.guest ? { map: 'Customer', profile: 'Sign Up', more: 'Business' } : { home: 'Feed' }}
             moreOpen={bottomMoreSheetVisible}
             onSelect={handleBottomNavSelection}
