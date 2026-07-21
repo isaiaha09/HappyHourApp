@@ -65,6 +65,7 @@ function parseCliOptions(rawArgs) {
     adapter: 'any',
     hostIp: process.env.MOBILE_HOST_IP || null,
     expoArgs: [],
+    developmentBuild: false,
     networkMode: 'lan',
   };
 
@@ -89,6 +90,11 @@ function parseCliOptions(rawArgs) {
 
     if (arg === '--tunnel' || arg === 'tunnel') {
       options.networkMode = 'tunnel';
+      continue;
+    }
+
+    if (arg === '--dev-client' || arg === '--development-build' || arg === 'dev-client') {
+      options.developmentBuild = true;
       continue;
     }
 
@@ -135,6 +141,10 @@ function parseCliOptions(rawArgs) {
     }
 
     options.expoArgs.push(arg);
+  }
+
+  if (options.developmentBuild && !options.expoArgs.includes('--dev-client')) {
+    options.expoArgs.unshift('--dev-client');
   }
 
   return options;

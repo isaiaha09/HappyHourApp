@@ -5,6 +5,7 @@
   "scripts": {
     "start": "node ./scripts/start-expo.cjs",
     "start:wifi": "node ./scripts/start-expo.cjs --wifi",
+    "start:wifi:xcode": "node ./scripts/start-expo.cjs --wifi --dev-client",
     "start:ethernet": "node ./scripts/start-expo.cjs --ethernet",
     "test": "jest",
     "test:watch": "jest --watch",
