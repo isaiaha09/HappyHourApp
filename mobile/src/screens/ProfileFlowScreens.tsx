@@ -1479,7 +1479,6 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
   }
 
   function handleSubmitVerification() {
-    scrollToTop();
     if (Object.values(socialFieldErrors).some(Boolean)) {
       return;
     }
@@ -1546,7 +1545,6 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
       <KeyboardAwareFormScreen>
         <ScrollView
           contentContainerStyle={styles.profileScrollContent}
-          automaticallyAdjustKeyboardInsets
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           keyboardShouldPersistTaps="handled"
           onScroll={handleScroll}

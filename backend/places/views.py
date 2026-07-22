@@ -1,3 +1,5 @@
+import logging
+
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.files.storage import default_storage
@@ -13,6 +15,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from pathlib import Path
 from uuid import uuid4
+
+
+logger = logging.getLogger(__name__)
 
 from .authentication import ProfileTokenAuthentication
 from .serializers import (
@@ -516,6 +521,7 @@ class BusinessSignupView(generics.GenericAPIView):
 				try:
 					send_business_claim_received_email(user, claim)
 				except Exception:
+					logger.exception('Business signup confirmation email failed for reused claimed-business signup user_id=%s claim_id=%s', user.pk, getattr(claim, 'pk', None))
 					transaction.set_rollback(True)
 					return Response({'detail': 'We could not send the verification email. No business claim was submitted. Check your email address and try again.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 				payload = build_account_response(user, 'business', claim=claim, token=response_token)
@@ -524,6 +530,7 @@ class BusinessSignupView(generics.GenericAPIView):
 			try:
 				payload = build_email_verification_challenge(user, 'business', claim=claim)
 			except Exception:
+				logger.exception('Business signup verification email failed for claimed-business signup user_id=%s claim_id=%s', user.pk, getattr(claim, 'pk', None))
 				transaction.set_rollback(True)
 				return Response({'detail': 'We could not send the verification email. No business claim was submitted. Check your email address and try again.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 			return Response(payload, status=status.HTTP_201_CREATED)
@@ -546,6 +553,7 @@ class ManualBusinessSignupView(generics.GenericAPIView):
 				try:
 					send_business_claim_received_email(user, claim)
 				except Exception:
+					logger.exception('Business signup confirmation email failed for manual-business signup user_id=%s claim_id=%s', user.pk, getattr(claim, 'pk', None))
 					transaction.set_rollback(True)
 					return Response({'detail': 'We could not send the verification email. No business claim was submitted. Check your email address and try again.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 				payload = build_account_response(user, 'business', claim=claim, token=None)
@@ -554,6 +562,7 @@ class ManualBusinessSignupView(generics.GenericAPIView):
 			try:
 				payload = build_email_verification_challenge(user, 'business', claim=claim)
 			except Exception:
+				logger.exception('Business signup verification email failed for manual-business signup user_id=%s claim_id=%s', user.pk, getattr(claim, 'pk', None))
 				transaction.set_rollback(True)
 				return Response({'detail': 'We could not send the verification email. No business claim was submitted. Check your email address and try again.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 			return Response(payload, status=status.HTTP_201_CREATED)
@@ -576,6 +585,7 @@ class InformalBusinessSignupView(generics.GenericAPIView):
 				try:
 					send_business_claim_received_email(user, claim)
 				except Exception:
+					logger.exception('Business signup confirmation email failed for informal-business signup user_id=%s claim_id=%s', user.pk, getattr(claim, 'pk', None))
 					transaction.set_rollback(True)
 					return Response({'detail': 'We could not send the verification email. No business claim was submitted. Check your email address and try again.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 				payload = build_account_response(user, 'business', claim=claim, token=None)
@@ -584,6 +594,7 @@ class InformalBusinessSignupView(generics.GenericAPIView):
 			try:
 				payload = build_email_verification_challenge(user, 'business', claim=claim)
 			except Exception:
+				logger.exception('Business signup verification email failed for informal-business signup user_id=%s claim_id=%s', user.pk, getattr(claim, 'pk', None))
 				transaction.set_rollback(True)
 				return Response({'detail': 'We could not send the verification email. No business claim was submitted. Check your email address and try again.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 			return Response(payload, status=status.HTTP_201_CREATED)
