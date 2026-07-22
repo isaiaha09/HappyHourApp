@@ -4881,6 +4881,38 @@ class ProfileSignupApiTests(APITestCase):
 			claim.get_profile_entry_values(BusinessClaim.ProfileEntryKind.PHOTO_REFERENCE),
 			claim.photo_references,
 		)
+		self.assertEqual(claim.status, BusinessClaim.Status.SUBMITTED)
+
+	def test_informal_business_signup_allows_uploaded_photo_without_social_links_or_website(self):
+		with TemporaryDirectory() as temp_dir:
+			with override_settings(MEDIA_ROOT=Path(temp_dir)):
+				response = self.client.post(
+					reverse('informal-business-signup'),
+					{
+						'username': 'photo_only_vendor',
+						'email': 'photo-only@example.com',
+						'password': 'test-pass-123',
+						'first_name': 'Photo',
+						'last_name': 'Vendor',
+						'business_name': 'Photo Only Snacks',
+						'business_city': BusinessClaim.MULTIPLE_AREAS_VALUE,
+						'business_venue_type': VenueType.OTHER,
+						'profile_photo_uploads': [
+							SimpleUploadedFile('booth.jpg', b'photo-only', content_type='image/jpeg'),
+						],
+						'supporting_details': 'Weekend market snack booth.',
+					},
+					format='multipart',
+				)
+
+		self.assertEqual(response.status_code, 201)
+		claim = BusinessClaim.objects.get(claimant__username='photo_only_vendor')
+		self.assertEqual(claim.status, BusinessClaim.Status.SUBMITTED)
+		self.assertEqual(len(claim.photo_references), 1)
+		self.assertEqual(
+			claim.get_profile_entry_values(BusinessClaim.ProfileEntryKind.PHOTO_REFERENCE),
+			claim.photo_references,
+		)
 
 	@patch('places.views.get_source_place_payload')
 	def test_claimed_business_signup_accepts_per_deal_attachment_uploads(self, mock_get_source_place_payload):

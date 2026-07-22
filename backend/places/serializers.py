@@ -270,6 +270,45 @@ def _save_uploaded_deal_attachment(request, claim, uploaded_file):
 	return attachment_payload
 
 
+def _append_uploaded_profile_photos_to_claim(request, claim):
+	if request is None or claim is None or getattr(claim, '_profile_photo_uploads_saved', False):
+		return
+
+	uploaded_photo_urls = []
+	for uploaded_file in request.FILES.getlist('profile_photo_uploads'):
+		content_type = str(getattr(uploaded_file, 'content_type', '') or '').strip().lower()
+		file_suffix = Path(getattr(uploaded_file, 'name', '') or '').suffix.lower()
+		if content_type == 'application/pdf' or file_suffix == '.pdf' or not (content_type.startswith('image/') or file_suffix in SUPPORTED_DEAL_ATTACHMENT_SUFFIXES):
+			raise serializers.ValidationError({'photo_uploads': ['Only image uploads from your photo library are supported.']})
+		if not file_suffix:
+			file_suffix = '.jpg'
+
+		filename_root = Path(getattr(uploaded_file, 'name', '') or 'business-photo').stem or 'business-photo'
+		safe_name = slugify(filename_root) or 'business-photo'
+		saved_name = default_storage.save(
+			f'business-profile-photos/{claim.id}/{uuid4().hex}-{safe_name}{file_suffix}',
+			uploaded_file,
+		)
+		uploaded_photo_urls.append(request.build_absolute_uri(default_storage.url(saved_name)))
+
+	if not uploaded_photo_urls:
+		return
+
+	claim.photo_references = _normalize_string_list([*claim.photo_references, *uploaded_photo_urls])
+	claim.photo_gallery_overridden = True
+	claim.save(update_fields=['photo_references', 'photo_gallery_overridden', 'updated_at'])
+	_replace_claim_profile_entries(
+		claim,
+		{
+			'social_media_links': claim.social_media_links,
+			'offer_entries': claim.offer_entries,
+			'hours_of_operation_entries': claim.hours_of_operation_entries,
+			'photo_references': claim.photo_references,
+		},
+	)
+	claim._profile_photo_uploads_saved = True
+
+
 class AccountResponseSerializer(serializers.Serializer):
 	id = serializers.IntegerField()
 	username = serializers.CharField()
@@ -808,6 +847,7 @@ class ClaimedBusinessSignupSerializer(CustomerSignupSerializer):
 			claim.save(update_fields=['deal_overrides', 'updated_at'])
 			_create_claim_profile_entries(claim, claim_data)
 			_create_claim_attachments(claim, request)
+			_append_uploaded_profile_photos_to_claim(request, claim)
 			try:
 				claim.submit_for_review()
 			except DjangoValidationError as error:
@@ -923,6 +963,7 @@ class EstablishedBusinessSignupSerializer(CustomerSignupSerializer):
 			claim.save(update_fields=['deal_overrides', 'updated_at'])
 			_create_claim_profile_entries(claim, claim_data)
 			_create_claim_attachments(claim, request)
+			_append_uploaded_profile_photos_to_claim(request, claim)
 			try:
 				claim.submit_for_review()
 			except DjangoValidationError as error:
@@ -1032,6 +1073,7 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 				},
 			)
 			_create_claim_attachments(claim, request)
+			_append_uploaded_profile_photos_to_claim(request, claim)
 			try:
 				claim.submit_for_review()
 			except DjangoValidationError as error:

@@ -95,7 +95,7 @@ def _save_uploaded_profile_photo_urls(request, claim):
 
 
 def _append_uploaded_profile_photos_to_claim(request, claim):
-	if request is None or claim is None:
+	if request is None or claim is None or getattr(claim, '_profile_photo_uploads_saved', False):
 		return
 
 	uploaded_photo_urls = _save_uploaded_profile_photo_urls(request, claim)
