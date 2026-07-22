@@ -399,7 +399,7 @@ function buildSharedBusinessDetails(form: ProfileFormState) {
   };
 }
 
-function getBusinessSignupValidationMessage(form: ProfileFormState, mode: 'claimed' | 'manual' | 'informal') {
+function getBusinessSignupValidationMessage(form: ProfileFormState, mode: 'claimed' | 'manual' | 'informal', photoUploadCount = 0) {
   const missingFields: string[] = [];
 
   if (mode !== 'claimed') {
@@ -456,11 +456,12 @@ function getBusinessSignupValidationMessage(form: ProfileFormState, mode: 'claim
       || form.youtube_profile.trim()
       || form.photo_references_text.trim(),
     );
+    const hasUploadedBusinessPhotos = photoUploadCount > 0;
     if (!form.supporting_details.trim()) {
       missingFields.push('business summary');
     }
-    if (!hasVerificationSignal) {
-      missingFields.push('website, social link, or business photo');
+    if (!hasVerificationSignal && !hasUploadedBusinessPhotos) {
+      missingFields.push('website, social link(s), and/or business photo(s)');
     }
   }
 
@@ -4889,7 +4890,7 @@ function AppScreen() {
   }
 
   async function handleSubmitClaimedBusinessProfile() {
-    const validationMessage = getBusinessSignupValidationMessage(profileForm, 'claimed');
+    const validationMessage = getBusinessSignupValidationMessage(profileForm, 'claimed', businessPhotoUploads.length);
     if (validationMessage) {
       setProfileErrorMessage(validationMessage);
       setProfileMessage(null);
@@ -4948,7 +4949,7 @@ function AppScreen() {
   }
 
   async function handleSubmitManualBusinessProfile() {
-    const validationMessage = getBusinessSignupValidationMessage(profileForm, 'manual');
+    const validationMessage = getBusinessSignupValidationMessage(profileForm, 'manual', businessPhotoUploads.length);
     if (validationMessage) {
       setProfileErrorMessage(validationMessage);
       setProfileMessage(null);
@@ -4998,7 +4999,7 @@ function AppScreen() {
   }
 
   async function handleSubmitInformalBusinessProfile() {
-    const validationMessage = getBusinessSignupValidationMessage(profileForm, 'informal');
+    const validationMessage = getBusinessSignupValidationMessage(profileForm, 'informal', businessPhotoUploads.length);
     if (validationMessage) {
       setProfileErrorMessage(validationMessage);
       setProfileMessage(null);

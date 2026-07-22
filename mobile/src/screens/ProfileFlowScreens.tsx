@@ -343,12 +343,12 @@ type KeyboardScrollViewHandle = ScrollView & {
 };
 
 type AutoScrollTextInputProps = ComponentProps<typeof TextInput> & {
-  onBeforeAutoScroll?: () => void;
+  onBeforeAutoScroll?: (target?: number | null) => void;
   scrollViewRef: RefObject<ScrollView | null>;
 };
 
 type AutoScrollFormController = {
-  handleFieldFocus: () => void;
+  handleFieldFocus: (target?: number | null) => void;
   handleScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
   scrollToTop: () => void;
   scrollViewRef: RefObject<ScrollView | null>;
@@ -356,7 +356,7 @@ type AutoScrollFormController = {
 
 type PasswordFieldProps = {
   inputStyle?: any;
-  onBeforeAutoScroll?: () => void;
+  onBeforeAutoScroll?: (target?: number | null) => void;
   onChangeText: (value: string) => void;
   scrollViewRef: RefObject<ScrollView | null>;
   value: string;
@@ -367,12 +367,18 @@ function useAutoScrollForm(): AutoScrollFormController {
   const currentScrollOffsetRef = useRef(0);
   const restoreScrollOffsetRef = useRef(0);
   const keyboardVisibleRef = useRef(false);
+  const focusedFieldTargetRef = useRef<number | null>(null);
 
   useEffect(() => {
     const keyboardShowEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const keyboardHideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
     const showSubscription = Keyboard.addListener(keyboardShowEvent, () => {
       keyboardVisibleRef.current = true;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          scrollFocusedFieldIntoView(scrollViewRef, focusedFieldTargetRef.current);
+        });
+      });
     });
     const hideSubscription = Keyboard.addListener(keyboardHideEvent, () => {
       keyboardVisibleRef.current = false;
@@ -384,7 +390,8 @@ function useAutoScrollForm(): AutoScrollFormController {
     };
   }, []);
 
-  function handleFieldFocus() {
+  function handleFieldFocus(target?: number | null) {
+    focusedFieldTargetRef.current = target ?? null;
     if (!keyboardVisibleRef.current) {
       restoreScrollOffsetRef.current = currentScrollOffsetRef.current;
     }
@@ -432,7 +439,7 @@ function scrollFocusedFieldIntoView(scrollViewRef: RefObject<ScrollView | null>,
 
   requestAnimationFrame(() => {
     const responder = (scrollViewRef.current as KeyboardScrollViewHandle | null)?.getScrollResponder?.();
-    responder?.scrollResponderScrollNativeHandleToKeyboard?.(target, 96, true);
+    responder?.scrollResponderScrollNativeHandleToKeyboard?.(target, 140, true);
   });
 }
 
@@ -444,8 +451,9 @@ function AutoScrollTextInput({ onBeforeAutoScroll, onFocus, scrollViewRef, ...pr
       {...props}
       ref={inputRef}
       onFocus={(event) => {
-        onBeforeAutoScroll?.();
-        scrollFocusedFieldIntoView(scrollViewRef, findNodeHandle(inputRef.current));
+        const target = findNodeHandle(inputRef.current);
+        onBeforeAutoScroll?.(target);
+        scrollFocusedFieldIntoView(scrollViewRef, target);
         onFocus?.(event);
       }}
     />
@@ -1538,6 +1546,7 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
       <KeyboardAwareFormScreen>
         <ScrollView
           contentContainerStyle={styles.profileScrollContent}
+          automaticallyAdjustKeyboardInsets
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           keyboardShouldPersistTaps="handled"
           onScroll={handleScroll}
