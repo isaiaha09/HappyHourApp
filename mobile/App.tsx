@@ -2154,6 +2154,10 @@ function AppScreen() {
       setBrowseProfileTransitionFrom(null);
       setIncomingBrowseProfileScreen(null);
       setIncomingBrowseProfileTargetScreen(null);
+      setGuestBrowseTransitionFrom(null);
+      setIncomingGuestBrowseScreen(null);
+      setMainShellTransitionFrom(null);
+      setIncomingMainShellScreen(null);
       setIncomingOnboardingScreen(null);
       setReturningToSplashScreen(null);
       onboardingNavigationInFlightRef.current = false;
@@ -2163,6 +2167,13 @@ function AppScreen() {
       return;
     }
 
+    setBrowseProfileTransitionFrom(null);
+    setIncomingBrowseProfileScreen(null);
+    setIncomingBrowseProfileTargetScreen(null);
+    setGuestBrowseTransitionFrom(null);
+    setIncomingGuestBrowseScreen(null);
+    setMainShellTransitionFrom(null);
+    setIncomingMainShellScreen(null);
     screenTransition.setValue(0);
     setReturningToSplashScreen(null);
     pendingOnboardingTransitionRef.current = { onComplete, targetScreen: nextScreen };
