@@ -6956,6 +6956,7 @@ function AppScreen() {
         wrapScreenWithInteractiveBackSwipe(currentOnboardingScreen, (
           <View style={styles.onboardingTransitionRoot}>
             <Animated.View
+              key={`onboarding-current-${currentOnboardingScreen}-${incomingOnboardingScreen ? 'transitioning' : 'settled'}`}
               pointerEvents={incomingOnboardingScreen ? 'none' : 'auto'}
               style={[
                 incomingOnboardingScreen ? styles.screenTransitionLayerAbsolute : styles.screenTransitionLayer,
@@ -6968,7 +6969,7 @@ function AppScreen() {
               {renderOnboardingScreen(currentOnboardingScreen)}
             </Animated.View>
             {incomingOnboardingScreen ? (
-              <Animated.View style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, incomingScreenTransitionStyle]}>
+              <Animated.View key={`onboarding-incoming-${incomingOnboardingScreen}`} style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, incomingScreenTransitionStyle]}>
                 {renderOnboardingScreen(incomingOnboardingScreen)}
               </Animated.View>
             ) : null}
