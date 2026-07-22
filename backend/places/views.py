@@ -521,7 +521,7 @@ class BusinessSignupView(generics.GenericAPIView):
 				try:
 					send_business_claim_received_email(user, claim)
 				except Exception:
-					logger.exception('Business signup confirmation email failed for reused claimed-business signup user_id=%s claim_id=%s', user.pk, getattr(claim, 'pk', None))
+					logger.exception('Business signup confirmation email failed for reused claimed-business signup user_id=%s claim_id=%s email_backend=%s email_host=%s email_port=%s email_use_tls=%s email_use_ssl=%s', user.pk, getattr(claim, 'pk', None), getattr(settings, 'EMAIL_BACKEND', ''), getattr(settings, 'EMAIL_HOST', ''), getattr(settings, 'EMAIL_PORT', ''), getattr(settings, 'EMAIL_USE_TLS', ''), getattr(settings, 'EMAIL_USE_SSL', ''))
 					transaction.set_rollback(True)
 					return Response({'detail': 'We could not send the verification email. No business claim was submitted. Check your email address and try again.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 				payload = build_account_response(user, 'business', claim=claim, token=response_token)
@@ -530,7 +530,7 @@ class BusinessSignupView(generics.GenericAPIView):
 			try:
 				payload = build_email_verification_challenge(user, 'business', claim=claim)
 			except Exception:
-				logger.exception('Business signup verification email failed for claimed-business signup user_id=%s claim_id=%s', user.pk, getattr(claim, 'pk', None))
+				logger.exception('Business signup verification email failed for claimed-business signup user_id=%s claim_id=%s email_backend=%s email_host=%s email_port=%s email_use_tls=%s email_use_ssl=%s', user.pk, getattr(claim, 'pk', None), getattr(settings, 'EMAIL_BACKEND', ''), getattr(settings, 'EMAIL_HOST', ''), getattr(settings, 'EMAIL_PORT', ''), getattr(settings, 'EMAIL_USE_TLS', ''), getattr(settings, 'EMAIL_USE_SSL', ''))
 				transaction.set_rollback(True)
 				return Response({'detail': 'We could not send the verification email. No business claim was submitted. Check your email address and try again.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 			return Response(payload, status=status.HTTP_201_CREATED)
@@ -553,7 +553,7 @@ class ManualBusinessSignupView(generics.GenericAPIView):
 				try:
 					send_business_claim_received_email(user, claim)
 				except Exception:
-					logger.exception('Business signup confirmation email failed for manual-business signup user_id=%s claim_id=%s', user.pk, getattr(claim, 'pk', None))
+					logger.exception('Business signup confirmation email failed for manual-business signup user_id=%s claim_id=%s email_backend=%s email_host=%s email_port=%s email_use_tls=%s email_use_ssl=%s', user.pk, getattr(claim, 'pk', None), getattr(settings, 'EMAIL_BACKEND', ''), getattr(settings, 'EMAIL_HOST', ''), getattr(settings, 'EMAIL_PORT', ''), getattr(settings, 'EMAIL_USE_TLS', ''), getattr(settings, 'EMAIL_USE_SSL', ''))
 					transaction.set_rollback(True)
 					return Response({'detail': 'We could not send the verification email. No business claim was submitted. Check your email address and try again.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 				payload = build_account_response(user, 'business', claim=claim, token=None)
@@ -562,7 +562,7 @@ class ManualBusinessSignupView(generics.GenericAPIView):
 			try:
 				payload = build_email_verification_challenge(user, 'business', claim=claim)
 			except Exception:
-				logger.exception('Business signup verification email failed for manual-business signup user_id=%s claim_id=%s', user.pk, getattr(claim, 'pk', None))
+				logger.exception('Business signup verification email failed for manual-business signup user_id=%s claim_id=%s email_backend=%s email_host=%s email_port=%s email_use_tls=%s email_use_ssl=%s', user.pk, getattr(claim, 'pk', None), getattr(settings, 'EMAIL_BACKEND', ''), getattr(settings, 'EMAIL_HOST', ''), getattr(settings, 'EMAIL_PORT', ''), getattr(settings, 'EMAIL_USE_TLS', ''), getattr(settings, 'EMAIL_USE_SSL', ''))
 				transaction.set_rollback(True)
 				return Response({'detail': 'We could not send the verification email. No business claim was submitted. Check your email address and try again.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 			return Response(payload, status=status.HTTP_201_CREATED)
@@ -585,7 +585,7 @@ class InformalBusinessSignupView(generics.GenericAPIView):
 				try:
 					send_business_claim_received_email(user, claim)
 				except Exception:
-					logger.exception('Business signup confirmation email failed for informal-business signup user_id=%s claim_id=%s', user.pk, getattr(claim, 'pk', None))
+					logger.exception('Business signup confirmation email failed for informal-business signup user_id=%s claim_id=%s email_backend=%s email_host=%s email_port=%s email_use_tls=%s email_use_ssl=%s', user.pk, getattr(claim, 'pk', None), getattr(settings, 'EMAIL_BACKEND', ''), getattr(settings, 'EMAIL_HOST', ''), getattr(settings, 'EMAIL_PORT', ''), getattr(settings, 'EMAIL_USE_TLS', ''), getattr(settings, 'EMAIL_USE_SSL', ''))
 					transaction.set_rollback(True)
 					return Response({'detail': 'We could not send the verification email. No business claim was submitted. Check your email address and try again.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 				payload = build_account_response(user, 'business', claim=claim, token=None)
@@ -594,7 +594,7 @@ class InformalBusinessSignupView(generics.GenericAPIView):
 			try:
 				payload = build_email_verification_challenge(user, 'business', claim=claim)
 			except Exception:
-				logger.exception('Business signup verification email failed for informal-business signup user_id=%s claim_id=%s', user.pk, getattr(claim, 'pk', None))
+				logger.exception('Business signup verification email failed for informal-business signup user_id=%s claim_id=%s email_backend=%s email_host=%s email_port=%s email_use_tls=%s email_use_ssl=%s', user.pk, getattr(claim, 'pk', None), getattr(settings, 'EMAIL_BACKEND', ''), getattr(settings, 'EMAIL_HOST', ''), getattr(settings, 'EMAIL_PORT', ''), getattr(settings, 'EMAIL_USE_TLS', ''), getattr(settings, 'EMAIL_USE_SSL', ''))
 				transaction.set_rollback(True)
 				return Response({'detail': 'We could not send the verification email. No business claim was submitted. Check your email address and try again.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 			return Response(payload, status=status.HTTP_201_CREATED)

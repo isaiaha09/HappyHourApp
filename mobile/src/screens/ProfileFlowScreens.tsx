@@ -432,6 +432,21 @@ function useScrollToTopOnError(errorMessage: string | null, scrollToTop: () => v
   }, [errorMessage, scrollToTop]);
 }
 
+function useScrollToTopAfterSubmitError(errorMessage: string | null, submitting: boolean, scrollToTop: () => void) {
+  const previousSubmittingRef = useRef(submitting);
+
+  useEffect(() => {
+    const wasSubmitting = previousSubmittingRef.current;
+    previousSubmittingRef.current = submitting;
+
+    if (!errorMessage || submitting || !wasSubmitting) {
+      return;
+    }
+
+    scrollToTop();
+  }, [errorMessage, scrollToTop, submitting]);
+}
+
 function scrollFocusedFieldIntoView(scrollViewRef: RefObject<ScrollView | null>, target: number | null) {
   if (target === null) {
     return;
@@ -1307,6 +1322,7 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
   const [attachmentPreviewLoading, setAttachmentPreviewLoading] = useState(false);
   const attachmentPreviewRequestIdRef = useRef(0);
   const { handleFieldFocus, handleScroll, scrollToTop, scrollViewRef } = useAutoScrollForm();
+  useScrollToTopAfterSubmitError(errorMessage, submitting, scrollToTop);
   const currentPhotoUrls = dedupeImageUrls(
     form.photo_references_text
       .split(/\r?\n/)
