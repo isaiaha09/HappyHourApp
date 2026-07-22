@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { ActivityIndicator, Animated, Image, Keyboard, KeyboardAvoidingView, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Animated, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -28,6 +28,12 @@ type DirectMessagesScreenProps = {
 };
 
 const directMessageThreadCache = new Map<string, DirectMessageThread[]>();
+
+const dismissKeyboardOnScrollProps = {
+	keyboardDismissMode: Platform.OS === 'ios' ? 'interactive' : 'on-drag',
+	onScrollBeginDrag: Keyboard.dismiss,
+	onTouchStart: Keyboard.dismiss,
+} as const;
 
 function buildImageDraft(asset: ImagePicker.ImagePickerAsset): BusinessAttachmentDraft {
 	const extension = asset.mimeType?.includes('png') ? 'png' : 'jpg';
@@ -699,6 +705,7 @@ export function DirectMessagesScreen({
 							isLandscape ? styles.directMessageFeedLandscape : null,
 							{ paddingBottom: Math.max(insets.bottom + 20, 20) },
 						]}
+						{...dismissKeyboardOnScrollProps}
 						keyboardShouldPersistTaps="handled"
 						showsVerticalScrollIndicator={false}
 					>
@@ -784,6 +791,7 @@ export function DirectMessagesScreen({
 									isLandscape ? styles.directMessageFeedLandscape : null,
 									{ paddingBottom: Math.max(insets.bottom + 12, 12) },
 								]}
+								{...dismissKeyboardOnScrollProps}
 								keyboardShouldPersistTaps="handled"
 								onContentSizeChange={() => scrollMessagesToEnd(false)}
 								showsVerticalScrollIndicator={false}

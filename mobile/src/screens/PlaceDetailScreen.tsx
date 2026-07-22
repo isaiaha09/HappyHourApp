@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
-import { ActivityIndicator, Image, Keyboard, Linking, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Keyboard, Linking, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
 import { WebView } from 'react-native-webview';
@@ -137,6 +137,12 @@ function buildPdfPreviewHtml(base64Document: string, fileName: string) {
     </html>
   `;
 }
+
+const dismissKeyboardOnScrollProps = {
+  keyboardDismissMode: Platform.OS === 'ios' ? 'interactive' : 'on-drag',
+  onScrollBeginDrag: Keyboard.dismiss,
+  onTouchStart: Keyboard.dismiss,
+} as const;
 
 export type PlaceDetailScreenProps = {
   backButtonLabel?: string;
@@ -363,6 +369,8 @@ export function PlaceDetailScreen({
           isLandscape ? styles.detailScrollContentLandscape : null,
           { paddingBottom: Math.max(insets.bottom + 118, 132) },
         ]}
+        {...dismissKeyboardOnScrollProps}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.screenHeaderBar, styles.screenHeaderBarRow]}>
@@ -473,6 +481,8 @@ export function PlaceDetailScreen({
                 <ScrollView
                   contentContainerStyle={styles.photoGalleryRow}
                   horizontal
+                  {...dismissKeyboardOnScrollProps}
+                  keyboardShouldPersistTaps="handled"
                   showsHorizontalScrollIndicator={false}
                   style={styles.photoGalleryScroll}
                 >
@@ -663,7 +673,7 @@ export function PlaceDetailScreen({
               Choose the detail that needs to be fixed, then explain exactly what should be added or changed.
             </Text>
 
-            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <ScrollView {...dismissKeyboardOnScrollProps} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
               <View style={styles.profileFormSection}>
                 <Text style={styles.profileFieldLabel}>What needs to be updated?</Text>
                 <View style={styles.filterRow}>

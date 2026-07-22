@@ -661,6 +661,10 @@ function AppScreen() {
   const [supportDraftContext, setSupportDraftContext] = useState<{ message: string; subject: string } | null>(null);
   const [pendingEmailVerification, setPendingEmailVerification] = useState<EmailVerificationChallengeResponse | null>(null);
   const [emailVerificationCode, setEmailVerificationCode] = useState('');
+  const [outgoingEmailVerificationSnapshot, setOutgoingEmailVerificationSnapshot] = useState<{
+    pendingVerification: EmailVerificationChallengeResponse | null;
+    verificationCode: string;
+  } | null>(null);
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [dashboardSubmitting, setDashboardSubmitting] = useState(false);
   const [settingsSubmittingAction, setSettingsSubmittingAction] = useState<SettingsSubmittingAction>(null);
@@ -1497,6 +1501,7 @@ function AppScreen() {
       unstable_batchedUpdates(() => {
         setIncomingOnboardingScreen(null);
         setScreenMode(pendingTransition.targetScreen);
+        setOutgoingEmailVerificationSnapshot(null);
         screenTransition.setValue(1);
       });
       onboardingNavigationInFlightRef.current = false;
@@ -2015,6 +2020,14 @@ function AppScreen() {
     onComplete?: () => void,
   ) {
     const currentScreen = screenMode;
+    if (currentScreen === 'email-verification' && nextScreen !== 'email-verification') {
+      setOutgoingEmailVerificationSnapshot({
+        pendingVerification: pendingEmailVerification,
+        verificationCode: emailVerificationCode,
+      });
+    } else {
+      setOutgoingEmailVerificationSnapshot(null);
+    }
     const shouldAnimateGuestOnboardingEntry = !authenticatedSession
       && !selectedPlaceSlug
       && currentScreen === 'browse'
@@ -6175,6 +6188,12 @@ function AppScreen() {
       case 'direct-messages':
         return renderProfilesScreen(profileSessionOverride, 'direct-messages');
       case 'email-verification':
+        const verificationScreenPendingVerification = targetScreen === currentOnboardingScreen && incomingOnboardingScreen
+          ? (outgoingEmailVerificationSnapshot?.pendingVerification ?? pendingEmailVerification)
+          : pendingEmailVerification;
+        const verificationScreenCode = targetScreen === currentOnboardingScreen && incomingOnboardingScreen
+          ? outgoingEmailVerificationSnapshot?.verificationCode ?? emailVerificationCode
+          : emailVerificationCode;
         return (
           <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
             <EmailVerificationScreen
@@ -6185,9 +6204,9 @@ function AppScreen() {
               onChangeCode={setEmailVerificationCode}
               onResend={() => void handleResendEmailVerificationCode()}
               onSubmit={() => void handleSubmitEmailVerificationCode()}
-              pendingVerification={pendingEmailVerification}
+              pendingVerification={verificationScreenPendingVerification}
               submitting={profileSubmitting}
-              verificationCode={emailVerificationCode}
+              verificationCode={verificationScreenCode}
             />
           </SafeAreaView>
         );

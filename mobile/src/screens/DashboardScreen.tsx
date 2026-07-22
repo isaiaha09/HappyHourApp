@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
-import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Keyboard, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 
 import { styles } from '../appStyles';
 import { buildDealOverridesFromDeals, buildNormalizedDealOverrides, buildNormalizedOperatingHourOverrides, buildOperatingHourOverridesFromWindows } from '../businessProfileOverrides';
@@ -76,6 +76,12 @@ export type BlockedDirectMessageCustomersScreenProps = Pick<AccountSettingsScree
   onConfirmBlockedDirectMessageCustomers: (usernames: string[]) => Promise<boolean>;
   onLoadExistingDirectMessageCustomers: () => Promise<DirectMessageThread[]>;
 };
+
+const dismissKeyboardOnScrollProps = {
+  keyboardDismissMode: Platform.OS === 'ios' ? 'interactive' : 'on-drag',
+  onScrollBeginDrag: Keyboard.dismiss,
+  onTouchStart: Keyboard.dismiss,
+} as const;
 
 function DashboardDetailRow({ label, value }: { label: string; value: string }) {
   return (
@@ -503,6 +509,7 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
       >
         <ScrollView
           contentContainerStyle={styles.dashboardScrollContent}
+          {...dismissKeyboardOnScrollProps}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -780,7 +787,7 @@ export function FavoriteBusinessesScreen({
 
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
-      <ScrollView contentContainerStyle={styles.dashboardScrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.dashboardScrollContent} {...dismissKeyboardOnScrollProps} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
           <NativeIOSLiquidGlassBackButton label="Back to Profile" onPress={onBack} />
         </View>
@@ -852,7 +859,7 @@ export function FavoriteBusinessNotificationsScreen({
 
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
-      <ScrollView contentContainerStyle={styles.dashboardScrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.dashboardScrollContent} {...dismissKeyboardOnScrollProps} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
           <NativeIOSLiquidGlassBackButton label="Back to Profile" onPress={onBack} />
         </View>
@@ -887,6 +894,8 @@ export function FavoriteBusinessNotificationsScreen({
               hasNotificationOverflow ? (
                 <ScrollView
                   contentContainerStyle={styles.dashboardNotificationList}
+                  {...dismissKeyboardOnScrollProps}
+                  keyboardShouldPersistTaps="handled"
                   nestedScrollEnabled
                   showsVerticalScrollIndicator={false}
                   style={styles.dashboardNotificationListScroller}
@@ -1130,6 +1139,7 @@ export function BusinessProfileEditorScreen({
       >
         <ScrollView
           contentContainerStyle={styles.dashboardScrollContent}
+          {...dismissKeyboardOnScrollProps}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -1202,6 +1212,8 @@ export function BusinessProfileEditorScreen({
                     <ScrollView
                       contentContainerStyle={styles.photoGalleryRow}
                       horizontal
+                      {...dismissKeyboardOnScrollProps}
+                      keyboardShouldPersistTaps="handled"
                       showsHorizontalScrollIndicator={false}
                       style={styles.photoGalleryScroll}
                     >
@@ -1222,6 +1234,8 @@ export function BusinessProfileEditorScreen({
                     <ScrollView
                       contentContainerStyle={styles.photoGalleryRow}
                       horizontal
+                      {...dismissKeyboardOnScrollProps}
+                      keyboardShouldPersistTaps="handled"
                       showsHorizontalScrollIndicator={false}
                       style={styles.photoGalleryScroll}
                     >
@@ -1306,6 +1320,7 @@ export function AccountSettingsScreen({
       >
         <ScrollView
           contentContainerStyle={styles.dashboardScrollContent}
+          {...dismissKeyboardOnScrollProps}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -1607,6 +1622,8 @@ export function BlockedDirectMessageCustomersScreen({
             ) : selectableMessageFeedCustomers.length ? (
               <View style={styles.settingsItemBody}>
                 <ScrollView
+                  {...dismissKeyboardOnScrollProps}
+                  keyboardShouldPersistTaps="handled"
                   nestedScrollEnabled
                   showsVerticalScrollIndicator={hasSelectableCustomerOverflow}
                   style={hasSelectableCustomerOverflow ? styles.blockedCustomerListScroller : null}
@@ -1689,6 +1706,8 @@ export function BlockedDirectMessageCustomersScreen({
             <Text style={styles.guestFavoriteModalText}>Are you sure these are the accounts you want to block from direct messages?</Text>
             <View style={styles.settingsItemBody}>
               <ScrollView
+                {...dismissKeyboardOnScrollProps}
+                keyboardShouldPersistTaps="handled"
                 nestedScrollEnabled
                 showsVerticalScrollIndicator={hasSelectedCustomerOverflow}
                 style={hasSelectedCustomerOverflow ? styles.blockedCustomerModalListScroller : null}
