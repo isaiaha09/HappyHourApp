@@ -9,6 +9,7 @@ from django.contrib import admin, messages
 from django.contrib.auth.admin import GroupAdmin, UserAdmin
 from django.contrib.auth.models import Group, User
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models import Exists, OuterRef, Prefetch, Q, Subquery
 from django.http import JsonResponse
 from django.http import HttpResponseRedirect
@@ -46,6 +47,28 @@ def _format_verification_blocker(blocker_code):
 	if blocker_code in VERIFICATION_BLOCKER_LABELS:
 		return VERIFICATION_BLOCKER_LABELS[blocker_code]
 	return f'{str(blocker_code or "").replace("_", " ").capitalize()}.'
+
+
+def _collect_orphaned_claimant_ids_for_deleted_claims(queryset):
+	selected_claim_ids_by_claimant = {}
+	for claim_id, claimant_id in queryset.values_list('pk', 'claimant_id'):
+		selected_claim_ids_by_claimant.setdefault(claimant_id, set()).add(claim_id)
+
+	orphaned_claimant_ids = []
+	for claimant_id, selected_claim_ids in selected_claim_ids_by_claimant.items():
+		if not claimant_id:
+			continue
+
+		claimant = User.objects.filter(pk=claimant_id).only('pk', 'is_staff', 'is_superuser').first()
+		if claimant is None or claimant.is_staff or claimant.is_superuser:
+			continue
+
+		has_other_claims = BusinessClaim.objects.filter(claimant_id=claimant_id).exclude(pk__in=selected_claim_ids).exists()
+		has_other_memberships = BusinessMembership.objects.filter(user_id=claimant_id).exclude(claim_id__in=selected_claim_ids).exists()
+		if not has_other_claims and not has_other_memberships:
+			orphaned_claimant_ids.append(claimant_id)
+
+	return orphaned_claimant_ids
 
 
 def _json_text_for_admin(value):
@@ -958,12 +981,20 @@ class StaffUserAdmin(UserAdmin):
 		return super().changelist_view(request, extra_context)
 
 
+class HardDeleteUserAdminMixin:
+	def delete_model(self, request, obj):
+		User.objects.filter(pk=obj.pk).delete()
+
+	def delete_queryset(self, request, queryset):
+		User.objects.filter(pk__in=queryset.values_list('pk', flat=True)).delete()
+
+
 happyhour_admin_site.register(User, StaffUserAdmin)
 happyhour_admin_site.register(Group, GroupAdmin)
 
 
 @admin.register(CustomerAccount, site=happyhour_admin_site)
-class CustomerAccountAdmin(UserAdmin):
+class CustomerAccountAdmin(HardDeleteUserAdminMixin, UserAdmin):
 	delete_confirmation_template = 'admin/places/customeraccount/delete_confirmation.html'
 	delete_selected_confirmation_template = 'admin/places/customeraccount/delete_selected_confirmation.html'
 	list_display = (
@@ -1010,7 +1041,7 @@ class CustomerAccountAdmin(UserAdmin):
 			return False
 
 @admin.register(BusinessAccount, site=happyhour_admin_site)
-class BusinessAccountAdmin(UserAdmin):
+class BusinessAccountAdmin(HardDeleteUserAdminMixin, UserAdmin):
 	delete_confirmation_template = 'admin/places/businessaccount/delete_confirmation.html'
 	delete_selected_confirmation_template = 'admin/places/businessaccount/delete_selected_confirmation.html'
 	list_display = (
@@ -1737,6 +1768,20 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 		if obj.status == BusinessClaim.Status.UNDER_REVIEW and not obj.reviewed_by:
 			obj.reviewed_by = request.user
 		super().save_model(request, obj, form, change)
+
+	def delete_model(self, request, obj):
+		with transaction.atomic():
+			orphaned_claimant_ids = _collect_orphaned_claimant_ids_for_deleted_claims(self.model.objects.filter(pk=obj.pk))
+			super().delete_model(request, obj)
+			if orphaned_claimant_ids:
+				User.objects.filter(pk__in=orphaned_claimant_ids).delete()
+
+	def delete_queryset(self, request, queryset):
+		with transaction.atomic():
+			orphaned_claimant_ids = _collect_orphaned_claimant_ids_for_deleted_claims(queryset)
+			super().delete_queryset(request, queryset)
+			if orphaned_claimant_ids:
+				User.objects.filter(pk__in=orphaned_claimant_ids).delete()
 
 	@admin.display(description='Trust score')
 	def verification_score_display(self, obj):

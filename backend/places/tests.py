@@ -8257,6 +8257,16 @@ class AccountProxyTests(APITestCase):
 		self.assertContains(response, first_customer.email)
 		self.assertContains(response, second_customer.email)
 
+	def test_customer_account_admin_delete_model_hard_deletes_user(self):
+		customer = User.objects.create_user(username='hard_delete_customer', email='hard_delete_customer@example.com', password='test-pass-123')
+		admin_instance = CustomerAccountAdmin(CustomerAccount, AdminSite())
+		request = RequestFactory().post('/admin/places/customeraccount/')
+		request.user = self.admin_user
+
+		admin_instance.delete_model(request, CustomerAccount.objects.get(pk=customer.pk))
+
+		self.assertFalse(User.objects.filter(pk=customer.pk).exists())
+
 	def test_business_account_delete_confirmation_shows_warning_and_scrollable_list(self):
 		approved_user = User.objects.create_user(username='delete_business_owner', email='delete_business_owner@example.com', password='test-pass-123')
 		snapshot = ListingSnapshot.objects.create(
@@ -8341,6 +8351,32 @@ class AccountProxyTests(APITestCase):
 		self.assertContains(response, second_user.username)
 		self.assertContains(response, first_snapshot.name)
 		self.assertContains(response, second_snapshot.name)
+
+	def test_business_account_admin_delete_model_hard_deletes_user(self):
+		user = User.objects.create_user(username='hard_delete_business', email='hard_delete_business@example.com', password='test-pass-123')
+		snapshot = ListingSnapshot.objects.create(
+			name='Hard Delete Business',
+			city=City.VENTURA,
+			venue_type=VenueType.CAFE,
+			address_line_1='40 Main St',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=user,
+			listing_snapshot=snapshot,
+			contact_name='Business Owner',
+			job_title='Owner',
+			work_email='owner@harddelete.example.com',
+			verification_summary='Approved verification.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(user=user, claim=claim, is_active=True)
+		admin_instance = BusinessAccountAdmin(BusinessAccount, AdminSite())
+		request = RequestFactory().post('/admin/places/businessaccount/')
+		request.user = self.admin_user
+
+		admin_instance.delete_model(request, BusinessAccount.objects.get(pk=user.pk))
+
+		self.assertFalse(User.objects.filter(pk=user.pk).exists())
 
 
 class ListingSnapshotAdminTests(TestCase):
@@ -9633,6 +9669,13 @@ class BusinessClaimAdminTests(TestCase):
 			file_size=14,
 		)
 
+	def _build_request(self, path='/admin/places/businessclaim/'):
+		request = RequestFactory().post(path)
+		request.user = self.admin_user
+		setattr(request, 'session', {})
+		setattr(request, '_messages', FallbackStorage(request))
+		return request
+
 	def test_change_view_shows_submitted_related_claim_data(self):
 		self.client.force_login(self.admin_user)
 
@@ -10000,6 +10043,67 @@ class BusinessClaimAdminTests(TestCase):
 		self.assertContains(response, other_snapshot.name)
 		self.assertContains(response, self.claim.claimant.email)
 		self.assertContains(response, other_claim.claimant.email)
+
+	def test_delete_model_removes_orphaned_claimant_account(self):
+		claimant_id = self.claimant.pk
+		claim_id = self.claim.pk
+		request = self._build_request()
+
+		self.admin.delete_model(request, self.claim)
+
+		self.assertFalse(BusinessClaim.objects.filter(pk=claim_id).exists())
+		self.assertFalse(User.objects.filter(pk=claimant_id).exists())
+
+	def test_delete_model_keeps_claimant_with_other_claims(self):
+		other_snapshot = ListingSnapshot.objects.create(
+			name='Second Claimed Place',
+			city=City.CAMARILLO,
+			venue_type=VenueType.CAFE,
+			address_line_1='456 Mission Dr',
+			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+		)
+		other_claim = BusinessClaim.objects.create(
+			claimant=self.claimant,
+			listing_snapshot=other_snapshot,
+			pathway=BusinessClaim.Pathway.CLAIMED,
+			status=BusinessClaim.Status.DRAFT,
+			contact_name='Owner Name',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='owner+second@claimed-place.com',
+		)
+		claimant_id = self.claimant.pk
+		request = self._build_request()
+
+		self.admin.delete_model(request, self.claim)
+
+		self.assertFalse(BusinessClaim.objects.filter(pk=self.claim.pk).exists())
+		self.assertTrue(User.objects.filter(pk=claimant_id).exists())
+		self.assertTrue(BusinessClaim.objects.filter(pk=other_claim.pk).exists())
+
+	def test_delete_queryset_removes_all_orphaned_claimant_accounts(self):
+		other_claimant = User.objects.create_user(username='third_claim_owner', email='third-owner@example.com', password='test-pass-123')
+		other_snapshot = ListingSnapshot.objects.create(
+			name='Third Claimed Place',
+			city=City.OXNARD,
+			venue_type=VenueType.BAR,
+			address_line_1='789 Harbor Blvd',
+			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+		)
+		other_claim = BusinessClaim.objects.create(
+			claimant=other_claimant,
+			listing_snapshot=other_snapshot,
+			pathway=BusinessClaim.Pathway.CLAIMED,
+			status=BusinessClaim.Status.SUBMITTED,
+			contact_name='Third Owner',
+			job_title=BusinessClaim.JobTitle.MANAGER,
+			work_email='third@claimed-place.com',
+		)
+		request = self._build_request()
+
+		self.admin.delete_queryset(request, BusinessClaim.objects.filter(pk__in=[self.claim.pk, other_claim.pk]))
+
+		self.assertFalse(BusinessClaim.objects.filter(pk__in=[self.claim.pk, other_claim.pk]).exists())
+		self.assertFalse(User.objects.filter(pk__in=[self.claimant.pk, other_claimant.pk]).exists())
 
 
 
