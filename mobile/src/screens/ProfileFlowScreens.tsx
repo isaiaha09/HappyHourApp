@@ -36,6 +36,11 @@ import type { BusinessAttachmentBuckets, BusinessAttachmentDraft, BusinessAttach
 
 const SUPPORT_EMAIL = 'support@diningdealz.com';
 const onboardingPlaceholderTextColor = theme.textDarkMuted;
+const dismissKeyboardOnScrollProps = {
+  keyboardDismissMode: Platform.OS === 'ios' ? 'interactive' : 'on-drag',
+  onScrollBeginDrag: Keyboard.dismiss,
+  onTouchStart: Keyboard.dismiss,
+} as const;
 
 function OnboardingBackButton({ label, onPress, style }: { label: string; onPress: () => void; style?: any }) {
   const resolvedStyle = isNativeIOSLiquidGlassHeaderButtonAvailable()
@@ -642,7 +647,7 @@ export function AuthPortalScreen({ authMessage, autoFocusIdentifier, errorMessag
       <KeyboardAwareFormScreen>
         <ScrollView
           contentContainerStyle={styles.authScrollContent}
-          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          {...dismissKeyboardOnScrollProps}
           keyboardShouldPersistTaps="always"
           onScroll={handleScroll}
           ref={scrollViewRef}
@@ -777,7 +782,7 @@ export function CreateProfileScreen({ errorMessage, form, isLandscape, message, 
       <KeyboardAwareFormScreen>
         <ScrollView
           contentContainerStyle={[styles.profileScrollContent, styles.createProfileScrollContent]}
-          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          {...dismissKeyboardOnScrollProps}
           keyboardShouldPersistTaps="always"
           onScroll={handleScroll}
           ref={scrollViewRef}
@@ -887,7 +892,7 @@ export function EmailVerificationScreen({ errorMessage, isLandscape, message, on
       <KeyboardAwareFormScreen>
         <ScrollView
           contentContainerStyle={[styles.profileScrollContent, styles.createProfileScrollContent]}
-          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          {...dismissKeyboardOnScrollProps}
           keyboardShouldPersistTaps="always"
           onScroll={handleScroll}
           ref={scrollViewRef}
@@ -978,7 +983,7 @@ export function BusinessClaimReviewPendingScreen({ errorMessage, isLandscape, me
       <KeyboardAwareFormScreen>
         <ScrollView
           contentContainerStyle={[styles.profileScrollContent, styles.createProfileScrollContent]}
-          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          {...dismissKeyboardOnScrollProps}
           keyboardShouldPersistTaps="always"
           showsVerticalScrollIndicator={false}
         >
@@ -1044,7 +1049,7 @@ export function ContactSupportScreen({ errorMessage, initialMessage = '', initia
       <KeyboardAwareFormScreen>
         <ScrollView
           contentContainerStyle={[styles.profileScrollContent, styles.createProfileScrollContent]}
-          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          {...dismissKeyboardOnScrollProps}
           keyboardShouldPersistTaps="always"
           onScroll={handleScroll}
           ref={scrollViewRef}
@@ -1121,6 +1126,7 @@ function LegalDocumentScreen({ eyebrow, intro, isLandscape, onBack, sections, ti
       <KeyboardAwareFormScreen>
         <ScrollView
           contentContainerStyle={[styles.profileScrollContent, styles.createProfileScrollContent]}
+          {...dismissKeyboardOnScrollProps}
           keyboardShouldPersistTaps="always"
           showsVerticalScrollIndicator={false}
         >
@@ -1239,7 +1245,7 @@ export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces,
       <KeyboardAwareFormScreen>
         <ScrollView
           contentContainerStyle={styles.profileScrollContent}
-          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          {...dismissKeyboardOnScrollProps}
           keyboardShouldPersistTaps="always"
           onScroll={handleScroll}
           ref={scrollViewRef}
@@ -1561,11 +1567,9 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
       <KeyboardAwareFormScreen>
         <ScrollView
           contentContainerStyle={styles.profileScrollContent}
-          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          {...dismissKeyboardOnScrollProps}
           keyboardShouldPersistTaps="handled"
           onScroll={handleScroll}
-          onScrollBeginDrag={Keyboard.dismiss}
-          onTouchStart={Keyboard.dismiss}
           ref={scrollViewRef}
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
@@ -1749,6 +1753,8 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
                     <ScrollView
                       contentContainerStyle={styles.photoGalleryRow}
                       horizontal
+                      {...dismissKeyboardOnScrollProps}
+                      keyboardShouldPersistTaps="handled"
                       showsHorizontalScrollIndicator={false}
                       style={styles.photoGalleryScroll}
                     >
@@ -1769,6 +1775,8 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
                     <ScrollView
                       contentContainerStyle={styles.photoGalleryRow}
                       horizontal
+                      {...dismissKeyboardOnScrollProps}
+                      keyboardShouldPersistTaps="handled"
                       showsHorizontalScrollIndicator={false}
                       style={styles.photoGalleryScroll}
                     >

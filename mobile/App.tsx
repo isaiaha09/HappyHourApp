@@ -1820,6 +1820,7 @@ function AppScreen() {
     const status = (parsedUrl.searchParams.get('status') ?? '').trim().toLowerCase();
     if (status === 'success') {
       dismissKeyboardForScreenTransition();
+      prepareProfilesScreenCommit();
       setProfileErrorMessage(null);
       setAuthMessage(null);
       setProfileMessage('Email verified successfully.');
@@ -1829,12 +1830,14 @@ function AppScreen() {
         try {
           const response = await fetchProfileDashboard(apiBaseUrl, currentSession.auth_token, currentSession.portal);
           if (setAuthenticatedSessionIfCurrentToken(currentSession.auth_token, response)) {
-            setScreenMode('profiles');
+            navigateScreen('profiles', 'forward');
           }
         } catch (error) {
           setProfileErrorMessage(getErrorMessage(error));
         }
       } else {
+        setPendingEmailVerification(null);
+        setEmailVerificationCode('');
         setScreenMode('auth');
         setAuthMessage('Email verified successfully. Sign in to continue.');
       }
@@ -1880,6 +1883,15 @@ function AppScreen() {
   function dismissKeyboardForScreenTransition() {
     suppressKeyboardLayoutAnimationUntilRef.current = Date.now() + onboardingTransitionDuration + 120;
     Keyboard.dismiss();
+  }
+
+  function prepareProfilesScreenCommit() {
+    setSelectedPlaceSlug(null);
+    setProfileEntryOffset(0);
+    profileSceneTransition.stopAnimation();
+    browseSceneTransition.stopAnimation();
+    profileSceneTransition.setValue(1);
+    browseSceneTransition.setValue(1);
   }
 
   useEffect(() => {
@@ -4798,6 +4810,7 @@ function AppScreen() {
         return;
       }
       dismissKeyboardForScreenTransition();
+      prepareProfilesScreenCommit();
       setPendingEmailVerification(null);
       setEmailVerificationCode('');
       setAuthenticatedSession(response);
@@ -6359,6 +6372,7 @@ function AppScreen() {
                     userInterfaceStyle={Platform.OS === 'ios' ? (displayedDarkMapMode ? 'dark' : 'light') : undefined}
                     rotateEnabled={false}
                     mapType="standard"
+                    onPanDrag={Keyboard.dismiss}
                     onMapReady={() => {
                       if (!shouldUseNativeMapBoundaries || !mapRef.current) {
                         return;

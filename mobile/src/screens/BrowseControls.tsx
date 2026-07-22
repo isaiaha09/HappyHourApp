@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Easing, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Animated, Easing, Keyboard, Platform, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import {
@@ -15,6 +15,12 @@ import {
 } from '../browseConfig';
 import { styles } from '../appStyles';
 import { normalizeSearchText } from '../placeHelpers';
+
+const dismissKeyboardOnScrollProps = {
+  keyboardDismissMode: Platform.OS === 'ios' ? 'interactive' : 'on-drag',
+  onScrollBeginDrag: Keyboard.dismiss,
+  onTouchStart: Keyboard.dismiss,
+} as const;
 
 export type BrowseControlsProps = {
   browseMode: BrowseMode;
@@ -239,6 +245,7 @@ export function BrowseControls({
 
   return (
     <View
+      onTouchStart={Keyboard.dismiss}
       style={[
         overlay ? styles.mapTopPanel : styles.browseHeaderCard,
         compactLandscapeControls ? (overlay ? styles.mapTopPanelLandscape : styles.browseHeaderCardLandscape) : null,
@@ -442,6 +449,8 @@ export function BrowseControls({
           <View style={{ maxHeight: filtersPanelMaxHeight }}>
             <ScrollView
               contentContainerStyle={styles.filtersPanelScrollContent}
+              {...dismissKeyboardOnScrollProps}
+              keyboardShouldPersistTaps="handled"
               nestedScrollEnabled
               showsVerticalScrollIndicator
             >
@@ -468,6 +477,8 @@ export function BrowseControls({
             <ScrollView
               contentContainerStyle={styles.venueFilterRow}
               horizontal
+              {...dismissKeyboardOnScrollProps}
+              keyboardShouldPersistTaps="handled"
               nestedScrollEnabled
               showsHorizontalScrollIndicator={false}
             >
