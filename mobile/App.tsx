@@ -92,7 +92,7 @@ import {
 import { AccountSettingsScreen, BlockedDirectMessageCustomersScreen, BusinessProfileEditorScreen, DashboardScreen, FavoriteBusinessNotificationsScreen, FavoriteBusinessesScreen } from './src/screens/DashboardScreen';
 import { BrowseControls } from './src/screens/BrowseControls';
 import { GuestShellChrome } from './src/components/GuestShellChrome';
-import { NativeIOSLiquidGlassBottomNav, NativeIOSLiquidGlassHeaderButton, isNativeIOSLiquidGlassBottomNavAvailable, isSupportedIOSLiquidGlassRuntime } from './src/components/NativeIOSLiquidGlass';
+import { NativeIOSLiquidGlassBottomNav, NativeIOSLiquidGlassHeaderButton, isNativeIOSLiquidGlassBottomNavAvailable, isNativeIOSLiquidGlassHeaderButtonAvailable, isSupportedIOSLiquidGlassRuntime } from './src/components/NativeIOSLiquidGlass';
 import { PhotoLightbox } from './src/components/PhotoLightbox';
 import { DirectMessagesScreen } from './src/screens/DirectMessagesScreen';
 import { HomeFeedScreen } from './src/screens/HomeFeedScreen';
@@ -1721,6 +1721,29 @@ function AppScreen() {
       outputRange: [0, 0, 1],
     })
     : 1;
+  const guestBrowseNativeChromeOpacity = guestToBrowseTransition
+    ? screenTransition.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, 1],
+    })
+    : usesGuestBrowseSlideTransition && guestBrowseTransitionFrom === 'browse'
+      ? screenTransition.interpolate({
+        inputRange: [0, 1],
+        outputRange: [1, 0],
+      })
+      : incomingOnboardingScreen && screenMode === 'browse'
+        ? screenTransition.interpolate({
+          inputRange: [0, 1],
+          outputRange: [1, 0],
+        })
+        : incomingOnboardingScreen === 'splash' && currentOnboardingScreen !== null && guestOnboardingOrigin === 'browse'
+          ? screenTransition.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0, 1],
+          })
+          : currentOnboardingScreen !== null && guestOnboardingOrigin === 'browse'
+            ? 0
+            : 1;
   const mainShellOutgoingStyle = {
     transform: [
       {
@@ -6105,6 +6128,7 @@ function AppScreen() {
 
   function renderGuestMainShell() {
     const browseTransitionActive = usesGuestBrowseSlideTransition;
+    const nativeGuestChrome = nativeBottomNavAvailable || isNativeIOSLiquidGlassHeaderButtonAvailable();
     const currentOverlayScreen = currentOnboardingScreen && currentOnboardingScreen !== 'splash'
       ? currentOnboardingScreen
       : null;
@@ -6188,7 +6212,9 @@ function AppScreen() {
         >
           {renderBrowseScreen({
             guestChrome: true,
+            guestChromeActionOpacity: nativeGuestChrome ? guestBrowseNativeChromeOpacity : 1,
             guestChromeInteractive,
+            guestChromeHeaderOpacity: nativeGuestChrome ? guestBrowseNativeChromeOpacity : 1,
             suppressBrowseSceneTransitionStyle: true,
             suppressScreenTransitionStyle: true,
             suppressTransitionOverlay: true,
@@ -6490,6 +6516,8 @@ function AppScreen() {
   function renderBrowseScreen(options?: {
     guestChrome?: boolean;
     guestChromeInteractive?: boolean;
+    guestChromeActionOpacity?: Animated.Value | Animated.AnimatedInterpolation<number> | number;
+    guestChromeHeaderOpacity?: Animated.Value | Animated.AnimatedInterpolation<number> | number;
     suppressScreenTransitionStyle?: boolean;
     suppressBrowseSceneTransitionStyle?: boolean;
     suppressTransitionOverlay?: boolean;
@@ -6963,11 +6991,13 @@ function AppScreen() {
             </SafeAreaView>
             {options?.guestChrome ? (
               <GuestShellChrome
+                actionOpacity={options.guestChromeActionOpacity}
+                headerOpacity={options.guestChromeHeaderOpacity}
                 interactive={options.guestChromeInteractive ?? true}
                 logoEntranceOpacity={guestBrowseHeaderLogoOpacity}
                 onCreateAccount={handleOpenProfiles}
                 onSelectPortal={handleOpenAuthFromLanding}
-                showBottomNav={false}
+                showBottomNav
                 showHeader={!guestMapOnlyMode && browseMode !== 'map'}
                 themeVariant={displayedDarkMapMode ? 'map-dark' : 'map-light'}
               />
@@ -7000,12 +7030,7 @@ function AppScreen() {
   const shouldRenderPersistentBottomNav = !showLoginSuccessTransition && !showLogoutTransition && (
     authenticatedSession
       ? selectedPlaceSlug !== null || authenticatedBottomNavScreens.includes(screenMode)
-      : selectedPlaceSlug !== null || (
-        screenMode === 'browse'
-        && currentOnboardingScreen === null
-        && incomingOnboardingScreen === null
-        && returningToSplashScreen === null
-      )
+      : selectedPlaceSlug !== null
   );
 
   return (
