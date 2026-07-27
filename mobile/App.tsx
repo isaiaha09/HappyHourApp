@@ -67,6 +67,12 @@ import {
   updateBusinessLocation,
   verifyEmailCode,
 } from './src/api';
+import {
+  clearPersistedBusinessTrackingSession,
+  ensureBusinessBackgroundLocationTaskStarted,
+  loadPersistedBusinessTrackingSession,
+  stopBusinessBackgroundLocationTask,
+} from './src/businessLocationTracking';
 import type { AuthPortal, LoginFormState, ProfileFormState } from './src/appFlowTypes';
 import { styles } from './src/appStyles';
 import {
@@ -220,6 +226,11 @@ type CustomerBusinessClaimNotice = {
 type UserCoordinates = {
   latitude: number;
   longitude: number;
+};
+
+type BusinessTrackingSession = {
+  approvedBusinessSlugs: string[];
+  authToken: string;
 };
 
 type InteractiveBackSwipeConfig = {
@@ -670,6 +681,7 @@ function AppScreen() {
   const [settingsSubmittingAction, setSettingsSubmittingAction] = useState<SettingsSubmittingAction>(null);
   const [pendingBusinessLocationTrackingEnabled, setPendingBusinessLocationTrackingEnabled] = useState<boolean | null>(null);
   const [pendingDirectMessagingEnabled, setPendingDirectMessagingEnabled] = useState<boolean | null>(null);
+  const [loggedOutBusinessTrackingSession, setLoggedOutBusinessTrackingSession] = useState<BusinessTrackingSession | null>(null);
   const [nativeBottomNavAvailable, setNativeBottomNavAvailable] = useState(() => isNativeIOSLiquidGlassBottomNavAvailable());
   const [deleteAccountPassword, setDeleteAccountPassword] = useState('');
   const [bottomMoreSheetVisible, setBottomMoreSheetVisible] = useState(false);
@@ -840,6 +852,35 @@ function AppScreen() {
       : selectedPlaceIsFavorited
         ? 'This business is saved to your favorites and will appear on your dashboard.'
         : 'Save this business to your favorites so it appears on your dashboard.';
+  const currentBusinessTrackingSession = useMemo(() => {
+    if (
+      authenticatedSession?.auth_token
+      && authenticatedSession.portal === 'business'
+      && authenticatedSession.requires_business_location_tracking
+    ) {
+      return {
+        approvedBusinessSlugs: (authenticatedSession.approved_businesses ?? []).map((business) => business.slug),
+        authToken: authenticatedSession.auth_token,
+      } satisfies BusinessTrackingSession;
+    }
+
+    if (authenticatedSession) {
+      return null;
+    }
+
+    return loggedOutBusinessTrackingSession;
+  }, [authenticatedSession, loggedOutBusinessTrackingSession]);
+
+  function buildBusinessTrackingSession(session: SignupResponse | null): BusinessTrackingSession | null {
+    if (!session?.auth_token || session.portal !== 'business' || !session.requires_business_location_tracking) {
+      return null;
+    }
+
+    return {
+      approvedBusinessSlugs: (session.approved_businesses ?? []).map((business) => business.slug),
+      authToken: session.auth_token,
+    };
+  }
 
   useEffect(() => {
     mapRegionRef.current = mapRegion;
@@ -848,6 +889,25 @@ function AppScreen() {
   useEffect(() => {
     authenticatedSessionRef.current = authenticatedSession;
   }, [authenticatedSession]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function restorePersistedBusinessTracking() {
+      const restoredSession = await loadPersistedBusinessTrackingSession();
+      if (cancelled || authenticatedSessionRef.current?.auth_token) {
+        return;
+      }
+
+      setLoggedOutBusinessTrackingSession(restoredSession);
+    }
+
+    void restorePersistedBusinessTracking();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     openFavoriteBusinessFromNotificationRef.current = (slug: string) => {
@@ -1046,13 +1106,48 @@ function AppScreen() {
   }, [authenticatedSession]);
 
   useEffect(() => {
+    if (!authenticatedSession) {
+      return;
+    }
+
+    setLoggedOutBusinessTrackingSession(buildBusinessTrackingSession(authenticatedSession));
+  }, [authenticatedSession]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function syncBusinessBackgroundTracking() {
+      if (!currentBusinessTrackingSession) {
+        await stopBusinessBackgroundLocationTask();
+        return;
+      }
+
+      const backgroundLocationAvailable = await Location.isBackgroundLocationAvailableAsync();
+      if (!backgroundLocationAvailable || cancelled) {
+        return;
+      }
+
+      const backgroundPermission = await Location.getBackgroundPermissionsAsync();
+      if (cancelled || !backgroundPermission.granted) {
+        return;
+      }
+
+      await ensureBusinessBackgroundLocationTaskStarted(apiBaseUrl, currentBusinessTrackingSession);
+    }
+
+    void syncBusinessBackgroundTracking();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBaseUrl, currentBusinessTrackingSession]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function startBusinessLocationTracking() {
       if (
-        !authenticatedSession?.auth_token
-        || authenticatedSession.portal !== 'business'
-        || !authenticatedSession.requires_business_location_tracking
+        !currentBusinessTrackingSession?.authToken
       ) {
         businessLocationLastReportedRef.current = '';
         businessLocationWatcherRef.current?.remove();
@@ -1076,12 +1171,14 @@ function AppScreen() {
         }
 
         const reportLocation = async (coords: { latitude: number; longitude: number; accuracy?: number | null }) => {
-          const currentSession = authenticatedSessionRef.current;
-          if (!currentSession?.auth_token || !currentSession.requires_business_location_tracking) {
+          const activeTrackingSession = authenticatedSessionRef.current?.auth_token
+            ? buildBusinessTrackingSession(authenticatedSessionRef.current)
+            : currentBusinessTrackingSession;
+          if (!activeTrackingSession?.authToken) {
             return;
           }
 
-          const approvedBusinessSlugs = new Set((currentSession.approved_businesses ?? []).map((business) => business.slug));
+          const approvedBusinessSlugs = new Set(activeTrackingSession.approvedBusinessSlugs);
 
           const roundedLocationKey = `${coords.latitude.toFixed(4)}:${coords.longitude.toFixed(4)}`;
           if (businessLocationLastReportedRef.current === roundedLocationKey) {
@@ -1090,13 +1187,14 @@ function AppScreen() {
 
           businessLocationLastReportedRef.current = roundedLocationKey;
           try {
-            const response = await updateBusinessLocation(apiBaseUrl, currentSession.auth_token, {
+            const response = await updateBusinessLocation(apiBaseUrl, activeTrackingSession.authToken, {
               latitude: coords.latitude,
               longitude: coords.longitude,
               accuracy_meters: coords.accuracy ?? null,
             });
             if (!cancelled) {
-              setAuthenticatedSessionIfCurrentToken(currentSession.auth_token, response);
+              setAuthenticatedSessionIfCurrentToken(activeTrackingSession.authToken, response);
+              setLoggedOutBusinessTrackingSession(buildBusinessTrackingSession(response));
               if (approvedBusinessSlugs.size > 0) {
                 setPlaces((current) => current.map((place) => applyTrackedCoordinatesToBusiness(
                   place,
@@ -1164,7 +1262,7 @@ function AppScreen() {
       businessLocationWatcherRef.current?.remove();
       businessLocationWatcherRef.current = null;
     };
-  }, [apiBaseUrl, authenticatedSession?.auth_token, authenticatedSession?.portal, authenticatedSession?.requires_business_location_tracking]);
+  }, [apiBaseUrl, currentBusinessTrackingSession]);
 
   useEffect(() => {
     if (startupImagesReady) {
@@ -2834,11 +2932,20 @@ function AppScreen() {
     });
   }
 
-  function startLogoutTransition() {
+  function startLogoutTransition(options?: { preserveBusinessTracking?: boolean }) {
+    const preserveBusinessTracking = options?.preserveBusinessTracking ?? true;
     if (!authenticatedSession) {
       setGuestBrowseModeLocked(false);
       setScreenMode('auth');
       return;
+    }
+
+    setLoggedOutBusinessTrackingSession(
+      preserveBusinessTracking ? buildBusinessTrackingSession(authenticatedSession) : null,
+    );
+    if (!preserveBusinessTracking) {
+      void stopBusinessBackgroundLocationTask();
+      void clearPersistedBusinessTrackingSession();
     }
 
     if (onboardingTransitionFrameRef.current !== null) {
@@ -5200,8 +5307,43 @@ function AppScreen() {
     setProfileErrorMessage(null);
 
     try {
+      if (enabled) {
+        const foregroundPermission = await Location.getForegroundPermissionsAsync();
+        const resolvedForegroundPermission = foregroundPermission.granted
+          ? foregroundPermission
+          : foregroundPermission.canAskAgain
+            ? await Location.requestForegroundPermissionsAsync()
+            : foregroundPermission;
+
+        if (!resolvedForegroundPermission.granted) {
+          throw new Error('Business location tracking needs foreground location access before it can stay active in the background.');
+        }
+
+        const backgroundPermission = await Location.getBackgroundPermissionsAsync();
+        const resolvedBackgroundPermission = backgroundPermission.granted
+          ? backgroundPermission
+          : backgroundPermission.canAskAgain
+            ? await Location.requestBackgroundPermissionsAsync()
+            : backgroundPermission;
+
+        if (!resolvedBackgroundPermission.granted) {
+          throw new Error(
+            Platform.OS === 'ios'
+              ? 'Background tracking was not granted. In iPhone Settings, allow DiningDealz to use location Always if you want your business pin to update after the app is closed.'
+              : 'Background tracking was not granted. In Android Settings, allow DiningDealz to access location all the time if you want your business pin to update after the app is closed.',
+          );
+        }
+      }
+
       const response = await updateBusinessLocationTrackingPreference(apiBaseUrl, currentAuthToken, { enabled });
       setAuthenticatedSessionIfCurrentToken(currentAuthToken, response);
+      const nextTrackingSession = enabled ? buildBusinessTrackingSession(response) : null;
+      setLoggedOutBusinessTrackingSession(nextTrackingSession);
+      if (enabled && nextTrackingSession) {
+        await ensureBusinessBackgroundLocationTaskStarted(apiBaseUrl, nextTrackingSession);
+      } else {
+        await stopBusinessBackgroundLocationTask();
+      }
       if (!enabled && approvedBusinessSlugs.size > 0) {
         setPlaces((current) => current.map((place) => clearTrackedCoordinatesForBusiness(place, approvedBusinessSlugs)));
         setProfilePlaces((current) => current.map((place) => clearTrackedCoordinatesForBusiness(place, approvedBusinessSlugs)));
@@ -5370,7 +5512,7 @@ function AppScreen() {
       setTwoFactorSetup(null);
       setTwoFactorSetupCode('');
       setTwoFactorDisableCode('');
-      startLogoutTransition();
+      startLogoutTransition({ preserveBusinessTracking: false });
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
     } finally {
