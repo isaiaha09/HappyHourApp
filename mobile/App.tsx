@@ -5971,18 +5971,19 @@ function AppScreen() {
     );
   }
 
-  function renderBottomNavIcon(icon: MainShellBottomNavItem, active: boolean) {
+  function renderBottomNavIcon(icon: MainShellBottomNavItem, active: boolean, options?: { guest?: boolean }) {
     const color = active ? '#fff8f1' : 'rgba(255, 248, 241, 0.68)';
+    const guest = options?.guest ?? false;
 
     switch (icon) {
       case 'home':
         return <Ionicons color={color} name={active ? 'newspaper' : 'newspaper-outline'} size={20} />;
       case 'map':
-        return <Ionicons color={color} name={active ? 'map' : 'map-outline'} size={20} />;
+        return <Ionicons color={color} name={guest ? 'person' : active ? 'map' : 'map-outline'} size={20} />;
       case 'profile':
-        return <Ionicons color={color} name={active ? 'person' : 'person-outline'} size={20} />;
+        return <Ionicons color={color} name={guest ? 'add-circle' : active ? 'person' : 'person-outline'} size={20} />;
       case 'more':
-        return <Ionicons color={color} name={active ? 'menu' : 'menu-outline'} size={20} />;
+        return <Ionicons color={color} name={guest ? 'briefcase' : active ? 'menu' : 'menu-outline'} size={20} />;
       default:
         return null;
     }
@@ -6068,23 +6069,23 @@ function AppScreen() {
               <Text style={[styles.bottomNavItemLabel, activeItem === 'home' ? styles.bottomNavItemLabelActive : null]}>Feed</Text>
             </Pressable>
           ) : null}
-          <Pressable accessibilityLabel="Open map" onPress={handleBottomNavOpenMap} style={styles.bottomNavItem}>
+          <Pressable accessibilityLabel={options.guest ? 'Open customer sign in' : 'Open map'} onPress={() => handleBottomNavSelection('map')} style={styles.bottomNavItem}>
             <View style={[styles.bottomNavItemIconWrap, activeItem === 'map' ? styles.bottomNavItemIconWrapActive : null]}>
-              {renderBottomNavIcon('map', activeItem === 'map')}
+              {renderBottomNavIcon('map', activeItem === 'map', options)}
             </View>
-            <Text style={[styles.bottomNavItemLabel, activeItem === 'map' ? styles.bottomNavItemLabelActive : null]}>Map</Text>
+            <Text style={[styles.bottomNavItemLabel, activeItem === 'map' ? styles.bottomNavItemLabelActive : null]}>{options.guest ? 'Customer' : 'Map'}</Text>
           </Pressable>
-          <Pressable accessibilityLabel="Open profile" onPress={handleBottomNavOpenProfile} style={styles.bottomNavItem}>
+          <Pressable accessibilityLabel={options.guest ? 'Open sign up' : 'Open profile'} onPress={() => handleBottomNavSelection('profile')} style={styles.bottomNavItem}>
             <View style={[styles.bottomNavItemIconWrap, activeItem === 'profile' ? styles.bottomNavItemIconWrapActive : null]}>
-              {renderBottomNavIcon('profile', activeItem === 'profile')}
+              {renderBottomNavIcon('profile', activeItem === 'profile', options)}
             </View>
-            <Text style={[styles.bottomNavItemLabel, activeItem === 'profile' ? styles.bottomNavItemLabelActive : null]}>Profile</Text>
+            <Text style={[styles.bottomNavItemLabel, activeItem === 'profile' ? styles.bottomNavItemLabelActive : null]}>{options.guest ? 'Sign Up' : 'Profile'}</Text>
           </Pressable>
-          <Pressable accessibilityLabel="Open more menu" hitSlop={12} onPress={handleBottomNavOpenMore} pressRetentionOffset={12} style={styles.bottomNavItem}>
+          <Pressable accessibilityLabel={options.guest ? 'Open business sign in' : 'Open more menu'} hitSlop={12} onPress={() => handleBottomNavSelection('more')} pressRetentionOffset={12} style={styles.bottomNavItem}>
             <View style={[styles.bottomNavItemIconWrap, activeItem === 'more' || bottomMoreSheetVisible ? styles.bottomNavItemIconWrapActive : null]}>
-              {renderBottomNavIcon('more', activeItem === 'more' || bottomMoreSheetVisible)}
+              {renderBottomNavIcon('more', activeItem === 'more' || bottomMoreSheetVisible, options)}
             </View>
-            <Text style={[styles.bottomNavItemLabel, activeItem === 'more' || bottomMoreSheetVisible ? styles.bottomNavItemLabelActive : null]}>More</Text>
+            <Text style={[styles.bottomNavItemLabel, activeItem === 'more' || bottomMoreSheetVisible ? styles.bottomNavItemLabelActive : null]}>{options.guest ? 'Business' : 'More'}</Text>
           </Pressable>
         </View>
       </View>
