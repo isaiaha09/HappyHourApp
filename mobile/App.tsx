@@ -7056,22 +7056,6 @@ function AppScreen() {
   );
 
   function renderConnectivityGateScreen() {
-    if (connectivityCheckPending) {
-      return (
-        <SafeAreaView edges={['top', 'right', 'bottom', 'left']} style={styles.safeArea}>
-          <View style={[styles.fullScreenRoot, { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 }]}> 
-            <ActivityIndicator color="#F97316" size="large" />
-            <Text style={{ color: '#F8FAFC', fontSize: 24, fontWeight: '700', marginTop: 20, textAlign: 'center' }}>
-              Checking connection
-            </Text>
-            <Text style={{ color: 'rgba(226, 232, 240, 0.84)', fontSize: 15, lineHeight: 22, marginTop: 10, maxWidth: 320, textAlign: 'center' }}>
-              DiningDealz needs an internet connection before the app can open.
-            </Text>
-          </View>
-        </SafeAreaView>
-      );
-    }
-
     return (
       <SafeAreaView edges={['top', 'right', 'bottom', 'left']} style={styles.safeArea}>
         <View style={[styles.fullScreenRoot, { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 }]}> 
@@ -7127,7 +7111,7 @@ function AppScreen() {
           ))}
         </View>
       ) : null}
-      {showNoInternetScreen || connectivityCheckPending ? (
+      {showNoInternetScreen ? (
         renderConnectivityGateScreen()
       ) : showLoginSuccessTransition ? (
         <View style={styles.onboardingTransitionRoot}>

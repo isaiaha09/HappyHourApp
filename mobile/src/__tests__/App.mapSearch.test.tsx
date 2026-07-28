@@ -4,16 +4,22 @@ import { NativeModules } from 'react-native';
 
 import type { PlaceListItem } from '../types';
 
+type MockNetworkState = {
+  isConnected: boolean;
+  isInternetReachable: boolean;
+  type: string;
+};
+
 const mockFetchPlaces = jest.fn<Promise<PlaceListItem[]>, [string, string]>();
 const mockFetchProfileDashboard = jest.fn();
 const mockLoginProfile = jest.fn();
-let mockNetworkState = {
+let mockNetworkState: MockNetworkState = {
   isConnected: true,
   isInternetReachable: true,
   type: 'WIFI',
 };
 const mockGetNetworkStateAsync = jest.fn(async () => mockNetworkState);
-const mockNetworkListeners = new Set<(state: { isConnected?: boolean; isInternetReachable?: boolean; type?: string }) => void>();
+const mockNetworkListeners = new Set<(state: MockNetworkState) => void>();
 
 jest.mock('../api', () => ({
   beginTwoFactorSetup: jest.fn(),
@@ -76,7 +82,7 @@ jest.mock('expo-network', () => ({
     UNKNOWN: 'UNKNOWN',
     WIFI: 'WIFI',
   },
-  addNetworkStateListener: jest.fn((listener: (state: { isConnected?: boolean; isInternetReachable?: boolean; type?: string }) => void) => {
+  addNetworkStateListener: jest.fn((listener: (state: MockNetworkState) => void) => {
     mockNetworkListeners.add(listener);
     return {
       remove: () => {
@@ -84,8 +90,8 @@ jest.mock('expo-network', () => ({
       },
     };
   }),
-  getNetworkStateAsync: (...args: unknown[]) => mockGetNetworkStateAsync(...args),
-  __setMockNetworkState: (nextState: { isConnected?: boolean; isInternetReachable?: boolean; type?: string }) => {
+  getNetworkStateAsync: () => mockGetNetworkStateAsync(),
+  __setMockNetworkState: (nextState: MockNetworkState) => {
     mockNetworkState = nextState;
   },
 }));
