@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
+import * as Network from 'expo-network';
 import * as Notifications from 'expo-notifications';
 import {
   ActivityIndicator,
@@ -124,7 +125,6 @@ import {
   getSelectedClaimLocation,
   normalizeSearchText,
 } from './src/placeHelpers';
-import { getSeededPlaceDetail, getSeededPlaces, seededPlacesAvailable } from './src/seededPlaces';
 import type {
   BusinessAttachmentBuckets,
   BusinessAttachmentDraft,
@@ -174,7 +174,6 @@ const shellFadeDurationMs = 360;
 const interactiveSwipeCompletionProgress = 0.35;
 const interactiveSwipeMinVelocity = 720;
 const mapEdgeSwipeWidth = 28;
-const seedDataFallbackMessage = 'Live backend unavailable. Showing bundled test data.';
 const defaultMapRegion = {
   latitude: (mapAreaBounds.minLatitude + mapAreaBounds.maxLatitude) / 2,
   longitude: (mapAreaBounds.minLongitude + mapAreaBounds.maxLongitude) / 2,
@@ -646,6 +645,8 @@ function AppScreen() {
   const [reloadCount, setReloadCount] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [networkState, setNetworkState] = useState<Network.NetworkState | null>(null);
+  const [networkRefreshPending, setNetworkRefreshPending] = useState(false);
   const [showMapResultsCard, setShowMapResultsCard] = useState(false);
   const [mapResultsCollapsed, setMapResultsCollapsed] = useState(false);
   const [renderedMapSearchResults, setRenderedMapSearchResults] = useState<MapSearchResultPlace[]>([]);
@@ -716,6 +717,57 @@ function AppScreen() {
   const [userCoordinates, setUserCoordinates] = useState<UserCoordinates | null>(null);
   const [renderedMappedPlaces, setRenderedMappedPlaces] = useState<MappedPlace[]>([]);
   const [renderedMappedPlaceKey, setRenderedMappedPlaceKey] = useState('');
+  const hasInternetConnection = networkState?.isInternetReachable ?? networkState?.isConnected ?? null;
+  const connectivityCheckPending = networkState === null;
+  const showNoInternetScreen = hasInternetConnection === false;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    void Network.getNetworkStateAsync()
+      .then((nextNetworkState) => {
+        if (isMounted) {
+          setNetworkState(nextNetworkState);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setNetworkState({
+            type: Network.NetworkStateType.UNKNOWN,
+            isConnected: false,
+            isInternetReachable: false,
+          });
+        }
+      });
+
+    const subscription = Network.addNetworkStateListener((nextNetworkState) => {
+      if (isMounted) {
+        setNetworkState(nextNetworkState);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.remove();
+    };
+  }, []);
+
+  const handleRetryNetworkCheck = useCallback(async () => {
+    setNetworkRefreshPending(true);
+
+    try {
+      const nextNetworkState = await Network.getNetworkStateAsync();
+      setNetworkState(nextNetworkState);
+    } catch {
+      setNetworkState({
+        type: Network.NetworkStateType.UNKNOWN,
+        isConnected: false,
+        isInternetReachable: false,
+      });
+    } finally {
+      setNetworkRefreshPending(false);
+    }
+  }, []);
   const authenticatedSessionRef = useRef<SignupResponse | null>(null);
   const businessLocationWatcherRef = useRef<Location.LocationSubscription | null>(null);
   const userLocationWatcherRef = useRef<Location.LocationSubscription | null>(null);
@@ -3163,6 +3215,12 @@ function AppScreen() {
   }
 
   useEffect(() => {
+    if (hasInternetConnection !== true) {
+      setListLoading(false);
+      setPlaces([]);
+      return;
+    }
+
     let isMounted = true;
 
     async function loadPlaces() {
@@ -3194,13 +3252,6 @@ function AppScreen() {
           return;
         }
 
-        const seededPlaces = getSeededPlaces(selectedCity);
-        if (seededPlacesAvailable() && seededPlaces.length > 0) {
-          setErrorMessage(seedDataFallbackMessage);
-          setPlaces(seededPlaces);
-          return;
-        }
-
         setErrorMessage(getErrorMessage(error));
         setPlaces([]);
       } finally {
@@ -3215,11 +3266,16 @@ function AppScreen() {
     return () => {
       isMounted = false;
     };
-  }, [apiBaseUrl, reloadCount, selectedCity]);
+  }, [apiBaseUrl, hasInternetConnection, reloadCount, selectedCity]);
 
   useEffect(() => {
     if (!selectedPlaceSlug) {
       setSelectedPlace(null);
+      return;
+    }
+
+    if (hasInternetConnection !== true) {
+      setDetailLoading(false);
       return;
     }
 
@@ -3249,13 +3305,6 @@ function AppScreen() {
           return;
         }
 
-        const seededPlaceDetail = getSeededPlaceDetail(placeSlug);
-        if (seededPlaceDetail) {
-          setErrorMessage(seedDataFallbackMessage);
-          setSelectedPlace(seededPlaceDetail);
-          return;
-        }
-
         setErrorMessage(getErrorMessage(error));
       } finally {
         if (isMounted) {
@@ -3269,7 +3318,7 @@ function AppScreen() {
     return () => {
       isMounted = false;
     };
-  }, [apiBaseUrl, authenticatedSession?.auth_token, reloadCount, selectedPlaceSlug]);
+  }, [apiBaseUrl, authenticatedSession?.auth_token, hasInternetConnection, reloadCount, selectedPlaceSlug]);
 
   useEffect(() => {
     const showSubscription = Keyboard.addListener('keyboardDidShow', (event) => {
@@ -3362,6 +3411,12 @@ function AppScreen() {
       return;
     }
 
+    if (hasInternetConnection !== true) {
+      setProfilePlaces([]);
+      setProfilePlacesLoading(false);
+      return;
+    }
+
     const cachedAllPlaces = allPlacesCacheRef.current;
 
     if (selectedCity === 'all' && places.length > 0) {
@@ -3401,13 +3456,6 @@ function AppScreen() {
         return;
       }
 
-      const seededPlaces = getSeededPlaces('all');
-      if (seededPlacesAvailable() && seededPlaces.length > 0) {
-        setProfileErrorMessage(seedDataFallbackMessage);
-        setProfilePlaces(seededPlaces);
-        return;
-      }
-
       setProfileErrorMessage(getErrorMessage(error));
     }).finally(() => {
       if (isMounted) {
@@ -3418,10 +3466,14 @@ function AppScreen() {
     return () => {
       isMounted = false;
     };
-  }, [apiBaseUrl, places, reloadCount, screenMode, selectedCity]);
+  }, [apiBaseUrl, hasInternetConnection, places, reloadCount, screenMode, selectedCity]);
 
   useEffect(() => {
     if (screenMode !== 'business-claim' || !profileForm.business_slug) {
+      return;
+    }
+
+    if (hasInternetConnection !== true) {
       return;
     }
 
@@ -3477,38 +3529,7 @@ function AppScreen() {
           return;
         }
 
-        const seededDetail = getSeededPlaceDetail(profileForm.business_slug);
-        if (!seededDetail) {
-          return;
-        }
-
-        const prefill = buildClaimPrefill(seededDetail, selectedClaimLocationId);
-        claimPrefillLoadedKeyRef.current = prefillKey;
-
-        startTransition(() => {
-          setSelectedClaimPlace(seededDetail);
-          setSelectedClaimLocationId(prefill.locationId);
-          setProfileErrorMessage(seedDataFallbackMessage);
-          setProfileForm((current) => {
-            if (current.business_slug !== profileForm.business_slug) {
-              return current;
-            }
-
-            return {
-              ...current,
-              business_city: current.business_city || prefill.business_city,
-              business_venue_type: current.business_venue_type || prefill.business_venue_type,
-              business_website_url: current.business_website_url || prefill.business_website_url,
-              instagram_profile: current.instagram_profile || prefill.instagram_profile,
-              facebook_profile: current.facebook_profile || prefill.facebook_profile,
-              tiktok_profile: current.tiktok_profile || prefill.tiktok_profile,
-              youtube_profile: current.youtube_profile || prefill.youtube_profile,
-              deal_overrides: current.deal_overrides.length ? current.deal_overrides : prefill.deal_overrides,
-              operating_hour_overrides: current.operating_hour_overrides.length ? current.operating_hour_overrides : prefill.operating_hour_overrides,
-              photo_references_text: current.photo_references_text.trim() ? current.photo_references_text : prefill.photo_references_text,
-            };
-          });
-        });
+        setProfileErrorMessage(getErrorMessage(error));
       });
 
     return () => {
@@ -3516,6 +3537,7 @@ function AppScreen() {
     };
   }, [
     apiBaseUrl,
+    hasInternetConnection,
     profileForm.business_slug,
     screenMode,
     selectedClaimLocationId,
@@ -7033,6 +7055,61 @@ function AppScreen() {
       : selectedPlaceSlug !== null
   );
 
+  function renderConnectivityGateScreen() {
+    if (connectivityCheckPending) {
+      return (
+        <SafeAreaView edges={['top', 'right', 'bottom', 'left']} style={styles.safeArea}>
+          <View style={[styles.fullScreenRoot, { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 }]}> 
+            <ActivityIndicator color="#F97316" size="large" />
+            <Text style={{ color: '#F8FAFC', fontSize: 24, fontWeight: '700', marginTop: 20, textAlign: 'center' }}>
+              Checking connection
+            </Text>
+            <Text style={{ color: 'rgba(226, 232, 240, 0.84)', fontSize: 15, lineHeight: 22, marginTop: 10, maxWidth: 320, textAlign: 'center' }}>
+              DiningDealz needs an internet connection before the app can open.
+            </Text>
+          </View>
+        </SafeAreaView>
+      );
+    }
+
+    return (
+      <SafeAreaView edges={['top', 'right', 'bottom', 'left']} style={styles.safeArea}>
+        <View style={[styles.fullScreenRoot, { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 }]}> 
+          <View style={{ alignItems: 'center', backgroundColor: 'rgba(15, 23, 42, 0.7)', borderColor: 'rgba(148, 163, 184, 0.2)', borderRadius: 28, borderWidth: 1, maxWidth: 360, paddingHorizontal: 24, paddingVertical: 28, width: '100%' }}>
+            <View style={{ alignItems: 'center', backgroundColor: 'rgba(249, 115, 22, 0.14)', borderRadius: 30, height: 60, justifyContent: 'center', marginBottom: 18, width: 60 }}>
+              <Ionicons color="#FB923C" name="cloud-offline-outline" size={28} />
+            </View>
+            <Text style={{ color: '#F8FAFC', fontSize: 24, fontWeight: '700', textAlign: 'center' }}>
+              No internet connection
+            </Text>
+            <Text style={{ color: 'rgba(226, 232, 240, 0.84)', fontSize: 15, lineHeight: 22, marginTop: 10, textAlign: 'center' }}>
+              This device is not able to connect to Wi-Fi or mobile data. Reconnect to the internet to use the app.
+            </Text>
+            <Pressable
+              disabled={networkRefreshPending}
+              onPress={() => void handleRetryNetworkCheck()}
+              style={({ pressed }) => [{
+                alignItems: 'center',
+                backgroundColor: networkRefreshPending ? 'rgba(249, 115, 22, 0.5)' : '#F97316',
+                borderRadius: 999,
+                justifyContent: 'center',
+                marginTop: 22,
+                minHeight: 48,
+                opacity: pressed ? 0.88 : 1,
+                paddingHorizontal: 22,
+                width: '100%',
+              }]}
+            >
+              <Text style={{ color: '#0F172A', fontSize: 15, fontWeight: '700' }}>
+                {networkRefreshPending ? 'Checking...' : 'Try again'}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <>
       <StatusBar backgroundColor="transparent" style={statusBarStyle} translucent={translucentStatusBar} />
@@ -7050,7 +7127,9 @@ function AppScreen() {
           ))}
         </View>
       ) : null}
-      {showLoginSuccessTransition ? (
+      {showNoInternetScreen || connectivityCheckPending ? (
+        renderConnectivityGateScreen()
+      ) : showLoginSuccessTransition ? (
         <View style={styles.onboardingTransitionRoot}>
           <View style={styles.screenTransitionLayer}>
             {renderOnboardingScreen('profiles')}
