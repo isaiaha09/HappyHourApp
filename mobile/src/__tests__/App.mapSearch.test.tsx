@@ -13,6 +13,13 @@ type MockNetworkState = {
 const mockFetchPlaces = jest.fn<Promise<PlaceListItem[]>, [string, string]>();
 const mockFetchProfileDashboard = jest.fn();
 const mockLoginProfile = jest.fn();
+const mockRegisterPushDevice = jest.fn();
+let mockNotificationResponseListener: ((response: unknown) => void) | null = null;
+const mockRegisterForPushNotificationsAsync = jest.fn<Promise<{
+  installationId: string;
+  platform: 'ios' | 'android';
+  pushToken: string;
+} | null>, []>(async () => null);
 let mockNetworkState: MockNetworkState = {
   isConnected: true,
   isInternetReachable: true,
@@ -36,6 +43,7 @@ jest.mock('../api', () => ({
   fetchProfileDashboard: (...args: unknown[]) => mockFetchProfileDashboard(...args),
   getDefaultApiBaseUrl: jest.fn(() => 'http://127.0.0.1:8000/api'),
   loginProfile: (...args: unknown[]) => mockLoginProfile(...args),
+  registerPushDevice: (...args: unknown[]) => mockRegisterPushDevice(...args),
   recordFeedEngagement: jest.fn(),
   recordFeedImpression: jest.fn(),
   requestPasswordReset: jest.fn(),
@@ -67,7 +75,10 @@ jest.mock('expo-location', () => ({
 
 jest.mock('expo-notifications', () => ({
   AndroidImportance: { DEFAULT: 3 },
-  addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  addNotificationResponseReceivedListener: jest.fn((listener: (response: unknown) => void) => {
+    mockNotificationResponseListener = listener;
+    return { remove: jest.fn() };
+  }),
   getLastNotificationResponseAsync: jest.fn(async () => null),
   getPermissionsAsync: jest.fn(async () => ({ canAskAgain: false, granted: false })),
   getExpoPushTokenAsync: jest.fn(async () => ({ data: 'ExponentPushToken[test-token]' })),
@@ -94,6 +105,29 @@ jest.mock('expo-network', () => ({
   __setMockNetworkState: (nextState: MockNetworkState) => {
     mockNetworkState = nextState;
   },
+}));
+
+jest.mock('../pushNotifications', () => ({
+  extractDirectMessageThreadIdFromNotificationData: (data: unknown) => {
+    if (!data || typeof data !== 'object') {
+      return null;
+    }
+
+    const rawThreadId = (data as Record<string, unknown>).thread_id;
+    const parsedThreadId = typeof rawThreadId === 'number'
+      ? rawThreadId
+      : Number.parseInt(String(rawThreadId ?? ''), 10);
+    return Number.isNaN(parsedThreadId) || parsedThreadId <= 0 ? null : parsedThreadId;
+  },
+  extractFavoriteBusinessSlugFromNotificationData: (data: unknown) => {
+    if (!data || typeof data !== 'object') {
+      return null;
+    }
+
+    const slug = (data as Record<string, unknown>).slug;
+    return typeof slug === 'string' && slug.trim().length ? slug.trim() : null;
+  },
+  registerForPushNotificationsAsync: () => mockRegisterForPushNotificationsAsync(),
 }));
 
 jest.mock('@expo/vector-icons', () => ({
@@ -206,6 +240,15 @@ jest.mock('../components/PhotoLightbox', () => ({
   PhotoLightbox: () => null,
 }));
 
+jest.mock('../screens/DirectMessagesScreen', () => ({
+  DirectMessagesScreen: () => {
+    const React = require('react');
+    const { Text } = require('react-native');
+
+    return <Text>Direct messages screen</Text>;
+  },
+}));
+
 jest.mock('react-native-maps', () => {
   const React = require('react');
   const { View } = require('react-native');
@@ -290,6 +333,7 @@ const samplePlace: PlaceListItem = {
 describe('App browse map search', () => {
   beforeEach(() => {
     mockNetworkListeners.clear();
+    mockNotificationResponseListener = null;
     networkModule.__setMockNetworkState({
       isConnected: true,
       isInternetReachable: true,
@@ -298,6 +342,9 @@ describe('App browse map search', () => {
     mockGetNetworkStateAsync.mockClear();
     mockFetchPlaces.mockResolvedValue([samplePlace]);
     mockFetchProfileDashboard.mockResolvedValue(null);
+    mockRegisterPushDevice.mockReset();
+    mockRegisterForPushNotificationsAsync.mockReset();
+    mockRegisterForPushNotificationsAsync.mockResolvedValue(null);
     mockLoginProfile.mockResolvedValue({
       id: 7,
       username: 'guestfan',
@@ -321,6 +368,134 @@ describe('App browse map search', () => {
     mockFetchPlaces.mockReset();
     mockFetchProfileDashboard.mockReset();
     mockLoginProfile.mockReset();
+    mockRegisterPushDevice.mockReset();
+    mockRegisterForPushNotificationsAsync.mockReset();
+  });
+
+  it('registers push notifications for business sessions so direct-message pushes can be delivered', async () => {
+    mockRegisterForPushNotificationsAsync.mockResolvedValue({
+      installationId: 'installation-1',
+      pushToken: 'ExponentPushToken[business-token]',
+      platform: 'ios',
+    });
+    mockLoginProfile.mockResolvedValue({
+      id: 9,
+      username: 'bizowner',
+      email: 'bizowner@example.com',
+      first_name: 'Biz',
+      last_name: 'Owner',
+      auth_token: 'business-token-123',
+      portal: 'business',
+      profile_type: 'business',
+      email_verified: true,
+      two_factor_enabled: false,
+      can_access_places: true,
+      approved_businesses: [],
+      requires_business_location_tracking: false,
+    });
+
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    fireEvent.press(screen.getByLabelText('Open business login'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    fireEvent.press(screen.getByLabelText('Submit login'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(mockRegisterForPushNotificationsAsync).toHaveBeenCalledTimes(1);
+    expect(mockRegisterPushDevice).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api',
+      'business-token-123',
+      {
+        installation_id: 'installation-1',
+        push_token: 'ExponentPushToken[business-token]',
+        platform: 'ios',
+        portal: 'business',
+      },
+    );
+  });
+
+  it('resumes a logged-out direct-message notification after business login', async () => {
+    mockLoginProfile.mockResolvedValue({
+      id: 9,
+      username: 'bizowner',
+      email: 'bizowner@example.com',
+      first_name: 'Biz',
+      last_name: 'Owner',
+      auth_token: 'business-token-123',
+      portal: 'business',
+      profile_type: 'business',
+      email_verified: true,
+      two_factor_enabled: false,
+      can_access_places: true,
+      approved_businesses: [],
+      requires_business_location_tracking: false,
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      mockNotificationResponseListener?.({
+        notification: {
+          request: {
+            identifier: 'dm-logged-out',
+            content: {
+              data: {
+                portal: 'business',
+                slug: 'baskin-robbins',
+                thread_id: 44,
+                type: 'direct_message',
+              },
+            },
+          },
+        },
+      });
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(screen.getByText('Auth screen')).toBeTruthy();
+
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    fireEvent.press(screen.getByLabelText('Submit login'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(mockLoginProfile).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api',
+      expect.objectContaining({
+        identifier: 'guestfan',
+        password: 'password123',
+        portal: 'business',
+      }),
+    );
+    expect(screen.getByText('Direct messages screen')).toBeTruthy();
   });
 
   it('shows the no-internet gate on startup and blocks the app from loading places', async () => {

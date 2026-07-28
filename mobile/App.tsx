@@ -102,7 +102,11 @@ import { SplashScreen } from './src/screens/SplashScreen';
 import { shouldSkipBrowseMapAutoFit } from './src/mapBrowseState';
 import { buildSocialProfilesFromInputs, socialProfilesToInputs } from './src/socialProfiles';
 import { buildDealOverridesFromDeals, buildNormalizedDealOverrides, buildNormalizedOperatingHourOverrides, buildOperatingHourOverridesFromWindows } from './src/businessProfileOverrides';
-import { extractFavoriteBusinessSlugFromNotificationData, registerForPushNotificationsAsync } from './src/pushNotifications';
+import {
+  extractDirectMessageThreadIdFromNotificationData,
+  extractFavoriteBusinessSlugFromNotificationData,
+  registerForPushNotificationsAsync,
+} from './src/pushNotifications';
 import {
   AuthPortalScreen,
   BusinessClaimReviewPendingScreen,
@@ -222,6 +226,12 @@ type CustomerBusinessClaimNotice = {
   locationLabel: string;
 };
 
+type PendingNotificationIntent = {
+  kind: 'direct-message';
+  portal: AuthPortal;
+  threadId: number;
+};
+
 type UserCoordinates = {
   latitude: number;
   longitude: number;
@@ -255,6 +265,15 @@ type MappedPlace = MapPreviewPlace & {
   markerLongitude: number;
   markerKey: string;
 };
+
+function extractNotificationPortal(data: unknown): AuthPortal | null {
+  if (!data || typeof data !== 'object') {
+    return null;
+  }
+
+  const portal = (data as Record<string, unknown>).portal;
+  return portal === 'customer' || portal === 'business' ? portal : null;
+}
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -597,6 +616,7 @@ function AppScreen() {
   const [onboardingTransitionAxis, setOnboardingTransitionAxis] = useState<TransitionAxis>('x');
   const [onboardingIncomingOffset, setOnboardingIncomingOffset] = useState(0);
   const [authPortal, setAuthPortal] = useState<AuthPortal>('customer');
+  const [pendingNotificationIntent, setPendingNotificationIntent] = useState<PendingNotificationIntent | null>(null);
   const [loginForm, setLoginForm] = useState<LoginFormState>(initialLoginFormState);
   const [showLoginTwoFactorCodeField, setShowLoginTwoFactorCodeField] = useState(false);
   const [shouldAutoFocusLoginField, setShouldAutoFocusLoginField] = useState(false);
@@ -776,9 +796,11 @@ function AppScreen() {
   const claimPrefillLoadedKeyRef = useRef('');
   const startupImageLoadCountRef = useRef(0);
   const appStateRef = useRef(AppState.currentState);
+  const authPortalRef = useRef<AuthPortal>(authPortal);
   const pushRegistrationAuthTokenRef = useRef('');
   const lastHandledNotificationResponseIdRef = useRef('');
   const openFavoriteBusinessFromNotificationRef = useRef<(slug: string) => void>(() => undefined);
+  const openDirectMessagesFromNotificationRef = useRef<(threadId: number, portal?: AuthPortal) => void>(() => undefined);
   const interactiveBackSwipeRef = useRef<(InteractiveBackSwipeConfig & { targetScreen: AppScreenMode }) | null>(null);
   const interactiveSwipeSettlingRef = useRef(false);
   const shouldUseNativeMapBoundaries = false;
@@ -943,6 +965,10 @@ function AppScreen() {
   }, [authenticatedSession]);
 
   useEffect(() => {
+    authPortalRef.current = authPortal;
+  }, [authPortal]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function restorePersistedBusinessTracking() {
@@ -969,6 +995,28 @@ function AppScreen() {
 
       setScreenMode('browse');
       handleOpenFavoriteBusiness(slug);
+    };
+  });
+
+  useEffect(() => {
+    openDirectMessagesFromNotificationRef.current = (threadId: number) => {
+      if (!threadId) {
+        return;
+      }
+
+      if (!authenticatedSessionRef.current?.auth_token) {
+        setPendingNotificationIntent({
+          kind: 'direct-message',
+          portal: authPortalRef.current,
+          threadId,
+        });
+        return;
+      }
+
+      dismissKeyboardForScreenTransition();
+      setSelectedPlaceSlug(null);
+      setProfileEntryOffset(0);
+      setScreenMode('direct-messages');
     };
   });
 
@@ -1001,10 +1049,35 @@ function AppScreen() {
   }, []);
 
   useEffect(() => {
+    if (!pendingNotificationIntent || authenticatedSession?.auth_token) {
+      return;
+    }
+
+    if ((screenMode === 'auth' || incomingOnboardingScreen === 'auth') && authPortal === pendingNotificationIntent.portal) {
+      return;
+    }
+
+    handleOpenAuthFromLanding(pendingNotificationIntent.portal);
+  }, [authPortal, authenticatedSession?.auth_token, incomingOnboardingScreen, pendingNotificationIntent, screenMode, selectedPlaceSlug]);
+
+  useEffect(() => {
+    if (!pendingNotificationIntent || !authenticatedSession?.auth_token) {
+      return;
+    }
+
+    if (authenticatedSession.portal !== pendingNotificationIntent.portal) {
+      return;
+    }
+
+    openDirectMessagesFromNotificationRef.current(pendingNotificationIntent.threadId, pendingNotificationIntent.portal);
+    setPendingNotificationIntent(null);
+  }, [authenticatedSession, pendingNotificationIntent]);
+
+  useEffect(() => {
     const authToken = authenticatedSession?.auth_token ?? '';
     const portal = authenticatedSession?.portal;
 
-    if (!authToken || portal !== 'customer') {
+    if (!authToken || (portal !== 'customer' && portal !== 'business')) {
       pushRegistrationAuthTokenRef.current = '';
       return;
     }
@@ -4021,7 +4094,24 @@ function AppScreen() {
     }
 
     lastHandledNotificationResponseIdRef.current = responseId;
-    const slug = extractFavoriteBusinessSlugFromNotificationData(response.notification.request.content.data);
+    const data = response.notification.request.content.data;
+    const directMessageThreadId = extractDirectMessageThreadIdFromNotificationData(data);
+    const notificationPortal = extractNotificationPortal(data) ?? authenticatedSessionRef.current?.portal ?? authPortalRef.current;
+    if (directMessageThreadId) {
+      if (!authenticatedSessionRef.current?.auth_token) {
+        setPendingNotificationIntent({
+          kind: 'direct-message',
+          portal: notificationPortal,
+          threadId: directMessageThreadId,
+        });
+        return;
+      }
+
+      openDirectMessagesFromNotificationRef.current(directMessageThreadId, notificationPortal);
+      return;
+    }
+
+    const slug = extractFavoriteBusinessSlugFromNotificationData(data);
     if (!slug) {
       return;
     }
