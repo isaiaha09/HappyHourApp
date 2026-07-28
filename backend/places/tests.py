@@ -7798,7 +7798,18 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(image_send_response.status_code, 201)
 		self.assertEqual(image_send_response.data['message']['message_type'], 'image')
 		self.assertTrue(bool(image_send_response.data['message']['image_url']))
+		self.assertIn(
+			reverse('profile-direct-message-image', kwargs={'message_id': image_send_response.data['message']['id']}),
+			image_send_response.data['message']['image_url'],
+		)
 		self.assertFalse(image_send_response.data['message']['image_expired'])
+
+		customer_image_response = self.client.get(
+			reverse('profile-direct-message-image', kwargs={'message_id': image_send_response.data['message']['id']}),
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+		self.assertEqual(customer_image_response.status_code, 200)
+		self.assertEqual(customer_image_response['Content-Type'], 'image/png')
 		self.assertGreaterEqual(mock_send_dm_push.call_count, 2)
 
 	def test_expired_direct_message_image_is_hidden_after_24_hours(self):

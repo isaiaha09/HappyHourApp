@@ -1,10 +1,12 @@
 import logging
+import mimetypes
 
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.files.storage import default_storage
 from django.db import transaction
-from django.http import Http404, HttpResponse
+from django.http import FileResponse, Http404, HttpResponse
+from django.urls import reverse
 from django.utils.text import slugify
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework import generics, status
@@ -245,12 +247,13 @@ def _build_direct_message_item_payload(message, request=None):
 		_delete_expired_direct_message_image(message)
 	image_url = ''
 	if message.image and not image_expired:
-		try:
-			image_url = message.image.url
-		except ValueError:
-			image_url = ''
-	if image_url and request is not None and image_url.startswith('/'):
-		image_url = request.build_absolute_uri(image_url)
+		if request is not None:
+			image_url = request.build_absolute_uri(reverse('profile-direct-message-image', kwargs={'message_id': message.id}))
+		else:
+			try:
+				image_url = message.image.url
+			except ValueError:
+				image_url = ''
 	return {
 		'id': message.id,
 		'sender_id': message.sender_id,
@@ -1108,6 +1111,47 @@ class DirectMessageThreadDetailView(APIView):
 			'thread': thread_payload,
 			'messages': DirectMessageItemSerializer(message_payloads, many=True).data,
 		})
+
+
+class DirectMessageImageView(APIView):
+	authentication_classes = [ProfileTokenAuthentication]
+	permission_classes = [IsAuthenticated]
+
+	def get(self, request, message_id):
+		message = BusinessDirectMessage.objects.select_related(
+			'thread__business_claim__membership',
+			'thread__business_claim__claimant',
+			'thread__customer',
+		).filter(id=message_id).first()
+		if message is None:
+			raise Http404('Direct message image not found.')
+
+		thread = message.thread
+		if thread is None or not self._user_can_access_thread(request.user, thread):
+			raise Http404('Direct message image not found.')
+
+		if not message.image:
+			raise Http404('Direct message image not found.')
+
+		if message.image_has_expired():
+			_delete_expired_direct_message_image(message)
+			raise Http404('Direct message image has expired.')
+
+		file_handle = message.image.open('rb')
+		content_type = mimetypes.guess_type(str(message.image.name or ''))[0] or 'application/octet-stream'
+		response = FileResponse(file_handle, content_type=content_type)
+		response['Cache-Control'] = 'private, max-age=300'
+		return response
+
+	def _user_can_access_thread(self, user, thread):
+		if thread.customer_id == user.id:
+			return _customer_can_access_direct_message_thread(user, thread)
+
+		return BusinessDirectMessageThread.objects.filter(
+			id=thread.id,
+			business_claim__membership__is_active=True,
+			business_claim__membership__user=user,
+		).exists()
 
 	def delete(self, request, thread_id):
 		portal = infer_portal_for_user(request.user, request.query_params.get('portal') or request.data.get('portal'))

@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { styles } from '../appStyles';
 
 type PhotoLightboxProps = {
+  authHeaders?: Record<string, string>;
   imageUrls: string[];
   initialIndex?: number;
   visible: boolean;
@@ -12,6 +13,7 @@ type PhotoLightboxProps = {
 };
 
 export function PhotoLightbox({
+  authHeaders,
   imageUrls,
   initialIndex = 0,
   visible,
@@ -67,7 +69,7 @@ export function PhotoLightbox({
           ref={flatListRef}
           renderItem={({ item }) => (
             <View style={[styles.photoLightboxSlide, { width }]}> 
-              <Image resizeMode="contain" source={{ uri: item }} style={styles.photoLightboxImage} />
+              <Image resizeMode="contain" source={{ uri: item, headers: authHeaders }} style={styles.photoLightboxImage} />
             </View>
           )}
           showsHorizontalScrollIndicator={false}

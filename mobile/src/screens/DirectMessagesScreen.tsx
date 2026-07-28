@@ -99,6 +99,9 @@ export function DirectMessagesScreen({
 	session,
 }: DirectMessagesScreenProps) {
 	const insets = useSafeAreaInsets();
+	const directMessageImageHeaders = useMemo(() => (
+		session.auth_token ? { Authorization: `Token ${session.auth_token}` } : undefined
+	), [session.auth_token]);
 	const messageScrollRef = useRef<ScrollView | null>(null);
 	const swipeableRowRefs = useRef(new Map<number, Swipeable | null>());
 	const threadCacheKey = `${session.portal}:${session.id}`;
@@ -810,7 +813,7 @@ export function DirectMessagesScreen({
 														message.image_url ? (
 															<View style={[styles.directMessageImageWrap, isMine ? styles.directMessageImageWrapMine : null]}>
 																<Pressable onPress={() => handleOpenMessagePhotoLightbox(message.image_url)}>
-																	<Image source={{ uri: message.image_url }} style={styles.directMessageImage} />
+																	<Image source={{ uri: message.image_url, headers: directMessageImageHeaders }} style={styles.directMessageImage} />
 																</Pressable>
 															</View>
 														) : (
@@ -897,6 +900,7 @@ export function DirectMessagesScreen({
 				</View>
 			</Animated.View>
 			<PhotoLightbox
+				authHeaders={directMessageImageHeaders}
 				imageUrls={messageImageUrls}
 				initialIndex={photoLightboxIndex}
 				onClose={() => setPhotoLightboxVisible(false)}
