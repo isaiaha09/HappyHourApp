@@ -514,6 +514,7 @@ export type InformalBusinessSignupRequest = CustomerSignupRequest & SharedBusine
   business_name: string;
   business_city: string;
   business_venue_type: string;
+  employer_address: string;
   supporting_details: string;
 };
 

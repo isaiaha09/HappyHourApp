@@ -5493,6 +5493,33 @@ class ProfileSignupApiTests(APITestCase):
 			['2 tacos for $5'],
 		)
 
+	def test_informal_business_signup_stores_optional_address_when_provided(self):
+		response = self.client.post(
+			reverse('informal-business-signup'),
+			{
+				'username': 'vendor_with_address',
+				'email': 'vendor-with-address@example.com',
+				'password': 'test-pass-123',
+				'first_name': 'Riley',
+				'last_name': 'Vendor',
+				'business_name': 'Riley Snacks Cart',
+				'business_city': City.VENTURA,
+				'business_venue_type': VenueType.FAST_FOOD,
+				'business_website_url': '',
+				'employer_address': '123 Ventura Ave, Ventura, CA 93001',
+				'social_media_links': ['https://instagram.com/rileysnacks'],
+				'supporting_details': 'I run this cart during lunch service near downtown Ventura.',
+			},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, 201)
+		claim = BusinessClaim.objects.select_related('listing_snapshot').get(claimant__username='vendor_with_address')
+		self.assertEqual(claim.pathway, BusinessClaim.Pathway.INFORMAL)
+		self.assertEqual(claim.employer_address, '123 Ventura Ave, Ventura, CA 93001')
+		self.assertFalse(claim.address_not_applicable)
+		self.assertEqual(claim.listing_snapshot.address_line_1, '123 Ventura Ave, Ventura, CA 93001')
+
 	@patch('places.services.account_profiles.send_mail', side_effect=RuntimeError('SMTP unavailable'))
 	def test_informal_business_signup_rolls_back_when_verification_email_fails(self, mock_send_mail):
 		response = self.client.post(

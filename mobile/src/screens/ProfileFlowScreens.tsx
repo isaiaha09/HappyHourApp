@@ -1628,6 +1628,22 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
                     selectedValue={form.business_venue_type}
                   />
 
+                  {isInformal ? (
+                    <>
+                      <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Business address (optional)</Text>
+                      <AutoScrollTextInput
+                        onBeforeAutoScroll={handleFieldFocus}
+                        onChangeText={(value) => onChangeField('employer_address', value)}
+                        placeholder="Street address, neighborhood, or usual setup location"
+                        placeholderTextColor={onboardingPlaceholderTextColor}
+                        scrollViewRef={scrollViewRef}
+                        style={[styles.profileInput, styles.onboardingInput]}
+                        value={form.employer_address}
+                      />
+                      <Text style={[styles.profileSupportText, styles.onboardingBodyText]}>Leave this blank if you work across multiple areas or do not have a fixed address yet.</Text>
+                    </>
+                  ) : null}
+
                   {servesMultipleAreas ? (
                     <Text style={[styles.profileSupportText, styles.onboardingBodyText]}>It is highly recommend for small startups and vendors that do not have a dedicated business address to turn on location services for DiningDealz after account is verified so you have can a business pin on the map.</Text>
                   ) : null}

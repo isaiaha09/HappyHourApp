@@ -1014,6 +1014,7 @@ class DirectMessageThreadsView(APIView):
 			[recipient_id],
 			thread_id=thread.id,
 			listing_slug=thread.business_claim.listing_snapshot.listing_slug,
+			portal='business' if request.user.id == thread.customer_id else 'customer',
 			title=f'New direct message from {request.user.username}',
 			message='Sent a photo.' if message.image else (message.body[:120] or 'Sent you a message.'),
 		)

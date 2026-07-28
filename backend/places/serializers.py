@@ -977,6 +977,7 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 	business_city = serializers.CharField(max_length=40)
 	business_venue_type = serializers.ChoiceField(choices=VenueType.choices)
 	business_website_url = serializers.URLField(required=False, allow_blank=True)
+	employer_address = serializers.CharField(max_length=255, required=False, allow_blank=True)
 	social_profiles = serializers.JSONField(required=False)
 	deal_overrides = serializers.JSONField(required=False)
 	operating_hour_overrides = serializers.JSONField(required=False)
@@ -1026,12 +1027,13 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 		offer_entries = validated_data.pop('offer_entries', [])
 		hours_of_operation_entries = validated_data.pop('hours_of_operation_entries', [])
 		photo_references = validated_data.pop('photo_references', [])
+		employer_address = validated_data.pop('employer_address', '')
 		supporting_details = validated_data.pop('supporting_details', '')
 		listing_snapshot = ListingSnapshot.objects.create(
 			name=validated_data.pop('business_name'),
 			city=validated_data.pop('business_city', ''),
 			venue_type=validated_data.pop('business_venue_type'),
-			address_line_1='Approximate live location' if serves_multiple_areas else 'Address not yet provided',
+			address_line_1=employer_address or ('Approximate live location' if serves_multiple_areas else 'Address not yet provided'),
 			serves_multiple_areas=serves_multiple_areas,
 			website_url=validated_data.pop('business_website_url', ''),
 			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
@@ -1048,7 +1050,8 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 				status=BusinessClaim.Status.DRAFT,
 				contact_name=' '.join(part for part in [user.first_name, user.last_name] if part).strip() or user.username,
 				work_email=user.email,
-				address_not_applicable=serves_multiple_areas,
+				employer_address=employer_address,
+				address_not_applicable=serves_multiple_areas and not employer_address,
 				serves_multiple_areas=serves_multiple_areas,
 				business_website_url=listing_snapshot.website_url,
 				social_profiles=social_profiles,

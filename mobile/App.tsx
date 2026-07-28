@@ -5302,6 +5302,7 @@ function AppScreen() {
         business_name: profileForm.business_name,
         business_city: profileForm.business_city,
         business_venue_type: profileForm.business_venue_type,
+        employer_address: profileForm.employer_address.trim(),
         supporting_details: profileForm.supporting_details,
       };
       const response = await createInformalBusinessProfile(apiBaseUrl, payload);

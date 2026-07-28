@@ -5,7 +5,7 @@ import requests
 from places.models import FavoriteBusinessPushDevice
 
 
-def send_push_notifications_for_direct_message(user_ids, *, thread_id, listing_slug, title, message=''):
+def send_push_notifications_for_direct_message(user_ids, *, thread_id, listing_slug, portal, title, message=''):
 	if not getattr(settings, 'EXPO_PUSH_NOTIFICATIONS_ENABLED', True):
 		return 0
 	if not user_ids:
@@ -35,6 +35,7 @@ def send_push_notifications_for_direct_message(user_ids, *, thread_id, listing_s
 				'data': {
 					'type': 'direct_message',
 					'thread_id': thread_id,
+					'portal': portal,
 					'slug': listing_slug,
 				},
 			}
