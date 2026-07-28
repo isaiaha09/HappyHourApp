@@ -1166,7 +1166,7 @@ export function PrivacyPolicyScreen({ isLandscape, onBack }: Pick<LegalDocumentS
         },
         {
           title: 'Information collected through use of the service',
-          body: 'DiningDealz creates and stores service data needed to run the platform, including authentication tokens, email verification status, password reset and two-factor authentication state, favorite businesses, business notification history, direct message threads and receipts, business claim status, feed impression and engagement records, sponsored campaign delivery metrics, and push-device registration details. If an approved service-area or mobile business enables live location features, DiningDealz also stores the business location updates sent from that account.',
+          body: 'DiningDealz creates and stores service data needed to run the platform, including authentication tokens, email verification status, password reset and two-factor authentication state, favorite businesses, business notification history, direct message threads and receipts, business claim status, feed impression and engagement records, sponsored campaign delivery metrics, and push-device registration details. If an approved mobile business enables live location features, DiningDealz also stores the business location updates sent from that account.',
         },
         {
           title: 'Website, device, and technical information',
@@ -1216,7 +1216,7 @@ export function TermsOfServiceScreen({ isLandscape, onBack }: Pick<LegalDocument
         },
         {
           title: 'Business claims, verification, and location features',
-          body: 'Business users must submit accurate claim, contact, and verification information and may only claim or manage businesses they are authorized to represent. DiningDealz may review, request more information about, approve, reject, limit, or remove claims or related content. If a business uses service-area or mobile location features, the business is responsible for sending accurate location updates and for using those features only with proper permission and authority.',
+          body: 'Business users must submit accurate claim, contact, and verification information and may only claim or manage businesses they are authorized to represent. DiningDealz may review, request more information about, approve, reject, limit, or remove claims or related content. If a business uses mobile location features, the business is responsible for sending accurate location updates and for using those features only with proper permission and authority.',
         },
         {
           title: 'Notifications, billing, and paid features',
@@ -1614,7 +1614,7 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
                     onToggle={() => setOpenDropdown((current) => current === 'city' ? null : 'city')}
                     open={openDropdown === 'city'}
                     options={[{ label: 'Select a city', value: '' }, ...manualBusinessCityOptions]}
-                    placeholder="Select a city or service area"
+                    placeholder="Select a city or mobile business"
                     selectedValue={form.business_city}
                   />
 

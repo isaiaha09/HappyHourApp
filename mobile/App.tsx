@@ -436,7 +436,7 @@ function getBusinessSignupValidationMessage(form: ProfileFormState, mode: 'claim
       missingFields.push('business name');
     }
     if (!form.business_city.trim()) {
-      missingFields.push('city or service area');
+      missingFields.push('city or mobile business');
     }
     if (!form.business_venue_type.trim()) {
       missingFields.push('business type');
@@ -1291,7 +1291,7 @@ function AppScreen() {
         }
 
         if (!permission.granted) {
-          setProfileErrorMessage('Service area businesses must enable location access so their map pin can follow their current service area.');
+          setProfileErrorMessage('Mobile businesses must enable location access so their map pin can follow their current location.');
           return;
         }
 

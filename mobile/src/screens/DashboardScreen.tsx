@@ -647,7 +647,7 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
                     {session.claim_status ? <DashboardDetailRow label="Claim review" value={session.claim_status} /> : null}
                   {session.requires_business_location_tracking ? (
                     <>
-                    <DashboardDetailRow label="Location tracking" value="Required for service area business pins" />
+                    <DashboardDetailRow label="Location tracking" value="Required for mobile business pins" />
                       <DashboardDetailRow label="Last pin update" value={trackedBusinessLocationUpdatedAt || 'Waiting for the first phone location update'} />
                     </>
                   ) : null}
@@ -1362,7 +1362,7 @@ export function AccountSettingsScreen({
               <View style={styles.settingsItemRow}>
                 <View style={styles.settingsItemBody}>
                   <Text style={styles.dashboardSectionTitle}>Business location services</Text>
-                  <Text style={styles.dashboardSupportText}>Turn live location updates on when your service area business should publish its current service area pin. Turn it off to stop sending business location updates.</Text>
+                  <Text style={styles.dashboardSupportText}>Turn live location updates on when your mobile business should publish its current map pin. Turn it off to stop sending business location updates.</Text>
                 </View>
                 <View style={styles.settingsItemActions}>
                   <View style={styles.settingsSwitchCluster}>
