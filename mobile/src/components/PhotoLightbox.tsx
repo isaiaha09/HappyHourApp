@@ -3,6 +3,7 @@ import { FlatList, Image, Modal, Pressable, Text, useWindowDimensions, View, typ
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { styles } from '../appStyles';
+import { AuthenticatedImage } from './AuthenticatedImage';
 
 type PhotoLightboxProps = {
   authHeaders?: Record<string, string>;
@@ -69,7 +70,7 @@ export function PhotoLightbox({
           ref={flatListRef}
           renderItem={({ item }) => (
             <View style={[styles.photoLightboxSlide, { width }]}> 
-              <Image resizeMode="contain" source={{ uri: item, headers: authHeaders }} style={styles.photoLightboxImage} />
+              <AuthenticatedImage headers={authHeaders} resizeMode="contain" sourceUri={item} style={styles.photoLightboxImage} />
             </View>
           )}
           showsHorizontalScrollIndicator={false}

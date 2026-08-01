@@ -6,6 +6,7 @@ import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { styles } from '../appStyles';
+import { AuthenticatedImage } from '../components/AuthenticatedImage';
 import { NativeIOSLiquidGlassHeaderButton, isNativeIOSLiquidGlassBottomNavAvailable } from '../components/NativeIOSLiquidGlass';
 import { PhotoLightbox } from '../components/PhotoLightbox';
 import type { BusinessAttachmentDraft, DirectMessageItem, DirectMessageThread, DirectMessageThreadDetailResponse, DirectMessageSendResponse, SignupResponse } from '../types';
@@ -813,7 +814,7 @@ export function DirectMessagesScreen({
 														message.image_url ? (
 															<View style={[styles.directMessageImageWrap, isMine ? styles.directMessageImageWrapMine : null]}>
 																<Pressable onPress={() => handleOpenMessagePhotoLightbox(message.image_url)}>
-																	<Image source={{ uri: message.image_url, headers: directMessageImageHeaders }} style={styles.directMessageImage} />
+																	<AuthenticatedImage headers={directMessageImageHeaders} sourceUri={message.image_url} style={styles.directMessageImage} />
 																</Pressable>
 															</View>
 														) : (
