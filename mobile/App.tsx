@@ -3870,7 +3870,9 @@ function AppScreen() {
   }
 
   function handleBackToBrowse() {
-    animateNextLayout();
+    if (authenticatedSession) {
+      animateNextLayout();
+    }
     Keyboard.dismiss();
     setSelectedPlaceSlug(null);
 
