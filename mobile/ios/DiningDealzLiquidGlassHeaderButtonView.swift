@@ -25,6 +25,11 @@ private enum DiningDealzLiquidGlassThemeVariant: String {
 @objc(DiningDealzLiquidGlassHeaderButtonView)
 final class DiningDealzLiquidGlassHeaderButtonView: UIView {
   @objc var onGlassButtonPress: RCTDirectEventBlock?
+  @objc var glassOpacity: NSNumber = 1 {
+    didSet {
+      hostingController.view.alpha = CGFloat(truncating: glassOpacity)
+    }
+  }
   @objc var themeVariant: NSString = "default-dark" {
     didSet {
       updateRootView()
@@ -90,6 +95,7 @@ final class DiningDealzLiquidGlassHeaderButtonView: UIView {
 
     hostingController.view.backgroundColor = .clear
     hostingController.view.layer.allowsGroupOpacity = true
+    hostingController.view.alpha = CGFloat(truncating: glassOpacity)
     hostingController.view.translatesAutoresizingMaskIntoConstraints = false
     addSubview(hostingController.view)
 

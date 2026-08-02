@@ -5,6 +5,7 @@
 
 RCT_EXPORT_VIEW_PROPERTY(activeItem, NSString)
 RCT_EXPORT_VIEW_PROPERTY(bottomInset, NSNumber)
+RCT_EXPORT_VIEW_PROPERTY(glassOpacity, NSNumber)
 RCT_EXPORT_VIEW_PROPERTY(homeLabel, NSString)
 RCT_EXPORT_VIEW_PROPERTY(homeSystemImage, NSString)
 RCT_EXPORT_VIEW_PROPERTY(includeHomeItem, BOOL)
