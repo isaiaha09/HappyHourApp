@@ -18,6 +18,7 @@ type GuestShellChromeProps = {
   logoEntranceScale?: AnimatedNumber;
   logoScale?: AnimatedNumber;
   logoTranslateY?: AnimatedNumber;
+  nativeBottomNavOpacity?: Animated.Value;
   onCreateAccount: () => void;
   onSelectPortal: (portal: AuthPortal) => void;
   showBottomNav?: boolean;
@@ -35,6 +36,7 @@ export function GuestShellChrome({
   logoEntranceScale = 1,
   logoScale = 0.5,
   logoTranslateY = 0,
+  nativeBottomNavOpacity,
   onCreateAccount,
   onSelectPortal,
   showBottomNav = true,
@@ -237,32 +239,34 @@ export function GuestShellChrome({
               transform: [{ translateY: actionTranslateY }],
             }}
           >
-            <NativeIOSLiquidGlassBottomNav
-              activeItem="map"
-              bottomInset={insets.bottom}
-              key={`guest-shell:${themeVariant}`}
-              labels={{ map: 'Customer', profile: 'Sign Up', more: 'Business' }}
-              onSelect={(item) => {
-                if (!interactive) {
-                  return;
-                }
+            <Animated.View style={{ opacity: nativeBottomNavOpacity ?? 1 }}>
+              <NativeIOSLiquidGlassBottomNav
+                activeItem="map"
+                bottomInset={insets.bottom}
+                key={`guest-shell:${themeVariant}`}
+                labels={{ map: 'Customer', profile: 'Sign Up', more: 'Business' }}
+                onSelect={(item) => {
+                  if (!interactive) {
+                    return;
+                  }
 
-                if (item === 'map') {
-                  onSelectPortal('customer');
-                  return;
-                }
+                  if (item === 'map') {
+                    onSelectPortal('customer');
+                    return;
+                  }
 
-                if (item === 'profile') {
-                  onCreateAccount();
-                  return;
-                }
+                  if (item === 'profile') {
+                    onCreateAccount();
+                    return;
+                  }
 
-                onSelectPortal('business');
-              }}
-              style={{ width: '100%' }}
-              systemImages={{ map: 'person.fill', profile: 'plus', more: 'briefcase' }}
-              themeVariant={themeVariant}
-            />
+                  onSelectPortal('business');
+                }}
+                style={{ width: '100%' }}
+                systemImages={{ map: 'person.fill', profile: 'plus', more: 'briefcase' }}
+                themeVariant={themeVariant}
+              />
+            </Animated.View>
           </Animated.View>
         ) : (
           <Animated.View

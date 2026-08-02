@@ -21,6 +21,7 @@ export function resetSplashIntroState() {
 type SplashScreenProps = {
   assetsReady?: boolean;
   chromeInteractive?: boolean;
+  nativeBottomNavOpacity?: Animated.Value;
   onCreateAccount: () => void;
   onIntroComplete: () => void;
   onSelectPortal: (portal: AuthPortal) => void;
@@ -28,7 +29,7 @@ type SplashScreenProps = {
   themeVariant?: 'default-dark' | 'map-dark' | 'map-light';
 };
 
-export function SplashScreen({ assetsReady = true, chromeInteractive = true, onCreateAccount, onIntroComplete, onSelectPortal, showHeader = true, themeVariant = 'default-dark' }: SplashScreenProps) {
+export function SplashScreen({ assetsReady = true, chromeInteractive = true, nativeBottomNavOpacity, onCreateAccount, onIntroComplete, onSelectPortal, showHeader = true, themeVariant = 'default-dark' }: SplashScreenProps) {
   const { height } = useWindowDimensions();
   const timeline = useRef(new Animated.Value(splashIntroState === 'unplayed' ? 0 : 1)).current;
   const logoEntranceOpacity = useRef(new Animated.Value(splashIntroState === 'unplayed' ? 0 : 1)).current;
@@ -247,6 +248,7 @@ export function SplashScreen({ assetsReady = true, chromeInteractive = true, onC
         logoEntranceScale={logoEntranceScale}
         logoScale={logoScale}
         logoTranslateY={logoTranslateY}
+        nativeBottomNavOpacity={nativeBottomNavOpacity}
         onCreateAccount={onCreateAccount}
         onSelectPortal={onSelectPortal}
         showHeader={showHeader}

@@ -597,6 +597,7 @@ function AppScreen() {
   const authIntroOpacity = useRef(new Animated.Value(1)).current;
   const loginSuccessTransition = useRef(new Animated.Value(1)).current;
   const loginSuccessNativeBottomNavReveal = useRef(new Animated.Value(1)).current;
+  const guestNativeBottomNavOpacity = useRef(new Animated.Value(1)).current;
   const screenTransition = useRef(new Animated.Value(1)).current;
   const profileSceneTransition = useRef(new Animated.Value(1)).current;
   const browseSceneTransition = useRef(new Animated.Value(1)).current;
@@ -2973,9 +2974,18 @@ function AppScreen() {
     setGuestBrowseTransitionFrom(currentGuestBrowseScreen);
     setIncomingGuestBrowseScreen(null);
     screenTransition.setValue(0);
+    guestNativeBottomNavOpacity.stopAnimation();
+    guestNativeBottomNavOpacity.setValue(1);
     setIncomingGuestBrowseScreen(nextScreen);
     const startAnimation = () => {
       onboardingTransitionFrameRef.current = null;
+      if (nativeBottomNavAvailable) {
+        Animated.timing(guestNativeBottomNavOpacity, {
+          duration: currentGuestBrowseScreen === 'splash' ? 220 : onboardingTransitionDuration,
+          toValue: 0,
+          useNativeDriver: true,
+        }).start();
+      }
       Animated.timing(screenTransition, {
         duration: onboardingTransitionDuration,
         toValue: 1,
@@ -2998,6 +3008,23 @@ function AppScreen() {
         setGuestBrowseTransitionFrom(null);
         setIncomingGuestBrowseScreen(null);
         screenTransition.setValue(1);
+
+        if (currentGuestBrowseScreen === 'splash' && nextScreen === 'browse' && nativeBottomNavAvailable) {
+          requestAnimationFrame(() => {
+            Animated.timing(guestNativeBottomNavOpacity, {
+              duration: 220,
+              easing: Easing.out(Easing.cubic),
+              toValue: 1,
+              useNativeDriver: true,
+            }).start(({ finished: navFadeFinished }) => {
+              if (navFadeFinished) {
+                onComplete?.();
+              }
+            });
+          });
+          return;
+        }
+
         onComplete?.();
       });
     };
@@ -6485,6 +6512,7 @@ function AppScreen() {
             <SplashScreen
               assetsReady={startupImagesReady}
               chromeInteractive={splashChromeInteractive}
+              nativeBottomNavOpacity={guestNativeBottomNavOpacity}
               onCreateAccount={handleOpenProfiles}
               onIntroComplete={handleOpenMapFromSplash}
               onSelectPortal={handleOpenAuthFromLanding}
@@ -7147,6 +7175,7 @@ function AppScreen() {
                 headerOpacity={options.guestChromeHeaderOpacity}
                 interactive={options.guestChromeInteractive ?? true}
                 logoEntranceOpacity={guestBrowseHeaderLogoOpacity}
+                nativeBottomNavOpacity={guestNativeBottomNavOpacity}
                 onCreateAccount={handleOpenProfiles}
                 onSelectPortal={handleOpenAuthFromLanding}
                 showBottomNav={!selectedPlaceSlug}
