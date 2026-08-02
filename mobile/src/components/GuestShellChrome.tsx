@@ -49,6 +49,13 @@ export function GuestShellChrome({
   const touchTargetPressRetentionOffset = 12;
   const shouldFloatHeaderControls = !showHeader && isNativeIOSLiquidGlassHeaderButtonAvailable();
   const shouldUseTransparentIOSHeaderBar = Platform.OS === 'ios' && isNativeIOSLiquidGlassHeaderButtonAvailable();
+  const nativeBottomNavOpacity = typeof actionOpacity === 'number'
+    ? Math.max(actionOpacity, 0.01)
+    : actionOpacity.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.01, 1],
+      extrapolate: 'clamp',
+    });
 
   useEffect(() => {
     if (interactive || activeModal === null) {
@@ -241,7 +248,7 @@ export function GuestShellChrome({
         {isNativeIOSLiquidGlassBottomNavAvailable() ? (
           <Animated.View
             style={{
-              opacity: actionOpacity,
+              opacity: nativeBottomNavOpacity,
               transform: [{ translateY: actionTranslateY }],
             }}
           >
