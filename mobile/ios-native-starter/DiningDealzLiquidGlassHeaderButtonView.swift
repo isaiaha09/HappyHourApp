@@ -206,6 +206,7 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
     )
     .accessibilityLabel(accessibilityLabel ?? label ?? "Button")
     .background(Color.clear)
+    .compositingGroup()
   }
 }
 

@@ -308,6 +308,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     .tabViewStyle(.tabBarOnly)
     .tint(accentColor)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    .compositingGroup()
   }
 }
 
