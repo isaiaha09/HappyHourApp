@@ -302,21 +302,30 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     Color(red: 1, green: 0.3, blue: 0.38)
   }
 
+  private var tabViewHeight: CGFloat {
+    max(90, 76 + bottomInset)
+  }
+
   var body: some View {
-    TabView(selection: Binding(
-      get: { selectedTab },
-      set: { onSelect($0) }
-    )) {
-      ForEach(items) { displayItem in
-        Tab(displayItem.title, systemImage: displayItem.systemImageName, value: displayItem.item) {
-          Color.clear
+    VStack(spacing: 0) {
+      Spacer(minLength: 0)
+      TabView(selection: Binding(
+        get: { selectedTab },
+        set: { onSelect($0) }
+      )) {
+        ForEach(items) { displayItem in
+          Tab(displayItem.title, systemImage: displayItem.systemImageName, value: displayItem.item) {
+            Color.clear
+          }
         }
       }
+      .background(Color.clear)
+      .tabViewStyle(.tabBarOnly)
+      .tint(accentColor)
+      .frame(maxWidth: .infinity, height: tabViewHeight, alignment: .bottom)
     }
-    .background(Color.clear)
-    .tabViewStyle(.tabBarOnly)
-    .tint(accentColor)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    .background(Color.clear)
   }
 }
 
