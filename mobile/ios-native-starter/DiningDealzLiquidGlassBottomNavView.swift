@@ -138,11 +138,15 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     isOpaque = false
     clipsToBounds = true
     layer.allowsGroupOpacity = true
+    layer.shouldRasterize = true
+    layer.rasterizationScale = UIScreen.main.scale
 
     hostingController.view.backgroundColor = .clear
     hostingController.view.isOpaque = false
     hostingController.view.clipsToBounds = true
     hostingController.view.layer.allowsGroupOpacity = true
+    hostingController.view.layer.shouldRasterize = true
+    hostingController.view.layer.rasterizationScale = UIScreen.main.scale
     hostingController.view.translatesAutoresizingMaskIntoConstraints = false
     addSubview(hostingController.view)
 
