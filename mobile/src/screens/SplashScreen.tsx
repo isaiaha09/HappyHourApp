@@ -21,8 +21,6 @@ export function resetSplashIntroState() {
 type SplashScreenProps = {
   assetsReady?: boolean;
   chromeInteractive?: boolean;
-  chromeActionOpacity?: number | Animated.AnimatedInterpolation<string | number>;
-  chromeHeaderOpacity?: number | Animated.AnimatedInterpolation<string | number>;
   onCreateAccount: () => void;
   onIntroComplete: () => void;
   onSelectPortal: (portal: AuthPortal) => void;
@@ -30,7 +28,7 @@ type SplashScreenProps = {
   themeVariant?: 'default-dark' | 'map-dark' | 'map-light';
 };
 
-export function SplashScreen({ assetsReady = true, chromeInteractive = true, chromeActionOpacity, chromeHeaderOpacity, onCreateAccount, onIntroComplete, onSelectPortal, showHeader = true, themeVariant = 'default-dark' }: SplashScreenProps) {
+export function SplashScreen({ assetsReady = true, chromeInteractive = true, onCreateAccount, onIntroComplete, onSelectPortal, showHeader = true, themeVariant = 'default-dark' }: SplashScreenProps) {
   const { height } = useWindowDimensions();
   const timeline = useRef(new Animated.Value(splashIntroState === 'unplayed' ? 0 : 1)).current;
   const logoEntranceOpacity = useRef(new Animated.Value(splashIntroState === 'unplayed' ? 0 : 1)).current;
@@ -205,16 +203,6 @@ export function SplashScreen({ assetsReady = true, chromeInteractive = true, chr
     outputRange: [18, 0, 0],
     extrapolate: 'clamp',
   });
-  const resolvedActionOpacity = typeof chromeActionOpacity === 'number'
-    ? actionOpacity
-    : chromeActionOpacity
-      ? Animated.multiply(actionOpacity, chromeActionOpacity)
-      : actionOpacity;
-  const resolvedHeaderOpacity = typeof chromeHeaderOpacity === 'number'
-    ? headerOpacity
-    : chromeHeaderOpacity
-      ? Animated.multiply(headerOpacity, chromeHeaderOpacity)
-      : headerOpacity;
   return (
     <View style={styles.splashScreen}>
       <Animated.View
@@ -251,9 +239,9 @@ export function SplashScreen({ assetsReady = true, chromeInteractive = true, chr
       </View>
 
       <GuestShellChrome
-        actionOpacity={resolvedActionOpacity}
+        actionOpacity={actionOpacity}
         actionTranslateY={actionTranslateY}
-        headerOpacity={resolvedHeaderOpacity}
+        headerOpacity={headerOpacity}
         interactive={chromeInteractive}
         logoEntranceOpacity={logoEntranceOpacity}
         logoEntranceScale={logoEntranceScale}

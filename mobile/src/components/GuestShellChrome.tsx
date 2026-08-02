@@ -150,7 +150,6 @@ export function GuestShellChrome({
         <NativeIOSLiquidGlassHeaderButton
           accessibilityLabel="Open Home Feed"
           fallback={homeFeedFallback}
-          glassOpacity={headerOpacity}
           onPress={() => openModal('home-feed')}
           systemImage="newspaper.fill"
           style={{ marginTop: 8 }}
@@ -163,7 +162,6 @@ export function GuestShellChrome({
         <NativeIOSLiquidGlassHeaderButton
           accessibilityLabel="Sign in"
           fallback={signInFallback}
-          glassOpacity={headerOpacity}
           onPress={() => openModal('sign-in')}
           systemImage="person.crop.circle"
           style={{ marginTop: 8 }}
@@ -178,6 +176,7 @@ export function GuestShellChrome({
     <View pointerEvents="box-none" style={styles.guestShellChrome}>
       {showHeader || !shouldFloatHeaderControls ? (
         <Animated.View
+          shouldRasterizeIOS
           pointerEvents={interactive ? 'auto' : 'none'}
           style={[
             styles.screenHeaderBar,
@@ -189,17 +188,18 @@ export function GuestShellChrome({
                   borderTopWidth: 0,
                 }
               : null,
-            { opacity: isNativeIOSLiquidGlassHeaderButtonAvailable() ? 1 : headerOpacity },
+            { opacity: headerOpacity },
           ]}
         >
           {headerControls}
         </Animated.View>
       ) : interactive ? (
         <Animated.View
+          shouldRasterizeIOS
           pointerEvents="box-none"
           style={{
             left: 0,
-            opacity: isNativeIOSLiquidGlassHeaderButtonAvailable() ? 1 : headerOpacity,
+            opacity: headerOpacity,
             position: 'absolute',
             right: 0,
             top: Math.max(insets.top, 14),
@@ -234,15 +234,15 @@ export function GuestShellChrome({
       {showBottomNav ? <View pointerEvents="box-none" style={styles.bottomNavOverlay}>
         {isNativeIOSLiquidGlassBottomNavAvailable() ? (
           <Animated.View
+            shouldRasterizeIOS
             style={{
-              opacity: isNativeIOSLiquidGlassBottomNavAvailable() ? 1 : actionOpacity,
+              opacity: actionOpacity,
               transform: [{ translateY: actionTranslateY }],
             }}
           >
             <NativeIOSLiquidGlassBottomNav
               activeItem="map"
               bottomInset={insets.bottom}
-              glassOpacity={actionOpacity}
               key={`guest-shell:${themeVariant}`}
               labels={{ map: 'Customer', profile: 'Sign Up', more: 'Business' }}
               onSelect={(item) => {

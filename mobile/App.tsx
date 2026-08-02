@@ -1869,17 +1869,6 @@ function AppScreen() {
           : currentOnboardingScreen !== null && guestOnboardingOrigin === 'browse'
             ? 0
             : 1;
-  const splashGuestChromeOpacity = guestToBrowseTransition
-    ? screenTransition.interpolate({
-      inputRange: [0, 1],
-      outputRange: [1, 0],
-    })
-    : usesGuestBrowseSlideTransition && guestBrowseTransitionFrom === 'browse'
-      ? screenTransition.interpolate({
-        inputRange: [0, 1],
-        outputRange: [0, 1],
-      })
-      : 1;
   const mainShellOutgoingStyle = {
     transform: [
       {
@@ -6495,8 +6484,6 @@ function AppScreen() {
           <SafeAreaView edges={['left', 'right']} style={styles.safeAreaTransparent}>
             <SplashScreen
               assetsReady={startupImagesReady}
-              chromeActionOpacity={splashGuestChromeOpacity}
-              chromeHeaderOpacity={splashGuestChromeOpacity}
               chromeInteractive={splashChromeInteractive}
               onCreateAccount={handleOpenProfiles}
               onIntroComplete={handleOpenMapFromSplash}
