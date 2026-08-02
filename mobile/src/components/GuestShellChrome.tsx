@@ -241,6 +241,7 @@ export function GuestShellChrome({
         {isNativeIOSLiquidGlassBottomNavAvailable() ? (
           <Animated.View
             style={{
+              opacity: actionOpacity,
               transform: [{ translateY: actionTranslateY }],
             }}
           >
@@ -249,7 +250,6 @@ export function GuestShellChrome({
               bottomInset={insets.bottom}
               key={`guest-shell:${themeVariant}`}
               labels={{ map: 'Customer', profile: 'Sign Up', more: 'Business' }}
-              opacity={actionOpacity}
               onSelect={(item) => {
                 if (!interactive) {
                   return;

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Animated, Platform, Pressable, Text, UIManager, requireNativeComponent, type NativeSyntheticEvent, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { Platform, Pressable, Text, UIManager, requireNativeComponent, type NativeSyntheticEvent, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 
 import { styles } from '../appStyles';
 
@@ -13,8 +13,6 @@ type NativeBottomNavSelectEvent = NativeSyntheticEvent<{
 }>;
 
 type NativeHeaderButtonPressEvent = NativeSyntheticEvent<Record<string, never>>;
-
-type AnimatedNumber = Animated.Value | Animated.AnimatedInterpolation<number> | number;
 
 type NativeBottomNavViewProps = {
   activeItem: NativeLiquidGlassBottomNavItem;
@@ -51,7 +49,6 @@ type NativeIOSLiquidGlassBottomNavProps = {
   labels?: NativeLiquidGlassBottomNavLabels;
   moreOpen?: boolean;
   onSelect: (item: NativeLiquidGlassBottomNavItem) => void;
-  opacity?: AnimatedNumber;
   systemImages?: NativeLiquidGlassBottomNavSystemImages;
   style?: StyleProp<ViewStyle>;
   themeVariant?: 'default-dark' | 'map-dark' | 'map-light';
@@ -88,7 +85,6 @@ const averageHeaderPillCharacterWidth = 8;
 
 const NativeBottomNavView = requireNativeComponent<NativeBottomNavViewProps>(nativeBottomNavViewName);
 const NativeHeaderButtonView = requireNativeComponent<NativeHeaderButtonViewProps>(nativeHeaderButtonViewName);
-const AnimatedNativeBottomNavView = Animated.createAnimatedComponent(NativeBottomNavView);
 
 export function isSupportedIOSLiquidGlassRuntime() {
   if (Platform.OS !== 'ios') {
@@ -146,13 +142,13 @@ export function isNativeIOSLiquidGlassHeaderButtonAvailable() {
   return hasNativeViewManager(nativeHeaderButtonViewName);
 }
 
-export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, includeHomeItem = false, labels, moreOpen = false, onSelect, opacity = 1, style, systemImages, themeVariant = 'default-dark' }: NativeIOSLiquidGlassBottomNavProps) {
+export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, includeHomeItem = false, labels, moreOpen = false, onSelect, style, systemImages, themeVariant = 'default-dark' }: NativeIOSLiquidGlassBottomNavProps) {
   if (!isNativeIOSLiquidGlassBottomNavAvailable()) {
     return null;
   }
 
   return (
-    <AnimatedNativeBottomNavView
+    <NativeBottomNavView
       activeItem={activeItem}
       bottomInset={bottomInset}
       homeLabel={labels?.home}
@@ -166,7 +162,7 @@ export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, include
       onNavItemSelect={(event) => onSelect(event.nativeEvent.item)}
       profileLabel={labels?.profile}
       profileSystemImage={systemImages?.profile}
-      style={[getBottomNavStyle(bottomInset, style), { opacity }]}
+      style={getBottomNavStyle(bottomInset, style)}
       themeVariant={themeVariant}
     />
   );
