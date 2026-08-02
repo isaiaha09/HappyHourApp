@@ -200,9 +200,9 @@ export function GuestShellChrome({
         >
           {headerControls}
         </Animated.View>
-      ) : interactive ? (
+      ) : (
         <Animated.View
-          pointerEvents="box-none"
+          pointerEvents={interactive ? 'box-none' : 'none'}
           style={{
             left: 0,
             opacity: headerOpacity,
@@ -214,7 +214,7 @@ export function GuestShellChrome({
         >
           {headerControls}
         </Animated.View>
-      ) : null}
+      )}
 
       {showLogo ? (
         <Animated.View
