@@ -1,9 +1,11 @@
+import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import { File, Paths } from 'expo-file-system';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
 const androidNotificationChannelId = 'business-updates';
+const iosBundleIdentifier = 'com.ia09.diningdealz';
 
 export type PushRegistrationResult = {
   installationId: string;
@@ -35,7 +37,10 @@ export async function registerForPushNotificationsAsync(): Promise<PushRegistrat
     return null;
   }
 
-  const tokenResponse = await Notifications.getExpoPushTokenAsync({ projectId });
+  const tokenResponse = await Notifications.getExpoPushTokenAsync({
+    applicationId: getPushApplicationId(),
+    projectId,
+  });
   return {
     installationId: await getPushInstallationId(),
     pushToken: tokenResponse.data,
@@ -113,6 +118,18 @@ function getExpoProjectId() {
     || Constants.expoConfig?.extra?.eas?.projectId
     || Constants.easConfig?.projectId
     || '';
+}
+
+function getPushApplicationId() {
+  if (Platform.OS !== 'ios') {
+    return Application.applicationId || undefined;
+  }
+
+  if (Application.applicationId === 'host.exp.exponent') {
+    throw new Error('Expo Go cannot register push notifications for the DiningDealz standalone app.');
+  }
+
+  return iosBundleIdentifier;
 }
 
 function createInstallationId() {

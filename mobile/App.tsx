@@ -1088,8 +1088,9 @@ function AppScreen() {
 
     pushRegistrationAuthTokenRef.current = authToken;
     let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-    async function registerCurrentDeviceForPush() {
+    async function registerCurrentDeviceForPush(attempt = 0) {
       try {
         const registration = await registerForPushNotificationsAsync();
         if (!registration || cancelled) {
@@ -1102,8 +1103,15 @@ function AppScreen() {
           platform: registration.platform,
           portal,
         });
-      } catch {
-        // Leave push registration as a best-effort enhancement.
+        pushRegistrationAuthTokenRef.current = authToken;
+      } catch (error) {
+        pushRegistrationAuthTokenRef.current = '';
+        console.warn('Unable to register this device for push notifications.', error);
+        if (!cancelled && attempt < 2) {
+          retryTimer = setTimeout(() => {
+            void registerCurrentDeviceForPush(attempt + 1);
+          }, 5_000);
+        }
       }
     }
 
@@ -1111,6 +1119,9 @@ function AppScreen() {
 
     return () => {
       cancelled = true;
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+      }
     };
   }, [apiBaseUrl, authenticatedSession?.auth_token, authenticatedSession?.portal]);
 
