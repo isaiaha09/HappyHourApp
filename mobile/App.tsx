@@ -6496,6 +6496,7 @@ function AppScreen() {
             <SplashScreen
               assetsReady={startupImagesReady}
               chromeActionOpacity={splashGuestChromeOpacity}
+              chromeHeaderOpacity={splashGuestChromeOpacity}
               chromeInteractive={splashChromeInteractive}
               onCreateAccount={handleOpenProfiles}
               onIntroComplete={handleOpenMapFromSplash}

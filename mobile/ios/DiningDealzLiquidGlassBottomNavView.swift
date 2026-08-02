@@ -24,6 +24,11 @@ private struct DiningDealzLiquidGlassBottomNavDisplayItem: Identifiable {
 @objc(DiningDealzLiquidGlassBottomNavView)
 final class DiningDealzLiquidGlassBottomNavView: UIView {
   @objc var onNavItemSelect: RCTDirectEventBlock?
+  @objc var glassOpacity: NSNumber = 1 {
+    didSet {
+      alpha = min(max(CGFloat(truncating: glassOpacity), 0), 1)
+    }
+  }
   @objc var themeVariant: NSString = "default-dark" {
     didSet {
       updateRootView()
