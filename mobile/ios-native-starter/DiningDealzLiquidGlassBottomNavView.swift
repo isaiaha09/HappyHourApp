@@ -39,6 +39,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   @objc var bottomInset: NSNumber = 0 {
     didSet {
       invalidateIntrinsicContentSize()
+      updateHostingHeight()
       updateRootView()
     }
   }
@@ -104,6 +105,11 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   }
 
   private let hostingController = UIHostingController(rootView: AnyView(EmptyView()))
+  private var hostingHeightConstraint: NSLayoutConstraint!
+
+  private var bottomNavHeight: CGFloat {
+    max(90, 76 + CGFloat(truncating: bottomInset))
+  }
 
   private var resolvedActiveItem: DiningDealzLiquidGlassBottomNavItem {
     let preferredItem = DiningDealzLiquidGlassBottomNavItem(rawValue: activeItem as String) ?? .map
@@ -121,7 +127,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   }
 
   override var intrinsicContentSize: CGSize {
-    CGSize(width: UIView.noIntrinsicMetric, height: 52 + CGFloat(truncating: bottomInset))
+    CGSize(width: UIView.noIntrinsicMetric, height: bottomNavHeight)
   }
 
   override func layoutSubviews() {
@@ -156,11 +162,20 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     NSLayoutConstraint.activate([
       hostingController.view.leadingAnchor.constraint(equalTo: leadingAnchor),
       hostingController.view.trailingAnchor.constraint(equalTo: trailingAnchor),
-      hostingController.view.topAnchor.constraint(equalTo: topAnchor),
       hostingController.view.bottomAnchor.constraint(equalTo: bottomAnchor),
     ])
+    hostingHeightConstraint = hostingController.view.heightAnchor.constraint(equalToConstant: bottomNavHeight)
+    hostingHeightConstraint.isActive = true
 
     updateRootView()
+  }
+
+  private func updateHostingHeight() {
+    guard hostingHeightConstraint != nil else { return }
+
+    hostingHeightConstraint.constant = bottomNavHeight
+    setNeedsLayout()
+    hostingController.view.setNeedsLayout()
   }
 
   private func updateRootView() {
