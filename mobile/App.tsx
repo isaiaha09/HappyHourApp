@@ -6362,7 +6362,7 @@ function AppScreen() {
             guestChromeActionOpacity: nativeGuestChrome ? guestBrowseNativeChromeOpacity : 1,
             guestChromeInteractive: guestChromeInteractive && !selectedPlaceSlug,
             guestChromeHeaderOpacity: nativeGuestChrome ? guestBrowseNativeChromeOpacity : 1,
-            guestChromeShowLogo: !selectedPlaceSlug && !(nativeGuestChrome && guestToBrowseTransition),
+            guestChromeLogoOpacity: nativeGuestChrome && guestToBrowseTransition ? 0 : guestBrowseHeaderLogoOpacity,
             suppressBrowseSceneTransitionStyle: true,
             suppressScreenTransitionStyle: true,
             suppressTransitionOverlay: true,
@@ -6671,7 +6671,7 @@ function AppScreen() {
     guestChromeInteractive?: boolean;
     guestChromeActionOpacity?: Animated.Value | Animated.AnimatedInterpolation<number> | number;
     guestChromeHeaderOpacity?: Animated.Value | Animated.AnimatedInterpolation<number> | number;
-    guestChromeShowLogo?: boolean;
+    guestChromeLogoOpacity?: Animated.Value | Animated.AnimatedInterpolation<number> | number;
     suppressScreenTransitionStyle?: boolean;
     suppressBrowseSceneTransitionStyle?: boolean;
     suppressTransitionOverlay?: boolean;
@@ -7148,12 +7148,12 @@ function AppScreen() {
                 actionOpacity={options.guestChromeActionOpacity}
                 headerOpacity={options.guestChromeHeaderOpacity}
                 interactive={options.guestChromeInteractive ?? true}
-                logoEntranceOpacity={guestBrowseHeaderLogoOpacity}
+                logoEntranceOpacity={options.guestChromeLogoOpacity ?? guestBrowseHeaderLogoOpacity}
                 onCreateAccount={handleOpenProfiles}
                 onSelectPortal={handleOpenAuthFromLanding}
                 showBottomNav={!selectedPlaceSlug}
                 showHeader={!guestMapOnlyMode && browseMode !== 'map'}
-                showLogo={options.guestChromeShowLogo ?? !selectedPlaceSlug}
+                showLogo={!selectedPlaceSlug}
                 themeVariant={displayedDarkMapMode ? 'map-dark' : 'map-light'}
               />
             ) : null}
