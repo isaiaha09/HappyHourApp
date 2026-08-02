@@ -150,7 +150,6 @@ export function GuestShellChrome({
         <NativeIOSLiquidGlassHeaderButton
           accessibilityLabel="Open Home Feed"
           fallback={homeFeedFallback}
-          glassOpacity={headerOpacity}
           onPress={() => {
             if (interactive) {
               openModal('home-feed');
@@ -167,7 +166,6 @@ export function GuestShellChrome({
         <NativeIOSLiquidGlassHeaderButton
           accessibilityLabel="Sign in"
           fallback={signInFallback}
-          glassOpacity={headerOpacity}
           onPress={() => {
             if (interactive) {
               openModal('sign-in');
@@ -197,7 +195,7 @@ export function GuestShellChrome({
                   borderTopWidth: 0,
                 }
               : null,
-            { opacity: isNativeIOSLiquidGlassHeaderButtonAvailable() ? 1 : headerOpacity },
+            { opacity: headerOpacity },
           ]}
         >
           {headerControls}
@@ -207,7 +205,7 @@ export function GuestShellChrome({
           pointerEvents="box-none"
           style={{
             left: 0,
-            opacity: 1,
+            opacity: headerOpacity,
             position: 'absolute',
             right: 0,
             top: Math.max(insets.top, 14),
@@ -243,13 +241,13 @@ export function GuestShellChrome({
         {isNativeIOSLiquidGlassBottomNavAvailable() ? (
           <Animated.View
             style={{
+              opacity: actionOpacity,
               transform: [{ translateY: actionTranslateY }],
             }}
           >
             <NativeIOSLiquidGlassBottomNav
               activeItem="map"
               bottomInset={insets.bottom}
-              glassOpacity={actionOpacity}
               key={`guest-shell:${themeVariant}`}
               labels={{ map: 'Customer', profile: 'Sign Up', more: 'Business' }}
               onSelect={(item) => {

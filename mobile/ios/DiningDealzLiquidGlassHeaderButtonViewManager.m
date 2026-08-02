@@ -4,7 +4,6 @@
 @interface RCT_EXTERN_REMAP_MODULE(DiningDealzLiquidGlassHeaderButtonView, DiningDealzLiquidGlassHeaderButtonViewManager, RCTViewManager)
 
 RCT_EXPORT_VIEW_PROPERTY(accessibilityLabel, NSString)
-RCT_EXPORT_VIEW_PROPERTY(glassOpacity, NSNumber)
 RCT_EXPORT_VIEW_PROPERTY(label, NSString)
 RCT_EXPORT_VIEW_PROPERTY(systemImage, NSString)
 RCT_EXPORT_VIEW_PROPERTY(themeVariant, NSString)

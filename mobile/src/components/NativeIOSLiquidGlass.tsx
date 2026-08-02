@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Animated, Platform, Pressable, Text, UIManager, requireNativeComponent, type NativeSyntheticEvent, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { Platform, Pressable, Text, UIManager, requireNativeComponent, type NativeSyntheticEvent, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 
 import { styles } from '../appStyles';
 
@@ -14,12 +14,9 @@ type NativeBottomNavSelectEvent = NativeSyntheticEvent<{
 
 type NativeHeaderButtonPressEvent = NativeSyntheticEvent<Record<string, never>>;
 
-type AnimatedNumber = Animated.Value | Animated.AnimatedInterpolation<number> | number;
-
 type NativeBottomNavViewProps = {
   activeItem: NativeLiquidGlassBottomNavItem;
   bottomInset: number;
-  glassOpacity?: number;
   homeLabel?: string;
   homeSystemImage?: string;
   includeHomeItem?: boolean;
@@ -37,7 +34,6 @@ type NativeBottomNavViewProps = {
 
 type NativeHeaderButtonViewProps = {
   accessibilityLabel?: string;
-  glassOpacity?: number;
   label?: string;
   onGlassButtonPress?: (event: NativeHeaderButtonPressEvent) => void;
   systemImage?: string;
@@ -49,7 +45,6 @@ type NativeHeaderButtonViewProps = {
 type NativeIOSLiquidGlassBottomNavProps = {
   activeItem: NativeLiquidGlassBottomNavItem;
   bottomInset: number;
-  glassOpacity?: AnimatedNumber;
   includeHomeItem?: boolean;
   labels?: NativeLiquidGlassBottomNavLabels;
   moreOpen?: boolean;
@@ -62,7 +57,6 @@ type NativeIOSLiquidGlassBottomNavProps = {
 type NativeIOSLiquidGlassHeaderButtonProps = {
   accessibilityLabel?: string;
   fallback: ReactNode;
-  glassOpacity?: AnimatedNumber;
   hideFallbackWhenNativeUnavailable?: boolean;
   label?: string;
   onPress: () => void;
@@ -91,8 +85,6 @@ const averageHeaderPillCharacterWidth = 8;
 
 const NativeBottomNavView = requireNativeComponent<NativeBottomNavViewProps>(nativeBottomNavViewName);
 const NativeHeaderButtonView = requireNativeComponent<NativeHeaderButtonViewProps>(nativeHeaderButtonViewName);
-const AnimatedNativeBottomNavView = Animated.createAnimatedComponent(NativeBottomNavView);
-const AnimatedNativeHeaderButtonView = Animated.createAnimatedComponent(NativeHeaderButtonView);
 
 export function isSupportedIOSLiquidGlassRuntime() {
   if (Platform.OS !== 'ios') {
@@ -150,16 +142,15 @@ export function isNativeIOSLiquidGlassHeaderButtonAvailable() {
   return hasNativeViewManager(nativeHeaderButtonViewName);
 }
 
-export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, glassOpacity = 1, includeHomeItem = false, labels, moreOpen = false, onSelect, style, systemImages, themeVariant = 'default-dark' }: NativeIOSLiquidGlassBottomNavProps) {
+export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, includeHomeItem = false, labels, moreOpen = false, onSelect, style, systemImages, themeVariant = 'default-dark' }: NativeIOSLiquidGlassBottomNavProps) {
   if (!isNativeIOSLiquidGlassBottomNavAvailable()) {
     return null;
   }
 
   return (
-    <AnimatedNativeBottomNavView
+    <NativeBottomNavView
       activeItem={activeItem}
       bottomInset={bottomInset}
-      glassOpacity={glassOpacity}
       homeLabel={labels?.home}
       homeSystemImage={systemImages?.home}
       includeHomeItem={includeHomeItem}
@@ -177,7 +168,7 @@ export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, glassOp
   );
 }
 
-export function NativeIOSLiquidGlassHeaderButton({ accessibilityLabel, fallback, glassOpacity = 1, hideFallbackWhenNativeUnavailable = false, label, onPress, style, systemImage, themeVariant = 'default-dark', variant }: NativeIOSLiquidGlassHeaderButtonProps) {
+export function NativeIOSLiquidGlassHeaderButton({ accessibilityLabel, fallback, hideFallbackWhenNativeUnavailable = false, label, onPress, style, systemImage, themeVariant = 'default-dark', variant }: NativeIOSLiquidGlassHeaderButtonProps) {
   if (!isNativeIOSLiquidGlassHeaderButtonAvailable()) {
     if (hideFallbackWhenNativeUnavailable && isSupportedIOSLiquidGlassRuntime()) {
       return null;
@@ -187,9 +178,8 @@ export function NativeIOSLiquidGlassHeaderButton({ accessibilityLabel, fallback,
   }
 
   return (
-    <AnimatedNativeHeaderButtonView
+    <NativeHeaderButtonView
       accessibilityLabel={accessibilityLabel}
-      glassOpacity={glassOpacity}
       label={label}
       onGlassButtonPress={() => onPress()}
       style={getHeaderButtonStyle(variant, label, style)}
