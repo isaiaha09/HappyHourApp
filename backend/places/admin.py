@@ -95,6 +95,53 @@ def _normalize_admin_string_list(value):
 	return normalized_items
 
 
+def _admin_media_path_from_url(value):
+	return urlparse(str(value or '')).path.lower()
+
+
+def _is_admin_image_media(value, content_type=''):
+	return str(content_type or '').lower().startswith('image/') or _admin_media_path_from_url(value).endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.heic', '.heif'))
+
+
+def _is_admin_pdf_media(value, content_type=''):
+	return str(content_type or '').lower() == 'application/pdf' or _admin_media_path_from_url(value).endswith('.pdf')
+
+
+def _format_admin_media_preview(url, label='', content_type=''):
+	media_url = str(url or '').strip()
+	media_label = str(label or '').strip() or 'Submitted file'
+	if not media_url:
+		return 'No file'
+
+	if _is_admin_image_media(media_url, content_type):
+		return format_html(
+			'<div class="admin-media-preview" style="min-width:220px;max-width:280px;">'
+			'<a href="{}" target="_blank" rel="noopener">'
+			'<img src="{}" alt="{}" style="display:block;width:220px;max-height:180px;object-fit:contain;border:1px solid #c7c7c7;background:#fff;padding:4px;" />'
+			'</a>'
+			'<div style="margin-top:6px;line-height:1.35;"><a href="{}" target="_blank" rel="noopener">Open full size</a></div>'
+			'</div>',
+			media_url,
+			media_url,
+			media_label,
+			media_url,
+		)
+
+	if _is_admin_pdf_media(media_url, content_type):
+		return format_html(
+			'<div class="admin-media-preview" style="min-width:280px;max-width:340px;">'
+			'<iframe src="{}" title="{}" style="display:block;width:280px;height:180px;border:1px solid #c7c7c7;background:#fff;"></iframe>'
+			'<div style="margin-top:6px;line-height:1.35;"><a href="{}" target="_blank" rel="noopener">Open/download {}</a></div>'
+			'</div>',
+			media_url,
+			media_label,
+			media_url,
+			media_label,
+		)
+
+	return format_html('<a class="button" href="{}" target="_blank" rel="noopener">Open/download {}</a>', media_url, media_label)
+
+
 def _coerce_imported_image_url_input(raw_value):
 	normalized = str(raw_value or '').strip()
 	if not normalized or normalized.lower() in {'null', 'none'}:
@@ -1562,28 +1609,39 @@ class BusinessClaimProfileEntryInline(admin.TabularInline):
 	model = BusinessClaimProfileEntry
 	extra = 0
 	can_delete = False
-	fields = ('entry_kind', 'value', 'sort_order', 'metadata', 'created_at', 'updated_at')
-	readonly_fields = ('entry_kind', 'value', 'sort_order', 'metadata', 'created_at', 'updated_at')
+	fields = ('entry_kind', 'value_preview', 'sort_order', 'metadata', 'created_at', 'updated_at')
+	readonly_fields = ('entry_kind', 'value_preview', 'sort_order', 'metadata', 'created_at', 'updated_at')
 	ordering = ('entry_kind', 'sort_order', 'id')
 	verbose_name = 'Submitted profile entry'
 	verbose_name_plural = 'Submitted profile entries'
+
+	@admin.display(description='Submitted value')
+	def value_preview(self, obj):
+		value = str(obj.value or '').strip()
+		if not value:
+			return '-'
+		if obj.entry_kind == BusinessClaim.ProfileEntryKind.PHOTO_REFERENCE:
+			return _format_admin_media_preview(value, 'Submitted photo reference', 'image/jpeg')
+		if value.lower().startswith(('http://', 'https://')):
+			return format_html('<a href="{}" target="_blank" rel="noopener">{}</a>', value, value)
+		return value
 
 
 class BusinessClaimAttachmentInline(admin.TabularInline):
 	model = BusinessClaimAttachment
 	extra = 0
 	can_delete = False
-	fields = ('attachment_kind', 'original_filename', 'file_link', 'content_type', 'file_size_display', 'created_at')
-	readonly_fields = ('attachment_kind', 'original_filename', 'file_link', 'content_type', 'file_size_display', 'created_at')
+	fields = ('attachment_kind', 'original_filename', 'file_preview', 'content_type', 'file_size_display', 'created_at')
+	readonly_fields = ('attachment_kind', 'original_filename', 'file_preview', 'content_type', 'file_size_display', 'created_at')
 	ordering = ('attachment_kind', 'created_at')
 	verbose_name = 'Submitted attachment'
 	verbose_name_plural = 'Submitted attachments'
 
-	@admin.display(description='Stored file')
-	def file_link(self, obj):
+	@admin.display(description='Submitted file')
+	def file_preview(self, obj):
 		if not obj.file:
 			return 'No file'
-		return format_html('<a href="{}" target="_blank" rel="noopener">{}</a>', obj.file.url, obj.original_filename or 'Open file')
+		return _format_admin_media_preview(obj.file.url, obj.original_filename or 'Open file', obj.content_type)
 
 	@admin.display(description='File size')
 	def file_size_display(self, obj):

@@ -9698,6 +9698,12 @@ class BusinessClaimAdminTests(TestCase):
 			value='https://instagram.com/claimedplace',
 			sort_order=0,
 		)
+		BusinessClaimProfileEntry.objects.create(
+			claim=self.claim,
+			entry_kind=BusinessClaim.ProfileEntryKind.PHOTO_REFERENCE,
+			value='https://pqenwlrxrfzrhpvxzqcv.supabase.co/storage/v1/object/public/business-media/business-profile-photos/39/storefront.jpg',
+			sort_order=0,
+		)
 		BusinessClaimAttachment.objects.create(
 			claim=self.claim,
 			attachment_kind=BusinessClaimAttachment.AttachmentKind.PROOF_OF_AUTHORITY,
@@ -9705,6 +9711,14 @@ class BusinessClaimAdminTests(TestCase):
 			original_filename='authority.pdf',
 			content_type='application/pdf',
 			file_size=14,
+		)
+		BusinessClaimAttachment.objects.create(
+			claim=self.claim,
+			attachment_kind=BusinessClaimAttachment.AttachmentKind.SOCIAL_MEDIA,
+			file=SimpleUploadedFile('social-proof.jpg', b'social-photo', content_type='image/jpeg'),
+			original_filename='social-proof.jpg',
+			content_type='image/jpeg',
+			file_size=12,
 		)
 
 	def _build_request(self, path='/admin/places/businessclaim/'):
@@ -9723,7 +9737,14 @@ class BusinessClaimAdminTests(TestCase):
 		self.assertContains(response, 'Submitted profile entries')
 		self.assertContains(response, 'Submitted attachments')
 		self.assertContains(response, 'https://instagram.com/claimedplace')
+		self.assertContains(response, 'Submitted photo reference')
+		self.assertContains(response, 'business-profile-photos/39/storefront.jpg')
+		self.assertContains(response, '<img')
+		self.assertContains(response, 'Open full size')
 		self.assertContains(response, 'authority.pdf')
+		self.assertContains(response, '<iframe')
+		self.assertContains(response, 'Open/download authority.pdf')
+		self.assertContains(response, 'social-proof.jpg')
 		self.assertContains(response, 'https://claimed-place.example.com')
 		self.assertContains(response, BusinessClaim.Pathway.ESTABLISHED)
 		self.assertContains(response, '0.0000 GB')
