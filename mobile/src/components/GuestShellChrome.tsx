@@ -176,7 +176,6 @@ export function GuestShellChrome({
     <View pointerEvents="box-none" style={styles.guestShellChrome}>
       {showHeader || !shouldFloatHeaderControls ? (
         <Animated.View
-          shouldRasterizeIOS
           pointerEvents={interactive ? 'auto' : 'none'}
           style={[
             styles.screenHeaderBar,
@@ -195,7 +194,6 @@ export function GuestShellChrome({
         </Animated.View>
       ) : interactive ? (
         <Animated.View
-          shouldRasterizeIOS
           pointerEvents="box-none"
           style={{
             left: 0,
@@ -234,7 +232,6 @@ export function GuestShellChrome({
       {showBottomNav ? <View pointerEvents="box-none" style={styles.bottomNavOverlay}>
         {isNativeIOSLiquidGlassBottomNavAvailable() ? (
           <Animated.View
-            shouldRasterizeIOS
             style={{
               opacity: actionOpacity,
               transform: [{ translateY: actionTranslateY }],
