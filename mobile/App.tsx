@@ -6195,7 +6195,7 @@ function AppScreen() {
 
     return (
       <View pointerEvents="box-none" style={styles.bottomNavOverlay}>
-        <View style={[styles.bottomNavShell, { paddingBottom: Math.max(insets.bottom + 10, 14) }]}>
+        <View style={[styles.bottomNavShell, { paddingBottom: Math.max(insets.bottom + 2, 4) }]}>
           <View pointerEvents="none" style={styles.bottomNavGlassHighlight} />
           {!options.guest ? (
             <Pressable accessibilityLabel="Open home feed" onPress={handleBottomNavOpenHomeFeed} style={styles.bottomNavItem}>
@@ -7143,7 +7143,7 @@ function AppScreen() {
   const shouldRenderPersistentBottomNav = !showLoginSuccessTransition && !showLogoutTransition && (
     authenticatedSession
       ? selectedPlaceSlug !== null || authenticatedBottomNavScreens.includes(screenMode)
-      : selectedPlaceSlug !== null
+      : false
   );
 
   function renderConnectivityGateScreen() {

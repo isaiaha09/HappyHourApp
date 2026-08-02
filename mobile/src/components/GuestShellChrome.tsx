@@ -270,7 +270,7 @@ export function GuestShellChrome({
               styles.bottomNavShell,
               {
                 opacity: actionOpacity,
-                paddingBottom: Math.max(insets.bottom + 10, 14),
+                paddingBottom: Math.max(insets.bottom + 2, 4),
                 transform: [{ translateY: actionTranslateY }],
               },
             ]}

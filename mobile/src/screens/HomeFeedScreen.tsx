@@ -39,6 +39,7 @@ type HomeFeedScreenProps = {
 };
 
 const PAGE_SIZE = 12;
+const HOME_FEED_BOOSTS_ENABLED = false;
 const feedCache = new Map<string, FeedCacheEntry>();
 
 function createFeedSessionKey() {
@@ -206,6 +207,10 @@ export function HomeFeedScreen({
 
   const normalizedQuery = normalizeSearchText(searchQuery);
   const filteredItems = items.filter((item) => {
+    if (!HOME_FEED_BOOSTS_ENABLED && (item.is_sponsored || item.item_type === 'sponsored')) {
+      return false;
+    }
+
     if (selectedVenueTypes.length > 0 && !selectedVenueTypes.includes(item.venue_type)) {
       return false;
     }
@@ -341,7 +346,7 @@ export function HomeFeedScreen({
       <View style={[styles.homeFeedHeader, headerHorizontalPadding ? { paddingHorizontal: headerHorizontalPadding } : null]}>
         <Text style={styles.homeFeedEyebrow}>Home Feed</Text>
         <Text style={styles.homeFeedTitle}>What local businesses are posting right now</Text>
-        <Text style={styles.homeFeedSubtitle}>Specials, updates, events, stories, and boosted posts are blended into one scrollable feed.</Text>
+        <Text style={styles.homeFeedSubtitle}>Specials, updates, events, and stories are blended into one scrollable feed.</Text>
       </View>
     </Animated.View>
   ) : null;
