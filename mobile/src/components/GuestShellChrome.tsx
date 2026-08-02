@@ -18,6 +18,7 @@ type GuestShellChromeProps = {
   logoEntranceScale?: AnimatedNumber;
   logoScale?: AnimatedNumber;
   logoTranslateY?: AnimatedNumber;
+  nativeBottomNavEntrance?: boolean;
   onCreateAccount: () => void;
   onSelectPortal: (portal: AuthPortal) => void;
   showBottomNav?: boolean;
@@ -35,6 +36,7 @@ export function GuestShellChrome({
   logoEntranceScale = 1,
   logoScale = 0.5,
   logoTranslateY = 0,
+  nativeBottomNavEntrance = false,
   onCreateAccount,
   onSelectPortal,
   showBottomNav = true,
@@ -241,14 +243,14 @@ export function GuestShellChrome({
         {isNativeIOSLiquidGlassBottomNavAvailable() ? (
           <Animated.View
             style={{
-              opacity: actionOpacity,
+              opacity: nativeBottomNavEntrance ? 1 : actionOpacity,
               transform: [{ translateY: actionTranslateY }],
             }}
           >
             <NativeIOSLiquidGlassBottomNav
               activeItem="map"
               bottomInset={insets.bottom}
-              entranceVisible={interactive}
+              entranceVisible={nativeBottomNavEntrance}
               key={`guest-shell:${themeVariant}`}
               labels={{ map: 'Customer', profile: 'Sign Up', more: 'Business' }}
               onSelect={(item) => {

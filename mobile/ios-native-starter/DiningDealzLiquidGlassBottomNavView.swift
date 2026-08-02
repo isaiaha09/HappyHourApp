@@ -174,15 +174,12 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
       return
     }
 
-    DispatchQueue.main.async { [weak self] in
-      guard let self, self.entranceVisible else { return }
-      UIView.animate(
-        withDuration: 0.5,
-        delay: 0,
-        options: [.beginFromCurrentState, .curveEaseInOut, .allowUserInteraction]
-      ) {
-        self.hostingController.view.alpha = 1
-      }
+    UIView.animate(
+      withDuration: 0.5,
+      delay: 0,
+      options: [.beginFromCurrentState, .curveEaseInOut, .allowUserInteraction]
+    ) {
+      self.hostingController.view.alpha = 1
     }
   }
 
