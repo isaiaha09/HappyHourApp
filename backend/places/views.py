@@ -1112,6 +1112,22 @@ class DirectMessageThreadDetailView(APIView):
 			'messages': DirectMessageItemSerializer(message_payloads, many=True).data,
 		})
 
+	def delete(self, request, thread_id):
+		portal = infer_portal_for_user(request.user, request.query_params.get('portal') or request.data.get('portal'))
+		if portal != 'business':
+			return Response({'detail': 'Only business accounts can delete direct message conversations.'}, status=status.HTTP_403_FORBIDDEN)
+
+		thread = BusinessDirectMessageThread.objects.filter(
+			id=thread_id,
+			business_claim__membership__is_active=True,
+			business_claim__membership__user=request.user,
+		).distinct().first()
+		if thread is None:
+			return Response({'detail': 'Direct message thread not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+		thread.delete()
+		return Response({'detail': 'Conversation permanently deleted.'})
+
 
 class DirectMessageImageView(APIView):
 	authentication_classes = [ProfileTokenAuthentication]
@@ -1152,22 +1168,6 @@ class DirectMessageImageView(APIView):
 			business_claim__membership__is_active=True,
 			business_claim__membership__user=user,
 		).exists()
-
-	def delete(self, request, thread_id):
-		portal = infer_portal_for_user(request.user, request.query_params.get('portal') or request.data.get('portal'))
-		if portal != 'business':
-			return Response({'detail': 'Only business accounts can delete direct message conversations.'}, status=status.HTTP_403_FORBIDDEN)
-
-		thread = BusinessDirectMessageThread.objects.filter(
-			id=thread_id,
-			business_claim__membership__is_active=True,
-			business_claim__membership__user=request.user,
-		).distinct().first()
-		if thread is None:
-			return Response({'detail': 'Direct message thread not found.'}, status=status.HTTP_404_NOT_FOUND)
-
-		thread.delete()
-		return Response({'detail': 'Conversation permanently deleted.'})
 
 
 class DirectMessageBlocksView(APIView):
