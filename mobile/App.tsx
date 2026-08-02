@@ -626,6 +626,7 @@ function AppScreen() {
   const [twoFactorSetupCode, setTwoFactorSetupCode] = useState('');
   const [twoFactorDisableCode, setTwoFactorDisableCode] = useState('');
   const [authenticatedSession, setAuthenticatedSession] = useState<SignupResponse | null>(null);
+  const [pushRegistrationAttempt, setPushRegistrationAttempt] = useState(0);
   const [browseMode, setBrowseMode] = useState<BrowseMode>('list');
   const [browseFiltersExpanded, setBrowseFiltersExpanded] = useState(false);
   const [mapSearchPanelLifted, setMapSearchPanelLifted] = useState(false);
@@ -1093,7 +1094,17 @@ function AppScreen() {
     async function registerCurrentDeviceForPush(attempt = 0) {
       try {
         const registration = await registerForPushNotificationsAsync();
-        if (!registration || cancelled) {
+        if (cancelled) {
+          return;
+        }
+
+        if (!registration) {
+          pushRegistrationAuthTokenRef.current = '';
+          if (attempt < 2) {
+            retryTimer = setTimeout(() => {
+              void registerCurrentDeviceForPush(attempt + 1);
+            }, 5_000);
+          }
           return;
         }
 
@@ -1123,7 +1134,7 @@ function AppScreen() {
         clearTimeout(retryTimer);
       }
     };
-  }, [apiBaseUrl, authenticatedSession?.auth_token, authenticatedSession?.portal]);
+  }, [apiBaseUrl, authenticatedSession?.auth_token, authenticatedSession?.portal, pushRegistrationAttempt]);
 
   function setAuthenticatedSessionIfCurrentToken(expectedAuthToken: string, session: SignupResponse) {
     if (authenticatedSessionRef.current?.auth_token !== expectedAuthToken) {
@@ -1642,6 +1653,11 @@ function AppScreen() {
         clearAutoFitMapRegionTimer();
         clearMapMarkersTrackViewChangesTimer();
         return;
+      }
+
+      if (previousAppState !== 'active') {
+        pushRegistrationAuthTokenRef.current = '';
+        setPushRegistrationAttempt((current) => current + 1);
       }
 
       if (previousAppState === 'active' || !showMapBrowse) {
