@@ -21,7 +21,7 @@ export function resetSplashIntroState() {
 type SplashScreenProps = {
   assetsReady?: boolean;
   chromeInteractive?: boolean;
-  nativeBottomNavOpacity?: Animated.Value;
+  chromeActionOpacity?: number | Animated.AnimatedInterpolation<string | number>;
   onCreateAccount: () => void;
   onIntroComplete: () => void;
   onSelectPortal: (portal: AuthPortal) => void;
@@ -29,7 +29,7 @@ type SplashScreenProps = {
   themeVariant?: 'default-dark' | 'map-dark' | 'map-light';
 };
 
-export function SplashScreen({ assetsReady = true, chromeInteractive = true, nativeBottomNavOpacity, onCreateAccount, onIntroComplete, onSelectPortal, showHeader = true, themeVariant = 'default-dark' }: SplashScreenProps) {
+export function SplashScreen({ assetsReady = true, chromeInteractive = true, chromeActionOpacity, onCreateAccount, onIntroComplete, onSelectPortal, showHeader = true, themeVariant = 'default-dark' }: SplashScreenProps) {
   const { height } = useWindowDimensions();
   const timeline = useRef(new Animated.Value(splashIntroState === 'unplayed' ? 0 : 1)).current;
   const logoEntranceOpacity = useRef(new Animated.Value(splashIntroState === 'unplayed' ? 0 : 1)).current;
@@ -204,6 +204,11 @@ export function SplashScreen({ assetsReady = true, chromeInteractive = true, nat
     outputRange: [18, 0, 0],
     extrapolate: 'clamp',
   });
+  const resolvedActionOpacity = typeof chromeActionOpacity === 'number'
+    ? actionOpacity
+    : chromeActionOpacity
+      ? Animated.multiply(actionOpacity, chromeActionOpacity)
+      : actionOpacity;
   return (
     <View style={styles.splashScreen}>
       <Animated.View
@@ -240,7 +245,7 @@ export function SplashScreen({ assetsReady = true, chromeInteractive = true, nat
       </View>
 
       <GuestShellChrome
-        actionOpacity={actionOpacity}
+        actionOpacity={resolvedActionOpacity}
         actionTranslateY={actionTranslateY}
         headerOpacity={headerOpacity}
         interactive={chromeInteractive}
@@ -248,7 +253,6 @@ export function SplashScreen({ assetsReady = true, chromeInteractive = true, nat
         logoEntranceScale={logoEntranceScale}
         logoScale={logoScale}
         logoTranslateY={logoTranslateY}
-        nativeBottomNavOpacity={nativeBottomNavOpacity}
         onCreateAccount={onCreateAccount}
         onSelectPortal={onSelectPortal}
         showHeader={showHeader}
