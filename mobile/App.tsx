@@ -6334,11 +6334,26 @@ function AppScreen() {
             guestChromeActionOpacity: nativeGuestChrome ? guestBrowseNativeChromeOpacity : 1,
             guestChromeInteractive,
             guestChromeHeaderOpacity: nativeGuestChrome ? guestBrowseNativeChromeOpacity : 1,
+            guestChromeShowBottomNav: false,
             suppressBrowseSceneTransitionStyle: true,
             suppressScreenTransitionStyle: true,
             suppressTransitionOverlay: true,
           })}
         </Animated.View>
+        {showingBrowse && browseMode === 'map' && !selectedPlaceSlug ? (
+          <GuestShellChrome
+            actionOpacity={nativeGuestChrome ? guestBrowseNativeChromeOpacity : 1}
+            bottomNavResetKey={guestBottomNavResetKey}
+            interactive={guestChromeInteractive}
+            onCreateAccount={handleOpenProfiles}
+            onSelectPortal={handleOpenAuthFromLanding}
+            showBottomNav
+            showFloatingHeaderWhenHidden={false}
+            showHeader={false}
+            showLogo={false}
+            themeVariant={displayedDarkMapMode ? 'map-dark' : 'map-light'}
+          />
+        ) : null}
         {!browseTransitionActive && (showingBrowse || showingBrowseUnderSplash) && shellFadeScope === 'browse' ? (
           <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, browseShellFadeMaskStyle]} />
         ) : null}
@@ -6637,6 +6652,7 @@ function AppScreen() {
     guestChromeInteractive?: boolean;
     guestChromeActionOpacity?: Animated.Value | Animated.AnimatedInterpolation<number> | number;
     guestChromeHeaderOpacity?: Animated.Value | Animated.AnimatedInterpolation<number> | number;
+    guestChromeShowBottomNav?: boolean;
     suppressScreenTransitionStyle?: boolean;
     suppressBrowseSceneTransitionStyle?: boolean;
     suppressTransitionOverlay?: boolean;
@@ -7117,7 +7133,7 @@ function AppScreen() {
                 logoEntranceOpacity={guestBrowseHeaderLogoOpacity}
                 onCreateAccount={handleOpenProfiles}
                 onSelectPortal={handleOpenAuthFromLanding}
-                showBottomNav
+                showBottomNav={options.guestChromeShowBottomNav ?? true}
                 showHeader={!guestMapOnlyMode && browseMode !== 'map'}
                 themeVariant={displayedDarkMapMode ? 'map-dark' : 'map-light'}
               />

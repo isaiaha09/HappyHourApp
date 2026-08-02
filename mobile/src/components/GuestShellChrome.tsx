@@ -22,6 +22,7 @@ type GuestShellChromeProps = {
   onCreateAccount: () => void;
   onSelectPortal: (portal: AuthPortal) => void;
   showBottomNav?: boolean;
+  showFloatingHeaderWhenHidden?: boolean;
   showHeader?: boolean;
   showLogo?: boolean;
   themeVariant?: 'default-dark' | 'map-dark' | 'map-light';
@@ -40,6 +41,7 @@ export function GuestShellChrome({
   onCreateAccount,
   onSelectPortal,
   showBottomNav = true,
+  showFloatingHeaderWhenHidden = true,
   showHeader = true,
   showLogo = true,
   themeVariant = 'default-dark',
@@ -49,7 +51,7 @@ export function GuestShellChrome({
   const modalOpacity = useRef(new Animated.Value(0)).current;
   const touchTargetHitSlop = 12;
   const touchTargetPressRetentionOffset = 12;
-  const shouldFloatHeaderControls = !showHeader && isNativeIOSLiquidGlassHeaderButtonAvailable();
+  const shouldFloatHeaderControls = showFloatingHeaderWhenHidden && !showHeader && isNativeIOSLiquidGlassHeaderButtonAvailable();
   const shouldUseTransparentIOSHeaderBar = Platform.OS === 'ios' && isNativeIOSLiquidGlassHeaderButtonAvailable();
 
   useEffect(() => {
