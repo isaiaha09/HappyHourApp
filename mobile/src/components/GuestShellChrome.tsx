@@ -12,6 +12,7 @@ type AnimatedNumber = Animated.Value | Animated.AnimatedInterpolation<number> | 
 type GuestShellChromeProps = {
   actionOpacity?: AnimatedNumber;
   actionTranslateY?: AnimatedNumber;
+  bottomNavResetKey?: number;
   headerOpacity?: AnimatedNumber;
   interactive?: boolean;
   logoEntranceOpacity?: AnimatedNumber;
@@ -29,6 +30,7 @@ type GuestShellChromeProps = {
 export function GuestShellChrome({
   actionOpacity = 1,
   actionTranslateY = 0,
+  bottomNavResetKey = 0,
   headerOpacity = 1,
   interactive = true,
   logoEntranceOpacity = 1,
@@ -240,7 +242,7 @@ export function GuestShellChrome({
             <NativeIOSLiquidGlassBottomNav
               activeItem="map"
               bottomInset={insets.bottom}
-              key={`guest-shell:${themeVariant}`}
+              key={`guest-shell:${themeVariant}:${bottomNavResetKey}`}
               labels={{ map: 'Customer', profile: 'Sign Up', more: 'Business' }}
               onSelect={(item) => {
                 if (!interactive) {

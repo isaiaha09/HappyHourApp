@@ -708,6 +708,7 @@ function AppScreen() {
   const [bottomMoreSheetVisible, setBottomMoreSheetVisible] = useState(false);
   const [shellFadeScope, setShellFadeScope] = useState<ShellFadeScope | null>(null);
   const [selectedPlaceReturnFadeActive, setSelectedPlaceReturnFadeActive] = useState(false);
+  const [guestBottomNavResetKey, setGuestBottomNavResetKey] = useState(0);
   const [profilePlaces, setProfilePlaces] = useState<PlaceListItem[]>([]);
   const [profilePlacesLoading, setProfilePlacesLoading] = useState(false);
   const allPlacesCacheRef = useRef<{ apiBaseUrl: string; places: PlaceListItem[]; reloadCount: number } | null>(null);
@@ -3872,6 +3873,11 @@ function AppScreen() {
   function handleBackToBrowse() {
     animateNextLayout();
     Keyboard.dismiss();
+
+    if (!authenticatedSession && selectedPlaceSlug && screenMode === 'browse') {
+      setGuestBottomNavResetKey((current) => current + 1);
+    }
+
     setSelectedPlaceSlug(null);
 
     if (screenMode === 'profiles' || screenMode === 'business-profile-editor') {
@@ -7105,6 +7111,7 @@ function AppScreen() {
             {options?.guestChrome ? (
               <GuestShellChrome
                 actionOpacity={options.guestChromeActionOpacity}
+                bottomNavResetKey={guestBottomNavResetKey}
                 headerOpacity={options.guestChromeHeaderOpacity}
                 interactive={options.guestChromeInteractive ?? true}
                 logoEntranceOpacity={guestBrowseHeaderLogoOpacity}
