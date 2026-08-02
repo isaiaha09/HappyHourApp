@@ -831,7 +831,7 @@ function AppScreen() {
     && !selectedPlaceSlug
     && browseMode === 'map';
   const showMainShellTransitionMap = mainShellTransitionFrom === 'browse' || incomingMainShellScreen === 'browse';
-  const showMapBrowse = (screenMode === 'browse' && !selectedPlaceSlug && browseMode === 'map') || keepGuestMapVisibleDuringGuestOnboarding || keepGuestMapVisibleOnSplash || showGuestTransitionMap || showTransitionMapBrowse || showMainShellTransitionMap;
+  const showMapBrowse = (screenMode === 'browse' && (!selectedPlaceSlug || !authenticatedSession) && browseMode === 'map') || keepGuestMapVisibleDuringGuestOnboarding || keepGuestMapVisibleOnSplash || showGuestTransitionMap || showTransitionMapBrowse || showMainShellTransitionMap;
   const shouldTrackUserLocation = screenMode === 'browse' || selectedPlaceSlug !== null;
   const translucentStatusBar = (screenMode === 'browse' && !selectedPlaceSlug && browseMode === 'map')
     || (browseProfileTransitionFrom === 'profiles'
@@ -6239,6 +6239,40 @@ function AppScreen() {
     );
   }
 
+  function renderSelectedPlaceDetailScreen() {
+    return (
+      <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
+        <PlaceDetailScreen
+          backButtonLabel={screenMode === 'profiles' || screenMode === 'business-profile-editor' ? 'Back to Profile' : 'Back to Places'}
+          canSubmitPlaceAccuracyReport={!!authenticatedSession?.auth_token}
+          detailLoading={detailLoading}
+          errorMessage={errorMessage}
+          favoriteHelperText={favoriteHelperText}
+          favoriteSubmitting={favoriteSubmitting}
+          isLandscape={isLandscape}
+          isFavorited={selectedPlaceIsFavorited}
+          onBack={handleBackToBrowse}
+          onClaimBusiness={handleOpenBusinessClaimFromPlaceDetail}
+          onEditBusinessProfile={handleOpenBusinessProfileEditor}
+          onOpenDirectMessages={openDirectMessagesScreen}
+          onRequirePlaceAccuracyAccount={() => setShowGuestAccuracyPrompt(true)}
+          onSelectLocation={setSelectedLocationId}
+          onSubmitPlaceAccuracyReport={(subject, message) => handleSubmitPlaceAccuracyReport(subject, message)}
+          onToggleFavorite={() => void handleToggleFavoriteBusiness()}
+          showClaimBusinessControl={showClaimBusinessControl}
+          showDirectMessageControl={showDirectMessageControl}
+          showEditBusinessProfileControl={selectedPlaceIsOwnedByAuthenticatedBusiness}
+          showFavoriteControl={showFavoriteControl}
+          distanceLabel={selectedPlaceDistanceLabel}
+          selectedPlace={selectedPlace}
+          selectedPlaceDeals={selectedPlaceDeals}
+          selectedPlaceLocation={selectedPlaceLocation}
+          selectedPlaceOperatingHours={selectedPlaceOperatingHours}
+        />
+      </SafeAreaView>
+    );
+  }
+
   function renderGuestMainShell() {
     const browseTransitionActive = usesGuestBrowseSlideTransition;
     const nativeGuestChrome = nativeBottomNavAvailable || isNativeIOSLiquidGlassHeaderButtonAvailable();
@@ -6316,7 +6350,7 @@ function AppScreen() {
           ) : null}
         </Animated.View>
         <Animated.View
-          pointerEvents={showingBrowse && !browseTransitionActive ? 'auto' : 'none'}
+          pointerEvents={showingBrowse && !browseTransitionActive && !selectedPlaceSlug ? 'auto' : 'none'}
           style={[
             styles.screenTransitionLayerAbsolute,
             !browseTransitionActive && (showingBrowse || showingBrowseUnderSplash) && shellFadeScope === 'browse' ? browseSceneTransitionStyle : null,
@@ -6326,7 +6360,7 @@ function AppScreen() {
           {renderBrowseScreen({
             guestChrome: true,
             guestChromeActionOpacity: nativeGuestChrome ? guestBrowseNativeChromeOpacity : 1,
-            guestChromeInteractive,
+            guestChromeInteractive: guestChromeInteractive && !selectedPlaceSlug,
             guestChromeHeaderOpacity: nativeGuestChrome ? guestBrowseNativeChromeOpacity : 1,
             suppressBrowseSceneTransitionStyle: true,
             suppressScreenTransitionStyle: true,
@@ -6351,6 +6385,11 @@ function AppScreen() {
         {incomingOnboardingScreen && currentOverlayScreen && onboardingScreenKeys.has(incomingOnboardingScreen) && incomingOnboardingScreen !== 'splash' ? (
           <Animated.View testID="incoming-onboarding-screen" style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, incomingScreenTransitionStyle]}>
             {renderOnboardingScreen(incomingOnboardingScreen)}
+          </Animated.View>
+        ) : null}
+        {selectedPlaceSlug ? (
+          <Animated.View style={[styles.screenTransitionLayerAbsolute, selectedPlaceReturnFadeActive ? { opacity: selectedPlaceReturnFade } : null]}>
+            {renderSelectedPlaceDetailScreen()}
           </Animated.View>
         ) : null}
         {showingBrowse && browseMode === 'map' && !selectedPlaceSlug ? renderMapSwipeEdgeShield() : null}
@@ -7110,8 +7149,9 @@ function AppScreen() {
                 logoEntranceOpacity={guestBrowseHeaderLogoOpacity}
                 onCreateAccount={handleOpenProfiles}
                 onSelectPortal={handleOpenAuthFromLanding}
-                showBottomNav
+                showBottomNav={!selectedPlaceSlug}
                 showHeader={!guestMapOnlyMode && browseMode !== 'map'}
+                showLogo={!selectedPlaceSlug}
                 themeVariant={displayedDarkMapMode ? 'map-dark' : 'map-light'}
               />
             ) : null}
@@ -7238,40 +7278,12 @@ function AppScreen() {
         </View>
       ) : authenticatedSession && (screenMode === 'direct-messages' || (!selectedPlaceSlug && (['profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'browse', 'home-feed'].includes(screenMode) || usesBrowseProfileSlideTransition || usesProfileStackSlideTransition))) ? (
         renderAuthenticatedMainShell()
-      ) : !authenticatedSession && !selectedPlaceSlug && (screenMode === 'browse' || currentOnboardingScreen !== null || usesGuestBrowseSlideTransition || incomingOnboardingScreen !== null || returningToSplashScreen !== null) ? (
+      ) : !authenticatedSession && (screenMode === 'browse' || currentOnboardingScreen !== null || usesGuestBrowseSlideTransition || incomingOnboardingScreen !== null || returningToSplashScreen !== null) ? (
         renderGuestMainShell()
       ) : selectedPlaceSlug ? (
         <View style={styles.fullScreenRoot}>
           <Animated.View style={[styles.fullScreenRoot, selectedPlaceReturnFadeActive ? { opacity: selectedPlaceReturnFade } : null]}>
-            <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
-              <PlaceDetailScreen
-                backButtonLabel={screenMode === 'profiles' || screenMode === 'business-profile-editor' ? 'Back to Profile' : 'Back to Places'}
-                canSubmitPlaceAccuracyReport={!!authenticatedSession?.auth_token}
-                detailLoading={detailLoading}
-                errorMessage={errorMessage}
-                favoriteHelperText={favoriteHelperText}
-                favoriteSubmitting={favoriteSubmitting}
-                isLandscape={isLandscape}
-                isFavorited={selectedPlaceIsFavorited}
-                onBack={handleBackToBrowse}
-                onClaimBusiness={handleOpenBusinessClaimFromPlaceDetail}
-                onEditBusinessProfile={handleOpenBusinessProfileEditor}
-                onOpenDirectMessages={openDirectMessagesScreen}
-                onRequirePlaceAccuracyAccount={() => setShowGuestAccuracyPrompt(true)}
-                onSelectLocation={setSelectedLocationId}
-                onSubmitPlaceAccuracyReport={(subject, message) => handleSubmitPlaceAccuracyReport(subject, message)}
-                onToggleFavorite={() => void handleToggleFavoriteBusiness()}
-                showClaimBusinessControl={showClaimBusinessControl}
-                showDirectMessageControl={showDirectMessageControl}
-                showEditBusinessProfileControl={selectedPlaceIsOwnedByAuthenticatedBusiness}
-                showFavoriteControl={showFavoriteControl}
-                distanceLabel={selectedPlaceDistanceLabel}
-                selectedPlace={selectedPlace}
-                selectedPlaceDeals={selectedPlaceDeals}
-                selectedPlaceLocation={selectedPlaceLocation}
-                selectedPlaceOperatingHours={selectedPlaceOperatingHours}
-              />
-            </SafeAreaView>
+            {renderSelectedPlaceDetailScreen()}
           </Animated.View>
         </View>
       ) : usesOnboardingSlideTransition && currentOnboardingScreen ? (
