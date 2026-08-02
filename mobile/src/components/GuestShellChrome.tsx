@@ -12,7 +12,6 @@ type AnimatedNumber = Animated.Value | Animated.AnimatedInterpolation<number> | 
 type GuestShellChromeProps = {
   actionOpacity?: AnimatedNumber;
   actionTranslateY?: AnimatedNumber;
-  bottomNavResetKey?: number;
   headerOpacity?: AnimatedNumber;
   interactive?: boolean;
   logoEntranceOpacity?: AnimatedNumber;
@@ -22,7 +21,6 @@ type GuestShellChromeProps = {
   onCreateAccount: () => void;
   onSelectPortal: (portal: AuthPortal) => void;
   showBottomNav?: boolean;
-  showFloatingHeaderWhenHidden?: boolean;
   showHeader?: boolean;
   showLogo?: boolean;
   themeVariant?: 'default-dark' | 'map-dark' | 'map-light';
@@ -31,7 +29,6 @@ type GuestShellChromeProps = {
 export function GuestShellChrome({
   actionOpacity = 1,
   actionTranslateY = 0,
-  bottomNavResetKey = 0,
   headerOpacity = 1,
   interactive = true,
   logoEntranceOpacity = 1,
@@ -41,7 +38,6 @@ export function GuestShellChrome({
   onCreateAccount,
   onSelectPortal,
   showBottomNav = true,
-  showFloatingHeaderWhenHidden = true,
   showHeader = true,
   showLogo = true,
   themeVariant = 'default-dark',
@@ -51,7 +47,7 @@ export function GuestShellChrome({
   const modalOpacity = useRef(new Animated.Value(0)).current;
   const touchTargetHitSlop = 12;
   const touchTargetPressRetentionOffset = 12;
-  const shouldFloatHeaderControls = showFloatingHeaderWhenHidden && !showHeader && isNativeIOSLiquidGlassHeaderButtonAvailable();
+  const shouldFloatHeaderControls = !showHeader && isNativeIOSLiquidGlassHeaderButtonAvailable();
   const shouldUseTransparentIOSHeaderBar = Platform.OS === 'ios' && isNativeIOSLiquidGlassHeaderButtonAvailable();
 
   useEffect(() => {
@@ -244,7 +240,7 @@ export function GuestShellChrome({
             <NativeIOSLiquidGlassBottomNav
               activeItem="map"
               bottomInset={insets.bottom}
-              key={`guest-shell:${themeVariant}:${bottomNavResetKey}`}
+              key={`guest-shell:${themeVariant}`}
               labels={{ map: 'Customer', profile: 'Sign Up', more: 'Business' }}
               onSelect={(item) => {
                 if (!interactive) {

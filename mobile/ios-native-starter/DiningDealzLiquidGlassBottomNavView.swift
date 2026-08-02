@@ -39,7 +39,6 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   @objc var bottomInset: NSNumber = 0 {
     didSet {
       invalidateIntrinsicContentSize()
-      updateHostingHeight()
       updateRootView()
     }
   }
@@ -105,11 +104,6 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   }
 
   private let hostingController = UIHostingController(rootView: AnyView(EmptyView()))
-  private var hostingHeightConstraint: NSLayoutConstraint!
-
-  private var bottomNavHeight: CGFloat {
-    max(90, 76 + CGFloat(truncating: bottomInset))
-  }
 
   private var resolvedActiveItem: DiningDealzLiquidGlassBottomNavItem {
     let preferredItem = DiningDealzLiquidGlassBottomNavItem(rawValue: activeItem as String) ?? .map
@@ -127,7 +121,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   }
 
   override var intrinsicContentSize: CGSize {
-    CGSize(width: UIView.noIntrinsicMetric, height: bottomNavHeight)
+    CGSize(width: UIView.noIntrinsicMetric, height: 52 + CGFloat(truncating: bottomInset))
   }
 
   override func layoutSubviews() {
@@ -137,15 +131,6 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
       guard let self else { return }
       self.clearTabViewBackingBackgrounds(in: self.hostingController.view)
     }
-  }
-
-  override func didMoveToWindow() {
-    super.didMoveToWindow()
-    guard window != nil else { return }
-
-    updateRootView()
-    setNeedsLayout()
-    hostingController.view.setNeedsLayout()
   }
 
   private func setupView() {
@@ -162,20 +147,11 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     NSLayoutConstraint.activate([
       hostingController.view.leadingAnchor.constraint(equalTo: leadingAnchor),
       hostingController.view.trailingAnchor.constraint(equalTo: trailingAnchor),
+      hostingController.view.topAnchor.constraint(equalTo: topAnchor),
       hostingController.view.bottomAnchor.constraint(equalTo: bottomAnchor),
     ])
-    hostingHeightConstraint = hostingController.view.heightAnchor.constraint(equalToConstant: bottomNavHeight)
-    hostingHeightConstraint.isActive = true
 
     updateRootView()
-  }
-
-  private func updateHostingHeight() {
-    guard hostingHeightConstraint != nil else { return }
-
-    hostingHeightConstraint.constant = bottomNavHeight
-    setNeedsLayout()
-    hostingController.view.setNeedsLayout()
   }
 
   private func updateRootView() {
@@ -317,36 +293,21 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     Color(red: 1, green: 0.3, blue: 0.38)
   }
 
-  private var tabViewHeight: CGFloat {
-    max(90, 76 + bottomInset)
-  }
-
   var body: some View {
-    VStack(spacing: 0) {
-      Spacer(minLength: 0)
-      TabView(selection: Binding(
-        get: { selectedTab },
-        set: { onSelect($0) }
-      )) {
-        ForEach(items) { displayItem in
-          Tab(displayItem.title, systemImage: displayItem.systemImageName, value: displayItem.item) {
-            Color.clear
-          }
+    TabView(selection: Binding(
+      get: { selectedTab },
+      set: { onSelect($0) }
+    )) {
+      ForEach(items) { displayItem in
+        Tab(displayItem.title, systemImage: displayItem.systemImageName, value: displayItem.item) {
+          Color.clear
         }
       }
-      .background(Color.clear)
-      .tabViewStyle(.tabBarOnly)
-      .tint(accentColor)
-      .frame(
-        maxWidth: .infinity,
-        minHeight: tabViewHeight,
-        idealHeight: tabViewHeight,
-        maxHeight: tabViewHeight,
-        alignment: .bottom
-      )
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     .background(Color.clear)
+    .tabViewStyle(.tabBarOnly)
+    .tint(accentColor)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
   }
 }
 

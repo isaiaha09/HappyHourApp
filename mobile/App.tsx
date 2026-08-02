@@ -708,7 +708,6 @@ function AppScreen() {
   const [bottomMoreSheetVisible, setBottomMoreSheetVisible] = useState(false);
   const [shellFadeScope, setShellFadeScope] = useState<ShellFadeScope | null>(null);
   const [selectedPlaceReturnFadeActive, setSelectedPlaceReturnFadeActive] = useState(false);
-  const [guestBottomNavResetKey, setGuestBottomNavResetKey] = useState(0);
   const [profilePlaces, setProfilePlaces] = useState<PlaceListItem[]>([]);
   const [profilePlacesLoading, setProfilePlacesLoading] = useState(false);
   const allPlacesCacheRef = useRef<{ apiBaseUrl: string; places: PlaceListItem[]; reloadCount: number } | null>(null);
@@ -3873,11 +3872,6 @@ function AppScreen() {
   function handleBackToBrowse() {
     animateNextLayout();
     Keyboard.dismiss();
-
-    if (!authenticatedSession && selectedPlaceSlug && screenMode === 'browse') {
-      setGuestBottomNavResetKey((current) => current + 1);
-    }
-
     setSelectedPlaceSlug(null);
 
     if (screenMode === 'profiles' || screenMode === 'business-profile-editor') {
@@ -6334,26 +6328,11 @@ function AppScreen() {
             guestChromeActionOpacity: nativeGuestChrome ? guestBrowseNativeChromeOpacity : 1,
             guestChromeInteractive,
             guestChromeHeaderOpacity: nativeGuestChrome ? guestBrowseNativeChromeOpacity : 1,
-            guestChromeShowBottomNav: false,
             suppressBrowseSceneTransitionStyle: true,
             suppressScreenTransitionStyle: true,
             suppressTransitionOverlay: true,
           })}
         </Animated.View>
-        {showingBrowse && browseMode === 'map' && !selectedPlaceSlug ? (
-          <GuestShellChrome
-            actionOpacity={nativeGuestChrome ? guestBrowseNativeChromeOpacity : 1}
-            bottomNavResetKey={guestBottomNavResetKey}
-            interactive={guestChromeInteractive}
-            onCreateAccount={handleOpenProfiles}
-            onSelectPortal={handleOpenAuthFromLanding}
-            showBottomNav
-            showFloatingHeaderWhenHidden={false}
-            showHeader={false}
-            showLogo={false}
-            themeVariant={displayedDarkMapMode ? 'map-dark' : 'map-light'}
-          />
-        ) : null}
         {!browseTransitionActive && (showingBrowse || showingBrowseUnderSplash) && shellFadeScope === 'browse' ? (
           <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, browseShellFadeMaskStyle]} />
         ) : null}
@@ -6652,7 +6631,6 @@ function AppScreen() {
     guestChromeInteractive?: boolean;
     guestChromeActionOpacity?: Animated.Value | Animated.AnimatedInterpolation<number> | number;
     guestChromeHeaderOpacity?: Animated.Value | Animated.AnimatedInterpolation<number> | number;
-    guestChromeShowBottomNav?: boolean;
     suppressScreenTransitionStyle?: boolean;
     suppressBrowseSceneTransitionStyle?: boolean;
     suppressTransitionOverlay?: boolean;
@@ -7127,13 +7105,12 @@ function AppScreen() {
             {options?.guestChrome ? (
               <GuestShellChrome
                 actionOpacity={options.guestChromeActionOpacity}
-                bottomNavResetKey={guestBottomNavResetKey}
                 headerOpacity={options.guestChromeHeaderOpacity}
                 interactive={options.guestChromeInteractive ?? true}
                 logoEntranceOpacity={guestBrowseHeaderLogoOpacity}
                 onCreateAccount={handleOpenProfiles}
                 onSelectPortal={handleOpenAuthFromLanding}
-                showBottomNav={options.guestChromeShowBottomNav ?? true}
+                showBottomNav
                 showHeader={!guestMapOnlyMode && browseMode !== 'map'}
                 themeVariant={displayedDarkMapMode ? 'map-dark' : 'map-light'}
               />
