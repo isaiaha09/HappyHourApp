@@ -7110,7 +7110,7 @@ function AppScreen() {
                 logoEntranceOpacity={guestBrowseHeaderLogoOpacity}
                 onCreateAccount={handleOpenProfiles}
                 onSelectPortal={handleOpenAuthFromLanding}
-                showBottomNav={false}
+                showBottomNav
                 showHeader={!guestMapOnlyMode && browseMode !== 'map'}
                 themeVariant={displayedDarkMapMode ? 'map-dark' : 'map-light'}
               />
@@ -7140,17 +7140,10 @@ function AppScreen() {
     'browse',
     'home-feed',
   ];
-  const shouldRenderGuestPersistentBottomNav = !authenticatedSession
-    && !selectedPlaceSlug
-    && screenMode === 'browse'
-    && currentOnboardingScreen === null
-    && incomingOnboardingScreen === null
-    && returningToSplashScreen === null
-    && !usesGuestBrowseSlideTransition;
   const shouldRenderPersistentBottomNav = !showLoginSuccessTransition && !showLogoutTransition && (
     authenticatedSession
       ? selectedPlaceSlug !== null || authenticatedBottomNavScreens.includes(screenMode)
-      : shouldRenderGuestPersistentBottomNav
+      : false
   );
 
   function renderConnectivityGateScreen() {

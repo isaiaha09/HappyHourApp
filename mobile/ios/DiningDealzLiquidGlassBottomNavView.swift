@@ -133,6 +133,15 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     }
   }
 
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    guard window != nil else { return }
+
+    updateRootView()
+    setNeedsLayout()
+    hostingController.view.setNeedsLayout()
+  }
+
   private func setupView() {
     backgroundColor = .clear
     isOpaque = false
