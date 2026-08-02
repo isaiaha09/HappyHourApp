@@ -24,11 +24,6 @@ private struct DiningDealzLiquidGlassBottomNavDisplayItem: Identifiable {
 @objc(DiningDealzLiquidGlassBottomNavView)
 final class DiningDealzLiquidGlassBottomNavView: UIView {
   @objc var onNavItemSelect: RCTDirectEventBlock?
-  @objc var entranceVisible: Bool = true {
-    didSet {
-      setEntranceVisibility(entranceVisible)
-    }
-  }
   @objc var themeVariant: NSString = "default-dark" {
     didSet {
       updateRootView()
@@ -159,28 +154,6 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     ])
 
     updateRootView()
-    setEntranceVisibility(entranceVisible, animated: false)
-  }
-
-  private func setEntranceVisibility(_ visible: Bool, animated: Bool = true) {
-    guard visible else {
-      hostingController.view.layer.removeAllAnimations()
-      return
-    }
-
-    hostingController.view.alpha = 0
-    guard animated else {
-      hostingController.view.alpha = 1
-      return
-    }
-
-    UIView.animate(
-      withDuration: 0.5,
-      delay: 0,
-      options: [.beginFromCurrentState, .curveEaseInOut, .allowUserInteraction]
-    ) {
-      self.hostingController.view.alpha = 1
-    }
   }
 
   private func updateRootView() {

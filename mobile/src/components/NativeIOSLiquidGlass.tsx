@@ -17,7 +17,6 @@ type NativeHeaderButtonPressEvent = NativeSyntheticEvent<Record<string, never>>;
 type NativeBottomNavViewProps = {
   activeItem: NativeLiquidGlassBottomNavItem;
   bottomInset: number;
-  entranceVisible?: boolean;
   homeLabel?: string;
   homeSystemImage?: string;
   includeHomeItem?: boolean;
@@ -46,7 +45,6 @@ type NativeHeaderButtonViewProps = {
 type NativeIOSLiquidGlassBottomNavProps = {
   activeItem: NativeLiquidGlassBottomNavItem;
   bottomInset: number;
-  entranceVisible?: boolean;
   includeHomeItem?: boolean;
   labels?: NativeLiquidGlassBottomNavLabels;
   moreOpen?: boolean;
@@ -144,7 +142,7 @@ export function isNativeIOSLiquidGlassHeaderButtonAvailable() {
   return hasNativeViewManager(nativeHeaderButtonViewName);
 }
 
-export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, entranceVisible = true, includeHomeItem = false, labels, moreOpen = false, onSelect, style, systemImages, themeVariant = 'default-dark' }: NativeIOSLiquidGlassBottomNavProps) {
+export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, includeHomeItem = false, labels, moreOpen = false, onSelect, style, systemImages, themeVariant = 'default-dark' }: NativeIOSLiquidGlassBottomNavProps) {
   if (!isNativeIOSLiquidGlassBottomNavAvailable()) {
     return null;
   }
@@ -153,7 +151,6 @@ export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, entranc
     <NativeBottomNavView
       activeItem={activeItem}
       bottomInset={bottomInset}
-      entranceVisible={entranceVisible}
       homeLabel={labels?.home}
       homeSystemImage={systemImages?.home}
       includeHomeItem={includeHomeItem}

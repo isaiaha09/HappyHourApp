@@ -1869,9 +1869,6 @@ function AppScreen() {
           : currentOnboardingScreen !== null && guestOnboardingOrigin === 'browse'
             ? 0
             : 1;
-  const guestBrowseNativeBottomNavEntrance = incomingOnboardingScreen === 'splash'
-    && currentOnboardingScreen !== null
-    && guestOnboardingOrigin === 'browse';
   const mainShellOutgoingStyle = {
     transform: [
       {
@@ -6365,7 +6362,6 @@ function AppScreen() {
             guestChromeActionOpacity: nativeGuestChrome ? guestBrowseNativeChromeOpacity : 1,
             guestChromeInteractive: guestChromeInteractive && !selectedPlaceSlug,
             guestChromeHeaderOpacity: nativeGuestChrome ? guestBrowseNativeChromeOpacity : 1,
-            guestChromeNativeBottomNavEntrance: guestBrowseNativeBottomNavEntrance,
             suppressBrowseSceneTransitionStyle: true,
             suppressScreenTransitionStyle: true,
             suppressTransitionOverlay: true,
@@ -6674,7 +6670,6 @@ function AppScreen() {
     guestChromeInteractive?: boolean;
     guestChromeActionOpacity?: Animated.Value | Animated.AnimatedInterpolation<number> | number;
     guestChromeHeaderOpacity?: Animated.Value | Animated.AnimatedInterpolation<number> | number;
-    guestChromeNativeBottomNavEntrance?: boolean;
     suppressScreenTransitionStyle?: boolean;
     suppressBrowseSceneTransitionStyle?: boolean;
     suppressTransitionOverlay?: boolean;
@@ -7151,7 +7146,6 @@ function AppScreen() {
                 actionOpacity={options.guestChromeActionOpacity}
                 headerOpacity={options.guestChromeHeaderOpacity}
                 interactive={options.guestChromeInteractive ?? true}
-                nativeBottomNavEntrance={options.guestChromeNativeBottomNavEntrance}
                 logoEntranceOpacity={guestBrowseHeaderLogoOpacity}
                 onCreateAccount={handleOpenProfiles}
                 onSelectPortal={handleOpenAuthFromLanding}
