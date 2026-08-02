@@ -22,6 +22,7 @@ type NativeBottomNavViewProps = {
   includeHomeItem?: boolean;
   mapLabel?: string;
   mapSystemImage?: string;
+  materialFadeIn?: boolean;
   moreOpen?: boolean;
   moreLabel?: string;
   moreSystemImage?: string;
@@ -47,6 +48,7 @@ type NativeIOSLiquidGlassBottomNavProps = {
   bottomInset: number;
   includeHomeItem?: boolean;
   labels?: NativeLiquidGlassBottomNavLabels;
+  materialFadeIn?: boolean;
   moreOpen?: boolean;
   onSelect: (item: NativeLiquidGlassBottomNavItem) => void;
   systemImages?: NativeLiquidGlassBottomNavSystemImages;
@@ -142,7 +144,7 @@ export function isNativeIOSLiquidGlassHeaderButtonAvailable() {
   return hasNativeViewManager(nativeHeaderButtonViewName);
 }
 
-export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, includeHomeItem = false, labels, moreOpen = false, onSelect, style, systemImages, themeVariant = 'default-dark' }: NativeIOSLiquidGlassBottomNavProps) {
+export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, includeHomeItem = false, labels, materialFadeIn = false, moreOpen = false, onSelect, style, systemImages, themeVariant = 'default-dark' }: NativeIOSLiquidGlassBottomNavProps) {
   if (!isNativeIOSLiquidGlassBottomNavAvailable()) {
     return null;
   }
@@ -156,6 +158,7 @@ export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, include
       includeHomeItem={includeHomeItem}
       mapLabel={labels?.map}
       mapSystemImage={systemImages?.map}
+      materialFadeIn={materialFadeIn}
       moreOpen={moreOpen}
       moreLabel={labels?.more}
       moreSystemImage={systemImages?.more}

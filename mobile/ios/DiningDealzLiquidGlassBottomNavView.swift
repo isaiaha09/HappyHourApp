@@ -24,6 +24,13 @@ private struct DiningDealzLiquidGlassBottomNavDisplayItem: Identifiable {
 @objc(DiningDealzLiquidGlassBottomNavView)
 final class DiningDealzLiquidGlassBottomNavView: UIView {
   @objc var onNavItemSelect: RCTDirectEventBlock?
+  @objc var materialFadeIn: Bool = false {
+    didSet {
+      if materialFadeIn {
+        fadeInTabBarMaterial()
+      }
+    }
+  }
   @objc var themeVariant: NSString = "default-dark" {
     didSet {
       updateRootView()
@@ -203,6 +210,36 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     view.backgroundColor = .clear
     view.isOpaque = false
     view.subviews.forEach(clearTabViewBackingBackgrounds)
+  }
+
+  private func fadeInTabBarMaterial(retryCount: Int = 0) {
+    let materialViews = tabBarMaterialViews(in: hostingController.view)
+    guard !materialViews.isEmpty || retryCount == 2 else {
+      DispatchQueue.main.async { [weak self] in
+        self?.fadeInTabBarMaterial(retryCount: retryCount + 1)
+      }
+      return
+    }
+
+    guard !materialViews.isEmpty else { return }
+
+    materialViews.forEach {
+      $0.layer.removeAllAnimations()
+      $0.alpha = 0
+    }
+
+    UIView.animate(
+      withDuration: 0.5,
+      delay: 0,
+      options: [.beginFromCurrentState, .curveEaseInOut, .allowUserInteraction]
+    ) {
+      materialViews.forEach { $0.alpha = 1 }
+    }
+  }
+
+  private func tabBarMaterialViews(in view: UIView) -> [UIVisualEffectView] {
+    let currentView = (view as? UIVisualEffectView).map { [$0] } ?? []
+    return currentView + view.subviews.flatMap(tabBarMaterialViews)
   }
 
   private var resolvedThemeVariant: DiningDealzLiquidGlassThemeVariant {

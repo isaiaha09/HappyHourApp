@@ -18,6 +18,7 @@ type GuestShellChromeProps = {
   logoEntranceScale?: AnimatedNumber;
   logoScale?: AnimatedNumber;
   logoTranslateY?: AnimatedNumber;
+  nativeTabMaterialFadeIn?: boolean;
   onCreateAccount: () => void;
   onSelectPortal: (portal: AuthPortal) => void;
   showBottomNav?: boolean;
@@ -35,6 +36,7 @@ export function GuestShellChrome({
   logoEntranceScale = 1,
   logoScale = 0.5,
   logoTranslateY = 0,
+  nativeTabMaterialFadeIn = false,
   onCreateAccount,
   onSelectPortal,
   showBottomNav = true,
@@ -250,6 +252,7 @@ export function GuestShellChrome({
               bottomInset={insets.bottom}
               key={`guest-shell:${themeVariant}`}
               labels={{ map: 'Customer', profile: 'Sign Up', more: 'Business' }}
+              materialFadeIn={nativeTabMaterialFadeIn}
               onSelect={(item) => {
                 if (!interactive) {
                   return;
