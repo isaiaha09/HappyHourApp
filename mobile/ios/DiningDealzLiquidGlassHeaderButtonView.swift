@@ -86,8 +86,10 @@ final class DiningDealzLiquidGlassHeaderButtonView: UIView {
 
   private func setupView() {
     backgroundColor = .clear
+    layer.allowsGroupOpacity = true
 
     hostingController.view.backgroundColor = .clear
+    hostingController.view.layer.allowsGroupOpacity = true
     hostingController.view.translatesAutoresizingMaskIntoConstraints = false
     addSubview(hostingController.view)
 
@@ -206,7 +208,6 @@ private struct DiningDealzLiquidGlassHeaderButtonContent: View {
     )
     .accessibilityLabel(accessibilityLabel ?? label ?? "Button")
     .background(Color.clear)
-    .compositingGroup()
   }
 }
 

@@ -146,11 +146,15 @@ export function GuestShellChrome({
   );
   const headerControls = (
     <View style={[styles.dashboardHeaderRow, styles.splashHeaderRow]}>
-      {interactive ? (
+      {isNativeIOSLiquidGlassHeaderButtonAvailable() ? (
         <NativeIOSLiquidGlassHeaderButton
           accessibilityLabel="Open Home Feed"
           fallback={homeFeedFallback}
-          onPress={() => openModal('home-feed')}
+          onPress={() => {
+            if (interactive) {
+              openModal('home-feed');
+            }
+          }}
           systemImage="newspaper.fill"
           style={{ marginTop: 8 }}
           themeVariant={themeVariant}
@@ -158,11 +162,15 @@ export function GuestShellChrome({
         />
       ) : homeFeedFallback}
       <View pointerEvents="none" style={styles.splashHeaderCenterSlot} />
-      {interactive ? (
+      {isNativeIOSLiquidGlassHeaderButtonAvailable() ? (
         <NativeIOSLiquidGlassHeaderButton
           accessibilityLabel="Sign in"
           fallback={signInFallback}
-          onPress={() => openModal('sign-in')}
+          onPress={() => {
+            if (interactive) {
+              openModal('sign-in');
+            }
+          }}
           systemImage="person.crop.circle"
           style={{ marginTop: 8 }}
           themeVariant={themeVariant}
