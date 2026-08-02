@@ -1176,8 +1176,8 @@ class FavoriteBusinessPushDevice(models.Model):
 		ANDROID = 'android', 'Android'
 
 	user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='favorite_business_push_devices', on_delete=models.CASCADE)
-	installation_id = models.CharField(max_length=80, unique=True)
-	expo_push_token = models.CharField(max_length=255, unique=True)
+	installation_id = models.CharField(max_length=80)
+	expo_push_token = models.CharField(max_length=255)
 	platform = models.CharField(max_length=20, choices=Platform.choices)
 	is_active = models.BooleanField(default=True)
 	last_error = models.CharField(max_length=255, blank=True)
@@ -1187,6 +1187,10 @@ class FavoriteBusinessPushDevice(models.Model):
 
 	class Meta:
 		ordering = ['-last_registered_at', '-created_at']
+		constraints = [
+			models.UniqueConstraint(fields=['user', 'installation_id'], name='unique_user_push_installation'),
+			models.UniqueConstraint(fields=['user', 'expo_push_token'], name='unique_user_expo_push_token'),
+		]
 		indexes = [
 			models.Index(fields=['user', 'is_active']),
 		]

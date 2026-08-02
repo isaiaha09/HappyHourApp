@@ -6696,6 +6696,32 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(device.expo_push_token, 'ExponentPushToken[test-token-1]')
 		self.assertTrue(device.is_active)
 
+	def test_profile_push_device_registration_preserves_other_account_on_same_installation(self):
+		other_user = User.objects.create_user(username='other_push_user', email='other-push@example.com', password='test-pass-123')
+		other_token = ProfileAuthToken.objects.create(user=other_user)
+		FavoriteBusinessPushDevice.objects.create(
+			user=other_user,
+			installation_id='shared-testflight-installation',
+			expo_push_token='ExponentPushToken[shared-testflight-token]',
+			platform=FavoriteBusinessPushDevice.Platform.IOS,
+		)
+
+		response = self.client.post(
+			reverse('profile-push-devices'),
+			{
+				'installation_id': 'shared-testflight-installation',
+				'push_token': 'ExponentPushToken[shared-testflight-token]',
+				'platform': 'ios',
+				'portal': 'customer',
+			},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertTrue(FavoriteBusinessPushDevice.objects.filter(user=other_user, installation_id='shared-testflight-installation').exists())
+		self.assertTrue(FavoriteBusinessPushDevice.objects.filter(user=self.user, installation_id='shared-testflight-installation').exists())
+
 	def test_profile_favorite_business_notifications_clear_endpoint_removes_customer_notifications(self):
 		FavoriteBusinessNotification.objects.create(
 			user=self.user,

@@ -1245,11 +1245,11 @@ class PushDeviceRegistrationView(APIView):
 
 		installation_id = serializer.validated_data['installation_id']
 		push_token = serializer.validated_data['push_token']
-		FavoriteBusinessPushDevice.objects.filter(expo_push_token=push_token).exclude(installation_id=installation_id).delete()
+		FavoriteBusinessPushDevice.objects.filter(user=request.user, expo_push_token=push_token).exclude(installation_id=installation_id).delete()
 		FavoriteBusinessPushDevice.objects.update_or_create(
+			user=request.user,
 			installation_id=installation_id,
 			defaults={
-				'user': request.user,
 				'expo_push_token': push_token,
 				'platform': serializer.validated_data['platform'],
 				'is_active': True,
