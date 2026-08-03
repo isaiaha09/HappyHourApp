@@ -804,6 +804,7 @@ function AppScreen() {
     ? AppState.currentState
     : 'active');
   const liveLocationRefreshRemainingMsRef = useRef<number | null>(null);
+  const liveLocationRefreshStartedAtRef = useRef<number | null>(null);
   const liveLocationRefreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastHandledLiveLocationRefreshTokenRef = useRef(0);
   const authPortalRef = useRef<AuthPortal>(authPortal);
@@ -818,7 +819,6 @@ function AppScreen() {
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const normalizedDeferredSearchQuery = normalizeSearchText(deferredSearchQuery);
   const liveMapPlacesRefreshIntervalMs = 30_000;
-  const liveMapPlacesRefreshTickMs = 250;
   const onboardingTransitionDuration = 500;
   const showTransitionMapBrowse = browseProfileTransitionFrom !== null
     && incomingBrowseProfileScreen !== null
@@ -1659,6 +1659,14 @@ function AppScreen() {
 
   function pauseLiveLocationRefreshTimer() {
     clearLiveLocationRefreshTimer();
+    if (liveLocationRefreshStartedAtRef.current === null) {
+      return;
+    }
+
+    const remainingMs = liveLocationRefreshRemainingMsRef.current ?? liveMapPlacesRefreshIntervalMs;
+    const elapsedMs = Math.max(0, Date.now() - liveLocationRefreshStartedAtRef.current);
+    liveLocationRefreshRemainingMsRef.current = Math.max(0, remainingMs - elapsedMs);
+    liveLocationRefreshStartedAtRef.current = null;
   }
 
   useEffect(() => () => {
@@ -1677,6 +1685,7 @@ function AppScreen() {
         clearShowMoreMapResultsTimer();
         clearAutoFitMapRegionTimer();
         clearMapMarkersTrackViewChangesTimer();
+        pauseLiveLocationRefreshTimer();
         return;
       }
 
@@ -1748,33 +1757,23 @@ function AppScreen() {
     function scheduleNextLiveLocationRefresh(delayMs: number) {
       clearLiveLocationRefreshTimer();
       liveLocationRefreshRemainingMsRef.current = delayMs;
+      liveLocationRefreshStartedAtRef.current = Date.now();
       liveLocationRefreshTimeoutRef.current = setTimeout(() => {
         liveLocationRefreshTimeoutRef.current = null;
-        void advanceLiveLocationRefreshClock();
-      }, liveMapPlacesRefreshTickMs);
-    }
-
-    async function advanceLiveLocationRefreshClock() {
-      const remainingMs = liveLocationRefreshRemainingMsRef.current ?? liveMapPlacesRefreshIntervalMs;
-      const nextRemainingMs = remainingMs - liveMapPlacesRefreshTickMs;
-
-      if (nextRemainingMs > 0) {
-        scheduleNextLiveLocationRefresh(nextRemainingMs);
-        return;
-      }
-
-      liveLocationRefreshRemainingMsRef.current = liveMapPlacesRefreshIntervalMs;
-      await refreshLiveLocationPlaces();
-      if (cancelled) {
-        return;
-      }
-
-      scheduleNextLiveLocationRefresh(liveMapPlacesRefreshIntervalMs);
+        liveLocationRefreshStartedAtRef.current = null;
+        liveLocationRefreshRemainingMsRef.current = liveMapPlacesRefreshIntervalMs;
+        void refreshLiveLocationPlaces().then(() => {
+          if (!cancelled) {
+            scheduleNextLiveLocationRefresh(liveMapPlacesRefreshIntervalMs);
+          }
+        });
+      }, delayMs);
     }
 
     if (shouldForceImmediateRefresh) {
       liveLocationRefreshRemainingMsRef.current = liveMapPlacesRefreshIntervalMs;
       clearLiveLocationRefreshTimer();
+      liveLocationRefreshStartedAtRef.current = null;
       void refreshLiveLocationPlaces().then(() => {
         if (cancelled) {
           return;
