@@ -634,7 +634,7 @@ npx tsc --noEmit
 
 Before uploading a locally archived iOS build from Xcode to App Store Connect/TestFlight, increment the iOS build number. Xcode does not automatically increment this project for local archives.
 
-Update the same integer in all three places, currently `37`:
+Update the same integer in all three places:
 
 - `mobile/app.json`: `expo.ios.buildNumber`
 - `mobile/ios/DiningDealz/Info.plist`: `CFBundleVersion`
