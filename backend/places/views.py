@@ -5,6 +5,7 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.files.storage import default_storage
 from django.db import transaction
+from django.db.models import Q
 from django.http import FileResponse, Http404, HttpResponse
 from django.urls import reverse
 from django.utils.text import slugify
@@ -40,6 +41,7 @@ from .serializers import (
 	FeedItemSerializer,
 	FavoriteBusinessToggleSerializer,
 	InformalBusinessSignupSerializer,
+	LiveLocationPlaceSerializer,
 	LoginSerializer,
 	PasswordResetConfirmSerializer,
 	PasswordResetRequestSerializer,
@@ -58,7 +60,7 @@ from .serializers import (
 	sync_listing_snapshot_from_place_payload,
 )
 from .services.account_profiles import build_account_response, build_email_verification_challenge, deactivate_account_for_retained_direct_messages, get_business_access_hold_claim, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, is_deleted_account, send_business_claim_received_email, send_password_reset_email, send_support_contact_email, send_username_reminder_email, send_verification_email
-from .models import BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedImpression, VenueType
+from .models import BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedImpression, ListingSnapshot, VenueType
 from .services.favorite_notifications import create_notifications_for_business_profile_update
 from .services.direct_message_push import send_push_notifications_for_direct_message
 from .services.home_feed import get_feed_interval, get_feed_queryset, get_organic_page_size, get_ranked_campaigns, get_requested_feed_page_size, mix_feed_items, record_campaign_served
@@ -353,6 +355,38 @@ class PlaceDetailView(generics.GenericAPIView):
 		_apply_direct_message_access(payload, user=request.user)
 
 		serializer = self.get_serializer(payload)
+		return Response(serializer.data)
+
+
+class LiveLocationPlaceListView(generics.GenericAPIView):
+	serializer_class = LiveLocationPlaceSerializer
+	permission_classes = []
+
+	def get(self, request):
+		city = str(request.query_params.get('city') or '').strip().lower()
+		queryset = (
+			ListingSnapshot.objects
+			.exclude(listing_slug='')
+			.filter(
+				Q(venue_type=VenueType.MOBILE) | Q(serves_multiple_areas=True),
+				tracked_location_latitude__isnull=False,
+				tracked_location_longitude__isnull=False,
+			)
+			.order_by('listing_slug', 'pk')
+		)
+		if city and city != 'all':
+			queryset = queryset.filter(city=city)
+
+		payloads = [
+			{
+				'slug': snapshot.listing_slug,
+				'latitude': snapshot.tracked_location_latitude,
+				'longitude': snapshot.tracked_location_longitude,
+				'updated_at': snapshot.tracked_location_updated_at,
+			}
+			for snapshot in queryset
+		]
+		serializer = self.get_serializer(payloads, many=True)
 		return Response(serializer.data)
 
 

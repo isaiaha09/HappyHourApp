@@ -1290,6 +1290,13 @@ class PlaceLocationDetailSerializer(PlaceLocationSerializer):
 	deals = DealSerializer(many=True)
 
 
+class LiveLocationPlaceSerializer(serializers.Serializer):
+	slug = serializers.SlugField()
+	latitude = serializers.FloatField(allow_null=True)
+	longitude = serializers.FloatField(allow_null=True)
+	updated_at = serializers.DateTimeField(allow_null=True)
+
+
 class PlaceListSerializer(serializers.Serializer):
 	id = serializers.IntegerField()
 	name = serializers.CharField()

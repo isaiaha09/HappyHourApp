@@ -268,6 +268,46 @@ class PlaceApiTests(APITestCase):
 		self.assertEqual(response.json()['slug'], self.place_payload['slug'])
 		mock_get_source_place_payload.assert_called_once_with(location_slug)
 
+	def test_live_location_places_endpoint_returns_tracked_mobile_businesses(self):
+		ListingSnapshot.objects.create(
+			name='Scoops Truck',
+			listing_slug='scoops-truck',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+			tracked_location_latitude=34.2789,
+			tracked_location_longitude=-119.2914,
+			tracked_location_updated_at=timezone.now(),
+		)
+		ListingSnapshot.objects.create(
+			name='Static Restaurant',
+			listing_slug='static-restaurant',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='123 Main St',
+			tracked_location_latitude=34.1000,
+			tracked_location_longitude=-119.1000,
+		)
+		ListingSnapshot.objects.create(
+			name='Valley Truck',
+			listing_slug='valley-truck',
+			city=City.CAMARILLO,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+			tracked_location_latitude=34.2170,
+			tracked_location_longitude=-119.0380,
+			tracked_location_updated_at=timezone.now(),
+		)
+
+		response = self.client.get(reverse('place-live-locations'), {'city': City.VENTURA})
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(len(response.data), 1)
+		self.assertEqual(response.data[0]['slug'], 'scoops-truck')
+		self.assertEqual(response.data[0]['latitude'], 34.2789)
+		self.assertEqual(response.data[0]['longitude'], -119.2914)
+		self.assertTrue(bool(response.data[0]['updated_at']))
+
 	def test_deal_list_endpoint(self):
 		with patch('places.views.get_source_deal_payloads', return_value=self.place_payload['deals']):
 			response = self.client.get(reverse('deal-list'))

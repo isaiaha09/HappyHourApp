@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import { NativeModules } from 'react-native';
+import { AppState, NativeModules } from 'react-native';
 
 import type { PlaceListItem } from '../types';
 
@@ -11,6 +11,7 @@ type MockNetworkState = {
 };
 
 const mockFetchPlaces = jest.fn<Promise<PlaceListItem[]>, [string, string]>();
+const mockFetchLiveLocationPlaces = jest.fn<Promise<Array<{ slug: string; latitude: number | null; longitude: number | null; updated_at: string | null }>>, [string, string]>();
 const mockFetchProfileDashboard = jest.fn();
 const mockLoginProfile = jest.fn();
 const mockRegisterPushDevice = jest.fn();
@@ -27,9 +28,11 @@ let mockNetworkState: MockNetworkState = {
 };
 const mockGetNetworkStateAsync = jest.fn(async () => mockNetworkState);
 const mockNetworkListeners = new Set<(state: MockNetworkState) => void>();
+let mockAppStateChangeListener: ((state: string) => void) | null = null;
 
 jest.mock('../api', () => ({
   beginTwoFactorSetup: jest.fn(),
+  clearPlacesCache: jest.fn(),
   confirmTwoFactorSetup: jest.fn(),
   createBusinessProfile: jest.fn(),
   createCustomerProfile: jest.fn(),
@@ -38,6 +41,7 @@ jest.mock('../api', () => ({
   deleteProfileAccount: jest.fn(),
   disableTwoFactor: jest.fn(),
   fetchFeed: jest.fn(),
+  fetchLiveLocationPlaces: (...args: [string, string]) => mockFetchLiveLocationPlaces(...args),
   fetchPlaceDetail: jest.fn(),
   fetchPlaces: (...args: [string, string]) => mockFetchPlaces(...args),
   fetchProfileDashboard: (...args: unknown[]) => mockFetchProfileDashboard(...args),
@@ -162,13 +166,16 @@ jest.mock('../screens/DashboardScreen', () => ({
     );
   },
   BusinessProfileEditorScreen: () => null,
-  DashboardScreen: ({ onOpenSettings }: { onOpenSettings: () => void }) => {
+  DashboardScreen: ({ onOpenPlaces, onOpenSettings }: { onOpenPlaces: () => void; onOpenSettings: () => void }) => {
     const React = require('react');
     const { Pressable, Text, View } = require('react-native');
 
     return (
       <View>
         <Text>Dashboard screen</Text>
+        <Pressable accessibilityLabel="Open places" onPress={onOpenPlaces}>
+          <Text>Open places</Text>
+        </Pressable>
         <Pressable accessibilityLabel="Open settings" onPress={onOpenSettings}>
           <Text>Open settings</Text>
         </Pressable>
@@ -301,6 +308,8 @@ const networkModule = jest.requireMock('expo-network') as {
   __setMockNetworkState: (nextState: { isConnected?: boolean; isInternetReachable?: boolean; type?: string }) => void;
 };
 
+const originalAppStateAddEventListener = AppState.addEventListener.bind(AppState);
+
 const samplePlace: PlaceListItem = {
   id: 1,
   name: 'Baskin-Robbins',
@@ -332,6 +341,16 @@ const samplePlace: PlaceListItem = {
 
 describe('App browse map search', () => {
   beforeEach(() => {
+    mockAppStateChangeListener = null;
+    jest.spyOn(AppState, 'addEventListener').mockImplementation(((type: string, listener: (state: string) => void) => {
+      if (type === 'change') {
+        mockAppStateChangeListener = listener;
+      }
+
+      return {
+        remove: jest.fn(),
+      } as any;
+    }) as typeof AppState.addEventListener);
     mockNetworkListeners.clear();
     mockNotificationResponseListener = null;
     networkModule.__setMockNetworkState({
@@ -341,6 +360,8 @@ describe('App browse map search', () => {
     });
     mockGetNetworkStateAsync.mockClear();
     mockFetchPlaces.mockResolvedValue([samplePlace]);
+    mockFetchLiveLocationPlaces.mockReset();
+    mockFetchLiveLocationPlaces.mockResolvedValue([]);
     mockFetchProfileDashboard.mockResolvedValue(null);
     mockRegisterPushDevice.mockReset();
     mockRegisterForPushNotificationsAsync.mockReset();
@@ -364,8 +385,10 @@ describe('App browse map search', () => {
   });
 
   afterEach(() => {
+    jest.restoreAllMocks();
     mockNetworkListeners.clear();
     mockFetchPlaces.mockReset();
+    mockFetchLiveLocationPlaces.mockReset();
     mockFetchProfileDashboard.mockReset();
     mockLoginProfile.mockReset();
     mockRegisterPushDevice.mockReset();

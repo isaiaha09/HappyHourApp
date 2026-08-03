@@ -22,6 +22,7 @@ import type {
   FavoriteBusinessToggleRequest,
   InformalBusinessSignupRequest,
   LoginRequest,
+  LiveLocationPlaceUpdate,
   ManualBusinessSignupRequest,
   PaginatedResponse,
   PlaceDetail,
@@ -125,6 +126,16 @@ export async function fetchPlaces(baseUrl: string, city: string, hasDeals?: bool
     places: nextPlaces,
   });
   return nextPlaces;
+}
+
+export async function fetchLiveLocationPlaces(baseUrl: string, city: string) {
+  const queryParams = new URLSearchParams();
+  if (city !== 'all') {
+    queryParams.set('city', city);
+  }
+
+  const query = queryParams.size ? `?${queryParams.toString()}` : '';
+  return fetchJson<LiveLocationPlaceUpdate[]>(baseUrl, `/places/live-locations/${query}`);
 }
 
 export async function fetchPlaceDetail(baseUrl: string, slug: string, authToken?: string) {

@@ -136,6 +136,13 @@ export type PlaceDetail = Omit<PlaceListItem, 'locations'> & {
   locations: PlaceLocationDetail[];
 };
 
+export type LiveLocationPlaceUpdate = {
+  slug: string;
+  latitude: number | null;
+  longitude: number | null;
+  updated_at: string | null;
+};
+
 export type PaginatedResponse<T> = {
   count: number;
   next: string | null;

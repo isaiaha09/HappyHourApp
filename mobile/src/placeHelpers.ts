@@ -1,6 +1,6 @@
 import { Linking } from 'react-native';
 
-import type { PlaceDetail, PlaceListItem, PlaceLocation, PlaceLocationDetail } from './types';
+import type { LiveLocationPlaceUpdate, PlaceDetail, PlaceListItem, PlaceLocation, PlaceLocationDetail } from './types';
 
 export function formatPlaceAddress(place: PlaceListItem | PlaceDetail | PlaceLocation | PlaceLocationDetail) {
   const lineOne = place.address_line_1;
@@ -84,6 +84,83 @@ export function getPlaceCardImageUrl(place: PlaceListItem) {
 
 export function getPlaceLocations(place: PlaceListItem | PlaceDetail) {
   return place.locations.length ? place.locations : [place];
+}
+
+export function mergeLiveLocationUpdatesIntoPlaces(places: PlaceListItem[], updates: LiveLocationPlaceUpdate[]) {
+  if (!updates.length || !places.length) {
+    return places;
+  }
+
+  const updatesBySlug = new Map(updates.map((update) => [update.slug, update]));
+  let changed = false;
+  const nextPlaces = places.map((place) => {
+    const update = updatesBySlug.get(place.slug);
+    if (!update) {
+      return place;
+    }
+
+    const nextLocations = place.locations.map((location) => {
+      if (location.latitude === update.latitude && location.longitude === update.longitude) {
+        return location;
+      }
+
+      return {
+        ...location,
+        latitude: update.latitude,
+        longitude: update.longitude,
+      };
+    });
+    const locationsChanged = nextLocations.some((location, index) => location !== place.locations[index]);
+    const placeChanged = place.latitude !== update.latitude || place.longitude !== update.longitude;
+    if (!locationsChanged && !placeChanged) {
+      return place;
+    }
+
+    changed = true;
+    return {
+      ...place,
+      latitude: update.latitude,
+      longitude: update.longitude,
+      locations: nextLocations,
+    };
+  });
+
+  return changed ? nextPlaces : places;
+}
+
+export function mergeLiveLocationUpdatesIntoPlaceDetail(place: PlaceDetail | null, updates: LiveLocationPlaceUpdate[]) {
+  if (!place) {
+    return place;
+  }
+
+  const update = updates.find((entry) => entry.slug === place.slug);
+  if (!update) {
+    return place;
+  }
+
+  const nextLocations = place.locations.map((location) => {
+    if (location.latitude === update.latitude && location.longitude === update.longitude) {
+      return location;
+    }
+
+    return {
+      ...location,
+      latitude: update.latitude,
+      longitude: update.longitude,
+    };
+  });
+  const locationsChanged = nextLocations.some((location, index) => location !== place.locations[index]);
+  const placeChanged = place.latitude !== update.latitude || place.longitude !== update.longitude;
+  if (!locationsChanged && !placeChanged) {
+    return place;
+  }
+
+  return {
+    ...place,
+    latitude: update.latitude,
+    longitude: update.longitude,
+    locations: nextLocations,
+  };
 }
 
 export function getPlaceCardEyebrow(place: PlaceListItem) {

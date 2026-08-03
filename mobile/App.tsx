@@ -46,6 +46,7 @@ import {
   deleteProfileAccount,
   disableTwoFactor,
   clearPlacesCache,
+  fetchLiveLocationPlaces,
   fetchProfileDashboard,
   fetchPlaceDetail,
   fetchPlaces,
@@ -126,6 +127,8 @@ import {
   getPlaceCardAddress,
   getPlaceCardEyebrow,
   getPlaceLocations,
+  mergeLiveLocationUpdatesIntoPlaceDetail,
+  mergeLiveLocationUpdatesIntoPlaces,
   getSelectedClaimLocation,
   normalizeSearchText,
 } from './src/placeHelpers';
@@ -627,6 +630,7 @@ function AppScreen() {
   const [twoFactorDisableCode, setTwoFactorDisableCode] = useState('');
   const [authenticatedSession, setAuthenticatedSession] = useState<SignupResponse | null>(null);
   const [pushRegistrationAttempt, setPushRegistrationAttempt] = useState(0);
+  const [liveLocationRefreshToken, setLiveLocationRefreshToken] = useState(0);
   const [browseMode, setBrowseMode] = useState<BrowseMode>('list');
   const [browseFiltersExpanded, setBrowseFiltersExpanded] = useState(false);
   const [mapSearchPanelLifted, setMapSearchPanelLifted] = useState(false);
@@ -796,7 +800,12 @@ function AppScreen() {
   const claimPrefillRequestRef = useRef(0);
   const claimPrefillLoadedKeyRef = useRef('');
   const startupImageLoadCountRef = useRef(0);
-  const appStateRef = useRef(AppState.currentState);
+  const appStateRef = useRef(AppState.currentState === 'background' || AppState.currentState === 'inactive'
+    ? AppState.currentState
+    : 'active');
+  const liveLocationRefreshRemainingMsRef = useRef<number | null>(null);
+  const liveLocationRefreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastHandledLiveLocationRefreshTokenRef = useRef(0);
   const authPortalRef = useRef<AuthPortal>(authPortal);
   const pushRegistrationAuthTokenRef = useRef('');
   const lastHandledNotificationResponseIdRef = useRef('');
@@ -808,6 +817,8 @@ function AppScreen() {
   const normalizedSearchQuery = normalizeSearchText(searchQuery);
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const normalizedDeferredSearchQuery = normalizeSearchText(deferredSearchQuery);
+  const liveMapPlacesRefreshIntervalMs = 30_000;
+  const liveMapPlacesRefreshTickMs = 250;
   const onboardingTransitionDuration = 500;
   const showTransitionMapBrowse = browseProfileTransitionFrom !== null
     && incomingBrowseProfileScreen !== null
@@ -1637,10 +1648,24 @@ function AppScreen() {
     mapMarkersTrackViewChangesTimeoutRef.current = null;
   }
 
+  function clearLiveLocationRefreshTimer() {
+    if (liveLocationRefreshTimeoutRef.current === null) {
+      return;
+    }
+
+    clearTimeout(liveLocationRefreshTimeoutRef.current);
+    liveLocationRefreshTimeoutRef.current = null;
+  }
+
+  function pauseLiveLocationRefreshTimer() {
+    clearLiveLocationRefreshTimer();
+  }
+
   useEffect(() => () => {
     clearShowMoreMapResultsTimer();
     clearAutoFitMapRegionTimer();
     clearMapMarkersTrackViewChangesTimer();
+    clearLiveLocationRefreshTimer();
   }, []);
 
   useEffect(() => {
@@ -1658,6 +1683,9 @@ function AppScreen() {
       if (previousAppState !== 'active') {
         pushRegistrationAuthTokenRef.current = '';
         setPushRegistrationAttempt((current) => current + 1);
+        if (showMapBrowse && hasInternetConnection === true) {
+          setLiveLocationRefreshToken((current) => current + 1);
+        }
       }
 
       if (previousAppState === 'active' || !showMapBrowse) {
@@ -1675,7 +1703,95 @@ function AppScreen() {
     return () => {
       subscription.remove();
     };
-  }, [showMapBrowse]);
+  }, [hasInternetConnection, showMapBrowse]);
+
+  useEffect(() => {
+    if (
+      !showMapBrowse
+      || hasInternetConnection !== true
+      || appStateRef.current === 'background'
+      || appStateRef.current === 'inactive'
+    ) {
+      pauseLiveLocationRefreshTimer();
+      return;
+    }
+
+    let cancelled = false;
+    const shouldForceImmediateRefresh = lastHandledLiveLocationRefreshTokenRef.current !== liveLocationRefreshToken;
+    lastHandledLiveLocationRefreshTokenRef.current = liveLocationRefreshToken;
+
+    async function refreshLiveLocationPlaces() {
+      try {
+        const updates = await fetchLiveLocationPlaces(apiBaseUrl, selectedCity);
+        if (cancelled || !updates.length) {
+          return;
+        }
+
+        setPlaces((current) => {
+          const nextPlaces = mergeLiveLocationUpdatesIntoPlaces(current, updates);
+          if (nextPlaces !== current && selectedCity === 'all') {
+            allPlacesCacheRef.current = {
+              apiBaseUrl,
+              places: nextPlaces,
+              reloadCount,
+            };
+          }
+          return nextPlaces;
+        });
+        setProfilePlaces((current) => mergeLiveLocationUpdatesIntoPlaces(current, updates));
+        setSelectedPlace((current) => mergeLiveLocationUpdatesIntoPlaceDetail(current, updates));
+      } catch {
+        // Ignore best-effort live location refresh failures.
+      }
+    }
+
+    function scheduleNextLiveLocationRefresh(delayMs: number) {
+      clearLiveLocationRefreshTimer();
+      liveLocationRefreshRemainingMsRef.current = delayMs;
+      liveLocationRefreshTimeoutRef.current = setTimeout(() => {
+        liveLocationRefreshTimeoutRef.current = null;
+        void advanceLiveLocationRefreshClock();
+      }, liveMapPlacesRefreshTickMs);
+    }
+
+    async function advanceLiveLocationRefreshClock() {
+      const remainingMs = liveLocationRefreshRemainingMsRef.current ?? liveMapPlacesRefreshIntervalMs;
+      const nextRemainingMs = remainingMs - liveMapPlacesRefreshTickMs;
+
+      if (nextRemainingMs > 0) {
+        scheduleNextLiveLocationRefresh(nextRemainingMs);
+        return;
+      }
+
+      liveLocationRefreshRemainingMsRef.current = liveMapPlacesRefreshIntervalMs;
+      await refreshLiveLocationPlaces();
+      if (cancelled) {
+        return;
+      }
+
+      scheduleNextLiveLocationRefresh(liveMapPlacesRefreshIntervalMs);
+    }
+
+    if (shouldForceImmediateRefresh) {
+      liveLocationRefreshRemainingMsRef.current = liveMapPlacesRefreshIntervalMs;
+      clearLiveLocationRefreshTimer();
+      void refreshLiveLocationPlaces().then(() => {
+        if (cancelled) {
+          return;
+        }
+
+        scheduleNextLiveLocationRefresh(liveMapPlacesRefreshIntervalMs);
+      });
+    } else {
+      const remainingMs = liveLocationRefreshRemainingMsRef.current ?? liveMapPlacesRefreshIntervalMs;
+      scheduleNextLiveLocationRefresh(remainingMs);
+    }
+
+    return () => {
+      cancelled = true;
+      pauseLiveLocationRefreshTimer();
+    };
+  }, [apiBaseUrl, hasInternetConnection, liveLocationRefreshToken, liveMapPlacesRefreshIntervalMs, reloadCount, selectedCity, showMapBrowse]);
 
   useEffect(() => {
     if (!bottomMoreSheetVisible || authenticatedSession) {
@@ -3329,15 +3445,24 @@ function AppScreen() {
 
       try {
         const nextPlaces = await fetchPlaces(apiBaseUrl, selectedCity);
+        let nextPlacesWithLiveLocations = nextPlaces;
+
+        try {
+          const liveLocationUpdates = await fetchLiveLocationPlaces(apiBaseUrl, selectedCity);
+          nextPlacesWithLiveLocations = mergeLiveLocationUpdatesIntoPlaces(nextPlaces, liveLocationUpdates);
+        } catch {
+          nextPlacesWithLiveLocations = nextPlaces;
+        }
+
         if (!isMounted) {
           return;
         }
 
-        setPlaces(nextPlaces);
+        setPlaces(nextPlacesWithLiveLocations);
         if (selectedCity === 'all') {
           allPlacesCacheRef.current = {
             apiBaseUrl,
-            places: nextPlaces,
+            places: nextPlacesWithLiveLocations,
             reloadCount,
           };
         }
