@@ -1,4 +1,21 @@
-import { shouldSkipBrowseMapAutoFit } from '../mapBrowseState';
+import { getMappedPlaceRenderKey, shouldSkipBrowseMapAutoFit } from '../mapBrowseState';
+
+describe('getMappedPlaceRenderKey', () => {
+  it('changes when an existing live-location marker moves', () => {
+    const originalKey = getMappedPlaceRenderKey([{
+      latitude: 34.2171,
+      longitude: -119.0385,
+      markerKey: 'baskin-robbins:1',
+    }]);
+    const movedKey = getMappedPlaceRenderKey([{
+      latitude: 34.2184,
+      longitude: -119.0369,
+      markerKey: 'baskin-robbins:1',
+    }]);
+
+    expect(movedKey).not.toBe(originalKey);
+  });
+});
 
 describe('shouldSkipBrowseMapAutoFit', () => {
   it('skips auto-fit when browse map is hidden', () => {

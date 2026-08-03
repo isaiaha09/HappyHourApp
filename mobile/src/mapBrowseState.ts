@@ -5,6 +5,18 @@ type BrowseMapAutoFitOptions = {
   showMapBrowse: boolean;
 };
 
+type MappedPlaceRenderKeyInput = {
+  latitude: number;
+  longitude: number;
+  markerKey: string;
+};
+
+export function getMappedPlaceRenderKey(mappedPlaces: MappedPlaceRenderKeyInput[]) {
+  return mappedPlaces.map((place) => (
+    `${place.markerKey}:${place.latitude}:${place.longitude}`
+  )).join('|');
+}
+
 export function shouldSkipBrowseMapAutoFit({
   listLoading,
   mappedPlaceCount,

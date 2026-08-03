@@ -100,7 +100,7 @@ import { DirectMessagesScreen } from './src/screens/DirectMessagesScreen';
 import { HomeFeedScreen } from './src/screens/HomeFeedScreen';
 import { PlaceDetailScreen } from './src/screens/PlaceDetailScreen';
 import { SplashScreen } from './src/screens/SplashScreen';
-import { shouldSkipBrowseMapAutoFit } from './src/mapBrowseState';
+import { getMappedPlaceRenderKey, shouldSkipBrowseMapAutoFit } from './src/mapBrowseState';
 import { buildSocialProfilesFromInputs, socialProfilesToInputs } from './src/socialProfiles';
 import { buildDealOverridesFromDeals, buildNormalizedDealOverrides, buildNormalizedOperatingHourOverrides, buildOperatingHourOverridesFromWindows } from './src/businessProfileOverrides';
 import {
@@ -898,7 +898,7 @@ function AppScreen() {
   const precomputedMappedPlaces = useMemo(() => getMappedPlacesForBrowse(filteredBrowseLocations), [filteredBrowseLocations]);
   const mappedPlaces = useMemo(() => (showMapBrowse ? precomputedMappedPlaces : []), [precomputedMappedPlaces, showMapBrowse]);
   const browseResultCount = displayedBrowsePlaces.length;
-  const mappedPlaceKey = useMemo(() => mappedPlaces.map((place) => place.markerKey).join('|'), [mappedPlaces]);
+  const mappedPlaceKey = useMemo(() => getMappedPlaceRenderKey(mappedPlaces), [mappedPlaces]);
   const displayedMapPlaces = showMapBrowse
     ? normalizedDeferredSearchQuery.length > 0
       ? mappedPlaces
