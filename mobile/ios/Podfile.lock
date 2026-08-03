@@ -8,7 +8,7 @@ PODS:
     - React-Core
   - EXNotifications (0.32.17):
     - ExpoModulesCore
-  - Expo (54.0.35):
+  - Expo (54.0.36):
     - ExpoModulesCore
     - hermes-engine
     - RCTRequired
@@ -34,6 +34,8 @@ PODS:
     - ReactNativeDependencies
     - Yoga
   - ExpoAsset (12.0.13):
+    - ExpoModulesCore
+  - ExpoBlur (15.0.8):
     - ExpoModulesCore
   - ExpoClipboard (8.0.8):
     - ExpoModulesCore
@@ -72,8 +74,15 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - ExpoNetwork (8.0.8):
+    - ExpoModulesCore
+  - ExpoSecureStore (15.0.8):
+    - ExpoModulesCore
   - ExpoSharing (14.0.8):
     - ExpoModulesCore
+  - EXTaskManager (14.0.9):
+    - ExpoModulesCore
+    - UMAppLoader
   - FBLazyVector (0.81.5)
   - hermes-engine (0.81.5):
     - hermes-engine/Pre-built (= 0.81.5)
@@ -1822,6 +1831,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - UMAppLoader (6.0.8)
   - Yoga (0.0.0)
 
 DEPENDENCIES:
@@ -1830,7 +1840,8 @@ DEPENDENCIES:
   - EXImageLoader (from `../node_modules/expo-image-loader/ios`)
   - EXNotifications (from `../node_modules/expo-notifications/ios`)
   - Expo (from `../node_modules/expo`)
-  - ExpoAsset (from `../node_modules/expo/node_modules/expo-asset/ios`)
+  - ExpoAsset (from `../node_modules/expo-asset/ios`)
+  - ExpoBlur (from `../node_modules/expo-blur/ios`)
   - ExpoClipboard (from `../node_modules/expo-clipboard/ios`)
   - ExpoDocumentPicker (from `../node_modules/expo-document-picker/ios`)
   - ExpoFileSystem (from `../node_modules/expo-file-system/ios`)
@@ -1839,7 +1850,10 @@ DEPENDENCIES:
   - ExpoKeepAwake (from `../node_modules/expo/node_modules/expo-keep-awake/ios`)
   - ExpoLocation (from `../node_modules/expo-location/ios`)
   - ExpoModulesCore (from `../node_modules/expo-modules-core`)
+  - ExpoNetwork (from `../node_modules/expo-network/ios`)
+  - ExpoSecureStore (from `../node_modules/expo-secure-store/ios`)
   - ExpoSharing (from `../node_modules/expo-sharing/ios`)
+  - EXTaskManager (from `../node_modules/expo-task-manager/ios`)
   - FBLazyVector (from `../node_modules/react-native/Libraries/FBLazyVector`)
   - hermes-engine (from `../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec`)
   - RCTDeprecation (from `../node_modules/react-native/ReactApple/Libraries/RCTFoundation/RCTDeprecation`)
@@ -1911,6 +1925,7 @@ DEPENDENCIES:
   - ReactCommon/turbomodule/core (from `../node_modules/react-native/ReactCommon`)
   - ReactNativeDependencies (from `../node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec`)
   - RNGestureHandler (from `../node_modules/react-native-gesture-handler`)
+  - UMAppLoader (from `../node_modules/unimodules-app-loader/ios`)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
 
 EXTERNAL SOURCES:
@@ -1925,7 +1940,9 @@ EXTERNAL SOURCES:
   Expo:
     :path: "../node_modules/expo"
   ExpoAsset:
-    :path: "../node_modules/expo/node_modules/expo-asset/ios"
+    :path: "../node_modules/expo-asset/ios"
+  ExpoBlur:
+    :path: "../node_modules/expo-blur/ios"
   ExpoClipboard:
     :path: "../node_modules/expo-clipboard/ios"
   ExpoDocumentPicker:
@@ -1942,8 +1959,14 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-location/ios"
   ExpoModulesCore:
     :path: "../node_modules/expo-modules-core"
+  ExpoNetwork:
+    :path: "../node_modules/expo-network/ios"
+  ExpoSecureStore:
+    :path: "../node_modules/expo-secure-store/ios"
   ExpoSharing:
     :path: "../node_modules/expo-sharing/ios"
+  EXTaskManager:
+    :path: "../node_modules/expo-task-manager/ios"
   FBLazyVector:
     :path: "../node_modules/react-native/Libraries/FBLazyVector"
   hermes-engine:
@@ -2085,6 +2108,8 @@ EXTERNAL SOURCES:
     :podspec: "../node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec"
   RNGestureHandler:
     :path: "../node_modules/react-native-gesture-handler"
+  UMAppLoader:
+    :path: "../node_modules/unimodules-app-loader/ios"
   Yoga:
     :path: "../node_modules/react-native/ReactCommon/yoga"
 
@@ -2093,8 +2118,9 @@ SPEC CHECKSUMS:
   EXConstants: fce59a631a06c4151602843667f7cfe35f81e271
   EXImageLoader: 189e3476581efe3ad4d1d3fb4735b7179eb26f05
   EXNotifications: c67e92b9fdfe785ff9dbdc5f4c0ff935de357da7
-  Expo: edf5879dd9f83d2aa5b05d012412c810bc182ac1
+  Expo: 38ef0f0082a53f9604a48cbab2ab55289c658eaf
   ExpoAsset: 9e5a7c9c0a9fb83ad5b2bb365141f2bd7f289b66
+  ExpoBlur: b90747a3f22a8b6ceffd9cb0dc41a4184efdc656
   ExpoClipboard: b36b287d8356887844bb08ed5c84b5979bb4dd1e
   ExpoDocumentPicker: 7cd9e71a0f66fb19eb0a586d6f26eee1284692e0
   ExpoFileSystem: a8e7fb1e958471764fb48d281cf9fa81a9e4d77c
@@ -2103,7 +2129,10 @@ SPEC CHECKSUMS:
   ExpoKeepAwake: 55f75eca6499bb9e4231ebad6f3e9cb8f99c0296
   ExpoLocation: d5b61cb4970fa982e39ca94246a206a0c3b812ca
   ExpoModulesCore: 9e6a5514828e7dd5ded9e99d33557be2d284e660
+  ExpoNetwork: ee1fb67b0de59ab7f36794caf8242955dd8ae046
+  ExpoSecureStore: d32f751874a2ceb5aaeebeb3578e165c1ba2b24a
   ExpoSharing: 0d983394ed4a80334bab5a0d5384f75710feb7e8
+  EXTaskManager: 6f1a66e4c8cc6df6e24c3d90928704bc3013eae5
   FBLazyVector: e95a291ad2dadb88e42b06e0c5fb8262de53ec12
   hermes-engine: 9f4dfe93326146a1c99eb535b1cb0b857a3cd172
   RCTDeprecation: 943572d4be82d480a48f4884f670135ae30bf990
@@ -2174,6 +2203,7 @@ SPEC CHECKSUMS:
   ReactCommon: 08810150b1206cc44aecf5f6ae19af32f29151a8
   ReactNativeDependencies: 71ce9c28beb282aa720ea7b46980fff9669f428a
   RNGestureHandler: 2914750df066d89bf9d8f48a10ad5f0051108ac3
+  UMAppLoader: 145337733539f9af9b3dd97eeaa7f3bd97cacb23
   Yoga: 5934998fbeaef7845dbf698f698518695ab4cd1a
 
 PODFILE CHECKSUM: 2a54289487d0ec75f543f188d72df642696e927f
