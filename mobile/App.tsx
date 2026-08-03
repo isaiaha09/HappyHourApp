@@ -898,6 +898,7 @@ function AppScreen() {
   const precomputedMappedPlaces = useMemo(() => getMappedPlacesForBrowse(filteredBrowseLocations), [filteredBrowseLocations]);
   const mappedPlaces = useMemo(() => (showMapBrowse ? precomputedMappedPlaces : []), [precomputedMappedPlaces, showMapBrowse]);
   const browseResultCount = displayedBrowsePlaces.length;
+  const mappedPlaceIdentityKey = useMemo(() => mappedPlaces.map((place) => place.markerKey).join('|'), [mappedPlaces]);
   const mappedPlaceKey = useMemo(() => getMappedPlaceRenderKey(mappedPlaces), [mappedPlaces]);
   const displayedMapPlaces = showMapBrowse
     ? normalizedDeferredSearchQuery.length > 0
@@ -2399,9 +2400,15 @@ function AppScreen() {
     }
 
     pendingImmediateMapPinsRefreshRef.current = false;
+    const renderedMarkerIdentityKey = renderedMappedPlaces.map((place) => place.markerKey).join('|');
     mapPinsTransition.stopAnimation();
     setRenderedMappedPlaces(mappedPlaces);
     setRenderedMappedPlaceKey(mappedPlaceKey);
+    if (renderedMarkerIdentityKey === mappedPlaceIdentityKey) {
+      mapPinsTransition.setValue(1);
+      return;
+    }
+
     mapPinsTransition.setValue(0);
     requestAnimationFrame(() => {
       Animated.timing(mapPinsTransition, {
@@ -2411,7 +2418,7 @@ function AppScreen() {
         useNativeDriver: true,
       }).start();
     });
-  }, [authenticatedSession, browseMode, guestBrowseModeLocked, listLoading, mapPinsTransition, mappedPlaceKey, mappedPlaces, normalizedDeferredSearchQuery.length, renderedMappedPlaceKey, renderedMappedPlaces.length, screenMode, selectedPlaceSlug, shellFadeScope, showMapBrowse, showTransitionMapBrowse, splashMapHandoffPending]);
+  }, [authenticatedSession, browseMode, guestBrowseModeLocked, listLoading, mapPinsTransition, mappedPlaceIdentityKey, mappedPlaceKey, mappedPlaces, normalizedDeferredSearchQuery.length, renderedMappedPlaceKey, renderedMappedPlaces, screenMode, selectedPlaceSlug, shellFadeScope, showMapBrowse, showTransitionMapBrowse, splashMapHandoffPending]);
 
   function navigateScreen(
     nextScreen: AppScreenMode,

@@ -94,12 +94,12 @@ export function mergeLiveLocationUpdatesIntoPlaces(places: PlaceListItem[], upda
   const updatesBySlug = new Map(updates.map((update) => [update.slug, update]));
   let changed = false;
   const nextPlaces = places.map((place) => {
-    const update = updatesBySlug.get(place.slug);
-    if (!update) {
-      return place;
-    }
-
     const nextLocations = place.locations.map((location) => {
+      const update = updatesBySlug.get(location.slug);
+      if (!update) {
+        return location;
+      }
+
       if (location.latitude === update.latitude && location.longitude === update.longitude) {
         return location;
       }
@@ -111,16 +111,21 @@ export function mergeLiveLocationUpdatesIntoPlaces(places: PlaceListItem[], upda
       };
     });
     const locationsChanged = nextLocations.some((location, index) => location !== place.locations[index]);
-    const placeChanged = place.latitude !== update.latitude || place.longitude !== update.longitude;
-    if (!locationsChanged && !placeChanged) {
+    const update = updatesBySlug.get(place.slug);
+    const placeChanged = update !== undefined && (
+      place.latitude !== update.latitude || place.longitude !== update.longitude
+    );
+    if (!locationsChanged && (!update || !placeChanged)) {
       return place;
     }
 
     changed = true;
     return {
       ...place,
-      latitude: update.latitude,
-      longitude: update.longitude,
+      ...(update ? {
+        latitude: update.latitude,
+        longitude: update.longitude,
+      } : {}),
       locations: nextLocations,
     };
   });
@@ -133,12 +138,14 @@ export function mergeLiveLocationUpdatesIntoPlaceDetail(place: PlaceDetail | nul
     return place;
   }
 
-  const update = updates.find((entry) => entry.slug === place.slug);
-  if (!update) {
-    return place;
-  }
+  const updatesBySlug = new Map(updates.map((update) => [update.slug, update]));
 
   const nextLocations = place.locations.map((location) => {
+    const update = updatesBySlug.get(location.slug);
+    if (!update) {
+      return location;
+    }
+
     if (location.latitude === update.latitude && location.longitude === update.longitude) {
       return location;
     }
@@ -150,15 +157,20 @@ export function mergeLiveLocationUpdatesIntoPlaceDetail(place: PlaceDetail | nul
     };
   });
   const locationsChanged = nextLocations.some((location, index) => location !== place.locations[index]);
-  const placeChanged = place.latitude !== update.latitude || place.longitude !== update.longitude;
-  if (!locationsChanged && !placeChanged) {
+  const update = updatesBySlug.get(place.slug);
+  const placeChanged = update !== undefined && (
+    place.latitude !== update.latitude || place.longitude !== update.longitude
+  );
+  if (!locationsChanged && (!update || !placeChanged)) {
     return place;
   }
 
   return {
     ...place,
-    latitude: update.latitude,
-    longitude: update.longitude,
+    ...(update ? {
+      latitude: update.latitude,
+      longitude: update.longitude,
+    } : {}),
     locations: nextLocations,
   };
 }
