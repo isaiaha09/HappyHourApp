@@ -630,6 +630,18 @@ npm run android
 npx tsc --noEmit
 ```
 
+### Local iOS Build Number
+
+Before uploading a locally archived iOS build from Xcode to App Store Connect/TestFlight, increment the iOS build number. Xcode does not automatically increment this project for local archives.
+
+Update the same integer in all three places, currently `37`:
+
+- `mobile/app.json`: `expo.ios.buildNumber`
+- `mobile/ios/DiningDealz/Info.plist`: `CFBundleVersion`
+- `mobile/ios/DiningDealz.xcodeproj/project.pbxproj`: `CURRENT_PROJECT_VERSION` in both Debug and Release
+
+For example, after uploading build `37`, change all three values to `38` before creating the next local archive. EAS production builds are separate and use the `autoIncrement` setting in `mobile/eas.json`.
+
 ## Helpful Backend Commands
 
 Run tests:
