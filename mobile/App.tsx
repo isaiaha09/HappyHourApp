@@ -797,6 +797,7 @@ function AppScreen() {
   const businessLocationWatcherRef = useRef<Location.LocationSubscription | null>(null);
   const userLocationWatcherRef = useRef<Location.LocationSubscription | null>(null);
   const businessLocationLastReportedRef = useRef<string>('');
+  const businessLocationLastReportedAtRef = useRef(0);
   const claimPrefillRequestRef = useRef(0);
   const claimPrefillLoadedKeyRef = useRef('');
   const startupImageLoadCountRef = useRef(0);
@@ -1309,6 +1310,7 @@ function AppScreen() {
         !currentBusinessTrackingSession?.authToken
       ) {
         businessLocationLastReportedRef.current = '';
+        businessLocationLastReportedAtRef.current = 0;
         businessLocationWatcherRef.current?.remove();
         businessLocationWatcherRef.current = null;
         return;
@@ -1340,11 +1342,16 @@ function AppScreen() {
           const approvedBusinessSlugs = new Set(activeTrackingSession.approvedBusinessSlugs);
 
           const roundedLocationKey = `${coords.latitude.toFixed(4)}:${coords.longitude.toFixed(4)}`;
-          if (businessLocationLastReportedRef.current === roundedLocationKey) {
+          const now = Date.now();
+          if (
+            businessLocationLastReportedRef.current === roundedLocationKey
+            || now - businessLocationLastReportedAtRef.current < liveMapPlacesRefreshIntervalMs
+          ) {
             return;
           }
 
           businessLocationLastReportedRef.current = roundedLocationKey;
+          businessLocationLastReportedAtRef.current = now;
           try {
             const response = await updateBusinessLocation(apiBaseUrl, activeTrackingSession.authToken, {
               latitude: coords.latitude,
