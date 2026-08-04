@@ -73,6 +73,7 @@ import {
   clearPersistedBusinessTrackingSession,
   ensureBusinessBackgroundLocationTaskStarted,
   loadPersistedBusinessTrackingSession,
+  reserveBusinessLocationReport,
   stopBusinessBackgroundLocationTask,
 } from './src/businessLocationTracking';
 import type { AuthPortal, LoginFormState, ProfileFormState } from './src/appFlowTypes';
@@ -1304,6 +1305,8 @@ function AppScreen() {
 
   useEffect(() => {
     let cancelled = false;
+    let latestBusinessPosition: Location.LocationObject | null = null;
+    let businessLocationReportTimer: ReturnType<typeof setInterval> | null = null;
 
     async function startBusinessLocationTracking() {
       if (
@@ -1331,13 +1334,7 @@ function AppScreen() {
           return;
         }
 
-        const backgroundPermission = await Location.getBackgroundPermissionsAsync();
-        if (backgroundPermission.granted) {
-          await ensureBusinessBackgroundLocationTaskStarted(apiBaseUrl, currentBusinessTrackingSession);
-          return;
-        }
-
-        const reportLocation = async (coords: { latitude: number; longitude: number; accuracy?: number | null }) => {
+        const updateLocalBusinessLocation = (coords: { latitude: number; longitude: number }) => {
           const activeTrackingSession = authenticatedSessionRef.current?.auth_token
             ? buildBusinessTrackingSession(authenticatedSessionRef.current)
             : currentBusinessTrackingSession;
@@ -1346,13 +1343,48 @@ function AppScreen() {
           }
 
           const approvedBusinessSlugs = new Set(activeTrackingSession.approvedBusinessSlugs);
+          if (approvedBusinessSlugs.size === 0 || cancelled) {
+            return;
+          }
 
-          const roundedLocationKey = `${coords.latitude.toFixed(4)}:${coords.longitude.toFixed(4)}`;
+          setPlaces((current) => current.map((place) => applyTrackedCoordinatesToBusiness(
+            place,
+            approvedBusinessSlugs,
+            coords.latitude,
+            coords.longitude,
+          )));
+          setProfilePlaces((current) => current.map((place) => applyTrackedCoordinatesToBusiness(
+            place,
+            approvedBusinessSlugs,
+            coords.latitude,
+            coords.longitude,
+          )));
+          setSelectedPlace((current) => current ? applyTrackedCoordinatesToBusinessDetail(
+            current,
+            approvedBusinessSlugs,
+            coords.latitude,
+            coords.longitude,
+          ) : current);
+        };
+
+        const reportLocation = async (coords: { latitude: number; longitude: number; accuracy?: number | null }) => {
+          const activeTrackingSession = authenticatedSessionRef.current?.auth_token
+            ? buildBusinessTrackingSession(authenticatedSessionRef.current)
+            : currentBusinessTrackingSession;
+          if (!activeTrackingSession?.authToken || appStateRef.current !== 'active') {
+            return;
+          }
+
+          const roundedLocationKey = `${coords.latitude.toFixed(5)}:${coords.longitude.toFixed(5)}`;
           const now = Date.now();
           if (
             businessLocationLastReportedRef.current === roundedLocationKey
             || now - businessLocationLastReportedAtRef.current < liveMapPlacesRefreshIntervalMs
           ) {
+            return;
+          }
+
+          if (!(await reserveBusinessLocationReport(coords.latitude, coords.longitude))) {
             return;
           }
 
@@ -1367,26 +1399,6 @@ function AppScreen() {
             if (!cancelled) {
               setAuthenticatedSessionIfCurrentToken(activeTrackingSession.authToken, response);
               setLoggedOutBusinessTrackingSession(buildBusinessTrackingSession(response));
-              if (approvedBusinessSlugs.size > 0) {
-                setPlaces((current) => current.map((place) => applyTrackedCoordinatesToBusiness(
-                  place,
-                  approvedBusinessSlugs,
-                  coords.latitude,
-                  coords.longitude,
-                )));
-                setProfilePlaces((current) => current.map((place) => applyTrackedCoordinatesToBusiness(
-                  place,
-                  approvedBusinessSlugs,
-                  coords.latitude,
-                  coords.longitude,
-                )));
-                setSelectedPlace((current) => current ? applyTrackedCoordinatesToBusinessDetail(
-                  current,
-                  approvedBusinessSlugs,
-                  coords.latitude,
-                  coords.longitude,
-                ) : current);
-              }
             }
           } catch (error) {
             if (!cancelled) {
@@ -1401,16 +1413,19 @@ function AppScreen() {
         if (cancelled) {
           return;
         }
+        latestBusinessPosition = initialPosition;
+        updateLocalBusinessLocation(initialPosition.coords);
         void reportLocation(initialPosition.coords);
 
         const watcher = await Location.watchPositionAsync(
           {
             accuracy: Location.Accuracy.BestForNavigation,
-            distanceInterval: 10,
-            timeInterval: liveMapPlacesRefreshIntervalMs,
+            distanceInterval: 1,
+            timeInterval: 1000,
           },
           (position) => {
-            void reportLocation(position.coords);
+            latestBusinessPosition = position;
+            updateLocalBusinessLocation(position.coords);
           },
         );
 
@@ -1420,6 +1435,11 @@ function AppScreen() {
         }
 
         businessLocationWatcherRef.current = watcher;
+        businessLocationReportTimer = setInterval(() => {
+          if (latestBusinessPosition) {
+            void reportLocation(latestBusinessPosition.coords);
+          }
+        }, liveMapPlacesRefreshIntervalMs);
       } catch (error) {
         if (!cancelled) {
           setProfileErrorMessage(getErrorMessage(error));
@@ -1431,6 +1451,9 @@ function AppScreen() {
 
     return () => {
       cancelled = true;
+      if (businessLocationReportTimer !== null) {
+        clearInterval(businessLocationReportTimer);
+      }
       businessLocationWatcherRef.current?.remove();
       businessLocationWatcherRef.current = null;
     };

@@ -1,10 +1,11 @@
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import * as Location from 'expo-location';
 import * as SecureStore from 'expo-secure-store';
 import * as TaskManager from 'expo-task-manager';
 import {
   buildBusinessLocationKey,
   businessLocationReportIntervalMs,
+  getFreshestBusinessLocation,
   shouldReportBusinessLocation,
 } from './businessLocationReporting';
 
@@ -15,7 +16,7 @@ const apiBaseUrlStorageKey = 'diningdealz.business-location.api-base-url';
 const lastReportedLocationStorageKey = 'diningdealz.business-location.last-rounded-key';
 const lastReportedAtStorageKey = 'diningdealz.business-location.last-reported-at';
 const trackingConfigVersionStorageKey = 'diningdealz.business-location.config-version';
-const trackingConfigVersion = '2';
+const trackingConfigVersion = '3';
 
 const secureStoreOptions: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
@@ -145,6 +146,33 @@ export async function clearPersistedBusinessTrackingLastReportedLocation() {
   ]);
 }
 
+export async function reserveBusinessLocationReport(latitude: number, longitude: number) {
+  const [lastReportedLocationKey, lastReportedAt] = await Promise.all([
+    getSecureItem(lastReportedLocationStorageKey),
+    getSecureItem(lastReportedAtStorageKey),
+  ]);
+  const parsedLastReportedAt = lastReportedAt === null ? null : Number(lastReportedAt);
+  const previousReportedAt = parsedLastReportedAt !== null && Number.isFinite(parsedLastReportedAt)
+    ? parsedLastReportedAt
+    : null;
+  const now = Date.now();
+  if (!shouldReportBusinessLocation({
+    latitude,
+    longitude,
+    lastReportedAt: previousReportedAt,
+    lastReportedLocationKey,
+    now,
+  })) {
+    return false;
+  }
+
+  await Promise.all([
+    setSecureItem(lastReportedLocationStorageKey, buildBusinessLocationKey(latitude, longitude)),
+    setSecureItem(lastReportedAtStorageKey, String(now)),
+  ]);
+  return true;
+}
+
 export async function ensureBusinessBackgroundLocationTaskStarted(
   apiBaseUrl: string,
   session: PersistedBusinessTrackingSession,
@@ -171,9 +199,9 @@ export async function ensureBusinessBackgroundLocationTaskStarted(
   await Location.startLocationUpdatesAsync(BUSINESS_LOCATION_TASK_NAME, {
     accuracy: Location.Accuracy.BestForNavigation,
     activityType: Location.ActivityType.OtherNavigation,
-    deferredUpdatesDistance: 10,
+    deferredUpdatesDistance: 0,
     deferredUpdatesInterval: businessLocationReportIntervalMs,
-    distanceInterval: 10,
+    distanceInterval: 1,
     foregroundService: {
       killServiceOnDestroy: false,
       notificationBody: 'DiningDealz is keeping your business map pin current for guests.',
@@ -211,44 +239,29 @@ if (!TaskManager.isTaskDefined(BUSINESS_LOCATION_TASK_NAME)) {
 
     const taskData = data as { locations?: Location.LocationObject[] } | undefined;
     const locations = taskData?.locations;
-    const latestLocation = locations && locations.length > 0 ? locations[locations.length - 1] : null;
+    const latestLocation = getFreshestBusinessLocation(locations ?? []);
     if (!latestLocation) {
       return;
     }
 
-    const [apiBaseUrl, lastReportedLocationKey, lastReportedAt, session] = await Promise.all([
+    const [apiBaseUrl, session] = await Promise.all([
       getSecureItem(apiBaseUrlStorageKey),
-      getSecureItem(lastReportedLocationStorageKey),
-      getSecureItem(lastReportedAtStorageKey),
       loadPersistedBusinessTrackingSession(),
     ]);
     if (!apiBaseUrl || !session?.authToken) {
       return;
     }
 
-    const roundedLocationKey = buildBusinessLocationKey(
-      latestLocation.coords.latitude,
-      latestLocation.coords.longitude,
-    );
-    const now = Date.now();
-    const parsedLastReportedAt = lastReportedAt === null ? null : Number(lastReportedAt);
-    const previousReportedAt = parsedLastReportedAt !== null && Number.isFinite(parsedLastReportedAt)
-      ? parsedLastReportedAt
-      : null;
-    if (!shouldReportBusinessLocation({
-      latitude: latestLocation.coords.latitude,
-      longitude: latestLocation.coords.longitude,
-      lastReportedAt: previousReportedAt,
-      lastReportedLocationKey,
-      now,
-    })) {
+    if (AppState.currentState === 'active') {
       return;
     }
 
-    await Promise.all([
-      setSecureItem(lastReportedLocationStorageKey, roundedLocationKey),
-      setSecureItem(lastReportedAtStorageKey, String(now)),
-    ]);
+    if (!(await reserveBusinessLocationReport(
+      latestLocation.coords.latitude,
+      latestLocation.coords.longitude,
+    ))) {
+      return;
+    }
 
     await postBusinessLocationUpdate(apiBaseUrl, session.authToken, {
       accuracy: latestLocation.coords.accuracy ?? null,

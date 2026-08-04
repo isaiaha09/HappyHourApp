@@ -1,7 +1,13 @@
 export const businessLocationReportIntervalMs = 30_000;
 
 export function buildBusinessLocationKey(latitude: number, longitude: number) {
-  return `${latitude.toFixed(4)}:${longitude.toFixed(4)}`;
+  return `${latitude.toFixed(5)}:${longitude.toFixed(5)}`;
+}
+
+export function getFreshestBusinessLocation<T extends { timestamp: number }>(locations: T[]) {
+  return locations.reduce<T | null>((freshestLocation, location) => (
+    !freshestLocation || location.timestamp > freshestLocation.timestamp ? location : freshestLocation
+  ), null);
 }
 
 export function shouldReportBusinessLocation(input: {
