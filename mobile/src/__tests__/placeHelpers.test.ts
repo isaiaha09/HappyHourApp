@@ -1,4 +1,5 @@
-import { dedupeImageUrls } from '../placeHelpers';
+import { dedupeImageUrls, mergeLiveLocationUpdatesIntoPlaces } from '../placeHelpers';
+import type { PlaceListItem } from '../types';
 
 describe('dedupeImageUrls', () => {
   it('removes exact duplicate URLs', () => {
@@ -43,5 +44,43 @@ describe('dedupeImageUrls', () => {
       'https://dynl.mktgcdn.com/p/SRFYEpCKcfTxj96Y-SCWNfTfDZoRu505ffHDrwtf86Y/500x500',
       'https://dynl.mktgcdn.com/p/another-asset/500x500',
     ]);
+  });
+});
+
+describe('mergeLiveLocationUpdatesIntoPlaces', () => {
+  it('moves the rendered child location identified by the live endpoint slug', () => {
+    const place = {
+      latitude: 34.2,
+      longitude: -119.1,
+      locations: [{
+        latitude: 34.2,
+        longitude: -119.1,
+        slug: 'scoops-truck-ventura',
+      }],
+      slug: 'scoops-truck',
+    } as PlaceListItem;
+    const staticPlace = {
+      latitude: 34.3,
+      longitude: -119.2,
+      locations: [{
+        latitude: 34.3,
+        longitude: -119.2,
+        slug: 'static-cafe-ventura',
+      }],
+      slug: 'static-cafe',
+    } as PlaceListItem;
+
+    const result = mergeLiveLocationUpdatesIntoPlaces([place, staticPlace], [{
+      latitude: 34.2789,
+      longitude: -119.2914,
+      slug: 'scoops-truck-ventura',
+      updated_at: '2026-08-03T17:33:20Z',
+    }]);
+
+    expect(result[0].locations[0]).toEqual(expect.objectContaining({
+      latitude: 34.2789,
+      longitude: -119.2914,
+    }));
+    expect(result[1]).toBe(staticPlace);
   });
 });

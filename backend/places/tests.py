@@ -303,7 +303,7 @@ class PlaceApiTests(APITestCase):
 
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(len(response.data), 1)
-		self.assertEqual(response.data[0]['slug'], 'scoops-truck')
+		self.assertEqual(response.data[0]['slug'], 'scoops-truck-ventura')
 		self.assertEqual(response.data[0]['latitude'], 34.2789)
 		self.assertEqual(response.data[0]['longitude'], -119.2914)
 		self.assertTrue(bool(response.data[0]['updated_at']))

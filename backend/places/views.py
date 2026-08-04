@@ -379,7 +379,7 @@ class LiveLocationPlaceListView(generics.GenericAPIView):
 
 		payloads = [
 			{
-				'slug': snapshot.listing_slug,
+				'slug': slugify(f'{snapshot.name}-{snapshot.city}'),
 				'latitude': snapshot.tracked_location_latitude,
 				'longitude': snapshot.tracked_location_longitude,
 				'updated_at': snapshot.tracked_location_updated_at,
