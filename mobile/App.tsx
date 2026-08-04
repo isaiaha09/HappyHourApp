@@ -1331,6 +1331,12 @@ function AppScreen() {
           return;
         }
 
+        const backgroundPermission = await Location.getBackgroundPermissionsAsync();
+        if (backgroundPermission.granted) {
+          await ensureBusinessBackgroundLocationTaskStarted(apiBaseUrl, currentBusinessTrackingSession);
+          return;
+        }
+
         const reportLocation = async (coords: { latitude: number; longitude: number; accuracy?: number | null }) => {
           const activeTrackingSession = authenticatedSessionRef.current?.auth_token
             ? buildBusinessTrackingSession(authenticatedSessionRef.current)
@@ -1390,7 +1396,7 @@ function AppScreen() {
         };
 
         const initialPosition = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
+          accuracy: Location.Accuracy.BestForNavigation,
         });
         if (cancelled) {
           return;
@@ -1399,9 +1405,9 @@ function AppScreen() {
 
         const watcher = await Location.watchPositionAsync(
           {
-            accuracy: Location.Accuracy.Balanced,
-            distanceInterval: 75,
-            timeInterval: 60000,
+            accuracy: Location.Accuracy.BestForNavigation,
+            distanceInterval: 10,
+            timeInterval: liveMapPlacesRefreshIntervalMs,
           },
           (position) => {
             void reportLocation(position.coords);

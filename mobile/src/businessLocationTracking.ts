@@ -2,12 +2,20 @@ import { Platform } from 'react-native';
 import * as Location from 'expo-location';
 import * as SecureStore from 'expo-secure-store';
 import * as TaskManager from 'expo-task-manager';
+import {
+  buildBusinessLocationKey,
+  businessLocationReportIntervalMs,
+  shouldReportBusinessLocation,
+} from './businessLocationReporting';
 
 export const BUSINESS_LOCATION_TASK_NAME = 'diningdealz-business-location-updates';
 
 const trackingSessionStorageKey = 'diningdealz.business-location.session';
 const apiBaseUrlStorageKey = 'diningdealz.business-location.api-base-url';
 const lastReportedLocationStorageKey = 'diningdealz.business-location.last-rounded-key';
+const lastReportedAtStorageKey = 'diningdealz.business-location.last-reported-at';
+const trackingConfigVersionStorageKey = 'diningdealz.business-location.config-version';
+const trackingConfigVersion = '2';
 
 const secureStoreOptions: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
@@ -30,10 +38,6 @@ function buildApiUrl(baseUrl: string, path: string) {
   const normalizedBaseUrl = normalizeApiBaseUrl(baseUrl);
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   return `${normalizedBaseUrl}${normalizedPath}`;
-}
-
-function buildRoundedLocationKey(latitude: number, longitude: number) {
-  return `${latitude.toFixed(4)}:${longitude.toFixed(4)}`;
 }
 
 async function getSecureItem(key: string) {
@@ -129,11 +133,16 @@ export async function clearPersistedBusinessTrackingSession() {
     deleteSecureItem(trackingSessionStorageKey),
     deleteSecureItem(apiBaseUrlStorageKey),
     deleteSecureItem(lastReportedLocationStorageKey),
+    deleteSecureItem(lastReportedAtStorageKey),
+    deleteSecureItem(trackingConfigVersionStorageKey),
   ]);
 }
 
 export async function clearPersistedBusinessTrackingLastReportedLocation() {
-  await deleteSecureItem(lastReportedLocationStorageKey);
+  await Promise.all([
+    deleteSecureItem(lastReportedLocationStorageKey),
+    deleteSecureItem(lastReportedAtStorageKey),
+  ]);
 }
 
 export async function ensureBusinessBackgroundLocationTaskStarted(
@@ -151,15 +160,20 @@ export async function ensureBusinessBackgroundLocationTaskStarted(
   }
 
   if (await Location.hasStartedLocationUpdatesAsync(BUSINESS_LOCATION_TASK_NAME)) {
-    return;
+    const activeConfigVersion = await getSecureItem(trackingConfigVersionStorageKey);
+    if (activeConfigVersion === trackingConfigVersion) {
+      return;
+    }
+
+    await Location.stopLocationUpdatesAsync(BUSINESS_LOCATION_TASK_NAME);
   }
 
   await Location.startLocationUpdatesAsync(BUSINESS_LOCATION_TASK_NAME, {
-    accuracy: Location.Accuracy.Balanced,
+    accuracy: Location.Accuracy.BestForNavigation,
     activityType: Location.ActivityType.OtherNavigation,
-    deferredUpdatesDistance: 100,
-    deferredUpdatesInterval: 60_000,
-    distanceInterval: 75,
+    deferredUpdatesDistance: 10,
+    deferredUpdatesInterval: businessLocationReportIntervalMs,
+    distanceInterval: 10,
     foregroundService: {
       killServiceOnDestroy: false,
       notificationBody: 'DiningDealz is keeping your business map pin current for guests.',
@@ -168,8 +182,9 @@ export async function ensureBusinessBackgroundLocationTaskStarted(
     },
     pausesUpdatesAutomatically: false,
     showsBackgroundLocationIndicator: true,
-    timeInterval: 60_000,
+    timeInterval: businessLocationReportIntervalMs,
   });
+  await setSecureItem(trackingConfigVersionStorageKey, trackingConfigVersion);
 }
 
 export async function stopBusinessBackgroundLocationTask(options?: { clearPersistedSession?: boolean }) {
@@ -201,28 +216,44 @@ if (!TaskManager.isTaskDefined(BUSINESS_LOCATION_TASK_NAME)) {
       return;
     }
 
-    const [apiBaseUrl, lastReportedLocationKey, session] = await Promise.all([
+    const [apiBaseUrl, lastReportedLocationKey, lastReportedAt, session] = await Promise.all([
       getSecureItem(apiBaseUrlStorageKey),
       getSecureItem(lastReportedLocationStorageKey),
+      getSecureItem(lastReportedAtStorageKey),
       loadPersistedBusinessTrackingSession(),
     ]);
     if (!apiBaseUrl || !session?.authToken) {
       return;
     }
 
-    const roundedLocationKey = buildRoundedLocationKey(
+    const roundedLocationKey = buildBusinessLocationKey(
       latestLocation.coords.latitude,
       latestLocation.coords.longitude,
     );
-    if (roundedLocationKey === lastReportedLocationKey) {
+    const now = Date.now();
+    const parsedLastReportedAt = lastReportedAt === null ? null : Number(lastReportedAt);
+    const previousReportedAt = parsedLastReportedAt !== null && Number.isFinite(parsedLastReportedAt)
+      ? parsedLastReportedAt
+      : null;
+    if (!shouldReportBusinessLocation({
+      latitude: latestLocation.coords.latitude,
+      longitude: latestLocation.coords.longitude,
+      lastReportedAt: previousReportedAt,
+      lastReportedLocationKey,
+      now,
+    })) {
       return;
     }
+
+    await Promise.all([
+      setSecureItem(lastReportedLocationStorageKey, roundedLocationKey),
+      setSecureItem(lastReportedAtStorageKey, String(now)),
+    ]);
 
     await postBusinessLocationUpdate(apiBaseUrl, session.authToken, {
       accuracy: latestLocation.coords.accuracy ?? null,
       latitude: latestLocation.coords.latitude,
       longitude: latestLocation.coords.longitude,
     });
-    await setSecureItem(lastReportedLocationStorageKey, roundedLocationKey);
   });
 }
