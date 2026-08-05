@@ -1,4 +1,4 @@
-import { dedupeImageUrls, mergeLiveLocationUpdatesIntoPlaces } from '../placeHelpers';
+import { dedupeImageUrls, mergeLiveLocationUpdatesIntoPlaces, stripLiveLocationCoordinatesFromPlaces } from '../placeHelpers';
 import type { PlaceListItem } from '../types';
 
 describe('dedupeImageUrls', () => {
@@ -156,5 +156,46 @@ describe('mergeLiveLocationUpdatesIntoPlaces', () => {
       latitude: 34.2789,
       longitude: -119.2914,
     }));
+  });
+});
+
+describe('stripLiveLocationCoordinatesFromPlaces', () => {
+  it('removes cached coordinates for live-location businesses while preserving static places', () => {
+    const mobilePlace = {
+      latitude: 34.2,
+      longitude: -119.1,
+      locations: [{
+        latitude: 34.2,
+        longitude: -119.1,
+        slug: 'scoops-truck-ventura',
+        venue_type: 'mobile',
+      }],
+      slug: 'scoops-truck',
+      venue_type: 'mobile',
+    } as PlaceListItem;
+    const staticPlace = {
+      latitude: 34.3,
+      longitude: -119.2,
+      locations: [{
+        latitude: 34.3,
+        longitude: -119.2,
+        slug: 'static-cafe-ventura',
+        venue_type: 'cafe',
+      }],
+      slug: 'static-cafe',
+      venue_type: 'cafe',
+    } as PlaceListItem;
+
+    const result = stripLiveLocationCoordinatesFromPlaces([mobilePlace, staticPlace]);
+
+    expect(result[0]).toEqual(expect.objectContaining({
+      latitude: null,
+      longitude: null,
+    }));
+    expect(result[0].locations[0]).toEqual(expect.objectContaining({
+      latitude: null,
+      longitude: null,
+    }));
+    expect(result[1]).toBe(staticPlace);
   });
 });

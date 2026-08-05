@@ -1,6 +1,8 @@
 import Constants from 'expo-constants';
 import { NativeModules } from 'react-native';
 
+import { stripLiveLocationCoordinatesFromPlaces } from './placeHelpers';
+
 import type {
   BusinessAttachmentDraft,
   BusinessAttachmentBuckets,
@@ -120,7 +122,9 @@ export async function fetchPlaces(baseUrl: string, city: string, hasDeals?: bool
   }
 
   const query = queryParams.size ? `?${queryParams.toString()}` : '';
-  const nextPlaces = await fetchAllPaginatedJson<PlaceListItem>(baseUrl, `/places/${query}`);
+  const nextPlaces = stripLiveLocationCoordinatesFromPlaces(
+    await fetchAllPaginatedJson<PlaceListItem>(baseUrl, `/places/${query}`),
+  );
   placeCache.set(cacheKey, {
     expiresAt: now + placeCacheTtlMs,
     places: nextPlaces,
