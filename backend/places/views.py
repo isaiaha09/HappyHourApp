@@ -383,23 +383,25 @@ class LiveLocationPlaceListView(generics.GenericAPIView):
 			)
 			.values_list('claim__listing_snapshot_id', flat=True)
 		)
+		disabled_live_location_slugs = {
+			live_slug
+			for snapshot in queryset.filter(pk__in=disabled_snapshot_ids)
+			for live_slug in self._get_live_location_slugs(snapshot)
+		}
 
 		payloads = []
 		seen_slugs = set()
 		for snapshot in queryset:
-			is_enabled = snapshot.pk not in disabled_snapshot_ids
-			latitude = snapshot.tracked_location_latitude if is_enabled else None
-			longitude = snapshot.tracked_location_longitude if is_enabled else None
-			updated_at = snapshot.tracked_location_updated_at if is_enabled else None
 			for live_slug in self._get_live_location_slugs(snapshot):
 				if live_slug in seen_slugs:
 					continue
 				seen_slugs.add(live_slug)
+				is_enabled = snapshot.pk not in disabled_snapshot_ids and live_slug not in disabled_live_location_slugs
 				payloads.append({
 					'slug': live_slug,
-					'latitude': latitude,
-					'longitude': longitude,
-					'updated_at': updated_at,
+					'latitude': snapshot.tracked_location_latitude if is_enabled else None,
+					'longitude': snapshot.tracked_location_longitude if is_enabled else None,
+					'updated_at': snapshot.tracked_location_updated_at if is_enabled else None,
 				})
 		serializer = self.get_serializer(payloads, many=True)
 		return Response(serializer.data)

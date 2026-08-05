@@ -385,6 +385,41 @@ class PlaceApiTests(APITestCase):
 		self.assertIsNone(payload_by_slug['approved-scoops-truck']['latitude'])
 		self.assertIsNone(payload_by_slug['approved-scoops-truck']['longitude'])
 
+	def test_live_location_endpoint_disables_duplicate_snapshot_aliases(self):
+		ListingSnapshot.objects.create(
+			name='Business Example',
+			listing_slug='business-example',
+			city='',
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+			tracked_location_latitude=34.2123825,
+			tracked_location_longitude=-119.1651275,
+			tracked_location_updated_at=timezone.now(),
+		)
+		user = User.objects.create_user(username='disabled_duplicate_owner', email='disabled-duplicate@example.com', password='test-pass-123')
+		AccountProfile.objects.create(user=user, business_location_tracking_enabled=False)
+		owned_snapshot = ListingSnapshot.objects.create(
+			name='Business Example',
+			listing_slug='business-example',
+			city='',
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=user,
+			listing_snapshot=owned_snapshot,
+			contact_name='Mobile Owner',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(user=user, claim=claim, is_active=True)
+
+		response = self.client.get(reverse('place-live-locations'), {'city': 'all'})
+
+		self.assertEqual(response.status_code, 200)
+		payload_by_slug = {payload['slug']: payload for payload in response.data}
+		self.assertIsNone(payload_by_slug['business-example']['latitude'])
+		self.assertIsNone(payload_by_slug['business-example']['longitude'])
+
 	def test_deal_list_endpoint(self):
 		with patch('places.views.get_source_deal_payloads', return_value=self.place_payload['deals']):
 			response = self.client.get(reverse('deal-list'))
