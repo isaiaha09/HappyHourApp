@@ -46,6 +46,29 @@ type PlaceCacheEntry = {
 
 const placeCache = new Map<string, PlaceCacheEntry>();
 
+function isLiveLocationBusiness(place: PlaceListItem) {
+  return place.venue_type === 'mobile' || place.serves_multiple_areas === true;
+}
+
+function stripLiveLocationCoordinatesFromPlaceCache(places: PlaceListItem[]) {
+  return places.map((place) => {
+    if (!isLiveLocationBusiness(place)) {
+      return place;
+    }
+
+    return {
+      ...place,
+      latitude: null,
+      longitude: null,
+      locations: place.locations.map((location) => ({
+        ...location,
+        latitude: null,
+        longitude: null,
+      })),
+    };
+  });
+}
+
 const businessAttachmentFieldNames: Record<BusinessAttachmentKind, string> = {
   social_media: 'social_media_attachments',
   business_registration: 'business_registration_attachments',
@@ -120,7 +143,9 @@ export async function fetchPlaces(baseUrl: string, city: string, hasDeals?: bool
   }
 
   const query = queryParams.size ? `?${queryParams.toString()}` : '';
-  const nextPlaces = await fetchAllPaginatedJson<PlaceListItem>(baseUrl, `/places/${query}`);
+  const nextPlaces = stripLiveLocationCoordinatesFromPlaceCache(
+    await fetchAllPaginatedJson<PlaceListItem>(baseUrl, `/places/${query}`),
+  );
   placeCache.set(cacheKey, {
     expiresAt: now + placeCacheTtlMs,
     places: nextPlaces,
