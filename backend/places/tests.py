@@ -3718,6 +3718,54 @@ class SourceListingIdentityTests(TestCase):
 		self.assertIsNone(second_payloads[0]['longitude'])
 
 	@patch('places.services.source_listings.load_source_records')
+	def test_disabled_mobile_business_suppresses_matching_source_coordinates_by_name(self, mock_load_source_records):
+		mock_load_source_records.return_value = [
+			ImportedPlace(
+				name='Scoops Truck',
+				city=City.VENTURA,
+				venue_type=VenueType.FAST_FOOD,
+				address_line_1='100 Static Source Way',
+				state='CA',
+				postal_code='93001',
+				latitude=34.2000,
+				longitude=-119.2000,
+				external_id='unmatched-source-scoops',
+				source_name='business_websites',
+				source_url='https://example.com/source-scoops',
+			),
+		]
+		user = User.objects.create_user(username='disabled_name_owner', email='disabled-name-owner@example.com', password='test-pass-123')
+		AccountProfile.objects.create(user=user, business_location_tracking_enabled=False)
+		snapshot = ListingSnapshot.objects.create(
+			name='Scoops Truck',
+			listing_slug='approved-scoops-truck',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+			state='CA',
+			postal_code='93001',
+			external_id='different-claim-source-id',
+			source_name='business_websites',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=user,
+			listing_snapshot=snapshot,
+			contact_name='Mobile Owner',
+			work_email='owner@scoops.example.com',
+			verification_summary='I operate this truck.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(user=user, claim=claim, is_active=True)
+
+		payloads = get_source_place_payloads(resolve_missing_coordinates=False)
+		payload_by_slug = {payload['slug']: payload for payload in payloads}
+
+		self.assertIsNone(payload_by_slug['scoops-truck']['latitude'])
+		self.assertIsNone(payload_by_slug['scoops-truck']['longitude'])
+		self.assertIsNone(payload_by_slug['scoops-truck']['locations'][0]['latitude'])
+		self.assertIsNone(payload_by_slug['scoops-truck']['locations'][0]['longitude'])
+
+	@patch('places.services.source_listings.load_source_records')
 	def test_disabled_claimed_mobile_business_replaces_matching_source_payload(self, mock_load_source_records):
 		mock_load_source_records.return_value = [
 			ImportedPlace(

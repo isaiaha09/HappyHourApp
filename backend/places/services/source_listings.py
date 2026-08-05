@@ -174,6 +174,7 @@ def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_
 	payloads_by_slug = {}
 	payload_slugs_by_source_identity = {}
 	payload_slugs_by_location_identity = {}
+	disabled_live_location_names = _get_disabled_live_location_claim_names()
 	snapshot_overrides_by_slug = _get_listing_snapshot_override_payloads()
 	claimed_listing_slugs = _get_claimed_listing_slugs()
 	for place_records in _group_source_records(load_source_records(source_name=source_name)).values():
@@ -210,6 +211,8 @@ def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_
 					)
 			else:
 				_apply_multi_location_snapshot_overrides(payload, place_records, snapshot_overrides_by_slug)
+		if _payload_matches_disabled_live_location_claim(payload, place_records, disabled_live_location_names):
+			_clear_payload_coordinates(payload)
 		payload['is_claimed'] = is_claimed
 		payload['is_informal'] = False
 		payloads_by_slug[payload['slug']] = payload
@@ -702,6 +705,41 @@ def _get_active_business_claims():
 			continue
 		seen_snapshot_ids.add(snapshot.pk)
 		yield claim
+
+
+def _get_disabled_live_location_claim_names():
+	disabled_names = set()
+	for claim in _get_active_business_claims():
+		snapshot = claim.listing_snapshot
+		if snapshot.venue_type != VenueType.MOBILE and not snapshot.serves_multiple_areas:
+			continue
+		profile = getattr(claim.claimant, 'account_profile', None)
+		if getattr(profile, 'business_location_tracking_enabled', True):
+			continue
+		normalized_name = _normalize_location_text(snapshot.name)
+		if normalized_name:
+			disabled_names.add(normalized_name)
+	return disabled_names
+
+
+def _payload_matches_disabled_live_location_claim(payload, place_records, disabled_live_location_names):
+	if not disabled_live_location_names:
+		return False
+	if _normalize_location_text(payload.get('name')) in disabled_live_location_names:
+		return True
+	return any(
+		_normalize_location_text(_profile_name_for_record(place_record)) in disabled_live_location_names
+		or _normalize_location_text(getattr(place_record, 'name', '')) in disabled_live_location_names
+		for place_record in place_records
+	)
+
+
+def _clear_payload_coordinates(payload):
+	payload['latitude'] = None
+	payload['longitude'] = None
+	for location in payload.get('locations', []):
+		location['latitude'] = None
+		location['longitude'] = None
 
 
 
