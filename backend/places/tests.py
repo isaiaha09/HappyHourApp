@@ -329,6 +329,71 @@ class PlaceApiTests(APITestCase):
 		self.assertEqual(response.data[0]['longitude'], -119.2914)
 		self.assertTrue(bool(response.data[0]['updated_at']))
 
+	def test_live_location_endpoint_disables_duplicate_snapshot_aliases(self):
+		disabled_user = User.objects.create_user(username='duplicate_hidden_owner', email='duplicate-hidden@example.com', password='test-pass-123')
+		AccountProfile.objects.create(user=disabled_user, business_location_tracking_enabled=False)
+		ListingSnapshot.objects.create(
+			name='Scoops Truck',
+			listing_slug='scoops-truck-legacy',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+			tracked_location_latitude=34.2789,
+			tracked_location_longitude=-119.2914,
+			tracked_location_updated_at=timezone.now(),
+		)
+		disabled_snapshot = ListingSnapshot.objects.create(
+			name='Scoops Truck',
+			listing_slug='scoops-truck',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+			tracked_location_latitude=34.2801,
+			tracked_location_longitude=-119.2921,
+			tracked_location_updated_at=timezone.now(),
+		)
+		disabled_claim = BusinessClaim.objects.create(
+			claimant=disabled_user,
+			listing_snapshot=disabled_snapshot,
+			contact_name='Duplicate Hidden Owner',
+			work_email='owner@duplicate-hidden.example.com',
+			verification_summary='I operate this truck.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(user=disabled_user, claim=disabled_claim, is_active=True)
+
+		response = self.client.get(reverse('place-live-locations'), {'city': City.VENTURA})
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data, [])
+
+	def test_live_location_endpoint_disables_approved_claim_without_active_membership(self):
+		disabled_user = User.objects.create_user(username='membershipless_hidden_owner', email='membershipless-hidden@example.com', password='test-pass-123')
+		AccountProfile.objects.create(user=disabled_user, business_location_tracking_enabled=False)
+		disabled_snapshot = ListingSnapshot.objects.create(
+			name='Membershipless Hidden Truck',
+			listing_slug='membershipless-hidden-truck',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+			tracked_location_latitude=34.2199,
+			tracked_location_longitude=-119.0401,
+			tracked_location_updated_at=timezone.now(),
+		)
+		BusinessClaim.objects.create(
+			claimant=disabled_user,
+			listing_snapshot=disabled_snapshot,
+			contact_name='Membershipless Hidden Owner',
+			work_email='owner@membershipless-hidden.example.com',
+			verification_summary='I operate this truck.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+
+		response = self.client.get(reverse('place-live-locations'), {'city': City.VENTURA})
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data, [])
+
 	def test_deal_list_endpoint(self):
 		with patch('places.views.get_source_deal_payloads', return_value=self.place_payload['deals']):
 			response = self.client.get(reverse('deal-list'))
@@ -3628,11 +3693,10 @@ class SourceListingIdentityTests(TestCase):
 		self.assertTrue(payloads[0]['is_verified'])
 
 	@patch('places.services.source_listings.load_source_records')
-	@override_settings(SOURCE_PLACE_PAYLOAD_CACHE_TIMEOUT=60)
 	def test_disabled_mobile_business_tracking_suppresses_public_map_coordinates(self, mock_load_source_records):
 		mock_load_source_records.return_value = []
 		user = User.objects.create_user(username='hidden_mobile_owner', email='hidden-owner@example.com', password='test-pass-123')
-		profile = AccountProfile.objects.create(user=user, business_location_tracking_enabled=True)
+		AccountProfile.objects.create(user=user, business_location_tracking_enabled=False)
 		snapshot = ListingSnapshot.objects.create(
 			name='Hidden Scoops Truck',
 			listing_slug='hidden-scoops-truck',
@@ -3652,15 +3716,43 @@ class SourceListingIdentityTests(TestCase):
 		)
 		BusinessMembership.objects.create(user=user, claim=claim, is_active=True)
 
-		cached_payloads = get_source_place_payloads(resolve_missing_coordinates=False)
-		self.assertEqual(cached_payloads[0]['latitude'], 34.2789)
-		self.assertEqual(cached_payloads[0]['locations'][0]['latitude'], 34.2789)
-
-		AccountProfile.objects.filter(pk=profile.pk).update(business_location_tracking_enabled=False)
 		payloads = get_source_place_payloads(resolve_missing_coordinates=False)
 
 		self.assertEqual(len(payloads), 1)
 		self.assertEqual(payloads[0]['slug'], 'hidden-scoops-truck')
+		self.assertIsNone(payloads[0]['latitude'])
+		self.assertIsNone(payloads[0]['longitude'])
+		self.assertIsNone(payloads[0]['locations'][0]['latitude'])
+		self.assertIsNone(payloads[0]['locations'][0]['longitude'])
+		self.assertTrue(payloads[0]['is_verified'])
+
+	@patch('places.services.source_listings.load_source_records')
+	def test_disabled_mobile_business_tracking_suppresses_public_map_coordinates_without_active_membership(self, mock_load_source_records):
+		mock_load_source_records.return_value = []
+		user = User.objects.create_user(username='hidden_mobile_owner_no_membership', email='hidden-owner-no-membership@example.com', password='test-pass-123')
+		AccountProfile.objects.create(user=user, business_location_tracking_enabled=False)
+		snapshot = ListingSnapshot.objects.create(
+			name='Hidden No Membership Truck',
+			listing_slug='hidden-no-membership-truck',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+			tracked_location_latitude=34.2789,
+			tracked_location_longitude=-119.2914,
+		)
+		BusinessClaim.objects.create(
+			claimant=user,
+			listing_snapshot=snapshot,
+			contact_name='Mobile Owner',
+			work_email='owner@hidden-no-membership.example.com',
+			verification_summary='I operate this truck.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+
+		payloads = get_source_place_payloads(resolve_missing_coordinates=False)
+
+		self.assertEqual(len(payloads), 1)
+		self.assertEqual(payloads[0]['slug'], 'hidden-no-membership-truck')
 		self.assertIsNone(payloads[0]['latitude'])
 		self.assertIsNone(payloads[0]['longitude'])
 		self.assertIsNone(payloads[0]['locations'][0]['latitude'])
