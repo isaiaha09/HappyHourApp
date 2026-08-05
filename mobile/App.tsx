@@ -289,17 +289,6 @@ function stripLiveLocationCoordinatesFromPlaces(places: PlaceListItem[]) {
   return changed ? nextPlaces : places;
 }
 
-function getApprovedBusinessSlugs(session: SignupResponse | null) {
-  const slugs = new Set<string>();
-  for (const business of session?.approved_businesses ?? []) {
-    slugs.add(business.slug);
-    if (business.public_slug) {
-      slugs.add(business.public_slug);
-    }
-  }
-  return slugs;
-}
-
 type InteractiveBackSwipeConfig = {
   kind: 'onboarding' | 'browse-profile' | 'guest-browse' | 'main-shell';
   nextScreen: AppScreenMode;
@@ -914,25 +903,7 @@ function AppScreen() {
         : 'dark')
     : 'light';
 
-  const disabledBusinessLocationSlugs = useMemo(() => {
-    if (
-      authenticatedSession?.portal !== 'business'
-      || (
-        authenticatedSession.business_location_tracking_enabled !== false
-        && pendingBusinessLocationTrackingEnabled !== false
-      )
-    ) {
-      return new Set<string>();
-    }
-
-    return getApprovedBusinessSlugs(authenticatedSession);
-  }, [authenticatedSession?.approved_businesses, authenticatedSession?.business_location_tracking_enabled, authenticatedSession?.portal, pendingBusinessLocationTrackingEnabled]);
-
-  const visiblePlaces = useMemo(() => (
-    disabledBusinessLocationSlugs.size > 0
-      ? places.map((place) => clearTrackedCoordinatesForBusiness(place, disabledBusinessLocationSlugs))
-      : places
-  ), [disabledBusinessLocationSlugs, places]);
+  const visiblePlaces = places;
 
   const filteredPlaces = useMemo(() => getFilteredPlaces(visiblePlaces, {
     confirmedDealsOnly,
@@ -981,11 +952,7 @@ function AppScreen() {
       ? mappedPlaces
       : renderedMappedPlaces
     : [];
-  const displayedMapPlaces = useMemo(() => (
-    disabledBusinessLocationSlugs.size > 0
-      ? displayedMapPlacesSource.filter((place) => !disabledBusinessLocationSlugs.has(place.slug))
-      : displayedMapPlacesSource
-  ), [disabledBusinessLocationSlugs, displayedMapPlacesSource]);
+  const displayedMapPlaces = displayedMapPlacesSource;
   const unplacedPlaceCount = useMemo(() => filteredPlaces.filter((place) => (
     !getPlaceLocations(place).some((location) => location.latitude !== null && location.longitude !== null)
   )).length, [filteredPlaces]);
@@ -1419,39 +1386,6 @@ function AppScreen() {
           return;
         }
 
-        const updateLocalBusinessLocation = (coords: { latitude: number; longitude: number }) => {
-          const activeTrackingSession = authenticatedSessionRef.current?.auth_token
-            ? buildBusinessTrackingSession(authenticatedSessionRef.current)
-            : currentBusinessTrackingSession;
-          if (!activeTrackingSession?.authToken) {
-            return;
-          }
-
-          const approvedBusinessSlugs = new Set(activeTrackingSession.approvedBusinessSlugs);
-          if (approvedBusinessSlugs.size === 0 || cancelled) {
-            return;
-          }
-
-          setPlaces((current) => current.map((place) => applyTrackedCoordinatesToBusiness(
-            place,
-            approvedBusinessSlugs,
-            coords.latitude,
-            coords.longitude,
-          )));
-          setProfilePlaces((current) => current.map((place) => applyTrackedCoordinatesToBusiness(
-            place,
-            approvedBusinessSlugs,
-            coords.latitude,
-            coords.longitude,
-          )));
-          setSelectedPlace((current) => current ? applyTrackedCoordinatesToBusinessDetail(
-            current,
-            approvedBusinessSlugs,
-            coords.latitude,
-            coords.longitude,
-          ) : current);
-        };
-
         const reportLocation = async (coords: { latitude: number; longitude: number; accuracy?: number | null }) => {
           const activeTrackingSession = authenticatedSessionRef.current?.auth_token
             ? buildBusinessTrackingSession(authenticatedSessionRef.current)
@@ -1499,7 +1433,6 @@ function AppScreen() {
           return;
         }
         latestBusinessPosition = initialPosition;
-        updateLocalBusinessLocation(initialPosition.coords);
         void reportLocation(initialPosition.coords);
 
         const watcher = await Location.watchPositionAsync(
@@ -1510,7 +1443,6 @@ function AppScreen() {
           },
           (position) => {
             latestBusinessPosition = position;
-            updateLocalBusinessLocation(position.coords);
           },
         );
 
@@ -1591,11 +1523,7 @@ function AppScreen() {
       : Math.min(height * 0.58, keyboardHeight > 0 ? 380 : 500),
     220,
   );
-  const visibleProfilePlaces = useMemo(() => (
-    disabledBusinessLocationSlugs.size > 0
-      ? profilePlaces.map((place) => clearTrackedCoordinatesForBusiness(place, disabledBusinessLocationSlugs))
-      : profilePlaces
-  ), [disabledBusinessLocationSlugs, profilePlaces]);
+  const visibleProfilePlaces = profilePlaces;
   const availableProfilePlaces = visibleProfilePlaces.length ? visibleProfilePlaces : visiblePlaces;
 
   function clearShowMoreMapResultsTimer() {
@@ -5728,8 +5656,6 @@ function AppScreen() {
     }
 
     const currentAuthToken = authenticatedSession.auth_token;
-    const approvedBusinessSlugs = getApprovedBusinessSlugs(authenticatedSession);
-
     setSettingsSubmittingAction('business-location');
     setPendingBusinessLocationTrackingEnabled(enabled);
     setProfileErrorMessage(null);
@@ -5776,14 +5702,11 @@ function AppScreen() {
       } else {
         await stopBusinessBackgroundLocationTask();
       }
-      if (!enabled && approvedBusinessSlugs.size > 0) {
+      if (!enabled) {
         clearPlacesCache();
         allPlacesCacheRef.current = null;
-        setPlaces((current) => current.map((place) => clearTrackedCoordinatesForBusiness(place, approvedBusinessSlugs)));
-        setProfilePlaces((current) => current.map((place) => clearTrackedCoordinatesForBusiness(place, approvedBusinessSlugs)));
-        setRenderedMappedPlaces((current) => current.filter((place) => !approvedBusinessSlugs.has(place.slug)));
+        setRenderedMappedPlaces([]);
         setRenderedMappedPlaceKey('');
-        setSelectedPlace((current) => current ? clearTrackedCoordinatesForBusinessDetail(current, approvedBusinessSlugs) : current);
         setReloadCount((current) => current + 1);
       }
       setProfileMessage(enabled
@@ -8041,88 +7964,6 @@ function getDistanceInMiles(
     * Math.sin(longitudeDeltaRadians / 2) ** 2;
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return earthRadiusMiles * c;
-}
-
-function clearTrackedCoordinatesForBusiness(place: PlaceListItem, approvedBusinessSlugs: Set<string>): PlaceListItem {
-  if (!approvedBusinessSlugs.has(place.slug)) {
-    return place;
-  }
-
-  const nextLocations = getPlaceLocations(place).map((location) => ({
-    ...location,
-    latitude: null,
-    longitude: null,
-  }));
-
-  return {
-    ...place,
-    latitude: null,
-    longitude: null,
-    locations: nextLocations,
-  };
-}
-
-function clearTrackedCoordinatesForBusinessDetail(place: PlaceDetail, approvedBusinessSlugs: Set<string>): PlaceDetail {
-  if (!approvedBusinessSlugs.has(place.slug)) {
-    return place;
-  }
-
-  return {
-    ...place,
-    latitude: null,
-    longitude: null,
-    locations: place.locations.map((location) => ({
-      ...location,
-      latitude: null,
-      longitude: null,
-    })),
-  };
-}
-
-function applyTrackedCoordinatesToBusiness(
-  place: PlaceListItem,
-  approvedBusinessSlugs: Set<string>,
-  latitude: number,
-  longitude: number,
-): PlaceListItem {
-  if (!approvedBusinessSlugs.has(place.slug)) {
-    return place;
-  }
-
-  const nextLocations = getPlaceLocations(place).map((location) => ({
-    ...location,
-    latitude,
-    longitude,
-  }));
-
-  return {
-    ...place,
-    latitude,
-    longitude,
-    locations: nextLocations,
-  };
-}
-
-function applyTrackedCoordinatesToBusinessDetail(
-  place: PlaceDetail,
-  approvedBusinessSlugs: Set<string>,
-  latitude: number,
-  longitude: number,
-): PlaceDetail {
-  if (!approvedBusinessSlugs.has(place.slug)) {
-    return place;
-  }
-
-  return {
-    ...place,
-    latitude,
-    longitude,
-    locations: place.locations.map((location) => ({
-      ...location,
-      latitude,
-      longitude,
-    })),
-  };
 }
 
 function toRadians(value: number) {
