@@ -7529,6 +7529,70 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertIsNone(payload['locations'][0]['latitude'])
 		self.assertIsNone(payload['locations'][0]['longitude'])
 
+	def test_business_location_update_invalidates_public_place_cache(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Scoops Truck',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@scoops.example.com',
+			employer_address='',
+			verification_summary='I operate the truck.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+
+		with patch('places.views.invalidate_source_place_payload_cache') as mock_invalidate_source_place_payload_cache:
+			response = self.client.post(
+				reverse('profile-business-location'),
+				{'latitude': 34.2812, 'longitude': -119.2944, 'accuracy_meters': 35.5},
+				format='json',
+				**self.auth_headers(),
+			)
+
+		self.assertEqual(response.status_code, 200)
+		mock_invalidate_source_place_payload_cache.assert_called_once_with(invalidate_all=True)
+
+	def test_business_location_preference_invalidates_public_place_cache(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Scoops Truck',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+			tracked_location_latitude=34.2812,
+			tracked_location_longitude=-119.2944,
+			tracked_location_accuracy_meters=35.5,
+			tracked_location_updated_at=timezone.now(),
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@scoops.example.com',
+			employer_address='',
+			verification_summary='I operate the truck.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+
+		with patch('places.views.invalidate_source_place_payload_cache') as mock_invalidate_source_place_payload_cache:
+			response = self.client.post(
+				reverse('profile-business-location-preference'),
+				{'enabled': False},
+				format='json',
+				**self.auth_headers(),
+			)
+
+		self.assertEqual(response.status_code, 200)
+		mock_invalidate_source_place_payload_cache.assert_called_once_with(invalidate_all=True)
+
 	def test_resend_verification_email_sends_message(self):
 		response = self.client.post(reverse('profile-resend-verification'), {}, format='json', **self.auth_headers())
 

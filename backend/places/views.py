@@ -65,7 +65,7 @@ from .services.favorite_notifications import create_notifications_for_business_p
 from .services.direct_message_push import send_push_notifications_for_direct_message
 from .services.home_feed import get_feed_interval, get_feed_queryset, get_organic_page_size, get_ranked_campaigns, get_requested_feed_page_size, mix_feed_items, record_campaign_served
 from .services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
-from .services.source_listings import get_disabled_live_location_slugs, get_source_deal_payloads, get_source_place_payload, get_source_place_payloads, is_live_location_tracking_enabled_for_snapshot, load_source_records
+from .services.source_listings import get_disabled_live_location_slugs, get_source_deal_payloads, get_source_place_payload, get_source_place_payloads, invalidate_source_place_payload_cache, is_live_location_tracking_enabled_for_snapshot, load_source_records
 from .throttles import DirectMessageSendRateThrottle, EmailVerificationRateThrottle, EmailVerificationResendRateThrottle, LoginRateThrottle, PasswordRecoveryRateThrottle, SignupRateThrottle, SupportContactRateThrottle, UserMutationRateThrottle
 
 
@@ -889,6 +889,7 @@ class BusinessLocationUpdateView(generics.GenericAPIView):
 		snapshot.tracked_location_accuracy_meters = serializer.validated_data.get('accuracy_meters')
 		snapshot.tracked_location_updated_at = timezone.now()
 		snapshot.save(update_fields=['tracked_location_latitude', 'tracked_location_longitude', 'tracked_location_accuracy_meters', 'tracked_location_updated_at', 'updated_at'])
+		invalidate_source_place_payload_cache(invalidate_all=True)
 
 		return Response(build_account_response(request.user, 'business', token=request.auth))
 
@@ -921,6 +922,8 @@ class BusinessLocationTrackingPreferenceView(generics.GenericAPIView):
 			snapshot.tracked_location_accuracy_meters = None
 			snapshot.tracked_location_updated_at = None
 			snapshot.save(update_fields=['tracked_location_latitude', 'tracked_location_longitude', 'tracked_location_accuracy_meters', 'tracked_location_updated_at', 'updated_at'])
+
+		invalidate_source_place_payload_cache(invalidate_all=True)
 
 		return Response(build_account_response(request.user, 'business', token=request.auth))
 
