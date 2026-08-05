@@ -11,7 +11,7 @@ from django.utils.text import slugify
 
 from django.db.models import Q
 
-from places.models import BusinessClaim, BusinessMembership, City, DealType, ListingSnapshot, VenueType, Weekday
+from places.models import AccountProfile, BusinessClaim, BusinessMembership, City, DealType, ListingSnapshot, VenueType, Weekday
 from places.services.business_profile_overrides import (
 	build_deal_payloads,
 	build_deal_weekdays,
@@ -658,7 +658,7 @@ def _build_manual_admin_snapshot_payload(snapshot, resolve_missing_coordinates=T
 def _get_active_business_claims():
 	memberships = (
 		BusinessMembership.objects
-		.select_related('claim__listing_snapshot')
+		.select_related('claim__listing_snapshot', 'user__account_profile')
 		.filter(is_active=True)
 		.order_by('-approved_at', '-created_at')
 	)
@@ -669,6 +669,7 @@ def _get_active_business_claims():
 		if snapshot.pk in seen_snapshot_ids:
 			continue
 		seen_snapshot_ids.add(snapshot.pk)
+		claim._active_business_membership = membership
 		yield claim
 
 	approved_claims_without_active_membership = (
@@ -684,6 +685,41 @@ def _get_active_business_claims():
 			continue
 		seen_snapshot_ids.add(snapshot.pk)
 		yield claim
+
+
+def _is_business_location_tracking_enabled_for_claim(claim):
+	membership = getattr(claim, '_active_business_membership', None)
+	if membership is None:
+		try:
+			membership = claim.membership
+		except BusinessMembership.DoesNotExist:
+			return True
+
+	if not membership.is_active:
+		return True
+
+	try:
+		return bool(membership.user.account_profile.business_location_tracking_enabled)
+	except AccountProfile.DoesNotExist:
+		return True
+
+
+def is_live_location_tracking_enabled_for_snapshot(snapshot):
+	active_memberships = (
+		BusinessMembership.objects
+		.select_related('user__account_profile')
+		.filter(claim__listing_snapshot=snapshot, is_active=True)
+	)
+	has_active_membership = False
+	for membership in active_memberships:
+		has_active_membership = True
+		try:
+			if membership.user.account_profile.business_location_tracking_enabled:
+				return True
+		except AccountProfile.DoesNotExist:
+			return True
+
+	return not has_active_membership
 
 
 
@@ -719,6 +755,10 @@ def _build_claim_override_payload(claim, public_address_overridden=False, public
 def _build_snapshot_place_payload(claim, resolve_missing_coordinates=True):
 	snapshot = claim.listing_snapshot
 	is_live_location_business = snapshot.venue_type == VenueType.MOBILE or snapshot.serves_multiple_areas
+	live_location_tracking_enabled = (
+		is_live_location_business
+		and _is_business_location_tracking_enabled_for_claim(claim)
+	)
 	should_resolve_coordinates = resolve_missing_coordinates and not is_live_location_business
 	public_address_fields, public_address_overridden, public_postal_code_overridden = _resolve_claim_public_address_fields(claim, snapshot, is_live_location_business)
 	website_url = claim.business_website_url or snapshot.website_url
@@ -734,8 +774,8 @@ def _build_snapshot_place_payload(claim, resolve_missing_coordinates=True):
 		neighborhood=public_address_fields['neighborhood'],
 		state=snapshot.state,
 		postal_code=public_address_fields['postal_code'],
-		latitude=snapshot.tracked_location_latitude if is_live_location_business else None,
-		longitude=snapshot.tracked_location_longitude if is_live_location_business else None,
+		latitude=snapshot.tracked_location_latitude if live_location_tracking_enabled else None,
+		longitude=snapshot.tracked_location_longitude if live_location_tracking_enabled else None,
 		phone_number=public_phone_number,
 		website_url=website_url,
 		external_id=snapshot.external_id or snapshot.listing_slug or f'listing-snapshot-{snapshot.pk}',

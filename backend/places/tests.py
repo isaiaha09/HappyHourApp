@@ -298,6 +298,27 @@ class PlaceApiTests(APITestCase):
 			tracked_location_longitude=-119.0380,
 			tracked_location_updated_at=timezone.now(),
 		)
+		disabled_user = User.objects.create_user(username='disabled_mobile_owner', email='disabled-mobile@example.com', password='test-pass-123')
+		AccountProfile.objects.create(user=disabled_user, business_location_tracking_enabled=False)
+		disabled_snapshot = ListingSnapshot.objects.create(
+			name='Hidden Truck',
+			listing_slug='hidden-truck',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+			tracked_location_latitude=34.2199,
+			tracked_location_longitude=-119.0401,
+			tracked_location_updated_at=timezone.now(),
+		)
+		disabled_claim = BusinessClaim.objects.create(
+			claimant=disabled_user,
+			listing_snapshot=disabled_snapshot,
+			contact_name='Hidden Owner',
+			work_email='owner@hidden.example.com',
+			verification_summary='I operate this truck.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(user=disabled_user, claim=disabled_claim, is_active=True)
 
 		response = self.client.get(reverse('place-live-locations'), {'city': City.VENTURA})
 
@@ -3604,6 +3625,40 @@ class SourceListingIdentityTests(TestCase):
 		self.assertEqual(payloads[0]['latitude'], 34.2789)
 		self.assertEqual(payloads[0]['longitude'], -119.2914)
 		self.assertEqual(payloads[0]['locations'][0]['address_line_1'], 'Approximate live location')
+		self.assertTrue(payloads[0]['is_verified'])
+
+	@patch('places.services.source_listings.load_source_records')
+	def test_disabled_mobile_business_tracking_suppresses_public_map_coordinates(self, mock_load_source_records):
+		mock_load_source_records.return_value = []
+		user = User.objects.create_user(username='hidden_mobile_owner', email='hidden-owner@example.com', password='test-pass-123')
+		AccountProfile.objects.create(user=user, business_location_tracking_enabled=False)
+		snapshot = ListingSnapshot.objects.create(
+			name='Hidden Scoops Truck',
+			listing_slug='hidden-scoops-truck',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+			tracked_location_latitude=34.2789,
+			tracked_location_longitude=-119.2914,
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=user,
+			listing_snapshot=snapshot,
+			contact_name='Mobile Owner',
+			work_email='owner@hidden-scoops.example.com',
+			verification_summary='I operate this truck.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(user=user, claim=claim, is_active=True)
+
+		payloads = get_source_place_payloads(resolve_missing_coordinates=False)
+
+		self.assertEqual(len(payloads), 1)
+		self.assertEqual(payloads[0]['slug'], 'hidden-scoops-truck')
+		self.assertIsNone(payloads[0]['latitude'])
+		self.assertIsNone(payloads[0]['longitude'])
+		self.assertIsNone(payloads[0]['locations'][0]['latitude'])
+		self.assertIsNone(payloads[0]['locations'][0]['longitude'])
 		self.assertTrue(payloads[0]['is_verified'])
 
 	@patch('places.services.source_listings.load_source_records')
