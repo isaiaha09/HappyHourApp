@@ -374,13 +374,22 @@ class LiveLocationPlaceListView(generics.GenericAPIView):
 		)
 		if city and city != 'all':
 			queryset = queryset.filter(Q(city=city) | Q(serves_multiple_areas=True))
+		disabled_snapshot_ids = set(
+			BusinessMembership.objects
+			.filter(
+				is_active=True,
+				claim__listing_snapshot__in=queryset,
+				user__account_profile__business_location_tracking_enabled=False,
+			)
+			.values_list('claim__listing_snapshot_id', flat=True)
+		)
 
 		payloads = [
 			{
 				'slug': slugify(f'{snapshot.name}-{snapshot.city}'),
-				'latitude': snapshot.tracked_location_latitude,
-				'longitude': snapshot.tracked_location_longitude,
-				'updated_at': snapshot.tracked_location_updated_at,
+				'latitude': snapshot.tracked_location_latitude if snapshot.pk not in disabled_snapshot_ids else None,
+				'longitude': snapshot.tracked_location_longitude if snapshot.pk not in disabled_snapshot_ids else None,
+				'updated_at': snapshot.tracked_location_updated_at if snapshot.pk not in disabled_snapshot_ids else None,
 			}
 			for snapshot in queryset
 		]

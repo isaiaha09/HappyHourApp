@@ -7398,6 +7398,18 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertIsNone(payload['latitude'])
 		self.assertIsNone(payload['longitude'])
 
+		snapshot.tracked_location_latitude = 34.2812
+		snapshot.tracked_location_longitude = -119.2944
+		snapshot.save(update_fields=['tracked_location_latitude', 'tracked_location_longitude', 'updated_at'])
+		payload = get_source_place_payload(snapshot.listing_slug)
+		self.assertIsNone(payload['latitude'])
+		self.assertIsNone(payload['longitude'])
+		live_response = self.client.get(reverse('place-live-locations'), {'city': City.VENTURA})
+		self.assertEqual(live_response.status_code, 200)
+		live_payload_by_slug = {item['slug']: item for item in live_response.data}
+		self.assertIsNone(live_payload_by_slug['scoops-truck-ventura']['latitude'])
+		self.assertIsNone(live_payload_by_slug['scoops-truck-ventura']['longitude'])
+
 	def test_service_area_business_without_live_tracking_does_not_restore_source_coordinates(self):
 		existing_payload = {
 			'address_line_1': '100 Static Source Way',
