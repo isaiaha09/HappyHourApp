@@ -749,6 +749,7 @@ def _build_snapshot_place_payload(claim, resolve_missing_coordinates=True):
 			public_address_overridden=public_address_overridden,
 			public_postal_code_overridden=public_postal_code_overridden,
 		))
+		payload['serves_multiple_areas'] = snapshot.serves_multiple_areas
 		_apply_claim_structured_overrides(payload, claim, payload_namespace=snapshot.listing_slug or f'claim-{claim.pk}')
 		photo_urls = _claim_photo_urls(claim)
 		if photo_urls:
@@ -819,7 +820,10 @@ def _parse_public_claim_address(address_value):
 
 def _merge_claimed_snapshot_payload(existing_payload, snapshot_payload):
 	merged_payload = dict(existing_payload)
-	is_live_location_business = snapshot_payload.get('venue_type') == VenueType.MOBILE
+	is_live_location_business = (
+		snapshot_payload.get('venue_type') == VenueType.MOBILE
+		or bool(snapshot_payload.get('serves_multiple_areas'))
+	)
 	owner_controls_public_address = bool(snapshot_payload.get('public_address_overridden'))
 	owner_controls_public_postal_code = bool(snapshot_payload.get('public_postal_code_overridden'))
 	owner_website_url = snapshot_payload.get('website_url') or existing_payload.get('website_url', '')

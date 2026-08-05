@@ -39,7 +39,7 @@ from .services.provider_quota import consume_provider_transaction, get_provider_
 from .services.favorite_notifications import create_notifications_for_business_profile_update
 from .services.importers.yelp_places import YelpFusionPlacesImporter
 from .services.importers.types import ImportedDeal, ImportedHappyHour, ImportedOperatingHour, ImportedPlace
-from .services.source_listings import _build_deal_identity_key, _build_place_payload, get_source_place_payload, get_source_place_payloads, load_source_records
+from .services.source_listings import _build_deal_identity_key, _build_place_payload, _merge_claimed_snapshot_payload, get_source_place_payload, get_source_place_payloads, load_source_records
 
 
 User = get_user_model()
@@ -7383,6 +7383,89 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertIsNotNone(payload)
 		self.assertIsNone(payload['latitude'])
 		self.assertIsNone(payload['longitude'])
+
+	def test_service_area_business_without_live_tracking_does_not_restore_source_coordinates(self):
+		existing_payload = {
+			'address_line_1': '100 Static Source Way',
+			'address_line_2': '',
+			'city': City.VENTURA,
+			'city_label': 'Ventura',
+			'image_urls': [],
+			'is_claimed': False,
+			'latitude': 34.2812,
+			'locations': [{
+				'address_line_1': '100 Static Source Way',
+				'address_line_2': '',
+				'city': City.VENTURA,
+				'city_label': 'Ventura',
+				'image_urls': [],
+				'latitude': 34.2812,
+				'longitude': -119.2944,
+				'neighborhood': '',
+				'phone_number': '',
+				'postal_code': '',
+				'state': 'CA',
+				'website_url': '',
+			}],
+			'longitude': -119.2944,
+			'neighborhood': '',
+			'phone_number': '',
+			'postal_code': '',
+			'state': 'CA',
+			'venue_type': VenueType.FAST_FOOD,
+			'venue_type_label': 'Fast Food',
+			'website_url': '',
+		}
+		snapshot_payload = {
+			'address_line_1': 'Approximate live location unavailable',
+			'address_line_2': '',
+			'city': '',
+			'city_label': '',
+			'image_urls': [],
+			'is_informal': True,
+			'latitude': None,
+			'locations': [{
+				'address_line_1': 'Approximate live location unavailable',
+				'address_line_2': '',
+				'city': '',
+				'city_label': '',
+				'image_urls': [],
+				'latitude': None,
+				'longitude': None,
+				'neighborhood': '',
+				'phone_number': '',
+				'postal_code': '',
+				'state': 'CA',
+				'website_url': '',
+			}],
+			'longitude': None,
+			'neighborhood': '',
+			'phone_number': '',
+			'photo_gallery_overridden': False,
+			'postal_code': '',
+			'public_address_overridden': False,
+			'public_postal_code_overridden': False,
+			'serves_multiple_areas': True,
+			'social_profiles': {},
+			'social_media_links': [],
+			'offer_entries': [],
+			'hours_of_operation_entries': [],
+			'photo_references': [],
+			'supporting_details': '',
+			'deal_overrides': None,
+			'operating_hour_overrides': None,
+			'state': 'CA',
+			'venue_type': VenueType.FAST_FOOD,
+			'venue_type_label': 'Fast Food',
+			'website_url': '',
+		}
+
+		payload = _merge_claimed_snapshot_payload(existing_payload, snapshot_payload)
+
+		self.assertIsNone(payload['latitude'])
+		self.assertIsNone(payload['longitude'])
+		self.assertIsNone(payload['locations'][0]['latitude'])
+		self.assertIsNone(payload['locations'][0]['longitude'])
 		self.assertIsNone(payload['locations'][0]['latitude'])
 		self.assertIsNone(payload['locations'][0]['longitude'])
 
