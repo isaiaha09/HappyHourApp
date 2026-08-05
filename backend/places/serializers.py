@@ -1303,7 +1303,6 @@ class PlaceListSerializer(serializers.Serializer):
 	slug = serializers.CharField()
 	is_claimed = serializers.BooleanField(required=False, default=False)
 	is_informal = serializers.BooleanField(required=False, default=False)
-	serves_multiple_areas = serializers.BooleanField(required=False, default=False)
 	direct_messaging_enabled = serializers.BooleanField(required=False, default=False)
 	direct_message_restricted = serializers.BooleanField(required=False, default=False)
 	can_direct_message = serializers.BooleanField(required=False, default=False)

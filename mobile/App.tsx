@@ -1,7 +1,6 @@
 import { memo, startTransition, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import Constants from 'expo-constants';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
@@ -246,48 +245,6 @@ type BusinessTrackingSession = {
   approvedBusinessSlugs: string[];
   authToken: string;
 };
-
-function isLiveLocationBusiness(place: Pick<PlaceListItem, 'venue_type'> & { serves_multiple_areas?: boolean }) {
-  return place.venue_type === mobileBusinessVenueType || place.serves_multiple_areas === true;
-}
-
-function stripLiveLocationCoordinatesFromPlaces(places: PlaceListItem[]) {
-  let changed = false;
-
-  const nextPlaces = places.map((place) => {
-    if (!isLiveLocationBusiness(place)) {
-      return place;
-    }
-
-    const nextLocations = place.locations.map((location) => {
-      if (location.latitude === null && location.longitude === null) {
-        return location;
-      }
-
-      changed = true;
-      return {
-        ...location,
-        latitude: null,
-        longitude: null,
-      };
-    });
-
-    const locationsChanged = nextLocations.some((location, index) => location !== place.locations[index]);
-    if (place.latitude === null && place.longitude === null && !locationsChanged) {
-      return place;
-    }
-
-    changed = true;
-    return {
-      ...place,
-      latitude: null,
-      longitude: null,
-      locations: nextLocations,
-    };
-  });
-
-  return changed ? nextPlaces : places;
-}
 
 type InteractiveBackSwipeConfig = {
   kind: 'onboarding' | 'browse-profile' | 'guest-browse' | 'main-shell';
@@ -903,9 +860,7 @@ function AppScreen() {
         : 'dark')
     : 'light';
 
-  const visiblePlaces = places;
-
-  const filteredPlaces = useMemo(() => getFilteredPlaces(visiblePlaces, {
+  const filteredPlaces = useMemo(() => getFilteredPlaces(places, {
     confirmedDealsOnly,
     informalBusinessesOnly,
     searchQuery: normalizedDeferredSearchQuery,
@@ -918,11 +873,11 @@ function AppScreen() {
     confirmedDealsOnly,
     informalBusinessesOnly,
     normalizedDeferredSearchQuery,
+    places,
     selectedCity,
     selectedDealDays,
     selectedOperatingDays,
     selectedVenueTypes,
-    visiblePlaces,
     verifiedBusinessesOnly,
   ]);
   const filteredPlaceKey = useMemo(() => filteredPlaces.map((place) => place.id).join('|'), [filteredPlaces]);
@@ -947,12 +902,11 @@ function AppScreen() {
   const browseResultCount = displayedBrowsePlaces.length;
   const mappedPlaceIdentityKey = useMemo(() => mappedPlaces.map((place) => place.markerKey).join('|'), [mappedPlaces]);
   const mappedPlaceKey = useMemo(() => getMappedPlaceRenderKey(mappedPlaces), [mappedPlaces]);
-  const displayedMapPlacesSource = showMapBrowse
+  const displayedMapPlaces = showMapBrowse
     ? normalizedDeferredSearchQuery.length > 0
       ? mappedPlaces
       : renderedMappedPlaces
     : [];
-  const displayedMapPlaces = displayedMapPlacesSource;
   const unplacedPlaceCount = useMemo(() => filteredPlaces.filter((place) => (
     !getPlaceLocations(place).some((location) => location.latitude !== null && location.longitude !== null)
   )).length, [filteredPlaces]);
@@ -992,7 +946,6 @@ function AppScreen() {
       authenticatedSession?.auth_token
       && authenticatedSession.portal === 'business'
       && authenticatedSession.requires_business_location_tracking
-      && authenticatedSession.business_location_tracking_enabled !== false
     ) {
       return {
         approvedBusinessSlugs: (authenticatedSession.approved_businesses ?? []).map((business) => business.slug),
@@ -1008,12 +961,7 @@ function AppScreen() {
   }, [authenticatedSession, loggedOutBusinessTrackingSession]);
 
   function buildBusinessTrackingSession(session: SignupResponse | null): BusinessTrackingSession | null {
-    if (
-      !session?.auth_token
-      || session.portal !== 'business'
-      || !session.requires_business_location_tracking
-      || session.business_location_tracking_enabled === false
-    ) {
+    if (!session?.auth_token || session.portal !== 'business' || !session.requires_business_location_tracking) {
       return null;
     }
 
@@ -1386,6 +1334,39 @@ function AppScreen() {
           return;
         }
 
+        const updateLocalBusinessLocation = (coords: { latitude: number; longitude: number }) => {
+          const activeTrackingSession = authenticatedSessionRef.current?.auth_token
+            ? buildBusinessTrackingSession(authenticatedSessionRef.current)
+            : currentBusinessTrackingSession;
+          if (!activeTrackingSession?.authToken) {
+            return;
+          }
+
+          const approvedBusinessSlugs = new Set(activeTrackingSession.approvedBusinessSlugs);
+          if (approvedBusinessSlugs.size === 0 || cancelled) {
+            return;
+          }
+
+          setPlaces((current) => current.map((place) => applyTrackedCoordinatesToBusiness(
+            place,
+            approvedBusinessSlugs,
+            coords.latitude,
+            coords.longitude,
+          )));
+          setProfilePlaces((current) => current.map((place) => applyTrackedCoordinatesToBusiness(
+            place,
+            approvedBusinessSlugs,
+            coords.latitude,
+            coords.longitude,
+          )));
+          setSelectedPlace((current) => current ? applyTrackedCoordinatesToBusinessDetail(
+            current,
+            approvedBusinessSlugs,
+            coords.latitude,
+            coords.longitude,
+          ) : current);
+        };
+
         const reportLocation = async (coords: { latitude: number; longitude: number; accuracy?: number | null }) => {
           const activeTrackingSession = authenticatedSessionRef.current?.auth_token
             ? buildBusinessTrackingSession(authenticatedSessionRef.current)
@@ -1433,6 +1414,7 @@ function AppScreen() {
           return;
         }
         latestBusinessPosition = initialPosition;
+        updateLocalBusinessLocation(initialPosition.coords);
         void reportLocation(initialPosition.coords);
 
         const watcher = await Location.watchPositionAsync(
@@ -1443,6 +1425,7 @@ function AppScreen() {
           },
           (position) => {
             latestBusinessPosition = position;
+            updateLocalBusinessLocation(position.coords);
           },
         );
 
@@ -1523,8 +1506,7 @@ function AppScreen() {
       : Math.min(height * 0.58, keyboardHeight > 0 ? 380 : 500),
     220,
   );
-  const visibleProfilePlaces = profilePlaces;
-  const availableProfilePlaces = visibleProfilePlaces.length ? visibleProfilePlaces : visiblePlaces;
+  const availableProfilePlaces = profilePlaces.length ? profilePlaces : places;
 
   function clearShowMoreMapResultsTimer() {
     if (showMoreMapResultsTimeoutRef.current === null) {
@@ -1796,7 +1778,7 @@ function AppScreen() {
           if (nextPlaces !== current && selectedCity === 'all') {
             allPlacesCacheRef.current = {
               apiBaseUrl,
-              places: stripLiveLocationCoordinatesFromPlaces(nextPlaces),
+              places: nextPlaces,
               reloadCount,
             };
           }
@@ -3294,13 +3276,6 @@ function AppScreen() {
     setLoggedOutBusinessTrackingSession(
       preserveBusinessTracking ? buildBusinessTrackingSession(authenticatedSession) : null,
     );
-    clearPlacesCache();
-    allPlacesCacheRef.current = null;
-    setPlaces([]);
-    setProfilePlaces([]);
-    setRenderedMappedPlaces([]);
-    setRenderedMappedPlaceKey('');
-    setReloadCount((current) => current + 1);
     if (!preserveBusinessTracking) {
       void stopBusinessBackgroundLocationTask();
       void clearPersistedBusinessTrackingSession();
@@ -3512,14 +3487,13 @@ function AppScreen() {
 
       try {
         const nextPlaces = await fetchPlaces(apiBaseUrl, selectedCity);
-        const stableNextPlaces = stripLiveLocationCoordinatesFromPlaces(nextPlaces);
-        let nextPlacesWithLiveLocations = stableNextPlaces;
+        let nextPlacesWithLiveLocations = nextPlaces;
 
         try {
           const liveLocationUpdates = await fetchLiveLocationPlaces(apiBaseUrl, selectedCity);
-          nextPlacesWithLiveLocations = mergeLiveLocationUpdatesIntoPlaces(stableNextPlaces, liveLocationUpdates);
+          nextPlacesWithLiveLocations = mergeLiveLocationUpdatesIntoPlaces(nextPlaces, liveLocationUpdates);
         } catch {
-          nextPlacesWithLiveLocations = stableNextPlaces;
+          nextPlacesWithLiveLocations = nextPlaces;
         }
 
         if (!isMounted) {
@@ -3530,7 +3504,7 @@ function AppScreen() {
         if (selectedCity === 'all') {
           allPlacesCacheRef.current = {
             apiBaseUrl,
-            places: stableNextPlaces,
+            places: nextPlacesWithLiveLocations,
             reloadCount,
           };
         }
@@ -3713,7 +3687,7 @@ function AppScreen() {
     const cachedAllPlaces = allPlacesCacheRef.current;
 
     if (selectedCity === 'all' && places.length > 0) {
-      setProfilePlaces(stripLiveLocationCoordinatesFromPlaces(places));
+      setProfilePlaces(places);
       setProfilePlacesLoading(false);
       return;
     }
@@ -3734,10 +3708,10 @@ function AppScreen() {
 
       allPlacesCacheRef.current = {
         apiBaseUrl,
-        places: stripLiveLocationCoordinatesFromPlaces(nextPlaces),
+        places: nextPlaces,
         reloadCount,
       };
-      setProfilePlaces(stripLiveLocationCoordinatesFromPlaces(nextPlaces));
+      setProfilePlaces(nextPlaces);
     }).catch((error) => {
       if (!isMounted) {
         return;
@@ -5656,16 +5630,14 @@ function AppScreen() {
     }
 
     const currentAuthToken = authenticatedSession.auth_token;
+    const approvedBusinessSlugs = new Set((authenticatedSession.approved_businesses ?? []).map((business) => business.slug));
+
     setSettingsSubmittingAction('business-location');
     setPendingBusinessLocationTrackingEnabled(enabled);
     setProfileErrorMessage(null);
 
     try {
       if (enabled) {
-        if (Constants.executionEnvironment === 'storeClient') {
-          throw new Error('Business location services require the DiningDealz development or production build. Expo Go cannot use this app\'s iOS location permissions or background tracking.');
-        }
-
         const foregroundPermission = await Location.getForegroundPermissionsAsync();
         const resolvedForegroundPermission = foregroundPermission.granted
           ? foregroundPermission
@@ -5702,12 +5674,10 @@ function AppScreen() {
       } else {
         await stopBusinessBackgroundLocationTask();
       }
-      if (!enabled) {
-        clearPlacesCache();
-        allPlacesCacheRef.current = null;
-        setRenderedMappedPlaces([]);
-        setRenderedMappedPlaceKey('');
-        setReloadCount((current) => current + 1);
+      if (!enabled && approvedBusinessSlugs.size > 0) {
+        setPlaces((current) => current.map((place) => clearTrackedCoordinatesForBusiness(place, approvedBusinessSlugs)));
+        setProfilePlaces((current) => current.map((place) => clearTrackedCoordinatesForBusiness(place, approvedBusinessSlugs)));
+        setSelectedPlace((current) => current ? clearTrackedCoordinatesForBusinessDetail(current, approvedBusinessSlugs) : current);
       }
       setProfileMessage(enabled
         ? 'Business location services turned on.'
@@ -7964,6 +7934,88 @@ function getDistanceInMiles(
     * Math.sin(longitudeDeltaRadians / 2) ** 2;
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return earthRadiusMiles * c;
+}
+
+function clearTrackedCoordinatesForBusiness(place: PlaceListItem, approvedBusinessSlugs: Set<string>): PlaceListItem {
+  if (!approvedBusinessSlugs.has(place.slug)) {
+    return place;
+  }
+
+  const nextLocations = getPlaceLocations(place).map((location) => ({
+    ...location,
+    latitude: null,
+    longitude: null,
+  }));
+
+  return {
+    ...place,
+    latitude: null,
+    longitude: null,
+    locations: nextLocations,
+  };
+}
+
+function clearTrackedCoordinatesForBusinessDetail(place: PlaceDetail, approvedBusinessSlugs: Set<string>): PlaceDetail {
+  if (!approvedBusinessSlugs.has(place.slug)) {
+    return place;
+  }
+
+  return {
+    ...place,
+    latitude: null,
+    longitude: null,
+    locations: place.locations.map((location) => ({
+      ...location,
+      latitude: null,
+      longitude: null,
+    })),
+  };
+}
+
+function applyTrackedCoordinatesToBusiness(
+  place: PlaceListItem,
+  approvedBusinessSlugs: Set<string>,
+  latitude: number,
+  longitude: number,
+): PlaceListItem {
+  if (!approvedBusinessSlugs.has(place.slug)) {
+    return place;
+  }
+
+  const nextLocations = getPlaceLocations(place).map((location) => ({
+    ...location,
+    latitude,
+    longitude,
+  }));
+
+  return {
+    ...place,
+    latitude,
+    longitude,
+    locations: nextLocations,
+  };
+}
+
+function applyTrackedCoordinatesToBusinessDetail(
+  place: PlaceDetail,
+  approvedBusinessSlugs: Set<string>,
+  latitude: number,
+  longitude: number,
+): PlaceDetail {
+  if (!approvedBusinessSlugs.has(place.slug)) {
+    return place;
+  }
+
+  return {
+    ...place,
+    latitude,
+    longitude,
+    locations: place.locations.map((location) => ({
+      ...location,
+      latitude,
+      longitude,
+    })),
+  };
 }
 
 function toRadians(value: number) {

@@ -117,7 +117,6 @@ export type PlaceLocationDetail = PlaceLocation & {
 export type PlaceListItem = PlaceLocation & {
   is_claimed: boolean;
   is_informal?: boolean;
-  serves_multiple_areas?: boolean;
   direct_messaging_enabled?: boolean;
   direct_message_restricted?: boolean;
   can_direct_message?: boolean;
@@ -244,7 +243,6 @@ export type SignupResponse = {
   approved_businesses?: Array<{
     id: number;
     slug: string;
-    public_slug?: string;
     name: string;
     city: string;
     city_label: string;

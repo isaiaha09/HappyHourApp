@@ -172,9 +172,6 @@ def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_
 		return deepcopy(cached_payloads)
 
 	payloads_by_slug = {}
-	payload_slugs_by_source_identity = {}
-	payload_slugs_by_location_identity = {}
-	disabled_live_location_names = _get_disabled_live_location_claim_names()
 	snapshot_overrides_by_slug = _get_listing_snapshot_override_payloads()
 	claimed_listing_slugs = _get_claimed_listing_slugs()
 	for place_records in _group_source_records(load_source_records(source_name=source_name)).values():
@@ -211,34 +208,16 @@ def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_
 					)
 			else:
 				_apply_multi_location_snapshot_overrides(payload, place_records, snapshot_overrides_by_slug)
-		if _payload_matches_disabled_live_location_claim(payload, place_records, disabled_live_location_names):
-			_clear_payload_coordinates(payload)
 		payload['is_claimed'] = is_claimed
 		payload['is_informal'] = False
 		payloads_by_slug[payload['slug']] = payload
-		for place_record in place_records:
-			source_identity = _build_place_record_source_identity(place_record)
-			if source_identity and source_identity not in payload_slugs_by_source_identity:
-				payload_slugs_by_source_identity[source_identity] = payload['slug']
-			location_identity = _build_place_record_location_identity(place_record)
-			if location_identity and location_identity not in payload_slugs_by_location_identity:
-				payload_slugs_by_location_identity[location_identity] = payload['slug']
 
 	for claim in _get_active_business_claims():
 		snapshot_payload = _build_snapshot_place_payload(claim, resolve_missing_coordinates=resolve_missing_coordinates)
 		if snapshot_payload is None:
 			continue
 		snapshot_payload['is_claimed'] = True
-		matched_payload_slug = snapshot_payload['slug']
-		if matched_payload_slug not in payloads_by_slug:
-			source_identity = _build_snapshot_source_identity(claim.listing_snapshot)
-			if source_identity:
-				matched_payload_slug = payload_slugs_by_source_identity.get(source_identity, matched_payload_slug)
-		if matched_payload_slug not in payloads_by_slug:
-			location_identity = _build_snapshot_location_identity(claim.listing_snapshot)
-			if location_identity:
-				matched_payload_slug = payload_slugs_by_location_identity.get(location_identity, matched_payload_slug)
-		existing_payload = payloads_by_slug.pop(matched_payload_slug, None)
+		existing_payload = payloads_by_slug.get(snapshot_payload['slug'])
 		if existing_payload is None:
 			payloads_by_slug[snapshot_payload['slug']] = snapshot_payload
 			continue
@@ -707,41 +686,6 @@ def _get_active_business_claims():
 		yield claim
 
 
-def _get_disabled_live_location_claim_names():
-	disabled_names = set()
-	for claim in _get_active_business_claims():
-		snapshot = claim.listing_snapshot
-		if snapshot.venue_type != VenueType.MOBILE and not snapshot.serves_multiple_areas:
-			continue
-		profile = getattr(claim.claimant, 'account_profile', None)
-		if getattr(profile, 'business_location_tracking_enabled', True):
-			continue
-		normalized_name = _normalize_location_text(snapshot.name)
-		if normalized_name:
-			disabled_names.add(normalized_name)
-	return disabled_names
-
-
-def _payload_matches_disabled_live_location_claim(payload, place_records, disabled_live_location_names):
-	if not disabled_live_location_names:
-		return False
-	if _normalize_location_text(payload.get('name')) in disabled_live_location_names:
-		return True
-	return any(
-		_normalize_location_text(_profile_name_for_record(place_record)) in disabled_live_location_names
-		or _normalize_location_text(getattr(place_record, 'name', '')) in disabled_live_location_names
-		for place_record in place_records
-	)
-
-
-def _clear_payload_coordinates(payload):
-	payload['latitude'] = None
-	payload['longitude'] = None
-	for location in payload.get('locations', []):
-		location['latitude'] = None
-		location['longitude'] = None
-
-
 
 def _claim_photo_urls(claim):
 	return [reference for reference in list(claim.photo_references or []) if str(reference or '').strip().lower().startswith(('http://', 'https://'))]
@@ -775,8 +719,6 @@ def _build_claim_override_payload(claim, public_address_overridden=False, public
 def _build_snapshot_place_payload(claim, resolve_missing_coordinates=True):
 	snapshot = claim.listing_snapshot
 	is_live_location_business = snapshot.venue_type == VenueType.MOBILE or snapshot.serves_multiple_areas
-	profile = getattr(claim.claimant, 'account_profile', None)
-	live_location_tracking_enabled = getattr(profile, 'business_location_tracking_enabled', True)
 	should_resolve_coordinates = resolve_missing_coordinates and not is_live_location_business
 	public_address_fields, public_address_overridden, public_postal_code_overridden = _resolve_claim_public_address_fields(claim, snapshot, is_live_location_business)
 	website_url = claim.business_website_url or snapshot.website_url
@@ -792,8 +734,8 @@ def _build_snapshot_place_payload(claim, resolve_missing_coordinates=True):
 		neighborhood=public_address_fields['neighborhood'],
 		state=snapshot.state,
 		postal_code=public_address_fields['postal_code'],
-		latitude=snapshot.tracked_location_latitude if is_live_location_business and live_location_tracking_enabled else None,
-		longitude=snapshot.tracked_location_longitude if is_live_location_business and live_location_tracking_enabled else None,
+		latitude=snapshot.tracked_location_latitude if is_live_location_business else None,
+		longitude=snapshot.tracked_location_longitude if is_live_location_business else None,
 		phone_number=public_phone_number,
 		website_url=website_url,
 		external_id=snapshot.external_id or snapshot.listing_slug or f'listing-snapshot-{snapshot.pk}',
@@ -807,7 +749,6 @@ def _build_snapshot_place_payload(claim, resolve_missing_coordinates=True):
 			public_address_overridden=public_address_overridden,
 			public_postal_code_overridden=public_postal_code_overridden,
 		))
-		payload['serves_multiple_areas'] = snapshot.serves_multiple_areas
 		_apply_claim_structured_overrides(payload, claim, payload_namespace=snapshot.listing_slug or f'claim-{claim.pk}')
 		photo_urls = _claim_photo_urls(claim)
 		if photo_urls:
@@ -878,10 +819,7 @@ def _parse_public_claim_address(address_value):
 
 def _merge_claimed_snapshot_payload(existing_payload, snapshot_payload):
 	merged_payload = dict(existing_payload)
-	is_live_location_business = (
-		snapshot_payload.get('venue_type') == VenueType.MOBILE
-		or bool(snapshot_payload.get('serves_multiple_areas'))
-	)
+	is_live_location_business = snapshot_payload.get('venue_type') == VenueType.MOBILE
 	owner_controls_public_address = bool(snapshot_payload.get('public_address_overridden'))
 	owner_controls_public_postal_code = bool(snapshot_payload.get('public_postal_code_overridden'))
 	owner_website_url = snapshot_payload.get('website_url') or existing_payload.get('website_url', '')
@@ -913,7 +851,6 @@ def _merge_claimed_snapshot_payload(existing_payload, snapshot_payload):
 		'city_label': snapshot_payload['city_label'],
 		'is_claimed': True,
 		'is_informal': bool(snapshot_payload.get('is_informal')),
-		'serves_multiple_areas': bool(snapshot_payload.get('serves_multiple_areas')),
 		'venue_type': snapshot_payload['venue_type'],
 		'venue_type_label': snapshot_payload['venue_type_label'],
 		'address_line_1': snapshot_payload['address_line_1'] if is_live_location_business or owner_controls_public_address else existing_payload['address_line_1'],

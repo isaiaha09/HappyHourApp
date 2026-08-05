@@ -83,40 +83,4 @@ describe('mergeLiveLocationUpdatesIntoPlaces', () => {
     }));
     expect(result[1]).toBe(staticPlace);
   });
-
-  it('removes a live pin when the endpoint reports cleared coordinates', () => {
-    const place = {
-      latitude: 34.2789,
-      longitude: -119.2914,
-      locations: [{
-        latitude: 34.2789,
-        longitude: -119.2914,
-        slug: 'scoops-truck-ventura',
-      }],
-      slug: 'scoops-truck',
-    } as PlaceListItem;
-    const staticPlace = {
-      latitude: 34.3,
-      longitude: -119.2,
-      locations: [{
-        latitude: 34.3,
-        longitude: -119.2,
-        slug: 'static-cafe-ventura',
-      }],
-      slug: 'static-cafe',
-    } as PlaceListItem;
-
-    const result = mergeLiveLocationUpdatesIntoPlaces([place, staticPlace], [{
-      latitude: null,
-      longitude: null,
-      slug: 'scoops-truck-ventura',
-      updated_at: null,
-    }]);
-
-    expect(result[0].locations[0]).toEqual(expect.objectContaining({
-      latitude: null,
-      longitude: null,
-    }));
-    expect(result[1]).toBe(staticPlace);
-  });
 });

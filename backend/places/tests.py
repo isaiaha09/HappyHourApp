@@ -39,7 +39,7 @@ from .services.provider_quota import consume_provider_transaction, get_provider_
 from .services.favorite_notifications import create_notifications_for_business_profile_update
 from .services.importers.yelp_places import YelpFusionPlacesImporter
 from .services.importers.types import ImportedDeal, ImportedHappyHour, ImportedOperatingHour, ImportedPlace
-from .services.source_listings import _build_deal_identity_key, _build_place_payload, _merge_claimed_snapshot_payload, get_source_place_payload, get_source_place_payloads, load_source_records
+from .services.source_listings import _build_deal_identity_key, _build_place_payload, get_source_place_payload, get_source_place_payloads, load_source_records
 
 
 User = get_user_model()
@@ -298,157 +298,15 @@ class PlaceApiTests(APITestCase):
 			tracked_location_longitude=-119.0380,
 			tracked_location_updated_at=timezone.now(),
 		)
-		ListingSnapshot.objects.create(
-			name='Offline Truck',
-			listing_slug='offline-truck',
-			city=City.VENTURA,
-			venue_type=VenueType.MOBILE,
-			address_line_1='Approximate live location',
-		)
-		ListingSnapshot.objects.create(
-			name='Service Area Catering',
-			listing_slug='service-area-catering',
-			city='',
-			venue_type=VenueType.FAST_FOOD,
-			address_line_1='Approximate live location unavailable',
-			serves_multiple_areas=True,
-		)
 
 		response = self.client.get(reverse('place-live-locations'), {'city': City.VENTURA})
 
 		self.assertEqual(response.status_code, 200)
-		payload_by_slug = {payload['slug']: payload for payload in response.data}
-		self.assertTrue({
-			'offline-truck-ventura',
-			'scoops-truck-ventura',
-			'service-area-catering',
-		}.issubset(set(payload_by_slug)))
-		self.assertEqual(payload_by_slug['scoops-truck-ventura']['latitude'], 34.2789)
-		self.assertEqual(payload_by_slug['scoops-truck-ventura']['longitude'], -119.2914)
-		self.assertEqual(payload_by_slug['scoops-truck']['latitude'], 34.2789)
-		self.assertEqual(payload_by_slug['scoops-truck']['longitude'], -119.2914)
-		self.assertTrue(bool(payload_by_slug['scoops-truck-ventura']['updated_at']))
-		self.assertIsNone(payload_by_slug['offline-truck-ventura']['latitude'])
-		self.assertIsNone(payload_by_slug['offline-truck-ventura']['longitude'])
-		self.assertIsNone(payload_by_slug['offline-truck-ventura']['updated_at'])
-		self.assertIsNone(payload_by_slug['service-area-catering']['latitude'])
-		self.assertIsNone(payload_by_slug['service-area-catering']['longitude'])
-
-	@patch('places.services.source_listings.load_source_records')
-	def test_live_location_endpoint_returns_null_for_public_slug_when_tracking_disabled(self, mock_load_source_records):
-		mock_load_source_records.return_value = [
-			ImportedPlace(
-				name='Scoops Truck',
-				city=City.VENTURA,
-				venue_type=VenueType.FAST_FOOD,
-				address_line_1='100 Static Source Way',
-				state='CA',
-				postal_code='93001',
-				latitude=34.2000,
-				longitude=-119.2000,
-				external_id='source-scoops-1',
-				source_name='business_websites',
-				source_url='https://example.com/source-scoops',
-			),
-		]
-		user = User.objects.create_user(username='disabled_guest_owner', email='disabled-guest-owner@example.com', password='test-pass-123')
-		AccountProfile.objects.create(user=user, business_location_tracking_enabled=False)
-		snapshot = ListingSnapshot.objects.create(
-			name='Scoops Truck',
-			listing_slug='approved-scoops-truck',
-			city=City.VENTURA,
-			venue_type=VenueType.MOBILE,
-			address_line_1='Approximate live location',
-			state='CA',
-			postal_code='93001',
-			tracked_location_latitude=34.2789,
-			tracked_location_longitude=-119.2914,
-			external_id='source-scoops-1',
-			source_name='business_websites',
-		)
-		claim = BusinessClaim.objects.create(
-			claimant=user,
-			listing_snapshot=snapshot,
-			contact_name='Mobile Owner',
-			work_email='owner@scoops.example.com',
-			verification_summary='I operate this truck.',
-			status=BusinessClaim.Status.APPROVED,
-		)
-		BusinessMembership.objects.create(user=user, claim=claim, is_active=True)
-
-		response = self.client.get(reverse('place-live-locations'), {'city': City.VENTURA})
-
-		self.assertEqual(response.status_code, 200)
-		payload_by_slug = {payload['slug']: payload for payload in response.data}
-		self.assertIsNone(payload_by_slug['scoops-truck']['latitude'])
-		self.assertIsNone(payload_by_slug['scoops-truck']['longitude'])
-		self.assertIsNone(payload_by_slug['approved-scoops-truck']['latitude'])
-		self.assertIsNone(payload_by_slug['approved-scoops-truck']['longitude'])
-
-	def test_live_location_endpoint_disables_duplicate_snapshot_aliases(self):
-		ListingSnapshot.objects.create(
-			name='Business Example',
-			listing_slug='business-example',
-			city='',
-			venue_type=VenueType.MOBILE,
-			address_line_1='Approximate live location',
-			tracked_location_latitude=34.2123825,
-			tracked_location_longitude=-119.1651275,
-			tracked_location_updated_at=timezone.now(),
-		)
-		user = User.objects.create_user(username='disabled_duplicate_owner', email='disabled-duplicate@example.com', password='test-pass-123')
-		AccountProfile.objects.create(user=user, business_location_tracking_enabled=False)
-		owned_snapshot = ListingSnapshot.objects.create(
-			name='Business Example',
-			listing_slug='business-example',
-			city='',
-			venue_type=VenueType.MOBILE,
-			address_line_1='Approximate live location',
-		)
-		claim = BusinessClaim.objects.create(
-			claimant=user,
-			listing_snapshot=owned_snapshot,
-			contact_name='Mobile Owner',
-			status=BusinessClaim.Status.APPROVED,
-		)
-		BusinessMembership.objects.create(user=user, claim=claim, is_active=True)
-
-		response = self.client.get(reverse('place-live-locations'), {'city': 'all'})
-
-		self.assertEqual(response.status_code, 200)
-		payload_by_slug = {payload['slug']: payload for payload in response.data}
-		self.assertIsNone(payload_by_slug['business-example']['latitude'])
-		self.assertIsNone(payload_by_slug['business-example']['longitude'])
-
-	def test_live_location_endpoint_disables_approved_claim_without_active_membership(self):
-		user = User.objects.create_user(username='disabled_unmembered_owner', email='disabled-unmembered@example.com', password='test-pass-123')
-		AccountProfile.objects.create(user=user, business_location_tracking_enabled=False)
-		ListingSnapshot.objects.create(
-			name='Unmembered Truck',
-			listing_slug='unmembered-truck',
-			city=City.VENTURA,
-			venue_type=VenueType.MOBILE,
-			address_line_1='Approximate live location',
-			tracked_location_latitude=34.2789,
-			tracked_location_longitude=-119.2914,
-			tracked_location_updated_at=timezone.now(),
-		)
-		snapshot = ListingSnapshot.objects.get(listing_slug='unmembered-truck')
-		BusinessClaim.objects.create(
-			claimant=user,
-			listing_snapshot=snapshot,
-			contact_name='Mobile Owner',
-			status=BusinessClaim.Status.APPROVED,
-		)
-
-		response = self.client.get(reverse('place-live-locations'), {'city': City.VENTURA})
-
-		self.assertEqual(response.status_code, 200)
-		payload_by_slug = {payload['slug']: payload for payload in response.data}
-		self.assertIsNone(payload_by_slug['unmembered-truck']['latitude'])
-		self.assertIsNone(payload_by_slug['unmembered-truck']['longitude'])
-		self.assertIsNone(payload_by_slug['unmembered-truck-ventura']['latitude'])
-		self.assertIsNone(payload_by_slug['unmembered-truck-ventura']['longitude'])
+		self.assertEqual(len(response.data), 1)
+		self.assertEqual(response.data[0]['slug'], 'scoops-truck-ventura')
+		self.assertEqual(response.data[0]['latitude'], 34.2789)
+		self.assertEqual(response.data[0]['longitude'], -119.2914)
+		self.assertTrue(bool(response.data[0]['updated_at']))
 
 	def test_deal_list_endpoint(self):
 		with patch('places.views.get_source_deal_payloads', return_value=self.place_payload['deals']):
@@ -3749,140 +3607,6 @@ class SourceListingIdentityTests(TestCase):
 		self.assertTrue(payloads[0]['is_verified'])
 
 	@patch('places.services.source_listings.load_source_records')
-	def test_account_profile_tracking_change_invalidates_cached_mobile_payload(self, mock_load_source_records):
-		mock_load_source_records.return_value = []
-		user = User.objects.create_user(username='cache_mobile_owner', email='cache-mobile-owner@example.com', password='test-pass-123')
-		profile = AccountProfile.objects.create(user=user, business_location_tracking_enabled=True)
-		snapshot = ListingSnapshot.objects.create(
-			name='Scoops Truck',
-			listing_slug='scoops-truck',
-			city=City.VENTURA,
-			venue_type=VenueType.MOBILE,
-			address_line_1='Approximate live location',
-			tracked_location_latitude=34.2789,
-			tracked_location_longitude=-119.2914,
-		)
-		claim = BusinessClaim.objects.create(
-			claimant=user,
-			listing_snapshot=snapshot,
-			contact_name='Mobile Owner',
-			work_email='owner@scoops.example.com',
-			verification_summary='I operate this truck.',
-			status=BusinessClaim.Status.APPROVED,
-		)
-		BusinessMembership.objects.create(user=user, claim=claim, is_active=True)
-
-		first_payloads = get_source_place_payloads(resolve_missing_coordinates=False)
-		profile.business_location_tracking_enabled = False
-		profile.save(update_fields=['business_location_tracking_enabled', 'updated_at'])
-		second_payloads = get_source_place_payloads(resolve_missing_coordinates=False)
-
-		self.assertEqual(first_payloads[0]['latitude'], 34.2789)
-		self.assertEqual(first_payloads[0]['longitude'], -119.2914)
-		self.assertIsNone(second_payloads[0]['latitude'])
-		self.assertIsNone(second_payloads[0]['longitude'])
-
-	@patch('places.services.source_listings.load_source_records')
-	def test_disabled_mobile_business_suppresses_matching_source_coordinates_by_name(self, mock_load_source_records):
-		mock_load_source_records.return_value = [
-			ImportedPlace(
-				name='Scoops Truck',
-				city=City.VENTURA,
-				venue_type=VenueType.FAST_FOOD,
-				address_line_1='100 Static Source Way',
-				state='CA',
-				postal_code='93001',
-				latitude=34.2000,
-				longitude=-119.2000,
-				external_id='unmatched-source-scoops',
-				source_name='business_websites',
-				source_url='https://example.com/source-scoops',
-			),
-		]
-		user = User.objects.create_user(username='disabled_name_owner', email='disabled-name-owner@example.com', password='test-pass-123')
-		AccountProfile.objects.create(user=user, business_location_tracking_enabled=False)
-		snapshot = ListingSnapshot.objects.create(
-			name='Scoops Truck',
-			listing_slug='approved-scoops-truck',
-			city=City.VENTURA,
-			venue_type=VenueType.MOBILE,
-			address_line_1='Approximate live location',
-			state='CA',
-			postal_code='93001',
-			external_id='different-claim-source-id',
-			source_name='business_websites',
-		)
-		claim = BusinessClaim.objects.create(
-			claimant=user,
-			listing_snapshot=snapshot,
-			contact_name='Mobile Owner',
-			work_email='owner@scoops.example.com',
-			verification_summary='I operate this truck.',
-			status=BusinessClaim.Status.APPROVED,
-		)
-		BusinessMembership.objects.create(user=user, claim=claim, is_active=True)
-
-		payloads = get_source_place_payloads(resolve_missing_coordinates=False)
-		payload_by_slug = {payload['slug']: payload for payload in payloads}
-
-		self.assertIsNone(payload_by_slug['scoops-truck']['latitude'])
-		self.assertIsNone(payload_by_slug['scoops-truck']['longitude'])
-		self.assertIsNone(payload_by_slug['scoops-truck']['locations'][0]['latitude'])
-		self.assertIsNone(payload_by_slug['scoops-truck']['locations'][0]['longitude'])
-
-	@patch('places.services.source_listings.load_source_records')
-	def test_disabled_claimed_mobile_business_replaces_matching_source_payload(self, mock_load_source_records):
-		mock_load_source_records.return_value = [
-			ImportedPlace(
-				name='Scoops Truck',
-				city=City.VENTURA,
-				venue_type=VenueType.FAST_FOOD,
-				address_line_1='100 Static Source Way',
-				state='CA',
-				postal_code='93001',
-				latitude=34.2000,
-				longitude=-119.2000,
-				external_id='source-scoops-1',
-				source_name='business_websites',
-				source_url='https://example.com/source-scoops',
-			),
-		]
-		user = User.objects.create_user(username='disabled_mobile_owner', email='disabled-mobile-owner@example.com', password='test-pass-123')
-		AccountProfile.objects.create(user=user, business_location_tracking_enabled=False)
-		snapshot = ListingSnapshot.objects.create(
-			name='Scoops Truck',
-			listing_slug='approved-scoops-truck',
-			city=City.VENTURA,
-			venue_type=VenueType.MOBILE,
-			address_line_1='Approximate live location',
-			state='CA',
-			postal_code='93001',
-			tracked_location_latitude=34.2789,
-			tracked_location_longitude=-119.2914,
-			external_id='source-scoops-1',
-			source_name='business_websites',
-		)
-		claim = BusinessClaim.objects.create(
-			claimant=user,
-			listing_snapshot=snapshot,
-			contact_name='Mobile Owner',
-			work_email='owner@scoops.example.com',
-			verification_summary='I operate this truck.',
-			status=BusinessClaim.Status.APPROVED,
-		)
-		BusinessMembership.objects.create(user=user, claim=claim, is_active=True)
-
-		payloads = get_source_place_payloads(resolve_missing_coordinates=False)
-
-		self.assertEqual(len(payloads), 1)
-		self.assertEqual(payloads[0]['slug'], 'scoops-truck')
-		self.assertTrue(payloads[0]['is_claimed'])
-		self.assertIsNone(payloads[0]['latitude'])
-		self.assertIsNone(payloads[0]['longitude'])
-		self.assertIsNone(payloads[0]['locations'][0]['latitude'])
-		self.assertIsNone(payloads[0]['locations'][0]['longitude'])
-
-	@patch('places.services.source_listings.load_source_records')
 	def test_approved_manual_business_creation_profile_counts_as_place_without_membership(self, mock_load_source_records):
 		mock_load_source_records.return_value = []
 		user = User.objects.create_user(username='manual_place_owner', email='manual-place-owner@example.com', password='test-pass-123')
@@ -6384,7 +6108,6 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(response.data['billing_portal_url'], 'https://example.com/billing')
 		self.assertEqual(len(response.data['approved_businesses']), 1)
 		self.assertEqual(response.data['approved_businesses'][0]['slug'], snapshot.listing_slug)
-		self.assertEqual(response.data['approved_businesses'][0]['public_slug'], snapshot.listing_slug)
 		self.assertEqual(response.data['approved_businesses'][0]['name'], 'Approved Spot')
 		self.assertEqual(response.data['business_contact']['work_email'], 'owner@approvedspot.com')
 		self.assertEqual(response.data['approved_businesses'][0]['address_line_1'], '55 Main St')
@@ -6410,38 +6133,6 @@ class ProfileDashboardApiTests(APITestCase):
 				},
 			},
 		)
-
-	@patch('places.services.source_listings.get_source_place_payload')
-	def test_profile_dashboard_includes_public_slug_for_approved_business(self, mock_get_source_place_payload):
-		mock_get_source_place_payload.return_value = {
-			'slug': 'scoops-truck',
-			'deals': [],
-			'operating_hours': [],
-		}
-		snapshot = ListingSnapshot.objects.create(
-			name='Scoops Truck',
-			listing_slug='approved-scoops-truck',
-			city=City.VENTURA,
-			venue_type=VenueType.MOBILE,
-			address_line_1='Approximate live location',
-		)
-		claim = BusinessClaim.objects.create(
-			claimant=self.user,
-			listing_snapshot=snapshot,
-			contact_name='Dash Board',
-			job_title='Owner',
-			work_email='owner@scoops.example.com',
-			employer_address='',
-			verification_summary='I operate the truck.',
-			status=BusinessClaim.Status.APPROVED,
-		)
-		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
-
-		response = self.client.get(reverse('profile-dashboard'), {'portal': 'business'}, **self.auth_headers())
-
-		self.assertEqual(response.status_code, 200)
-		self.assertEqual(response.data['approved_businesses'][0]['slug'], 'approved-scoops-truck')
-		self.assertEqual(response.data['approved_businesses'][0]['public_slug'], 'scoops-truck')
 
 	def test_profile_dashboard_update_allows_approved_business_profile_edits(self):
 		snapshot = ListingSnapshot.objects.create(
@@ -7682,102 +7373,6 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertIsNotNone(payload)
 		self.assertIsNone(payload['latitude'])
 		self.assertIsNone(payload['longitude'])
-
-		snapshot.tracked_location_latitude = 34.2812
-		snapshot.tracked_location_longitude = -119.2944
-		snapshot.save(update_fields=['tracked_location_latitude', 'tracked_location_longitude', 'updated_at'])
-		payload = get_source_place_payload(snapshot.listing_slug)
-		self.assertIsNone(payload['latitude'])
-		self.assertIsNone(payload['longitude'])
-		live_response = self.client.get(reverse('place-live-locations'), {'city': City.VENTURA})
-		self.assertEqual(live_response.status_code, 200)
-		live_payload_by_slug = {item['slug']: item for item in live_response.data}
-		self.assertIsNone(live_payload_by_slug['scoops-truck-ventura']['latitude'])
-		self.assertIsNone(live_payload_by_slug['scoops-truck-ventura']['longitude'])
-
-	def test_service_area_business_without_live_tracking_does_not_restore_source_coordinates(self):
-		existing_payload = {
-			'address_line_1': '100 Static Source Way',
-			'address_line_2': '',
-			'city': City.VENTURA,
-			'city_label': 'Ventura',
-			'image_urls': [],
-			'is_claimed': False,
-			'latitude': 34.2812,
-			'locations': [{
-				'address_line_1': '100 Static Source Way',
-				'address_line_2': '',
-				'city': City.VENTURA,
-				'city_label': 'Ventura',
-				'image_urls': [],
-				'latitude': 34.2812,
-				'longitude': -119.2944,
-				'neighborhood': '',
-				'phone_number': '',
-				'postal_code': '',
-				'state': 'CA',
-				'website_url': '',
-			}],
-			'longitude': -119.2944,
-			'neighborhood': '',
-			'phone_number': '',
-			'postal_code': '',
-			'state': 'CA',
-			'venue_type': VenueType.FAST_FOOD,
-			'venue_type_label': 'Fast Food',
-			'website_url': '',
-		}
-		snapshot_payload = {
-			'address_line_1': 'Approximate live location unavailable',
-			'address_line_2': '',
-			'city': '',
-			'city_label': '',
-			'image_urls': [],
-			'is_informal': True,
-			'latitude': None,
-			'locations': [{
-				'address_line_1': 'Approximate live location unavailable',
-				'address_line_2': '',
-				'city': '',
-				'city_label': '',
-				'image_urls': [],
-				'latitude': None,
-				'longitude': None,
-				'neighborhood': '',
-				'phone_number': '',
-				'postal_code': '',
-				'state': 'CA',
-				'website_url': '',
-			}],
-			'longitude': None,
-			'neighborhood': '',
-			'phone_number': '',
-			'photo_gallery_overridden': False,
-			'postal_code': '',
-			'public_address_overridden': False,
-			'public_postal_code_overridden': False,
-			'serves_multiple_areas': True,
-			'social_profiles': {},
-			'social_media_links': [],
-			'offer_entries': [],
-			'hours_of_operation_entries': [],
-			'photo_references': [],
-			'supporting_details': '',
-			'deal_overrides': None,
-			'operating_hour_overrides': None,
-			'state': 'CA',
-			'venue_type': VenueType.FAST_FOOD,
-			'venue_type_label': 'Fast Food',
-			'website_url': '',
-		}
-
-		payload = _merge_claimed_snapshot_payload(existing_payload, snapshot_payload)
-
-		self.assertTrue(payload['serves_multiple_areas'])
-		self.assertIsNone(payload['latitude'])
-		self.assertIsNone(payload['longitude'])
-		self.assertIsNone(payload['locations'][0]['latitude'])
-		self.assertIsNone(payload['locations'][0]['longitude'])
 		self.assertIsNone(payload['locations'][0]['latitude'])
 		self.assertIsNone(payload['locations'][0]['longitude'])
 

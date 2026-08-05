@@ -1,7 +1,7 @@
 from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 
-from .models import AccountProfile, BusinessClaim, BusinessClaimAttachment, BusinessDirectMessage, BusinessMembership, ListingSnapshot
+from .models import BusinessClaim, BusinessClaimAttachment, BusinessDirectMessage, BusinessMembership, ListingSnapshot
 from .services.media_storage import delete_removed_storage_references, delete_storage_names, delete_storage_references
 from .services.source_listings import invalidate_source_place_payload_cache
 
@@ -64,11 +64,6 @@ def invalidate_business_membership_place_payload_cache_on_save(sender, instance,
 
 @receiver(post_delete, sender=BusinessMembership)
 def invalidate_business_membership_place_payload_cache_on_delete(sender, instance, **kwargs):
-	invalidate_source_place_payload_cache(invalidate_all=True)
-
-
-@receiver(post_save, sender=AccountProfile)
-def invalidate_account_profile_place_payload_cache_on_save(sender, instance, **kwargs):
 	invalidate_source_place_payload_cache(invalidate_all=True)
 
 
