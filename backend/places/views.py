@@ -60,7 +60,7 @@ from .serializers import (
 	sync_listing_snapshot_from_place_payload,
 )
 from .services.account_profiles import build_account_response, build_email_verification_challenge, deactivate_account_for_retained_direct_messages, get_business_access_hold_claim, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, is_deleted_account, send_business_claim_received_email, send_password_reset_email, send_support_contact_email, send_username_reminder_email, send_verification_email
-from .models import BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedImpression, ListingSnapshot, VenueType
+from .models import BusinessClaim, BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedImpression, ListingSnapshot, VenueType
 from .services.favorite_notifications import create_notifications_for_business_profile_update
 from .services.direct_message_push import send_push_notifications_for_direct_message
 from .services.home_feed import get_feed_interval, get_feed_queryset, get_organic_page_size, get_ranked_campaigns, get_requested_feed_page_size, mix_feed_items, record_campaign_served
@@ -375,13 +375,13 @@ class LiveLocationPlaceListView(generics.GenericAPIView):
 		if city and city != 'all':
 			queryset = queryset.filter(Q(city=city) | Q(serves_multiple_areas=True))
 		disabled_snapshot_ids = set(
-			BusinessMembership.objects
+			BusinessClaim.objects
 			.filter(
-				is_active=True,
-				claim__listing_snapshot__in=queryset,
-				user__account_profile__business_location_tracking_enabled=False,
+				status=BusinessClaim.Status.APPROVED,
+				listing_snapshot__in=queryset,
+				claimant__account_profile__business_location_tracking_enabled=False,
 			)
-			.values_list('claim__listing_snapshot_id', flat=True)
+			.values_list('listing_snapshot_id', flat=True)
 		)
 		disabled_live_location_slugs = {
 			live_slug

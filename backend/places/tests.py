@@ -420,6 +420,36 @@ class PlaceApiTests(APITestCase):
 		self.assertIsNone(payload_by_slug['business-example']['latitude'])
 		self.assertIsNone(payload_by_slug['business-example']['longitude'])
 
+	def test_live_location_endpoint_disables_approved_claim_without_active_membership(self):
+		user = User.objects.create_user(username='disabled_unmembered_owner', email='disabled-unmembered@example.com', password='test-pass-123')
+		AccountProfile.objects.create(user=user, business_location_tracking_enabled=False)
+		ListingSnapshot.objects.create(
+			name='Unmembered Truck',
+			listing_slug='unmembered-truck',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+			tracked_location_latitude=34.2789,
+			tracked_location_longitude=-119.2914,
+			tracked_location_updated_at=timezone.now(),
+		)
+		snapshot = ListingSnapshot.objects.get(listing_slug='unmembered-truck')
+		BusinessClaim.objects.create(
+			claimant=user,
+			listing_snapshot=snapshot,
+			contact_name='Mobile Owner',
+			status=BusinessClaim.Status.APPROVED,
+		)
+
+		response = self.client.get(reverse('place-live-locations'), {'city': City.VENTURA})
+
+		self.assertEqual(response.status_code, 200)
+		payload_by_slug = {payload['slug']: payload for payload in response.data}
+		self.assertIsNone(payload_by_slug['unmembered-truck']['latitude'])
+		self.assertIsNone(payload_by_slug['unmembered-truck']['longitude'])
+		self.assertIsNone(payload_by_slug['unmembered-truck-ventura']['latitude'])
+		self.assertIsNone(payload_by_slug['unmembered-truck-ventura']['longitude'])
+
 	def test_deal_list_endpoint(self):
 		with patch('places.views.get_source_deal_payloads', return_value=self.place_payload['deals']):
 			response = self.client.get(reverse('deal-list'))
