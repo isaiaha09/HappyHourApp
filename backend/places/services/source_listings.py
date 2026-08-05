@@ -169,7 +169,7 @@ def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_
 	)
 	cached_payloads = cache.get(cache_key)
 	if cached_payloads is not None:
-		return deepcopy(cached_payloads)
+		return _suppress_disabled_live_location_payloads(deepcopy(cached_payloads))
 
 	payloads_by_slug = {}
 	snapshot_overrides_by_slug = _get_listing_snapshot_override_payloads()
@@ -242,11 +242,50 @@ def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_
 			continue
 		payloads.append(payload)
 
-	sorted_payloads = sorted(payloads, key=lambda payload: (payload['name'], payload['city_label']))
+	sorted_payloads = _suppress_disabled_live_location_payloads(sorted(payloads, key=lambda payload: (payload['name'], payload['city_label'])))
 	cache_timeout = _get_source_place_payload_cache_timeout()
 	if cache_timeout and cache_timeout > 0:
 		cache.set(cache_key, deepcopy(sorted_payloads), cache_timeout)
 	return sorted_payloads
+
+
+def _disabled_live_location_slugs():
+	disabled_slugs = set()
+	memberships = (
+		BusinessMembership.objects
+		.select_related('claim__listing_snapshot', 'user__account_profile')
+		.filter(
+			is_active=True,
+			user__account_profile__business_location_tracking_enabled=False,
+		)
+		.filter(
+			Q(claim__listing_snapshot__venue_type=VenueType.MOBILE)
+			| Q(claim__listing_snapshot__serves_multiple_areas=True)
+		)
+	)
+	for membership in memberships:
+		snapshot = membership.claim.listing_snapshot
+		if snapshot.listing_slug:
+			disabled_slugs.add(snapshot.listing_slug)
+		disabled_slugs.add(slugify(f'{snapshot.name}-{snapshot.city}'))
+	return disabled_slugs
+
+
+def _suppress_disabled_live_location_payloads(payloads):
+	disabled_slugs = _disabled_live_location_slugs()
+	if not disabled_slugs:
+		return payloads
+
+	for payload in payloads:
+		payload_slug = payload.get('slug')
+		if payload_slug in disabled_slugs:
+			payload['latitude'] = None
+			payload['longitude'] = None
+		for location in payload.get('locations', []):
+			if payload_slug in disabled_slugs or location.get('slug') in disabled_slugs:
+				location['latitude'] = None
+				location['longitude'] = None
+	return payloads
 
 
 def _get_listing_snapshot_override_payloads():

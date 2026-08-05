@@ -3628,10 +3628,11 @@ class SourceListingIdentityTests(TestCase):
 		self.assertTrue(payloads[0]['is_verified'])
 
 	@patch('places.services.source_listings.load_source_records')
+	@override_settings(SOURCE_PLACE_PAYLOAD_CACHE_TIMEOUT=60)
 	def test_disabled_mobile_business_tracking_suppresses_public_map_coordinates(self, mock_load_source_records):
 		mock_load_source_records.return_value = []
 		user = User.objects.create_user(username='hidden_mobile_owner', email='hidden-owner@example.com', password='test-pass-123')
-		AccountProfile.objects.create(user=user, business_location_tracking_enabled=False)
+		profile = AccountProfile.objects.create(user=user, business_location_tracking_enabled=True)
 		snapshot = ListingSnapshot.objects.create(
 			name='Hidden Scoops Truck',
 			listing_slug='hidden-scoops-truck',
@@ -3651,6 +3652,11 @@ class SourceListingIdentityTests(TestCase):
 		)
 		BusinessMembership.objects.create(user=user, claim=claim, is_active=True)
 
+		cached_payloads = get_source_place_payloads(resolve_missing_coordinates=False)
+		self.assertEqual(cached_payloads[0]['latitude'], 34.2789)
+		self.assertEqual(cached_payloads[0]['locations'][0]['latitude'], 34.2789)
+
+		AccountProfile.objects.filter(pk=profile.pk).update(business_location_tracking_enabled=False)
 		payloads = get_source_place_payloads(resolve_missing_coordinates=False)
 
 		self.assertEqual(len(payloads), 1)
