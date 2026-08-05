@@ -3684,6 +3684,40 @@ class SourceListingIdentityTests(TestCase):
 		self.assertTrue(payloads[0]['is_verified'])
 
 	@patch('places.services.source_listings.load_source_records')
+	def test_account_profile_tracking_change_invalidates_cached_mobile_payload(self, mock_load_source_records):
+		mock_load_source_records.return_value = []
+		user = User.objects.create_user(username='cache_mobile_owner', email='cache-mobile-owner@example.com', password='test-pass-123')
+		profile = AccountProfile.objects.create(user=user, business_location_tracking_enabled=True)
+		snapshot = ListingSnapshot.objects.create(
+			name='Scoops Truck',
+			listing_slug='scoops-truck',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+			tracked_location_latitude=34.2789,
+			tracked_location_longitude=-119.2914,
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=user,
+			listing_snapshot=snapshot,
+			contact_name='Mobile Owner',
+			work_email='owner@scoops.example.com',
+			verification_summary='I operate this truck.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(user=user, claim=claim, is_active=True)
+
+		first_payloads = get_source_place_payloads(resolve_missing_coordinates=False)
+		profile.business_location_tracking_enabled = False
+		profile.save(update_fields=['business_location_tracking_enabled', 'updated_at'])
+		second_payloads = get_source_place_payloads(resolve_missing_coordinates=False)
+
+		self.assertEqual(first_payloads[0]['latitude'], 34.2789)
+		self.assertEqual(first_payloads[0]['longitude'], -119.2914)
+		self.assertIsNone(second_payloads[0]['latitude'])
+		self.assertIsNone(second_payloads[0]['longitude'])
+
+	@patch('places.services.source_listings.load_source_records')
 	def test_disabled_claimed_mobile_business_replaces_matching_source_payload(self, mock_load_source_records):
 		mock_load_source_records.return_value = [
 			ImportedPlace(

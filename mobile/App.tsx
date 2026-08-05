@@ -289,6 +289,17 @@ function stripLiveLocationCoordinatesFromPlaces(places: PlaceListItem[]) {
   return changed ? nextPlaces : places;
 }
 
+function getApprovedBusinessSlugs(session: SignupResponse | null) {
+  const slugs = new Set<string>();
+  for (const business of session?.approved_businesses ?? []) {
+    slugs.add(business.slug);
+    if (business.public_slug) {
+      slugs.add(business.public_slug);
+    }
+  }
+  return slugs;
+}
+
 type InteractiveBackSwipeConfig = {
   kind: 'onboarding' | 'browse-profile' | 'guest-browse' | 'main-shell';
   nextScreen: AppScreenMode;
@@ -914,14 +925,7 @@ function AppScreen() {
       return new Set<string>();
     }
 
-    const slugs = new Set<string>();
-    for (const business of authenticatedSession.approved_businesses ?? []) {
-      slugs.add(business.slug);
-      if (business.public_slug) {
-        slugs.add(business.public_slug);
-      }
-    }
-    return slugs;
+    return getApprovedBusinessSlugs(authenticatedSession);
   }, [authenticatedSession?.approved_businesses, authenticatedSession?.business_location_tracking_enabled, authenticatedSession?.portal, pendingBusinessLocationTrackingEnabled]);
 
   const visiblePlaces = useMemo(() => (
@@ -3362,6 +3366,13 @@ function AppScreen() {
     setLoggedOutBusinessTrackingSession(
       preserveBusinessTracking ? buildBusinessTrackingSession(authenticatedSession) : null,
     );
+    clearPlacesCache();
+    allPlacesCacheRef.current = null;
+    setPlaces([]);
+    setProfilePlaces([]);
+    setRenderedMappedPlaces([]);
+    setRenderedMappedPlaceKey('');
+    setReloadCount((current) => current + 1);
     if (!preserveBusinessTracking) {
       void stopBusinessBackgroundLocationTask();
       void clearPersistedBusinessTrackingSession();
@@ -5717,7 +5728,7 @@ function AppScreen() {
     }
 
     const currentAuthToken = authenticatedSession.auth_token;
-    const approvedBusinessSlugs = new Set((authenticatedSession.approved_businesses ?? []).map((business) => business.slug));
+    const approvedBusinessSlugs = getApprovedBusinessSlugs(authenticatedSession);
 
     setSettingsSubmittingAction('business-location');
     setPendingBusinessLocationTrackingEnabled(enabled);
@@ -5766,9 +5777,14 @@ function AppScreen() {
         await stopBusinessBackgroundLocationTask();
       }
       if (!enabled && approvedBusinessSlugs.size > 0) {
+        clearPlacesCache();
+        allPlacesCacheRef.current = null;
         setPlaces((current) => current.map((place) => clearTrackedCoordinatesForBusiness(place, approvedBusinessSlugs)));
         setProfilePlaces((current) => current.map((place) => clearTrackedCoordinatesForBusiness(place, approvedBusinessSlugs)));
+        setRenderedMappedPlaces((current) => current.filter((place) => !approvedBusinessSlugs.has(place.slug)));
+        setRenderedMappedPlaceKey('');
         setSelectedPlace((current) => current ? clearTrackedCoordinatesForBusinessDetail(current, approvedBusinessSlugs) : current);
+        setReloadCount((current) => current + 1);
       }
       setProfileMessage(enabled
         ? 'Business location services turned on.'
