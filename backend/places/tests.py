@@ -305,18 +305,32 @@ class PlaceApiTests(APITestCase):
 			venue_type=VenueType.MOBILE,
 			address_line_1='Approximate live location',
 		)
+		ListingSnapshot.objects.create(
+			name='Service Area Catering',
+			listing_slug='service-area-catering',
+			city='',
+			venue_type=VenueType.FAST_FOOD,
+			address_line_1='Approximate live location unavailable',
+			serves_multiple_areas=True,
+		)
 
 		response = self.client.get(reverse('place-live-locations'), {'city': City.VENTURA})
 
 		self.assertEqual(response.status_code, 200)
 		payload_by_slug = {payload['slug']: payload for payload in response.data}
-		self.assertEqual(set(payload_by_slug), {'offline-truck-ventura', 'scoops-truck-ventura'})
+		self.assertEqual(set(payload_by_slug), {
+			'offline-truck-ventura',
+			'scoops-truck-ventura',
+			'service-area-catering',
+		})
 		self.assertEqual(payload_by_slug['scoops-truck-ventura']['latitude'], 34.2789)
 		self.assertEqual(payload_by_slug['scoops-truck-ventura']['longitude'], -119.2914)
 		self.assertTrue(bool(payload_by_slug['scoops-truck-ventura']['updated_at']))
 		self.assertIsNone(payload_by_slug['offline-truck-ventura']['latitude'])
 		self.assertIsNone(payload_by_slug['offline-truck-ventura']['longitude'])
 		self.assertIsNone(payload_by_slug['offline-truck-ventura']['updated_at'])
+		self.assertIsNone(payload_by_slug['service-area-catering']['latitude'])
+		self.assertIsNone(payload_by_slug['service-area-catering']['longitude'])
 
 	def test_deal_list_endpoint(self):
 		with patch('places.views.get_source_deal_payloads', return_value=self.place_payload['deals']):

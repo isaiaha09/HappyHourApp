@@ -373,7 +373,7 @@ class LiveLocationPlaceListView(generics.GenericAPIView):
 			.order_by('listing_slug', 'pk')
 		)
 		if city and city != 'all':
-			queryset = queryset.filter(city=city)
+			queryset = queryset.filter(Q(city=city) | Q(serves_multiple_areas=True))
 
 		payloads = [
 			{
