@@ -86,17 +86,40 @@ export function getPlaceLocations(place: PlaceListItem | PlaceDetail) {
   return place.locations.length ? place.locations : [place];
 }
 
-export function mergeLiveLocationUpdatesIntoPlaces(places: PlaceListItem[], updates: LiveLocationPlaceUpdate[]) {
-  if (!updates.length || !places.length) {
+const mobileBusinessVenueType = 'mobile';
+const multipleAreasBusinessCity = 'multiple_areas';
+
+function isLiveLocationPlace(place: PlaceListItem | PlaceDetail | PlaceLocation | PlaceLocationDetail) {
+  return place.venue_type === mobileBusinessVenueType || place.city === multipleAreasBusinessCity;
+}
+
+export function mergeLiveLocationUpdatesIntoPlaces(
+  places: PlaceListItem[],
+  updates: LiveLocationPlaceUpdate[],
+  options: { clearMissingLiveLocations?: boolean } = {},
+) {
+  if (!places.length) {
     return places;
   }
 
   const updatesBySlug = new Map(updates.map((update) => [update.slug, update]));
+  const shouldClearMissingLiveLocations = !!options.clearMissingLiveLocations;
   let changed = false;
   const nextPlaces = places.map((place) => {
     const nextLocations = place.locations.map((location) => {
       const update = updatesBySlug.get(location.slug);
       if (!update) {
+        if (
+          shouldClearMissingLiveLocations
+          && isLiveLocationPlace(location)
+          && (location.latitude !== null || location.longitude !== null)
+        ) {
+          return {
+            ...location,
+            latitude: null,
+            longitude: null,
+          };
+        }
         return location;
       }
 
@@ -112,10 +135,16 @@ export function mergeLiveLocationUpdatesIntoPlaces(places: PlaceListItem[], upda
     });
     const locationsChanged = nextLocations.some((location, index) => location !== place.locations[index]);
     const update = updatesBySlug.get(place.slug);
-    const placeChanged = update !== undefined && (
-      place.latitude !== update.latitude || place.longitude !== update.longitude
+    const hasLocationUpdate = place.locations.some((location) => updatesBySlug.has(location.slug));
+    const shouldClearPlaceCoordinates = shouldClearMissingLiveLocations
+      && update === undefined
+      && !hasLocationUpdate
+      && isLiveLocationPlace(place)
+      && (place.latitude !== null || place.longitude !== null);
+    const placeChanged = shouldClearPlaceCoordinates || (
+      update !== undefined && (place.latitude !== update.latitude || place.longitude !== update.longitude)
     );
-    if (!locationsChanged && (!update || !placeChanged)) {
+    if (!locationsChanged && !placeChanged) {
       return place;
     }
 
@@ -125,6 +154,9 @@ export function mergeLiveLocationUpdatesIntoPlaces(places: PlaceListItem[], upda
       ...(update ? {
         latitude: update.latitude,
         longitude: update.longitude,
+      } : shouldClearPlaceCoordinates ? {
+        latitude: null,
+        longitude: null,
       } : {}),
       locations: nextLocations,
     };
@@ -133,16 +165,32 @@ export function mergeLiveLocationUpdatesIntoPlaces(places: PlaceListItem[], upda
   return changed ? nextPlaces : places;
 }
 
-export function mergeLiveLocationUpdatesIntoPlaceDetail(place: PlaceDetail | null, updates: LiveLocationPlaceUpdate[]) {
+export function mergeLiveLocationUpdatesIntoPlaceDetail(
+  place: PlaceDetail | null,
+  updates: LiveLocationPlaceUpdate[],
+  options: { clearMissingLiveLocations?: boolean } = {},
+) {
   if (!place) {
     return place;
   }
 
   const updatesBySlug = new Map(updates.map((update) => [update.slug, update]));
+  const shouldClearMissingLiveLocations = !!options.clearMissingLiveLocations;
 
   const nextLocations = place.locations.map((location) => {
     const update = updatesBySlug.get(location.slug);
     if (!update) {
+      if (
+        shouldClearMissingLiveLocations
+        && isLiveLocationPlace(location)
+        && (location.latitude !== null || location.longitude !== null)
+      ) {
+        return {
+          ...location,
+          latitude: null,
+          longitude: null,
+        };
+      }
       return location;
     }
 
@@ -158,10 +206,16 @@ export function mergeLiveLocationUpdatesIntoPlaceDetail(place: PlaceDetail | nul
   });
   const locationsChanged = nextLocations.some((location, index) => location !== place.locations[index]);
   const update = updatesBySlug.get(place.slug);
-  const placeChanged = update !== undefined && (
-    place.latitude !== update.latitude || place.longitude !== update.longitude
+  const hasLocationUpdate = place.locations.some((location) => updatesBySlug.has(location.slug));
+  const shouldClearPlaceCoordinates = shouldClearMissingLiveLocations
+    && update === undefined
+    && !hasLocationUpdate
+    && isLiveLocationPlace(place)
+    && (place.latitude !== null || place.longitude !== null);
+  const placeChanged = shouldClearPlaceCoordinates || (
+    update !== undefined && (place.latitude !== update.latitude || place.longitude !== update.longitude)
   );
-  if (!locationsChanged && (!update || !placeChanged)) {
+  if (!locationsChanged && !placeChanged) {
     return place;
   }
 
@@ -170,6 +224,9 @@ export function mergeLiveLocationUpdatesIntoPlaceDetail(place: PlaceDetail | nul
     ...(update ? {
       latitude: update.latitude,
       longitude: update.longitude,
+    } : shouldClearPlaceCoordinates ? {
+      latitude: null,
+      longitude: null,
     } : {}),
     locations: nextLocations,
   };

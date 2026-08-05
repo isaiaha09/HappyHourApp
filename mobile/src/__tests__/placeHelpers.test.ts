@@ -83,4 +83,78 @@ describe('mergeLiveLocationUpdatesIntoPlaces', () => {
     }));
     expect(result[1]).toBe(staticPlace);
   });
+
+  it('clears stale mobile coordinates when live updates are authoritative and the business is missing', () => {
+    const place = {
+      latitude: 34.2,
+      longitude: -119.1,
+      locations: [{
+        latitude: 34.2,
+        longitude: -119.1,
+        slug: 'scoops-truck-ventura',
+        venue_type: 'mobile',
+      }],
+      slug: 'scoops-truck',
+      venue_type: 'mobile',
+    } as PlaceListItem;
+    const staticPlace = {
+      latitude: 34.3,
+      longitude: -119.2,
+      locations: [{
+        latitude: 34.3,
+        longitude: -119.2,
+        slug: 'static-cafe-ventura',
+        venue_type: 'cafe',
+      }],
+      slug: 'static-cafe',
+      venue_type: 'cafe',
+    } as PlaceListItem;
+
+    const result = mergeLiveLocationUpdatesIntoPlaces([place, staticPlace], [], {
+      clearMissingLiveLocations: true,
+    });
+
+    expect(result[0]).toEqual(expect.objectContaining({
+      latitude: null,
+      longitude: null,
+    }));
+    expect(result[0].locations[0]).toEqual(expect.objectContaining({
+      latitude: null,
+      longitude: null,
+    }));
+    expect(result[1]).toBe(staticPlace);
+  });
+
+  it('does not clear a mobile business when a child location update is present', () => {
+    const place = {
+      latitude: 34.2,
+      longitude: -119.1,
+      locations: [{
+        latitude: 34.2,
+        longitude: -119.1,
+        slug: 'scoops-truck-ventura',
+        venue_type: 'mobile',
+      }],
+      slug: 'scoops-truck',
+      venue_type: 'mobile',
+    } as PlaceListItem;
+
+    const result = mergeLiveLocationUpdatesIntoPlaces([place], [{
+      latitude: 34.2789,
+      longitude: -119.2914,
+      slug: 'scoops-truck-ventura',
+      updated_at: '2026-08-03T17:33:20Z',
+    }], {
+      clearMissingLiveLocations: true,
+    });
+
+    expect(result[0]).toEqual(expect.objectContaining({
+      latitude: 34.2,
+      longitude: -119.1,
+    }));
+    expect(result[0].locations[0]).toEqual(expect.objectContaining({
+      latitude: 34.2789,
+      longitude: -119.2914,
+    }));
+  });
 });

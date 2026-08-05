@@ -1769,12 +1769,14 @@ function AppScreen() {
     async function refreshLiveLocationPlaces() {
       try {
         const updates = await fetchLiveLocationPlaces(apiBaseUrl, selectedCity);
-        if (cancelled || !updates.length) {
+        if (cancelled) {
           return;
         }
 
         setPlaces((current) => {
-          const nextPlaces = mergeLiveLocationUpdatesIntoPlaces(current, updates);
+          const nextPlaces = mergeLiveLocationUpdatesIntoPlaces(current, updates, {
+            clearMissingLiveLocations: true,
+          });
           if (nextPlaces !== current && selectedCity === 'all') {
             allPlacesCacheRef.current = {
               apiBaseUrl,
@@ -1784,8 +1786,12 @@ function AppScreen() {
           }
           return nextPlaces;
         });
-        setProfilePlaces((current) => mergeLiveLocationUpdatesIntoPlaces(current, updates));
-        setSelectedPlace((current) => mergeLiveLocationUpdatesIntoPlaceDetail(current, updates));
+        setProfilePlaces((current) => mergeLiveLocationUpdatesIntoPlaces(current, updates, {
+          clearMissingLiveLocations: true,
+        }));
+        setSelectedPlace((current) => mergeLiveLocationUpdatesIntoPlaceDetail(current, updates, {
+          clearMissingLiveLocations: true,
+        }));
       } catch {
         // Ignore best-effort live location refresh failures.
       }
@@ -3491,7 +3497,9 @@ function AppScreen() {
 
         try {
           const liveLocationUpdates = await fetchLiveLocationPlaces(apiBaseUrl, selectedCity);
-          nextPlacesWithLiveLocations = mergeLiveLocationUpdatesIntoPlaces(nextPlaces, liveLocationUpdates);
+          nextPlacesWithLiveLocations = mergeLiveLocationUpdatesIntoPlaces(nextPlaces, liveLocationUpdates, {
+            clearMissingLiveLocations: true,
+          });
         } catch {
           nextPlacesWithLiveLocations = nextPlaces;
         }
@@ -5675,9 +5683,14 @@ function AppScreen() {
         await stopBusinessBackgroundLocationTask();
       }
       if (!enabled && approvedBusinessSlugs.size > 0) {
+        clearPlacesCache();
+        allPlacesCacheRef.current = null;
         setPlaces((current) => current.map((place) => clearTrackedCoordinatesForBusiness(place, approvedBusinessSlugs)));
         setProfilePlaces((current) => current.map((place) => clearTrackedCoordinatesForBusiness(place, approvedBusinessSlugs)));
         setSelectedPlace((current) => current ? clearTrackedCoordinatesForBusinessDetail(current, approvedBusinessSlugs) : current);
+      } else if (enabled) {
+        clearPlacesCache();
+        allPlacesCacheRef.current = null;
       }
       setProfileMessage(enabled
         ? 'Business location services turned on.'
