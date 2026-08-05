@@ -369,8 +369,6 @@ class LiveLocationPlaceListView(generics.GenericAPIView):
 			.exclude(listing_slug='')
 			.filter(
 				Q(venue_type=VenueType.MOBILE) | Q(serves_multiple_areas=True),
-				tracked_location_latitude__isnull=False,
-				tracked_location_longitude__isnull=False,
 			)
 			.order_by('listing_slug', 'pk')
 		)

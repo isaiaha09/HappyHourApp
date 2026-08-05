@@ -1,6 +1,7 @@
 import { memo, startTransition, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
@@ -5638,6 +5639,10 @@ function AppScreen() {
 
     try {
       if (enabled) {
+        if (Constants.executionEnvironment === 'storeClient') {
+          throw new Error('Business location services require the DiningDealz development or production build. Expo Go cannot use this app\'s iOS location permissions or background tracking.');
+        }
+
         const foregroundPermission = await Location.getForegroundPermissionsAsync();
         const resolvedForegroundPermission = foregroundPermission.granted
           ? foregroundPermission
