@@ -214,21 +214,25 @@ def build_account_response(user, portal, claim=None, token=None):
 		business_status = ''
 		profile_type = 'customer'
 
-	approved_businesses = [
-		{
-			'id': membership.claim.listing_snapshot.id,
-			'slug': membership.claim.listing_snapshot.listing_slug,
-			'name': membership.claim.listing_snapshot.name,
-			'city': membership.claim.listing_snapshot.city,
-			'city_label': membership.claim.listing_snapshot.get_city_display() if membership.claim.listing_snapshot.city else '',
-			'venue_type': membership.claim.listing_snapshot.venue_type,
-			'venue_type_label': membership.claim.listing_snapshot.get_venue_type_display() if membership.claim.listing_snapshot.venue_type else '',
-			'address_line_1': membership.claim.listing_snapshot.address_line_1,
-			'website_url': membership.claim.business_website_url or membership.claim.listing_snapshot.website_url,
-		}
-		for membership in memberships
-		if membership.is_active
-	]
+	from places.services.source_listings import get_source_place_payload
+	approved_businesses = []
+	for membership in memberships:
+		if not membership.is_active:
+			continue
+		snapshot = membership.claim.listing_snapshot
+		public_place_payload = get_source_place_payload(snapshot.listing_slug) if snapshot.listing_slug else None
+		approved_businesses.append({
+			'id': snapshot.id,
+			'slug': snapshot.listing_slug,
+			'public_slug': public_place_payload['slug'] if public_place_payload else snapshot.listing_slug,
+			'name': snapshot.name,
+			'city': snapshot.city,
+			'city_label': snapshot.get_city_display() if snapshot.city else '',
+			'venue_type': snapshot.venue_type,
+			'venue_type_label': snapshot.get_venue_type_display() if snapshot.venue_type else '',
+			'address_line_1': snapshot.address_line_1,
+			'website_url': membership.claim.business_website_url or snapshot.website_url,
+		})
 
 	favorite_businesses = [
 		{

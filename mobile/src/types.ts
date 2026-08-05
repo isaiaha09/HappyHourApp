@@ -244,6 +244,7 @@ export type SignupResponse = {
   approved_businesses?: Array<{
     id: number;
     slug: string;
+    public_slug?: string;
     name: string;
     city: string;
     city_label: string;

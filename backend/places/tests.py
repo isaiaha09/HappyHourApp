@@ -6184,6 +6184,7 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(response.data['billing_portal_url'], 'https://example.com/billing')
 		self.assertEqual(len(response.data['approved_businesses']), 1)
 		self.assertEqual(response.data['approved_businesses'][0]['slug'], snapshot.listing_slug)
+		self.assertEqual(response.data['approved_businesses'][0]['public_slug'], snapshot.listing_slug)
 		self.assertEqual(response.data['approved_businesses'][0]['name'], 'Approved Spot')
 		self.assertEqual(response.data['business_contact']['work_email'], 'owner@approvedspot.com')
 		self.assertEqual(response.data['approved_businesses'][0]['address_line_1'], '55 Main St')
@@ -6209,6 +6210,38 @@ class ProfileDashboardApiTests(APITestCase):
 				},
 			},
 		)
+
+	@patch('places.services.source_listings.get_source_place_payload')
+	def test_profile_dashboard_includes_public_slug_for_approved_business(self, mock_get_source_place_payload):
+		mock_get_source_place_payload.return_value = {
+			'slug': 'scoops-truck',
+			'deals': [],
+			'operating_hours': [],
+		}
+		snapshot = ListingSnapshot.objects.create(
+			name='Scoops Truck',
+			listing_slug='approved-scoops-truck',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@scoops.example.com',
+			employer_address='',
+			verification_summary='I operate the truck.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+
+		response = self.client.get(reverse('profile-dashboard'), {'portal': 'business'}, **self.auth_headers())
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data['approved_businesses'][0]['slug'], 'approved-scoops-truck')
+		self.assertEqual(response.data['approved_businesses'][0]['public_slug'], 'scoops-truck')
 
 	def test_profile_dashboard_update_allows_approved_business_profile_edits(self):
 		snapshot = ListingSnapshot.objects.create(

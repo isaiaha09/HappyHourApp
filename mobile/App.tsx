@@ -903,7 +903,34 @@ function AppScreen() {
         : 'dark')
     : 'light';
 
-  const filteredPlaces = useMemo(() => getFilteredPlaces(places, {
+  const disabledBusinessLocationSlugs = useMemo(() => {
+    if (
+      authenticatedSession?.portal !== 'business'
+      || (
+        authenticatedSession.business_location_tracking_enabled !== false
+        && pendingBusinessLocationTrackingEnabled !== false
+      )
+    ) {
+      return new Set<string>();
+    }
+
+    const slugs = new Set<string>();
+    for (const business of authenticatedSession.approved_businesses ?? []) {
+      slugs.add(business.slug);
+      if (business.public_slug) {
+        slugs.add(business.public_slug);
+      }
+    }
+    return slugs;
+  }, [authenticatedSession?.approved_businesses, authenticatedSession?.business_location_tracking_enabled, authenticatedSession?.portal, pendingBusinessLocationTrackingEnabled]);
+
+  const visiblePlaces = useMemo(() => (
+    disabledBusinessLocationSlugs.size > 0
+      ? places.map((place) => clearTrackedCoordinatesForBusiness(place, disabledBusinessLocationSlugs))
+      : places
+  ), [disabledBusinessLocationSlugs, places]);
+
+  const filteredPlaces = useMemo(() => getFilteredPlaces(visiblePlaces, {
     confirmedDealsOnly,
     informalBusinessesOnly,
     searchQuery: normalizedDeferredSearchQuery,
@@ -916,11 +943,11 @@ function AppScreen() {
     confirmedDealsOnly,
     informalBusinessesOnly,
     normalizedDeferredSearchQuery,
-    places,
     selectedCity,
     selectedDealDays,
     selectedOperatingDays,
     selectedVenueTypes,
+    visiblePlaces,
     verifiedBusinessesOnly,
   ]);
   const filteredPlaceKey = useMemo(() => filteredPlaces.map((place) => place.id).join('|'), [filteredPlaces]);
@@ -945,11 +972,16 @@ function AppScreen() {
   const browseResultCount = displayedBrowsePlaces.length;
   const mappedPlaceIdentityKey = useMemo(() => mappedPlaces.map((place) => place.markerKey).join('|'), [mappedPlaces]);
   const mappedPlaceKey = useMemo(() => getMappedPlaceRenderKey(mappedPlaces), [mappedPlaces]);
-  const displayedMapPlaces = showMapBrowse
+  const displayedMapPlacesSource = showMapBrowse
     ? normalizedDeferredSearchQuery.length > 0
       ? mappedPlaces
       : renderedMappedPlaces
     : [];
+  const displayedMapPlaces = useMemo(() => (
+    disabledBusinessLocationSlugs.size > 0
+      ? displayedMapPlacesSource.filter((place) => !disabledBusinessLocationSlugs.has(place.slug))
+      : displayedMapPlacesSource
+  ), [disabledBusinessLocationSlugs, displayedMapPlacesSource]);
   const unplacedPlaceCount = useMemo(() => filteredPlaces.filter((place) => (
     !getPlaceLocations(place).some((location) => location.latitude !== null && location.longitude !== null)
   )).length, [filteredPlaces]);
@@ -1555,7 +1587,12 @@ function AppScreen() {
       : Math.min(height * 0.58, keyboardHeight > 0 ? 380 : 500),
     220,
   );
-  const availableProfilePlaces = profilePlaces.length ? profilePlaces : places;
+  const visibleProfilePlaces = useMemo(() => (
+    disabledBusinessLocationSlugs.size > 0
+      ? profilePlaces.map((place) => clearTrackedCoordinatesForBusiness(place, disabledBusinessLocationSlugs))
+      : profilePlaces
+  ), [disabledBusinessLocationSlugs, profilePlaces]);
+  const availableProfilePlaces = visibleProfilePlaces.length ? visibleProfilePlaces : visiblePlaces;
 
   function clearShowMoreMapResultsTimer() {
     if (showMoreMapResultsTimeoutRef.current === null) {
