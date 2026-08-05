@@ -117,6 +117,7 @@ export type PlaceLocationDetail = PlaceLocation & {
 export type PlaceListItem = PlaceLocation & {
   is_claimed: boolean;
   is_informal?: boolean;
+  serves_multiple_areas?: boolean;
   direct_messaging_enabled?: boolean;
   direct_message_restricted?: boolean;
   can_direct_message?: boolean;

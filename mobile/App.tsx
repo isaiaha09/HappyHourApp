@@ -247,6 +247,48 @@ type BusinessTrackingSession = {
   authToken: string;
 };
 
+function isLiveLocationBusiness(place: Pick<PlaceListItem, 'venue_type'> & { serves_multiple_areas?: boolean }) {
+  return place.venue_type === mobileBusinessVenueType || place.serves_multiple_areas === true;
+}
+
+function stripLiveLocationCoordinatesFromPlaces(places: PlaceListItem[]) {
+  let changed = false;
+
+  const nextPlaces = places.map((place) => {
+    if (!isLiveLocationBusiness(place)) {
+      return place;
+    }
+
+    const nextLocations = place.locations.map((location) => {
+      if (location.latitude === null && location.longitude === null) {
+        return location;
+      }
+
+      changed = true;
+      return {
+        ...location,
+        latitude: null,
+        longitude: null,
+      };
+    });
+
+    const locationsChanged = nextLocations.some((location, index) => location !== place.locations[index]);
+    if (place.latitude === null && place.longitude === null && !locationsChanged) {
+      return place;
+    }
+
+    changed = true;
+    return {
+      ...place,
+      latitude: null,
+      longitude: null,
+      locations: nextLocations,
+    };
+  });
+
+  return changed ? nextPlaces : places;
+}
+
 type InteractiveBackSwipeConfig = {
   kind: 'onboarding' | 'browse-profile' | 'guest-browse' | 'main-shell';
   nextScreen: AppScreenMode;
@@ -1785,7 +1827,7 @@ function AppScreen() {
           if (nextPlaces !== current && selectedCity === 'all') {
             allPlacesCacheRef.current = {
               apiBaseUrl,
-              places: nextPlaces,
+              places: stripLiveLocationCoordinatesFromPlaces(nextPlaces),
               reloadCount,
             };
           }
@@ -3494,13 +3536,14 @@ function AppScreen() {
 
       try {
         const nextPlaces = await fetchPlaces(apiBaseUrl, selectedCity);
-        let nextPlacesWithLiveLocations = nextPlaces;
+        const stableNextPlaces = stripLiveLocationCoordinatesFromPlaces(nextPlaces);
+        let nextPlacesWithLiveLocations = stableNextPlaces;
 
         try {
           const liveLocationUpdates = await fetchLiveLocationPlaces(apiBaseUrl, selectedCity);
-          nextPlacesWithLiveLocations = mergeLiveLocationUpdatesIntoPlaces(nextPlaces, liveLocationUpdates);
+          nextPlacesWithLiveLocations = mergeLiveLocationUpdatesIntoPlaces(stableNextPlaces, liveLocationUpdates);
         } catch {
-          nextPlacesWithLiveLocations = nextPlaces;
+          nextPlacesWithLiveLocations = stableNextPlaces;
         }
 
         if (!isMounted) {
@@ -3511,7 +3554,7 @@ function AppScreen() {
         if (selectedCity === 'all') {
           allPlacesCacheRef.current = {
             apiBaseUrl,
-            places: nextPlacesWithLiveLocations,
+            places: stableNextPlaces,
             reloadCount,
           };
         }
@@ -3694,7 +3737,7 @@ function AppScreen() {
     const cachedAllPlaces = allPlacesCacheRef.current;
 
     if (selectedCity === 'all' && places.length > 0) {
-      setProfilePlaces(places);
+      setProfilePlaces(stripLiveLocationCoordinatesFromPlaces(places));
       setProfilePlacesLoading(false);
       return;
     }
@@ -3715,10 +3758,10 @@ function AppScreen() {
 
       allPlacesCacheRef.current = {
         apiBaseUrl,
-        places: nextPlaces,
+        places: stripLiveLocationCoordinatesFromPlaces(nextPlaces),
         reloadCount,
       };
-      setProfilePlaces(nextPlaces);
+      setProfilePlaces(stripLiveLocationCoordinatesFromPlaces(nextPlaces));
     }).catch((error) => {
       if (!isMounted) {
         return;

@@ -7540,6 +7540,7 @@ class ProfileDashboardApiTests(APITestCase):
 
 		payload = _merge_claimed_snapshot_payload(existing_payload, snapshot_payload)
 
+		self.assertTrue(payload['serves_multiple_areas'])
 		self.assertIsNone(payload['latitude'])
 		self.assertIsNone(payload['longitude'])
 		self.assertIsNone(payload['locations'][0]['latitude'])

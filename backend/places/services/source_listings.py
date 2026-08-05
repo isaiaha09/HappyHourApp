@@ -875,6 +875,7 @@ def _merge_claimed_snapshot_payload(existing_payload, snapshot_payload):
 		'city_label': snapshot_payload['city_label'],
 		'is_claimed': True,
 		'is_informal': bool(snapshot_payload.get('is_informal')),
+		'serves_multiple_areas': bool(snapshot_payload.get('serves_multiple_areas')),
 		'venue_type': snapshot_payload['venue_type'],
 		'venue_type_label': snapshot_payload['venue_type_label'],
 		'address_line_1': snapshot_payload['address_line_1'] if is_live_location_business or owner_controls_public_address else existing_payload['address_line_1'],
