@@ -172,6 +172,8 @@ def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_
 		return deepcopy(cached_payloads)
 
 	payloads_by_slug = {}
+	payload_slugs_by_source_identity = {}
+	payload_slugs_by_location_identity = {}
 	snapshot_overrides_by_slug = _get_listing_snapshot_override_payloads()
 	claimed_listing_slugs = _get_claimed_listing_slugs()
 	for place_records in _group_source_records(load_source_records(source_name=source_name)).values():
@@ -211,13 +213,29 @@ def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_
 		payload['is_claimed'] = is_claimed
 		payload['is_informal'] = False
 		payloads_by_slug[payload['slug']] = payload
+		for place_record in place_records:
+			source_identity = _build_place_record_source_identity(place_record)
+			if source_identity and source_identity not in payload_slugs_by_source_identity:
+				payload_slugs_by_source_identity[source_identity] = payload['slug']
+			location_identity = _build_place_record_location_identity(place_record)
+			if location_identity and location_identity not in payload_slugs_by_location_identity:
+				payload_slugs_by_location_identity[location_identity] = payload['slug']
 
 	for claim in _get_active_business_claims():
 		snapshot_payload = _build_snapshot_place_payload(claim, resolve_missing_coordinates=resolve_missing_coordinates)
 		if snapshot_payload is None:
 			continue
 		snapshot_payload['is_claimed'] = True
-		existing_payload = payloads_by_slug.get(snapshot_payload['slug'])
+		matched_payload_slug = snapshot_payload['slug']
+		if matched_payload_slug not in payloads_by_slug:
+			source_identity = _build_snapshot_source_identity(claim.listing_snapshot)
+			if source_identity:
+				matched_payload_slug = payload_slugs_by_source_identity.get(source_identity, matched_payload_slug)
+		if matched_payload_slug not in payloads_by_slug:
+			location_identity = _build_snapshot_location_identity(claim.listing_snapshot)
+			if location_identity:
+				matched_payload_slug = payload_slugs_by_location_identity.get(location_identity, matched_payload_slug)
+		existing_payload = payloads_by_slug.pop(matched_payload_slug, None)
 		if existing_payload is None:
 			payloads_by_slug[snapshot_payload['slug']] = snapshot_payload
 			continue

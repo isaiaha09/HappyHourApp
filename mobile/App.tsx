@@ -947,6 +947,7 @@ function AppScreen() {
       authenticatedSession?.auth_token
       && authenticatedSession.portal === 'business'
       && authenticatedSession.requires_business_location_tracking
+      && authenticatedSession.business_location_tracking_enabled !== false
     ) {
       return {
         approvedBusinessSlugs: (authenticatedSession.approved_businesses ?? []).map((business) => business.slug),
@@ -962,7 +963,12 @@ function AppScreen() {
   }, [authenticatedSession, loggedOutBusinessTrackingSession]);
 
   function buildBusinessTrackingSession(session: SignupResponse | null): BusinessTrackingSession | null {
-    if (!session?.auth_token || session.portal !== 'business' || !session.requires_business_location_tracking) {
+    if (
+      !session?.auth_token
+      || session.portal !== 'business'
+      || !session.requires_business_location_tracking
+      || session.business_location_tracking_enabled === false
+    ) {
       return null;
     }
 
