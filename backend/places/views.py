@@ -384,17 +384,43 @@ class LiveLocationPlaceListView(generics.GenericAPIView):
 			.values_list('claim__listing_snapshot_id', flat=True)
 		)
 
-		payloads = [
-			{
-				'slug': slugify(f'{snapshot.name}-{snapshot.city}'),
-				'latitude': snapshot.tracked_location_latitude if snapshot.pk not in disabled_snapshot_ids else None,
-				'longitude': snapshot.tracked_location_longitude if snapshot.pk not in disabled_snapshot_ids else None,
-				'updated_at': snapshot.tracked_location_updated_at if snapshot.pk not in disabled_snapshot_ids else None,
-			}
-			for snapshot in queryset
-		]
+		payloads = []
+		seen_slugs = set()
+		for snapshot in queryset:
+			is_enabled = snapshot.pk not in disabled_snapshot_ids
+			latitude = snapshot.tracked_location_latitude if is_enabled else None
+			longitude = snapshot.tracked_location_longitude if is_enabled else None
+			updated_at = snapshot.tracked_location_updated_at if is_enabled else None
+			for live_slug in self._get_live_location_slugs(snapshot):
+				if live_slug in seen_slugs:
+					continue
+				seen_slugs.add(live_slug)
+				payloads.append({
+					'slug': live_slug,
+					'latitude': latitude,
+					'longitude': longitude,
+					'updated_at': updated_at,
+				})
 		serializer = self.get_serializer(payloads, many=True)
 		return Response(serializer.data)
+
+	def _get_live_location_slugs(self, snapshot):
+		name_slug = slugify(snapshot.name)
+		slugs = [slugify(f'{snapshot.name}-{snapshot.city}'), name_slug]
+		public_payload = None
+		if snapshot.listing_slug:
+			slugs.append(snapshot.listing_slug)
+			public_payload = get_source_place_payload(snapshot.listing_slug)
+		if public_payload is None and name_slug:
+			public_payload = get_source_place_payload(name_slug)
+		if public_payload:
+			slugs.append(public_payload['slug'])
+			slugs.extend(
+				location.get('slug')
+				for location in public_payload.get('locations', [])
+				if location.get('slug')
+			)
+		return list(dict.fromkeys(slug for slug in slugs if slug))
 
 
 class DealListView(generics.GenericAPIView):

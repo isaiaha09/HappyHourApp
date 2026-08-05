@@ -94,24 +94,24 @@ export function mergeLiveLocationUpdatesIntoPlaces(places: PlaceListItem[], upda
   const updatesBySlug = new Map(updates.map((update) => [update.slug, update]));
   let changed = false;
   const nextPlaces = places.map((place) => {
+    const update = updatesBySlug.get(place.slug);
     const nextLocations = place.locations.map((location) => {
-      const update = updatesBySlug.get(location.slug);
-      if (!update) {
+      const locationUpdate = updatesBySlug.get(location.slug) ?? update;
+      if (!locationUpdate) {
         return location;
       }
 
-      if (location.latitude === update.latitude && location.longitude === update.longitude) {
+      if (location.latitude === locationUpdate.latitude && location.longitude === locationUpdate.longitude) {
         return location;
       }
 
       return {
         ...location,
-        latitude: update.latitude,
-        longitude: update.longitude,
+        latitude: locationUpdate.latitude,
+        longitude: locationUpdate.longitude,
       };
     });
     const locationsChanged = nextLocations.some((location, index) => location !== place.locations[index]);
-    const update = updatesBySlug.get(place.slug);
     const placeChanged = update !== undefined && (
       place.latitude !== update.latitude || place.longitude !== update.longitude
     );
@@ -139,25 +139,25 @@ export function mergeLiveLocationUpdatesIntoPlaceDetail(place: PlaceDetail | nul
   }
 
   const updatesBySlug = new Map(updates.map((update) => [update.slug, update]));
+  const update = updatesBySlug.get(place.slug);
 
   const nextLocations = place.locations.map((location) => {
-    const update = updatesBySlug.get(location.slug);
-    if (!update) {
+    const locationUpdate = updatesBySlug.get(location.slug) ?? update;
+    if (!locationUpdate) {
       return location;
     }
 
-    if (location.latitude === update.latitude && location.longitude === update.longitude) {
+    if (location.latitude === locationUpdate.latitude && location.longitude === locationUpdate.longitude) {
       return location;
     }
 
     return {
       ...location,
-      latitude: update.latitude,
-      longitude: update.longitude,
+      latitude: locationUpdate.latitude,
+      longitude: locationUpdate.longitude,
     };
   });
   const locationsChanged = nextLocations.some((location, index) => location !== place.locations[index]);
-  const update = updatesBySlug.get(place.slug);
   const placeChanged = update !== undefined && (
     place.latitude !== update.latitude || place.longitude !== update.longitude
   );
