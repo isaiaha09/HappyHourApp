@@ -902,10 +902,6 @@ function AppScreen() {
   const browseResultCount = displayedBrowsePlaces.length;
   const mappedPlaceIdentityKey = useMemo(() => mappedPlaces.map((place) => place.markerKey).join('|'), [mappedPlaces]);
   const mappedPlaceKey = useMemo(() => getMappedPlaceRenderKey(mappedPlaces), [mappedPlaces]);
-  const renderedMappedPlaceIdentityKey = useMemo(
-    () => renderedMappedPlaces.map((place) => place.markerKey).join('|'),
-    [renderedMappedPlaces],
-  );
   const displayedMapPlaces = showMapBrowse
     ? normalizedDeferredSearchQuery.length > 0
       ? mappedPlaces
@@ -3683,7 +3679,7 @@ function AppScreen() {
       setMapMarkersTrackViewChanges(false);
       mapMarkersTrackViewChangesTimeoutRef.current = null;
     }, 1600);
-  }, [renderedMappedPlaceIdentityKey, selectedMapPlaceKey, showMapBrowse]);
+  }, [selectedMapPlaceKey, showMapBrowse]);
 
   useEffect(() => {
     if (!['profiles', 'business-search', 'business-claim', 'manual-business-claim', 'informal-business-claim'].includes(screenMode)) {
