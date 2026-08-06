@@ -1,8 +1,7 @@
 import Foundation
-import React
 
 @objc(DiningDealzMetroHost)
-final class DiningDealzMetroHost: NSObject, RCTBridgeModule {
+final class DiningDealzMetroHost: NSObject {
   @objc static var currentHost: String?
 
   static func record(bundleUrl: URL?) {
