@@ -35,7 +35,7 @@ import type {
   TwoFactorSetupResponse,
 } from './types';
 
-const FALLBACK_API_BASE_URL = 'http://127.0.0.1:8000/api';
+const MISSING_DEVELOPMENT_API_BASE_URL_MESSAGE = 'This development build is missing a local LAN backend URL. Start Metro with npm run start:wifi:xcode.';
 const MISSING_PRODUCTION_API_BASE_URL_MESSAGE = 'This build is missing the live backend URL. Set EXPO_PUBLIC_API_BASE_URL for production builds.';
 const placeCacheTtlMs = 5 * 60 * 1000;
 
@@ -65,11 +65,11 @@ export function getDefaultApiBaseUrl() {
     }
 
     const metroHost = getMetroHost();
-    if (metroHost) {
+    if (metroHost && isLanHost(metroHost)) {
       return `http://${metroHost}:8000/api`;
     }
 
-    return FALLBACK_API_BASE_URL;
+    return '';
   }
 
   if (configured) {
@@ -80,7 +80,7 @@ export function getDefaultApiBaseUrl() {
     return '';
   }
 
-  return FALLBACK_API_BASE_URL;
+  return '';
 }
 
 export function normalizeApiBaseUrl(value: string) {
@@ -95,7 +95,10 @@ export function normalizeApiBaseUrl(value: string) {
 }
 
 export function isMissingProductionApiBaseUrlError(error: unknown) {
-  return error instanceof Error && error.message === MISSING_PRODUCTION_API_BASE_URL_MESSAGE;
+  return error instanceof Error && (
+    error.message === MISSING_DEVELOPMENT_API_BASE_URL_MESSAGE
+    || error.message === MISSING_PRODUCTION_API_BASE_URL_MESSAGE
+  );
 }
 
 function getPlaceCacheKey(baseUrl: string, city: string, hasDeals?: boolean) {
@@ -478,7 +481,7 @@ async function fetchPagedJson<T>(baseUrl: string, path: string): Promise<Paginat
 function buildApiUrl(baseUrl: string, path: string) {
   const normalizedBaseUrl = normalizeApiBaseUrl(baseUrl);
   if (!normalizedBaseUrl) {
-    throw new Error(MISSING_PRODUCTION_API_BASE_URL_MESSAGE);
+    throw new Error(__DEV__ ? MISSING_DEVELOPMENT_API_BASE_URL_MESSAGE : MISSING_PRODUCTION_API_BASE_URL_MESSAGE);
   }
   return `${normalizedBaseUrl}${path}`;
 }
@@ -669,12 +672,7 @@ function getMetroHost() {
     return lanHost;
   }
 
-  const loopbackHost = hostCandidates.find(isLoopbackHost);
-  if (loopbackHost) {
-    return loopbackHost;
-  }
-
-  return hostCandidates[0] ?? null;
+  return null;
 }
 
 function extractHostFromUrl(value: unknown) {
@@ -723,10 +721,13 @@ function isLoopbackHost(host: string) {
 }
 
 function isPrivateIpv4Host(host: string) {
+  return isLanHost(host) || isLoopbackHost(host);
+}
+
+function isLanHost(host: string) {
   return /^10\./.test(host)
     || /^192\.168\./.test(host)
-    || /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
-    || isLoopbackHost(host);
+    || /^172\.(1[6-9]|2\d|3[0-1])\./.test(host);
 }
 
 function isLocalDevelopmentApiBaseUrl(value: string) {
