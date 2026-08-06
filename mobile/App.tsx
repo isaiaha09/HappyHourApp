@@ -2446,7 +2446,7 @@ function AppScreen() {
     mapPinsTransition.stopAnimation();
     setRenderedMappedPlaces(mappedPlaces);
     setRenderedMappedPlaceKey(mappedPlaceKey);
-    if (renderedMarkerIdentityKey === mappedPlaceIdentityKey) {
+    if (renderedMarkerIdentityKey.length > 0) {
       mapPinsTransition.setValue(1);
       return;
     }
