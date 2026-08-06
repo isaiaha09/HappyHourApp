@@ -630,6 +630,26 @@ npm run android
 npx tsc --noEmit
 ```
 
+### Xcode Debug vs Release
+
+When running the iOS app from Xcode, the selected build configuration changes how the app loads JavaScript:
+
+- `Debug` uses Metro for the JS bundle.
+- `Release` uses the embedded bundled app build instead of Metro.
+
+For local development, use `Debug` in Xcode and make sure both Metro and the Django backend are already running.
+
+Practical local flow:
+
+1. Start Django from `backend/` with `python manage.py runserver 0.0.0.0:8000` or `./start-mobile-dev.ps1`.
+2. Start Metro from `mobile/` with `npm start`.
+3. Run the iOS target from Xcode in `Debug`.
+
+Important nuance:
+
+- `Debug` still needs Metro to be reachable by the device or simulator.
+- If Xcode runs in `Release`, it will behave like the real built app and use the embedded JS bundle.
+
 ### Local iOS Build Number
 
 Before uploading a locally archived iOS build from Xcode to App Store Connect/TestFlight, increment the iOS build number. Xcode does not automatically increment this project for local archives.
