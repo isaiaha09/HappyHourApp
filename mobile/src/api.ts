@@ -636,12 +636,6 @@ function sanitizeApiErrorMessage(key: string, message: string) {
 }
 
 function getMetroHost() {
-  const scriptUrl = NativeModules.SourceCode?.scriptURL;
-  const hostFromScriptUrl = extractHostFromUrl(scriptUrl);
-  if (hostFromScriptUrl) {
-    return hostFromScriptUrl;
-  }
-
   const expoConstants = Constants as typeof Constants & {
     experienceUrl?: string | null;
     expoConfig?: {
@@ -657,21 +651,30 @@ function getMetroHost() {
     } | null;
   };
 
-  const hostCandidates = [
+  const hostSources = [
+    NativeModules.SourceCode?.scriptURL,
     expoConstants.expoConfig?.hostUri,
     expoConstants.manifest2?.extra?.expoClient?.hostUri,
     expoConstants.linkingUri,
     expoConstants.experienceUrl,
   ];
+  const hostCandidates = hostSources.flatMap((candidate) => [
+    extractHostFromExpoUrlParam(candidate),
+    extractHostFromUrl(candidate),
+    extractHostFromHostUri(candidate),
+  ]).filter((host): host is string => Boolean(host));
 
-  for (const candidate of hostCandidates) {
-    const resolvedHost = extractHostFromUrl(candidate) ?? extractHostFromHostUri(candidate);
-    if (resolvedHost) {
-      return resolvedHost;
-    }
+  const lanHost = hostCandidates.find((host) => isPrivateIpv4Host(host) && !isLoopbackHost(host));
+  if (lanHost) {
+    return lanHost;
   }
 
-  return null;
+  const loopbackHost = hostCandidates.find(isLoopbackHost);
+  if (loopbackHost) {
+    return loopbackHost;
+  }
+
+  return hostCandidates[0] ?? null;
 }
 
 function extractHostFromUrl(value: unknown) {
@@ -698,6 +701,34 @@ function extractHostFromHostUri(value: unknown) {
   return host || null;
 }
 
+function extractHostFromExpoUrlParam(value: unknown) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const match = value.match(/[?&]url=([^&]+)/i);
+  if (!match) {
+    return null;
+  }
+
+  try {
+    return extractHostFromUrl(decodeURIComponent(match[1]));
+  } catch {
+    return null;
+  }
+}
+
+function isLoopbackHost(host: string) {
+  return host === 'localhost' || host === '127.0.0.1';
+}
+
+function isPrivateIpv4Host(host: string) {
+  return /^10\./.test(host)
+    || /^192\.168\./.test(host)
+    || /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
+    || isLoopbackHost(host);
+}
+
 function isLocalDevelopmentApiBaseUrl(value: string) {
   const normalized = normalizeApiBaseUrl(value);
   const host = extractHostFromUrl(normalized);
@@ -705,13 +736,7 @@ function isLocalDevelopmentApiBaseUrl(value: string) {
     return false;
   }
 
-  if (host === 'localhost' || host === '127.0.0.1') {
-    return true;
-  }
-
-  return /^10\./.test(host)
-    || /^192\.168\./.test(host)
-    || /^172\.(1[6-9]|2\d|3[0-1])\./.test(host);
+  return isPrivateIpv4Host(host);
 }
 
 async function fetchAuthedJson<T>(baseUrl: string, path: string, authToken: string): Promise<T> {
