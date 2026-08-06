@@ -38,6 +38,7 @@ async function main() {
 
   process.env.REACT_NATIVE_PACKAGER_HOSTNAME = lanIp;
   process.env.EXPO_PUBLIC_API_BASE_URL = `http://${lanIp}:8000/api`;
+  process.env.EXPO_NO_DOTENV = '1';
 
   console.log(`Using LAN IP ${lanIp} (${cli.adapter}) for Expo Go and backend API traffic.`);
 
