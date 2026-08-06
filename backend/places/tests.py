@@ -328,6 +328,51 @@ class PlaceApiTests(APITestCase):
 		self.assertEqual(response.data[0]['latitude'], 34.2789)
 		self.assertEqual(response.data[0]['longitude'], -119.2914)
 		self.assertTrue(bool(response.data[0]['updated_at']))
+		self.assertEqual(response['Cache-Control'], 'no-store, no-cache, must-revalidate')
+
+	def test_live_location_endpoint_hides_disabled_approved_claim_without_membership(self):
+		owner = User.objects.create_user(username='inactive_mobile_owner', email='inactive-mobile@example.com', password='test-pass-123')
+		AccountProfile.objects.create(user=owner, business_location_tracking_enabled=False)
+		snapshot = ListingSnapshot.objects.create(
+			name='Dormant Truck',
+			listing_slug='dormant-truck',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+			tracked_location_latitude=34.2199,
+			tracked_location_longitude=-119.0401,
+			tracked_location_updated_at=timezone.now(),
+		)
+		BusinessClaim.objects.create(
+			claimant=owner,
+			listing_snapshot=snapshot,
+			contact_name='Dormant Owner',
+			work_email='owner@dormant.example.com',
+			verification_summary='I operate this truck.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+
+		response = self.client.get(reverse('place-live-locations'), {'city': City.VENTURA})
+
+		self.assertEqual(response.status_code, 200)
+		self.assertNotIn('dormant-truck-ventura', [payload['slug'] for payload in response.data])
+
+	def test_live_location_endpoint_excludes_stale_coordinates(self):
+		ListingSnapshot.objects.create(
+			name='Stale Truck',
+			listing_slug='stale-truck',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+			tracked_location_latitude=34.2199,
+			tracked_location_longitude=-119.0401,
+			tracked_location_updated_at=timezone.now() - timedelta(minutes=3),
+		)
+
+		response = self.client.get(reverse('place-live-locations'), {'city': City.VENTURA})
+
+		self.assertEqual(response.status_code, 200)
+		self.assertNotIn('stale-truck-ventura', [payload['slug'] for payload in response.data])
 
 	def test_deal_list_endpoint(self):
 		with patch('places.views.get_source_deal_payloads', return_value=self.place_payload['deals']):
