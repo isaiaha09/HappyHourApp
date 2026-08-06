@@ -60,13 +60,13 @@ export function getDefaultApiBaseUrl() {
   const useConfiguredApiInDev = process.env.EXPO_PUBLIC_USE_REMOTE_API_IN_DEV?.trim().toLowerCase() === 'true';
 
   if (__DEV__ && !useConfiguredApiInDev) {
+    if (configured && isLocalDevelopmentApiBaseUrl(configured)) {
+      return normalizeApiBaseUrl(configured);
+    }
+
     const metroHost = getMetroHost();
     if (metroHost) {
       return `http://${metroHost}:8000/api`;
-    }
-
-    if (configured && isLocalDevelopmentApiBaseUrl(configured)) {
-      return normalizeApiBaseUrl(configured);
     }
 
     return FALLBACK_API_BASE_URL;
