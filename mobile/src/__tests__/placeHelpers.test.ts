@@ -198,4 +198,32 @@ describe('stripLiveLocationCoordinatesFromPlaces', () => {
     }));
     expect(result[1]).toBe(staticPlace);
   });
+
+  it('removes cached coordinates for service-area businesses identified by approximate live location text', () => {
+    const serviceAreaPlace = {
+      address_line_1: 'Approximate live location',
+      latitude: 34.2,
+      longitude: -119.1,
+      locations: [{
+        address_line_1: 'Approximate live location unavailable',
+        latitude: 34.2,
+        longitude: -119.1,
+        slug: 'coffee-catering-ventura',
+        venue_type: 'cafe',
+      }],
+      slug: 'coffee-catering',
+      venue_type: 'cafe',
+    } as PlaceListItem;
+
+    const result = stripLiveLocationCoordinatesFromPlaces([serviceAreaPlace]);
+
+    expect(result[0]).toEqual(expect.objectContaining({
+      latitude: null,
+      longitude: null,
+    }));
+    expect(result[0].locations[0]).toEqual(expect.objectContaining({
+      latitude: null,
+      longitude: null,
+    }));
+  });
 });

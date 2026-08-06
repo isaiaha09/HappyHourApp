@@ -88,9 +88,13 @@ export function getPlaceLocations(place: PlaceListItem | PlaceDetail) {
 
 const mobileBusinessVenueType = 'mobile';
 const multipleAreasBusinessCity = 'multiple_areas';
+const liveLocationAddressPrefix = 'approximate live location';
 
 function isLiveLocationPlace(place: PlaceListItem | PlaceDetail | PlaceLocation | PlaceLocationDetail) {
-  return place.venue_type === mobileBusinessVenueType || place.city === multipleAreasBusinessCity;
+  const normalizedAddress = String(place.address_line_1 ?? '').trim().toLowerCase();
+  return place.venue_type === mobileBusinessVenueType
+    || place.city === multipleAreasBusinessCity
+    || normalizedAddress.startsWith(liveLocationAddressPrefix);
 }
 
 export function stripLiveLocationCoordinatesFromPlaces(places: PlaceListItem[]) {
