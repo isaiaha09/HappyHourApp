@@ -639,6 +639,11 @@ function sanitizeApiErrorMessage(key: string, message: string) {
 }
 
 function getMetroHost() {
+  const nativeMetroHost = NativeModules.DiningDealzMetroHost?.host;
+  if (typeof nativeMetroHost === 'string' && isLanHost(nativeMetroHost)) {
+    return nativeMetroHost;
+  }
+
   const expoConstants = Constants as typeof Constants & {
     experienceUrl?: string | null;
     expoConfig?: {

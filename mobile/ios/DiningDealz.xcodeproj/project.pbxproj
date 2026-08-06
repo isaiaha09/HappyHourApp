@@ -15,6 +15,8 @@
 		40546DB82FF5D99D000164D8 /* DiningDealzLiquidGlassBottomNavViewManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 40546DB02FF5D99D000164D8 /* DiningDealzLiquidGlassBottomNavViewManager.m */; };
 		40546DB92FF5D99D000164D8 /* DiningDealzLiquidGlassHeaderButtonViewManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40546DB42FF5D99D000164D8 /* DiningDealzLiquidGlassHeaderButtonViewManager.swift */; };
 		40546DBA2FF5D99D000164D8 /* DiningDealzLiquidGlassBottomNavView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40546DAF2FF5D99D000164D8 /* DiningDealzLiquidGlassBottomNavView.swift */; };
+		E6A1C0013F5D99D000000001 /* DiningDealzMetroHost.m in Sources */ = {isa = PBXBuildFile; fileRef = E6A1C0033F5D99D000000001 /* DiningDealzMetroHost.m */; };
+		E6A1C0023F5D99D000000001 /* DiningDealzMetroHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A1C0043F5D99D000000001 /* DiningDealzMetroHost.swift */; };
 		737124CCA1455B18639BE1D1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = E56C9A26B47FF4BF399FD0E3 /* PrivacyInfo.xcprivacy */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		C0CFB7BC7F32716731521BEC /* libPods-DiningDealz.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B725024709964B4B62A19279 /* libPods-DiningDealz.a */; };
@@ -34,6 +36,8 @@
 		40546DB22FF5D99D000164D8 /* DiningDealzLiquidGlassHeaderButtonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiningDealzLiquidGlassHeaderButtonView.swift; sourceTree = "<group>"; };
 		40546DB32FF5D99D000164D8 /* DiningDealzLiquidGlassHeaderButtonViewManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = DiningDealzLiquidGlassHeaderButtonViewManager.m; sourceTree = "<group>"; };
 		40546DB42FF5D99D000164D8 /* DiningDealzLiquidGlassHeaderButtonViewManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiningDealzLiquidGlassHeaderButtonViewManager.swift; sourceTree = "<group>"; };
+		E6A1C0033F5D99D000000001 /* DiningDealzMetroHost.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = DiningDealzMetroHost.m; sourceTree = "<group>"; };
+		E6A1C0043F5D99D000000001 /* DiningDealzMetroHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiningDealzMetroHost.swift; sourceTree = "<group>"; };
 		442BF1F0C82A15A15B590F51 /* Pods-DiningDealz.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DiningDealz.release.xcconfig"; path = "Target Support Files/Pods-DiningDealz/Pods-DiningDealz.release.xcconfig"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = DiningDealz/SplashScreen.storyboard; sourceTree = "<group>"; };
 		B725024709964B4B62A19279 /* libPods-DiningDealz.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-DiningDealz.a"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -65,6 +69,8 @@
 				40546DB22FF5D99D000164D8 /* DiningDealzLiquidGlassHeaderButtonView.swift */,
 				40546DB32FF5D99D000164D8 /* DiningDealzLiquidGlassHeaderButtonViewManager.m */,
 				40546DB42FF5D99D000164D8 /* DiningDealzLiquidGlassHeaderButtonViewManager.swift */,
+				E6A1C0033F5D99D000000001 /* DiningDealzMetroHost.m */,
+				E6A1C0043F5D99D000000001 /* DiningDealzMetroHost.swift */,
 				F11748412D0307B40044C1D9 /* AppDelegate.swift */,
 				F11748442D0722820044C1D9 /* DiningDealz-Bridging-Header.h */,
 				BB2F792B24A3F905000567C9 /* Supporting */,
@@ -353,6 +359,8 @@
 				40546DB82FF5D99D000164D8 /* DiningDealzLiquidGlassBottomNavViewManager.m in Sources */,
 				40546DB92FF5D99D000164D8 /* DiningDealzLiquidGlassHeaderButtonViewManager.swift in Sources */,
 				40546DBA2FF5D99D000164D8 /* DiningDealzLiquidGlassBottomNavView.swift in Sources */,
+				E6A1C0013F5D99D000000001 /* DiningDealzMetroHost.m in Sources */,
+				E6A1C0023F5D99D000000001 /* DiningDealzMetroHost.swift in Sources */,
 				D618DE88D4559DEB32EE00A2 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
