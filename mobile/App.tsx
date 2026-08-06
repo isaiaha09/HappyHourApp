@@ -880,7 +880,25 @@ function AppScreen() {
     selectedVenueTypes,
     verifiedBusinessesOnly,
   ]);
-  const filteredPlaceKey = useMemo(() => filteredPlaces.map((place) => place.id).join('|'), [filteredPlaces]);
+  const mapAutoFitCriteriaKey = useMemo(() => [
+    confirmedDealsOnly,
+    informalBusinessesOnly,
+    normalizedDeferredSearchQuery,
+    selectedCity,
+    selectedDealDays.join('|'),
+    selectedOperatingDays.join('|'),
+    selectedVenueTypes.join('|'),
+    verifiedBusinessesOnly,
+  ].join(':'), [
+    confirmedDealsOnly,
+    informalBusinessesOnly,
+    normalizedDeferredSearchQuery,
+    selectedCity,
+    selectedDealDays,
+    selectedOperatingDays,
+    selectedVenueTypes,
+    verifiedBusinessesOnly,
+  ]);
   const filteredBrowseLocations = useMemo(() => getFilteredBrowseLocations(filteredPlaces, {
     confirmedDealsOnly,
     searchQuery: normalizedDeferredSearchQuery,
@@ -3664,7 +3682,7 @@ function AppScreen() {
       mapRef.current?.animateToRegion(boundedRegion, 220);
       autoFitMapRegionTimeoutRef.current = null;
     }, normalizedDeferredSearchQuery.length > 0 ? 140 : 0);
-  }, [filteredPlaceKey, listLoading, mappedPlaces.length, normalizedDeferredSearchQuery.length, selectedCity, showMapBrowse]);
+  }, [listLoading, mapAutoFitCriteriaKey, normalizedDeferredSearchQuery.length, selectedCity, showMapBrowse]);
 
   useEffect(() => {
     if (!showMapBrowse) {
