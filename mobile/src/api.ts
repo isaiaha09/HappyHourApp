@@ -65,6 +65,10 @@ export function getDefaultApiBaseUrl() {
       return `http://${metroHost}:8000/api`;
     }
 
+    if (configured && isLocalDevelopmentApiBaseUrl(configured)) {
+      return normalizeApiBaseUrl(configured);
+    }
+
     return FALLBACK_API_BASE_URL;
   }
 
@@ -692,6 +696,22 @@ function extractHostFromHostUri(value: unknown) {
   const withoutProtocol = trimmed.replace(/^[a-z]+:\/\//i, '');
   const host = withoutProtocol.split(/[/:]/, 1)[0];
   return host || null;
+}
+
+function isLocalDevelopmentApiBaseUrl(value: string) {
+  const normalized = normalizeApiBaseUrl(value);
+  const host = extractHostFromUrl(normalized);
+  if (!host) {
+    return false;
+  }
+
+  if (host === 'localhost' || host === '127.0.0.1') {
+    return true;
+  }
+
+  return /^10\./.test(host)
+    || /^192\.168\./.test(host)
+    || /^172\.(1[6-9]|2\d|3[0-1])\./.test(host);
 }
 
 async function fetchAuthedJson<T>(baseUrl: string, path: string, authToken: string): Promise<T> {
