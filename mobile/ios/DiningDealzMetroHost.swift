@@ -1,5 +1,6 @@
 import Foundation
 
+#if DEBUG
 @objc(DiningDealzMetroHost)
 final class DiningDealzMetroHost: NSObject {
   @objc static var currentHost: String?
@@ -26,3 +27,4 @@ final class DiningDealzMetroHost: NSObject {
       || host.range(of: "^172\\.(1[6-9]|2[0-9]|3[0-1])\\.", options: .regularExpression) != nil
   }
 }
+#endif
