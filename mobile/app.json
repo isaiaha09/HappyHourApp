@@ -12,7 +12,7 @@
       "backgroundColor": "#080101"
     },
     "ios": {
-	  "buildNumber": "44",
+	  "buildNumber": "45",
       "infoPlist": {
         "NSLocationAlwaysAndWhenInUseUsageDescription": "DiningDealz needs always-on location access so approved mobile business accounts can keep their live map pin updated even after the app is closed.",
         "NSLocationAlwaysUsageDescription": "DiningDealz needs always-on location access so approved mobile business accounts can keep their live map pin updated even after the app is closed.",
