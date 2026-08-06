@@ -59,17 +59,23 @@ const businessAttachmentFieldNames: Record<BusinessAttachmentKind, string> = {
 
 export function getDefaultApiBaseUrl() {
   const configured = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+  const useConfiguredApiInDev = process.env.EXPO_PUBLIC_USE_REMOTE_API_IN_DEV?.trim().toLowerCase() === 'true';
+
+  if (__DEV__ && !useConfiguredApiInDev) {
+    const metroHost = getMetroHost();
+    if (metroHost) {
+      return `http://${metroHost}:8000/api`;
+    }
+
+    return FALLBACK_API_BASE_URL;
+  }
+
   if (configured) {
     return normalizeApiBaseUrl(configured);
   }
 
   if (!__DEV__) {
     return '';
-  }
-
-  const metroHost = getMetroHost();
-  if (metroHost) {
-    return `http://${metroHost}:8000/api`;
   }
 
   return FALLBACK_API_BASE_URL;
@@ -134,6 +140,7 @@ export async function fetchPlaces(baseUrl: string, city: string, hasDeals?: bool
 
 export async function fetchLiveLocationPlaces(baseUrl: string, city: string) {
   const queryParams = new URLSearchParams();
+  queryParams.set('_ts', String(Date.now()));
   if (city !== 'all') {
     queryParams.set('city', city);
   }

@@ -365,6 +365,8 @@ class LiveLocationPlaceListView(generics.GenericAPIView):
 	def get(self, request):
 		city = str(request.query_params.get('city') or '').strip().lower()
 		disabled_live_location_slugs = get_disabled_live_location_slugs()
+		max_location_age_seconds = getattr(settings, 'BUSINESS_LIVE_LOCATION_MAX_AGE_SECONDS', 120)
+		location_freshness_cutoff = timezone.now() - timezone.timedelta(seconds=max_location_age_seconds)
 		queryset = (
 			ListingSnapshot.objects
 			.exclude(listing_slug='')
@@ -372,6 +374,7 @@ class LiveLocationPlaceListView(generics.GenericAPIView):
 				Q(venue_type=VenueType.MOBILE) | Q(serves_multiple_areas=True),
 				tracked_location_latitude__isnull=False,
 				tracked_location_longitude__isnull=False,
+				tracked_location_updated_at__gte=location_freshness_cutoff,
 			)
 			.order_by('listing_slug', 'pk')
 		)
@@ -391,7 +394,11 @@ class LiveLocationPlaceListView(generics.GenericAPIView):
 			and slugify(f'{snapshot.name}-{snapshot.city}') not in disabled_live_location_slugs
 		]
 		serializer = self.get_serializer(payloads, many=True)
-		return Response(serializer.data)
+		response = Response(serializer.data)
+		response['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+		response['Pragma'] = 'no-cache'
+		response['Expires'] = '0'
+		return response
 
 
 class DealListView(generics.GenericAPIView):

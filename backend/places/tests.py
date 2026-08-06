@@ -328,6 +328,37 @@ class PlaceApiTests(APITestCase):
 		self.assertEqual(response.data[0]['latitude'], 34.2789)
 		self.assertEqual(response.data[0]['longitude'], -119.2914)
 		self.assertTrue(bool(response.data[0]['updated_at']))
+		self.assertEqual(response['Cache-Control'], 'no-store, no-cache, must-revalidate')
+		self.assertEqual(response['Pragma'], 'no-cache')
+		self.assertEqual(response['Expires'], '0')
+
+	@override_settings(BUSINESS_LIVE_LOCATION_MAX_AGE_SECONDS=120)
+	def test_live_location_endpoint_excludes_stale_tracked_coordinates(self):
+		ListingSnapshot.objects.create(
+			name='Stale Truck',
+			listing_slug='stale-truck',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+			tracked_location_latitude=34.2789,
+			tracked_location_longitude=-119.2914,
+			tracked_location_updated_at=timezone.now() - timedelta(minutes=5),
+		)
+		ListingSnapshot.objects.create(
+			name='Fresh Truck',
+			listing_slug='fresh-truck',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+			tracked_location_latitude=34.2199,
+			tracked_location_longitude=-119.0401,
+			tracked_location_updated_at=timezone.now(),
+		)
+
+		response = self.client.get(reverse('place-live-locations'), {'city': City.VENTURA})
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual([payload['slug'] for payload in response.data], ['fresh-truck-ventura'])
 
 	def test_live_location_endpoint_disables_duplicate_snapshot_aliases(self):
 		disabled_user = User.objects.create_user(username='duplicate_hidden_owner', email='duplicate-hidden@example.com', password='test-pass-123')

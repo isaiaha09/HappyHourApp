@@ -639,6 +639,9 @@ When running the iOS app from Xcode, the selected build configuration changes ho
 
 For local development, use `Debug` in Xcode and make sure both Metro and the Django backend are already running.
 
+By default, Metro debug sessions in this app now prefer the local Django backend over any production URL stored in `mobile/.env`.
+If you intentionally want a Metro debug build to hit a remote backend instead, set `EXPO_PUBLIC_USE_REMOTE_API_IN_DEV=true` before starting Metro.
+
 Practical local flow:
 
 1. Start Django from `backend/` with `python manage.py runserver 0.0.0.0:8000` or `./start-mobile-dev.ps1`.
