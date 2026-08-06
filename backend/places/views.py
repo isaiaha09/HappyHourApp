@@ -65,7 +65,7 @@ from .services.favorite_notifications import create_notifications_for_business_p
 from .services.direct_message_push import send_push_notifications_for_direct_message
 from .services.home_feed import get_feed_interval, get_feed_queryset, get_organic_page_size, get_ranked_campaigns, get_requested_feed_page_size, mix_feed_items, record_campaign_served
 from .services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
-from .services.source_listings import get_disabled_live_location_slugs, get_source_deal_payloads, get_source_place_payload, get_source_place_payloads, invalidate_source_place_payload_cache, is_live_location_tracking_enabled_for_snapshot, load_source_records
+from .services.source_listings import get_source_deal_payloads, get_source_place_payload, get_source_place_payloads, is_live_location_tracking_enabled_for_snapshot, load_source_records
 from .throttles import DirectMessageSendRateThrottle, EmailVerificationRateThrottle, EmailVerificationResendRateThrottle, LoginRateThrottle, PasswordRecoveryRateThrottle, SignupRateThrottle, SupportContactRateThrottle, UserMutationRateThrottle
 
 
@@ -364,9 +364,6 @@ class LiveLocationPlaceListView(generics.GenericAPIView):
 
 	def get(self, request):
 		city = str(request.query_params.get('city') or '').strip().lower()
-		disabled_live_location_slugs = get_disabled_live_location_slugs()
-		max_location_age_seconds = getattr(settings, 'BUSINESS_LIVE_LOCATION_MAX_AGE_SECONDS', 120)
-		location_freshness_cutoff = timezone.now() - timezone.timedelta(seconds=max_location_age_seconds)
 		queryset = (
 			ListingSnapshot.objects
 			.exclude(listing_slug='')
@@ -374,7 +371,6 @@ class LiveLocationPlaceListView(generics.GenericAPIView):
 				Q(venue_type=VenueType.MOBILE) | Q(serves_multiple_areas=True),
 				tracked_location_latitude__isnull=False,
 				tracked_location_longitude__isnull=False,
-				tracked_location_updated_at__gte=location_freshness_cutoff,
 			)
 			.order_by('listing_slug', 'pk')
 		)
@@ -390,15 +386,9 @@ class LiveLocationPlaceListView(generics.GenericAPIView):
 			}
 			for snapshot in queryset
 			if is_live_location_tracking_enabled_for_snapshot(snapshot)
-			and snapshot.listing_slug not in disabled_live_location_slugs
-			and slugify(f'{snapshot.name}-{snapshot.city}') not in disabled_live_location_slugs
 		]
 		serializer = self.get_serializer(payloads, many=True)
-		response = Response(serializer.data)
-		response['Cache-Control'] = 'no-store, no-cache, must-revalidate'
-		response['Pragma'] = 'no-cache'
-		response['Expires'] = '0'
-		return response
+		return Response(serializer.data)
 
 
 class DealListView(generics.GenericAPIView):
@@ -896,7 +886,6 @@ class BusinessLocationUpdateView(generics.GenericAPIView):
 		snapshot.tracked_location_accuracy_meters = serializer.validated_data.get('accuracy_meters')
 		snapshot.tracked_location_updated_at = timezone.now()
 		snapshot.save(update_fields=['tracked_location_latitude', 'tracked_location_longitude', 'tracked_location_accuracy_meters', 'tracked_location_updated_at', 'updated_at'])
-		invalidate_source_place_payload_cache(invalidate_all=True)
 
 		return Response(build_account_response(request.user, 'business', token=request.auth))
 
@@ -929,8 +918,6 @@ class BusinessLocationTrackingPreferenceView(generics.GenericAPIView):
 			snapshot.tracked_location_accuracy_meters = None
 			snapshot.tracked_location_updated_at = None
 			snapshot.save(update_fields=['tracked_location_latitude', 'tracked_location_longitude', 'tracked_location_accuracy_meters', 'tracked_location_updated_at', 'updated_at'])
-
-		invalidate_source_place_payload_cache(invalidate_all=True)
 
 		return Response(build_account_response(request.user, 'business', token=request.auth))
 

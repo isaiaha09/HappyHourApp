@@ -132,7 +132,6 @@ import {
   mergeLiveLocationUpdatesIntoPlaces,
   getSelectedClaimLocation,
   normalizeSearchText,
-  stripLiveLocationCoordinatesFromPlaces,
 } from './src/placeHelpers';
 import type {
   BusinessAttachmentBuckets,
@@ -1781,7 +1780,7 @@ function AppScreen() {
           if (nextPlaces !== current && selectedCity === 'all') {
             allPlacesCacheRef.current = {
               apiBaseUrl,
-              places: stripLiveLocationCoordinatesFromPlaces(nextPlaces),
+              places: nextPlaces,
               reloadCount,
             };
           }
@@ -3513,7 +3512,7 @@ function AppScreen() {
         if (selectedCity === 'all') {
           allPlacesCacheRef.current = {
             apiBaseUrl,
-            places: stripLiveLocationCoordinatesFromPlaces(nextPlacesWithLiveLocations),
+            places: nextPlacesWithLiveLocations,
             reloadCount,
           };
         }
@@ -3717,7 +3716,7 @@ function AppScreen() {
 
       allPlacesCacheRef.current = {
         apiBaseUrl,
-        places: stripLiveLocationCoordinatesFromPlaces(nextPlaces),
+        places: nextPlaces,
         reloadCount,
       };
       setProfilePlaces(nextPlaces);

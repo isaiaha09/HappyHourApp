@@ -249,21 +249,22 @@ def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_
 	return sorted_payloads
 
 
-def get_disabled_live_location_slugs():
+def _disabled_live_location_slugs():
 	disabled_slugs = set()
-	claims = (
-		BusinessClaim.objects
-		.select_related('listing_snapshot', 'claimant__account_profile', 'membership__user__account_profile')
-		.filter(status=BusinessClaim.Status.APPROVED)
+	memberships = (
+		BusinessMembership.objects
+		.select_related('claim__listing_snapshot', 'user__account_profile')
 		.filter(
-			Q(listing_snapshot__venue_type=VenueType.MOBILE)
-			| Q(listing_snapshot__serves_multiple_areas=True)
+			is_active=True,
+			user__account_profile__business_location_tracking_enabled=False,
+		)
+		.filter(
+			Q(claim__listing_snapshot__venue_type=VenueType.MOBILE)
+			| Q(claim__listing_snapshot__serves_multiple_areas=True)
 		)
 	)
-	for claim in claims:
-		if _is_business_location_tracking_enabled_for_claim(claim):
-			continue
-		snapshot = claim.listing_snapshot
+	for membership in memberships:
+		snapshot = membership.claim.listing_snapshot
 		if snapshot.listing_slug:
 			disabled_slugs.add(snapshot.listing_slug)
 		disabled_slugs.add(slugify(f'{snapshot.name}-{snapshot.city}'))
@@ -271,7 +272,7 @@ def get_disabled_live_location_slugs():
 
 
 def _suppress_disabled_live_location_payloads(payloads):
-	disabled_slugs = get_disabled_live_location_slugs()
+	disabled_slugs = _disabled_live_location_slugs()
 	if not disabled_slugs:
 		return payloads
 
@@ -731,16 +732,13 @@ def _is_business_location_tracking_enabled_for_claim(claim):
 		try:
 			membership = claim.membership
 		except BusinessMembership.DoesNotExist:
-			membership = None
-
-	if membership is not None and membership.is_active:
-		try:
-			return bool(membership.user.account_profile.business_location_tracking_enabled)
-		except AccountProfile.DoesNotExist:
 			return True
 
+	if not membership.is_active:
+		return True
+
 	try:
-		return bool(claim.claimant.account_profile.business_location_tracking_enabled)
+		return bool(membership.user.account_profile.business_location_tracking_enabled)
 	except AccountProfile.DoesNotExist:
 		return True
 
@@ -760,19 +758,7 @@ def is_live_location_tracking_enabled_for_snapshot(snapshot):
 		except AccountProfile.DoesNotExist:
 			return True
 
-	if has_active_membership:
-		return False
-
-	claim = (
-		snapshot.business_claims
-		.filter(status=BusinessClaim.Status.APPROVED)
-		.order_by('-reviewed_at', '-submitted_at', '-created_at', '-pk')
-		.first()
-	)
-	if claim is None:
-		return True
-
-	return _is_business_location_tracking_enabled_for_claim(claim)
+	return not has_active_membership
 
 
 

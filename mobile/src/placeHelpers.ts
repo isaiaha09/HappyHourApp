@@ -88,54 +88,9 @@ export function getPlaceLocations(place: PlaceListItem | PlaceDetail) {
 
 const mobileBusinessVenueType = 'mobile';
 const multipleAreasBusinessCity = 'multiple_areas';
-const liveLocationAddressPrefix = 'approximate live location';
 
 function isLiveLocationPlace(place: PlaceListItem | PlaceDetail | PlaceLocation | PlaceLocationDetail) {
-  const normalizedAddress = String(place.address_line_1 ?? '').trim().toLowerCase();
-  return place.venue_type === mobileBusinessVenueType
-    || place.city === multipleAreasBusinessCity
-    || normalizedAddress.startsWith(liveLocationAddressPrefix);
-}
-
-export function stripLiveLocationCoordinatesFromPlaces(places: PlaceListItem[]) {
-  let changed = false;
-  const nextPlaces = places.map((place) => {
-    const nextLocations = place.locations.map((location) => {
-      if (!isLiveLocationPlace(location) || (location.latitude === null && location.longitude === null)) {
-        return location;
-      }
-
-      changed = true;
-      return {
-        ...location,
-        latitude: null,
-        longitude: null,
-      };
-    });
-    const locationsChanged = nextLocations.some((location, index) => location !== place.locations[index]);
-
-    if (!isLiveLocationPlace(place) || (!locationsChanged && place.latitude === null && place.longitude === null)) {
-      if (!locationsChanged) {
-        return place;
-      }
-
-      changed = true;
-      return {
-        ...place,
-        locations: nextLocations,
-      };
-    }
-
-    changed = true;
-    return {
-      ...place,
-      latitude: null,
-      longitude: null,
-      locations: nextLocations,
-    };
-  });
-
-  return changed ? nextPlaces : places;
+  return place.venue_type === mobileBusinessVenueType || place.city === multipleAreasBusinessCity;
 }
 
 export function mergeLiveLocationUpdatesIntoPlaces(
