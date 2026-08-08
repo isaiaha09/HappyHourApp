@@ -22,6 +22,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APITestCase
 from bs4 import BeautifulSoup
+from email.utils import parseaddr
 import pyotp
 
 from .admin import BusinessAccountAdmin, BusinessClaimAdmin, CustomerAccountAdmin, DeletedBusinessAdmin, ListingSnapshotAdmin, ListingSnapshotAdminForm, ProviderUsageWindowAdmin, _sync_listing_snapshot_from_imported_place
@@ -4745,6 +4746,7 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertNotEqual(new_user.pk, deleted_user.pk)
 		self.assertEqual(new_user.email, 'reusable@example.com')
 
+	@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
 	@patch('places.views.get_source_place_payload')
 	def test_business_signup_creates_submitted_claim(self, mock_get_source_place_payload):
 		mock_get_source_place_payload.return_value = {
@@ -4845,6 +4847,15 @@ class ProfileSignupApiTests(APITestCase):
 			claim.get_profile_entry_values(BusinessClaim.ProfileEntryKind.SOCIAL_MEDIA_LINK),
 			['https://instagram.com/finneysventura'],
 		)
+		self.assertEqual(len(mail.outbox), 2)
+		support_email = next(message for message in mail.outbox if 'business claim submitted' in message.subject.lower())
+		self.assertEqual(support_email.to, [parseaddr(settings.DEFAULT_FROM_EMAIL)[1]])
+		self.assertIn('Claim pathway: Claimed Business', support_email.body)
+		self.assertIn("Business name: Finney's Crafthouse", support_email.body)
+		self.assertIn('Claimant username: finneys_owner', support_email.body)
+		self.assertIn('Supporting details: Available to provide payroll and licensing records upon request.', support_email.body)
+		self.assertNotIn('manager-proof.pdf', support_email.body)
+		self.assertNotIn('CA business license #123', support_email.body)
 
 	@patch('places.views.get_source_place_payload')
 	def test_business_signup_stores_structured_deal_and_hour_overrides(self, mock_get_source_place_payload):
@@ -5177,6 +5188,7 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(legacy_snapshot.listing_slug, 'yard-house')
 		self.assertEqual(ListingSnapshot.objects.filter(name='Yard House').count(), 1)
 
+	@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
 	def test_manual_business_signup_supports_address_not_applicable(self):
 		response = self.client.post(
 			reverse('manual-business-signup'),
@@ -5216,6 +5228,15 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(claim.listing_snapshot.source_name, BusinessClaim.MANUAL_SOURCE_NAME)
 		self.assertEqual(claim.listing_snapshot.external_id, 'user-new-bistro-owner')
 		self.assertEqual(claim.listing_snapshot.address_line_1, 'Approximate live location')
+		self.assertEqual(len(mail.outbox), 2)
+		support_email = next(message for message in mail.outbox if 'business claim submitted' in message.subject.lower())
+		self.assertEqual(support_email.to, [parseaddr(settings.DEFAULT_FROM_EMAIL)[1]])
+		self.assertIn('Claim pathway: Create Business Profile', support_email.body)
+		self.assertIn('Address not applicable: Yes', support_email.body)
+		self.assertIn('Serves multiple areas: Yes', support_email.body)
+		self.assertIn('Business source: manual_submission', support_email.body)
+		self.assertNotIn('owner-proof.pdf', support_email.body)
+		self.assertNotIn('Articles of organization filed with CA Secretary of State', support_email.body)
 
 	@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
 	def test_verified_manual_business_claim_remains_pending_until_review(self):
@@ -5266,8 +5287,9 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(verify_response.data['claim_pathway'], BusinessClaim.Pathway.ESTABLISHED)
 		self.assertFalse(verify_response.data['can_access_places'])
 		self.assertIn('DiningDealz has received your business profile creation claim', verify_response.data['detail'])
-		self.assertEqual(len(mail.outbox), 2)
-		self.assertIn('received your business profile claim', mail.outbox[1].subject.lower())
+		self.assertEqual(len(mail.outbox), 3)
+		self.assertEqual(sum(1 for message in mail.outbox if 'business claim submitted' in message.subject.lower()), 1)
+		self.assertEqual(sum(1 for message in mail.outbox if 'received your business profile claim' in message.subject.lower()), 1)
 
 		login_response = self.client.post(
 			reverse('profile-login'),
@@ -5519,9 +5541,11 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(response.status_code, 201)
 		self.assertEqual(response.data['auth_token'], token.key)
 		self.assertEqual(response.data['claim_status'], BusinessClaim.Status.SUBMITTED)
-		self.assertEqual(len(mail.outbox), 1)
-		self.assertIn('customer@example.com', mail.outbox[0].to)
-		self.assertIn('received your business profile claim', mail.outbox[0].subject.lower())
+		self.assertEqual(len(mail.outbox), 2)
+		received_email = next(message for message in mail.outbox if 'received your business profile claim' in message.subject.lower())
+		support_email = next(message for message in mail.outbox if 'business claim submitted' in message.subject.lower())
+		self.assertIn('customer@example.com', received_email.to)
+		self.assertEqual(support_email.to, [parseaddr(settings.DEFAULT_FROM_EMAIL)[1]])
 		user.refresh_from_db()
 		self.assertTrue(user.check_password('new-pass-123'))
 		self.assertEqual(BusinessClaim.objects.filter(claimant=user).count(), 1)
@@ -5684,7 +5708,9 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertFalse(User.objects.filter(username='email_failure_vendor').exists())
 		self.assertFalse(BusinessClaim.objects.filter(listing_snapshot__name='Email Failure Snacks').exists())
 		self.assertFalse(ListingSnapshot.objects.filter(name='Email Failure Snacks').exists())
-		mock_send_mail.assert_called_once()
+		self.assertEqual(mock_send_mail.call_count, 2)
+		self.assertIn('business claim submitted', mock_send_mail.call_args_list[0].kwargs['subject'].lower())
+		self.assertIn('verify your diningdealz email', mock_send_mail.call_args_list[1].kwargs['subject'].lower())
 
 	def test_informal_business_signup_accepts_uploaded_business_photos(self):
 		with TemporaryDirectory() as temp_dir:

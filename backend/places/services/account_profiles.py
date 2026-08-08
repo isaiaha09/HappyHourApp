@@ -1,3 +1,6 @@
+import json
+import logging
+
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Count, Q
@@ -12,6 +15,9 @@ from places.services.business_profile_overrides import build_deal_payloads, buil
 from places.services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
 
 
+logger = logging.getLogger(__name__)
+
+
 def _get_branded_from_email():
 	configured_from_email = str(getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@diningdealz.local') or '').strip()
 	name, address = parseaddr(configured_from_email)
@@ -23,11 +29,6 @@ def _get_branded_from_email():
 
 
 def _get_support_contact_email():
-	configured_support_email = str(getattr(settings, 'SUPPORT_CONTACT_EMAIL', '') or '').strip()
-	_, support_address = parseaddr(configured_support_email)
-	if support_address:
-		return support_address
-
 	configured_server_email = str(getattr(settings, 'SERVER_EMAIL', '') or '').strip()
 	_, server_address = parseaddr(configured_server_email)
 	if server_address:
@@ -545,6 +546,111 @@ def send_business_claim_received_email(user, claim):
 		recipient_list=[user.email],
 		fail_silently=False,
 	)
+
+
+def _format_claim_submission_email_value(value):
+	if isinstance(value, bool):
+		return 'Yes' if value else 'No'
+	if isinstance(value, (list, tuple)):
+		parts = [str(item).strip() for item in value if str(item).strip()]
+		return '; '.join(parts)
+	if isinstance(value, dict):
+		return json.dumps(value, sort_keys=True)
+	return str(value or '').strip()
+
+
+def _build_business_claim_support_summary_lines(claim):
+	claimant = claim.claimant
+	listing_snapshot = claim.listing_snapshot
+	claimant_name = ' '.join(part for part in [claimant.first_name, claimant.last_name] if str(part or '').strip()).strip()
+	listing_address_parts = [
+		listing_snapshot.address_line_1,
+		listing_snapshot.address_line_2,
+		listing_snapshot.neighborhood,
+		listing_snapshot.city,
+		listing_snapshot.state,
+		listing_snapshot.postal_code,
+	]
+	listing_address = ', '.join(part.strip() for part in listing_address_parts if str(part or '').strip())
+	fields = [
+		('Claim ID', claim.pk),
+		('Submitted at', timezone.localtime(claim.submitted_at).isoformat() if claim.submitted_at else ''),
+		('Claim pathway', claim.get_pathway_display()),
+		('Claim status', claim.get_status_display()),
+		('Claimant name', claimant_name),
+		('Claimant username', claimant.username),
+		('Claimant email', claimant.email),
+		('Business name', listing_snapshot.name),
+		('Business slug', listing_snapshot.listing_slug),
+		('Business source', listing_snapshot.source_name),
+		('Business city', listing_snapshot.city),
+		('Business venue type', listing_snapshot.get_venue_type_display()),
+		('Business address', listing_address),
+		('Business website', claim.business_website_url or listing_snapshot.website_url),
+		('Contact name', claim.contact_name),
+		('Job title', claim.job_title),
+		('Work email', claim.work_email),
+		('Work phone', claim.work_phone),
+		('Employer address', claim.employer_address),
+		('Address not applicable', claim.address_not_applicable),
+		('Serves multiple areas', claim.serves_multiple_areas),
+		('Direct messaging enabled', claim.direct_messaging_enabled),
+		('Social profiles', claim.social_profiles),
+		('Social media links', claim.social_media_links),
+		('Deal overrides', claim.deal_overrides),
+		('Operating hour overrides', claim.operating_hour_overrides),
+		('Offer entries', claim.offer_entries),
+		('Hours of operation entries', claim.hours_of_operation_entries),
+		('Verification summary', claim.verification_summary),
+		('Supporting details', claim.supporting_details),
+	]
+	lines = []
+	for label, value in fields:
+		formatted_value = _format_claim_submission_email_value(value)
+		if formatted_value:
+			lines.append(f'{label}: {formatted_value}')
+	return lines
+
+
+def send_business_claim_submission_support_email(claim):
+	if claim is None or claim.status != BusinessClaim.Status.SUBMITTED:
+		return
+
+	claim = BusinessClaim.objects.select_related('claimant', 'listing_snapshot').get(pk=claim.pk)
+	summary_lines = _build_business_claim_support_summary_lines(claim)
+	business_name = claim.listing_snapshot.name
+	html_summary = ''.join(f'<li>{escape(line)}</li>' for line in summary_lines)
+	send_mail(
+		subject=f'DiningDealz business claim submitted: {business_name}',
+		message='\n'.join([
+			'New DiningDealz business claim submission',
+			'',
+			*summary_lines,
+		]),
+		html_message=(
+			'<p>New DiningDealz business claim submission</p>'
+			f'<ul>{html_summary}</ul>'
+		),
+		from_email=_get_branded_from_email(),
+		recipient_list=[_get_support_contact_email()],
+		fail_silently=False,
+	)
+
+
+def send_business_claim_submission_support_email_safely(claim):
+	try:
+		send_business_claim_submission_support_email(claim)
+	except Exception:
+		logger.exception(
+			'Business claim support notification failed for claim_id=%s user_id=%s email_backend=%s email_host=%s email_port=%s email_use_tls=%s email_use_ssl=%s',
+			getattr(claim, 'pk', None),
+			getattr(getattr(claim, 'claimant', None), 'pk', None),
+			getattr(settings, 'EMAIL_BACKEND', ''),
+			getattr(settings, 'EMAIL_HOST', ''),
+			getattr(settings, 'EMAIL_PORT', ''),
+			getattr(settings, 'EMAIL_USE_TLS', ''),
+			getattr(settings, 'EMAIL_USE_SSL', ''),
+		)
 
 
 def send_business_claim_approved_email(user, claim):

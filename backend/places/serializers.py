@@ -13,7 +13,7 @@ from django.utils.text import slugify
 from rest_framework import serializers
 
 from .models import BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessPost, City, FeedEngagement, FeedImpression, ListingSnapshot, SponsoredCampaign, VenueType
-from .services.account_profiles import build_account_response, get_or_create_account_profile, has_active_business_membership
+from .services.account_profiles import build_account_response, get_or_create_account_profile, has_active_business_membership, send_business_claim_submission_support_email_safely
 from .services.business_profile_overrides import (
 	build_deal_payloads,
 	build_operating_hour_payloads,
@@ -852,6 +852,7 @@ class ClaimedBusinessSignupSerializer(CustomerSignupSerializer):
 				claim.submit_for_review()
 			except DjangoValidationError as error:
 				raise serializers.ValidationError(list(error.messages))
+			send_business_claim_submission_support_email_safely(claim)
 			user._created_business_claim = claim
 			return user
 
@@ -968,6 +969,7 @@ class EstablishedBusinessSignupSerializer(CustomerSignupSerializer):
 				claim.submit_for_review()
 			except DjangoValidationError as error:
 				raise serializers.ValidationError(list(error.messages))
+			send_business_claim_submission_support_email_safely(claim)
 			user._created_business_claim = claim
 			return user
 
@@ -1081,6 +1083,7 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 				claim.submit_for_review()
 			except DjangoValidationError as error:
 				raise serializers.ValidationError(list(error.messages))
+			send_business_claim_submission_support_email_safely(claim)
 			user._created_business_claim = claim
 			return user
 
