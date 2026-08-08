@@ -1,7 +1,8 @@
 import React from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
 import { AppState, NativeModules } from 'react-native';
 
+import { getVenueMarkerStyle } from '../browseConfig';
 import type { PlaceListItem } from '../types';
 
 type MockNetworkState = {
@@ -136,7 +137,12 @@ jest.mock('../pushNotifications', () => ({
 }));
 
 jest.mock('@expo/vector-icons', () => ({
-  Ionicons: () => null,
+  Ionicons: ({ name }: { name: string }) => {
+    const React = require('react');
+    const { View } = require('react-native');
+
+    return <View testID={`mock-ionicon-${name}`} />;
+  },
 }));
 
 jest.mock('../screens/SplashScreen', () => ({
@@ -287,10 +293,14 @@ jest.mock('react-native-maps', () => {
     return <View testID={testID ?? 'mock-map-view'}>{children}</View>;
   });
 
-  const Marker = ({ children, onPress }: { children?: React.ReactNode; onPress?: () => void }) => {
+  const Marker = ({ children, onPress, style }: {
+    children?: React.ReactNode;
+    onPress?: () => void;
+    style?: unknown;
+  }) => {
     const { Pressable } = require('react-native');
 
-    return <Pressable onPress={onPress} testID="mock-map-marker">{children}</Pressable>;
+    return <Pressable onPress={onPress} style={style} testID="mock-map-marker">{children}</Pressable>;
   };
 
   return {
@@ -639,6 +649,10 @@ describe('App browse map search', () => {
     expect(screen.getByText('Best matches')).toBeTruthy();
     expect(screen.getByLabelText('Select Baskin-Robbins')).toBeTruthy();
     expect(screen.getAllByTestId('mock-map-marker')).toHaveLength(1);
+    const marker = screen.getByTestId('mock-map-marker');
+    expect(within(marker).getByTestId('mock-ionicon-location-sharp')).toBeTruthy();
+    expect(within(marker).getByTestId('mock-ionicon-location-outline')).toBeTruthy();
+    expect(within(marker).getByTestId('mock-ionicon-cafe-outline')).toBeTruthy();
     const markerChildren = React.Children.toArray(screen.getByTestId('mock-map-marker').props.children);
     expect(markerChildren[0]).toEqual(expect.objectContaining({
       props: expect.objectContaining({
@@ -707,6 +721,15 @@ describe('App browse map search', () => {
     expect(screen.getByLabelText('Select Yard House')).toBeTruthy();
     expect(screen.queryByLabelText('Focus Baskin-Robbins')).toBeNull();
     expect(screen.getAllByTestId('mock-map-marker')).toHaveLength(1);
+    const focusedMarker = screen.getByTestId('mock-map-marker');
+    const focusedMarkerChildren = React.Children.toArray(focusedMarker.props.children);
+    const focusedMarkerView = focusedMarkerChildren[0];
+    expect(React.isValidElement<{ style?: unknown; children?: React.ReactNode }>(focusedMarkerView)).toBe(true);
+    if (!React.isValidElement<{ style?: unknown; children?: React.ReactNode }>(focusedMarkerView)) {
+      throw new Error('The focused map marker did not render its animated wrapper.');
+    }
+    const focusedMarkerViewChildren = React.Children.toArray(focusedMarkerView.props.children);
+    expect(focusedMarkerViewChildren).toHaveLength(1);
     const focusedMapRegion = mapsModule.__mock.animateToRegionMock.mock.calls.at(-1)?.[0] as { latitude?: number } | undefined;
     expect(focusedMapRegion?.latitude).toBeGreaterThan(secondSamplePlace.latitude ?? 0);
     expect(screen.queryByText('Photos from this business page have not been found yet.')).toBeNull();
@@ -755,6 +778,43 @@ describe('App browse map search', () => {
     await act(async () => {
       await Promise.resolve();
       await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(screen.getAllByTestId('mock-map-marker')).toHaveLength(1);
+  });
+
+  it('keeps the current map marker mounted while places refresh is pending', async () => {
+    let resolveRefreshPlaces: ((places: PlaceListItem[]) => void) | null = null;
+    const refreshPlacesPromise = new Promise<PlaceListItem[]>((resolve) => {
+      resolveRefreshPlaces = resolve;
+    });
+
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    const markerBeforeRefresh = screen.getByTestId('mock-map-marker');
+    mockFetchPlaces.mockImplementationOnce(() => refreshPlacesPromise);
+
+    fireEvent.press(screen.getByLabelText('Refresh places'));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('mock-map-marker')).toBe(markerBeforeRefresh);
+
+    await act(async () => {
+      resolveRefreshPlaces?.([secondSamplePlace]);
+      await Promise.resolve();
+      await Promise.resolve();
     });
 
     expect(screen.getAllByTestId('mock-map-marker')).toHaveLength(1);

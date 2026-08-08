@@ -97,6 +97,7 @@ import { BrowseControls } from './src/screens/BrowseControls';
 import { GuestShellChrome } from './src/components/GuestShellChrome';
 import { NativeIOSLiquidGlassBottomNav, NativeIOSLiquidGlassHeaderButton, isNativeIOSLiquidGlassBottomNavAvailable, isNativeIOSLiquidGlassHeaderButtonAvailable, isSupportedIOSLiquidGlassRuntime } from './src/components/NativeIOSLiquidGlass';
 import { PhotoLightbox } from './src/components/PhotoLightbox';
+import { VenueMarkerVisual } from './src/components/VenueMarkerVisual';
 import { DirectMessagesScreen } from './src/screens/DirectMessagesScreen';
 import { HomeFeedScreen } from './src/screens/HomeFeedScreen';
 import { PlaceDetailScreen } from './src/screens/PlaceDetailScreen';
@@ -692,6 +693,7 @@ function AppScreen() {
   const hasSettledInitialMapRegionRef = useRef(false);
   const mapResultsCardTransitionVersionRef = useRef(0);
   const pendingImmediateMapPinsRefreshRef = useRef(false);
+  const pendingMapRefreshRef = useRef(false);
   const pendingListRevealRef = useRef(false);
   const [profileForm, setProfileForm] = useState<ProfileFormState>(initialProfileFormState);
   const [businessAttachments, setBusinessAttachments] = useState<BusinessAttachmentBuckets>(initialBusinessAttachments);
@@ -1518,6 +1520,9 @@ function AppScreen() {
   }, [authenticatedSession?.auth_token, nativeBottomNavAvailable, showLoginSuccessTransition]);
 
   const mapSearchResultPool = normalizedDeferredSearchQuery.length ? getMapSearchResults(filteredBrowseLocations) : [];
+  const mapMarkerFocusKey = selectedMapPlaceKey ?? (
+    mapSearchResultPool.length === 1 ? mapSearchResultPool[0]?.markerKey ?? null : null
+  );
   const focusedMapSearchResult = selectedMapPlaceKey
     ? mapSearchResultPool.find((place) => place.markerKey === selectedMapPlaceKey) ?? null
     : null;
@@ -1711,6 +1716,15 @@ function AppScreen() {
     mapMarkersTrackViewChangesTimeoutRef.current = null;
   }
 
+  function scheduleMapMarkersTrackViewChanges(durationMs: number) {
+    setMapMarkersTrackViewChanges(true);
+    clearMapMarkersTrackViewChangesTimer();
+    mapMarkersTrackViewChangesTimeoutRef.current = setTimeout(() => {
+      setMapMarkersTrackViewChanges(false);
+      mapMarkersTrackViewChangesTimeoutRef.current = null;
+    }, durationMs);
+  }
+
   function clearLiveLocationRefreshTimer() {
     if (liveLocationRefreshTimeoutRef.current === null) {
       return;
@@ -1764,12 +1778,7 @@ function AppScreen() {
         return;
       }
 
-      setMapMarkersTrackViewChanges(true);
-      clearMapMarkersTrackViewChangesTimer();
-      mapMarkersTrackViewChangesTimeoutRef.current = setTimeout(() => {
-        setMapMarkersTrackViewChanges(false);
-        mapMarkersTrackViewChangesTimeoutRef.current = null;
-      }, 1200);
+      scheduleMapMarkersTrackViewChanges(1200);
     });
 
     return () => {
@@ -2487,6 +2496,10 @@ function AppScreen() {
     }
 
     if (!showMapBrowse || listLoading) {
+      if (listLoading && pendingMapRefreshRef.current && renderedMappedPlaces.length > 0) {
+        return;
+      }
+
       if (renderedMappedPlaces.length || renderedMappedPlaceKey) {
         setRenderedMappedPlaces([]);
         setRenderedMappedPlaceKey('');
@@ -2496,7 +2509,11 @@ function AppScreen() {
       return;
     }
 
-    if (renderedMappedPlaceKey === mappedPlaceKey && !pendingImmediateMapPinsRefreshRef.current) {
+    if (
+      renderedMappedPlaceKey === mappedPlaceKey
+      && !pendingImmediateMapPinsRefreshRef.current
+      && !pendingMapRefreshRef.current
+    ) {
       return;
     }
 
@@ -2509,10 +2526,12 @@ function AppScreen() {
 
     pendingImmediateMapPinsRefreshRef.current = false;
     const renderedMarkerIdentityKey = renderedMappedPlaces.map((place) => place.markerKey).join('|');
+    const shouldAnimateMapRefresh = pendingMapRefreshRef.current;
+    pendingMapRefreshRef.current = false;
     mapPinsTransition.stopAnimation();
     setRenderedMappedPlaces(mappedPlaces);
     setRenderedMappedPlaceKey(mappedPlaceKey);
-    if (renderedMarkerIdentityKey.length > 0) {
+    if (renderedMarkerIdentityKey.length > 0 && !shouldAnimateMapRefresh) {
       mapPinsTransition.setValue(1);
       return;
     }
@@ -2527,6 +2546,14 @@ function AppScreen() {
       }).start();
     });
   }, [authenticatedSession, browseMode, guestBrowseModeLocked, listLoading, mapPinsTransition, mappedPlaceIdentityKey, mappedPlaceKey, mappedPlaces, normalizedDeferredSearchQuery.length, renderedMappedPlaceKey, renderedMappedPlaces, screenMode, selectedPlaceSlug, shellFadeScope, showMapBrowse, showTransitionMapBrowse, splashMapHandoffPending]);
+
+  useEffect(() => {
+    if (!showMapBrowse) {
+      return;
+    }
+
+    scheduleMapMarkersTrackViewChanges(mapMarkerFocusKey ? 900 : 450);
+  }, [mapMarkerFocusKey, showMapBrowse]);
 
   function navigateScreen(
     nextScreen: AppScreenMode,
@@ -3589,14 +3616,13 @@ function AppScreen() {
           return;
         }
 
+        pendingMapRefreshRef.current = false;
         if (isMissingProductionApiBaseUrlError(error)) {
           setErrorMessage(getErrorMessage(error));
-          setPlaces([]);
           return;
         }
 
         setErrorMessage(getErrorMessage(error));
-        setPlaces([]);
       } finally {
         if (isMounted) {
           setListLoading(false);
@@ -3743,12 +3769,7 @@ function AppScreen() {
       return;
     }
 
-    setMapMarkersTrackViewChanges(true);
-    clearMapMarkersTrackViewChangesTimer();
-    mapMarkersTrackViewChangesTimeoutRef.current = setTimeout(() => {
-      setMapMarkersTrackViewChanges(false);
-      mapMarkersTrackViewChangesTimeoutRef.current = null;
-    }, 1600);
+    scheduleMapMarkersTrackViewChanges(1600);
   }, [normalizedDeferredSearchQuery, selectedMapPlaceKey, showMapBrowse]);
 
   useEffect(() => {
@@ -4008,15 +4029,17 @@ function AppScreen() {
     setErrorMessage(null);
     setBrowseFiltersExpanded(false);
     clearPlacesCache();
-    setPlaces([]);
-    setProfilePlaces([]);
+    pendingMapRefreshRef.current = showMapBrowse;
+    setListLoading(true);
+    if (showMapBrowse) {
+      scheduleMapMarkersTrackViewChanges(1600);
+    }
     setSelectedMapPlaceKey(null);
     setSelectedPlaceSlug(null);
     setSelectedPlace(null);
     setSelectedLocationId(null);
     setApiBaseUrl(getDefaultApiBaseUrl());
     setReloadCount((current) => current + 1);
-    setMapRegion(clampRegionToBounds(defaultMapRegion));
   }
 
   const handleSelectPlace = useCallback((place: { slug: string; locationId?: number }) => {
@@ -7083,24 +7106,23 @@ function AppScreen() {
                       const animatedMarkerStyle = normalizedDeferredSearchQuery.length > 0
                         ? { opacity: 1, transform: [] }
                         : getAnimatedMapMarkerStyle(place, mapRegion, width, height, mapPinsTransition);
-                      const markerRenderKey = `${place.markerKey}:${normalizedDeferredSearchQuery.length > 0 ? 'search' : 'browse'}:${selectedMapPlaceKey === place.markerKey ? 'focused' : 'default'}`;
+                      const isFocusedMarker = mapMarkerFocusKey === place.markerKey;
+                      const markerRenderKey = `${place.markerKey}:${isFocusedMarker ? 'focused' : 'default'}`;
 
                       return (
                         <Marker
-                          anchor={{ x: 0.5, y: 0.5 }}
+                          anchor={{ x: 0.5, y: 1 }}
                           coordinate={{ latitude: place.markerLatitude, longitude: place.markerLongitude }}
                           key={markerRenderKey}
                           onPress={() => handleSelectMapPin(place.markerKey)}
-                          tracksViewChanges={mapMarkersTrackViewChanges || normalizedDeferredSearchQuery.length > 0}
+                          tracksViewChanges={mapMarkersTrackViewChanges || normalizedDeferredSearchQuery.length > 0 || isFocusedMarker}
                           zIndex={displayedMapPlaces.length - index}
                         >
                           <Animated.View style={[
                             animatedMarkerStyle,
-                            styles.mapMarker,
-                            { backgroundColor: markerStyle.fill, borderColor: markerStyle.stroke },
-                            selectedMapPlaceKey === place.markerKey ? styles.mapMarkerActive : null,
+                            styles.mapMarkerMotion,
                           ]}>
-                            <Text style={styles.mapMarkerText}>{markerStyle.badge}</Text>
+                            <VenueMarkerVisual markerStyle={markerStyle} style={isFocusedMarker ? styles.mapMarkerActive : null} />
                           </Animated.View>
                         </Marker>
                       );
@@ -7129,23 +7151,22 @@ function AppScreen() {
                         const animatedMarkerStyle = normalizedDeferredSearchQuery.length > 0
                           ? { opacity: 1, transform: [] }
                           : getAnimatedMapMarkerStyle(place, mapRegion, width, height, mapPinsTransition);
-                        const markerRenderKey = `transition-${place.markerKey}:${normalizedDeferredSearchQuery.length > 0 ? 'search' : 'browse'}:${selectedMapPlaceKey === place.markerKey ? 'focused' : 'default'}`;
+                        const isFocusedMarker = mapMarkerFocusKey === place.markerKey;
+                        const markerRenderKey = `transition-${place.markerKey}:${isFocusedMarker ? 'focused' : 'default'}`;
 
                         return (
                           <Marker
-                            anchor={{ x: 0.5, y: 0.5 }}
+                            anchor={{ x: 0.5, y: 1 }}
                             coordinate={{ latitude: place.markerLatitude, longitude: place.markerLongitude }}
                             key={markerRenderKey}
-                            tracksViewChanges={mapMarkersTrackViewChanges || normalizedDeferredSearchQuery.length > 0}
+                            tracksViewChanges={mapMarkersTrackViewChanges || normalizedDeferredSearchQuery.length > 0 || isFocusedMarker}
                             zIndex={displayedMapPlaces.length - index}
                           >
                             <Animated.View style={[
                               animatedMarkerStyle,
-                              styles.mapMarker,
-                              { backgroundColor: markerStyle.fill, borderColor: markerStyle.stroke },
-                              selectedMapPlaceKey === place.markerKey ? styles.mapMarkerActive : null,
+                              styles.mapMarkerMotion,
                             ]}>
-                              <Text style={styles.mapMarkerText}>{markerStyle.badge}</Text>
+                              <VenueMarkerVisual markerStyle={markerStyle} style={isFocusedMarker ? styles.mapMarkerActive : null} />
                             </Animated.View>
                           </Marker>
                         );

@@ -14,6 +14,7 @@ import {
   type WeekdayFilterValue,
 } from '../browseConfig';
 import { styles } from '../appStyles';
+import { VenueMarkerVisual } from '../components/VenueMarkerVisual';
 import { normalizeSearchText } from '../placeHelpers';
 
 const dismissKeyboardOnScrollProps = {
@@ -498,9 +499,7 @@ export function BrowseControls({
                     onPress={() => onToggleVenueType(filter.value)}
                     style={[styles.venueFilterChip, isActive ? styles.venueFilterChipActive : null]}
                   >
-                    <View style={[styles.venueFilterBadge, { backgroundColor: markerStyle.fill, borderColor: markerStyle.stroke }]}>
-                      <Text style={styles.venueFilterBadgeText}>{markerStyle.badge}</Text>
-                    </View>
+                    <VenueMarkerVisual markerStyle={markerStyle} />
                     <Text style={[chipTextStyle, isActive ? chipTextActiveStyle : null]}>{filter.label}</Text>
                   </Pressable>
                 );
