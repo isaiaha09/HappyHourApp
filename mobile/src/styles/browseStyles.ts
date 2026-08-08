@@ -786,7 +786,7 @@ export const browseStyles = {
   mapMarkerLayer: {
     left: 0,
     position: 'absolute',
-    top: 1,
+    top: 0,
   },
   mapMarkerCore: {
     borderRadius: 999,
@@ -802,12 +802,26 @@ export const browseStyles = {
   },
   mapMarkerIcon: {
     alignItems: 'center',
-    height: 20,
+    height: 16,
     justifyContent: 'center',
     left: 0,
     position: 'absolute',
     top: 5,
-    width: 38,
+    width: 32,
+  },
+  mapMarkerIconGlyph: {
+    includeFontPadding: false,
+    textAlign: 'center',
+  },
+  mapMarkerHighlight: {
+    backgroundColor: 'rgba(255, 250, 244, 0.78)',
+    borderRadius: 999,
+    height: 2,
+    left: 9,
+    position: 'absolute',
+    top: 8,
+    transform: [{ rotate: '-28deg' }],
+    width: 6,
   },
   listContent: {
     gap: 12,

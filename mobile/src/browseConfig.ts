@@ -37,14 +37,14 @@ export const manualBusinessCityOptions = [...cityFilters.filter((filter) => filt
 export const manualBusinessVenueOptions = venueFilters;
 
 const venueMarkerStyles = {
-  restaurant: { icon: 'restaurant-outline', fill: '#ff7b54', stroke: '#c94d2d' },
-  bar: { icon: 'wine-outline', fill: '#ff5c8a', stroke: '#b6315a' },
-  fast_food: { icon: 'fast-food-outline', fill: '#ff6647', stroke: '#b93a23' },
-  mobile: { icon: 'bus-outline', fill: '#ffb238', stroke: '#c27a10' },
-  cafe: { icon: 'cafe-outline', fill: '#ff944d', stroke: '#c1611f' },
+  restaurant: { icon: 'silverware-fork-knife', fill: '#ff7b54', stroke: '#c94d2d' },
+  bar: { icon: 'glass-cocktail', fill: '#ff5c8a', stroke: '#b6315a' },
+  fast_food: { icon: 'food', fill: '#ff6647', stroke: '#b93a23' },
+  mobile: { icon: 'bus', fill: '#ffb238', stroke: '#c27a10' },
+  cafe: { icon: 'coffee', fill: '#ff944d', stroke: '#c1611f' },
   shop: { icon: 'storefront-outline', fill: '#ff78b2', stroke: '#ba4a80' },
-  attraction: { icon: 'sparkles-outline', fill: '#9b6dff', stroke: '#6540b5' },
-  other: { icon: 'location-outline', fill: '#ff8f70', stroke: '#c46247' },
+  attraction: { icon: 'star-four-points', fill: '#9b6dff', stroke: '#6540b5' },
+  other: { icon: 'map-marker-outline', fill: '#ff8f70', stroke: '#c46247' },
 } as const;
 
 export function getVenueMarkerStyle(venueType: string) {

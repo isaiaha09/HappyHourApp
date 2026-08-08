@@ -143,6 +143,12 @@ jest.mock('@expo/vector-icons', () => ({
 
     return <View testID={`mock-ionicon-${name}`} />;
   },
+  MaterialCommunityIcons: ({ name }: { name: string }) => {
+    const React = require('react');
+    const { View } = require('react-native');
+
+    return <View testID={`mock-material-community-icon-${name}`} />;
+  },
 }));
 
 jest.mock('../screens/SplashScreen', () => ({
@@ -650,9 +656,9 @@ describe('App browse map search', () => {
     expect(screen.getByLabelText('Select Baskin-Robbins')).toBeTruthy();
     expect(screen.getAllByTestId('mock-map-marker')).toHaveLength(1);
     const marker = screen.getByTestId('mock-map-marker');
-    expect(within(marker).getByTestId('mock-ionicon-location-sharp')).toBeTruthy();
-    expect(within(marker).getByTestId('mock-ionicon-location-outline')).toBeTruthy();
-    expect(within(marker).getByTestId('mock-ionicon-cafe-outline')).toBeTruthy();
+    expect(within(marker).getAllByTestId('mock-material-community-icon-map-marker')).not.toHaveLength(0);
+    expect(within(marker).getByTestId('mock-material-community-icon-map-marker-outline')).toBeTruthy();
+    expect(within(marker).getByTestId('mock-material-community-icon-coffee')).toBeTruthy();
     const markerChildren = React.Children.toArray(screen.getByTestId('mock-map-marker').props.children);
     expect(markerChildren[0]).toEqual(expect.objectContaining({
       props: expect.objectContaining({
