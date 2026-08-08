@@ -12,6 +12,7 @@ type MockNetworkState = {
 
 const mockFetchPlaces = jest.fn<Promise<PlaceListItem[]>, [string, string]>();
 const mockFetchLiveLocationPlaces = jest.fn<Promise<Array<{ slug: string; latitude: number | null; longitude: number | null; updated_at: string | null }>>, [string, string]>();
+const mockFetchPlaceDetail = jest.fn();
 const mockFetchProfileDashboard = jest.fn();
 const mockLoginProfile = jest.fn();
 const mockRegisterPushDevice = jest.fn();
@@ -42,7 +43,7 @@ jest.mock('../api', () => ({
   disableTwoFactor: jest.fn(),
   fetchFeed: jest.fn(),
   fetchLiveLocationPlaces: (...args: [string, string]) => mockFetchLiveLocationPlaces(...args),
-  fetchPlaceDetail: jest.fn(),
+  fetchPlaceDetail: (...args: unknown[]) => mockFetchPlaceDetail(...args),
   fetchPlaces: (...args: [string, string]) => mockFetchPlaces(...args),
   fetchProfileDashboard: (...args: unknown[]) => mockFetchProfileDashboard(...args),
   getDefaultApiBaseUrl: jest.fn(() => 'http://127.0.0.1:8000/api'),
@@ -185,7 +186,12 @@ jest.mock('../screens/DashboardScreen', () => ({
 }));
 
 jest.mock('../screens/PlaceDetailScreen', () => ({
-  PlaceDetailScreen: () => null,
+  PlaceDetailScreen: ({ selectedPlace }: { selectedPlace?: { slug?: string } | null }) => {
+    const React = require('react');
+    const { Text } = require('react-native');
+
+    return selectedPlace ? <Text testID="mock-place-detail">{selectedPlace.slug}</Text> : null;
+  },
 }));
 
 jest.mock('../businessLocationTracking', () => ({
@@ -281,7 +287,11 @@ jest.mock('react-native-maps', () => {
     return <View testID={testID ?? 'mock-map-view'}>{children}</View>;
   });
 
-  const Marker = ({ children }: { children?: React.ReactNode }) => <View testID="mock-map-marker">{children}</View>;
+  const Marker = ({ children, onPress }: { children?: React.ReactNode; onPress?: () => void }) => {
+    const { Pressable } = require('react-native');
+
+    return <Pressable onPress={onPress} testID="mock-map-marker">{children}</Pressable>;
+  };
 
   return {
     __esModule: true,
@@ -339,6 +349,19 @@ const samplePlace: PlaceListItem = {
   locations: [],
 };
 
+const secondSamplePlace: PlaceListItem = {
+  ...samplePlace,
+  id: 2,
+  name: 'Yard House',
+  slug: 'yard-house',
+  city: 'oxnard',
+  city_label: 'Oxnard',
+  address_line_1: '501 Collection Blvd Ste # 4130',
+  latitude: 34.1975,
+  longitude: -119.1771,
+  phone_number: '805-555-0102',
+};
+
 describe('App browse map search', () => {
   beforeEach(() => {
     mockAppStateChangeListener = null;
@@ -362,6 +385,7 @@ describe('App browse map search', () => {
     mockFetchPlaces.mockResolvedValue([samplePlace]);
     mockFetchLiveLocationPlaces.mockReset();
     mockFetchLiveLocationPlaces.mockResolvedValue([]);
+    mockFetchPlaceDetail.mockReset();
     mockFetchProfileDashboard.mockResolvedValue(null);
     mockRegisterPushDevice.mockReset();
     mockRegisterForPushNotificationsAsync.mockReset();
@@ -581,6 +605,159 @@ describe('App browse map search', () => {
 
     expect(mapsModule.__mock.animateToRegionMock).toHaveBeenCalledTimes(baselineAnimateCount);
     expect(screen.getByText('No map matches found for that search yet.')).toBeTruthy();
+  });
+
+  it('opens the full place profile when a map marker is pressed', async () => {
+    mockFetchPlaceDetail.mockResolvedValue({
+      ...samplePlace,
+      deals: [],
+      locations: [],
+    });
+
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    fireEvent.changeText(screen.getByTestId('browse-search-input'), 'ba');
+
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 180));
+    });
+
+    expect(screen.getByText('Best matches')).toBeTruthy();
+    expect(screen.getByLabelText('Select Baskin-Robbins')).toBeTruthy();
+    expect(screen.getAllByTestId('mock-map-marker')).toHaveLength(1);
+    const markerChildren = React.Children.toArray(screen.getByTestId('mock-map-marker').props.children);
+    expect(markerChildren[0]).toEqual(expect.objectContaining({
+      props: expect.objectContaining({
+        style: expect.arrayContaining([expect.objectContaining({ opacity: 1 })]),
+      }),
+    }));
+    const lastMapRegion = mapsModule.__mock.animateToRegionMock.mock.calls.at(-1)?.[0] as { latitude?: number } | undefined;
+    expect(lastMapRegion?.latitude).toBeCloseTo((samplePlace.latitude ?? 0) + 0.01 * 0.18, 4);
+    fireEvent.press(screen.getByTestId('mock-map-marker'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(mockFetchPlaceDetail).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api',
+      samplePlace.slug,
+      undefined,
+    );
+    expect(screen.getByTestId('mock-place-detail')).toHaveTextContent(samplePlace.slug);
+    expect(screen.queryByText('Best matches')).toBeNull();
+  });
+
+  it('keeps Focus for multiple results, promotes the focused row to Select, and skips the preview', async () => {
+    mockFetchPlaces.mockResolvedValue([samplePlace, secondSamplePlace]);
+    mockFetchPlaceDetail.mockResolvedValue({
+      ...secondSamplePlace,
+      deals: [],
+      locations: [],
+    });
+
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    fireEvent.changeText(screen.getByTestId('browse-search-input'), 'a');
+
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(screen.getByLabelText('Focus Baskin-Robbins')).toBeTruthy();
+    expect(screen.getByLabelText('Focus Yard House')).toBeTruthy();
+
+    const baselineAnimateCount = mapsModule.__mock.animateToRegionMock.mock.calls.length;
+    fireEvent.press(screen.getByLabelText('Focus Yard House'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(mapsModule.__mock.animateToRegionMock.mock.calls.length).toBeGreaterThan(baselineAnimateCount);
+    expect(screen.getByText('Best matches')).toBeTruthy();
+    expect(screen.getByText('Top 1 of 1 in view')).toBeTruthy();
+    expect(screen.getByLabelText('Select Yard House')).toBeTruthy();
+    expect(screen.queryByLabelText('Focus Baskin-Robbins')).toBeNull();
+    expect(screen.getAllByTestId('mock-map-marker')).toHaveLength(1);
+    const focusedMapRegion = mapsModule.__mock.animateToRegionMock.mock.calls.at(-1)?.[0] as { latitude?: number } | undefined;
+    expect(focusedMapRegion?.latitude).toBeGreaterThan(secondSamplePlace.latitude ?? 0);
+    expect(screen.queryByText('Photos from this business page have not been found yet.')).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('Select Yard House'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(mockFetchPlaceDetail).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api',
+      secondSamplePlace.slug,
+      undefined,
+    );
+    expect(screen.getByTestId('mock-place-detail')).toHaveTextContent(secondSamplePlace.slug);
+    expect(screen.queryByText('Best matches')).toBeNull();
+  });
+
+  it('keeps the previous map marker mounted while a typed search settles', async () => {
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    const searchInput = screen.getByTestId('browse-search-input');
+    expect(screen.getAllByTestId('mock-map-marker')).toHaveLength(1);
+
+    fireEvent.changeText(searchInput, 'z');
+
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    fireEvent.changeText(searchInput, 'ba');
+
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(screen.getAllByTestId('mock-map-marker')).toHaveLength(1);
   });
 
   it('returns the guest sign-in flow to the browse map', async () => {

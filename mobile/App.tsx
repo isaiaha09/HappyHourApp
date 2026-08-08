@@ -182,6 +182,8 @@ const shellFadeDurationMs = 360;
 const interactiveSwipeCompletionProgress = 0.35;
 const interactiveSwipeMinVelocity = 720;
 const mapEdgeSwipeWidth = 28;
+const mapSearchPinsSettleDelayMs = 320;
+const mapSearchResultVerticalOffset = 0.18;
 const defaultMapRegion = {
   latitude: (mapAreaBounds.minLatitude + mapAreaBounds.maxLatitude) / 2,
   longitude: (mapAreaBounds.minLongitude + mapAreaBounds.maxLongitude) / 2,
@@ -686,6 +688,7 @@ function AppScreen() {
   const showMoreMapResultsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoFitMapRegionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mapMarkersTrackViewChangesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mapSearchPinsSettleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasSettledInitialMapRegionRef = useRef(false);
   const mapResultsCardTransitionVersionRef = useRef(0);
   const pendingImmediateMapPinsRefreshRef = useRef(false);
@@ -743,6 +746,7 @@ function AppScreen() {
   const [userCoordinates, setUserCoordinates] = useState<UserCoordinates | null>(null);
   const [renderedMappedPlaces, setRenderedMappedPlaces] = useState<MappedPlace[]>([]);
   const [renderedMappedPlaceKey, setRenderedMappedPlaceKey] = useState('');
+  const [searchedMapPlaces, setSearchedMapPlaces] = useState<MappedPlace[]>([]);
   const hasInternetConnection = networkState?.isInternetReachable ?? networkState?.isConnected ?? null;
   const connectivityCheckPending = networkState === null;
   const showNoInternetScreen = hasInternetConnection === false;
@@ -920,18 +924,18 @@ function AppScreen() {
   const browseResultCount = displayedBrowsePlaces.length;
   const mappedPlaceIdentityKey = useMemo(() => mappedPlaces.map((place) => place.markerKey).join('|'), [mappedPlaces]);
   const mappedPlaceKey = useMemo(() => getMappedPlaceRenderKey(mappedPlaces), [mappedPlaces]);
-  const displayedMapPlaces = showMapBrowse
+  const unfilteredDisplayedMapPlaces = showMapBrowse
     ? normalizedDeferredSearchQuery.length > 0
-      ? mappedPlaces
+      ? mappedPlaces.length > 0 ? mappedPlaces : searchedMapPlaces
       : renderedMappedPlaces
     : [];
+  const displayedMapPlaces = selectedMapPlaceKey
+    ? unfilteredDisplayedMapPlaces.filter((place) => place.markerKey === selectedMapPlaceKey)
+    : unfilteredDisplayedMapPlaces;
   const unplacedPlaceCount = useMemo(() => filteredPlaces.filter((place) => (
     !getPlaceLocations(place).some((location) => location.latitude !== null && location.longitude !== null)
   )).length, [filteredPlaces]);
-  const selectedMapPlace = selectedMapPlaceKey
-    ? displayedMapPlaces.find((place) => place.markerKey === selectedMapPlaceKey) ?? null
-    : null;
-  const activeMapPreviewPlace = selectedMapPlace ?? selectedMapSearchPreviewPlace;
+  const activeMapPreviewPlace = selectedMapSearchPreviewPlace;
   const displayedMapPreviewImageUrls = displayedMapPreviewPlace ? dedupeImageUrls(displayedMapPreviewPlace.image_urls) : [];
   const selectedPlaceLocation = getSelectedPlaceLocation(selectedPlace, selectedLocationId, selectedCity);
   const selectedPlaceDeals = selectedPlaceLocation?.deals ?? selectedPlace?.deals ?? [];
@@ -1514,7 +1518,11 @@ function AppScreen() {
   }, [authenticatedSession?.auth_token, nativeBottomNavAvailable, showLoginSuccessTransition]);
 
   const mapSearchResultPool = normalizedDeferredSearchQuery.length ? getMapSearchResults(filteredBrowseLocations) : [];
-  const mapSearchResultsKey = mapSearchResultPool.map((place) => place.resultKey).join('|');
+  const focusedMapSearchResult = selectedMapPlaceKey
+    ? mapSearchResultPool.find((place) => place.markerKey === selectedMapPlaceKey) ?? null
+    : null;
+  const mapSearchResultDisplayPool = focusedMapSearchResult ? [focusedMapSearchResult] : mapSearchResultPool;
+  const mapSearchResultsKey = mapSearchResultDisplayPool.map((place) => place.resultKey).join('|');
   const bottomNavHeight = Math.max(insets.bottom + 76, 90);
   const mapOverlayBottomPadding = bottomNavHeight + 18;
   const floatingDashboardButtonOffset = bottomNavHeight + 16;
@@ -2242,7 +2250,7 @@ function AppScreen() {
       ],
     }
     : null;
-  const shouldShowMapResults = showMapBrowse && !activeMapPreviewPlace && normalizedDeferredSearchQuery.length > 0;
+  const shouldShowMapResults = showMapBrowse && !selectedPlaceSlug && !activeMapPreviewPlace && normalizedDeferredSearchQuery.length > 0;
   const isLandscape = width > height;
   const useWideLandscapeLayout = isLandscape && width >= 760;
   const browseListColumns = useWideLandscapeLayout ? 2 : 1;
@@ -2416,6 +2424,44 @@ function AppScreen() {
   }, [browseEntryOffset, browseSceneTransition, screenMode, selectedPlaceSlug]);
 
   useEffect(() => {
+    if (mapSearchPinsSettleTimeoutRef.current !== null) {
+      clearTimeout(mapSearchPinsSettleTimeoutRef.current);
+      mapSearchPinsSettleTimeoutRef.current = null;
+    }
+
+    const hasActiveSearch = normalizedSearchQuery.length > 0 || normalizedDeferredSearchQuery.length > 0;
+    if (!showMapBrowse || !hasActiveSearch) {
+      setSearchedMapPlaces((current) => current.length ? [] : current);
+      return;
+    }
+
+    if (mappedPlaces.length > 0) {
+      setSearchedMapPlaces(mappedPlaces);
+      return;
+    }
+
+    if (normalizedSearchQuery !== normalizedDeferredSearchQuery) {
+      return;
+    }
+
+    if (!searchedMapPlaces.length) {
+      return;
+    }
+
+    mapSearchPinsSettleTimeoutRef.current = setTimeout(() => {
+      setSearchedMapPlaces([]);
+      mapSearchPinsSettleTimeoutRef.current = null;
+    }, mapSearchPinsSettleDelayMs);
+
+    return () => {
+      if (mapSearchPinsSettleTimeoutRef.current !== null) {
+        clearTimeout(mapSearchPinsSettleTimeoutRef.current);
+        mapSearchPinsSettleTimeoutRef.current = null;
+      }
+    };
+  }, [mappedPlaces, normalizedDeferredSearchQuery, normalizedSearchQuery, searchedMapPlaces.length, showMapBrowse]);
+
+  useEffect(() => {
     const shouldPreserveRenderedMapPins = !showMapBrowse && browseMode === 'map' && selectedPlaceSlug !== null;
     const shouldDelayPinsUntilBrowseScreenSettles = screenMode !== 'browse' && showTransitionMapBrowse;
     const shouldDelayPinsUntilBrowseFadeSettles = shellFadeScope === 'browse' && screenMode === 'browse' && showMapBrowse;
@@ -2456,6 +2502,8 @@ function AppScreen() {
 
     if (normalizedDeferredSearchQuery.length > 0) {
       pendingImmediateMapPinsRefreshRef.current = false;
+      mapPinsTransition.stopAnimation();
+      mapPinsTransition.setValue(1);
       return;
     }
 
@@ -3383,7 +3431,7 @@ function AppScreen() {
     if (shouldShowMapResults) {
       const resultsChanged = (
         mapSearchResultsKey !== renderedMapResultsKey ||
-        mapSearchResultPool.length !== renderedMapResultCount
+        mapSearchResultDisplayPool.length !== renderedMapResultCount
       );
 
       if (resultsChanged) {
@@ -3391,11 +3439,11 @@ function AppScreen() {
       }
 
       if (resultsChanged) {
-        const nextVisibleCount = Math.min(5, mapSearchResultPool.length);
+        const nextVisibleCount = Math.min(5, mapSearchResultDisplayPool.length);
         setVisibleMapResultCount(nextVisibleCount);
-        setRenderedMapSearchResults(mapSearchResultPool.slice(0, nextVisibleCount));
+        setRenderedMapSearchResults(mapSearchResultDisplayPool.slice(0, nextVisibleCount));
         setRenderedMapResultsKey(mapSearchResultsKey);
-        setRenderedMapResultCount(mapSearchResultPool.length);
+        setRenderedMapResultCount(mapSearchResultDisplayPool.length);
       }
 
       if (!showMapResultsCard) {
@@ -3455,8 +3503,8 @@ function AppScreen() {
     });
   }, [
     mapResultsOpacity,
-    mapSearchResultPool,
-    mapSearchResultPool.length,
+    mapSearchResultDisplayPool,
+    mapSearchResultDisplayPool.length,
     mapSearchResultsKey,
     renderedMapResultCount,
     renderedMapResultsKey,
@@ -3657,7 +3705,9 @@ function AppScreen() {
       && normalizedDeferredSearchQuery.length === 0;
     const nextRegion = useAllCitiesInitialRegion
       ? allCitiesInitialMapRegion
-      : getBrowseMapRegion(selectedCity, mappedPlaces);
+      : normalizedDeferredSearchQuery.length > 0 && mappedPlaces.length > 0
+        ? getSearchMapRegion(mappedPlaces)
+        : getBrowseMapRegion(selectedCity, mappedPlaces);
     const boundedRegion = clampRegionToBounds(nextRegion);
 
     if (useAllCitiesInitialRegion) {
@@ -3699,7 +3749,7 @@ function AppScreen() {
       setMapMarkersTrackViewChanges(false);
       mapMarkersTrackViewChangesTimeoutRef.current = null;
     }, 1600);
-  }, [selectedMapPlaceKey, showMapBrowse]);
+  }, [normalizedDeferredSearchQuery, selectedMapPlaceKey, showMapBrowse]);
 
   useEffect(() => {
     if (!['profiles', 'business-search', 'business-claim', 'manual-business-claim', 'informal-business-claim'].includes(screenMode)) {
@@ -4067,6 +4117,8 @@ function AppScreen() {
       return;
     }
 
+    setSelectedMapPlaceKey(null);
+    setSelectedMapSearchPreviewPlace(null);
     setSearchQuery(value);
   }
 
@@ -6030,21 +6082,48 @@ function AppScreen() {
   }
 
   function handleSelectMapPin(placeKey: string) {
-    invalidateMapResultsCardTransitions();
-    mapResultsOpacity.stopAnimation();
-    mapResultsOpacity.setValue(1);
-    setShowMapResultsCard(false);
-    setSelectedMapSearchPreviewPlace(null);
-    setSelectedMapPlaceKey(placeKey);
+    const place = displayedMapPlaces.find((mappedPlace) => mappedPlace.markerKey === placeKey);
+    if (!place) {
+      return;
+    }
+
+    selectMapSearchPlace(place);
   }
 
-  function handleFocusMapResult(place: MapSearchResultPlace) {
+  function selectMapSearchPlace(place: Pick<MappedPlace, 'locationId' | 'slug'>) {
     invalidateMapResultsCardTransitions();
     mapResultsOpacity.stopAnimation();
     mapResultsOpacity.setValue(0);
     setShowMapResultsCard(false);
+    setMapResultsCollapsed(false);
+    setSelectedMapSearchPreviewPlace(null);
+    handleSelectPlace({
+      locationId: place.locationId,
+      slug: place.slug,
+    });
+  }
+
+  function handlePressMapSearchResult(place: MapSearchResultPlace) {
+    const canSelect = !!place.markerKey && (
+      mapSearchResultPool.length === 1
+      || selectedMapPlaceKey === place.markerKey
+    );
+
+    if (canSelect) {
+      selectMapSearchPlace(place);
+      return;
+    }
+
+    handleFocusMapResult(place);
+  }
+
+  function handleFocusMapResult(place: MapSearchResultPlace) {
+    invalidateMapResultsCardTransitions();
 
     if (!place.markerKey || place.latitude === null || place.longitude === null) {
+      mapResultsOpacity.stopAnimation();
+      mapResultsOpacity.setValue(0);
+      setShowMapResultsCard(false);
       const nextRegion = clampRegionToBounds(defaultMapRegion);
       setSelectedMapPlaceKey(null);
       setSelectedMapSearchPreviewPlace(place);
@@ -6058,7 +6137,7 @@ function AppScreen() {
     setSelectedMapPlaceKey(place.markerKey);
     const currentMapRegion = mapRegionRef.current;
     const nextRegion = clampRegionToBounds({
-      latitude: place.latitude,
+      latitude: place.latitude + Math.min(currentMapRegion.latitudeDelta, 0.04) * mapSearchResultVerticalOffset,
       longitude: place.longitude,
       latitudeDelta: Math.min(currentMapRegion.latitudeDelta, 0.04),
       longitudeDelta: Math.min(currentMapRegion.longitudeDelta, 0.04),
@@ -7001,15 +7080,18 @@ function AppScreen() {
                   >
                     {displayedMapPlaces.map((place, index) => {
                       const markerStyle = getVenueMarkerStyle(place.venue_type);
-                      const animatedMarkerStyle = getAnimatedMapMarkerStyle(place, mapRegion, width, height, mapPinsTransition);
+                      const animatedMarkerStyle = normalizedDeferredSearchQuery.length > 0
+                        ? { opacity: 1, transform: [] }
+                        : getAnimatedMapMarkerStyle(place, mapRegion, width, height, mapPinsTransition);
+                      const markerRenderKey = `${place.markerKey}:${normalizedDeferredSearchQuery.length > 0 ? 'search' : 'browse'}:${selectedMapPlaceKey === place.markerKey ? 'focused' : 'default'}`;
 
                       return (
                         <Marker
                           anchor={{ x: 0.5, y: 0.5 }}
                           coordinate={{ latitude: place.markerLatitude, longitude: place.markerLongitude }}
-                          key={place.markerKey}
+                          key={markerRenderKey}
                           onPress={() => handleSelectMapPin(place.markerKey)}
-                          tracksViewChanges={mapMarkersTrackViewChanges}
+                          tracksViewChanges={mapMarkersTrackViewChanges || normalizedDeferredSearchQuery.length > 0}
                           zIndex={displayedMapPlaces.length - index}
                         >
                           <Animated.View style={[
@@ -7044,14 +7126,17 @@ function AppScreen() {
                     >
                       {displayedMapPlaces.map((place, index) => {
                         const markerStyle = getVenueMarkerStyle(place.venue_type);
-                        const animatedMarkerStyle = getAnimatedMapMarkerStyle(place, mapRegion, width, height, mapPinsTransition);
+                        const animatedMarkerStyle = normalizedDeferredSearchQuery.length > 0
+                          ? { opacity: 1, transform: [] }
+                          : getAnimatedMapMarkerStyle(place, mapRegion, width, height, mapPinsTransition);
+                        const markerRenderKey = `transition-${place.markerKey}:${normalizedDeferredSearchQuery.length > 0 ? 'search' : 'browse'}:${selectedMapPlaceKey === place.markerKey ? 'focused' : 'default'}`;
 
                         return (
                           <Marker
                             anchor={{ x: 0.5, y: 0.5 }}
                             coordinate={{ latitude: place.markerLatitude, longitude: place.markerLongitude }}
-                            key={`transition-${place.markerKey}`}
-                            tracksViewChanges={mapMarkersTrackViewChanges}
+                            key={markerRenderKey}
+                            tracksViewChanges={mapMarkersTrackViewChanges || normalizedDeferredSearchQuery.length > 0}
                             zIndex={displayedMapPlaces.length - index}
                           >
                             <Animated.View style={[
@@ -7243,21 +7328,33 @@ function AppScreen() {
                                   showsVerticalScrollIndicator
                                   style={styles.mapResultsScroll}
                                 >
-                                  {renderedMapSearchResults.map((place) => (
-                                    <Pressable
-                                      key={place.resultKey}
-                                      onPress={() => handleFocusMapResult(place)}
-                                      style={styles.mapResultRow}
-                                    >
-                                      <View style={styles.mapResultCopy}>
-                                        <Text numberOfLines={1} style={styles.mapResultTitle}>{place.name}</Text>
-                                        <Text numberOfLines={2} style={styles.mapResultMeta}>
-                                          {place.venue_type_label} • {place.fullAddress}{place.markerKey ? '' : ' • No map pin yet'}
-                                        </Text>
-                                      </View>
-                                      <Text style={styles.mapResultAction}>{place.markerKey ? 'Focus' : 'Preview'}</Text>
-                                    </Pressable>
-                                  ))}
+                                  {renderedMapSearchResults.map((place) => {
+                                    const canSelect = !!place.markerKey && (
+                                      mapSearchResultPool.length === 1
+                                      || selectedMapPlaceKey === place.markerKey
+                                    );
+                                    const actionLabel = place.markerKey
+                                      ? canSelect ? 'Select' : 'Focus'
+                                      : 'Preview';
+
+                                    return (
+                                      <Pressable
+                                        accessibilityLabel={`${actionLabel} ${place.name}`}
+                                        accessibilityRole="button"
+                                        key={place.resultKey}
+                                        onPress={() => handlePressMapSearchResult(place)}
+                                        style={styles.mapResultRow}
+                                      >
+                                        <View style={styles.mapResultCopy}>
+                                          <Text numberOfLines={1} style={styles.mapResultTitle}>{place.name}</Text>
+                                          <Text numberOfLines={2} style={styles.mapResultMeta}>
+                                            {place.venue_type_label} • {place.fullAddress}{place.markerKey ? '' : ' • No map pin yet'}
+                                          </Text>
+                                        </View>
+                                        <Text style={styles.mapResultAction}>{actionLabel}</Text>
+                                      </Pressable>
+                                    );
+                                  })}
                                 </ScrollView>
                                 {renderedMapSearchResults.length < renderedMapResultCount ? (
                                   <Pressable disabled={loadingMoreMapResults} onPress={handleShowMoreMapResults} style={styles.mapResultsMoreButton}>
@@ -8098,6 +8195,15 @@ function getBrowseMapRegion(selectedCity: CityFilterValue, mappedPlaces: MappedP
   }
 
   return getMapRegion(mappedPlaces);
+}
+
+function getSearchMapRegion(mappedPlaces: MappedPlace[]) {
+  const region = getMapRegion(mappedPlaces);
+
+  return clampRegionToBounds({
+    ...region,
+    latitude: region.latitude + region.latitudeDelta * mapSearchResultVerticalOffset,
+  });
 }
 
 function toggleWeekdaySelection(current: WeekdayFilterValue[], day: WeekdayFilterValue) {
