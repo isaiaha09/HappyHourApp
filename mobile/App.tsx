@@ -2938,6 +2938,7 @@ function AppScreen() {
         setListRevealEnabled(false);
         browseModeTransition.stopAnimation();
         browseModeTransition.setValue(1);
+        setConfirmedDealsOnly(true);
         setBrowseMode('map');
       }
       setGuestBrowseTransitionFrom(targetScreen === 'splash' ? 'splash' : 'browse');
@@ -2962,6 +2963,7 @@ function AppScreen() {
         setListRevealEnabled(false);
         browseModeTransition.stopAnimation();
         browseModeTransition.setValue(1);
+        setConfirmedDealsOnly(true);
         setBrowseMode('map');
       }
       setMainShellTransitionFrom(targetScreen === 'home-feed' ? 'home-feed' : 'browse');
@@ -4521,6 +4523,7 @@ function AppScreen() {
     setGuestOnboardingOrigin(null);
     setGuestBrowseModeLocked(true);
     setSplashMapHandoffPending(true);
+    setConfirmedDealsOnly(true);
     handleBrowseModeChange('map');
     warmMapShellThen(() => navigateGuestBrowseTransition('browse'));
   }
@@ -4769,6 +4772,10 @@ function AppScreen() {
   function handleBottomNavOpenMap() {
     if (!authenticatedSession) {
       return;
+    }
+
+    if (screenMode !== 'browse' || browseMode !== 'map') {
+      setConfirmedDealsOnly(true);
     }
 
     if (screenMode === 'home-feed') {
