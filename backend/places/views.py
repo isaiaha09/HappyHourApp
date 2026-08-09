@@ -378,18 +378,38 @@ class LiveLocationPlaceListView(generics.GenericAPIView):
 		if city and city != 'all':
 			queryset = queryset.filter(city=city)
 
+		active_snapshots_by_slug = {}
+		for snapshot in queryset:
+			payload_slug = slugify(f'{snapshot.name}-{snapshot.city}')
+			if payload_slug in disabled_slugs or not is_live_location_tracking_enabled_for_snapshot(snapshot):
+				continue
+
+			current_snapshot = active_snapshots_by_slug.get(payload_slug)
+			if current_snapshot is None:
+				active_snapshots_by_slug[payload_slug] = snapshot
+				continue
+
+			current_updated_at = current_snapshot.tracked_location_updated_at
+			candidate_updated_at = snapshot.tracked_location_updated_at
+			if (
+				current_updated_at is None
+				or candidate_updated_at is not None and (
+					candidate_updated_at > current_updated_at
+					or candidate_updated_at == current_updated_at and snapshot.pk > current_snapshot.pk
+				)
+			):
+				active_snapshots_by_slug[payload_slug] = snapshot
+
 		payloads = [
 			{
-				'slug': slugify(f'{snapshot.name}-{snapshot.city}'),
+				'slug': payload_slug,
 				'latitude': snapshot.tracked_location_latitude,
 				'longitude': snapshot.tracked_location_longitude,
 				'updated_at': snapshot.tracked_location_updated_at,
 				'tracking_enabled': True,
 				**(get_live_location_display_fields(snapshot) or {}),
 			}
-			for snapshot in queryset
-			if slugify(f'{snapshot.name}-{snapshot.city}') not in disabled_slugs
-			and is_live_location_tracking_enabled_for_snapshot(snapshot)
+			for payload_slug, snapshot in sorted(active_snapshots_by_slug.items())
 		]
 		disabled_snapshots = (
 			ListingSnapshot.objects

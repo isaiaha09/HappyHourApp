@@ -122,6 +122,39 @@ export function formatLastKnownLocationLabel(updatedAt: string | null | undefine
   return `Last known location ${elapsedHours} ${hourLabel} ago`;
 }
 
+function getLiveLocationUpdateTimestamp(update: LiveLocationPlaceUpdate) {
+  if (!update.updated_at) {
+    return null;
+  }
+
+  const timestamp = Date.parse(update.updated_at);
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function getLatestLiveLocationUpdatesBySlug(updates: LiveLocationPlaceUpdate[]) {
+  const updatesBySlug = new Map<string, LiveLocationPlaceUpdate>();
+  for (const update of updates) {
+    const existingUpdate = updatesBySlug.get(update.slug);
+    if (!existingUpdate) {
+      updatesBySlug.set(update.slug, update);
+      continue;
+    }
+
+    const existingTimestamp = getLiveLocationUpdateTimestamp(existingUpdate);
+    const updateTimestamp = getLiveLocationUpdateTimestamp(update);
+    if (existingTimestamp === null && updateTimestamp !== null) {
+      updatesBySlug.set(update.slug, update);
+      continue;
+    }
+
+    if (existingTimestamp !== null && updateTimestamp !== null && updateTimestamp > existingTimestamp) {
+      updatesBySlug.set(update.slug, update);
+    }
+  }
+
+  return updatesBySlug;
+}
+
 export function mergeLiveLocationUpdatesIntoPlaces(
   places: PlaceListItem[],
   updates: LiveLocationPlaceUpdate[],
@@ -131,7 +164,7 @@ export function mergeLiveLocationUpdatesIntoPlaces(
     return places;
   }
 
-  const updatesBySlug = new Map(updates.map((update) => [update.slug, update]));
+  const updatesBySlug = getLatestLiveLocationUpdatesBySlug(updates);
   let changed = false;
   const nextPlaces = places.map((place) => {
     const nextLocations = place.locations.map((location) => {
@@ -257,7 +290,7 @@ export function mergeLiveLocationUpdatesIntoPlaceDetail(
     return place;
   }
 
-  const updatesBySlug = new Map(updates.map((update) => [update.slug, update]));
+  const updatesBySlug = getLatestLiveLocationUpdatesBySlug(updates);
   const nextLocations = place.locations.map((location) => {
     const update = updatesBySlug.get(location.slug);
     if (!update || ((update.latitude === null || update.longitude === null) && update.tracking_enabled !== false)) {

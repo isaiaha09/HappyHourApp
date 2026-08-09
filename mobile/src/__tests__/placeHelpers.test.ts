@@ -90,6 +90,40 @@ describe('mergeLiveLocationUpdatesIntoPlaces', () => {
     expect(result[1]).toBe(staticPlace);
   });
 
+  it('keeps the newest coordinate when the live endpoint returns duplicate slugs', () => {
+    const place = {
+      latitude: 34.2,
+      longitude: -119.1,
+      locations: [{
+        latitude: 34.2,
+        longitude: -119.1,
+        slug: 'scoops-truck-ventura',
+      }],
+      slug: 'scoops-truck',
+    } as PlaceListItem;
+
+    const result = mergeLiveLocationUpdatesIntoPlaces([place], [
+      {
+        latitude: 34.2789,
+        longitude: -119.2914,
+        slug: 'scoops-truck-ventura',
+        updated_at: '2026-08-03T17:33:20Z',
+      },
+      {
+        latitude: 34.2001,
+        longitude: -119.1001,
+        slug: 'scoops-truck-ventura',
+        updated_at: '2026-08-03T17:23:20Z',
+      },
+    ]);
+
+    expect(result[0].locations[0]).toEqual(expect.objectContaining({
+      latitude: 34.2789,
+      longitude: -119.2914,
+      live_location_updated_at: '2026-08-03T17:33:20Z',
+    }));
+  });
+
   it('preserves the last known mobile coordinates when a live update is missing', () => {
     const place = {
       latitude: 34.2,

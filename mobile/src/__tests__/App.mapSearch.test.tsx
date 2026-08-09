@@ -304,14 +304,15 @@ jest.mock('react-native-maps', () => {
     return <View testID={testID ?? 'mock-map-view'}>{children}</View>;
   });
 
-  const Marker = ({ children, onPress, style }: {
+  const Marker = ({ children, coordinate, onPress, style }: {
     children?: React.ReactNode;
+    coordinate?: { latitude: number; longitude: number };
     onPress?: () => void;
     style?: unknown;
   }) => {
     const { Pressable } = require('react-native');
 
-    return <Pressable onPress={onPress} style={style} testID="mock-map-marker">{children}</Pressable>;
+    return <Pressable coordinate={coordinate} onPress={onPress} style={style} testID="mock-map-marker">{children}</Pressable>;
   };
 
   return {
@@ -633,6 +634,41 @@ describe('App browse map search', () => {
     expect(screen.getByText('Offline. Showing last known locations.')).toBeTruthy();
     expect(screen.getAllByTestId('mock-map-marker')).toHaveLength(1);
     expect(screen.queryByText('No internet connection')).toBeNull();
+  });
+
+  it('applies a fetched live coordinate to the rendered map marker', async () => {
+    const livePlace = {
+      ...samplePlace,
+      locations: [{
+        ...samplePlace,
+        id: 11,
+        slug: 'baskin-robbins-camarillo',
+      }],
+    } as PlaceListItem;
+    mockFetchPlaces.mockResolvedValue([livePlace]);
+    mockFetchLiveLocationPlaces.mockResolvedValue([{
+      slug: 'baskin-robbins-camarillo',
+      latitude: 34.2789,
+      longitude: -119.2914,
+      updated_at: '2026-08-03T17:33:20Z',
+    }]);
+
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(mockFetchLiveLocationPlaces).toHaveBeenCalled();
+    expect(screen.getByTestId('mock-map-marker').props.coordinate).toEqual({
+      latitude: 34.2789,
+      longitude: -119.2914,
+    });
   });
 
   it('retries a stationary vendor location after the device reconnects', async () => {

@@ -391,6 +391,39 @@ class PlaceApiTests(APITestCase):
 		self.assertEqual(stale_payload['longitude'], -119.0401)
 		self.assertEqual(stale_payload['updated_at'], timezone.localtime(updated_at).isoformat())
 
+	def test_live_location_endpoint_deduplicates_same_public_slug_using_newest_update(self):
+		older_updated_at = timezone.now() - timedelta(minutes=10)
+		newer_updated_at = timezone.now()
+		ListingSnapshot.objects.create(
+			name='Duplicate Truck',
+			listing_slug='duplicate-truck-old',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+			tracked_location_latitude=34.2001,
+			tracked_location_longitude=-119.1001,
+			tracked_location_updated_at=older_updated_at,
+		)
+		ListingSnapshot.objects.create(
+			name='Duplicate Truck',
+			listing_slug='duplicate-truck-new',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+			tracked_location_latitude=34.2002,
+			tracked_location_longitude=-119.1002,
+			tracked_location_updated_at=newer_updated_at,
+		)
+
+		response = self.client.get(reverse('place-live-locations'), {'city': City.VENTURA})
+
+		self.assertEqual(response.status_code, 200)
+		duplicate_payloads = [payload for payload in response.data if payload['slug'] == 'duplicate-truck-ventura']
+		self.assertEqual(len(duplicate_payloads), 1)
+		self.assertEqual(duplicate_payloads[0]['latitude'], 34.2002)
+		self.assertEqual(duplicate_payloads[0]['longitude'], -119.1002)
+		self.assertEqual(duplicate_payloads[0]['updated_at'], timezone.localtime(newer_updated_at).isoformat())
+
 	def test_deal_list_endpoint(self):
 		with patch('places.views.get_source_deal_payloads', return_value=self.place_payload['deals']):
 			response = self.client.get(reverse('deal-list'))
