@@ -10,7 +10,7 @@ import { styles } from '../appStyles';
 import { NativeIOSLiquidGlassHeaderButton } from '../components/NativeIOSLiquidGlass';
 import { PhotoLightbox } from '../components/PhotoLightbox';
 import { SocialButton } from '../components/SocialButton';
-import { buildGoogleReviewsUrl, dedupeImageUrls, formatPlaceAddress, getPlacePreviewRegion, openMapsAddress } from '../placeHelpers';
+import { buildGoogleReviewsUrl, dedupeImageUrls, formatLastKnownLocationLabel, formatPlaceAddress, getPlacePreviewRegion, openMapsAddress } from '../placeHelpers';
 import { getSocialProfilesForDisplay } from '../socialProfiles';
 import { theme } from '../styles/theme';
 import type { Deal, HappyHourWindow, OperatingHourWindow, PlaceDetail, PlaceLocationDetail } from '../types';
@@ -170,6 +170,7 @@ export type PlaceDetailScreenProps = {
   selectedPlaceDeals: Deal[];
   selectedPlaceLocation: PlaceDetail | PlaceLocationDetail | null;
   selectedPlaceOperatingHours: OperatingHourWindow[];
+  locationStatusNow: number;
 };
 
 export function PlaceDetailScreen({
@@ -198,6 +199,7 @@ export function PlaceDetailScreen({
   selectedPlaceDeals,
   selectedPlaceLocation,
   selectedPlaceOperatingHours,
+  locationStatusNow,
 }: PlaceDetailScreenProps) {
   const insets = useSafeAreaInsets();
   const [photoLightboxVisible, setPhotoLightboxVisible] = useState(false);
@@ -216,6 +218,14 @@ export function PlaceDetailScreen({
   const selectedPlaceMapRegion = getPlacePreviewRegion(selectedPlaceLocation ?? selectedPlace);
   const showVerifiedBadge = !!selectedPlace?.is_claimed;
   const showGoogleReviews = selectedPlace?.is_informal !== true;
+  const selectedPlaceAddressSource = selectedPlaceLocation ?? selectedPlace;
+  const selectedPlaceLastKnownLocationLabel = selectedPlaceAddressSource
+    ? formatLastKnownLocationLabel(
+      selectedPlaceAddressSource.live_location_updated_at,
+      formatPlaceAddress(selectedPlaceAddressSource),
+      locationStatusNow,
+    )
+    : null;
   const selectedPlaceImageUrls = dedupeImageUrls([
     ...(selectedPlaceLocation?.image_urls ?? []),
     ...(selectedPlace?.image_urls ?? []),
@@ -471,6 +481,9 @@ export function PlaceDetailScreen({
             <Pressable onPress={() => void openMapsAddress(selectedPlaceLocation ?? selectedPlace)} style={styles.addressButton}>
               <Text selectable style={styles.detailLinkText}>{formatPlaceAddress(selectedPlaceLocation ?? selectedPlace)}</Text>
             </Pressable>
+            {selectedPlaceLastKnownLocationLabel ? (
+              <Text style={styles.mapLastKnownLocationText}>{selectedPlaceLastKnownLocationLabel}</Text>
+            ) : null}
 
             {(selectedPlaceLocation?.phone_number ?? selectedPlace.phone_number) ? (
               <Text selectable style={styles.detailMeta}>Phone: {selectedPlaceLocation?.phone_number ?? selectedPlace.phone_number}</Text>

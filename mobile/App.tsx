@@ -6769,6 +6769,7 @@ function AppScreen() {
           selectedPlaceDeals={selectedPlaceDeals}
           selectedPlaceLocation={selectedPlaceLocation}
           selectedPlaceOperatingHours={selectedPlaceOperatingHours}
+          locationStatusNow={locationStatusNow}
         />
       </SafeAreaView>
     );
