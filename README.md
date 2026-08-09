@@ -475,6 +475,155 @@ For this repo, Postgres is not the whole story.
 - After the Render deploy is live, treat Postgres and `ListingSnapshot` as the durable source of truth for business edits.
 - Do not treat `backend/config/discovered_places.json` as authoritative production data after Render is live.
 
+## Production Backup And Recovery
+
+The local `backup_admin_data` command is an application-level export. It is useful for Django fixtures and admin review, but it is not a complete PostgreSQL backup and it does not download Supabase Storage objects. Use the production command below for a recoverable bundle containing:
+
+- a custom-format PostgreSQL dump
+- every object in the public and private Supabase media buckets
+- the runtime discovery file, committed discovery seed, and discovery exclusions file
+
+The command writes by default to `%USERPROFILE%\DiningDealzBackups`, outside the repository. Keep these bundles in encrypted external storage and never commit them.
+
+### Create A Production Backup On Windows
+
+Install the PostgreSQL client tools and confirm `pg_dump` is available:
+
+```powershell
+pg_dump --version
+```
+
+Set `BACKUP_DATABASE_URL` to the **external** Render Postgres URL from the database service's Connect menu. Do not use the internal URL from a local computer, and do not paste the URL into source files:
+
+```powershell
+$env:BACKUP_DATABASE_URL = '<external-render-postgresql-url>'
+.\backend\scripts\backup-production.ps1
+```
+
+The script reads the existing Supabase settings from `backend/.env` or the process environment. The required values are `SUPABASE_STORAGE_BUCKET`, `SUPABASE_PRIVATE_STORAGE_BUCKET`, `SUPABASE_STORAGE_ENDPOINT`, `SUPABASE_STORAGE_ACCESS_KEY`, and `SUPABASE_STORAGE_SECRET_KEY`.
+
+The direct Django command is also available when a different output directory is needed:
+
+```powershell
+backend\venv\Scripts\python.exe backend\manage.py backup_production_data --output-dir 'D:\ProtectedBackups'
+```
+
+Each completed bundle contains `manifest.json`, `postgresql.dump`, `supabase\public-media`, `supabase\private-media`, and the `discovery` directory. The manifest records object counts, file sizes, SHA-256 checksums, and Supabase object metadata. Verify the database dump after copying it:
+
+```powershell
+Get-FileHash 'C:\Users\<you>\DiningDealzBackups\production-backup-YYYYMMDD-HHMMSS\postgresql.dump' -Algorithm SHA256
+```
+
+Run this before risky migrations or bulk admin changes, and retain multiple dated copies. Free Render Postgres has no managed PITR or Render logical-export facility, so an independent `pg_dump` copy is required.
+
+### Recovery Track 1: Render PostgreSQL
+
+Pause admin edits, migrations, and other writes if possible. Do not restore over the live database as the first recovery attempt.
+
+For recent accidental deletion or corruption on a paid Render Postgres plan:
+
+1. Open the database service's **Recovery** page in Render.
+2. Choose **Restore Database** under Point-in-Time Recovery.
+3. Select a recovery time before the incident and give the new database a separate name.
+4. Wait for the recovery database to become available.
+5. Validate its schema, account data, business claims, `ListingSnapshot` edits, and API responses.
+6. Keep the current backend connected to the original database until validation is complete.
+
+Render documents a 3-day recovery window for Hobby and 7 days for Pro or higher. Free Postgres does not provide PITR.
+
+If PITR is unavailable or the required point is outside its window:
+
+1. Create a new empty Render Postgres database.
+2. Obtain its external connection URL.
+3. Confirm the backup dump checksum with `Get-FileHash`.
+4. Restore the custom-format dump into the new database:
+
+```powershell
+$env:TARGET_DATABASE_URL = '<external-url-for-new-empty-render-database>'
+pg_restore `
+	--dbname="$env:TARGET_DATABASE_URL" `
+	--verbose `
+	--clean `
+	--if-exists `
+	--no-owner `
+	--no-privileges `
+	--exit-on-error `
+	--format=custom `
+	'C:\Users\<you>\DiningDealzBackups\production-backup-YYYYMMDD-HHMMSS\postgresql.dump'
+```
+
+5. Validate the recovered database with Django admin, account data, business claims, `ListingSnapshot` edits, and the API.
+6. Update the Render backend service's `DATABASE_URL` to the recovered database's **internal** URL.
+7. Redeploy or restart the backend and verify the health endpoint, web app, and mobile app.
+
+### Recovery Track 2: Supabase Storage Objects
+
+PostgreSQL restores file references, not the uploaded file bytes. Restore both configured buckets:
+
+- `SUPABASE_STORAGE_BUCKET`: public business profile media
+- `SUPABASE_PRIVATE_STORAGE_BUCKET`: private claim, deal, and direct-message media
+
+1. Select the backup bundle that matches the database recovery point.
+2. Confirm the current Supabase environment variables point to the intended target project and buckets. Stop if they point to the wrong project.
+3. Run a media-only dry run. It verifies archive paths and checksums without uploading:
+
+```powershell
+backend\venv\Scripts\python.exe backend\manage.py restore_production_data `
+	--backup-dir 'C:\Users\<you>\DiningDealzBackups\production-backup-YYYYMMDD-HHMMSS' `
+	--skip-discovery
+```
+
+4. Review the public and private object names in the output.
+5. Apply the media restore:
+
+```powershell
+backend\venv\Scripts\python.exe backend\manage.py restore_production_data `
+	--backup-dir 'C:\Users\<you>\DiningDealzBackups\production-backup-YYYYMMDD-HHMMSS' `
+	--skip-discovery `
+	--apply
+```
+
+6. Verify public profile photos, private claim attachments, deal attachments, and direct-message images. Confirm signed URLs work for private objects.
+
+The command upserts archived objects and preserves content type and related metadata. It does not delete extra objects already present in the buckets.
+
+### Recovery Track 3: File-Based Discovery Data
+
+The backup contains the runtime discovery JSON, the committed discovery seed, and the discovery exclusions file. Restore only these files with a discovery-only dry run first:
+
+```powershell
+backend\venv\Scripts\python.exe backend\manage.py restore_production_data `
+	--backup-dir 'C:\Users\<you>\DiningDealzBackups\production-backup-YYYYMMDD-HHMMSS' `
+	--skip-media
+```
+
+1. Confirm the dry run identifies the expected `runtime_discovered_places`, `seed_discovered_places`, and `discovery_exclusions` targets.
+2. Apply the discovery restore:
+
+```powershell
+backend\venv\Scripts\python.exe backend\manage.py restore_production_data `
+	--backup-dir 'C:\Users\<you>\DiningDealzBackups\production-backup-YYYYMMDD-HHMMSS' `
+	--skip-media `
+	--apply
+```
+
+3. Review `backend/config/discovery_exclusions.json` and deploy that file through source control. Do not rely on a transient Render filesystem copy for permanent exclusions.
+4. Treat the runtime discovery JSON as a cache/bootstrap artifact. Durable admin business edits remain in PostgreSQL `ListingSnapshot` rows.
+
+A Render service's runtime filesystem may be replaced on deploy or restart. If the runtime file is lost after recovery, the backend can bootstrap from the committed seed file according to its configured discovery settings.
+
+### Complete Recovery Order
+
+1. Pause writes and identify the backup timestamp or Render PITR time to use.
+2. Recover PostgreSQL into a new Render database and validate it without changing the live backend.
+3. Restore Supabase public and private objects into the intended buckets.
+4. Restore discovery files, then review and deploy the source-controlled exclusions file.
+5. Point the backend service at the recovered database's internal URL and redeploy.
+6. Verify admin, account flows, business data, public images, private attachments, discovery exclusions, web behavior, and mobile behavior.
+7. Keep the original database and old backup bundle until the recovery has been accepted and a fresh backup has been taken.
+
+PostgreSQL restoration does not restore Supabase file bytes, and Supabase restoration does not restore PostgreSQL rows. Complete all three recovery tracks before declaring production recovered.
+
 ## Media Storage
 
 Uploaded business profile photos use public media storage because they are displayed on business profiles. Sensitive uploads, including business claim attachments and direct-message images, use private media storage with signed URLs.

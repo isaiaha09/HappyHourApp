@@ -71,3 +71,5 @@ pnpm-debug.log*
 media/
 staticfiles/
 backend/.django_cache/
+backend/backups/production-*/
+backend/tmp-backups/production-*/

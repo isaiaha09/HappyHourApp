@@ -1060,6 +1060,110 @@ class DiscoveryJsonStorageTests(TestCase):
 			self.assertEqual(snapshot_export['snapshots'][0]['display_data']['manual_deal_overrides'][0]['title'], 'Admin Deal')
 			self.assertIn('Created backup bundle at', stdout.getvalue())
 
+	def test_backup_production_data_command_creates_database_storage_and_discovery_bundle(self):
+		with TemporaryDirectory() as temp_dir:
+			output_dir = Path(temp_dir) / 'backups'
+			runtime_path = Path(temp_dir) / '.runtime' / 'discovered_places.json'
+			seed_path = Path(temp_dir) / 'config' / 'discovered_places.json'
+			exclusions_path = Path(temp_dir) / 'config' / 'discovery_exclusions.json'
+			runtime_path.parent.mkdir(parents=True)
+			seed_path.parent.mkdir(parents=True)
+			runtime_path.write_text('[{"name": "Runtime Spot"}]', encoding='utf-8')
+			seed_path.write_text('[{"name": "Seed Spot"}]', encoding='utf-8')
+			exclusions_path.write_text('{}', encoding='utf-8')
+
+			fake_client = MagicMock()
+			fake_client.get_paginator.return_value.paginate.side_effect = lambda Bucket: [{
+				'Contents': [{
+					'Key': 'business-profile-photos/test.jpg',
+					'Size': 5,
+					'ETag': '"test-etag"',
+				}],
+			}]
+			fake_client.head_object.return_value = {
+				'ContentLength': 5,
+				'ContentType': 'image/jpeg',
+				'ETag': '"test-etag"',
+			}
+			fake_client.download_fileobj.side_effect = lambda bucket, key, file_handle: file_handle.write(b'photo')
+			captured_pg_dump = {}
+
+			def fake_pg_dump(command, **kwargs):
+				captured_pg_dump['command'] = command
+				captured_pg_dump['environment'] = kwargs['env']
+				dump_path = Path(command[command.index('--file') + 1])
+				dump_path.write_bytes(b'postgres-dump')
+				return MagicMock(returncode=0, stderr='')
+
+			with patch.dict('os.environ', {'BACKUP_DATABASE_URL': 'postgresql://backup-user:backup-password@example.test:5432/diningdealz'}, clear=False):
+				with self.settings(
+					DISCOVERY_JSON_PATH=runtime_path,
+					DISCOVERY_JSON_SEED_PATH=seed_path,
+					DISCOVERY_EXCLUSIONS_PATH=exclusions_path,
+					SUPABASE_STORAGE_BUCKET='public-bucket',
+					SUPABASE_PRIVATE_STORAGE_BUCKET='private-bucket',
+					SUPABASE_STORAGE_ENDPOINT='https://storage.example.test/s3',
+					SUPABASE_STORAGE_ACCESS_KEY='test-access-key',
+					SUPABASE_STORAGE_SECRET_KEY='test-secret-key',
+				):
+					with patch('places.management.commands.backup_production_data.build_supabase_client', return_value=fake_client), patch('places.management.commands.backup_production_data.subprocess.run', side_effect=fake_pg_dump):
+						call_command('backup_production_data', '--output-dir', str(output_dir), '--label', 'test-production')
+
+			backup_dir = next(output_dir.iterdir())
+			manifest = json.loads((backup_dir / 'manifest.json').read_text(encoding='utf-8'))
+			self.assertEqual(manifest['status'], 'complete')
+			self.assertEqual(manifest['database']['format'], 'custom')
+			self.assertTrue((backup_dir / 'postgresql.dump').exists())
+			self.assertEqual(len(manifest['storage_buckets']), 2)
+			self.assertEqual(manifest['storage_buckets'][0]['object_count'], 1)
+			self.assertTrue((backup_dir / 'supabase' / 'public-media' / 'business-profile-photos' / 'test.jpg').exists())
+			self.assertTrue((backup_dir / 'discovery' / 'runtime-discovered_places.json').exists())
+			self.assertTrue((backup_dir / 'discovery' / 'seed-discovered_places.json').exists())
+			self.assertTrue((backup_dir / 'discovery' / 'discovery-exclusions.json').exists())
+			self.assertNotIn('backup-password', captured_pg_dump['command'])
+			self.assertEqual(captured_pg_dump['environment']['PGPASSWORD'], 'backup-password')
+
+			with self.settings(
+				SUPABASE_STORAGE_BUCKET='public-bucket',
+				SUPABASE_PRIVATE_STORAGE_BUCKET='private-bucket',
+				SUPABASE_STORAGE_ENDPOINT='https://storage.example.test/s3',
+				SUPABASE_STORAGE_ACCESS_KEY='test-access-key',
+				SUPABASE_STORAGE_SECRET_KEY='test-secret-key',
+			):
+				with patch('places.management.commands.restore_production_data.build_supabase_client', return_value=fake_client):
+					call_command('restore_production_data', '--backup-dir', str(backup_dir), '--skip-discovery', '--apply')
+
+			self.assertEqual(fake_client.upload_file.call_count, 2)
+			self.assertEqual(fake_client.upload_file.call_args_list[0].kwargs['ExtraArgs']['ContentType'], 'image/jpeg')
+
+	def test_restore_production_data_requires_apply_for_discovery_files(self):
+		with TemporaryDirectory() as temp_dir:
+			backup_dir = Path(temp_dir) / 'backup'
+			target_path = Path(temp_dir) / 'runtime' / 'discovered_places.json'
+			source_path = backup_dir / 'discovery' / 'runtime-discovered_places.json'
+			source_path.parent.mkdir(parents=True)
+			target_path.parent.mkdir(parents=True)
+			source_path.write_text('[{"name": "Recovered Spot"}]', encoding='utf-8')
+			target_path.write_text('[{"name": "Current Spot"}]', encoding='utf-8')
+			(backup_dir / 'manifest.json').write_text(json.dumps({
+				'backup_format_version': 1,
+				'status': 'complete',
+				'storage_buckets': [],
+				'discovery_files': [{
+					'role': 'runtime_discovered_places',
+					'file': 'discovery/runtime-discovered_places.json',
+					'present': True,
+					'size': source_path.stat().st_size,
+				}],
+			}, indent=2), encoding='utf-8')
+
+			with self.settings(DISCOVERY_JSON_PATH=target_path, DISCOVERY_JSON_SEED_PATH=target_path, DISCOVERY_EXCLUSIONS_PATH=target_path.parent / 'discovery_exclusions.json'):
+				call_command('restore_production_data', '--backup-dir', str(backup_dir), '--skip-media')
+				self.assertIn('Current Spot', target_path.read_text(encoding='utf-8'))
+				call_command('restore_production_data', '--backup-dir', str(backup_dir), '--skip-media', '--apply')
+
+			self.assertIn('Recovered Spot', target_path.read_text(encoding='utf-8'))
+
 
 class BusinessWebsiteImporterTests(TestCase):
 	def setUp(self):
