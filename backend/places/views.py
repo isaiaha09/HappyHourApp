@@ -384,12 +384,38 @@ class LiveLocationPlaceListView(generics.GenericAPIView):
 				'latitude': snapshot.tracked_location_latitude,
 				'longitude': snapshot.tracked_location_longitude,
 				'updated_at': snapshot.tracked_location_updated_at,
+				'tracking_enabled': True,
 				**(get_live_location_display_fields(snapshot) or {}),
 			}
 			for snapshot in queryset
 			if slugify(f'{snapshot.name}-{snapshot.city}') not in disabled_slugs
 			and is_live_location_tracking_enabled_for_snapshot(snapshot)
 		]
+		disabled_snapshots = (
+			ListingSnapshot.objects
+			.exclude(listing_slug='')
+			.filter(
+				Q(venue_type=VenueType.MOBILE) | Q(serves_multiple_areas=True),
+			)
+			.order_by('listing_slug', 'pk')
+		)
+		if city and city != 'all':
+			disabled_snapshots = disabled_snapshots.filter(city=city)
+		seen_payload_slugs = {payload['slug'] for payload in payloads}
+		for snapshot in disabled_snapshots:
+			payload_slug = slugify(f'{snapshot.name}-{snapshot.city}')
+			if payload_slug in seen_payload_slugs:
+				continue
+			if is_live_location_tracking_enabled_for_snapshot(snapshot):
+				continue
+			payloads.append({
+				'slug': payload_slug,
+				'latitude': None,
+				'longitude': None,
+				'updated_at': None,
+				'tracking_enabled': False,
+			})
+			seen_payload_slugs.add(payload_slug)
 		serializer = self.get_serializer(payloads, many=True)
 		response = Response(serializer.data)
 		response['Cache-Control'] = 'no-store, no-cache, must-revalidate'

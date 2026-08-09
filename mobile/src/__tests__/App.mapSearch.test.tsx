@@ -314,10 +314,26 @@ jest.mock('react-native-maps', () => {
     return <Pressable onPress={onPress} style={style} testID="mock-map-marker">{children}</Pressable>;
   };
 
+  class AnimatedRegion {
+    constructor(value: { latitude: number; longitude: number }) {
+      Object.assign(this, value);
+    }
+
+    stopAnimation() {}
+
+    timing() {
+      return {
+        start() {},
+      };
+    }
+  }
+
   return {
     __esModule: true,
     default: MapView,
     Marker,
+    MarkerAnimated: Marker,
+    AnimatedRegion,
     __mock: {
       animateToRegionMock,
       initialRegionMock,

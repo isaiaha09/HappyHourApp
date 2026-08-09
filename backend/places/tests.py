@@ -326,16 +326,21 @@ class PlaceApiTests(APITestCase):
 		response = self.client.get(reverse('place-live-locations'), {'city': City.VENTURA})
 
 		self.assertEqual(response.status_code, 200)
-		self.assertEqual(len(response.data), 1)
-		self.assertEqual(response.data[0]['slug'], 'scoops-truck-ventura')
-		self.assertEqual(response.data[0]['latitude'], 34.2789)
-		self.assertEqual(response.data[0]['longitude'], -119.2914)
-		self.assertTrue(bool(response.data[0]['updated_at']))
-		self.assertEqual(response.data[0]['address_line_1'], 'Approximate live location near Main Street')
-		self.assertEqual(response.data[0]['city_label'], 'Ventura')
+		self.assertEqual(len(response.data), 2)
+		live_payload = next(payload for payload in response.data if payload['slug'] == 'scoops-truck-ventura')
+		self.assertEqual(live_payload['latitude'], 34.2789)
+		self.assertEqual(live_payload['longitude'], -119.2914)
+		self.assertTrue(bool(live_payload['updated_at']))
+		self.assertTrue(live_payload['tracking_enabled'])
+		self.assertEqual(live_payload['address_line_1'], 'Approximate live location near Main Street')
+		self.assertEqual(live_payload['city_label'], 'Ventura')
+		disabled_payload = next(payload for payload in response.data if payload['slug'] == 'hidden-truck-ventura')
+		self.assertFalse(disabled_payload['tracking_enabled'])
+		self.assertIsNone(disabled_payload['latitude'])
+		self.assertIsNone(disabled_payload['longitude'])
 		self.assertEqual(response['Cache-Control'], 'no-store, no-cache, must-revalidate')
 
-	def test_live_location_endpoint_hides_disabled_approved_claim_without_membership(self):
+	def test_live_location_endpoint_returns_disabled_tombstone_for_approved_claim_without_membership(self):
 		owner = User.objects.create_user(username='inactive_mobile_owner', email='inactive-mobile@example.com', password='test-pass-123')
 		AccountProfile.objects.create(user=owner, business_location_tracking_enabled=False)
 		snapshot = ListingSnapshot.objects.create(
@@ -360,7 +365,10 @@ class PlaceApiTests(APITestCase):
 		response = self.client.get(reverse('place-live-locations'), {'city': City.VENTURA})
 
 		self.assertEqual(response.status_code, 200)
-		self.assertNotIn('dormant-truck-ventura', [payload['slug'] for payload in response.data])
+		disabled_payload = next(payload for payload in response.data if payload['slug'] == 'dormant-truck-ventura')
+		self.assertFalse(disabled_payload['tracking_enabled'])
+		self.assertIsNone(disabled_payload['latitude'])
+		self.assertIsNone(disabled_payload['longitude'])
 
 	def test_live_location_endpoint_returns_stale_coordinates_with_timestamp(self):
 		updated_at = timezone.now() - timedelta(minutes=3)

@@ -1,5 +1,7 @@
-import { dedupeImageUrls, formatLastKnownLocationLabel, formatPlaceAddress, mergeLiveLocationUpdatesIntoPlaces } from '../placeHelpers';
-import type { PlaceListItem } from '../types';
+import { Linking } from 'react-native';
+
+import { dedupeImageUrls, formatLastKnownLocationLabel, formatPlaceAddress, mergeLiveLocationUpdatesIntoPlaceDetail, mergeLiveLocationUpdatesIntoPlaces, openMapsAddress } from '../placeHelpers';
+import type { PlaceDetail, PlaceListItem } from '../types';
 
 describe('dedupeImageUrls', () => {
   it('removes exact duplicate URLs', () => {
@@ -161,6 +163,88 @@ describe('mergeLiveLocationUpdatesIntoPlaces', () => {
       longitude: -119.2914,
     }));
   });
+
+  it('clears a mobile pin when the live endpoint explicitly disables tracking', () => {
+    const place = {
+      latitude: 34.2789,
+      longitude: -119.2914,
+      live_location_updated_at: '2026-08-03T17:33:20Z',
+      address_line_1: 'Approximate live location near Main Street',
+      city_label: 'Ventura',
+      locations: [{
+        latitude: 34.2789,
+        longitude: -119.2914,
+        live_location_updated_at: '2026-08-03T17:33:20Z',
+        address_line_1: 'Approximate live location near Main Street',
+        city_label: 'Ventura',
+        slug: 'scoops-truck-ventura',
+        venue_type: 'mobile',
+      }],
+      slug: 'scoops-truck',
+      venue_type: 'mobile',
+    } as PlaceListItem;
+
+    const result = mergeLiveLocationUpdatesIntoPlaces([place], [{
+      latitude: null,
+      longitude: null,
+      slug: 'scoops-truck-ventura',
+      tracking_enabled: false,
+      updated_at: null,
+    }]);
+
+    expect(result[0].locations[0]).toEqual(expect.objectContaining({
+      latitude: null,
+      longitude: null,
+      live_location_updated_at: null,
+      address_line_1: 'Approximate live location',
+      city_label: '',
+    }));
+    expect(result[0]).toEqual(expect.objectContaining({
+      latitude: 34.2789,
+      longitude: -119.2914,
+    }));
+  });
+
+  it('clears the parent pin when the parent slug is explicitly disabled', () => {
+    const place = {
+      latitude: 34.2789,
+      longitude: -119.2914,
+      live_location_updated_at: '2026-08-03T17:33:20Z',
+      address_line_1: 'Approximate live location near Main Street',
+      city_label: 'Ventura',
+      locations: [{
+        latitude: 34.2789,
+        longitude: -119.2914,
+        live_location_updated_at: '2026-08-03T17:33:20Z',
+        address_line_1: 'Approximate live location near Main Street',
+        city_label: 'Ventura',
+        slug: 'scoops-truck-ventura',
+        venue_type: 'mobile',
+      }],
+      slug: 'scoops-truck',
+      venue_type: 'mobile',
+    } as PlaceDetail;
+
+    const result = mergeLiveLocationUpdatesIntoPlaceDetail(place, [{
+      latitude: null,
+      longitude: null,
+      slug: 'scoops-truck',
+      tracking_enabled: false,
+      updated_at: null,
+    }]);
+
+    expect(result).toEqual(expect.objectContaining({
+      latitude: null,
+      longitude: null,
+      live_location_updated_at: null,
+      address_line_1: 'Approximate live location',
+      city_label: '',
+    }));
+    expect(result?.locations[0]).toEqual(expect.objectContaining({
+      latitude: 34.2789,
+      longitude: -119.2914,
+    }));
+  });
 });
 
 describe('formatPlaceAddress', () => {
@@ -186,5 +270,25 @@ describe('formatLastKnownLocationLabel', () => {
 
   it('ignores invalid timestamps', () => {
     expect(formatLastKnownLocationLabel('not-a-timestamp', Date.now())).toBeNull();
+  });
+});
+
+describe('openMapsAddress', () => {
+  it('opens the exact live coordinates rendered in the map preview', async () => {
+    const openUrl = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+
+    await openMapsAddress({
+      name: 'Scoops Truck',
+      latitude: 34.2789,
+      longitude: -119.2914,
+      address_line_1: 'Approximate live location near Main Street',
+      address_line_2: '',
+      city_label: 'Ventura',
+      state: 'CA',
+      postal_code: '',
+    } as PlaceListItem);
+
+    expect(openUrl).toHaveBeenCalledWith(expect.stringContaining('34.2789,-119.2914'));
+    openUrl.mockRestore();
   });
 });

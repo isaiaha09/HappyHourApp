@@ -142,6 +142,7 @@ export type LiveLocationPlaceUpdate = {
   latitude: number | null;
   longitude: number | null;
   updated_at: string | null;
+  tracking_enabled?: boolean;
   address_line_1?: string | null;
   city_label?: string | null;
 };

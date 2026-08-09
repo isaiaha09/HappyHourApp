@@ -1,4 +1,4 @@
-import { Linking } from 'react-native';
+import { Linking, Platform } from 'react-native';
 
 import type { LiveLocationPlaceUpdate, PlaceDetail, PlaceListItem, PlaceLocation, PlaceLocationDetail } from './types';
 
@@ -77,6 +77,17 @@ function isDisplayableImageUrl(imageUrl: string) {
   return normalizedValue.startsWith('http://') || normalizedValue.startsWith('https://');
 }
 
+function getClearedLiveAddressFields(place: { address_line_1: string; city_label: string }) {
+  if (!place.address_line_1.startsWith('Approximate live location')) {
+    return {} as { address_line_1?: string; city_label?: string };
+  }
+
+  return {
+    address_line_1: 'Approximate live location',
+    city_label: '',
+  };
+}
+
 export function getPlaceCardImageUrl(place: PlaceListItem) {
   const candidateUrls = dedupeImageUrls([
     ...place.image_urls,
@@ -125,8 +136,32 @@ export function mergeLiveLocationUpdatesIntoPlaces(
   const nextPlaces = places.map((place) => {
     const nextLocations = place.locations.map((location) => {
       const update = updatesBySlug.get(location.slug);
-      if (!update || update.latitude === null || update.longitude === null) {
+      if (!update || ((update.latitude === null || update.longitude === null) && update.tracking_enabled !== false)) {
         return location;
+      }
+
+      if (update.tracking_enabled === false) {
+        const clearedAddressFields = getClearedLiveAddressFields(location);
+        const nextAddressLine1 = clearedAddressFields.address_line_1 ?? location.address_line_1;
+        const nextCityLabel = clearedAddressFields.city_label ?? location.city_label;
+        if (
+          location.latitude === null
+          && location.longitude === null
+          && location.live_location_updated_at === null
+          && location.address_line_1 === nextAddressLine1
+          && location.city_label === nextCityLabel
+        ) {
+          return location;
+        }
+
+        return {
+          ...location,
+          latitude: null,
+          longitude: null,
+          live_location_updated_at: null,
+          address_line_1: nextAddressLine1,
+          city_label: nextCityLabel,
+        };
       }
 
       const nextUpdatedAt = update.updated_at ?? location.live_location_updated_at ?? null;
@@ -157,6 +192,7 @@ export function mergeLiveLocationUpdatesIntoPlaces(
     });
     const locationsChanged = nextLocations.some((location, index) => location !== place.locations[index]);
     const update = updatesBySlug.get(place.slug);
+    const isPlaceTrackingDisabled = update?.tracking_enabled === false;
     const hasCompletePlaceUpdate = update !== undefined && update.latitude !== null && update.longitude !== null;
     const nextPlaceUpdatedAt = hasCompletePlaceUpdate
       ? update.updated_at ?? place.live_location_updated_at ?? null
@@ -167,13 +203,22 @@ export function mergeLiveLocationUpdatesIntoPlaces(
     );
     const nextPlaceAddressLine1 = update?.address_line_1 ?? place.address_line_1;
     const nextPlaceCityLabel = update?.city_label ?? place.city_label;
-    const placeChanged = hasCompletePlaceUpdate && (
-      place.latitude !== update.latitude
-      || place.longitude !== update.longitude
-      || place.live_location_updated_at !== nextPlaceUpdatedAt
-      || (hasPlaceAddressUpdate && place.address_line_1 !== nextPlaceAddressLine1)
-      || (hasPlaceAddressUpdate && place.city_label !== nextPlaceCityLabel)
-    );
+    const clearedPlaceAddressFields = isPlaceTrackingDisabled ? getClearedLiveAddressFields(place) : {};
+    const clearedPlaceAddressLine1 = clearedPlaceAddressFields.address_line_1 ?? place.address_line_1;
+    const clearedPlaceCityLabel = clearedPlaceAddressFields.city_label ?? place.city_label;
+    const placeChanged = isPlaceTrackingDisabled
+      ? place.latitude !== null
+        || place.longitude !== null
+        || place.live_location_updated_at !== null
+        || place.address_line_1 !== clearedPlaceAddressLine1
+        || place.city_label !== clearedPlaceCityLabel
+      : hasCompletePlaceUpdate && (
+        place.latitude !== update.latitude
+        || place.longitude !== update.longitude
+        || place.live_location_updated_at !== nextPlaceUpdatedAt
+        || (hasPlaceAddressUpdate && place.address_line_1 !== nextPlaceAddressLine1)
+        || (hasPlaceAddressUpdate && place.city_label !== nextPlaceCityLabel)
+      );
     if (!locationsChanged && !placeChanged) {
       return place;
     }
@@ -181,7 +226,13 @@ export function mergeLiveLocationUpdatesIntoPlaces(
     changed = true;
     return {
       ...place,
-      ...(hasCompletePlaceUpdate ? {
+      ...(isPlaceTrackingDisabled ? {
+        latitude: null,
+        longitude: null,
+        live_location_updated_at: null,
+        address_line_1: clearedPlaceAddressLine1,
+        city_label: clearedPlaceCityLabel,
+      } : hasCompletePlaceUpdate ? {
         latitude: update.latitude,
         longitude: update.longitude,
         live_location_updated_at: nextPlaceUpdatedAt,
@@ -209,8 +260,32 @@ export function mergeLiveLocationUpdatesIntoPlaceDetail(
   const updatesBySlug = new Map(updates.map((update) => [update.slug, update]));
   const nextLocations = place.locations.map((location) => {
     const update = updatesBySlug.get(location.slug);
-    if (!update || update.latitude === null || update.longitude === null) {
+    if (!update || ((update.latitude === null || update.longitude === null) && update.tracking_enabled !== false)) {
       return location;
+    }
+
+    if (update.tracking_enabled === false) {
+      const clearedAddressFields = getClearedLiveAddressFields(location);
+      const nextAddressLine1 = clearedAddressFields.address_line_1 ?? location.address_line_1;
+      const nextCityLabel = clearedAddressFields.city_label ?? location.city_label;
+      if (
+        location.latitude === null
+        && location.longitude === null
+        && location.live_location_updated_at === null
+        && location.address_line_1 === nextAddressLine1
+        && location.city_label === nextCityLabel
+      ) {
+        return location;
+      }
+
+      return {
+        ...location,
+        latitude: null,
+        longitude: null,
+        live_location_updated_at: null,
+        address_line_1: nextAddressLine1,
+        city_label: nextCityLabel,
+      };
     }
 
     const nextUpdatedAt = update.updated_at ?? location.live_location_updated_at ?? null;
@@ -241,6 +316,7 @@ export function mergeLiveLocationUpdatesIntoPlaceDetail(
   });
   const locationsChanged = nextLocations.some((location, index) => location !== place.locations[index]);
   const update = updatesBySlug.get(place.slug);
+  const isPlaceTrackingDisabled = update?.tracking_enabled === false;
   const hasCompletePlaceUpdate = update !== undefined && update.latitude !== null && update.longitude !== null;
   const nextPlaceUpdatedAt = hasCompletePlaceUpdate
     ? update.updated_at ?? place.live_location_updated_at ?? null
@@ -251,20 +327,35 @@ export function mergeLiveLocationUpdatesIntoPlaceDetail(
   );
   const nextPlaceAddressLine1 = update?.address_line_1 ?? place.address_line_1;
   const nextPlaceCityLabel = update?.city_label ?? place.city_label;
-  const placeChanged = hasCompletePlaceUpdate && (
-    place.latitude !== update.latitude
-    || place.longitude !== update.longitude
-    || place.live_location_updated_at !== nextPlaceUpdatedAt
-    || (hasPlaceAddressUpdate && place.address_line_1 !== nextPlaceAddressLine1)
-    || (hasPlaceAddressUpdate && place.city_label !== nextPlaceCityLabel)
-  );
+  const clearedPlaceAddressFields = isPlaceTrackingDisabled ? getClearedLiveAddressFields(place) : {};
+  const clearedPlaceAddressLine1 = clearedPlaceAddressFields.address_line_1 ?? place.address_line_1;
+  const clearedPlaceCityLabel = clearedPlaceAddressFields.city_label ?? place.city_label;
+  const placeChanged = isPlaceTrackingDisabled
+    ? place.latitude !== null
+      || place.longitude !== null
+      || place.live_location_updated_at !== null
+      || place.address_line_1 !== clearedPlaceAddressLine1
+      || place.city_label !== clearedPlaceCityLabel
+    : hasCompletePlaceUpdate && (
+      place.latitude !== update.latitude
+      || place.longitude !== update.longitude
+      || place.live_location_updated_at !== nextPlaceUpdatedAt
+      || (hasPlaceAddressUpdate && place.address_line_1 !== nextPlaceAddressLine1)
+      || (hasPlaceAddressUpdate && place.city_label !== nextPlaceCityLabel)
+    );
   if (!locationsChanged && !placeChanged) {
     return place;
   }
 
   return {
     ...place,
-    ...(hasCompletePlaceUpdate ? {
+    ...(isPlaceTrackingDisabled ? {
+      latitude: null,
+      longitude: null,
+      live_location_updated_at: null,
+      address_line_1: clearedPlaceAddressLine1,
+      city_label: clearedPlaceCityLabel,
+    } : hasCompletePlaceUpdate ? {
       latitude: update.latitude,
       longitude: update.longitude,
       live_location_updated_at: nextPlaceUpdatedAt,
@@ -305,6 +396,18 @@ export function getPlacePreviewRegion(place: PlaceListItem | PlaceDetail | Place
 }
 
 export async function openMapsAddress(place: PlaceListItem | PlaceDetail | PlaceLocation | PlaceLocationDetail) {
+  if (place.latitude !== null && place.longitude !== null) {
+    const coordinateQuery = `${place.latitude},${place.longitude}`;
+    const encodedLabel = encodeURIComponent(place.name);
+    if (Platform.OS === 'ios') {
+      await Linking.openURL(`http://maps.apple.com/?ll=${coordinateQuery}&q=${encodedLabel}`);
+      return;
+    }
+
+    await Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${coordinateQuery}`);
+    return;
+  }
+
   const query = encodeURIComponent(formatPlaceAddress(place));
   await Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
 }
