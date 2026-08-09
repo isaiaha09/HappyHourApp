@@ -278,7 +278,10 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
         }
       }
     }
+    .background(Color.clear)
+    .tabViewStyle(.tabBarOnly)
     .tint(accentColor)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
   }
 }
 
