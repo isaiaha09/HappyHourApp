@@ -168,16 +168,15 @@ const startupImageSources = [
   require('./assets/DiningDealz-Icon-Transparent.png'),
 ] as const;
 const mapAreaBounds = {
-  minLatitude: 34.0,
-  maxLatitude: 34.5,
-  minLongitude: -119.55,
-  maxLongitude: -118.85,
+  minLatitude: 33.75,
+  maxLatitude: 34.75,
+  minLongitude: -119.9,
+  maxLongitude: -118.5,
 };
 const minLatitudeDelta = 0.003;
 const minLongitudeDelta = 0.003;
 const maxLatitudeDelta = 0.24;
 const maxLongitudeDelta = 0.32;
-const maxMapGestureDelta = Math.hypot(maxLatitudeDelta, maxLongitudeDelta);
 const mapFitPaddingFactor = 1.15;
 const shellFadeDurationMs = 360;
 const interactiveSwipeCompletionProgress = 0.35;
@@ -7077,10 +7076,9 @@ function AppScreen() {
                 {shouldRenderMapView ? (
                   <MapView
                     initialRegion={mapInitialRegion}
-                    maxDelta={maxMapGestureDelta}
                     minDelta={minLatitudeDelta}
                     userInterfaceStyle={Platform.OS === 'ios' ? (displayedDarkMapMode ? 'dark' : 'light') : undefined}
-                    rotateEnabled={false}
+                    rotateEnabled
                     mapType="standard"
                     onPanDrag={Keyboard.dismiss}
                     onMapReady={() => {
@@ -7114,7 +7112,12 @@ function AppScreen() {
                         ));
 
                         if (shouldSnapToBounds) {
-                          mapRef.current?.animateToRegion(boundedRegion, 180);
+                          mapRef.current?.animateCamera({
+                            center: {
+                              latitude: boundedRegion.latitude,
+                              longitude: boundedRegion.longitude,
+                            },
+                          }, { duration: 180 });
                         }
 
                         return;
@@ -7127,7 +7130,12 @@ function AppScreen() {
                       ));
 
                       if (!shouldUseNativeMapBoundaries && shouldSnapRegionToBounds(nextRegion)) {
-                        mapRef.current?.animateToRegion(boundedRegion, 180);
+                        mapRef.current?.animateCamera({
+                          center: {
+                            latitude: boundedRegion.latitude,
+                            longitude: boundedRegion.longitude,
+                          },
+                        }, { duration: 180 });
                       }
                     }}
                     onPress={(event) => {
