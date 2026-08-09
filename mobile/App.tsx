@@ -662,7 +662,6 @@ function AppScreen() {
   const [favoriteSubmitting, setFavoriteSubmitting] = useState(false);
   const [guestBrowseModeLocked, setGuestBrowseModeLocked] = useState(false);
   const [guestOnboardingOrigin, setGuestOnboardingOrigin] = useState<'browse' | 'splash' | null>(null);
-  const [guestChromeMountVersion, setGuestChromeMountVersion] = useState(0);
   const [guestChromeFadeInActive, setGuestChromeFadeInActive] = useState(false);
   const [showGuestFavoritePrompt, setShowGuestFavoritePrompt] = useState(false);
   const [showGuestBusinessClaimPrompt, setShowGuestBusinessClaimPrompt] = useState(false);
@@ -2976,7 +2975,6 @@ function AppScreen() {
       guestChromeFadeInOpacity.setValue(0);
       setGuestChromeFadeInActive(true);
       setGuestOnboardingOrigin(null);
-      setGuestChromeMountVersion((current) => current + 1);
     }
 
     setScreenMode(nextScreen);
@@ -7537,7 +7535,6 @@ function AppScreen() {
             </SafeAreaView>
             {options?.guestChrome ? (
               <GuestShellChrome
-                key={`guest-chrome:${guestChromeMountVersion}`}
                 actionOpacity={options.guestChromeActionOpacity}
                 headerOpacity={options.guestChromeHeaderOpacity}
                 interactive={options.guestChromeInteractive ?? true}
