@@ -169,11 +169,12 @@ def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_
 	)
 	cached_payloads = cache.get(cache_key)
 	if cached_payloads is not None:
-		return _suppress_disabled_live_location_payloads(deepcopy(cached_payloads))
+		return _suppress_deleted_business_payloads(_suppress_disabled_live_location_payloads(deepcopy(cached_payloads)))
 
 	payloads_by_slug = {}
 	snapshot_overrides_by_slug = _get_listing_snapshot_override_payloads()
 	claimed_listing_slugs = _get_claimed_listing_slugs()
+	deleted_business_public_slugs = get_deleted_business_public_slugs()
 	for place_records in _group_source_records(load_source_records(source_name=source_name)).values():
 		payload = _build_grouped_place_payload(
 			place_records,
@@ -181,6 +182,11 @@ def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_
 			resolve_missing_coordinates=resolve_missing_coordinates,
 		)
 		if payload is None:
+			continue
+		if payload['slug'] in deleted_business_public_slugs or any(
+			location.get('slug') in deleted_business_public_slugs
+			for location in payload.get('locations', [])
+		):
 			continue
 		is_claimed = payload['slug'] in claimed_listing_slugs
 		if not is_claimed:
@@ -242,7 +248,9 @@ def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_
 			continue
 		payloads.append(payload)
 
-	sorted_payloads = _suppress_disabled_live_location_payloads(sorted(payloads, key=lambda payload: (payload['name'], payload['city_label'])))
+	sorted_payloads = _suppress_deleted_business_payloads(
+		_suppress_disabled_live_location_payloads(sorted(payloads, key=lambda payload: (payload['name'], payload['city_label'])))
+	)
 	cache_timeout = _get_source_place_payload_cache_timeout()
 	if cache_timeout and cache_timeout > 0:
 		cache.set(cache_key, deepcopy(sorted_payloads), cache_timeout)
@@ -256,6 +264,8 @@ def get_disabled_live_location_slugs():
 		.select_related('listing_snapshot', 'claimant__account_profile', 'membership__user__account_profile')
 		.filter(
 			status=BusinessClaim.Status.APPROVED,
+			claimant__is_active=True,
+			claimant__account_profile__deleted_at__isnull=True,
 		)
 		.filter(
 			Q(listing_snapshot__venue_type=VenueType.MOBILE)
@@ -289,6 +299,19 @@ def _suppress_disabled_live_location_payloads(payloads):
 				location['latitude'] = None
 				location['longitude'] = None
 	return payloads
+
+
+def _suppress_deleted_business_payloads(payloads):
+	deleted_slugs = get_deleted_business_public_slugs()
+	if not deleted_slugs:
+		return payloads
+
+	return [
+		payload
+		for payload in payloads
+		if payload.get('slug') not in deleted_slugs
+		and not any(location.get('slug') in deleted_slugs for location in payload.get('locations', []))
+	]
 
 
 def _get_listing_snapshot_override_payloads():
@@ -512,9 +535,47 @@ def _get_claimed_listing_slugs():
 	return set(
 		BusinessClaim.objects
 		.exclude(status=BusinessClaim.Status.REJECTED)
+		.filter(
+			claimant__is_active=True,
+			claimant__account_profile__deleted_at__isnull=True,
+		)
 		.exclude(listing_snapshot__listing_slug='')
 		.values_list('listing_snapshot__listing_slug', flat=True)
 	)
+
+
+def get_deleted_business_snapshot_ids():
+	deleted_snapshot_ids = set(
+		BusinessClaim.objects
+		.exclude(status=BusinessClaim.Status.REJECTED)
+		.filter(
+			Q(claimant__is_active=False) | Q(claimant__account_profile__deleted_at__isnull=False),
+		)
+		.values_list('listing_snapshot_id', flat=True)
+	)
+	public_snapshot_ids = set(
+		BusinessClaim.objects
+		.exclude(status=BusinessClaim.Status.REJECTED)
+		.filter(
+			claimant__is_active=True,
+			claimant__account_profile__deleted_at__isnull=True,
+		)
+		.values_list('listing_snapshot_id', flat=True)
+	)
+	return deleted_snapshot_ids - public_snapshot_ids
+
+
+def get_deleted_business_public_slugs():
+	deleted_snapshot_ids = get_deleted_business_snapshot_ids()
+	if not deleted_snapshot_ids:
+		return set()
+
+	deleted_slugs = set()
+	for snapshot in ListingSnapshot.objects.filter(pk__in=deleted_snapshot_ids).only('listing_slug', 'name', 'city'):
+		if snapshot.listing_slug:
+			deleted_slugs.add(snapshot.listing_slug)
+		deleted_slugs.add(slugify(f'{snapshot.name}-{snapshot.city}'))
+	return deleted_slugs
 
 
 def get_source_place_payload(slug, source_name=None):
@@ -702,7 +763,13 @@ def _get_active_business_claims():
 	memberships = (
 		BusinessMembership.objects
 		.select_related('claim__listing_snapshot', 'user__account_profile')
-		.filter(is_active=True)
+		.filter(
+			is_active=True,
+			user__is_active=True,
+			user__account_profile__deleted_at__isnull=True,
+			claim__claimant__is_active=True,
+			claim__claimant__account_profile__deleted_at__isnull=True,
+		)
 		.order_by('-approved_at', '-created_at')
 	)
 	seen_snapshot_ids = set()
@@ -718,7 +785,11 @@ def _get_active_business_claims():
 	approved_claims_without_active_membership = (
 		BusinessClaim.objects
 		.select_related('listing_snapshot')
-		.filter(status=BusinessClaim.Status.APPROVED)
+		.filter(
+			status=BusinessClaim.Status.APPROVED,
+			claimant__is_active=True,
+			claimant__account_profile__deleted_at__isnull=True,
+		)
 		.exclude(membership__is_active=True)
 		.order_by('-reviewed_at', '-submitted_at', '-created_at')
 	)

@@ -136,7 +136,7 @@ import {
   getSelectedClaimLocation,
   normalizeSearchText,
 } from './src/placeHelpers';
-import { loadPersistedPlaceCache, persistPlaceCache } from './src/placeCache';
+import { clearPersistedPlaceCache, loadPersistedPlaceCache, persistPlaceCache } from './src/placeCache';
 import type {
   BusinessAttachmentBuckets,
   BusinessAttachmentDraft,
@@ -726,6 +726,7 @@ function AppScreen() {
   const [profilePlaces, setProfilePlaces] = useState<PlaceListItem[]>([]);
   const [profilePlacesLoading, setProfilePlacesLoading] = useState(false);
   const allPlacesCacheRef = useRef<{ apiBaseUrl: string; places: PlaceListItem[]; reloadCount: number } | null>(null);
+  const placeCacheGenerationRef = useRef(0);
   const [businessSearchQuery, setBusinessSearchQuery] = useState('');
   const [selectedClaimPlace, setSelectedClaimPlace] = useState<PlaceListItem | null>(null);
   const [selectedClaimLocationId, setSelectedClaimLocationId] = useState<number | null>(null);
@@ -833,9 +834,10 @@ function AppScreen() {
 
   useEffect(() => {
     let isMounted = true;
+    const cacheGeneration = placeCacheGenerationRef.current;
 
     void loadPersistedPlaceCache(apiBaseUrl).then((cachedPlaces) => {
-      if (!isMounted || !cachedPlaces?.length) {
+      if (!isMounted || cacheGeneration !== placeCacheGenerationRef.current || !cachedPlaces?.length) {
         return;
       }
 
@@ -3721,6 +3723,7 @@ function AppScreen() {
     }
 
     let isMounted = true;
+    const placeDataGeneration = placeCacheGenerationRef.current;
 
     async function loadPlaces() {
       setListLoading(true);
@@ -3739,7 +3742,7 @@ function AppScreen() {
           nextPlacesWithLiveLocations = nextPlaces;
         }
 
-        if (!isMounted) {
+        if (!isMounted || placeDataGeneration !== placeCacheGenerationRef.current) {
           return;
         }
 
@@ -3755,7 +3758,7 @@ function AppScreen() {
           };
         }
       } catch (error) {
-        if (!isMounted) {
+        if (!isMounted || placeDataGeneration !== placeCacheGenerationRef.current) {
           return;
         }
 
@@ -3767,7 +3770,7 @@ function AppScreen() {
 
         setErrorMessage(getErrorMessage(error));
       } finally {
-        if (isMounted) {
+        if (isMounted && placeDataGeneration === placeCacheGenerationRef.current) {
           setListLoading(false);
         }
       }
@@ -3794,6 +3797,7 @@ function AppScreen() {
     const placeSlug = selectedPlaceSlug;
 
     let isMounted = true;
+    const placeDataGeneration = placeCacheGenerationRef.current;
 
     async function loadPlaceDetail() {
       setDetailLoading(true);
@@ -3801,13 +3805,13 @@ function AppScreen() {
 
       try {
         const detail = await fetchPlaceDetail(apiBaseUrl, placeSlug, authenticatedSession?.auth_token);
-        if (!isMounted) {
+        if (!isMounted || placeDataGeneration !== placeCacheGenerationRef.current) {
           return;
         }
 
         setSelectedPlace(detail);
       } catch (error) {
-        if (!isMounted) {
+        if (!isMounted || placeDataGeneration !== placeCacheGenerationRef.current) {
           return;
         }
 
@@ -3819,7 +3823,7 @@ function AppScreen() {
 
         setErrorMessage(getErrorMessage(error));
       } finally {
-        if (isMounted) {
+        if (isMounted && placeDataGeneration === placeCacheGenerationRef.current) {
           setDetailLoading(false);
         }
       }
@@ -3940,10 +3944,11 @@ function AppScreen() {
     }
 
     let isMounted = true;
+    const placeDataGeneration = placeCacheGenerationRef.current;
     setProfilePlacesLoading(true);
 
     void fetchPlaces(apiBaseUrl, 'all').then((nextPlaces) => {
-      if (!isMounted) {
+      if (!isMounted || placeDataGeneration !== placeCacheGenerationRef.current) {
         return;
       }
 
@@ -3955,7 +3960,7 @@ function AppScreen() {
       void persistPlaceCache(apiBaseUrl, nextPlaces);
       setProfilePlaces(nextPlaces);
     }).catch((error) => {
-      if (!isMounted) {
+      if (!isMounted || placeDataGeneration !== placeCacheGenerationRef.current) {
         return;
       }
 
@@ -3967,7 +3972,7 @@ function AppScreen() {
 
       setProfileErrorMessage(getErrorMessage(error));
     }).finally(() => {
-      if (isMounted) {
+      if (isMounted && placeDataGeneration === placeCacheGenerationRef.current) {
         setProfilePlacesLoading(false);
       }
     });
@@ -6122,6 +6127,29 @@ function AppScreen() {
       setTwoFactorSetup(null);
       setTwoFactorSetupCode('');
       setTwoFactorDisableCode('');
+      clearPlacesCache();
+      placeCacheGenerationRef.current += 1;
+      await clearPersistedPlaceCache();
+      allPlacesCacheRef.current = null;
+      setPlaces([]);
+      setProfilePlaces([]);
+      setListLoading(false);
+      setProfilePlacesLoading(false);
+      setDetailLoading(false);
+      setRenderedMappedPlaces([]);
+      setRenderedMappedPlaceKey('');
+      setSearchedMapPlaces([]);
+      setSearchQuery('');
+      setMapSearchPanelLifted(false);
+      setShowMapResultsCard(false);
+      setMapResultsCollapsed(false);
+      setRenderedMapSearchResults([]);
+      setRenderedMapResultsKey('');
+      setRenderedMapResultCount(0);
+      setVisibleMapResultCount(0);
+      setLoadingMoreMapResults(false);
+      clearShowMoreMapResultsTimer();
+      pendingMapRefreshRef.current = false;
       startLogoutTransition({ preserveBusinessTracking: false });
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));

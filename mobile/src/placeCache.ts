@@ -61,3 +61,21 @@ export function persistPlaceCache(apiBaseUrl: string, places: PlaceListItem[]) {
 
   return pendingPlaceCacheWrite;
 }
+
+export function clearPersistedPlaceCache() {
+  if (Platform.OS === 'web') {
+    return Promise.resolve();
+  }
+
+  pendingPlaceCacheWrite = pendingPlaceCacheWrite.then(() => {
+    try {
+      const cacheFile = getPlaceCacheFile();
+      if (cacheFile.exists) {
+        cacheFile.delete();
+      }
+    } catch {
+    }
+  });
+
+  return pendingPlaceCacheWrite;
+}

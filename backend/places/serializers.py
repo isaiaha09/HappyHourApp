@@ -1300,6 +1300,7 @@ class LiveLocationPlaceSerializer(serializers.Serializer):
 	longitude = serializers.FloatField(allow_null=True)
 	updated_at = serializers.DateTimeField(allow_null=True)
 	tracking_enabled = serializers.BooleanField(required=False, default=True)
+	place_removed = serializers.BooleanField(required=False, default=False)
 	address_line_1 = serializers.CharField(required=False, allow_blank=True, default='')
 	city_label = serializers.CharField(required=False, allow_blank=True, default='')
 

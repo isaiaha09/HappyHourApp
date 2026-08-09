@@ -65,7 +65,7 @@ from .services.favorite_notifications import create_notifications_for_business_p
 from .services.direct_message_push import send_push_notifications_for_direct_message
 from .services.home_feed import get_feed_interval, get_feed_queryset, get_organic_page_size, get_ranked_campaigns, get_requested_feed_page_size, mix_feed_items, record_campaign_served
 from .services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
-from .services.source_listings import get_disabled_live_location_slugs, get_live_location_display_fields, get_source_deal_payloads, get_source_place_payload, get_source_place_payloads, invalidate_source_place_payload_cache, is_live_location_tracking_enabled_for_snapshot, load_source_records, reverse_geocode_tracked_location
+from .services.source_listings import get_deleted_business_snapshot_ids, get_disabled_live_location_slugs, get_live_location_display_fields, get_source_deal_payloads, get_source_place_payload, get_source_place_payloads, invalidate_source_place_payload_cache, is_live_location_tracking_enabled_for_snapshot, load_source_records, reverse_geocode_tracked_location
 from .throttles import DirectMessageSendRateThrottle, EmailVerificationRateThrottle, EmailVerificationResendRateThrottle, LoginRateThrottle, PasswordRecoveryRateThrottle, SignupRateThrottle, SupportContactRateThrottle, UserMutationRateThrottle
 
 
@@ -365,6 +365,7 @@ class LiveLocationPlaceListView(generics.GenericAPIView):
 	def get(self, request):
 		city = str(request.query_params.get('city') or '').strip().lower()
 		disabled_slugs = get_disabled_live_location_slugs()
+		deleted_snapshot_ids = get_deleted_business_snapshot_ids()
 		queryset = (
 			ListingSnapshot.objects
 			.exclude(listing_slug='')
@@ -373,6 +374,7 @@ class LiveLocationPlaceListView(generics.GenericAPIView):
 				tracked_location_latitude__isnull=False,
 				tracked_location_longitude__isnull=False,
 			)
+			.exclude(pk__in=deleted_snapshot_ids)
 			.order_by('listing_slug', 'pk')
 		)
 		if city and city != 'all':
@@ -417,6 +419,7 @@ class LiveLocationPlaceListView(generics.GenericAPIView):
 			.filter(
 				Q(venue_type=VenueType.MOBILE) | Q(serves_multiple_areas=True),
 			)
+			.exclude(pk__in=deleted_snapshot_ids)
 			.order_by('listing_slug', 'pk')
 		)
 		if city and city != 'all':
@@ -434,6 +437,30 @@ class LiveLocationPlaceListView(generics.GenericAPIView):
 				'longitude': None,
 				'updated_at': None,
 				'tracking_enabled': False,
+			})
+			seen_payload_slugs.add(payload_slug)
+		deleted_snapshots = (
+			ListingSnapshot.objects
+			.filter(pk__in=deleted_snapshot_ids)
+			.exclude(listing_slug='')
+			.filter(
+				Q(venue_type=VenueType.MOBILE) | Q(serves_multiple_areas=True),
+			)
+			.order_by('listing_slug', 'pk')
+		)
+		if city and city != 'all':
+			deleted_snapshots = deleted_snapshots.filter(city=city)
+		for snapshot in deleted_snapshots:
+			payload_slug = slugify(f'{snapshot.name}-{snapshot.city}')
+			if payload_slug in seen_payload_slugs:
+				continue
+			payloads.append({
+				'slug': payload_slug,
+				'latitude': None,
+				'longitude': None,
+				'updated_at': None,
+				'tracking_enabled': False,
+				'place_removed': True,
 			})
 			seen_payload_slugs.add(payload_slug)
 		serializer = self.get_serializer(payloads, many=True)

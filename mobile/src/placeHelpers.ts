@@ -151,6 +151,13 @@ function getLatestLiveLocationUpdatesBySlug(updates: LiveLocationPlaceUpdate[]) 
       continue;
     }
 
+    if (existingUpdate.place_removed !== update.place_removed) {
+      if (update.place_removed) {
+        updatesBySlug.set(update.slug, update);
+      }
+      continue;
+    }
+
     const existingTimestamp = getLiveLocationUpdateTimestamp(existingUpdate);
     const updateTimestamp = getLiveLocationUpdateTimestamp(update);
     if (existingTimestamp === null && updateTimestamp !== null) {
@@ -177,7 +184,18 @@ export function mergeLiveLocationUpdatesIntoPlaces(
 
   const updatesBySlug = getLatestLiveLocationUpdatesBySlug(updates);
   let changed = false;
-  const nextPlaces = places.map((place) => {
+  const nextPlaces = places
+    .filter((place) => {
+      const isRemoved = updatesBySlug.get(place.slug)?.place_removed
+        || getPlaceLocations(place).some((location) => updatesBySlug.get(location.slug)?.place_removed);
+      if (!isRemoved) {
+        return true;
+      }
+
+      changed = true;
+      return false;
+    })
+    .map((place) => {
     const nextLocations = place.locations.map((location) => {
       const update = updatesBySlug.get(location.slug);
       if (!update || ((update.latitude === null || update.longitude === null) && update.tracking_enabled !== false)) {
@@ -233,7 +251,7 @@ export function mergeLiveLocationUpdatesIntoPlaces(
           city_label: nextCityLabel,
         } : {}),
       };
-    });
+      });
     const locationsChanged = nextLocations.some((location, index) => location !== place.locations[index]);
     const update = updatesBySlug.get(place.slug);
     const isPlaceTrackingDisabled = update?.tracking_enabled === false;
@@ -302,6 +320,13 @@ export function mergeLiveLocationUpdatesIntoPlaceDetail(
   }
 
   const updatesBySlug = getLatestLiveLocationUpdatesBySlug(updates);
+  if (
+    updatesBySlug.get(place.slug)?.place_removed
+    || place.locations.some((location) => updatesBySlug.get(location.slug)?.place_removed)
+  ) {
+    return null;
+  }
+
   const nextLocations = place.locations.map((location) => {
     const update = updatesBySlug.get(location.slug);
     if (!update || ((update.latitude === null || update.longitude === null) && update.tracking_enabled !== false)) {

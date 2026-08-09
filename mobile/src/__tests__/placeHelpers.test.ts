@@ -279,6 +279,26 @@ describe('mergeLiveLocationUpdatesIntoPlaces', () => {
       longitude: -119.2914,
     }));
   });
+
+  it('removes a place when the live endpoint explicitly reports account deletion', () => {
+    const place = {
+      latitude: 34.2789,
+      longitude: -119.2914,
+      locations: [{ slug: 'example-mobile-vendor-ventura' }],
+      slug: 'example-mobile-vendor-ventura',
+    } as PlaceListItem;
+
+    const result = mergeLiveLocationUpdatesIntoPlaces([place], [{
+      latitude: null,
+      longitude: null,
+      place_removed: true,
+      slug: 'example-mobile-vendor-ventura',
+      tracking_enabled: false,
+      updated_at: null,
+    }]);
+
+    expect(result).toEqual([]);
+  });
 });
 
 describe('formatPlaceAddress', () => {

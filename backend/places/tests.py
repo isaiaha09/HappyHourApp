@@ -7765,6 +7765,56 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(ProfileAuthToken.objects.filter(user_id=self.user.pk).count(), 0)
 		self.assertEqual(FavoriteBusiness.objects.filter(user_id=self.user.pk).count(), 0)
 
+	@patch('places.services.source_listings.load_source_records', return_value=[])
+	def test_delete_account_removes_owned_business_from_public_places_and_live_locations(self, mock_load_source_records):
+		snapshot = ListingSnapshot.objects.create(
+			name='Example Mobile Vendor',
+			listing_slug='example-mobile-vendor-ventura',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+			tracked_location_latitude=34.2789,
+			tracked_location_longitude=-119.2914,
+			tracked_location_updated_at=timezone.now(),
+			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			work_email='owner@example-mobile-vendor.com',
+			status=BusinessClaim.Status.APPROVED,
+			verification_summary='I operate this vendor.',
+		)
+		BusinessMembership.objects.create(user=self.user, claim=claim, is_active=True)
+
+		public_payloads = get_source_place_payloads()
+		self.assertTrue(any(payload['slug'] == 'example-mobile-vendor-ventura' for payload in public_payloads))
+		self.assertIsNotNone(get_source_place_payload(snapshot.listing_slug))
+
+		response = self.client.post(
+			reverse('profile-delete-account'),
+			{'password': 'test-pass-123'},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 200)
+		public_payloads = get_source_place_payloads()
+		self.assertFalse(any(payload['slug'] == 'example-mobile-vendor-ventura' for payload in public_payloads))
+		self.assertIsNone(get_source_place_payload(snapshot.listing_slug))
+
+		list_response = self.client.get(reverse('place-list'))
+		self.assertFalse(any(payload['slug'] == snapshot.listing_slug for payload in list_response.data['results']))
+		detail_response = self.client.get(reverse('place-detail', kwargs={'slug': snapshot.listing_slug}))
+		self.assertEqual(detail_response.status_code, 404)
+
+		live_response = self.client.get(reverse('place-live-locations'), {'city': City.VENTURA})
+		removed_payload = next(payload for payload in live_response.data if payload['slug'] == 'example-mobile-vendor-ventura')
+		self.assertTrue(removed_payload['place_removed'])
+		self.assertIsNone(removed_payload['latitude'])
+		self.assertIsNone(removed_payload['longitude'])
+
 	def test_delete_account_rejects_incorrect_password(self):
 		response = self.client.post(
 			reverse('profile-delete-account'),
