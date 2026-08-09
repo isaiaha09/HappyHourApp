@@ -71,6 +71,7 @@ import {
 } from './src/api';
 import {
   clearPersistedBusinessTrackingSession,
+  commitBusinessLocationReport,
   ensureBusinessBackgroundLocationTaskStarted,
   loadPersistedBusinessTrackingSession,
   reserveBusinessLocationReport,
@@ -131,9 +132,11 @@ import {
   getPlaceLocations,
   mergeLiveLocationUpdatesIntoPlaceDetail,
   mergeLiveLocationUpdatesIntoPlaces,
+  formatLastKnownLocationLabel,
   getSelectedClaimLocation,
   normalizeSearchText,
 } from './src/placeHelpers';
+import { loadPersistedPlaceCache, persistPlaceCache } from './src/placeCache';
 import type {
   BusinessAttachmentBuckets,
   BusinessAttachmentDraft,
@@ -747,12 +750,38 @@ function AppScreen() {
   const [mapPreviewPhotoLightboxVisible, setMapPreviewPhotoLightboxVisible] = useState(false);
   const [mapPreviewPhotoLightboxIndex, setMapPreviewPhotoLightboxIndex] = useState(0);
   const [userCoordinates, setUserCoordinates] = useState<UserCoordinates | null>(null);
+  const [locationStatusNow, setLocationStatusNow] = useState(() => Date.now());
   const [renderedMappedPlaces, setRenderedMappedPlaces] = useState<MappedPlace[]>([]);
   const [renderedMappedPlaceKey, setRenderedMappedPlaceKey] = useState('');
   const [searchedMapPlaces, setSearchedMapPlaces] = useState<MappedPlace[]>([]);
+  const hasInternetConnectionRef = useRef<boolean | null>(null);
+  const businessLocationLatestPositionRef = useRef<Location.LocationObject | null>(null);
+  const businessLocationReportRef = useRef<((forceRetry?: boolean) => void) | null>(null);
+  const businessLocationNeedsRetryRef = useRef(false);
+  const wasBusinessLocationOfflineRef = useRef(false);
   const hasInternetConnection = networkState?.isInternetReachable ?? networkState?.isConnected ?? null;
   const connectivityCheckPending = networkState === null;
   const showNoInternetScreen = hasInternetConnection === false;
+  const hasCachedMapPlaces = places.some((place) => getPlaceLocations(place).some((location) => (
+    location.latitude !== null && location.longitude !== null
+  )));
+
+  useEffect(() => {
+    hasInternetConnectionRef.current = hasInternetConnection;
+  }, [hasInternetConnection]);
+
+  useEffect(() => {
+    if (hasInternetConnection === false) {
+      wasBusinessLocationOfflineRef.current = true;
+      businessLocationNeedsRetryRef.current = true;
+      return;
+    }
+
+    if (hasInternetConnection === true && wasBusinessLocationOfflineRef.current) {
+      businessLocationReportRef.current?.(true);
+      wasBusinessLocationOfflineRef.current = false;
+    }
+  }, [hasInternetConnection]);
 
   useEffect(() => {
     let isMounted = true;
@@ -800,6 +829,38 @@ function AppScreen() {
     } finally {
       setNetworkRefreshPending(false);
     }
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    void loadPersistedPlaceCache(apiBaseUrl).then((cachedPlaces) => {
+      if (!isMounted || !cachedPlaces?.length) {
+        return;
+      }
+
+      setPlaces((current) => current.length ? current : cachedPlaces);
+      setProfilePlaces((current) => current.length ? current : cachedPlaces);
+      allPlacesCacheRef.current = {
+        apiBaseUrl,
+        places: cachedPlaces,
+        reloadCount,
+      };
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [apiBaseUrl]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setLocationStatusNow(Date.now());
+    }, 60_000);
+
+    return () => {
+      clearInterval(timer);
+    };
   }, []);
   const authenticatedSessionRef = useRef<SignupResponse | null>(null);
   const businessLocationWatcherRef = useRef<Location.LocationSubscription | null>(null);
@@ -940,6 +1001,9 @@ function AppScreen() {
   )).length, [filteredPlaces]);
   const activeMapPreviewPlace = selectedMapSearchPreviewPlace;
   const displayedMapPreviewImageUrls = displayedMapPreviewPlace ? dedupeImageUrls(displayedMapPreviewPlace.image_urls) : [];
+  const displayedMapPreviewLastKnownLabel = displayedMapPreviewPlace
+    ? formatLastKnownLocationLabel(displayedMapPreviewPlace.live_location_updated_at, locationStatusNow)
+    : null;
   const selectedPlaceLocation = getSelectedPlaceLocation(selectedPlace, selectedLocationId, selectedCity);
   const selectedPlaceDeals = selectedPlaceLocation?.deals ?? selectedPlace?.deals ?? [];
   const selectedPlaceOperatingHours = selectedPlaceLocation?.operating_hours ?? selectedPlace?.operating_hours ?? [];
@@ -1339,6 +1403,7 @@ function AppScreen() {
       ) {
         businessLocationLastReportedRef.current = '';
         businessLocationLastReportedAtRef.current = 0;
+        businessLocationNeedsRetryRef.current = false;
         businessLocationWatcherRef.current?.remove();
         businessLocationWatcherRef.current = null;
         return;
@@ -1359,7 +1424,16 @@ function AppScreen() {
           return;
         }
 
-        const updateLocalBusinessLocation = (coords: { latitude: number; longitude: number }) => {
+        const updateLocalBusinessLocation = (
+          coords: { latitude: number; longitude: number },
+          liveLocationUpdatedAt?: string | null,
+          liveLocationAddressLine1?: string | null,
+          liveLocationCityLabel?: string | null,
+        ) => {
+          if (hasInternetConnectionRef.current === false) {
+            return;
+          }
+
           const activeTrackingSession = authenticatedSessionRef.current?.auth_token
             ? buildBusinessTrackingSession(authenticatedSessionRef.current)
             : currentBusinessTrackingSession;
@@ -1377,18 +1451,27 @@ function AppScreen() {
             approvedBusinessSlugs,
             coords.latitude,
             coords.longitude,
+            liveLocationUpdatedAt,
+            liveLocationAddressLine1,
+            liveLocationCityLabel,
           )));
           setProfilePlaces((current) => current.map((place) => applyTrackedCoordinatesToBusiness(
             place,
             approvedBusinessSlugs,
             coords.latitude,
             coords.longitude,
+            liveLocationUpdatedAt,
+            liveLocationAddressLine1,
+            liveLocationCityLabel,
           )));
           setSelectedPlace((current) => current ? applyTrackedCoordinatesToBusinessDetail(
             current,
             approvedBusinessSlugs,
             coords.latitude,
             coords.longitude,
+            liveLocationUpdatedAt,
+            liveLocationAddressLine1,
+            liveLocationCityLabel,
           ) : current);
         };
 
@@ -1400,21 +1483,28 @@ function AppScreen() {
             return;
           }
 
+          if (hasInternetConnectionRef.current === false) {
+            return;
+          }
+
           const roundedLocationKey = `${coords.latitude.toFixed(5)}:${coords.longitude.toFixed(5)}`;
           const now = Date.now();
+          const shouldRetryAfterReconnect = businessLocationNeedsRetryRef.current;
           if (
-            businessLocationLastReportedRef.current === roundedLocationKey
-            || now - businessLocationLastReportedAtRef.current < liveMapPlacesRefreshIntervalMs
+            !shouldRetryAfterReconnect
+            && (
+              businessLocationLastReportedRef.current === roundedLocationKey
+              || now - businessLocationLastReportedAtRef.current < liveMapPlacesRefreshIntervalMs
+            )
           ) {
             return;
           }
 
-          if (!(await reserveBusinessLocationReport(coords.latitude, coords.longitude))) {
+          if (!(await reserveBusinessLocationReport(coords.latitude, coords.longitude, { force: shouldRetryAfterReconnect }))) {
             return;
           }
 
           businessLocationLastReportedRef.current = roundedLocationKey;
-          businessLocationLastReportedAtRef.current = now;
           try {
             const response = await updateBusinessLocation(apiBaseUrl, activeTrackingSession.authToken, {
               latitude: coords.latitude,
@@ -1422,10 +1512,22 @@ function AppScreen() {
               accuracy_meters: coords.accuracy ?? null,
             });
             if (!cancelled) {
+              businessLocationLastReportedRef.current = roundedLocationKey;
+              businessLocationLastReportedAtRef.current = Date.now();
+              businessLocationNeedsRetryRef.current = false;
+              await commitBusinessLocationReport(coords.latitude, coords.longitude);
+              updateLocalBusinessLocation(
+                coords,
+                response.tracked_business_location?.updated_at ?? new Date().toISOString(),
+                response.tracked_business_location?.address_line_1,
+                response.tracked_business_location?.city_label,
+              );
               setAuthenticatedSessionIfCurrentToken(activeTrackingSession.authToken, response);
               setLoggedOutBusinessTrackingSession(buildBusinessTrackingSession(response));
             }
           } catch (error) {
+            businessLocationLastReportedRef.current = '';
+            businessLocationLastReportedAtRef.current = 0;
             if (!cancelled) {
               setProfileErrorMessage(getErrorMessage(error));
             }
@@ -1439,7 +1541,15 @@ function AppScreen() {
           return;
         }
         latestBusinessPosition = initialPosition;
-        updateLocalBusinessLocation(initialPosition.coords);
+        businessLocationLatestPositionRef.current = initialPosition;
+        businessLocationReportRef.current = (forceRetry = false) => {
+          if (businessLocationLatestPositionRef.current) {
+            if (forceRetry) {
+              businessLocationNeedsRetryRef.current = true;
+            }
+            void reportLocation(businessLocationLatestPositionRef.current.coords);
+          }
+        };
         void reportLocation(initialPosition.coords);
 
         const watcher = await Location.watchPositionAsync(
@@ -1450,7 +1560,7 @@ function AppScreen() {
           },
           (position) => {
             latestBusinessPosition = position;
-            updateLocalBusinessLocation(position.coords);
+            businessLocationLatestPositionRef.current = position;
           },
         );
 
@@ -1481,6 +1591,9 @@ function AppScreen() {
       }
       businessLocationWatcherRef.current?.remove();
       businessLocationWatcherRef.current = null;
+      businessLocationLatestPositionRef.current = null;
+      businessLocationReportRef.current = null;
+      businessLocationNeedsRetryRef.current = false;
     };
   }, [apiBaseUrl, currentBusinessTrackingSession]);
 
@@ -1773,6 +1886,9 @@ function AppScreen() {
         if (showMapBrowse && hasInternetConnection === true) {
           setLiveLocationRefreshToken((current) => current + 1);
         }
+        if (hasInternetConnection === true) {
+          businessLocationReportRef.current?.(businessLocationNeedsRetryRef.current);
+        }
       }
 
       if (previousAppState === 'active' || !showMapBrowse) {
@@ -1813,6 +1929,9 @@ function AppScreen() {
           const nextPlaces = mergeLiveLocationUpdatesIntoPlaces(current, updates, {
             clearMissingLiveLocations: true,
           });
+          if (nextPlaces !== current && selectedCity === 'all') {
+            void persistPlaceCache(apiBaseUrl, nextPlaces);
+          }
           if (nextPlaces !== current && selectedCity === 'all') {
             allPlacesCacheRef.current = {
               apiBaseUrl,
@@ -3587,7 +3706,6 @@ function AppScreen() {
   useEffect(() => {
     if (hasInternetConnection !== true) {
       setListLoading(false);
-      setPlaces([]);
       return;
     }
 
@@ -3615,6 +3733,9 @@ function AppScreen() {
         }
 
         setPlaces(nextPlacesWithLiveLocations);
+        if (selectedCity === 'all') {
+          void persistPlaceCache(apiBaseUrl, nextPlacesWithLiveLocations);
+        }
         if (selectedCity === 'all') {
           allPlacesCacheRef.current = {
             apiBaseUrl,
@@ -3789,7 +3910,6 @@ function AppScreen() {
     }
 
     if (hasInternetConnection !== true) {
-      setProfilePlaces([]);
       setProfilePlacesLoading(false);
       return;
     }
@@ -3821,6 +3941,7 @@ function AppScreen() {
         places: nextPlaces,
         reloadCount,
       };
+      void persistPlaceCache(apiBaseUrl, nextPlaces);
       setProfilePlaces(nextPlaces);
     }).catch((error) => {
       if (!isMounted) {
@@ -7277,6 +7398,13 @@ function AppScreen() {
                       </View>
                     ) : null}
 
+                    {showNoInternetScreen && hasCachedMapPlaces ? (
+                      <View style={styles.mapOfflineBanner}>
+                        <Ionicons color="#f7c873" name="cloud-offline-outline" size={16} />
+                        <Text style={styles.mapOfflineBannerText}>Offline. Showing last known locations.</Text>
+                      </View>
+                    ) : null}
+
                     {displayedMapPreviewPlace ? (
                       <Animated.View style={[styles.mapPreviewCard, isLandscape ? styles.mapPreviewCardLandscape : null, { opacity: mapPreviewOpacity }]}>
                         <View style={styles.mapPreviewHeader}>
@@ -7296,6 +7424,9 @@ function AppScreen() {
 
                         <View style={styles.mapPreviewDetails}>
                           <Text style={[styles.mapPreviewDetailText, isLandscape ? styles.mapPreviewDetailTextLandscape : null]}>{displayedMapPreviewPlace.fullAddress}</Text>
+                          {displayedMapPreviewLastKnownLabel ? (
+                            <Text style={[styles.mapLastKnownLocationText, isLandscape ? styles.mapPreviewDetailTextLandscape : null]}>{displayedMapPreviewLastKnownLabel}</Text>
+                          ) : null}
                           {displayedMapPreviewPlace.latitude === null || displayedMapPreviewPlace.longitude === null ? (
                             <Text style={[styles.mapPreviewDetailText, isLandscape ? styles.mapPreviewDetailTextLandscape : null]}>Map pin unavailable right now.</Text>
                           ) : null}
@@ -7642,7 +7773,7 @@ function AppScreen() {
           ))}
         </View>
       ) : null}
-      {showNoInternetScreen ? (
+      {showNoInternetScreen && !hasCachedMapPlaces ? (
         renderConnectivityGateScreen()
       ) : showLoginSuccessTransition ? (
         <View style={styles.onboardingTransitionRoot}>
@@ -8149,12 +8280,22 @@ function clearTrackedCoordinatesForBusiness(place: PlaceListItem, approvedBusine
     ...location,
     latitude: null,
     longitude: null,
+    live_location_updated_at: null,
+    ...(location.address_line_1.startsWith('Approximate live location') ? {
+      address_line_1: 'Approximate live location',
+      city_label: '',
+    } : {}),
   }));
 
   return {
     ...place,
     latitude: null,
     longitude: null,
+    live_location_updated_at: null,
+    ...(place.address_line_1.startsWith('Approximate live location') ? {
+      address_line_1: 'Approximate live location',
+      city_label: '',
+    } : {}),
     locations: nextLocations,
   };
 }
@@ -8168,10 +8309,20 @@ function clearTrackedCoordinatesForBusinessDetail(place: PlaceDetail, approvedBu
     ...place,
     latitude: null,
     longitude: null,
+    live_location_updated_at: null,
+    ...(place.address_line_1.startsWith('Approximate live location') ? {
+      address_line_1: 'Approximate live location',
+      city_label: '',
+    } : {}),
     locations: place.locations.map((location) => ({
       ...location,
       latitude: null,
       longitude: null,
+      live_location_updated_at: null,
+      ...(location.address_line_1.startsWith('Approximate live location') ? {
+        address_line_1: 'Approximate live location',
+        city_label: '',
+      } : {}),
     })),
   };
 }
@@ -8181,6 +8332,9 @@ function applyTrackedCoordinatesToBusiness(
   approvedBusinessSlugs: Set<string>,
   latitude: number,
   longitude: number,
+  liveLocationUpdatedAt?: string | null,
+  liveLocationAddressLine1?: string | null,
+  liveLocationCityLabel?: string | null,
 ): PlaceListItem {
   if (!approvedBusinessSlugs.has(place.slug)) {
     return place;
@@ -8190,12 +8344,18 @@ function applyTrackedCoordinatesToBusiness(
     ...location,
     latitude,
     longitude,
+    ...(liveLocationUpdatedAt ? { live_location_updated_at: liveLocationUpdatedAt } : {}),
+    ...(liveLocationAddressLine1 ? { address_line_1: liveLocationAddressLine1 } : {}),
+    ...(liveLocationCityLabel ? { city_label: liveLocationCityLabel } : {}),
   }));
 
   return {
     ...place,
     latitude,
     longitude,
+    ...(liveLocationUpdatedAt ? { live_location_updated_at: liveLocationUpdatedAt } : {}),
+    ...(liveLocationAddressLine1 ? { address_line_1: liveLocationAddressLine1 } : {}),
+    ...(liveLocationCityLabel ? { city_label: liveLocationCityLabel } : {}),
     locations: nextLocations,
   };
 }
@@ -8205,6 +8365,9 @@ function applyTrackedCoordinatesToBusinessDetail(
   approvedBusinessSlugs: Set<string>,
   latitude: number,
   longitude: number,
+  liveLocationUpdatedAt?: string | null,
+  liveLocationAddressLine1?: string | null,
+  liveLocationCityLabel?: string | null,
 ): PlaceDetail {
   if (!approvedBusinessSlugs.has(place.slug)) {
     return place;
@@ -8214,10 +8377,16 @@ function applyTrackedCoordinatesToBusinessDetail(
     ...place,
     latitude,
     longitude,
+    ...(liveLocationUpdatedAt ? { live_location_updated_at: liveLocationUpdatedAt } : {}),
+    ...(liveLocationAddressLine1 ? { address_line_1: liveLocationAddressLine1 } : {}),
+    ...(liveLocationCityLabel ? { city_label: liveLocationCityLabel } : {}),
     locations: place.locations.map((location) => ({
       ...location,
       latitude,
       longitude,
+      ...(liveLocationUpdatedAt ? { live_location_updated_at: liveLocationUpdatedAt } : {}),
+      ...(liveLocationAddressLine1 ? { address_line_1: liveLocationAddressLine1 } : {}),
+      ...(liveLocationCityLabel ? { city_label: liveLocationCityLabel } : {}),
     })),
   };
 }
@@ -8383,6 +8552,7 @@ function getMappedPlacesForBrowse(filteredLocations: Array<{ listKey: string; lo
         postal_code: location.postal_code,
         latitude: location.latitude,
         longitude: location.longitude,
+        live_location_updated_at: location.live_location_updated_at ?? place.live_location_updated_at ?? null,
         phone_number: location.phone_number,
         website_url: location.website_url,
         image_urls: location.image_urls,
@@ -8409,6 +8579,7 @@ function getMapSearchResults(filteredLocations: Array<{ listKey: string; locatio
     postal_code: location.postal_code,
     latitude: location.latitude,
     longitude: location.longitude,
+    live_location_updated_at: location.live_location_updated_at ?? place.live_location_updated_at ?? null,
     phone_number: location.phone_number,
     website_url: location.website_url,
     image_urls: location.image_urls,

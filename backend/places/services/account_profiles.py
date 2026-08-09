@@ -317,6 +317,8 @@ def build_account_response(user, portal, claim=None, token=None):
 		tracked_business_location = {
 			'latitude': tracked_snapshot.tracked_location_latitude,
 			'longitude': tracked_snapshot.tracked_location_longitude,
+			'address_line_1': getattr(tracked_snapshot, 'tracked_location_address_line_1', ''),
+			'city_label': getattr(tracked_snapshot, 'tracked_location_city_label', ''),
 			'accuracy_meters': tracked_snapshot.tracked_location_accuracy_meters,
 			'updated_at': tracked_snapshot.tracked_location_updated_at,
 		}

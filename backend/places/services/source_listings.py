@@ -669,6 +669,7 @@ def _build_manual_admin_snapshot_payload(snapshot, resolve_missing_coordinates=T
 	payload = _build_place_payload(place_record, resolve_missing_coordinates=should_resolve_coordinates)
 	if payload is None:
 		return None
+	_apply_live_location_timestamp(payload, snapshot)
 	payload['is_claimed'] = False
 	payload['is_informal'] = False
 	payload['social_profiles'] = normalized_social_profiles
@@ -832,6 +833,7 @@ def _build_snapshot_place_payload(claim, resolve_missing_coordinates=True):
 	)
 	payload = _build_place_payload(place_record, resolve_missing_coordinates=should_resolve_coordinates)
 	if payload is not None:
+		_apply_live_location_timestamp(payload, snapshot)
 		payload.update(_build_claim_override_payload(
 			claim,
 			public_address_overridden=public_address_overridden,
@@ -850,7 +852,7 @@ def _build_snapshot_place_payload(claim, resolve_missing_coordinates=True):
 def _snapshot_display_address(snapshot):
 	if snapshot.venue_type == VenueType.MOBILE or snapshot.serves_multiple_areas:
 		if snapshot.tracked_location_latitude is not None and snapshot.tracked_location_longitude is not None:
-			return 'Approximate live location'
+			return getattr(snapshot, 'tracked_location_address_line_1', '') or 'Approximate live location'
 		return snapshot.address_line_1 or 'Approximate live location unavailable'
 	return snapshot.address_line_1
 
@@ -1217,6 +1219,104 @@ def _select_primary_location(location_payloads, preferred_city=None):
 			if location['city'] == preferred_city:
 				return location
 	return location_payloads[0]
+
+
+def _apply_live_location_timestamp(payload, snapshot):
+	updated_at = getattr(snapshot, 'tracked_location_updated_at', None)
+	if (
+		updated_at is None
+		or getattr(snapshot, 'tracked_location_latitude', None) is None
+		or getattr(snapshot, 'tracked_location_longitude', None) is None
+	):
+		return
+
+	payload['live_location_updated_at'] = updated_at
+	display_fields = get_live_location_display_fields(snapshot)
+	if display_fields:
+		payload['address_line_1'] = display_fields['address_line_1']
+		payload['city_label'] = display_fields['city_label']
+	for location in payload.get('locations', []):
+		location['live_location_updated_at'] = updated_at
+		if display_fields:
+			location['address_line_1'] = display_fields['address_line_1']
+			location['city_label'] = display_fields['city_label']
+
+
+def get_live_location_display_fields(snapshot):
+	if (
+		getattr(snapshot, 'tracked_location_latitude', None) is None
+		or getattr(snapshot, 'tracked_location_longitude', None) is None
+	):
+		return None
+
+	return {
+		'address_line_1': getattr(snapshot, 'tracked_location_address_line_1', '') or 'Approximate live location',
+		'city_label': getattr(snapshot, 'tracked_location_city_label', '') or (
+			_label_for_choice(City, snapshot.city) if snapshot.city else ''
+		),
+	}
+
+
+def reverse_geocode_tracked_location(latitude, longitude):
+	try:
+		latitude = float(latitude)
+		longitude = float(longitude)
+	except (TypeError, ValueError):
+		return None
+
+	cache = caches[getattr(settings, 'PLACE_GEOCODE_CACHE_ALIAS', 'default')]
+	cache_key = f'place-reverse-geocode:{latitude:.3f}:{longitude:.3f}'
+	cached_result = cache.get(cache_key)
+	if cached_result is not None:
+		return cached_result or None
+
+	try:
+		response = requests.get(
+			getattr(settings, 'PLACE_REVERSE_GEOCODE_URL', 'https://nominatim.openstreetmap.org/reverse'),
+			params={
+				'lat': latitude,
+				'lon': longitude,
+				'format': 'jsonv2',
+				'zoom': 18,
+				'addressdetails': 1,
+			},
+			headers={
+				'User-Agent': getattr(settings, 'PLACE_GEOCODE_USER_AGENT', 'HappyHourApp/1.0'),
+			},
+			timeout=getattr(settings, 'PLACE_REVERSE_GEOCODE_TIMEOUT', 3),
+		)
+		response.raise_for_status()
+		payload = response.json()
+	except (requests.RequestException, ValueError, TypeError):
+		return None
+
+	if not isinstance(payload, dict):
+		return None
+
+	address = payload.get('address')
+	if not isinstance(address, dict):
+		return None
+
+	road = next((str(address.get(key) or '').strip() for key in ('road', 'pedestrian', 'footway') if str(address.get(key) or '').strip()), '')
+	city_label = next((str(address.get(key) or '').strip() for key in ('city', 'town', 'village', 'municipality') if str(address.get(key) or '').strip()), '')
+	neighborhood = next((str(address.get(key) or '').strip() for key in ('neighbourhood', 'suburb') if str(address.get(key) or '').strip()), '')
+	location_label = road or neighborhood
+	if not location_label and not city_label:
+		return None
+
+	address_line_1 = f'Approximate live location near {location_label}' if location_label else 'Approximate live location'
+	if not road and city_label:
+		address_line_1 = f'{address_line_1}, {city_label}'
+	result = {
+		'address_line_1': address_line_1[:255],
+		'city_label': city_label[:120],
+	}
+	cache.set(
+		cache_key,
+		result,
+		getattr(settings, 'PLACE_REVERSE_GEOCODE_CACHE_TIMEOUT', 3600),
+	)
+	return result
 
 
 def _get_place_coordinates(place_record, resolve_missing=True):

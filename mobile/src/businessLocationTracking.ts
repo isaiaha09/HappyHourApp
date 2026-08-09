@@ -146,7 +146,11 @@ export async function clearPersistedBusinessTrackingLastReportedLocation() {
   ]);
 }
 
-export async function reserveBusinessLocationReport(latitude: number, longitude: number) {
+export async function reserveBusinessLocationReport(
+  latitude: number,
+  longitude: number,
+  options: { force?: boolean } = {},
+) {
   const [lastReportedLocationKey, lastReportedAt] = await Promise.all([
     getSecureItem(lastReportedLocationStorageKey),
     getSecureItem(lastReportedAtStorageKey),
@@ -156,7 +160,7 @@ export async function reserveBusinessLocationReport(latitude: number, longitude:
     ? parsedLastReportedAt
     : null;
   const now = Date.now();
-  if (!shouldReportBusinessLocation({
+  if (!options.force && !shouldReportBusinessLocation({
     latitude,
     longitude,
     lastReportedAt: previousReportedAt,
@@ -166,11 +170,14 @@ export async function reserveBusinessLocationReport(latitude: number, longitude:
     return false;
   }
 
+  return true;
+}
+
+export async function commitBusinessLocationReport(latitude: number, longitude: number, reportedAt = Date.now()) {
   await Promise.all([
     setSecureItem(lastReportedLocationStorageKey, buildBusinessLocationKey(latitude, longitude)),
-    setSecureItem(lastReportedAtStorageKey, String(now)),
+    setSecureItem(lastReportedAtStorageKey, String(reportedAt)),
   ]);
-  return true;
 }
 
 export async function ensureBusinessBackgroundLocationTaskStarted(
@@ -263,10 +270,15 @@ if (!TaskManager.isTaskDefined(BUSINESS_LOCATION_TASK_NAME)) {
       return;
     }
 
-    await postBusinessLocationUpdate(apiBaseUrl, session.authToken, {
-      accuracy: latestLocation.coords.accuracy ?? null,
-      latitude: latestLocation.coords.latitude,
-      longitude: latestLocation.coords.longitude,
-    });
+    try {
+      await postBusinessLocationUpdate(apiBaseUrl, session.authToken, {
+        accuracy: latestLocation.coords.accuracy ?? null,
+        latitude: latestLocation.coords.latitude,
+        longitude: latestLocation.coords.longitude,
+      });
+      await commitBusinessLocationReport(latestLocation.coords.latitude, latestLocation.coords.longitude);
+    } catch {
+      // Leave the last successful report untouched so the next location sample can retry.
+    }
   });
 }

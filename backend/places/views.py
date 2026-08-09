@@ -65,7 +65,7 @@ from .services.favorite_notifications import create_notifications_for_business_p
 from .services.direct_message_push import send_push_notifications_for_direct_message
 from .services.home_feed import get_feed_interval, get_feed_queryset, get_organic_page_size, get_ranked_campaigns, get_requested_feed_page_size, mix_feed_items, record_campaign_served
 from .services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
-from .services.source_listings import get_disabled_live_location_slugs, get_source_deal_payloads, get_source_place_payload, get_source_place_payloads, invalidate_source_place_payload_cache, is_live_location_tracking_enabled_for_snapshot, load_source_records
+from .services.source_listings import get_disabled_live_location_slugs, get_live_location_display_fields, get_source_deal_payloads, get_source_place_payload, get_source_place_payloads, invalidate_source_place_payload_cache, is_live_location_tracking_enabled_for_snapshot, load_source_records, reverse_geocode_tracked_location
 from .throttles import DirectMessageSendRateThrottle, EmailVerificationRateThrottle, EmailVerificationResendRateThrottle, LoginRateThrottle, PasswordRecoveryRateThrottle, SignupRateThrottle, SupportContactRateThrottle, UserMutationRateThrottle
 
 
@@ -364,7 +364,6 @@ class LiveLocationPlaceListView(generics.GenericAPIView):
 
 	def get(self, request):
 		city = str(request.query_params.get('city') or '').strip().lower()
-		cutoff = timezone.now() - timezone.timedelta(seconds=getattr(settings, 'BUSINESS_LIVE_LOCATION_MAX_AGE_SECONDS', 120))
 		disabled_slugs = get_disabled_live_location_slugs()
 		queryset = (
 			ListingSnapshot.objects
@@ -373,7 +372,6 @@ class LiveLocationPlaceListView(generics.GenericAPIView):
 				Q(venue_type=VenueType.MOBILE) | Q(serves_multiple_areas=True),
 				tracked_location_latitude__isnull=False,
 				tracked_location_longitude__isnull=False,
-				tracked_location_updated_at__gte=cutoff,
 			)
 			.order_by('listing_slug', 'pk')
 		)
@@ -386,6 +384,7 @@ class LiveLocationPlaceListView(generics.GenericAPIView):
 				'latitude': snapshot.tracked_location_latitude,
 				'longitude': snapshot.tracked_location_longitude,
 				'updated_at': snapshot.tracked_location_updated_at,
+				**(get_live_location_display_fields(snapshot) or {}),
 			}
 			for snapshot in queryset
 			if slugify(f'{snapshot.name}-{snapshot.city}') not in disabled_slugs
@@ -891,9 +890,15 @@ class BusinessLocationUpdateView(generics.GenericAPIView):
 
 		snapshot.tracked_location_latitude = serializer.validated_data['latitude']
 		snapshot.tracked_location_longitude = serializer.validated_data['longitude']
+		live_location_display = reverse_geocode_tracked_location(
+			snapshot.tracked_location_latitude,
+			snapshot.tracked_location_longitude,
+		)
+		snapshot.tracked_location_address_line_1 = live_location_display['address_line_1'] if live_location_display else ''
+		snapshot.tracked_location_city_label = live_location_display['city_label'] if live_location_display else ''
 		snapshot.tracked_location_accuracy_meters = serializer.validated_data.get('accuracy_meters')
 		snapshot.tracked_location_updated_at = timezone.now()
-		snapshot.save(update_fields=['tracked_location_latitude', 'tracked_location_longitude', 'tracked_location_accuracy_meters', 'tracked_location_updated_at', 'updated_at'])
+		snapshot.save(update_fields=['tracked_location_latitude', 'tracked_location_longitude', 'tracked_location_address_line_1', 'tracked_location_city_label', 'tracked_location_accuracy_meters', 'tracked_location_updated_at', 'updated_at'])
 		invalidate_source_place_payload_cache()
 
 		return Response(build_account_response(request.user, 'business', token=request.auth))
@@ -924,9 +929,11 @@ class BusinessLocationTrackingPreferenceView(generics.GenericAPIView):
 		if not enabled:
 			snapshot.tracked_location_latitude = None
 			snapshot.tracked_location_longitude = None
+			snapshot.tracked_location_address_line_1 = ''
+			snapshot.tracked_location_city_label = ''
 			snapshot.tracked_location_accuracy_meters = None
 			snapshot.tracked_location_updated_at = None
-			snapshot.save(update_fields=['tracked_location_latitude', 'tracked_location_longitude', 'tracked_location_accuracy_meters', 'tracked_location_updated_at', 'updated_at'])
+			snapshot.save(update_fields=['tracked_location_latitude', 'tracked_location_longitude', 'tracked_location_address_line_1', 'tracked_location_city_label', 'tracked_location_accuracy_meters', 'tracked_location_updated_at', 'updated_at'])
 		invalidate_source_place_payload_cache()
 
 		return Response(build_account_response(request.user, 'business', token=request.auth))

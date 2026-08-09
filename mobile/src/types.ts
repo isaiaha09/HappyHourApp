@@ -89,6 +89,7 @@ export type PlaceLocation = {
   postal_code: string;
   latitude: number | null;
   longitude: number | null;
+  live_location_updated_at?: string | null;
   phone_number: string;
   website_url: string;
   image_urls: string[];
@@ -141,6 +142,8 @@ export type LiveLocationPlaceUpdate = {
   latitude: number | null;
   longitude: number | null;
   updated_at: string | null;
+  address_line_1?: string | null;
+  city_label?: string | null;
 };
 
 export type PaginatedResponse<T> = {
@@ -314,6 +317,8 @@ export type SignupResponse = {
   tracked_business_location?: {
     latitude?: number | null;
     longitude?: number | null;
+    address_line_1?: string;
+    city_label?: string;
     accuracy_meters?: number | null;
     updated_at?: string | null;
   };

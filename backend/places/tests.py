@@ -276,6 +276,8 @@ class PlaceApiTests(APITestCase):
 			city=City.VENTURA,
 			venue_type=VenueType.MOBILE,
 			address_line_1='Approximate live location',
+			tracked_location_address_line_1='Approximate live location near Main Street',
+			tracked_location_city_label='Ventura',
 			tracked_location_latitude=34.2789,
 			tracked_location_longitude=-119.2914,
 			tracked_location_updated_at=timezone.now(),
@@ -329,6 +331,8 @@ class PlaceApiTests(APITestCase):
 		self.assertEqual(response.data[0]['latitude'], 34.2789)
 		self.assertEqual(response.data[0]['longitude'], -119.2914)
 		self.assertTrue(bool(response.data[0]['updated_at']))
+		self.assertEqual(response.data[0]['address_line_1'], 'Approximate live location near Main Street')
+		self.assertEqual(response.data[0]['city_label'], 'Ventura')
 		self.assertEqual(response['Cache-Control'], 'no-store, no-cache, must-revalidate')
 
 	def test_live_location_endpoint_hides_disabled_approved_claim_without_membership(self):
@@ -358,7 +362,8 @@ class PlaceApiTests(APITestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertNotIn('dormant-truck-ventura', [payload['slug'] for payload in response.data])
 
-	def test_live_location_endpoint_excludes_stale_coordinates(self):
+	def test_live_location_endpoint_returns_stale_coordinates_with_timestamp(self):
+		updated_at = timezone.now() - timedelta(minutes=3)
 		ListingSnapshot.objects.create(
 			name='Stale Truck',
 			listing_slug='stale-truck',
@@ -367,13 +372,16 @@ class PlaceApiTests(APITestCase):
 			address_line_1='Approximate live location',
 			tracked_location_latitude=34.2199,
 			tracked_location_longitude=-119.0401,
-			tracked_location_updated_at=timezone.now() - timedelta(minutes=3),
+			tracked_location_updated_at=updated_at,
 		)
 
 		response = self.client.get(reverse('place-live-locations'), {'city': City.VENTURA})
 
 		self.assertEqual(response.status_code, 200)
-		self.assertNotIn('stale-truck-ventura', [payload['slug'] for payload in response.data])
+		stale_payload = next(payload for payload in response.data if payload['slug'] == 'stale-truck-ventura')
+		self.assertEqual(stale_payload['latitude'], 34.2199)
+		self.assertEqual(stale_payload['longitude'], -119.0401)
+		self.assertEqual(stale_payload['updated_at'], timezone.localtime(updated_at).isoformat())
 
 	def test_deal_list_endpoint(self):
 		with patch('places.views.get_source_deal_payloads', return_value=self.place_payload['deals']):
@@ -6736,6 +6744,10 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertTrue(response.data['business_location_tracking_available'])
 		self.assertTrue(response.data['business_location_tracking_enabled'])
 		self.assertTrue(response.data['requires_business_location_tracking'])
+		payload = get_source_place_payload(snapshot.listing_slug)
+		self.assertIsNotNone(payload)
+		self.assertEqual(payload['live_location_updated_at'], snapshot.tracked_location_updated_at)
+		self.assertEqual(payload['locations'][0]['live_location_updated_at'], snapshot.tracked_location_updated_at)
 		self.assertEqual(response.data['tracked_business_location']['latitude'], 34.2791)
 		self.assertEqual(response.data['tracked_business_location']['accuracy_meters'], 42.0)
 
@@ -7493,7 +7505,22 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(self.profile.previous_verified_email, '')
 		self.assertIsNone(self.profile.email_change_requested_at)
 
-	def test_business_location_update_updates_mobile_snapshot(self):
+	@patch('places.services.source_listings.requests.get')
+	def test_business_location_update_updates_mobile_snapshot(self, mock_geocode_get):
+		geocode_response = MagicMock()
+		geocode_response.json.return_value = {
+			'address': {
+				'city': 'Ventura',
+				'road': 'Main Street',
+			},
+		}
+		geocode_response.raise_for_status.return_value = None
+		forward_geocode_response = MagicMock()
+		forward_geocode_response.json.return_value = []
+		forward_geocode_response.raise_for_status.return_value = None
+		mock_geocode_get.side_effect = lambda url, **kwargs: (
+			geocode_response if url.endswith('/reverse') else forward_geocode_response
+		)
 		snapshot = ListingSnapshot.objects.create(
 			name='Scoops Truck',
 			city=City.VENTURA,
@@ -7523,8 +7550,16 @@ class ProfileDashboardApiTests(APITestCase):
 		snapshot.refresh_from_db()
 		self.assertEqual(snapshot.tracked_location_latitude, 34.2812)
 		self.assertEqual(snapshot.tracked_location_longitude, -119.2944)
+		self.assertEqual(snapshot.tracked_location_address_line_1, 'Approximate live location near Main Street')
+		self.assertEqual(snapshot.tracked_location_city_label, 'Ventura')
 		self.assertEqual(snapshot.tracked_location_accuracy_meters, 35.5)
 		self.assertTrue(response.data['requires_business_location_tracking'])
+
+		payload = get_source_place_payload(snapshot.listing_slug)
+		self.assertEqual(payload['address_line_1'], 'Approximate live location near Main Street')
+		self.assertEqual(payload['city_label'], 'Ventura')
+		self.assertEqual(payload['locations'][0]['address_line_1'], 'Approximate live location near Main Street')
+		self.assertEqual(payload['locations'][0]['city_label'], 'Ventura')
 
 	def test_business_location_update_rejects_when_tracking_is_disabled(self):
 		self.profile.business_location_tracking_enabled = False
@@ -7593,6 +7628,8 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertFalse(self.profile.business_location_tracking_enabled)
 		self.assertIsNone(snapshot.tracked_location_latitude)
 		self.assertIsNone(snapshot.tracked_location_longitude)
+		self.assertEqual(snapshot.tracked_location_address_line_1, '')
+		self.assertEqual(snapshot.tracked_location_city_label, '')
 		self.assertIsNone(snapshot.tracked_location_accuracy_meters)
 		self.assertIsNone(snapshot.tracked_location_updated_at)
 		self.assertTrue(response.data['business_location_tracking_available'])

@@ -1277,6 +1277,7 @@ class PlaceLocationSerializer(serializers.Serializer):
 	postal_code = serializers.CharField()
 	latitude = serializers.FloatField(allow_null=True)
 	longitude = serializers.FloatField(allow_null=True)
+	live_location_updated_at = serializers.DateTimeField(allow_null=True, required=False, default=None)
 	phone_number = serializers.CharField()
 	website_url = serializers.CharField()
 	image_urls = serializers.ListField(child=serializers.CharField(), required=False, default=list)
@@ -1298,6 +1299,8 @@ class LiveLocationPlaceSerializer(serializers.Serializer):
 	latitude = serializers.FloatField(allow_null=True)
 	longitude = serializers.FloatField(allow_null=True)
 	updated_at = serializers.DateTimeField(allow_null=True)
+	address_line_1 = serializers.CharField(required=False, allow_blank=True, default='')
+	city_label = serializers.CharField(required=False, allow_blank=True, default='')
 
 
 class PlaceListSerializer(serializers.Serializer):
@@ -1328,6 +1331,7 @@ class PlaceListSerializer(serializers.Serializer):
 	postal_code = serializers.CharField()
 	latitude = serializers.FloatField(allow_null=True)
 	longitude = serializers.FloatField(allow_null=True)
+	live_location_updated_at = serializers.DateTimeField(allow_null=True, required=False, default=None)
 	phone_number = serializers.CharField()
 	website_url = serializers.CharField()
 	image_urls = serializers.ListField(child=serializers.CharField(), required=False, default=list)

@@ -383,6 +383,28 @@ export const browseStyles = {
     fontSize: 13,
     lineHeight: 18,
   },
+  mapOfflineBanner: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    backgroundColor: 'rgba(35, 31, 22, 0.94)',
+    borderColor: 'rgba(247, 200, 115, 0.45)',
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 7,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+  },
+  mapOfflineBannerText: {
+    color: '#f7c873',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  mapLastKnownLocationText: {
+    color: '#f7c873',
+    fontSize: 13,
+    fontWeight: '700',
+  },
   searchRow: {
     alignItems: 'center',
     flexDirection: 'row',

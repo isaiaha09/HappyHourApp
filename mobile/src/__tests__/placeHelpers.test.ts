@@ -1,4 +1,4 @@
-import { dedupeImageUrls, mergeLiveLocationUpdatesIntoPlaces } from '../placeHelpers';
+import { dedupeImageUrls, formatLastKnownLocationLabel, formatPlaceAddress, mergeLiveLocationUpdatesIntoPlaces } from '../placeHelpers';
 import type { PlaceListItem } from '../types';
 
 describe('dedupeImageUrls', () => {
@@ -75,16 +75,20 @@ describe('mergeLiveLocationUpdatesIntoPlaces', () => {
       longitude: -119.2914,
       slug: 'scoops-truck-ventura',
       updated_at: '2026-08-03T17:33:20Z',
+      address_line_1: 'Approximate live location near Main Street',
+      city_label: 'Ventura',
     }]);
 
     expect(result[0].locations[0]).toEqual(expect.objectContaining({
       latitude: 34.2789,
       longitude: -119.2914,
+      address_line_1: 'Approximate live location near Main Street',
+      city_label: 'Ventura',
     }));
     expect(result[1]).toBe(staticPlace);
   });
 
-  it('clears stale mobile coordinates when live updates are authoritative and the business is missing', () => {
+  it('preserves the last known mobile coordinates when a live update is missing', () => {
     const place = {
       latitude: 34.2,
       longitude: -119.1,
@@ -115,12 +119,12 @@ describe('mergeLiveLocationUpdatesIntoPlaces', () => {
     });
 
     expect(result[0]).toEqual(expect.objectContaining({
-      latitude: null,
-      longitude: null,
+      latitude: 34.2,
+      longitude: -119.1,
     }));
     expect(result[0].locations[0]).toEqual(expect.objectContaining({
-      latitude: null,
-      longitude: null,
+      latitude: 34.2,
+      longitude: -119.1,
     }));
     expect(result[1]).toBe(staticPlace);
   });
@@ -156,5 +160,31 @@ describe('mergeLiveLocationUpdatesIntoPlaces', () => {
       latitude: 34.2789,
       longitude: -119.2914,
     }));
+  });
+});
+
+describe('formatPlaceAddress', () => {
+  it('omits empty city placeholders from approximate live addresses', () => {
+    expect(formatPlaceAddress({
+      address_line_1: 'Approximate live location near Main Street',
+      address_line_2: '',
+      city_label: '',
+      state: 'CA',
+      postal_code: '',
+    } as PlaceListItem)).toBe('Approximate live location near Main Street, CA');
+  });
+});
+
+describe('formatLastKnownLocationLabel', () => {
+  it('formats recent locations in minutes', () => {
+    expect(formatLastKnownLocationLabel('2026-08-03T17:28:20Z', Date.parse('2026-08-03T17:33:20Z'))).toBe('Last known location 5 minutes ago');
+  });
+
+  it('formats older locations in hours', () => {
+    expect(formatLastKnownLocationLabel('2026-08-03T15:33:20Z', Date.parse('2026-08-03T17:33:20Z'))).toBe('Last known location 2 hours ago');
+  });
+
+  it('ignores invalid timestamps', () => {
+    expect(formatLastKnownLocationLabel('not-a-timestamp', Date.now())).toBeNull();
   });
 });

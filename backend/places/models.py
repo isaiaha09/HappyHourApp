@@ -175,6 +175,8 @@ class ListingSnapshot(models.Model):
 	operating_hour_overrides_cleared = models.BooleanField(default=False)
 	tracked_location_latitude = models.FloatField(null=True, blank=True)
 	tracked_location_longitude = models.FloatField(null=True, blank=True)
+	tracked_location_address_line_1 = models.CharField(max_length=255, blank=True)
+	tracked_location_city_label = models.CharField(max_length=120, blank=True)
 	tracked_location_accuracy_meters = models.FloatField(null=True, blank=True)
 	tracked_location_updated_at = models.DateTimeField(null=True, blank=True)
 	captured_at = models.DateTimeField(auto_now_add=True)

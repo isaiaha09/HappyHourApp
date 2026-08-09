@@ -16,6 +16,7 @@ const mockFetchLiveLocationPlaces = jest.fn<Promise<Array<{ slug: string; latitu
 const mockFetchPlaceDetail = jest.fn();
 const mockFetchProfileDashboard = jest.fn();
 const mockLoginProfile = jest.fn();
+const mockUpdateBusinessLocation = jest.fn();
 const mockRegisterPushDevice = jest.fn();
 let mockNotificationResponseListener: ((response: unknown) => void) | null = null;
 const mockRegisterForPushNotificationsAsync = jest.fn<Promise<{
@@ -58,7 +59,7 @@ jest.mock('../api', () => ({
   resendVerificationEmail: jest.fn(),
   submitSupportRequest: jest.fn(),
   toggleFavoriteBusiness: jest.fn(),
-  updateBusinessLocation: jest.fn(),
+  updateBusinessLocation: (...args: unknown[]) => mockUpdateBusinessLocation(...args),
   updateBusinessLocationTrackingPreference: jest.fn(),
   updateProfileDashboard: jest.fn(),
   updateProfileDashboardWithUploads: jest.fn(),
@@ -74,9 +75,11 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('expo-location', () => ({
   Accuracy: { Balanced: 1 },
   getCurrentPositionAsync: jest.fn(),
+  getBackgroundPermissionsAsync: jest.fn(async () => ({ canAskAgain: false, granted: false })),
   getForegroundPermissionsAsync: jest.fn(async () => ({ canAskAgain: false, granted: false })),
+  isBackgroundLocationAvailableAsync: jest.fn(async () => false),
   requestForegroundPermissionsAsync: jest.fn(async () => ({ canAskAgain: false, granted: false })),
-  watchPositionAsync: jest.fn(),
+  watchPositionAsync: jest.fn(async () => ({ remove: jest.fn() })),
 }));
 
 jest.mock('expo-notifications', () => ({
@@ -208,8 +211,10 @@ jest.mock('../screens/PlaceDetailScreen', () => ({
 
 jest.mock('../businessLocationTracking', () => ({
   clearPersistedBusinessTrackingSession: jest.fn(async () => undefined),
+  commitBusinessLocationReport: jest.fn(async () => undefined),
   ensureBusinessBackgroundLocationTaskStarted: jest.fn(async () => undefined),
   loadPersistedBusinessTrackingSession: jest.fn(async () => null),
+  reserveBusinessLocationReport: jest.fn(async () => true),
   stopBusinessBackgroundLocationTask: jest.fn(async () => undefined),
 }));
 
@@ -333,6 +338,14 @@ const mapsModule = jest.requireMock('react-native-maps') as {
 const networkModule = jest.requireMock('expo-network') as {
   __setMockNetworkState: (nextState: { isConnected?: boolean; isInternetReachable?: boolean; type?: string }) => void;
 };
+const locationModule = jest.requireMock('expo-location') as {
+  getBackgroundPermissionsAsync: jest.Mock;
+  getCurrentPositionAsync: jest.Mock;
+  getForegroundPermissionsAsync: jest.Mock;
+  isBackgroundLocationAvailableAsync: jest.Mock;
+  requestForegroundPermissionsAsync: jest.Mock;
+  watchPositionAsync: jest.Mock;
+};
 
 const originalAppStateAddEventListener = AppState.addEventListener.bind(AppState);
 
@@ -403,6 +416,7 @@ describe('App browse map search', () => {
     mockFetchLiveLocationPlaces.mockResolvedValue([]);
     mockFetchPlaceDetail.mockReset();
     mockFetchProfileDashboard.mockResolvedValue(null);
+    mockUpdateBusinessLocation.mockReset();
     mockRegisterPushDevice.mockReset();
     mockRegisterForPushNotificationsAsync.mockReset();
     mockRegisterForPushNotificationsAsync.mockResolvedValue(null);
@@ -419,6 +433,17 @@ describe('App browse map search', () => {
       two_factor_enabled: false,
       can_access_places: true,
     });
+    locationModule.getBackgroundPermissionsAsync.mockReset();
+    locationModule.getBackgroundPermissionsAsync.mockResolvedValue({ canAskAgain: false, granted: false });
+    locationModule.getCurrentPositionAsync.mockReset();
+    locationModule.getForegroundPermissionsAsync.mockReset();
+    locationModule.getForegroundPermissionsAsync.mockResolvedValue({ canAskAgain: false, granted: false });
+    locationModule.isBackgroundLocationAvailableAsync.mockReset();
+    locationModule.isBackgroundLocationAvailableAsync.mockResolvedValue(false);
+    locationModule.requestForegroundPermissionsAsync.mockReset();
+    locationModule.requestForegroundPermissionsAsync.mockResolvedValue({ canAskAgain: false, granted: false });
+    locationModule.watchPositionAsync.mockReset();
+    locationModule.watchPositionAsync.mockResolvedValue({ remove: jest.fn() });
     mapsModule.__mock.animateToRegionMock.mockClear();
     mapsModule.__mock.initialRegionMock.mockClear();
     mapsModule.__mock.setMapBoundariesMock.mockClear();
@@ -431,6 +456,7 @@ describe('App browse map search', () => {
     mockFetchLiveLocationPlaces.mockReset();
     mockFetchProfileDashboard.mockReset();
     mockLoginProfile.mockReset();
+    mockUpdateBusinessLocation.mockReset();
     mockRegisterPushDevice.mockReset();
     mockRegisterForPushNotificationsAsync.mockReset();
   });
@@ -574,6 +600,136 @@ describe('App browse map search', () => {
     expect(screen.getByText('This device is not able to connect to Wi-Fi or mobile data. Reconnect to the internet to use the app.')).toBeTruthy();
     expect(screen.queryByTestId('complete-splash-intro')).toBeNull();
     expect(mockFetchPlaces).not.toHaveBeenCalled();
+  });
+
+  it('keeps the cached map and last-known pins visible after connectivity drops', async () => {
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(screen.getAllByTestId('mock-map-marker')).toHaveLength(1);
+
+    const offlineState = {
+      isConnected: false,
+      isInternetReachable: false,
+      type: 'NONE',
+    } as const;
+    networkModule.__setMockNetworkState(offlineState);
+    act(() => {
+      mockNetworkListeners.forEach((listener) => listener(offlineState));
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('Offline. Showing last known locations.')).toBeTruthy();
+    expect(screen.getAllByTestId('mock-map-marker')).toHaveLength(1);
+    expect(screen.queryByText('No internet connection')).toBeNull();
+  });
+
+  it('retries a stationary vendor location after the device reconnects', async () => {
+    const businessSession = {
+      id: 9,
+      username: 'bizowner',
+      email: 'bizowner@example.com',
+      first_name: 'Biz',
+      last_name: 'Owner',
+      auth_token: 'business-token-123',
+      portal: 'business' as const,
+      profile_type: 'business' as const,
+      email_verified: true,
+      two_factor_enabled: false,
+      can_access_places: true,
+      approved_businesses: [{ slug: samplePlace.slug }],
+      requires_business_location_tracking: true,
+    };
+    const currentPosition = {
+      coords: {
+        accuracy: 4,
+        latitude: 34.2171,
+        longitude: -119.0385,
+      },
+      timestamp: Date.now(),
+    };
+    mockLoginProfile.mockResolvedValue(businessSession);
+    mockUpdateBusinessLocation.mockResolvedValue(businessSession);
+    locationModule.requestForegroundPermissionsAsync.mockResolvedValue({ canAskAgain: false, granted: true });
+    locationModule.getCurrentPositionAsync.mockResolvedValue(currentPosition);
+
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    fireEvent.press(screen.getByLabelText('Open business login'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    fireEvent.press(screen.getByLabelText('Submit login'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+
+    expect(mockUpdateBusinessLocation).toHaveBeenCalledTimes(1);
+
+    const offlineState = {
+      isConnected: false,
+      isInternetReachable: false,
+      type: 'NONE',
+    } as const;
+    networkModule.__setMockNetworkState(offlineState);
+    act(() => {
+      mockNetworkListeners.forEach((listener) => listener(offlineState));
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const onlineState = {
+      isConnected: true,
+      isInternetReachable: true,
+      type: 'WIFI',
+    } as const;
+    networkModule.__setMockNetworkState(onlineState);
+    act(() => {
+      mockNetworkListeners.forEach((listener) => listener(onlineState));
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+
+    expect(mockUpdateBusinessLocation).toHaveBeenCalledTimes(2);
+    expect(mockUpdateBusinessLocation).toHaveBeenLastCalledWith(
+      'http://127.0.0.1:8000/api',
+      'business-token-123',
+      expect.objectContaining({
+        latitude: currentPosition.coords.latitude,
+        longitude: currentPosition.coords.longitude,
+      }),
+    );
   });
 
   it('does not trigger additional map auto-fit animations for gibberish no-match searches', async () => {
