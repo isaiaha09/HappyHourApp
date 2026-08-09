@@ -101,7 +101,11 @@ export function getPlaceLocations(place: PlaceListItem | PlaceDetail) {
   return place.locations.length ? place.locations : [place];
 }
 
-export function formatLastKnownLocationLabel(updatedAt: string | null | undefined, now = Date.now()) {
+export function formatLastKnownLocationLabel(
+  updatedAt: string | null | undefined,
+  address: string,
+  now = Date.now(),
+) {
   if (!updatedAt) {
     return null;
   }
@@ -114,12 +118,12 @@ export function formatLastKnownLocationLabel(updatedAt: string | null | undefine
   const elapsedMinutes = Math.max(1, Math.floor(Math.max(0, now - updatedAtMs) / 60_000));
   if (elapsedMinutes < 60) {
     const minuteLabel = elapsedMinutes === 1 ? 'minute' : 'minutes';
-    return `Last known location ${elapsedMinutes} ${minuteLabel} ago`;
+    return `Last known location: ${address} approximately ${elapsedMinutes} ${minuteLabel} ago`;
   }
 
   const elapsedHours = Math.max(1, Math.floor(elapsedMinutes / 60));
   const hourLabel = elapsedHours === 1 ? 'hour' : 'hours';
-  return `Last known location ${elapsedHours} ${hourLabel} ago`;
+  return `Last known location: ${address} approximately ${elapsedHours} ${hourLabel} ago`;
 }
 
 function getLiveLocationUpdateTimestamp(update: LiveLocationPlaceUpdate) {

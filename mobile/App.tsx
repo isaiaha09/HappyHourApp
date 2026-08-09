@@ -1002,7 +1002,7 @@ function AppScreen() {
   const activeMapPreviewPlace = selectedMapSearchPreviewPlace;
   const displayedMapPreviewImageUrls = displayedMapPreviewPlace ? dedupeImageUrls(displayedMapPreviewPlace.image_urls) : [];
   const displayedMapPreviewLastKnownLabel = displayedMapPreviewPlace
-    ? formatLastKnownLocationLabel(displayedMapPreviewPlace.live_location_updated_at, locationStatusNow)
+    ? formatLastKnownLocationLabel(displayedMapPreviewPlace.live_location_updated_at, displayedMapPreviewPlace.fullAddress, locationStatusNow)
     : null;
   const selectedPlaceLocation = getSelectedPlaceLocation(selectedPlace, selectedLocationId, selectedCity);
   const selectedPlaceDeals = selectedPlaceLocation?.deals ?? selectedPlace?.deals ?? [];

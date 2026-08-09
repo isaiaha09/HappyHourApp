@@ -295,15 +295,23 @@ describe('formatPlaceAddress', () => {
 
 describe('formatLastKnownLocationLabel', () => {
   it('formats recent locations in minutes', () => {
-    expect(formatLastKnownLocationLabel('2026-08-03T17:28:20Z', Date.parse('2026-08-03T17:33:20Z'))).toBe('Last known location 5 minutes ago');
+    expect(formatLastKnownLocationLabel(
+      '2026-08-03T17:28:20Z',
+      'Approximate live location near Main Street, CA',
+      Date.parse('2026-08-03T17:33:20Z'),
+    )).toBe('Last known location: Approximate live location near Main Street, CA approximately 5 minutes ago');
   });
 
   it('formats older locations in hours', () => {
-    expect(formatLastKnownLocationLabel('2026-08-03T15:33:20Z', Date.parse('2026-08-03T17:33:20Z'))).toBe('Last known location 2 hours ago');
+    expect(formatLastKnownLocationLabel(
+      '2026-08-03T15:33:20Z',
+      'Approximate live location near Main Street, CA',
+      Date.parse('2026-08-03T17:33:20Z'),
+    )).toBe('Last known location: Approximate live location near Main Street, CA approximately 2 hours ago');
   });
 
   it('ignores invalid timestamps', () => {
-    expect(formatLastKnownLocationLabel('not-a-timestamp', Date.now())).toBeNull();
+    expect(formatLastKnownLocationLabel('not-a-timestamp', 'Approximate live location')).toBeNull();
   });
 });
 

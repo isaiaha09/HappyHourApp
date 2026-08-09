@@ -215,6 +215,7 @@ export function PlaceDetailScreen({
   const attachmentPreviewRequestIdRef = useRef(0);
   const selectedPlaceMapRegion = getPlacePreviewRegion(selectedPlaceLocation ?? selectedPlace);
   const showVerifiedBadge = !!selectedPlace?.is_claimed;
+  const showGoogleReviews = selectedPlace?.is_informal !== true;
   const selectedPlaceImageUrls = dedupeImageUrls([
     ...(selectedPlaceLocation?.image_urls ?? []),
     ...(selectedPlace?.image_urls ?? []),
@@ -544,12 +545,14 @@ export function PlaceDetailScreen({
               </>
             ) : null}
 
-            <Pressable
-              onPress={() => void Linking.openURL(buildGoogleReviewsUrl(selectedPlaceLocation ?? selectedPlace))}
-              style={styles.linkButtonSecondary}
-            >
-              <Text style={styles.linkButtonSecondaryText}>View Google Reviews</Text>
-            </Pressable>
+            {showGoogleReviews ? (
+              <Pressable
+                onPress={() => void Linking.openURL(buildGoogleReviewsUrl(selectedPlaceLocation ?? selectedPlace))}
+                style={styles.linkButtonSecondary}
+              >
+                <Text style={styles.linkButtonSecondaryText}>View Google Reviews</Text>
+              </Pressable>
+            ) : null}
 
             {showClaimBusinessControl && onClaimBusiness ? (
               <Pressable onPress={onClaimBusiness} style={styles.linkButtonSecondaryWide}>
