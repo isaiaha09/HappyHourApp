@@ -1,4 +1,10 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Terms of Service",
+  description: "Read the DiningDealz terms governing customer, business, and website use of the service.",
+};
 
 const termsSections = [
   {

@@ -1,5 +1,5 @@
+import type { Metadata } from "next";
 import Image from "next/image";
-import Link from "next/link";
 
 import { LoginForm } from "@/components/login-form";
 import { getTurnstileSiteKey } from "@/lib/turnstile";
@@ -18,6 +18,11 @@ const featureCards = [
     body: "The businesses and location the app uses is exclusive to the cities of Ventura County, specifically Ventura, Oxnard, and Camarillo, CA. We want to support the local food scene and the communities that make it great.",
   },
 ];
+
+export const metadata: Metadata = {
+  title: "Find Local Food Deals",
+  description: "Discover local specials, happy hours, and limited-time food deals across Ventura, Oxnard, and Camarillo.",
+};
 
 export default function Home() {
   const turnstileSiteKey = getTurnstileSiteKey();

@@ -34,12 +34,6 @@ export function TurnstileWidget({ siteKey, onTokenChange, resetKey = 0 }: Turnst
   const [isScriptReady, setIsScriptReady] = useState(false);
 
   useEffect(() => {
-    if (window.turnstile) {
-      setIsScriptReady(true);
-    }
-  }, []);
-
-  useEffect(() => {
     if (!siteKey || !isScriptReady || !containerRef.current || !window.turnstile || widgetIdRef.current) {
       return;
     }
@@ -78,7 +72,7 @@ export function TurnstileWidget({ siteKey, onTokenChange, resetKey = 0 }: Turnst
       <Script
         src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
         strategy="afterInteractive"
-        onLoad={() => setIsScriptReady(true)}
+        onReady={() => setIsScriptReady(true)}
       />
       <div className="min-h-[65px] rounded-2xl border border-white/10 bg-black/20 p-2">
         <div ref={containerRef} />

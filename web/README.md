@@ -24,9 +24,11 @@ To enable Cloudflare Turnstile on the dashboard login and contact form, set thes
 CLOUDFLARE_TURNSTILE_SITE_KEY=your_turnstile_site_key
 CLOUDFLARE_TURNSTILE_SECRET_KEY=your_turnstile_secret_key
 NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+NEXT_PUBLIC_SITE_URL=https://www.diningdealz.com
 ```
 
 `CLOUDFLARE_TURNSTILE_SITE_KEY` is used by the browser widget. `CLOUDFLARE_TURNSTILE_SECRET_KEY` is used only by the Next.js server routes that verify each token before login or contact form submission is allowed.
+`NEXT_PUBLIC_SITE_URL` is the canonical public origin used for metadata, Open Graph links, structured data, the sitemap, and robots.txt. Set it to the exact production or preview origin for each deployment.
 
 Optional Sentry variables for the Vercel deployment:
 

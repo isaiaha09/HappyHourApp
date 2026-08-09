@@ -1,4 +1,10 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Privacy Policy",
+  description: "Read the DiningDealz privacy policy covering account, location, messaging, business, and website data.",
+};
 
 const privacySections = [
   {

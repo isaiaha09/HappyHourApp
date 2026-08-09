@@ -1,8 +1,18 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 
 import { LoginForm } from "@/components/login-form";
 import { getTurnstileSiteKey } from "@/lib/turnstile";
+
+export const metadata: Metadata = {
+  title: "Sign In",
+  description: "Sign in to manage your DiningDealz account and business tools.",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default function LoginPage() {
   const turnstileSiteKey = getTurnstileSiteKey();

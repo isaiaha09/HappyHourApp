@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { ContactForm } from "@/components/contact-form";
 import { getTurnstileSiteKey } from "@/lib/turnstile";
+
+export const metadata: Metadata = {
+  title: "Contact Support",
+  description: "Contact DiningDealz for account help, business onboarding, billing questions, or partnership inquiries.",
+};
 
 export default function ContactPage() {
   const turnstileSiteKey = getTurnstileSiteKey();

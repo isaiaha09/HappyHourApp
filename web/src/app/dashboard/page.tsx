@@ -1,7 +1,17 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 
 import { DashboardShell } from "@/components/dashboard-shell";
+
+export const metadata: Metadata = {
+  title: "Account Dashboard",
+  description: "Manage your DiningDealz account from the web dashboard.",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default function DashboardPage() {
   return (

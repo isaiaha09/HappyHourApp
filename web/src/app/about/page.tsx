@@ -1,4 +1,10 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "About",
+  description: "Learn how DiningDealz helps people discover local specials while supporting businesses in the 805 area.",
+};
 
 export default function AboutPage() {
   return (

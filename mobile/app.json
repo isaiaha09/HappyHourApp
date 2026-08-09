@@ -14,9 +14,10 @@
     "ios": {
 	  "buildNumber": "49",
       "infoPlist": {
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "DiningDealz needs always-on location access so approved mobile business accounts can keep their live map pin updated even after the app is closed.",
-        "NSLocationAlwaysUsageDescription": "DiningDealz needs always-on location access so approved mobile business accounts can keep their live map pin updated even after the app is closed.",
-        "NSLocationWhenInUseUsageDescription": "DiningDealz uses your location so approved mobile or multi-area business accounts can update their live map location and mobile business pin in the app.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "When you enable live location for an approved business, DiningDealz uses your location to keep that business pin updated while the app is closed.",
+        "NSLocationAlwaysUsageDescription": "When you enable live location for an approved business, DiningDealz uses your location to keep that business pin updated while the app is closed.",
+        "NSLocationWhenInUseUsageDescription": "DiningDealz uses your location to show nearby places and, when enabled for an approved business, update its live map location.",
+        "NSPhotoLibraryUsageDescription": "DiningDealz uses your photo library so you can add business photos and attach images to messages.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "requireFullScreen": true,
@@ -34,8 +35,8 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "DiningDealz needs always-on location access so approved mobile business accounts can keep their live map pin updated even after the app is closed.",
-          "locationWhenInUsePermission": "DiningDealz uses your location so approved mobile or multi-area business accounts can update their live map location and mobile business pin in the app.",
+          "locationAlwaysAndWhenInUsePermission": "When you enable live location for an approved business, DiningDealz uses your location to keep that business pin updated while the app is closed.",
+          "locationWhenInUsePermission": "DiningDealz uses your location to show nearby places and, when enabled for an approved business, update its live map location.",
           "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true

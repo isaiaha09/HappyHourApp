@@ -630,17 +630,60 @@ npm run android
 npx tsc --noEmit
 ```
 
-### Local iOS Build Number
+### iOS Versioning And Upload Workflow
 
-Before uploading a locally archived iOS build from Xcode to App Store Connect/TestFlight, increment the iOS build number. Xcode does not automatically increment this project for local archives.
+iOS uses two version values:
 
-Update the same integer in all three places:
+- **Marketing version**: the user-facing App Store version, such as `1.0.0`. Change this when preparing a new App Store release version.
+- **Build number**: the unique integer for each uploaded binary, such as `49`, `50`, or `51`. Do not reuse a build number after Apple has accepted that binary.
 
-- `mobile/app.json`: `expo.ios.buildNumber`
-- `mobile/ios/DiningDealz/Info.plist`: `CFBundleVersion`
-- `mobile/ios/DiningDealz.xcodeproj/project.pbxproj`: `CURRENT_PROJECT_VERSION` in both Debug and Release
+#### EAS cloud builds
 
-For example, after uploading build `37`, change all three values to `38` before creating the next local archive. EAS production builds are separate and use the `autoIncrement` setting in `mobile/eas.json`.
+Production EAS builds use the settings in `mobile/eas.json`:
+
+- `appVersionSource: "remote"` means EAS servers own the canonical build number.
+- `autoIncrement: true` means EAS increments that remote number for the next production build.
+
+For a normal EAS production build, do not manually change the build number in Xcode or `mobile/app.json` first. Check the remote value when needed:
+
+```powershell
+cd mobile
+npx eas-cli@latest build:version:get
+```
+
+If the local native project needs to match the value stored on EAS, synchronize it with:
+
+```powershell
+npx eas-cli@latest build:version:sync
+```
+
+#### Xcode uploads
+
+An archive uploaded directly from Xcode is outside EAS automatic incrementing. Before creating the archive, set the Xcode target's **Build** value, or `CURRENT_PROJECT_VERSION`, to the next unused number. The marketing version stays unchanged unless this is a new App Store version.
+
+For example, if the EAS remote build number is `49` and the next upload will come from Xcode, use build `50`. Do not use `49` again. After the Xcode upload succeeds, update the EAS remote value so the next EAS build starts from the correct number:
+
+```powershell
+cd mobile
+npx eas-cli@latest build:version:set
+```
+
+When prompted, enter the build number that was just uploaded, such as `50`. The next EAS production build will then increment to `51`.
+
+If an EAS build has already uploaded build `50`, the next Xcode archive must use `51` instead. The same unique-number rule applies regardless of whether the binary was uploaded by EAS or Xcode.
+
+#### App Store listing metadata
+
+The local App Store listing source is `mobile/store.config.json`. It can be validated and synchronized with App Store Connect:
+
+```powershell
+cd mobile
+npx eas-cli@latest metadata:lint
+npx eas-cli@latest metadata:pull
+npx eas-cli@latest metadata:push
+```
+
+`metadata:pull` imports the current App Store Connect listing into the local file. `metadata:push` sends the local file to App Store Connect and can overwrite portal edits. Screenshots, app previews, privacy nutrition labels, age rating, pricing, and availability are still managed in App Store Connect.
 
 ## Helpful Backend Commands
 

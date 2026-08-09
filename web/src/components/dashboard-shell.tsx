@@ -18,7 +18,7 @@ export function DashboardShell() {
   useEffect(() => {
     const storedSession = readSession();
     if (!storedSession) {
-      setIsLoading(false);
+      startTransition(() => setIsLoading(false));
       return;
     }
 

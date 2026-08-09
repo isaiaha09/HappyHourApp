@@ -1,0 +1,31 @@
+{
+    "configVersion": 0,
+    "apple": {
+        "categories": [
+            "FOOD_AND_DRINK",
+            "LIFESTYLE"
+        ],
+        "info": {
+            "en-US": {
+                "title": "DiningDealz",
+                "subtitle": "Find local food & drink deals",
+                "description": "DiningDealz helps you find local happy hours, food deals, daily specials, and limited-time discounts across Ventura, Oxnard, and Camarillo, California.\n\nBrowse nearby restaurants, bars, cafes, shops, and attractions. Search by city or venue type, explore deals on a map or in a list, and open a place profile for hours, addresses, contact details, photos, and current offers.\n\nCreate an account to save favorite businesses and receive updates. Business owners can create a business account, manage their profile, share offers, and connect with customers.\n\nListings and offers can change. Confirm details with the business before you visit.",
+                "keywords": [
+                    "happy hour",
+                    "food deals",
+                    "restaurant deals",
+                    "drink specials",
+                    "daily specials",
+                    "Ventura",
+                    "Oxnard",
+                    "Camarillo"
+                ],
+                "promoText": "Discover local specials, happy hours, and food deals across the 805.",
+                "marketingUrl": "https://www.diningdealz.com/about",
+                "supportUrl": "https://www.diningdealz.com/contact",
+                "privacyPolicyUrl": "https://www.diningdealz.com/privacy",
+                "privacyChoicesUrl": "https://www.diningdealz.com/privacy"
+            }
+        }
+    }
+}
