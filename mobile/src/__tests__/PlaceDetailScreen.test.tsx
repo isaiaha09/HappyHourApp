@@ -96,4 +96,28 @@ describe('PlaceDetailScreen live location messaging', () => {
     expect(screen.getByText('Last known location: Approximate live location near Main Street, CA approximately 5 minutes ago')).toBeTruthy();
     expect(screen.queryByText('View Google Reviews')).toBeNull();
   });
+
+  it('hides the last known location message after a fresh reconnect update', () => {
+    render(
+      <PlaceDetailScreen
+        detailLoading={false}
+        errorMessage={null}
+        favoriteHelperText={null}
+        favoriteSubmitting={false}
+        isLandscape={false}
+        isFavorited={false}
+        locationStatusNow={Date.parse('2026-08-03T17:33:20Z')}
+        onBack={jest.fn()}
+        onSelectLocation={jest.fn()}
+        onToggleFavorite={jest.fn()}
+        selectedPlace={buildPlace({ live_location_updated_at: '2026-08-03T17:33:00Z' })}
+        selectedPlaceDeals={[]}
+        selectedPlaceLocation={null}
+        selectedPlaceOperatingHours={[]}
+        showFavoriteControl={false}
+      />,
+    );
+
+    expect(screen.queryByText(/Last known location:/)).toBeNull();
+  });
 });

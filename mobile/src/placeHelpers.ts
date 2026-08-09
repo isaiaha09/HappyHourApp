@@ -101,6 +101,8 @@ export function getPlaceLocations(place: PlaceListItem | PlaceDetail) {
   return place.locations.length ? place.locations : [place];
 }
 
+const lastKnownLocationStaleAfterMs = 90_000;
+
 export function formatLastKnownLocationLabel(
   updatedAt: string | null | undefined,
   address: string,
@@ -115,7 +117,12 @@ export function formatLastKnownLocationLabel(
     return null;
   }
 
-  const elapsedMinutes = Math.max(1, Math.floor(Math.max(0, now - updatedAtMs) / 60_000));
+  const elapsedMs = Math.max(0, now - updatedAtMs);
+  if (elapsedMs < lastKnownLocationStaleAfterMs) {
+    return null;
+  }
+
+  const elapsedMinutes = Math.max(1, Math.floor(elapsedMs / 60_000));
   if (elapsedMinutes < 60) {
     const minuteLabel = elapsedMinutes === 1 ? 'minute' : 'minutes';
     return `Last known location: ${address} approximately ${elapsedMinutes} ${minuteLabel} ago`;

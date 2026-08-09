@@ -294,12 +294,20 @@ describe('formatPlaceAddress', () => {
 });
 
 describe('formatLastKnownLocationLabel', () => {
-  it('formats recent locations in minutes', () => {
+  it('formats stale locations in minutes', () => {
     expect(formatLastKnownLocationLabel(
       '2026-08-03T17:28:20Z',
       'Approximate live location near Main Street, CA',
       Date.parse('2026-08-03T17:33:20Z'),
     )).toBe('Last known location: Approximate live location near Main Street, CA approximately 5 minutes ago');
+  });
+
+  it('omits the label while a location update is still fresh', () => {
+    expect(formatLastKnownLocationLabel(
+      '2026-08-03T17:33:00Z',
+      'Approximate live location near Main Street, CA',
+      Date.parse('2026-08-03T17:33:20Z'),
+    )).toBeNull();
   });
 
   it('formats older locations in hours', () => {
