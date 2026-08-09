@@ -314,26 +314,10 @@ jest.mock('react-native-maps', () => {
     return <Pressable onPress={onPress} style={style} testID="mock-map-marker">{children}</Pressable>;
   };
 
-  class AnimatedRegion {
-    constructor(value: { latitude: number; longitude: number }) {
-      Object.assign(this, value);
-    }
-
-    stopAnimation() {}
-
-    timing() {
-      return {
-        start() {},
-      };
-    }
-  }
-
   return {
     __esModule: true,
     default: MapView,
     Marker,
-    MarkerAnimated: Marker,
-    AnimatedRegion,
     __mock: {
       animateToRegionMock,
       initialRegionMock,
@@ -1186,6 +1170,71 @@ describe('App browse map search', () => {
         startAnimatingNodeMock.mockReset();
       }
     }
+  });
+
+  it('preserves browse filters after leaving and returning to the authenticated map', async () => {
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    fireEvent.press(screen.getByLabelText('Open customer login'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    fireEvent.press(screen.getByLabelText('Submit login'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(await screen.findByText('Dashboard screen')).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('Open places'));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    fireEvent.press(screen.getByLabelText('Open map'));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    fireEvent.press(screen.getByTestId('browse-filters-toggle'));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+
+    fireEvent.press(screen.getByTestId('browse-confirmed-deals-filter'));
+    fireEvent.press(screen.getByTestId('browse-city-filter-camarillo'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+
+    expect(screen.getByTestId('browse-summary-label').props.children).toBe('Camarillo');
+
+    fireEvent.press(screen.getByLabelText('Open profile'));
+    expect(await screen.findByText('Dashboard screen')).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('Open places'));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(screen.getByTestId('browse-summary-label').props.children).toBe('Camarillo');
   });
 
   it('returns to the login screen after logout and restores the previous guest map without restarting splash', async () => {

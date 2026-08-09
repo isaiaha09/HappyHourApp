@@ -423,7 +423,7 @@ export function BrowseControls({
 
         <View style={[styles.browseStatsRow, compactLandscapeControls ? styles.browseStatsRowLandscape : null]}>
           <Text style={styles.browseStatsText}>{resultCount} {resultCount === 1 ? 'place' : 'places'}</Text>
-          <Text numberOfLines={1} style={styles.browseStatsSubtleText}>
+          <Text numberOfLines={1} style={styles.browseStatsSubtleText} testID="browse-summary-label">
             {getBrowseSummaryLabel(selectedCity, selectedVenueTypes, normalizedSearchQuery, {
               confirmedDealsOnly,
               informalBusinessesOnly,
@@ -468,6 +468,7 @@ export function BrowseControls({
                     key={filter.value}
                     onPress={() => onSelectCity(filter.value)}
                     style={[chipStyle, isActive ? chipActiveStyle : null]}
+                    testID={`browse-city-filter-${filter.value}`}
                   >
                     <Text style={[chipTextStyle, isActive ? chipTextActiveStyle : null]}>{filter.label}</Text>
                   </Pressable>
@@ -514,6 +515,7 @@ export function BrowseControls({
               <Pressable
                 onPress={onToggleConfirmedDealsOnly}
                 style={[chipStyle, confirmedDealsOnly ? chipActiveStyle : null]}
+                testID="browse-confirmed-deals-filter"
               >
                 <Text style={[chipTextStyle, confirmedDealsOnly ? chipTextActiveStyle : null]}>Confirmed Happy Hours & Deals</Text>
               </Pressable>
