@@ -124,25 +124,12 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     CGSize(width: UIView.noIntrinsicMetric, height: 52 + CGFloat(truncating: bottomInset))
   }
 
-  override func layoutSubviews() {
-    super.layoutSubviews()
-    clearTabViewBackingBackgrounds(in: hostingController.view)
-    DispatchQueue.main.async { [weak self] in
-      guard let self else { return }
-      self.clearTabViewBackingBackgrounds(in: self.hostingController.view)
-    }
-  }
-
   private func setupView() {
     backgroundColor = .clear
     isOpaque = false
-    clipsToBounds = true
-    layer.allowsGroupOpacity = true
 
     hostingController.view.backgroundColor = .clear
     hostingController.view.isOpaque = false
-    hostingController.view.clipsToBounds = true
-    hostingController.view.layer.allowsGroupOpacity = true
     hostingController.view.translatesAutoresizingMaskIntoConstraints = false
     addSubview(hostingController.view)
 
@@ -188,21 +175,6 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
         }
       }
     )
-
-    DispatchQueue.main.async { [weak self] in
-      guard let self else { return }
-      self.clearTabViewBackingBackgrounds(in: self.hostingController.view)
-    }
-  }
-
-  private func clearTabViewBackingBackgrounds(in view: UIView) {
-    if view is UITabBar || view is UIVisualEffectView {
-      return
-    }
-
-    view.backgroundColor = .clear
-    view.isOpaque = false
-    view.subviews.forEach(clearTabViewBackingBackgrounds)
   }
 
   private var resolvedThemeVariant: DiningDealzLiquidGlassThemeVariant {
@@ -291,10 +263,6 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     moreOpen ? .more : activeItem
   }
 
-  private var shouldHideSystemTabBarBackground: Bool {
-    items.contains(where: { $0.item == .home })
-  }
-
   private var accentColor: Color {
     Color(red: 1, green: 0.3, blue: 0.38)
   }
@@ -310,11 +278,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
         }
       }
     }
-    .background(Color.clear)
-    .toolbarBackground(shouldHideSystemTabBarBackground ? .hidden : .visible, for: .tabBar)
-    .tabViewStyle(.tabBarOnly)
     .tint(accentColor)
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
   }
 }
 
