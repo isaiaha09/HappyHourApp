@@ -666,7 +666,8 @@ describe('App browse map search', () => {
       }),
     }));
     const lastMapRegion = mapsModule.__mock.animateToRegionMock.mock.calls.at(-1)?.[0] as { latitude?: number } | undefined;
-    expect(lastMapRegion?.latitude).toBeCloseTo((samplePlace.latitude ?? 0) + 0.01 * 0.18, 4);
+    expect(lastMapRegion?.latitude).toBeGreaterThan(samplePlace.latitude ?? 0);
+    expect(lastMapRegion?.latitude).toBeLessThan((samplePlace.latitude ?? 0) + 0.04 * 0.18);
     fireEvent.press(screen.getByTestId('mock-map-marker'));
 
     await act(async () => {

@@ -173,8 +173,8 @@ const mapAreaBounds = {
   minLongitude: -119.55,
   maxLongitude: -118.85,
 };
-const minLatitudeDelta = 0.01;
-const minLongitudeDelta = 0.01;
+const minLatitudeDelta = 0.003;
+const minLongitudeDelta = 0.003;
 const maxLatitudeDelta = 0.24;
 const maxLongitudeDelta = 0.32;
 const maxMapGestureDelta = Math.hypot(maxLatitudeDelta, maxLongitudeDelta);
