@@ -884,6 +884,94 @@ describe('App browse map search', () => {
     expect(screen.queryByTestId('incoming-onboarding-screen')).toBeNull();
   });
 
+  it('restores guest chrome after completing an auth back swipe to the map', async () => {
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    fireEvent.press(screen.getByLabelText('Open customer login'));
+    expect(screen.getByText('Auth screen')).toBeTruthy();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    const swipeHandler = screen.getAllByTestId('mock-pan-gesture-handler').find((handler) => handler.props.enabled);
+    expect(swipeHandler).toBeDefined();
+
+    act(() => {
+      swipeHandler?.props.onGestureEvent({ nativeEvent: { translationX: 240 } });
+      swipeHandler?.props.onHandlerStateChange({
+        nativeEvent: {
+          oldState: 4,
+          state: 5,
+          translationX: 240,
+          velocityX: 0,
+        },
+      });
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 360));
+    });
+
+    expect(screen.getByTestId('browse-search-input')).toBeTruthy();
+    expect(screen.getByText('Customer')).toBeTruthy();
+    expect(screen.getByText('Sign Up')).toBeTruthy();
+    expect(screen.getByText('Business')).toBeTruthy();
+  });
+
+  it('restores guest chrome after completing a sign-up back swipe to the map', async () => {
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    fireEvent.press(screen.getByLabelText('Create a free account'));
+    expect(screen.getByText('Create profile screen')).toBeTruthy();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    const swipeHandler = screen.getAllByTestId('mock-pan-gesture-handler').find((handler) => handler.props.enabled);
+    expect(swipeHandler).toBeDefined();
+
+    act(() => {
+      swipeHandler?.props.onGestureEvent({ nativeEvent: { translationX: 240 } });
+      swipeHandler?.props.onHandlerStateChange({
+        nativeEvent: {
+          oldState: 4,
+          state: 5,
+          translationX: 240,
+          velocityX: 0,
+        },
+      });
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 360));
+    });
+
+    expect(screen.getByTestId('browse-search-input')).toBeTruthy();
+    expect(screen.getByText('Customer')).toBeTruthy();
+    expect(screen.getByText('Sign Up')).toBeTruthy();
+    expect(screen.getByText('Business')).toBeTruthy();
+  });
+
   it('renders map pins only after the splash-to-map fade completes', async () => {
     const startAnimatingNodeMock = NativeModules.NativeAnimatedModule.startAnimatingNode as jest.Mock;
     const originalStartAnimatingNode = startAnimatingNodeMock.getMockImplementation();
