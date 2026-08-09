@@ -604,6 +604,7 @@ function AppScreen() {
   const authIntroOpacity = useRef(new Animated.Value(1)).current;
   const loginSuccessTransition = useRef(new Animated.Value(1)).current;
   const loginSuccessNativeBottomNavReveal = useRef(new Animated.Value(1)).current;
+  const guestChromeFadeInOpacity = useRef(new Animated.Value(1)).current;
   const screenTransition = useRef(new Animated.Value(1)).current;
   const profileSceneTransition = useRef(new Animated.Value(1)).current;
   const browseSceneTransition = useRef(new Animated.Value(1)).current;
@@ -662,6 +663,7 @@ function AppScreen() {
   const [guestBrowseModeLocked, setGuestBrowseModeLocked] = useState(false);
   const [guestOnboardingOrigin, setGuestOnboardingOrigin] = useState<'browse' | 'splash' | null>(null);
   const [guestChromeMountVersion, setGuestChromeMountVersion] = useState(0);
+  const [guestChromeFadeInActive, setGuestChromeFadeInActive] = useState(false);
   const [showGuestFavoritePrompt, setShowGuestFavoritePrompt] = useState(false);
   const [showGuestBusinessClaimPrompt, setShowGuestBusinessClaimPrompt] = useState(false);
   const [showGuestAccuracyPrompt, setShowGuestAccuracyPrompt] = useState(false);
@@ -2090,6 +2092,9 @@ function AppScreen() {
           : currentOnboardingScreen !== null && guestOnboardingOrigin === 'browse'
             ? 0
             : 1;
+  const resolvedGuestBrowseNativeChromeOpacity = guestChromeFadeInActive
+    ? guestChromeFadeInOpacity
+    : guestBrowseNativeChromeOpacity;
   const mainShellOutgoingStyle = {
     transform: [
       {
@@ -2967,6 +2972,9 @@ function AppScreen() {
     }
 
     if (nextScreen === 'browse' && !authenticatedSession) {
+      guestChromeFadeInOpacity.stopAnimation();
+      guestChromeFadeInOpacity.setValue(0);
+      setGuestChromeFadeInActive(true);
       setGuestOnboardingOrigin(null);
       setGuestChromeMountVersion((current) => current + 1);
     }
@@ -4030,6 +4038,28 @@ function AppScreen() {
     });
   }, [browseMode, browseModeTransition]);
 
+  useEffect(() => {
+    if (!guestChromeFadeInActive) {
+      return;
+    }
+
+    guestChromeFadeInOpacity.stopAnimation();
+    guestChromeFadeInOpacity.setValue(0);
+    Animated.timing(guestChromeFadeInOpacity, {
+      duration: onboardingTransitionDuration,
+      toValue: 1,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) {
+        setGuestChromeFadeInActive(false);
+      }
+    });
+
+    return () => {
+      guestChromeFadeInOpacity.stopAnimation();
+    };
+  }, [guestChromeFadeInActive, guestChromeFadeInOpacity, onboardingTransitionDuration]);
+
   function handleRefreshPlaces() {
     animateNextLayout();
     setErrorMessage(null);
@@ -4496,6 +4526,9 @@ function AppScreen() {
 
   function handleOpenProfiles() {
     dismissKeyboardForScreenTransition();
+    guestChromeFadeInOpacity.stopAnimation();
+    guestChromeFadeInOpacity.setValue(1);
+    setGuestChromeFadeInActive(false);
     const openingFromGuestBrowse = !authenticatedSession && screenMode === 'browse' && !selectedPlaceSlug;
     setGuestOnboardingOrigin(openingFromGuestBrowse ? 'browse' : 'splash');
     if (!openingFromGuestBrowse) {
@@ -4520,6 +4553,9 @@ function AppScreen() {
 
   function handleOpenAuthFromLanding(portal: AuthPortal) {
     dismissKeyboardForScreenTransition();
+    guestChromeFadeInOpacity.stopAnimation();
+    guestChromeFadeInOpacity.setValue(1);
+    setGuestChromeFadeInActive(false);
     const openingFromGuestBrowse = !authenticatedSession && screenMode === 'browse' && !selectedPlaceSlug;
     setGuestOnboardingOrigin(openingFromGuestBrowse ? 'browse' : 'splash');
     if (!openingFromGuestBrowse) {
@@ -6699,9 +6735,9 @@ function AppScreen() {
         >
           {renderBrowseScreen({
             guestChrome: true,
-            guestChromeActionOpacity: nativeGuestChrome ? guestBrowseNativeChromeOpacity : 1,
+            guestChromeActionOpacity: nativeGuestChrome ? resolvedGuestBrowseNativeChromeOpacity : 1,
             guestChromeInteractive: guestChromeInteractive && !selectedPlaceSlug,
-            guestChromeHeaderOpacity: nativeGuestChrome ? guestBrowseNativeChromeOpacity : 1,
+            guestChromeHeaderOpacity: nativeGuestChrome ? resolvedGuestBrowseNativeChromeOpacity : 1,
             guestChromeLogoOpacity: nativeGuestChrome && guestToBrowseTransition ? 0 : guestBrowseHeaderLogoOpacity,
             suppressBrowseSceneTransitionStyle: true,
             suppressScreenTransitionStyle: true,
