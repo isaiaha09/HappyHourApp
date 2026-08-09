@@ -291,6 +291,10 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     moreOpen ? .more : activeItem
   }
 
+  private var shouldHideSystemTabBarBackground: Bool {
+    items.contains(where: { $0.item == .home })
+  }
+
   private var accentColor: Color {
     Color(red: 1, green: 0.3, blue: 0.38)
   }
@@ -307,6 +311,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
       }
     }
     .background(Color.clear)
+    .toolbarBackground(shouldHideSystemTabBarBackground ? .hidden : .visible, for: .tabBar)
     .tabViewStyle(.tabBarOnly)
     .tint(accentColor)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
