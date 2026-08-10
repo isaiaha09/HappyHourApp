@@ -21,7 +21,7 @@
         "ITSAppUsesNonExemptEncryption": false
       },
       "requireFullScreen": true,
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.ia09.diningdealz"
     },
     "android": {
