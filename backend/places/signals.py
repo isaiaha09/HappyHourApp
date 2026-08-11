@@ -6,6 +6,23 @@ from .services.media_storage import delete_removed_storage_references, delete_st
 from .services.source_listings import invalidate_source_place_payload_cache
 
 
+LIVE_LOCATION_SNAPSHOT_FIELDS = {
+	'tracked_location_latitude',
+	'tracked_location_longitude',
+	'tracked_location_address_line_1',
+	'tracked_location_city_label',
+	'tracked_location_accuracy_meters',
+	'tracked_location_updated_at',
+	'updated_at',
+}
+
+
+def _is_only_live_location_update(update_fields, allowed_fields):
+	if update_fields is None:
+		return False
+	return set(update_fields).issubset(allowed_fields)
+
+
 @receiver(pre_save, sender=BusinessClaim)
 def capture_previous_business_claim_photo_references(sender, instance, **kwargs):
 	if not instance.pk:
@@ -38,7 +55,9 @@ def cleanup_deleted_business_claim_photo_references(sender, instance, **kwargs):
 
 
 @receiver(post_save, sender=ListingSnapshot)
-def invalidate_listing_snapshot_place_payload_cache_on_save(sender, instance, **kwargs):
+def invalidate_listing_snapshot_place_payload_cache_on_save(sender, instance, created, update_fields=None, **kwargs):
+	if not created and _is_only_live_location_update(update_fields, LIVE_LOCATION_SNAPSHOT_FIELDS):
+		return
 	invalidate_source_place_payload_cache(invalidate_all=True)
 
 
@@ -68,7 +87,9 @@ def invalidate_business_membership_place_payload_cache_on_delete(sender, instanc
 
 
 @receiver(post_save, sender=AccountProfile)
-def invalidate_account_profile_place_payload_cache_on_save(sender, instance, **kwargs):
+def invalidate_account_profile_place_payload_cache_on_save(sender, instance, created, update_fields=None, **kwargs):
+	if not created and _is_only_live_location_update(update_fields, {'business_location_tracking_enabled', 'updated_at'}):
+		return
 	invalidate_source_place_payload_cache(invalidate_all=True)
 
 

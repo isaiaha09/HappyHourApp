@@ -3,8 +3,9 @@ import mimetypes
 
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.core.cache import caches
 from django.core.files.storage import default_storage
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import Q
 from django.http import FileResponse, Http404, HttpResponse
 from django.urls import reverse
@@ -65,7 +66,7 @@ from .services.favorite_notifications import create_notifications_for_business_p
 from .services.direct_message_push import send_push_notifications_for_direct_message
 from .services.home_feed import get_feed_interval, get_feed_queryset, get_organic_page_size, get_ranked_campaigns, get_requested_feed_page_size, mix_feed_items, record_campaign_served
 from .services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
-from .services.source_listings import get_deleted_business_snapshot_ids, get_disabled_live_location_slugs, get_live_location_display_fields, get_source_deal_payloads, get_source_place_payload, get_source_place_payloads, invalidate_source_place_payload_cache, is_live_location_tracking_enabled_for_snapshot, load_source_records, reverse_geocode_tracked_location
+from .services.source_listings import get_deleted_business_snapshot_ids, get_disabled_live_location_slugs, get_live_location_display_fields, get_source_deal_payloads, get_source_place_payload, get_source_place_payloads, is_live_location_tracking_enabled_for_snapshot, load_source_records
 from .throttles import DirectMessageSendRateThrottle, EmailVerificationRateThrottle, EmailVerificationResendRateThrottle, LoginRateThrottle, PasswordRecoveryRateThrottle, SignupRateThrottle, SupportContactRateThrottle, UserMutationRateThrottle
 
 
@@ -271,7 +272,55 @@ def _build_direct_message_item_payload(message, request=None):
 
 class HealthCheckView(APIView):
 	def get(self, request):
-		return Response({'status': 'ok', 'service': 'happyhour-backend'})
+		dependencies = {
+			'database': self._check_database(),
+			'redis': self._check_redis(),
+		}
+		is_healthy = all(
+			dependency['status'] == 'ok'
+			or dependency['status'] == 'not_configured' and not dependency.get('required', False)
+			for dependency in dependencies.values()
+		)
+		return Response(
+			{
+				'status': 'ok' if is_healthy else 'degraded',
+				'service': 'happyhour-backend',
+				'dependencies': dependencies,
+			},
+			status=status.HTTP_200_OK if is_healthy else status.HTTP_503_SERVICE_UNAVAILABLE,
+		)
+
+	def _check_database(self):
+		try:
+			with connection.cursor() as cursor:
+				cursor.execute('SELECT 1')
+				cursor.fetchone()
+			return {'status': 'ok', 'backend': connection.vendor}
+		except Exception:
+			logger.exception('Health check database dependency failed.')
+			return {'status': 'error', 'backend': connection.vendor}
+
+	def _check_redis(self):
+		redis_configured = bool(str(getattr(settings, 'REDIS_URL', '') or '').strip())
+		redis_required = redis_configured or bool(getattr(settings, 'IS_RENDER', False))
+		if not redis_configured:
+			return {'status': 'not_configured', 'required': redis_required}
+
+		cache = caches['default']
+		cache_key = f'health-check:{uuid4().hex}'
+		try:
+			cache.set(cache_key, 'ok', 5)
+			if cache.get(cache_key) != 'ok':
+				raise RuntimeError('Redis health-check value did not round-trip.')
+			return {'status': 'ok', 'required': True}
+		except Exception:
+			logger.exception('Health check Redis dependency failed.')
+			return {'status': 'error', 'required': True}
+		finally:
+			try:
+				cache.delete(cache_key)
+			except Exception:
+				pass
 
 
 class DiscoveryEnrichmentStatusView(APIView):
@@ -961,18 +1010,15 @@ class BusinessLocationUpdateView(generics.GenericAPIView):
 		if not get_or_create_account_profile(request.user).business_location_tracking_enabled:
 			return Response({'detail': 'Turn on location services in settings before sending live business location updates.'}, status=status.HTTP_400_BAD_REQUEST)
 
-		snapshot.tracked_location_latitude = serializer.validated_data['latitude']
-		snapshot.tracked_location_longitude = serializer.validated_data['longitude']
-		live_location_display = reverse_geocode_tracked_location(
-			snapshot.tracked_location_latitude,
-			snapshot.tracked_location_longitude,
-		)
-		snapshot.tracked_location_address_line_1 = live_location_display['address_line_1'] if live_location_display else ''
-		snapshot.tracked_location_city_label = live_location_display['city_label'] if live_location_display else ''
-		snapshot.tracked_location_accuracy_meters = serializer.validated_data.get('accuracy_meters')
-		snapshot.tracked_location_updated_at = timezone.now()
-		snapshot.save(update_fields=['tracked_location_latitude', 'tracked_location_longitude', 'tracked_location_address_line_1', 'tracked_location_city_label', 'tracked_location_accuracy_meters', 'tracked_location_updated_at', 'updated_at'])
-		invalidate_source_place_payload_cache()
+		now = timezone.now()
+		with transaction.atomic():
+			snapshot.tracked_location_latitude = serializer.validated_data['latitude']
+			snapshot.tracked_location_longitude = serializer.validated_data['longitude']
+			snapshot.tracked_location_address_line_1 = ''
+			snapshot.tracked_location_city_label = ''
+			snapshot.tracked_location_accuracy_meters = serializer.validated_data.get('accuracy_meters')
+			snapshot.tracked_location_updated_at = now
+			snapshot.save(update_fields=['tracked_location_latitude', 'tracked_location_longitude', 'tracked_location_address_line_1', 'tracked_location_city_label', 'tracked_location_accuracy_meters', 'tracked_location_updated_at', 'updated_at'])
 
 		return Response(build_account_response(request.user, 'business', token=request.auth))
 
@@ -1007,7 +1053,6 @@ class BusinessLocationTrackingPreferenceView(generics.GenericAPIView):
 			snapshot.tracked_location_accuracy_meters = None
 			snapshot.tracked_location_updated_at = None
 			snapshot.save(update_fields=['tracked_location_latitude', 'tracked_location_longitude', 'tracked_location_address_line_1', 'tracked_location_city_label', 'tracked_location_accuracy_meters', 'tracked_location_updated_at', 'updated_at'])
-		invalidate_source_place_payload_cache()
 
 		return Response(build_account_response(request.user, 'business', token=request.auth))
 

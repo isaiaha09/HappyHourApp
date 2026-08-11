@@ -175,6 +175,37 @@ class PlaceApiTests(APITestCase):
 
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response.json()['status'], 'ok')
+		self.assertEqual(response.json()['dependencies']['database']['status'], 'ok')
+		self.assertEqual(response.json()['dependencies']['redis']['status'], 'not_configured')
+
+	@override_settings(IS_RENDER=True, REDIS_URL='')
+	def test_health_endpoint_requires_redis_on_render(self):
+		response = self.client.get(reverse('health-check'))
+
+		self.assertEqual(response.status_code, 503)
+		self.assertEqual(response.json()['status'], 'degraded')
+		self.assertEqual(response.json()['dependencies']['redis']['status'], 'not_configured')
+		self.assertTrue(response.json()['dependencies']['redis']['required'])
+
+	@patch('places.views.connection.cursor', side_effect=RuntimeError('database unavailable'))
+	def test_health_endpoint_reports_database_failure_without_exception_details(self, mock_cursor):
+		response = self.client.get(reverse('health-check'))
+
+		self.assertEqual(response.status_code, 503)
+		self.assertEqual(response.json()['dependencies']['database']['status'], 'error')
+		self.assertNotIn('database unavailable', response.content.decode())
+
+	@override_settings(REDIS_URL='redis://configured.example.com:6379/0')
+	def test_health_endpoint_reports_redis_failure_without_secret(self):
+		broken_cache = MagicMock()
+		broken_cache.set.side_effect = RuntimeError('redis unavailable')
+
+		with patch('places.views.caches', {'default': broken_cache}):
+			response = self.client.get(reverse('health-check'))
+
+		self.assertEqual(response.status_code, 503)
+		self.assertEqual(response.json()['dependencies']['redis']['status'], 'error')
+		self.assertNotIn('configured.example.com', response.content.decode())
 
 	def test_place_list_endpoint(self):
 		with patch('places.views.get_source_place_payloads', return_value=[self.place_payload]):
@@ -4604,6 +4635,43 @@ class SourceFetchCacheTests(TestCase):
 		self.assertEqual(refreshed_payloads[0]['name'], 'Cache Place 2')
 		self.assertEqual(DummyPayloadImporter.call_count, 2)
 
+	def test_cached_claimed_mobile_payload_overlays_latest_coordinates_without_source_rebuild(self):
+		user = User.objects.create_user(username='cached_mobile_owner', email='cached-mobile@example.com', password='test-pass-123')
+		AccountProfile.objects.create(user=user)
+		snapshot = ListingSnapshot.objects.create(
+			name='Cache Truck',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+			tracked_location_latitude=34.2701,
+			tracked_location_longitude=-119.2801,
+			tracked_location_updated_at=timezone.now(),
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=user,
+			listing_snapshot=snapshot,
+			contact_name='Cache Owner',
+			work_email='owner@cache-truck.example.com',
+			verification_summary='I operate this truck.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(user=user, claim=claim, is_active=True)
+
+		with patch('places.services.source_listings.load_source_records', return_value=[]) as mock_load_source_records:
+			first_payload = get_source_place_payloads(resolve_missing_coordinates=False)[0]
+			snapshot.tracked_location_latitude = 34.2802
+			snapshot.tracked_location_longitude = -119.2902
+			snapshot.tracked_location_updated_at = timezone.now()
+			snapshot.save(update_fields=['tracked_location_latitude', 'tracked_location_longitude', 'tracked_location_updated_at', 'updated_at'])
+			second_payload = get_source_place_payloads(resolve_missing_coordinates=False)[0]
+
+		self.assertEqual(first_payload['latitude'], 34.2701)
+		self.assertEqual(second_payload['latitude'], 34.2802)
+		self.assertEqual(second_payload['longitude'], -119.2902)
+		self.assertEqual(second_payload['locations'][0]['latitude'], 34.2802)
+		self.assertEqual(second_payload['locations'][0]['longitude'], -119.2902)
+		mock_load_source_records.assert_called_once_with(source_name=None)
+
 
 @override_settings(
 	EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
@@ -7546,22 +7614,7 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(self.profile.previous_verified_email, '')
 		self.assertIsNone(self.profile.email_change_requested_at)
 
-	@patch('places.services.source_listings.requests.get')
-	def test_business_location_update_updates_mobile_snapshot(self, mock_geocode_get):
-		geocode_response = MagicMock()
-		geocode_response.json.return_value = {
-			'address': {
-				'city': 'Ventura',
-				'road': 'Main Street',
-			},
-		}
-		geocode_response.raise_for_status.return_value = None
-		forward_geocode_response = MagicMock()
-		forward_geocode_response.json.return_value = []
-		forward_geocode_response.raise_for_status.return_value = None
-		mock_geocode_get.side_effect = lambda url, **kwargs: (
-			geocode_response if url.endswith('/reverse') else forward_geocode_response
-		)
+	def test_business_location_update_updates_mobile_snapshot_with_approximate_label(self):
 		snapshot = ListingSnapshot.objects.create(
 			name='Scoops Truck',
 			city=City.VENTURA,
@@ -7591,15 +7644,17 @@ class ProfileDashboardApiTests(APITestCase):
 		snapshot.refresh_from_db()
 		self.assertEqual(snapshot.tracked_location_latitude, 34.2812)
 		self.assertEqual(snapshot.tracked_location_longitude, -119.2944)
-		self.assertEqual(snapshot.tracked_location_address_line_1, 'Approximate live location near Main Street')
-		self.assertEqual(snapshot.tracked_location_city_label, 'Ventura')
+		self.assertEqual(snapshot.tracked_location_address_line_1, '')
+		self.assertEqual(snapshot.tracked_location_city_label, '')
 		self.assertEqual(snapshot.tracked_location_accuracy_meters, 35.5)
 		self.assertTrue(response.data['requires_business_location_tracking'])
 
 		payload = get_source_place_payload(snapshot.listing_slug)
-		self.assertEqual(payload['address_line_1'], 'Approximate live location near Main Street')
+		self.assertEqual(payload['latitude'], 34.2812)
+		self.assertEqual(payload['longitude'], -119.2944)
+		self.assertEqual(payload['address_line_1'], 'Approximate live location')
 		self.assertEqual(payload['city_label'], 'Ventura')
-		self.assertEqual(payload['locations'][0]['address_line_1'], 'Approximate live location near Main Street')
+		self.assertEqual(payload['locations'][0]['address_line_1'], 'Approximate live location')
 		self.assertEqual(payload['locations'][0]['city_label'], 'Ventura')
 
 	def test_business_location_update_rejects_when_tracking_is_disabled(self):

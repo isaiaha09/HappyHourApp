@@ -169,7 +169,9 @@ def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_
 	)
 	cached_payloads = cache.get(cache_key)
 	if cached_payloads is not None:
-		return _suppress_deleted_business_payloads(_suppress_disabled_live_location_payloads(deepcopy(cached_payloads)))
+		cached_payloads = deepcopy(cached_payloads)
+		_apply_current_live_location_state(cached_payloads)
+		return _suppress_deleted_business_payloads(_suppress_disabled_live_location_payloads(cached_payloads))
 
 	payloads_by_slug = {}
 	snapshot_overrides_by_slug = _get_listing_snapshot_override_payloads()
@@ -251,10 +253,99 @@ def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_
 	sorted_payloads = _suppress_deleted_business_payloads(
 		_suppress_disabled_live_location_payloads(sorted(payloads, key=lambda payload: (payload['name'], payload['city_label'])))
 	)
+	_apply_current_live_location_state(sorted_payloads)
+	sorted_payloads = _suppress_deleted_business_payloads(_suppress_disabled_live_location_payloads(sorted_payloads))
 	cache_timeout = _get_source_place_payload_cache_timeout()
 	if cache_timeout and cache_timeout > 0:
 		cache.set(cache_key, deepcopy(sorted_payloads), cache_timeout)
 	return sorted_payloads
+
+
+def _apply_current_live_location_state(payloads):
+	if not payloads:
+		return payloads
+
+	disabled_slugs = get_disabled_live_location_slugs()
+	snapshots_by_alias = {}
+	snapshots_by_location_id = {}
+	for snapshot in ListingSnapshot.objects.filter(
+		Q(venue_type=VenueType.MOBILE) | Q(serves_multiple_areas=True),
+	).only(
+		'name',
+		'city',
+		'venue_type',
+		'serves_multiple_areas',
+		'address_line_1',
+		'listing_slug',
+		'source_name',
+		'external_id',
+		'tracked_location_latitude',
+		'tracked_location_longitude',
+		'tracked_location_address_line_1',
+		'tracked_location_city_label',
+		'tracked_location_updated_at',
+	).order_by('-tracked_location_updated_at', '-pk'):
+		for alias in _get_live_location_snapshot_aliases(snapshot):
+			if alias and alias not in snapshots_by_alias:
+				snapshots_by_alias[alias] = snapshot
+		for source_name in (snapshot.source_name, 'claimed_business', BusinessClaim.ADMIN_SOURCE_NAME):
+			location_id = _stable_numeric_id(
+				source_name,
+				snapshot.external_id or snapshot.listing_slug,
+				snapshot.name,
+				snapshot.city,
+			)
+			snapshots_by_location_id.setdefault(location_id, snapshot)
+
+	for payload in payloads:
+		matched_location_snapshots = {}
+		for location in payload.get('locations', []):
+			snapshot = snapshots_by_location_id.get(location.get('id')) or snapshots_by_alias.get(location.get('slug'))
+			if snapshot is None:
+				continue
+			matched_location_snapshots[location.get('id')] = snapshot
+			_apply_live_location_snapshot_to_mapping(location, snapshot, disabled_slugs)
+
+		snapshot = snapshots_by_alias.get(payload.get('slug'))
+		if snapshot is None:
+			primary_location = next(
+				(location for location in payload.get('locations', []) if location.get('city') == payload.get('city')),
+				None,
+			)
+			if primary_location is not None:
+				snapshot = matched_location_snapshots.get(primary_location.get('id'))
+		if snapshot is not None:
+			_apply_live_location_snapshot_to_mapping(payload, snapshot, disabled_slugs)
+
+	return payloads
+
+
+def _get_live_location_snapshot_aliases(snapshot):
+	return {
+		str(getattr(snapshot, 'listing_slug', '') or '').strip(),
+		slugify(f'{snapshot.name}-{snapshot.city}'),
+	}
+
+
+def _apply_live_location_snapshot_to_mapping(mapping, snapshot, disabled_slugs):
+	public_slug = slugify(f'{snapshot.name}-{snapshot.city}')
+	tracking_enabled = snapshot.listing_slug not in disabled_slugs and public_slug not in disabled_slugs
+	latitude = getattr(snapshot, 'tracked_location_latitude', None)
+	longitude = getattr(snapshot, 'tracked_location_longitude', None)
+	if not tracking_enabled or latitude is None or longitude is None:
+		mapping['latitude'] = None
+		mapping['longitude'] = None
+		mapping['live_location_updated_at'] = None
+		mapping['address_line_1'] = snapshot.address_line_1 or mapping.get('address_line_1', '')
+		mapping['city_label'] = _label_for_choice(City, snapshot.city) if snapshot.city else mapping.get('city_label', '')
+		return
+
+	mapping['latitude'] = latitude
+	mapping['longitude'] = longitude
+	mapping['live_location_updated_at'] = getattr(snapshot, 'tracked_location_updated_at', None)
+	display_fields = get_live_location_display_fields(snapshot)
+	if display_fields:
+		mapping.update(display_fields)
 
 
 def get_disabled_live_location_slugs():
@@ -1326,68 +1417,6 @@ def get_live_location_display_fields(snapshot):
 			_label_for_choice(City, snapshot.city) if snapshot.city else ''
 		),
 	}
-
-
-def reverse_geocode_tracked_location(latitude, longitude):
-	try:
-		latitude = float(latitude)
-		longitude = float(longitude)
-	except (TypeError, ValueError):
-		return None
-
-	cache = caches[getattr(settings, 'PLACE_GEOCODE_CACHE_ALIAS', 'default')]
-	cache_key = f'place-reverse-geocode:{latitude:.3f}:{longitude:.3f}'
-	cached_result = cache.get(cache_key)
-	if cached_result is not None:
-		return cached_result or None
-
-	try:
-		response = requests.get(
-			getattr(settings, 'PLACE_REVERSE_GEOCODE_URL', 'https://nominatim.openstreetmap.org/reverse'),
-			params={
-				'lat': latitude,
-				'lon': longitude,
-				'format': 'jsonv2',
-				'zoom': 18,
-				'addressdetails': 1,
-			},
-			headers={
-				'User-Agent': getattr(settings, 'PLACE_GEOCODE_USER_AGENT', 'HappyHourApp/1.0'),
-			},
-			timeout=getattr(settings, 'PLACE_REVERSE_GEOCODE_TIMEOUT', 3),
-		)
-		response.raise_for_status()
-		payload = response.json()
-	except (requests.RequestException, ValueError, TypeError):
-		return None
-
-	if not isinstance(payload, dict):
-		return None
-
-	address = payload.get('address')
-	if not isinstance(address, dict):
-		return None
-
-	road = next((str(address.get(key) or '').strip() for key in ('road', 'pedestrian', 'footway') if str(address.get(key) or '').strip()), '')
-	city_label = next((str(address.get(key) or '').strip() for key in ('city', 'town', 'village', 'municipality') if str(address.get(key) or '').strip()), '')
-	neighborhood = next((str(address.get(key) or '').strip() for key in ('neighbourhood', 'suburb') if str(address.get(key) or '').strip()), '')
-	location_label = road or neighborhood
-	if not location_label and not city_label:
-		return None
-
-	address_line_1 = f'Approximate live location near {location_label}' if location_label else 'Approximate live location'
-	if not road and city_label:
-		address_line_1 = f'{address_line_1}, {city_label}'
-	result = {
-		'address_line_1': address_line_1[:255],
-		'city_label': city_label[:120],
-	}
-	cache.set(
-		cache_key,
-		result,
-		getattr(settings, 'PLACE_REVERSE_GEOCODE_CACHE_TIMEOUT', 3600),
-	)
-	return result
 
 
 def _get_place_coordinates(place_record, resolve_missing=True):

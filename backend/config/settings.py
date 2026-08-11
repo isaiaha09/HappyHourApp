@@ -226,6 +226,8 @@ def _build_discovery_json_path(base_dir, database_config):
 
 
 REDIS_URL = get_env('REDIS_URL', ENV_VALUES, '').strip()
+CACHE_KEY_PREFIX = get_env('CACHE_KEY_PREFIX', ENV_VALUES, 'happyhourapp')
+SOURCE_CACHE_KEY_PREFIX = get_env('SOURCE_CACHE_KEY_PREFIX', ENV_VALUES, f'{CACHE_KEY_PREFIX}-source')
 
 CACHES = {
     'default': {
@@ -233,8 +235,8 @@ CACHES = {
         'LOCATION': 'happyhourapp-default-cache',
     },
     'source_fetch': {
-        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
-        'LOCATION': str(BASE_DIR / '.django_cache' / 'source_fetch'),
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'happyhourapp-source-fetch-cache',
     },
 }
 
@@ -245,7 +247,15 @@ if REDIS_URL:
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
         },
-        'KEY_PREFIX': get_env('CACHE_KEY_PREFIX', ENV_VALUES, 'happyhourapp'),
+        'KEY_PREFIX': CACHE_KEY_PREFIX,
+    }
+    CACHES['source_fetch'] = {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': REDIS_URL,
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        },
+        'KEY_PREFIX': SOURCE_CACHE_KEY_PREFIX,
     }
 
 SOURCE_FETCH_CACHE_ALIAS = 'source_fetch'
@@ -290,9 +300,6 @@ PLACE_GEOCODE_CACHE_TIMEOUT = 86400
 PLACE_GEOCODE_TIMEOUT = 5
 PLACE_GEOCODE_URL = 'https://nominatim.openstreetmap.org/search'
 PLACE_GEOCODE_USER_AGENT = 'HappyHourApp/1.0'
-PLACE_REVERSE_GEOCODE_URL = 'https://nominatim.openstreetmap.org/reverse'
-PLACE_REVERSE_GEOCODE_CACHE_TIMEOUT = 3600
-PLACE_REVERSE_GEOCODE_TIMEOUT = 3
 LISTING_SOURCE_NAME = 'curated_json_places'
 DISCOVERY_JSON_SEED_PATH = BASE_DIR / 'config' / 'discovered_places.json'
 DISCOVERY_JSON_PATH = _build_discovery_json_path(BASE_DIR, DATABASES['default'])

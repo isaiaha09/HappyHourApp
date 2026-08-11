@@ -105,23 +105,6 @@ When running the mobile app against the local backend, you can now choose networ
 
 All commands should be run from `mobile/` after the backend is running with `python manage.py runserver 0.0.0.0:8000`.
 
-### Temporary TestFlight Seed Data Mode
-
-For current TestFlight testing, I am intentionally shipping a built-in mobile seed dataset so first installs can browse business data without requiring a hosted backend.
-
-- The seed file is bundled in the app at `mobile/assets/seeds/places.json`.
-- The mobile app attempts live backend requests first, then falls back to bundled seed data if the backend is unavailable.
-- This is temporary testing behavior and is not the final production architecture.
-
-Before production go-live, these seed-data fallback changes must be removed so all clients use the hosted backend as the single source of truth.
-
-Production cleanup checklist:
-
-- remove fallback imports/usages in `mobile/App.tsx`
-- remove helper module `mobile/src/seededPlaces.ts`
-- remove bundled seed file `mobile/assets/seeds/places.json`
-- confirm mobile app only reads listing data from hosted API endpoints
-
 ### Current Backend Models
 
 The backend currently includes data models for:
@@ -213,7 +196,7 @@ These parts are not built yet:
 - production deployment
 - expanded city coverage outside the first 805 launch area
 - site-specific extraction rules for every business website I want to support reliably
-- a finalized production cache strategy for source fetches and geocoding
+- a finalized production cache strategy for source fetches and static listing coordinate resolution
 
 ## Render Deployment Note
 
@@ -245,7 +228,8 @@ Until then, the current code safely degrades instead of breaking uploads or clai
 The backend already exposes a lightweight health endpoint for uptime checks:
 
 - `GET /api/health/`
-- expected response: `200 {"status":"ok","service":"happyhour-backend"}`
+- expected response: `200` with `status: "ok"` when PostgreSQL and configured Redis are reachable
+- dependency failures return `503` with dependency status fields but no connection strings or provider error details
 
 Recommended monitoring setup:
 
@@ -292,10 +276,13 @@ The backend applies scoped DRF throttles to login, signup, verification-code, pa
 
 For a single local development process, the default in-memory cache is enough. For Render production, set `REDIS_URL` so throttles and cache counters are shared across workers and deploy instances.
 
+When `REDIS_URL` is configured, both Django cache aliases use Redis: the default cache stores throttles and general runtime values, while the `source_fetch` alias stores source responses and normalized listing payloads under a separate key prefix. The listing payload cache does not rebuild on every live-location update; current coordinates are overlaid from PostgreSQL when a cached payload is read.
+
 Recommended production env vars:
 
 - `REDIS_URL=<your-render-redis-internal-url>`
 - optional: `CACHE_KEY_PREFIX=happyhourapp-prod`
+- optional: `SOURCE_CACHE_KEY_PREFIX=happyhourapp-prod-source`
 
 Throttle rates can be tuned without code changes:
 
