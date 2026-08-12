@@ -4155,6 +4155,8 @@ function AppScreen() {
 
   useLayoutEffect(() => {
     if (!browseModeFadePendingRef.current) {
+      browseModeTransition.stopAnimation();
+      browseModeTransition.setValue(browseMode === 'map' ? 1 : 0);
       return;
     }
 
@@ -7245,6 +7247,8 @@ function AppScreen() {
                     minDelta={minLatitudeDelta}
                     userInterfaceStyle={Platform.OS === 'ios' ? (displayedDarkMapMode ? 'dark' : 'light') : undefined}
                     rotateEnabled
+                    scrollEnabled
+                    zoomEnabled
                     mapType="standard"
                     onLayout={(event) => {
                       if (__DEV__) {
@@ -7413,7 +7417,7 @@ function AppScreen() {
                   verifiedBusinessesOnly={verifiedBusinessesOnly}
                 />
 
-                <View style={styles.browseContentStage}>
+                <View pointerEvents={browseMode === 'map' ? 'box-none' : 'auto'} style={styles.browseContentStage}>
                   <Animated.View
                     pointerEvents={browseMode === 'map' ? 'box-none' : 'none'}
                     style={[
