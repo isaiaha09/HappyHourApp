@@ -7246,8 +7246,18 @@ function AppScreen() {
                     userInterfaceStyle={Platform.OS === 'ios' ? (displayedDarkMapMode ? 'dark' : 'light') : undefined}
                     rotateEnabled
                     mapType="standard"
+                    onLayout={(event) => {
+                      if (__DEV__) {
+                        const { height: mapHeight, width: mapWidth } = event.nativeEvent.layout;
+                        console.log(`[MapView] layout ${mapWidth}x${mapHeight}`);
+                      }
+                    }}
                     onPanDrag={Keyboard.dismiss}
                     onMapReady={() => {
+                      if (__DEV__) {
+                        console.log('[MapView] onMapReady');
+                      }
+
                       if (!shouldUseNativeMapBoundaries || !mapRef.current) {
                         return;
                       }
@@ -7256,6 +7266,11 @@ function AppScreen() {
                         { latitude: mapAreaBounds.maxLatitude, longitude: mapAreaBounds.maxLongitude },
                         { latitude: mapAreaBounds.minLatitude, longitude: mapAreaBounds.minLongitude },
                       );
+                    }}
+                    onMapLoaded={() => {
+                      if (__DEV__) {
+                        console.log('[MapView] onMapLoaded');
+                      }
                     }}
                     onRegionChangeComplete={(nextRegion, details) => {
                       const isGesture = !!details?.isGesture;
