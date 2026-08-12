@@ -1,6 +1,7 @@
 import UIKit
 import React
 import SwiftUI
+import Combine
 
 private enum DiningDealzLiquidGlassBottomNavItem: String, CaseIterable, Identifiable {
   case home
@@ -19,6 +20,14 @@ private struct DiningDealzLiquidGlassBottomNavDisplayItem: Identifiable {
   var id: String {
     item.rawValue
   }
+}
+
+private final class DiningDealzLiquidGlassBottomNavState: ObservableObject {
+  @Published var activeItem: DiningDealzLiquidGlassBottomNavItem = .map
+  @Published var bottomInset: CGFloat = 0
+  @Published var items: [DiningDealzLiquidGlassBottomNavDisplayItem] = []
+  @Published var moreOpen = false
+  @Published var themeVariant: DiningDealzLiquidGlassThemeVariant = .defaultDark
 }
 
 @objc(DiningDealzLiquidGlassBottomNavView)
@@ -103,7 +112,9 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     }
   }
 
+  private let state = DiningDealzLiquidGlassBottomNavState()
   private let hostingController = UIHostingController(rootView: AnyView(EmptyView()))
+  private var hasConfiguredRootView = false
 
   private var resolvedActiveItem: DiningDealzLiquidGlassBottomNavItem {
     let preferredItem = DiningDealzLiquidGlassBottomNavItem(rawValue: activeItem as String) ?? .map
@@ -163,31 +174,34 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     let currentMoreOpen = moreOpen
     let currentThemeVariant = resolvedThemeVariant
 
-    hostingController.overrideUserInterfaceStyle = currentThemeVariant.interfaceStyle
+    state.activeItem = currentActiveItem
+    state.bottomInset = currentBottomInset
+    state.items = currentItems
+    state.moreOpen = currentMoreOpen
+    state.themeVariant = currentThemeVariant
 
-    hostingController.rootView = AnyView(
-      Group {
-        if #available(iOS 26.0, *) {
-          DiningDealzLiquidGlassBottomNavContent(
-            activeItem: currentActiveItem,
-            bottomInset: currentBottomInset,
-            items: currentItems,
-            moreOpen: currentMoreOpen,
-            themeVariant: currentThemeVariant,
-            onSelect: handleSelection
-          )
-        } else {
-          DiningDealzLegacyBottomNavContent(
-            activeItem: currentActiveItem,
-            bottomInset: currentBottomInset,
-            items: currentItems,
-            moreOpen: currentMoreOpen,
-            themeVariant: currentThemeVariant,
-            onSelect: handleSelection
-          )
+    if hostingController.overrideUserInterfaceStyle != currentThemeVariant.interfaceStyle {
+      hostingController.overrideUserInterfaceStyle = currentThemeVariant.interfaceStyle
+    }
+
+    if !hasConfiguredRootView {
+      hostingController.rootView = AnyView(
+        Group {
+          if #available(iOS 26.0, *) {
+            DiningDealzLiquidGlassBottomNavContent(
+              state: state,
+              onSelect: handleSelection
+            )
+          } else {
+            DiningDealzLegacyBottomNavContent(
+              state: state,
+              onSelect: handleSelection
+            )
+          }
         }
-      }
-    )
+      )
+      hasConfiguredRootView = true
+    }
 
     DispatchQueue.main.async { [weak self] in
       guard let self else { return }
@@ -280,15 +294,11 @@ private extension String {
 
 @available(iOS 26.0, *)
 private struct DiningDealzLiquidGlassBottomNavContent: View {
-  let activeItem: DiningDealzLiquidGlassBottomNavItem
-  let bottomInset: CGFloat
-  let items: [DiningDealzLiquidGlassBottomNavDisplayItem]
-  let moreOpen: Bool
-  let themeVariant: DiningDealzLiquidGlassThemeVariant
+  @ObservedObject var state: DiningDealzLiquidGlassBottomNavState
   let onSelect: (DiningDealzLiquidGlassBottomNavItem) -> Void
 
   private var selectedTab: DiningDealzLiquidGlassBottomNavItem {
-    moreOpen ? .more : activeItem
+    state.moreOpen ? .more : state.activeItem
   }
 
   private var accentColor: Color {
@@ -300,7 +310,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
       get: { selectedTab },
       set: { onSelect($0) }
     )) {
-      ForEach(items) { displayItem in
+      ForEach(state.items) { displayItem in
         Tab(displayItem.title, systemImage: displayItem.systemImageName, value: displayItem.item) {
           Color.clear
         }
@@ -317,19 +327,15 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
 // MARK: — Legacy Fallback (pre-iOS 26)
 
 private struct DiningDealzLegacyBottomNavContent: View {
-  let activeItem: DiningDealzLiquidGlassBottomNavItem
-  let bottomInset: CGFloat
-  let items: [DiningDealzLiquidGlassBottomNavDisplayItem]
-  let moreOpen: Bool
-  let themeVariant: DiningDealzLiquidGlassThemeVariant
+  @ObservedObject var state: DiningDealzLiquidGlassBottomNavState
   let onSelect: (DiningDealzLiquidGlassBottomNavItem) -> Void
 
   private var displayedActiveItem: DiningDealzLiquidGlassBottomNavItem {
-    moreOpen ? .more : activeItem
+    state.moreOpen ? .more : state.activeItem
   }
 
   private var inactiveForegroundColor: Color {
-    switch themeVariant {
+    switch state.themeVariant {
     case .mapLight:
       return Color(red: 0.14, green: 0.18, blue: 0.25).opacity(0.82)
     case .defaultDark, .mapDark:
@@ -338,7 +344,7 @@ private struct DiningDealzLegacyBottomNavContent: View {
   }
 
   private var selectorFillColor: Color {
-    switch themeVariant {
+    switch state.themeVariant {
     case .mapLight:
       return Color.white.opacity(displayedActiveItem == .map ? 0.5 : 0.22)
     case .defaultDark, .mapDark:
@@ -350,7 +356,7 @@ private struct DiningDealzLegacyBottomNavContent: View {
     VStack(spacing: 0) {
       Spacer(minLength: 0)
       HStack(spacing: 6) {
-        ForEach(items) { displayItem in
+        ForEach(state.items) { displayItem in
           Button {
             onSelect(displayItem.item)
           } label: {
@@ -380,7 +386,7 @@ private struct DiningDealzLegacyBottomNavContent: View {
           .fill(.ultraThinMaterial)
       )
       .padding(.horizontal, 12)
-      .padding(.bottom, max(bottomInset * 0.32, 4))
+      .padding(.bottom, max(state.bottomInset * 0.32, 4))
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     .background(Color.clear)

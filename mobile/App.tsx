@@ -6726,7 +6726,6 @@ function AppScreen() {
             activeItem={activeItem}
             bottomInset={insets.bottom}
             includeHomeItem={!options.guest}
-            key={`authenticated-shell:${bottomNavThemeVariant}:${activeItem}`}
             labels={options.guest ? { map: 'Customer', profile: 'Sign Up', more: 'Business' } : { home: 'Feed' }}
             moreOpen={bottomMoreSheetVisible}
             onSelect={handleBottomNavSelection}
