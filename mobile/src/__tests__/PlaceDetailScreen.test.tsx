@@ -33,7 +33,12 @@ jest.mock('../components/PhotoLightbox', () => ({
 }));
 
 jest.mock('../components/SocialButton', () => ({
-  SocialButton: () => null,
+  SocialButton: ({ platform, username }: { platform: string; username: string }) => {
+    const React = require('react');
+    const { Text } = require('react-native');
+
+    return <Text>{`${platform}:${username}`}</Text>;
+  },
 }));
 
 function buildPlace(overrides: Partial<PlaceDetail> = {}) {
@@ -119,5 +124,39 @@ describe('PlaceDetailScreen live location messaging', () => {
     );
 
     expect(screen.queryByText(/Last known location:/)).toBeNull();
+  });
+
+  it('renders the website and social profiles as proper profile links', () => {
+    render(
+      <PlaceDetailScreen
+        detailLoading={false}
+        errorMessage={null}
+        favoriteHelperText={null}
+        favoriteSubmitting={false}
+        isLandscape={false}
+        isFavorited={false}
+        locationStatusNow={Date.parse('2026-08-03T17:33:20Z')}
+        onBack={jest.fn()}
+        onSelectLocation={jest.fn()}
+        onToggleFavorite={jest.fn()}
+        selectedPlace={buildPlace({
+          social_profiles: {
+            instagram: {
+              url: 'https://instagram.com/yardhouseoxnard',
+              username: 'yardhouseoxnard',
+            },
+          },
+          website_url: 'https://www.yardhouse.com/oxnard',
+        })}
+        selectedPlaceDeals={[]}
+        selectedPlaceLocation={null}
+        selectedPlaceOperatingHours={[]}
+        showFavoriteControl={false}
+      />,
+    );
+
+    expect(screen.getByText('instagram:yardhouseoxnard')).toBeTruthy();
+    expect(screen.getByText('website:yardhouse.com')).toBeTruthy();
+    expect(screen.queryByText('Open website')).toBeNull();
   });
 });

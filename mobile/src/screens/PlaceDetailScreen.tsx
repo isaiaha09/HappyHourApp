@@ -230,8 +230,9 @@ export function PlaceDetailScreen({
     ...(selectedPlaceLocation?.image_urls ?? []),
     ...(selectedPlace?.image_urls ?? []),
   ]);
-  const socialButtons = selectedPlace ? getSocialProfilesForDisplay(selectedPlace.social_profiles) : [];
-  const hasWebsiteSocialButton = socialButtons.some((profile) => profile.platform === 'website');
+  const socialButtons = selectedPlace
+    ? getSocialProfilesForDisplay(selectedPlace.social_profiles, selectedPlaceLocation?.website_url ?? selectedPlace.website_url)
+    : [];
   const accuracySubjectOptions = useMemo(() => ([
     { label: 'Address or pin', value: 'address-or-pin' },
     { label: 'Hours of operation', value: 'hours' },
@@ -533,12 +534,6 @@ export function PlaceDetailScreen({
                 <View style={styles.detailMapCaption}>
                   <Text style={styles.detailMapCaptionText}>Tap to open in Maps</Text>
                 </View>
-              </Pressable>
-            ) : null}
-
-            {(selectedPlaceLocation?.website_url ?? selectedPlace.website_url) && !hasWebsiteSocialButton ? (
-              <Pressable onPress={() => void Linking.openURL(selectedPlaceLocation?.website_url ?? selectedPlace.website_url)} style={styles.linkButton}>
-                <Text style={styles.linkButtonText}>Open website</Text>
               </Pressable>
             ) : null}
 

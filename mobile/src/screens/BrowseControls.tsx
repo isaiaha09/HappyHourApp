@@ -215,6 +215,11 @@ export function BrowseControls({
       toValue: browseMode === 'map' ? 1 : 0,
       useNativeDriver: false,
     }).start();
+
+    return () => {
+      modeSwitchTranslateProgress.stopAnimation();
+      modeSwitchColorProgress.stopAnimation();
+    };
   }, [browseMode, modeSwitchColorProgress, modeSwitchTranslateProgress]);
 
   useEffect(() => {
@@ -224,6 +229,10 @@ export function BrowseControls({
       toValue: filtersExpanded ? 1 : 0,
       useNativeDriver: false,
     }).start();
+
+    return () => {
+      filtersPanelProgress.stopAnimation();
+    };
   }, [filtersExpanded, filtersPanelProgress]);
 
   useEffect(() => {
@@ -233,6 +242,10 @@ export function BrowseControls({
       toValue: isDarkMapMode ? 1 : 0,
       useNativeDriver: false,
     }).start();
+
+    return () => {
+      mapThemeToggleProgress.stopAnimation();
+    };
   }, [isDarkMapMode, mapThemeToggleProgress]);
 
   useEffect(() => {
@@ -242,6 +255,10 @@ export function BrowseControls({
       toValue: searchPanelLifted ? 1 : 0,
       useNativeDriver: false,
     }).start();
+
+    return () => {
+      searchPanelLiftProgress.stopAnimation();
+    };
   }, [searchPanelLiftProgress, searchPanelLifted]);
 
   return (
