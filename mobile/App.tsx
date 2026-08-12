@@ -187,6 +187,7 @@ const interactiveSwipeMinVelocity = 720;
 const mapEdgeSwipeWidth = 28;
 const mapSearchPinsSettleDelayMs = 320;
 const mapSearchResultVerticalOffset = 0.18;
+const mapSearchResultKeyboardClearance = 56;
 const defaultMapRegion = {
   latitude: (mapAreaBounds.minLatitude + mapAreaBounds.maxLatitude) / 2,
   longitude: (mapAreaBounds.minLongitude + mapAreaBounds.maxLongitude) / 2,
@@ -3894,11 +3895,13 @@ function AppScreen() {
     const useAllCitiesInitialRegion = !hasSettledInitialMapRegionRef.current
       && selectedCity === 'all'
       && normalizedDeferredSearchQuery.length === 0;
-    const nextRegion = useAllCitiesInitialRegion
-      ? allCitiesInitialMapRegion
-      : normalizedDeferredSearchQuery.length > 0 && mappedPlaces.length > 0
-        ? getSearchMapRegion(mappedPlaces)
-        : getBrowseMapRegion(selectedCity, mappedPlaces);
+    const nextRegion = focusedDisplayedMapPlace
+      ? getFocusedMapRegion(focusedDisplayedMapPlace, mapRegionRef.current, height, keyboardHeight)
+      : useAllCitiesInitialRegion
+        ? allCitiesInitialMapRegion
+        : normalizedDeferredSearchQuery.length > 0 && mappedPlaces.length > 0
+          ? getSearchMapRegion(mappedPlaces, height, keyboardHeight)
+          : getBrowseMapRegion(selectedCity, mappedPlaces);
     const boundedRegion = clampRegionToBounds(nextRegion);
 
     if (useAllCitiesInitialRegion) {
@@ -3925,7 +3928,7 @@ function AppScreen() {
       mapRef.current?.animateToRegion(boundedRegion, 220);
       autoFitMapRegionTimeoutRef.current = null;
     }, normalizedDeferredSearchQuery.length > 0 ? 140 : 0);
-  }, [listLoading, mapAutoFitCriteriaKey, normalizedDeferredSearchQuery.length, selectedCity, showMapBrowse]);
+  }, [focusedDisplayedMapPlace, height, keyboardHeight, listLoading, mapAutoFitCriteriaKey, normalizedDeferredSearchQuery.length, selectedCity, showMapBrowse]);
 
   useEffect(() => {
     if (!['profiles', 'business-search', 'business-claim', 'manual-business-claim', 'informal-business-claim'].includes(screenMode)) {
@@ -6368,13 +6371,10 @@ function AppScreen() {
 
     setSelectedMapSearchPreviewPlace(null);
     setSelectedMapPlaceKey(place.markerKey);
+    const latitude = place.latitude;
+    const longitude = place.longitude;
     const currentMapRegion = mapRegionRef.current;
-    const nextRegion = clampRegionToBounds({
-      latitude: place.latitude + Math.min(currentMapRegion.latitudeDelta, 0.04) * mapSearchResultVerticalOffset,
-      longitude: place.longitude,
-      latitudeDelta: Math.min(currentMapRegion.latitudeDelta, 0.04),
-      longitudeDelta: Math.min(currentMapRegion.longitudeDelta, 0.04),
-    });
+    const nextRegion = getFocusedMapRegion({ latitude, longitude }, currentMapRegion, height, keyboardHeight);
 
     mapRegionRef.current = nextRegion;
     setMapRegion(nextRegion);
@@ -8535,13 +8535,50 @@ function getBrowseMapRegion(selectedCity: CityFilterValue, mappedPlaces: MappedP
   return getMapRegion(mappedPlaces);
 }
 
-function getSearchMapRegion(mappedPlaces: MappedPlace[]) {
+function getSearchMapRegion(mappedPlaces: MappedPlace[], viewportHeight: number, keyboardHeight: number) {
   const region = getMapRegion(mappedPlaces);
+  const verticalOffset = getMapSearchResultVerticalOffset(viewportHeight, keyboardHeight);
 
   return clampRegionToBounds({
     ...region,
-    latitude: region.latitude + region.latitudeDelta * mapSearchResultVerticalOffset,
+    latitude: region.latitude + region.latitudeDelta * verticalOffset,
   });
+}
+
+function getFocusedMapRegion(
+  place: Pick<MappedPlace, 'latitude' | 'longitude'>,
+  currentMapRegion: Region,
+  viewportHeight: number,
+  keyboardHeight: number,
+) {
+  const latitudeDelta = Math.min(currentMapRegion.latitudeDelta, 0.04);
+  const longitudeDelta = Math.min(currentMapRegion.longitudeDelta, 0.04);
+  const verticalOffset = getMapSearchResultVerticalOffset(viewportHeight, keyboardHeight);
+
+  return clampRegionToBounds({
+    latitude: place.latitude + latitudeDelta * verticalOffset,
+    longitude: place.longitude,
+    latitudeDelta,
+    longitudeDelta,
+  });
+}
+
+function getMapSearchResultVerticalOffset(viewportHeight: number, keyboardHeight: number) {
+  if (keyboardHeight <= 0 || viewportHeight <= 0) {
+    return mapSearchResultVerticalOffset;
+  }
+
+  const keyboardTop = Math.max(viewportHeight - keyboardHeight, 0);
+  const targetMarkerCenter = Math.max(
+    keyboardTop - mapSearchResultKeyboardClearance,
+    viewportHeight * 0.46,
+  );
+
+  return clamp(
+    (targetMarkerCenter - viewportHeight / 2) / viewportHeight,
+    -0.16,
+    mapSearchResultVerticalOffset,
+  );
 }
 
 function toggleWeekdaySelection(current: WeekdayFilterValue[], day: WeekdayFilterValue) {
