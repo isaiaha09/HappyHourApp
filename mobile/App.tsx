@@ -759,6 +759,7 @@ function AppScreen() {
   const [renderedMappedPlaces, setRenderedMappedPlaces] = useState<MappedPlace[]>([]);
   const [renderedMappedPlaceKey, setRenderedMappedPlaceKey] = useState('');
   const [searchedMapPlaces, setSearchedMapPlaces] = useState<MappedPlace[]>([]);
+  const [renderedSearchMapQuery, setRenderedSearchMapQuery] = useState<string | null>(null);
   const hasInternetConnectionRef = useRef<boolean | null>(null);
   const businessLocationLatestPositionRef = useRef<Location.LocationObject | null>(null);
   const businessLocationReportRef = useRef<((forceRetry?: boolean) => void) | null>(null);
@@ -994,9 +995,12 @@ function AppScreen() {
   const browseResultCount = displayedBrowsePlaces.length;
   const mappedPlaceIdentityKey = useMemo(() => mappedPlaces.map((place) => place.markerKey).join('|'), [mappedPlaces]);
   const mappedPlaceKey = useMemo(() => getMappedPlaceRenderKey(mappedPlaces), [mappedPlaces]);
+  const mapPlacesDuringSearch = renderedSearchMapQuery === null
+    ? renderedMappedPlaces
+    : searchedMapPlaces;
   const unfilteredDisplayedMapPlaces = showMapBrowse
     ? normalizedDeferredSearchQuery.length > 0
-      ? mappedPlaces.length > 0 ? mappedPlaces : searchedMapPlaces
+      ? mapPlacesDuringSearch
       : renderedMappedPlaces
     : [];
   const displayedMapPlaces = selectedMapPlaceKey
@@ -2593,11 +2597,7 @@ function AppScreen() {
     const hasActiveSearch = normalizedSearchQuery.length > 0 || normalizedDeferredSearchQuery.length > 0;
     if (!showMapBrowse || !hasActiveSearch) {
       setSearchedMapPlaces((current) => current.length ? [] : current);
-      return;
-    }
-
-    if (mappedPlaces.length > 0) {
-      setSearchedMapPlaces(mappedPlaces);
+      setRenderedSearchMapQuery((current) => current === null ? current : null);
       return;
     }
 
@@ -2605,12 +2605,9 @@ function AppScreen() {
       return;
     }
 
-    if (!searchedMapPlaces.length) {
-      return;
-    }
-
     mapSearchPinsSettleTimeoutRef.current = setTimeout(() => {
-      setSearchedMapPlaces([]);
+      setSearchedMapPlaces(mappedPlaces);
+      setRenderedSearchMapQuery(normalizedDeferredSearchQuery);
       mapSearchPinsSettleTimeoutRef.current = null;
     }, mapSearchPinsSettleDelayMs);
 
@@ -2620,7 +2617,7 @@ function AppScreen() {
         mapSearchPinsSettleTimeoutRef.current = null;
       }
     };
-  }, [mappedPlaces, normalizedDeferredSearchQuery, normalizedSearchQuery, searchedMapPlaces.length, showMapBrowse]);
+  }, [mappedPlaces, normalizedDeferredSearchQuery, normalizedSearchQuery, showMapBrowse]);
 
   useEffect(() => {
     const shouldPreserveRenderedMapPins = !showMapBrowse && browseMode === 'map' && selectedPlaceSlug !== null;
@@ -6148,6 +6145,7 @@ function AppScreen() {
       setRenderedMappedPlaces([]);
       setRenderedMappedPlaceKey('');
       setSearchedMapPlaces([]);
+      setRenderedSearchMapQuery(null);
       setSearchQuery('');
       setMapSearchPanelLifted(false);
       setShowMapResultsCard(false);

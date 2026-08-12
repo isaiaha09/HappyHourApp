@@ -54,7 +54,7 @@
     <key>NSPhotoLibraryUsageDescription</key>
     <string>DiningDealz uses your photo library so you can add business photos and attach images to messages.</string>
     <key>RCTNewArchEnabled</key>
-    <true/>
+    <false/>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
     <key>UIRequiredDeviceCapabilities</key>

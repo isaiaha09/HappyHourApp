@@ -1085,6 +1085,38 @@ describe('App browse map search', () => {
     expect(mapsModule.__mock.getMarkerRenderCount()).toBe(renderCountAfterFirstKeystroke);
   });
 
+  it('keeps the full marker set mounted until a search query settles', async () => {
+    mockFetchPlaces.mockResolvedValue([samplePlace, secondSamplePlace, thirdSamplePlace]);
+
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    const searchInput = screen.getByTestId('browse-search-input');
+    expect(screen.getAllByTestId('mock-map-marker')).toHaveLength(3);
+
+    fireEvent.changeText(searchInput, 'ba');
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 60));
+    });
+
+    expect(screen.getAllByTestId('mock-map-marker')).toHaveLength(3);
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 360));
+    });
+
+    expect(screen.getAllByTestId('mock-map-marker')).toHaveLength(1);
+  });
+
   it('keeps the current map marker mounted while places refresh is pending', async () => {
     let resolveRefreshPlaces: ((places: PlaceListItem[]) => void) | null = null;
     const refreshPlacesPromise = new Promise<PlaceListItem[]>((resolve) => {

@@ -5,6 +5,7 @@
     "version": "1.0.0",
     "scheme": "diningdealz",
     "orientation": "portrait",
+    "newArchEnabled": false,
     "icon": "./assets/DiningDealz-Icon.png",
     "userInterfaceStyle": "light",
     "splash": {
