@@ -1,24 +1,5 @@
 const { NativeModules } = require('react-native');
 
-const nativeAnimationTimeouts = new Map();
-const nativeAnimatedModule = NativeModules.NativeAnimatedModule;
-if (nativeAnimatedModule) {
-  nativeAnimatedModule.startAnimatingNode = jest.fn((animationId, _nodeTag, _config, endCallback) => {
-    const timeout = setTimeout(() => {
-      nativeAnimationTimeouts.delete(animationId);
-      endCallback({ finished: true });
-    }, 16);
-    nativeAnimationTimeouts.set(animationId, timeout);
-  });
-  nativeAnimatedModule.stopAnimation = jest.fn((animationId) => {
-    const timeout = nativeAnimationTimeouts.get(animationId);
-    if (timeout !== undefined) {
-      clearTimeout(timeout);
-      nativeAnimationTimeouts.delete(animationId);
-    }
-  });
-}
-
 NativeModules.RNGestureHandlerModule = {
   ...(NativeModules.RNGestureHandlerModule || {}),
   install: jest.fn(),

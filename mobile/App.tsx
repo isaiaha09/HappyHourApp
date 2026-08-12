@@ -699,7 +699,6 @@ function AppScreen() {
   const autoFitMapRegionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mapMarkersTrackViewChangesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mapSearchPinsSettleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mapPinsTransitionFrameRef = useRef<number | null>(null);
   const hasSettledInitialMapRegionRef = useRef(false);
   const mapResultsCardTransitionVersionRef = useRef(0);
   const pendingImmediateMapPinsRefreshRef = useRef(false);
@@ -923,8 +922,7 @@ function AppScreen() {
     && browseMode === 'map';
   const showMainShellTransitionMap = mainShellTransitionFrom === 'browse' || incomingMainShellScreen === 'browse';
   const showMapBrowse = (screenMode === 'browse' && (!selectedPlaceSlug || !authenticatedSession) && browseMode === 'map') || keepGuestMapVisibleDuringGuestOnboarding || keepGuestMapVisibleOnSplash || showGuestTransitionMap || showTransitionMapBrowse || showMainShellTransitionMap;
-  const shouldTrackUserLocation = selectedPlaceSlug !== null
-    || (screenMode === 'browse' && browseMode === 'list');
+  const shouldTrackUserLocation = screenMode === 'browse' || selectedPlaceSlug !== null;
   const translucentStatusBar = (screenMode === 'browse' && !selectedPlaceSlug && browseMode === 'map')
     || (browseProfileTransitionFrom === 'profiles'
       && incomingBrowseProfileScreen === 'browse'
@@ -2534,7 +2532,6 @@ function AppScreen() {
       if (onboardingTransitionFrameRef.current !== null) {
         cancelAnimationFrame(onboardingTransitionFrameRef.current);
       }
-      screenTransition.stopAnimation();
       pendingOnboardingTransitionRef.current = null;
       if (interactiveSwipeCleanupFrameRef.current !== null) {
         cancelAnimationFrame(interactiveSwipeCleanupFrameRef.current);
@@ -2628,11 +2625,6 @@ function AppScreen() {
   }, [mappedPlaces, normalizedDeferredSearchQuery, normalizedSearchQuery, showMapBrowse]);
 
   useEffect(() => {
-    if (mapPinsTransitionFrameRef.current !== null) {
-      cancelAnimationFrame(mapPinsTransitionFrameRef.current);
-      mapPinsTransitionFrameRef.current = null;
-    }
-
     const shouldPreserveRenderedMapPins = !showMapBrowse && browseMode === 'map' && selectedPlaceSlug !== null;
     const shouldDelayPinsUntilBrowseScreenSettles = screenMode !== 'browse' && showTransitionMapBrowse;
     const shouldDelayPinsUntilBrowseFadeSettles = shellFadeScope === 'browse' && screenMode === 'browse' && showMapBrowse;
@@ -2699,8 +2691,7 @@ function AppScreen() {
     }
 
     mapPinsTransition.setValue(0);
-    mapPinsTransitionFrameRef.current = requestAnimationFrame(() => {
-      mapPinsTransitionFrameRef.current = null;
+    requestAnimationFrame(() => {
       Animated.timing(mapPinsTransition, {
         duration: 1450,
         easing: Easing.out(Easing.cubic),
@@ -2708,14 +2699,6 @@ function AppScreen() {
         useNativeDriver: true,
       }).start();
     });
-
-    return () => {
-      if (mapPinsTransitionFrameRef.current !== null) {
-        cancelAnimationFrame(mapPinsTransitionFrameRef.current);
-        mapPinsTransitionFrameRef.current = null;
-      }
-      mapPinsTransition.stopAnimation();
-    };
   }, [authenticatedSession, browseMode, guestBrowseModeLocked, listLoading, mapPinsTransition, mappedPlaceIdentityKey, mappedPlaceKey, mappedPlaces, normalizedDeferredSearchQuery.length, renderedMappedPlaceKey, renderedMappedPlaces, screenMode, selectedPlaceSlug, shellFadeScope, showMapBrowse, showTransitionMapBrowse, splashMapHandoffPending]);
 
   useEffect(() => {
@@ -3719,23 +3702,13 @@ function AppScreen() {
   ]);
 
   useEffect(() => {
-    if (!showMapResultsCard) {
-      mapResultsExpandedProgress.stopAnimation();
-      mapResultsExpandedProgress.setValue(mapResultsCollapsed ? 0 : 1);
-      return;
-    }
-
     Animated.timing(mapResultsExpandedProgress, {
       duration: 220,
       easing: Easing.out(Easing.cubic),
       toValue: mapResultsCollapsed ? 0 : 1,
       useNativeDriver: false,
     }).start();
-
-    return () => {
-      mapResultsExpandedProgress.stopAnimation();
-    };
-  }, [mapResultsCollapsed, mapResultsExpandedProgress, showMapResultsCard]);
+  }, [mapResultsCollapsed, mapResultsExpandedProgress]);
 
   function handleShowMoreMapResults() {
     if (loadingMoreMapResults) {
@@ -6999,9 +6972,7 @@ function AppScreen() {
       : showingProfile
         ? { opacity: 0, transform: [{ translateX: -width }] }
         : null;
-    const profileLayerContent = showingProfile || transitionActive
-      ? renderProfilesScreen(undefined, incomingProfileScreen)
-      : null;
+    const profileLayerContent = renderProfilesScreen(undefined, incomingProfileScreen);
     const browseLayerContent = (incomingBrowseScreen ?? screenMode) === 'home-feed'
       ? renderAuthenticatedHomeFeedScreen()
       : renderBrowseScreen({
@@ -8189,10 +8160,6 @@ function AnimatedListPlaceCard({
       toValue: 1,
       useNativeDriver: true,
     }).start();
-
-    return () => {
-      entrance.stopAnimation();
-    };
   }, [entrance, item.id, listRevealEnabled, revealIndex, revealToken]);
 
   return (
