@@ -8237,36 +8237,32 @@ const BrowseMapMarkers = memo(function BrowseMapMarkers({
   places,
   width,
 }: BrowseMapMarkersProps) {
-  return (
-    <>
-      {places.map((place, index) => {
-        const markerStyle = getVenueMarkerStyle(place.venue_type);
-        const animatedMarkerStyle = hasDeferredSearch
-          ? { opacity: 1, transform: [] }
-          : getAnimatedMapMarkerStyle(place, mapRegion, width, height, mapPinsTransition);
-        const isFocusedMarker = focusedMarkerKey === place.markerKey;
-        const markerRenderKey = `${markerRenderKeyPrefix}${place.markerKey}`;
+  return places.map((place, index) => {
+    const markerStyle = getVenueMarkerStyle(place.venue_type);
+    const animatedMarkerStyle = hasDeferredSearch
+      ? { opacity: 1, transform: [] }
+      : getAnimatedMapMarkerStyle(place, mapRegion, width, height, mapPinsTransition);
+    const isFocusedMarker = focusedMarkerKey === place.markerKey;
+    const markerRenderKey = `${markerRenderKeyPrefix}${place.markerKey}`;
 
-        return (
-          <Marker
-            anchor={{ x: 0.5, y: 1 }}
-            coordinate={{ latitude: place.markerLatitude, longitude: place.markerLongitude }}
-            key={markerRenderKey}
-            onPress={() => onSelectMapPin(place.markerKey)}
-            tracksViewChanges={mapMarkersTrackViewChanges || isFocusedMarker}
-            zIndex={places.length - index}
-          >
-            <Animated.View style={[
-              animatedMarkerStyle,
-              styles.mapMarkerMotion,
-            ]}>
-              <VenueMarkerVisual markerStyle={markerStyle} style={isFocusedMarker ? styles.mapMarkerActive : null} />
-            </Animated.View>
-          </Marker>
-        );
-      })}
-    </>
-  );
+    return (
+      <Marker
+        anchor={{ x: 0.5, y: 1 }}
+        coordinate={{ latitude: place.markerLatitude, longitude: place.markerLongitude }}
+        key={markerRenderKey}
+        onPress={() => onSelectMapPin(place.markerKey)}
+        tracksViewChanges={mapMarkersTrackViewChanges || isFocusedMarker}
+        zIndex={places.length - index}
+      >
+        <Animated.View style={[
+          animatedMarkerStyle,
+          styles.mapMarkerMotion,
+        ]}>
+          <VenueMarkerVisual markerStyle={markerStyle} style={isFocusedMarker ? styles.mapMarkerActive : null} />
+        </Animated.View>
+      </Marker>
+    );
+  });
 });
 
 function getAnimatedMapMarkerStyle(
