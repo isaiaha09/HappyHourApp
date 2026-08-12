@@ -7237,7 +7237,7 @@ function AppScreen() {
           shouldShowProfileOverlay ? browseProfileOutgoingStyle : null,
         ]}>
           <View style={styles.fullScreenRoot}>
-            <Animated.View pointerEvents={browseMode === 'map' ? 'auto' : 'none'} style={[styles.mapModeContentLayer, browseModeTransitionStyle]}>
+            <View pointerEvents={browseMode === 'map' ? 'auto' : 'none'} style={styles.mapModeContentLayer}>
               <View style={styles.mapScreen}>
                 {shouldRenderMapView ? (
                   <MapView
@@ -7376,7 +7376,7 @@ function AppScreen() {
                   </Animated.View>
                 ) : null}
               </View>
-            </Animated.View>
+            </View>
 
             <SafeAreaView edges={['top', 'left', 'right']} pointerEvents="box-none" style={styles.safeAreaTransparent}>
               <View pointerEvents="box-none" style={[styles.screen, options?.guestChrome ? styles.screenWithGuestChrome : null, isLandscape ? styles.screenLandscape : null]}>
