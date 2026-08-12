@@ -950,6 +950,10 @@ describe('App browse map search', () => {
     expect(screen.getByLabelText('Focus Baskin-Robbins')).toBeTruthy();
     expect(screen.getByLabelText('Focus Yard House')).toBeTruthy();
 
+    const yardHouseMarkerBeforeFocus = screen.getAllByTestId('mock-map-marker').find((marker) => (
+      marker.props.coordinate?.latitude === secondSamplePlace.latitude
+    ));
+    expect(yardHouseMarkerBeforeFocus).toBeDefined();
     const baselineAnimateCount = mapsModule.__mock.animateToRegionMock.mock.calls.length;
     fireEvent.press(screen.getByLabelText('Focus Yard House'));
 
@@ -965,6 +969,7 @@ describe('App browse map search', () => {
     expect(screen.queryByLabelText('Focus Baskin-Robbins')).toBeNull();
     expect(screen.getAllByTestId('mock-map-marker')).toHaveLength(1);
     const focusedMarker = screen.getByTestId('mock-map-marker');
+    expect(focusedMarker).toBe(yardHouseMarkerBeforeFocus);
     const focusedMarkerChildren = React.Children.toArray(focusedMarker.props.children);
     const focusedMarkerView = focusedMarkerChildren[0];
     expect(React.isValidElement<{ style?: unknown; children?: React.ReactNode }>(focusedMarkerView)).toBe(true);

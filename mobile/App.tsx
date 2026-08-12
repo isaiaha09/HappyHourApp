@@ -8247,7 +8247,7 @@ const BrowseMapMarkers = memo(function BrowseMapMarkers({
           ? { opacity: 1, transform: [] }
           : getAnimatedMapMarkerStyle(place, mapRegion, width, height, mapPinsTransition);
         const isFocusedMarker = focusedMarkerKey === place.markerKey;
-        const markerRenderKey = `${markerRenderKeyPrefix}${place.markerKey}:${isFocusedMarker ? 'focused' : 'default'}`;
+        const markerRenderKey = `${markerRenderKeyPrefix}${place.markerKey}`;
 
         return (
           <Marker
