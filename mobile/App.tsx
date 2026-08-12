@@ -1003,9 +1003,16 @@ function AppScreen() {
       ? mapPlacesDuringSearch
       : renderedMappedPlaces
     : [];
-  const displayedMapPlaces = selectedMapPlaceKey
-    ? unfilteredDisplayedMapPlaces.filter((place) => place.markerKey === selectedMapPlaceKey)
-    : unfilteredDisplayedMapPlaces;
+  const focusedDisplayedMapPlace = selectedMapPlaceKey
+    ? unfilteredDisplayedMapPlaces.find((place) => place.markerKey === selectedMapPlaceKey)
+      ?? mappedPlaces.find((place) => place.markerKey === selectedMapPlaceKey)
+      ?? renderedMappedPlaces.find((place) => place.markerKey === selectedMapPlaceKey)
+    : null;
+  const displayedMapPlaces = focusedDisplayedMapPlace
+    ? [focusedDisplayedMapPlace]
+    : selectedMapPlaceKey
+      ? []
+      : unfilteredDisplayedMapPlaces;
   const unplacedPlaceCount = useMemo(() => filteredPlaces.filter((place) => (
     !getPlaceLocations(place).some((location) => location.latitude !== null && location.longitude !== null)
   )).length, [filteredPlaces]);
@@ -2331,9 +2338,6 @@ function AppScreen() {
       inputRange: [0, 1],
       outputRange: [1, 0],
     }),
-  };
-  const browseModeTransitionStyle = {
-    opacity: browseModeTransition,
   };
   const listModeTransitionStyle = {
     opacity: browseModeTransition.interpolate({
@@ -7418,13 +7422,12 @@ function AppScreen() {
                 />
 
                 <View pointerEvents={browseMode === 'map' ? 'box-none' : 'auto'} style={styles.browseContentStage}>
-                  <Animated.View
+                  <View
                     pointerEvents={browseMode === 'map' ? 'box-none' : 'none'}
                     style={[
                       styles.browseContentFill,
                       styles.mapOverlayContentLayer,
-                      browseModeTransitionStyle,
-                      { paddingBottom: mapOverlayBottomPadding },
+                      { display: browseMode === 'map' ? 'flex' : 'none', paddingBottom: mapOverlayBottomPadding },
                     ]}
                   >
                     {listLoading ? (
@@ -7620,9 +7623,17 @@ function AppScreen() {
                         <Text style={styles.errorText}>{errorMessage}</Text>
                       </View>
                     ) : null}
-                  </Animated.View>
+                  </View>
 
-                  <Animated.View pointerEvents={browseMode === 'list' ? 'auto' : 'none'} style={[styles.browseContentFill, styles.browseModeContentLayer, listModeTransitionStyle]}>
+                  <Animated.View
+                    pointerEvents={browseMode === 'list' ? 'auto' : 'none'}
+                    style={[
+                      styles.browseContentFill,
+                      styles.browseModeContentLayer,
+                      listModeTransitionStyle,
+                      { display: browseMode === 'list' ? 'flex' : 'none' },
+                    ]}
+                  >
                     {listLoading ? (
                       <View style={styles.centerState}>
                         <ActivityIndicator color="#c65d1f" size="large" />
