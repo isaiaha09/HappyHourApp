@@ -22,6 +22,7 @@ const mockLoginProfile = jest.fn();
 const mockUpdateBusinessLocation = jest.fn();
 const mockRegisterPushDevice = jest.fn();
 let mockNotificationResponseListener: ((response: unknown) => void) | null = null;
+let mockMarkerRenderCount = 0;
 const mockRegisterForPushNotificationsAsync = jest.fn<Promise<{
   installationId: string;
   platform: 'ios' | 'android';
@@ -319,15 +320,17 @@ jest.mock('react-native-maps', () => {
     return <View testID={testID ?? 'mock-map-view'}>{children}</View>;
   });
 
-  const Marker = ({ children, coordinate, onPress, style }: {
+  const Marker = ({ children, coordinate, onPress, style, tracksViewChanges }: {
     children?: React.ReactNode;
     coordinate?: { latitude: number; longitude: number };
     onPress?: () => void;
     style?: unknown;
+    tracksViewChanges?: boolean;
   }) => {
     const { Pressable } = require('react-native');
+    mockMarkerRenderCount += 1;
 
-    return <Pressable coordinate={coordinate} onPress={onPress} style={style} testID="mock-map-marker">{children}</Pressable>;
+    return <Pressable coordinate={coordinate} onPress={onPress} style={style} testID="mock-map-marker" tracksViewChanges={tracksViewChanges}>{children}</Pressable>;
   };
 
   return {
@@ -336,7 +339,11 @@ jest.mock('react-native-maps', () => {
     Marker,
     __mock: {
       animateToRegionMock,
+      getMarkerRenderCount: () => mockMarkerRenderCount,
       initialRegionMock,
+      resetMarkerRenderCount: () => {
+        mockMarkerRenderCount = 0;
+      },
       setMapBoundariesMock,
     },
   };
@@ -347,7 +354,9 @@ import App from '../../App';
 const mapsModule = jest.requireMock('react-native-maps') as {
   __mock: {
     animateToRegionMock: jest.Mock;
+    getMarkerRenderCount: () => number;
     initialRegionMock: jest.Mock;
+    resetMarkerRenderCount: () => void;
     setMapBoundariesMock: jest.Mock;
   };
 };
@@ -405,6 +414,18 @@ const secondSamplePlace: PlaceListItem = {
   latitude: 34.1975,
   longitude: -119.1771,
   phone_number: '805-555-0102',
+};
+
+const thirdSamplePlace: PlaceListItem = {
+  ...samplePlace,
+  id: 3,
+  name: 'Cafe Rio',
+  slug: 'cafe-rio',
+  city: 'ventura',
+  city_label: 'Ventura',
+  latitude: 34.2746,
+  longitude: -119.2291,
+  phone_number: '805-555-0103',
 };
 
 describe('App browse map search', () => {
@@ -465,6 +486,7 @@ describe('App browse map search', () => {
     locationModule.watchPositionAsync.mockReset();
     locationModule.watchPositionAsync.mockResolvedValue({ remove: jest.fn() });
     mapsModule.__mock.animateToRegionMock.mockClear();
+    mapsModule.__mock.resetMarkerRenderCount();
     mapsModule.__mock.initialRegionMock.mockClear();
     mapsModule.__mock.setMapBoundariesMock.mockClear();
   });
@@ -1002,6 +1024,60 @@ describe('App browse map search', () => {
     });
 
     expect(screen.getAllByTestId('mock-map-marker')).toHaveLength(1);
+  });
+
+  it('stops tracking every marker while search text is rapidly typed and cleared', async () => {
+    mockFetchPlaces.mockResolvedValue([samplePlace, secondSamplePlace, thirdSamplePlace]);
+
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(screen.getAllByTestId('mock-map-marker')).toHaveLength(3);
+    const searchInput = screen.getByTestId('browse-search-input');
+
+    fireEvent.changeText(searchInput, 'z');
+    fireEvent.changeText(searchInput, '');
+
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    const markerViews = screen.getAllByTestId('mock-map-marker');
+    expect(markerViews).toHaveLength(3);
+    expect(markerViews.every((marker) => marker.props.tracksViewChanges === false)).toBe(true);
+  });
+
+  it('does not rebuild the full marker set for each raw search keystroke', async () => {
+    mockFetchPlaces.mockResolvedValue([samplePlace, secondSamplePlace, thirdSamplePlace]);
+
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    const searchInput = screen.getByTestId('browse-search-input');
+    fireEvent.changeText(searchInput, 'z');
+    const renderCountAfterFirstKeystroke = mapsModule.__mock.getMarkerRenderCount();
+
+    fireEvent.changeText(searchInput, 'zr');
+    fireEvent.changeText(searchInput, 'zrx');
+
+    expect(mapsModule.__mock.getMarkerRenderCount()).toBe(renderCountAfterFirstKeystroke);
   });
 
   it('keeps the current map marker mounted while places refresh is pending', async () => {

@@ -594,6 +594,10 @@ function AppScreen() {
   const { height, width } = useWindowDimensions();
   const initialMapRegionRef = useRef<Region>(clampRegionToBounds(allCitiesInitialMapRegion));
   const mapRef = useRef<MapView | null>(null);
+  const mapMarkerPressHandlerRef = useRef<(placeKey: string) => void>(() => undefined);
+  const handleMapMarkerPress = useCallback((placeKey: string) => {
+    mapMarkerPressHandlerRef.current(placeKey);
+  }, []);
   const onboardingTransitionFrameRef = useRef<number | null>(null);
   const pendingOnboardingTransitionRef = useRef<{ onComplete?: () => void; targetScreen: AppScreenMode } | null>(null);
   const onboardingNavigationInFlightRef = useRef(false);
@@ -1845,12 +1849,23 @@ function AppScreen() {
   }
 
   function scheduleMapMarkersTrackViewChanges(durationMs: number) {
+    if (normalizedSearchQuery.length > 0 || normalizedDeferredSearchQuery.length > 0) {
+      clearMapMarkersTrackViewChangesTimer();
+      setMapMarkersTrackViewChanges(false);
+      return;
+    }
+
     setMapMarkersTrackViewChanges(true);
     clearMapMarkersTrackViewChangesTimer();
     mapMarkersTrackViewChangesTimeoutRef.current = setTimeout(() => {
       setMapMarkersTrackViewChanges(false);
       mapMarkersTrackViewChangesTimeoutRef.current = null;
     }, durationMs);
+  }
+
+  function stopMapMarkersTrackViewChanges() {
+    clearMapMarkersTrackViewChangesTimer();
+    setMapMarkersTrackViewChanges(false);
   }
 
   function clearLiveLocationRefreshTimer() {
@@ -2686,11 +2701,13 @@ function AppScreen() {
 
   useEffect(() => {
     if (!showMapBrowse) {
+      clearMapMarkersTrackViewChangesTimer();
+      setMapMarkersTrackViewChanges(true);
       return;
     }
 
-    scheduleMapMarkersTrackViewChanges(mapMarkerFocusKey ? 900 : 450);
-  }, [mapMarkerFocusKey, showMapBrowse]);
+    scheduleMapMarkersTrackViewChanges(1600);
+  }, [showMapBrowse]);
 
   function navigateScreen(
     nextScreen: AppScreenMode,
@@ -3910,16 +3927,6 @@ function AppScreen() {
   }, [listLoading, mapAutoFitCriteriaKey, normalizedDeferredSearchQuery.length, selectedCity, showMapBrowse]);
 
   useEffect(() => {
-    if (!showMapBrowse) {
-      clearMapMarkersTrackViewChangesTimer();
-      setMapMarkersTrackViewChanges(true);
-      return;
-    }
-
-    scheduleMapMarkersTrackViewChanges(1600);
-  }, [normalizedDeferredSearchQuery, selectedMapPlaceKey, showMapBrowse]);
-
-  useEffect(() => {
     if (!['profiles', 'business-search', 'business-claim', 'manual-business-claim', 'informal-business-claim'].includes(screenMode)) {
       return;
     }
@@ -4310,6 +4317,7 @@ function AppScreen() {
       return;
     }
 
+    stopMapMarkersTrackViewChanges();
     setSelectedMapPlaceKey(null);
     setSelectedMapSearchPreviewPlace(null);
     setSearchQuery(value);
@@ -4317,6 +4325,7 @@ function AppScreen() {
 
   function handleClearSearchQuery() {
     animateNextLayout();
+    stopMapMarkersTrackViewChanges();
     pendingImmediateMapPinsRefreshRef.current = true;
     invalidateMapResultsCardTransitions();
     clearAutoFitMapRegionTimer();
@@ -6308,6 +6317,8 @@ function AppScreen() {
     selectMapSearchPlace(place);
   }
 
+  mapMarkerPressHandlerRef.current = handleSelectMapPin;
+
   function selectMapSearchPlace(place: Pick<MappedPlace, 'locationId' | 'slug'>) {
     invalidateMapResultsCardTransitions();
     mapResultsOpacity.stopAnimation();
@@ -7306,32 +7317,17 @@ function AppScreen() {
                     ref={mapRef}
                     style={styles.mapBackground}
                   >
-                    {displayedMapPlaces.map((place, index) => {
-                      const markerStyle = getVenueMarkerStyle(place.venue_type);
-                      const animatedMarkerStyle = normalizedDeferredSearchQuery.length > 0
-                        ? { opacity: 1, transform: [] }
-                        : getAnimatedMapMarkerStyle(place, mapRegion, width, height, mapPinsTransition);
-                      const isFocusedMarker = mapMarkerFocusKey === place.markerKey;
-                      const markerRenderKey = `${place.markerKey}:${isFocusedMarker ? 'focused' : 'default'}`;
-
-                      return (
-                        <Marker
-                          anchor={{ x: 0.5, y: 1 }}
-                          coordinate={{ latitude: place.markerLatitude, longitude: place.markerLongitude }}
-                          key={markerRenderKey}
-                          onPress={() => handleSelectMapPin(place.markerKey)}
-                          tracksViewChanges={mapMarkersTrackViewChanges || isFocusedMarker}
-                          zIndex={displayedMapPlaces.length - index}
-                        >
-                          <Animated.View style={[
-                            animatedMarkerStyle,
-                            styles.mapMarkerMotion,
-                          ]}>
-                            <VenueMarkerVisual markerStyle={markerStyle} style={isFocusedMarker ? styles.mapMarkerActive : null} />
-                          </Animated.View>
-                        </Marker>
-                      );
-                    })}
+                    <BrowseMapMarkers
+                      focusedMarkerKey={mapMarkerFocusKey}
+                      hasDeferredSearch={normalizedDeferredSearchQuery.length > 0}
+                      height={height}
+                      mapMarkersTrackViewChanges={mapMarkersTrackViewChanges}
+                      mapPinsTransition={mapPinsTransition}
+                      mapRegion={mapRegion}
+                      onSelectMapPin={handleMapMarkerPress}
+                      places={displayedMapPlaces}
+                      width={width}
+                    />
                   </MapView>
                 ) : (
                   <View style={styles.mapBackground} />
@@ -7351,31 +7347,18 @@ function AppScreen() {
                       zoomEnabled={false}
                       style={styles.mapBackground}
                     >
-                      {displayedMapPlaces.map((place, index) => {
-                        const markerStyle = getVenueMarkerStyle(place.venue_type);
-                        const animatedMarkerStyle = normalizedDeferredSearchQuery.length > 0
-                          ? { opacity: 1, transform: [] }
-                          : getAnimatedMapMarkerStyle(place, mapRegion, width, height, mapPinsTransition);
-                        const isFocusedMarker = mapMarkerFocusKey === place.markerKey;
-                        const markerRenderKey = `transition-${place.markerKey}:${isFocusedMarker ? 'focused' : 'default'}`;
-
-                        return (
-                          <Marker
-                            anchor={{ x: 0.5, y: 1 }}
-                            coordinate={{ latitude: place.markerLatitude, longitude: place.markerLongitude }}
-                            key={markerRenderKey}
-                            tracksViewChanges={mapMarkersTrackViewChanges || isFocusedMarker}
-                            zIndex={displayedMapPlaces.length - index}
-                          >
-                            <Animated.View style={[
-                              animatedMarkerStyle,
-                              styles.mapMarkerMotion,
-                            ]}>
-                              <VenueMarkerVisual markerStyle={markerStyle} style={isFocusedMarker ? styles.mapMarkerActive : null} />
-                            </Animated.View>
-                          </Marker>
-                        );
-                      })}
+                      <BrowseMapMarkers
+                        focusedMarkerKey={mapMarkerFocusKey}
+                        hasDeferredSearch={normalizedDeferredSearchQuery.length > 0}
+                        height={height}
+                        markerRenderKeyPrefix="transition-"
+                        mapMarkersTrackViewChanges={mapMarkersTrackViewChanges}
+                        mapPinsTransition={mapPinsTransition}
+                        mapRegion={mapRegion}
+                        onSelectMapPin={handleMapMarkerPress}
+                        places={displayedMapPlaces}
+                        width={width}
+                      />
                     </MapView>
                   </Animated.View>
                 ) : null}
@@ -8228,6 +8211,63 @@ const BrowsePlaceList = memo(function BrowsePlaceList({
       renderItem={renderBrowsePlaceItem}
       showsVerticalScrollIndicator={false}
     />
+  );
+});
+
+type BrowseMapMarkersProps = {
+  focusedMarkerKey: string | null;
+  hasDeferredSearch: boolean;
+  height: number;
+  markerRenderKeyPrefix?: string;
+  mapMarkersTrackViewChanges: boolean;
+  mapPinsTransition: Animated.Value;
+  mapRegion: Region;
+  onSelectMapPin: (placeKey: string) => void;
+  places: MappedPlace[];
+  width: number;
+};
+
+const BrowseMapMarkers = memo(function BrowseMapMarkers({
+  focusedMarkerKey,
+  hasDeferredSearch,
+  height,
+  markerRenderKeyPrefix = '',
+  mapMarkersTrackViewChanges,
+  mapPinsTransition,
+  mapRegion,
+  onSelectMapPin,
+  places,
+  width,
+}: BrowseMapMarkersProps) {
+  return (
+    <>
+      {places.map((place, index) => {
+        const markerStyle = getVenueMarkerStyle(place.venue_type);
+        const animatedMarkerStyle = hasDeferredSearch
+          ? { opacity: 1, transform: [] }
+          : getAnimatedMapMarkerStyle(place, mapRegion, width, height, mapPinsTransition);
+        const isFocusedMarker = focusedMarkerKey === place.markerKey;
+        const markerRenderKey = `${markerRenderKeyPrefix}${place.markerKey}:${isFocusedMarker ? 'focused' : 'default'}`;
+
+        return (
+          <Marker
+            anchor={{ x: 0.5, y: 1 }}
+            coordinate={{ latitude: place.markerLatitude, longitude: place.markerLongitude }}
+            key={markerRenderKey}
+            onPress={() => onSelectMapPin(place.markerKey)}
+            tracksViewChanges={mapMarkersTrackViewChanges || isFocusedMarker}
+            zIndex={places.length - index}
+          >
+            <Animated.View style={[
+              animatedMarkerStyle,
+              styles.mapMarkerMotion,
+            ]}>
+              <VenueMarkerVisual markerStyle={markerStyle} style={isFocusedMarker ? styles.mapMarkerActive : null} />
+            </Animated.View>
+          </Marker>
+        );
+      })}
+    </>
   );
 });
 

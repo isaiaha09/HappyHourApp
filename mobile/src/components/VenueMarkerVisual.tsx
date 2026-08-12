@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { View, type StyleProp, type ViewStyle } from 'react-native';
 
@@ -9,7 +10,7 @@ type VenueMarkerVisualProps = {
   style?: StyleProp<ViewStyle>;
 };
 
-export function VenueMarkerVisual({ markerStyle, style }: VenueMarkerVisualProps) {
+export const VenueMarkerVisual = memo(function VenueMarkerVisual({ markerStyle, style }: VenueMarkerVisualProps) {
   const markerSize = 34;
   const neonBorderSize = 31;
   const innerBodySize = 27;
@@ -82,4 +83,4 @@ export function VenueMarkerVisual({ markerStyle, style }: VenueMarkerVisualProps
       </View>
     </View>
   );
-}
+});
