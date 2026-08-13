@@ -40,7 +40,6 @@ export const appShellStyles = {
     backgroundColor: theme.bgApp,
   },
   bottomNavLoginTransitionLayer: {
-    backgroundColor: theme.bgApp,
     bottom: 0,
     left: 0,
     position: 'absolute',
