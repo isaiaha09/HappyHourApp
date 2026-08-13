@@ -7870,6 +7870,55 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertIsNone(removed_payload['latitude'])
 		self.assertIsNone(removed_payload['longitude'])
 
+	@patch('places.services.source_listings.load_source_records', return_value=[])
+	def test_business_account_delete_removes_customer_favorite_for_owned_business(self, mock_load_source_records):
+		business_user = User.objects.create_user(
+			username='favorite_business_owner',
+			email='favorite_business_owner@example.com',
+			password='test-pass-123',
+		)
+		business_profile = AccountProfile.objects.create(user=business_user, email_verified_at=timezone.now())
+		business_token = ProfileAuthToken.objects.create(user=business_user)
+		snapshot = ListingSnapshot.objects.create(
+			name='Favorite Business',
+			listing_slug='favorite-business-ventura',
+			city=City.VENTURA,
+			venue_type=VenueType.CAFE,
+			address_line_1='12 Main St',
+			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=business_user,
+			listing_snapshot=snapshot,
+			contact_name='Favorite Owner',
+			work_email='owner@favorite-business.example.com',
+			verification_summary='I operate this business.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(user=business_user, claim=claim, is_active=True)
+		FavoriteBusiness.objects.create(
+			user=self.user,
+			listing_slug=snapshot.listing_slug,
+			name=snapshot.name,
+			city=snapshot.city,
+			city_label='Ventura',
+			venue_type=snapshot.venue_type,
+			venue_type_label='Cafe',
+			address_line_1=snapshot.address_line_1,
+		)
+
+		response = self.client.post(
+			reverse('profile-delete-account'),
+			{'password': 'test-pass-123'},
+			format='json',
+			HTTP_AUTHORIZATION=f'Token {business_token.key}',
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertFalse(FavoriteBusiness.objects.filter(user=self.user, listing_slug=snapshot.listing_slug).exists())
+		business_profile.refresh_from_db()
+		self.assertTrue(bool(business_profile.deleted_at))
+
 	def test_delete_account_rejects_incorrect_password(self):
 		response = self.client.post(
 			reverse('profile-delete-account'),
@@ -8887,6 +8936,17 @@ class AccountProxyTests(APITestCase):
 			status=BusinessClaim.Status.APPROVED,
 		)
 		BusinessMembership.objects.create(user=user, claim=claim, is_active=True)
+		customer = User.objects.create_user(username='favorite_customer', email='favorite_customer@example.com', password='test-pass-123')
+		FavoriteBusiness.objects.create(
+			user=customer,
+			listing_slug=snapshot.listing_slug,
+			name=snapshot.name,
+			city=snapshot.city,
+			city_label='Ventura',
+			venue_type=snapshot.venue_type,
+			venue_type_label='Cafe',
+			address_line_1=snapshot.address_line_1,
+		)
 		admin_instance = BusinessAccountAdmin(BusinessAccount, AdminSite())
 		request = RequestFactory().post('/admin/places/businessaccount/')
 		request.user = self.admin_user
@@ -8894,6 +8954,7 @@ class AccountProxyTests(APITestCase):
 		admin_instance.delete_model(request, BusinessAccount.objects.get(pk=user.pk))
 
 		self.assertFalse(User.objects.filter(pk=user.pk).exists())
+		self.assertFalse(FavoriteBusiness.objects.filter(user=customer, listing_slug=snapshot.listing_slug).exists())
 
 
 class ListingSnapshotAdminTests(TestCase):
@@ -9702,6 +9763,31 @@ class ListingSnapshotAdminTests(TestCase):
 				restored_records = load_discovery_json_records(file_path=json_path)
 				self.assertEqual(len(restored_records), 1)
 				self.assertEqual(restored_records[0].external_id, 'here:cronies-ventura')
+
+	def test_delete_model_removes_customer_favorites_for_deleted_snapshot(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Deleted Favorite Cafe',
+			listing_slug='deleted-favorite-cafe',
+			city=City.VENTURA,
+			venue_type=VenueType.CAFE,
+			address_line_1='40 Main St',
+		)
+		customer = User.objects.create_user(username='snapshot_favorite_customer', email='snapshot_favorite_customer@example.com', password='test-pass-123')
+		FavoriteBusiness.objects.create(
+			user=customer,
+			listing_slug=snapshot.listing_slug,
+			name=snapshot.name,
+			city=snapshot.city,
+			city_label='Ventura',
+			venue_type=snapshot.venue_type,
+			venue_type_label='Cafe',
+			address_line_1=snapshot.address_line_1,
+		)
+
+		self.admin.delete_model(self._build_request('/admin/places/listingsnapshot/'), snapshot)
+
+		self.assertFalse(FavoriteBusiness.objects.filter(user=customer, listing_slug=snapshot.listing_slug).exists())
+		self.assertTrue(DeletedBusiness.objects.filter(name=snapshot.name).exists())
 
 	@override_settings(DISCOVERY_JSON_PATH='')
 	def test_pull_business_data_view_preserves_manual_website_and_overrides_when_pulled_record_has_no_website(self):
@@ -10585,12 +10671,24 @@ class BusinessClaimAdminTests(TestCase):
 	def test_delete_model_removes_orphaned_claimant_account(self):
 		claimant_id = self.claimant.pk
 		claim_id = self.claim.pk
+		customer = User.objects.create_user(username='claim_favorite_customer', email='claim_favorite_customer@example.com', password='test-pass-123')
+		FavoriteBusiness.objects.create(
+			user=customer,
+			listing_slug=self.snapshot.listing_slug,
+			name=self.snapshot.name,
+			city=self.snapshot.city,
+			city_label='Ventura',
+			venue_type=self.snapshot.venue_type,
+			venue_type_label='Restaurant',
+			address_line_1=self.snapshot.address_line_1,
+		)
 		request = self._build_request()
 
 		self.admin.delete_model(request, self.claim)
 
 		self.assertFalse(BusinessClaim.objects.filter(pk=claim_id).exists())
 		self.assertFalse(User.objects.filter(pk=claimant_id).exists())
+		self.assertFalse(FavoriteBusiness.objects.filter(user=customer, listing_slug=self.snapshot.listing_slug).exists())
 
 	def test_delete_model_keeps_claimant_with_other_claims(self):
 		other_snapshot = ListingSnapshot.objects.create(

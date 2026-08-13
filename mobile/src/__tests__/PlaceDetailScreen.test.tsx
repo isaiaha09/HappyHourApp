@@ -21,7 +21,12 @@ jest.mock('react-native-webview', () => ({
 }));
 
 jest.mock('@expo/vector-icons', () => ({
-  Ionicons: () => null,
+  Ionicons: ({ name }: { name: string }) => {
+    const React = require('react');
+    const { Text } = require('react-native');
+
+    return <Text testID={`icon-${name}`}>{name}</Text>;
+  },
 }));
 
 jest.mock('../components/NativeIOSLiquidGlass', () => ({
@@ -158,5 +163,57 @@ describe('PlaceDetailScreen live location messaging', () => {
     expect(screen.getByText('instagram:yardhouseoxnard')).toBeTruthy();
     expect(screen.getByText('website:yardhouse.com')).toBeTruthy();
     expect(screen.queryByText('Open website')).toBeNull();
+  });
+});
+
+describe('PlaceDetailScreen favorites', () => {
+  it('renders an outline heart when the business is not favorited', () => {
+    render(
+      <PlaceDetailScreen
+        detailLoading={false}
+        errorMessage={null}
+        favoriteHelperText={null}
+        favoriteSubmitting={false}
+        isLandscape={false}
+        isFavorited={false}
+        locationStatusNow={Date.parse('2026-08-03T17:33:20Z')}
+        onBack={jest.fn()}
+        onSelectLocation={jest.fn()}
+        onToggleFavorite={jest.fn()}
+        selectedPlace={buildPlace()}
+        selectedPlaceDeals={[]}
+        selectedPlaceLocation={null}
+        selectedPlaceOperatingHours={[]}
+        showFavoriteControl
+      />,
+    );
+
+    expect(screen.getByTestId('icon-heart-outline')).toBeTruthy();
+    expect(screen.queryByTestId('icon-heart')).toBeNull();
+  });
+
+  it('renders a filled heart when the business is favorited', () => {
+    render(
+      <PlaceDetailScreen
+        detailLoading={false}
+        errorMessage={null}
+        favoriteHelperText={null}
+        favoriteSubmitting={false}
+        isLandscape={false}
+        isFavorited
+        locationStatusNow={Date.parse('2026-08-03T17:33:20Z')}
+        onBack={jest.fn()}
+        onSelectLocation={jest.fn()}
+        onToggleFavorite={jest.fn()}
+        selectedPlace={buildPlace()}
+        selectedPlaceDeals={[]}
+        selectedPlaceLocation={null}
+        selectedPlaceOperatingHours={[]}
+        showFavoriteControl
+      />,
+    );
+
+    expect(screen.getByTestId('icon-heart')).toBeTruthy();
+    expect(screen.queryByTestId('icon-heart-outline')).toBeNull();
   });
 });

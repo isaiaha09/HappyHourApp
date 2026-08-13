@@ -21,6 +21,7 @@ from django.utils import timezone
 
 from .admin_site import happyhour_admin_site
 from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessMembership, CustomerAccount, DealType, DeletedBusiness, ListingSnapshot, ProviderUsageWindow, Weekday
+from .services.account_profiles import remove_favorites_for_business_accounts, remove_favorites_for_listing_slugs
 from .services.business_profile_overrides import format_operating_hour_display, format_time_display, is_open_24_hours_row, normalize_deal_overrides, normalize_operating_hour_overrides, normalize_time_value, summarize_deal_overrides, summarize_operating_hour_overrides
 from .services.importers.discovered_json_places import load_discovery_json_records, merge_discovery_json_records, write_discovery_json_records
 from .services.deleted_businesses import imported_place_from_deleted_business, store_deleted_business
@@ -944,6 +945,10 @@ def _remove_discovery_records_for_snapshot(snapshot):
 
 def _delete_snapshot_to_deleted_business(snapshot):
 	removed_records = _remove_discovery_records_for_snapshot(snapshot)
+	remove_favorites_for_listing_slugs([
+		snapshot.listing_slug,
+		slugify(f'{snapshot.name}-{snapshot.city}'),
+	])
 	deleted_business = store_deleted_business(snapshot, removed_records=removed_records)
 	return deleted_business, removed_records
 
@@ -1030,10 +1035,13 @@ class StaffUserAdmin(UserAdmin):
 
 class HardDeleteUserAdminMixin:
 	def delete_model(self, request, obj):
+		remove_favorites_for_business_accounts([obj.pk])
 		User.objects.filter(pk=obj.pk).delete()
 
 	def delete_queryset(self, request, queryset):
-		User.objects.filter(pk__in=queryset.values_list('pk', flat=True)).delete()
+		user_ids = list(queryset.values_list('pk', flat=True))
+		remove_favorites_for_business_accounts(user_ids)
+		User.objects.filter(pk__in=user_ids).delete()
 
 
 happyhour_admin_site.register(User, StaffUserAdmin)
@@ -1830,6 +1838,8 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 	def delete_model(self, request, obj):
 		with transaction.atomic():
 			orphaned_claimant_ids = _collect_orphaned_claimant_ids_for_deleted_claims(self.model.objects.filter(pk=obj.pk))
+			if orphaned_claimant_ids:
+				remove_favorites_for_business_accounts(orphaned_claimant_ids)
 			super().delete_model(request, obj)
 			if orphaned_claimant_ids:
 				User.objects.filter(pk__in=orphaned_claimant_ids).delete()
@@ -1837,6 +1847,8 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 	def delete_queryset(self, request, queryset):
 		with transaction.atomic():
 			orphaned_claimant_ids = _collect_orphaned_claimant_ids_for_deleted_claims(queryset)
+			if orphaned_claimant_ids:
+				remove_favorites_for_business_accounts(orphaned_claimant_ids)
 			super().delete_queryset(request, queryset)
 			if orphaned_claimant_ids:
 				User.objects.filter(pk__in=orphaned_claimant_ids).delete()

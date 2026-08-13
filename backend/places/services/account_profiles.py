@@ -124,12 +124,60 @@ def is_deleted_account(user):
 	return bool(profile.deleted_at)
 
 
+def remove_favorites_for_listing_slugs(listing_slugs):
+	listing_slugs = {
+		str(listing_slug or '').strip()
+		for listing_slug in list(listing_slugs or [])
+		if str(listing_slug or '').strip()
+	}
+	if not listing_slugs:
+		return 0
+
+	deleted_count, _ = FavoriteBusiness.objects.filter(listing_slug__in=listing_slugs).delete()
+	FavoriteBusinessNotification.objects.filter(listing_slug__in=listing_slugs).delete()
+	return deleted_count
+
+
+def remove_favorites_for_business_accounts(user_ids):
+	user_ids = list(user_ids or [])
+	if not user_ids:
+		return 0
+
+	claimed_slugs = set(
+		BusinessClaim.objects
+		.filter(claimant_id__in=user_ids)
+		.exclude(status=BusinessClaim.Status.REJECTED)
+		.exclude(listing_snapshot__listing_slug='')
+		.values_list('listing_snapshot__listing_slug', flat=True)
+	)
+	if not claimed_slugs:
+		return 0
+
+	retained_slugs = set(
+		BusinessClaim.objects
+		.filter(
+			listing_snapshot__listing_slug__in=claimed_slugs,
+			claimant__is_active=True,
+			claimant__account_profile__deleted_at__isnull=True,
+		)
+		.exclude(claimant_id__in=user_ids)
+		.exclude(status=BusinessClaim.Status.REJECTED)
+		.values_list('listing_snapshot__listing_slug', flat=True)
+	)
+	slugs_to_remove = claimed_slugs - retained_slugs
+	if not slugs_to_remove:
+		return 0
+
+	return remove_favorites_for_listing_slugs(slugs_to_remove)
+
+
 @transaction.atomic
 def deactivate_account_for_retained_direct_messages(user):
 	profile = get_or_create_account_profile(user)
 	deleted_at = timezone.now()
 	deleted_username = f'deleted-account-{user.pk}-{uuid4().hex[:12]}'
 
+	remove_favorites_for_business_accounts([user.pk])
 	ProfileAuthToken.objects.filter(user=user).delete()
 	FavoriteBusiness.objects.filter(user=user).delete()
 	FavoriteBusinessNotification.objects.filter(user=user).delete()

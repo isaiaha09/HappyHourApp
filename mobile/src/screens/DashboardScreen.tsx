@@ -6,6 +6,7 @@ import { ActivityIndicator, Image, Keyboard, KeyboardAvoidingView, Linking, Moda
 
 import { styles } from '../appStyles';
 import { buildDealOverridesFromDeals, buildNormalizedDealOverrides, buildNormalizedOperatingHourOverrides, buildOperatingHourOverridesFromWindows } from '../businessProfileOverrides';
+import { AutoScrollTextInput, useAutoScrollForm } from '../components/AutoScrollTextInput';
 import { BusinessDealsEditor, BusinessHoursEditor } from '../components/BusinessProfileStructuredEditors';
 import { NativeIOSLiquidGlassBackButton, NativeIOSLiquidGlassHeaderButton } from '../components/NativeIOSLiquidGlass';
 import { SOCIAL_PLATFORM_LABELS, buildSocialProfilesFromInputs, getSocialProfilePreview, getSocialProfileValidationMessage, socialProfilesToInputs } from '../socialProfiles';
@@ -828,7 +829,7 @@ export function FavoriteBusinessesScreen({
             ) : favoriteBusinesses.length ? (
               <Text style={styles.dashboardSupportText}>No favorite businesses matched that search.</Text>
             ) : (
-              <Text style={styles.dashboardSupportText}>Star businesses from place details to keep a list of favorites here.</Text>
+              <Text style={styles.dashboardSupportText}>Favorite businesses from place details to keep a list of favorites here.</Text>
             )}
           </View>
         </View>
@@ -1315,6 +1316,7 @@ export function AccountSettingsScreen({
   const displayedBusinessLocationTrackingEnabled = pendingBusinessLocationTrackingEnabled ?? !!session.business_location_tracking_enabled;
   const displayedDirectMessagingEnabled = pendingDirectMessagingEnabled ?? !!session.direct_messaging_enabled;
   const blockedCustomerAccounts = session.blocked_customer_accounts ?? [];
+  const { handleFieldFocus, handleScroll, scrollViewRef } = useAutoScrollForm();
 
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
@@ -1326,6 +1328,9 @@ export function AccountSettingsScreen({
           contentContainerStyle={styles.dashboardScrollContent}
           {...dismissKeyboardOnScrollProps}
           keyboardShouldPersistTaps="handled"
+          onScroll={handleScroll}
+          ref={scrollViewRef}
+          scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
@@ -1448,11 +1453,14 @@ export function AccountSettingsScreen({
                 <Text style={styles.dashboardSectionTitle}>Account management</Text>
                 <Text style={styles.dashboardSupportText}>Permanently delete your DiningDealz account and associated profile data from inside the app.</Text>
                 <Text style={styles.profileFieldLabel}>Current password</Text>
-                <TextInput
+                <AutoScrollTextInput
+                  accessibilityLabel="Current password for account deletion"
                   autoCapitalize="none"
                   autoCorrect={false}
+                  onBeforeAutoScroll={handleFieldFocus}
                   onChangeText={onChangeDeleteAccountPassword}
                   secureTextEntry
+                  scrollViewRef={scrollViewRef}
                   style={styles.profileInput}
                   value={deleteAccountPassword}
                 />

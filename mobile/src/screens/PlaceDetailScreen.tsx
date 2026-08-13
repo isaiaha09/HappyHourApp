@@ -442,14 +442,16 @@ export function PlaceDetailScreen({
                     accessibilityLabel={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
                     onPress={onToggleFavorite}
                     style={[
-                      styles.favoriteStarButton,
-                      isFavorited ? styles.favoriteStarButtonActive : null,
+                      styles.favoriteHeartButton,
+                      isFavorited ? styles.favoriteHeartButtonActive : null,
                       favoriteSubmitting ? styles.linkButtonDisabled : null,
                     ]}
                   >
-                    <Text style={[styles.favoriteStarIcon, isFavorited ? styles.favoriteStarIconActive : null]}>
-                      {isFavorited ? '★' : '☆'}
-                    </Text>
+                    <Ionicons
+                      name={isFavorited ? 'heart' : 'heart-outline'}
+                      size={24}
+                      style={[styles.favoriteHeartIcon, isFavorited ? styles.favoriteHeartIconActive : null]}
+                    />
                   </Pressable>
                 ) : null}
               </View>

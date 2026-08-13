@@ -187,7 +187,7 @@ export const detailStyles = {
     maxHeight: '100%',
     width: '100%',
   },
-  favoriteStarButton: {
+  favoriteHeartButton: {
     alignItems: 'center',
     backgroundColor: theme.bgElevated,
     borderColor: theme.border,
@@ -198,18 +198,18 @@ export const detailStyles = {
     marginTop: 4,
     width: 48,
   },
-  favoriteStarButtonActive: {
-    backgroundColor: theme.warningSoft,
-    borderColor: theme.warning,
+  favoriteHeartButtonActive: {
+    backgroundColor: theme.accentSoft,
+    borderColor: theme.accent,
   },
-  favoriteStarIcon: {
+  favoriteHeartIcon: {
     color: theme.textMuted,
     fontSize: 26,
     lineHeight: 28,
     textAlign: 'center',
   },
-  favoriteStarIconActive: {
-    color: theme.warning,
+  favoriteHeartIconActive: {
+    color: theme.accent,
   },
   verifiedStatusBadge: {
     alignItems: 'center',
