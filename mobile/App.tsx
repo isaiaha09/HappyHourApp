@@ -7249,7 +7249,7 @@ function AppScreen() {
                   <MapView
                     initialRegion={mapInitialRegion}
                     minDelta={minLatitudeDelta}
-                    pitchEnabled={false}
+                    pitchEnabled
                     userInterfaceStyle={Platform.OS === 'ios' ? (displayedDarkMapMode ? 'dark' : 'light') : undefined}
                     rotateEnabled
                     scrollEnabled
@@ -7363,7 +7363,7 @@ function AppScreen() {
                     <MapView
                       mapType="standard"
                       region={mapRegion}
-                      pitchEnabled={false}
+                      pitchEnabled
                       rotateEnabled
                       scrollEnabled
                       showsCompass={false}
