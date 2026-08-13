@@ -147,12 +147,12 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   private func setupView() {
     backgroundColor = .clear
     isOpaque = false
-    clipsToBounds = true
+    clipsToBounds = false
     layer.allowsGroupOpacity = true
 
     hostingController.view.backgroundColor = .clear
     hostingController.view.isOpaque = false
-    hostingController.view.clipsToBounds = true
+    hostingController.view.clipsToBounds = false
     hostingController.view.layer.allowsGroupOpacity = true
     hostingController.view.translatesAutoresizingMaskIntoConstraints = false
     addSubview(hostingController.view)
@@ -210,7 +210,22 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   }
 
   private func clearTabViewBackingBackgrounds(in view: UIView) {
-    if view is UITabBar || view is UIVisualEffectView {
+    if let tabBar = view as? UITabBar {
+      let appearance = UITabBarAppearance()
+      appearance.configureWithTransparentBackground()
+      appearance.backgroundColor = .clear
+      appearance.shadowColor = .clear
+      tabBar.standardAppearance = appearance
+      if #available(iOS 15.0, *) {
+        tabBar.scrollEdgeAppearance = appearance
+      }
+      tabBar.backgroundColor = .clear
+      tabBar.isOpaque = false
+      tabBar.isTranslucent = true
+      return
+    }
+
+    if view is UIVisualEffectView {
       return
     }
 
