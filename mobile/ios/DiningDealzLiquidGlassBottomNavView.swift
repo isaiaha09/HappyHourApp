@@ -115,7 +115,6 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   private let state = DiningDealzLiquidGlassBottomNavState()
   private let hostingController = UIHostingController(rootView: AnyView(EmptyView()))
   private var hasConfiguredRootView = false
-  private var rootViewUpdateScheduled = false
 
   private var resolvedActiveItem: DiningDealzLiquidGlassBottomNavItem {
     let preferredItem = DiningDealzLiquidGlassBottomNavItem(rawValue: activeItem as String) ?? .map
@@ -169,19 +168,6 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   }
 
   private func updateRootView() {
-    guard !rootViewUpdateScheduled else {
-      return
-    }
-
-    rootViewUpdateScheduled = true
-    DispatchQueue.main.async { [weak self] in
-      guard let self else { return }
-      self.rootViewUpdateScheduled = false
-      self.applyRootViewUpdate()
-    }
-  }
-
-  private func applyRootViewUpdate() {
     let currentActiveItem = resolvedActiveItem
     let currentBottomInset = CGFloat(truncating: bottomInset)
     let currentItems = resolvedItems
@@ -224,7 +210,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   }
 
   private func clearTabViewBackingBackgrounds(in view: UIView) {
-    if view is UIVisualEffectView {
+    if view is UITabBar || view is UIVisualEffectView {
       return
     }
 
