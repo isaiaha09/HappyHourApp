@@ -322,7 +322,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
       .toolbarBackground(.hidden, for: .tabBar)
       .tint(accentColor)
       .frame(maxWidth: .infinity)
-      .frame(height: 0)
+      .frame(height: 52)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     .background(Color.clear)
