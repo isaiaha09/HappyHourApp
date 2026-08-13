@@ -1692,7 +1692,7 @@ function AppScreen() {
   );
   const fallbackBottomNavHeight = Math.max(insets.bottom + 76, 90);
   const nativeBottomNavHeight = Math.max(insets.bottom + 52, 64);
-  const bottomNavHeight = supportedIOSLiquidGlassRuntime ? nativeBottomNavHeight : fallbackBottomNavHeight;
+  const bottomNavHeight = nativeBottomNavAvailable ? nativeBottomNavHeight : fallbackBottomNavHeight;
   const mapOverlayBottomPadding = bottomNavHeight + 18;
   const floatingDashboardButtonOffset = bottomNavHeight + 16;
   const mapResultsCardMaxHeight = Math.max(
