@@ -6713,7 +6713,6 @@ function AppScreen() {
     const bottomNavThemeVariant = mapScreenActive
       ? (displayedDarkMapMode ? 'map-dark' : 'map-light')
       : 'default-dark';
-    const shouldPreferNativeAuthenticatedBottomNav = !options.guest && supportedIOSLiquidGlassRuntime;
     let activeItem: MainShellBottomNavItem = 'map';
     if (!options.guest) {
       if (screenMode === 'home-feed') {
@@ -6725,7 +6724,7 @@ function AppScreen() {
       }
     }
 
-    if (nativeBottomNavAvailable || shouldPreferNativeAuthenticatedBottomNav) {
+    if (nativeBottomNavAvailable) {
       return (
         <View pointerEvents="box-none" style={styles.bottomNavOverlay}>
           <NativeIOSLiquidGlassBottomNav
