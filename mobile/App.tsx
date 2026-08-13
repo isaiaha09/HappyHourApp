@@ -7249,9 +7249,13 @@ function AppScreen() {
                   <MapView
                     initialRegion={mapInitialRegion}
                     minDelta={minLatitudeDelta}
+                    pitchEnabled={false}
                     userInterfaceStyle={Platform.OS === 'ios' ? (displayedDarkMapMode ? 'dark' : 'light') : undefined}
                     rotateEnabled
                     scrollEnabled
+                    showsCompass={false}
+                    showsMyLocationButton={false}
+                    toolbarEnabled={false}
                     zoomEnabled
                     mapType="standard"
                     onLayout={(event) => {
@@ -7359,13 +7363,14 @@ function AppScreen() {
                     <MapView
                       mapType="standard"
                       region={mapRegion}
-                      rotateEnabled={false}
-                      scrollEnabled={false}
+                      pitchEnabled={false}
+                      rotateEnabled
+                      scrollEnabled
                       showsCompass={false}
                       showsMyLocationButton={false}
                       toolbarEnabled={false}
                       userInterfaceStyle={transitioningMapTheme ? 'dark' : 'light'}
-                      zoomEnabled={false}
+                      zoomEnabled
                       style={styles.mapBackground}
                     >
                       <BrowseMapMarkers
@@ -7835,12 +7840,6 @@ function AppScreen() {
               {renderOnboardingScreen('profiles')}
             </View>
           </Animated.View>
-          {renderAuthenticatedBottomNavLayer({
-            interactive: false,
-            transitionStyle: nativeBottomNavAvailable
-              ? loginSuccessNativeBottomNavStyle
-              : loginSuccessBottomNavStyle,
-          })}
         </View>
       ) : showLogoutTransition ? (
         <View style={styles.onboardingTransitionRoot}>
@@ -7890,7 +7889,16 @@ function AppScreen() {
       ) : (
         renderBrowseScreen()
       )}
-      {shouldRenderPersistentBottomNav ? renderBottomNav({ guest: !authenticatedSession }) : null}
+      {authenticatedSession && (showLoginSuccessTransition || shouldRenderPersistentBottomNav) ? (
+        renderAuthenticatedBottomNavLayer({
+          interactive: !showLoginSuccessTransition,
+          transitionStyle: showLoginSuccessTransition
+            ? nativeBottomNavAvailable
+              ? loginSuccessNativeBottomNavStyle
+              : loginSuccessBottomNavStyle
+            : undefined,
+        })
+      ) : shouldRenderPersistentBottomNav ? renderBottomNav({ guest: true }) : null}
       <Modal
         animationType="none"
         onRequestClose={() => closeBottomMoreSheet()}
