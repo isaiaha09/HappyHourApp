@@ -120,10 +120,6 @@ function hasNativeViewManager(viewName: string) {
   return Boolean(nativeUIManager[viewName] || nativeUIManager[`${viewName}Manager`]);
 }
 
-function getBottomNavStyle(bottomInset: number, style?: StyleProp<ViewStyle>) {
-  return [{ width: '100%' as const, backgroundColor: 'transparent', height: Math.max(64, 64 + bottomInset), overflow: 'visible' as const }, style];
-}
-
 function getHeaderButtonStyle(variant: 'pill' | 'icon', label?: string, style?: StyleProp<ViewStyle>) {
   if (variant === 'icon') {
     return [{ width: headerIconButtonSize, height: headerIconButtonSize }, style];
@@ -162,7 +158,7 @@ export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, include
       onNavItemSelect={(event) => onSelect(event.nativeEvent.item)}
       profileLabel={labels?.profile}
       profileSystemImage={systemImages?.profile}
-      style={getBottomNavStyle(bottomInset, style)}
+      style={[{ width: '100%' as const }, style]}
       themeVariant={themeVariant}
     />
   );
