@@ -18,6 +18,7 @@ export async function registerForPushNotificationsAsync(): Promise<PushRegistrat
     await Notifications.setNotificationChannelAsync(androidNotificationChannelId, {
       name: 'Business updates',
       importance: Notifications.AndroidImportance.DEFAULT,
+      sound: 'default',
     });
   }
 
