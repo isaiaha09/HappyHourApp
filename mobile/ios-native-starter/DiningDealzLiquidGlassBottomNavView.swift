@@ -115,6 +115,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   private let state = DiningDealzLiquidGlassBottomNavState()
   private let hostingController = UIHostingController(rootView: AnyView(EmptyView()))
   private var hasConfiguredRootView = false
+  private var tabBarAppearanceCleanupGeneration = 0
 
   private var resolvedActiveItem: DiningDealzLiquidGlassBottomNavItem {
     let preferredItem = DiningDealzLiquidGlassBottomNavItem(rawValue: activeItem as String) ?? .map
@@ -138,9 +139,13 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   override func layoutSubviews() {
     super.layoutSubviews()
     clearTabViewBackingBackgrounds(in: hostingController.view)
-    DispatchQueue.main.async { [weak self] in
-      guard let self else { return }
-      self.clearTabViewBackingBackgrounds(in: self.hostingController.view)
+    scheduleTabViewBackingBackgroundCleanup()
+  }
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    if window != nil {
+      scheduleTabViewBackingBackgroundCleanup()
     }
   }
 
@@ -203,9 +208,17 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
       hasConfiguredRootView = true
     }
 
-    DispatchQueue.main.async { [weak self] in
-      guard let self else { return }
-      self.clearTabViewBackingBackgrounds(in: self.hostingController.view)
+    scheduleTabViewBackingBackgroundCleanup()
+  }
+
+  private func scheduleTabViewBackingBackgroundCleanup() {
+    tabBarAppearanceCleanupGeneration += 1
+    let generation = tabBarAppearanceCleanupGeneration
+    [0.0, 0.1, 0.3, 0.6].forEach { delay in
+      DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+        guard let self, self.tabBarAppearanceCleanupGeneration == generation else { return }
+        self.clearTabViewBackingBackgrounds(in: self.hostingController.view)
+      }
     }
   }
 
@@ -229,12 +242,11 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
       return
     }
 
-    if view is UIVisualEffectView {
-      return
+    if !(view is UIVisualEffectView) {
+      view.backgroundColor = .clear
+      view.isOpaque = false
     }
 
-    view.backgroundColor = .clear
-    view.isOpaque = false
     view.subviews.forEach(clearTabViewBackingBackgrounds)
   }
 
