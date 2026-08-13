@@ -7,6 +7,7 @@ function createProps(overrides: Partial<BrowseControlsProps> = {}): BrowseContro
   return {
     browseMode: 'map',
     confirmedDealsOnly: false,
+    favoriteBusinessesOnly: false,
     filtersExpanded: false,
     informalBusinessesOnly: false,
     onBrowseModeChange: jest.fn(),
@@ -17,6 +18,7 @@ function createProps(overrides: Partial<BrowseControlsProps> = {}): BrowseContro
     onSelectCity: jest.fn() as jest.MockedFunction<(city: CityFilterValue) => void>,
     onToggleConfirmedDealsOnly: jest.fn(),
     onToggleDealDay: jest.fn() as jest.MockedFunction<(day: WeekdayFilterValue) => void>,
+    onToggleFavoriteBusinessesOnly: jest.fn(),
     onToggleFilters: jest.fn(),
     onToggleInformalBusinessesOnly: jest.fn(),
     onToggleOperatingDay: jest.fn() as jest.MockedFunction<(day: WeekdayFilterValue) => void>,
@@ -24,6 +26,7 @@ function createProps(overrides: Partial<BrowseControlsProps> = {}): BrowseContro
     onToggleVerifiedBusinessesOnly: jest.fn(),
     resultCount: 12,
     searchQuery: '',
+    showFavoriteBusinessesFilter: false,
     selectedCity: 'all',
     selectedDealDays: [],
     selectedOperatingDays: [],

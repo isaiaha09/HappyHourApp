@@ -654,6 +654,7 @@ function AppScreen() {
   const [selectedCity, setSelectedCity] = useState<(typeof cityFilters)[number]['value']>('all');
   const [selectedVenueTypes, setSelectedVenueTypes] = useState<VenueFilterValue[]>(() => venueFilters.map((filter) => filter.value));
   const [confirmedDealsOnly, setConfirmedDealsOnly] = useState(false);
+  const [favoriteBusinessesOnly, setFavoriteBusinessesOnly] = useState(false);
   const [selectedOperatingDays, setSelectedOperatingDays] = useState<WeekdayFilterValue[]>([]);
   const [selectedDealDays, setSelectedDealDays] = useState<WeekdayFilterValue[]>([]);
   const [informalBusinessesOnly, setInformalBusinessesOnly] = useState(false);
@@ -672,6 +673,7 @@ function AppScreen() {
   const [guestOnboardingOrigin, setGuestOnboardingOrigin] = useState<'browse' | 'splash' | null>(null);
   const [guestChromeFadeInActive, setGuestChromeFadeInActive] = useState(false);
   const [showGuestFavoritePrompt, setShowGuestFavoritePrompt] = useState(false);
+  const [showGuestFavoriteBusinessesFilterPrompt, setShowGuestFavoriteBusinessesFilterPrompt] = useState(false);
   const [showGuestBusinessClaimPrompt, setShowGuestBusinessClaimPrompt] = useState(false);
   const [showGuestAccuracyPrompt, setShowGuestAccuracyPrompt] = useState(false);
   const [showGuestBottomNavPrompt, setShowGuestBottomNavPrompt] = useState(false);
@@ -939,8 +941,14 @@ function AppScreen() {
         : 'dark')
     : 'light';
 
+  const favoriteBusinessSlugs = useMemo(() => (
+    (authenticatedSession?.favorite_businesses ?? []).map((business) => business.slug)
+  ), [authenticatedSession?.favorite_businesses]);
+  const favoriteBusinessesFilterActive = authenticatedSession?.portal === 'customer' && favoriteBusinessesOnly;
   const filteredPlaces = useMemo(() => getFilteredPlaces(places, {
     confirmedDealsOnly,
+    favoriteBusinessesOnly: favoriteBusinessesFilterActive,
+    favoriteBusinessSlugs,
     informalBusinessesOnly,
     searchQuery: normalizedDeferredSearchQuery,
     selectedCity,
@@ -950,6 +958,8 @@ function AppScreen() {
     verifiedBusinessesOnly,
   }), [
     confirmedDealsOnly,
+    favoriteBusinessesFilterActive,
+    favoriteBusinessSlugs,
     informalBusinessesOnly,
     normalizedDeferredSearchQuery,
     places,
@@ -961,6 +971,8 @@ function AppScreen() {
   ]);
   const mapAutoFitCriteriaKey = useMemo(() => [
     confirmedDealsOnly,
+    favoriteBusinessesFilterActive,
+    favoriteBusinessSlugs.join('|'),
     informalBusinessesOnly,
     normalizedDeferredSearchQuery,
     selectedCity,
@@ -970,6 +982,8 @@ function AppScreen() {
     verifiedBusinessesOnly,
   ].join(':'), [
     confirmedDealsOnly,
+    favoriteBusinessesFilterActive,
+    favoriteBusinessSlugs,
     informalBusinessesOnly,
     normalizedDeferredSearchQuery,
     selectedCity,
@@ -1372,6 +1386,7 @@ function AppScreen() {
     if (authenticatedSession) {
       setGuestBrowseModeLocked(false);
       setShowGuestFavoritePrompt(false);
+      setShowGuestFavoriteBusinessesFilterPrompt(false);
       setShowGuestBusinessClaimPrompt(false);
     }
   }, [authenticatedSession]);
@@ -3087,6 +3102,7 @@ function AppScreen() {
         break;
       case 'auth':
         setShowGuestFavoritePrompt(false);
+        setShowGuestFavoriteBusinessesFilterPrompt(false);
         setShowGuestBusinessClaimPrompt(false);
         setShowCustomerBusinessClaimPrompt(false);
         setAuthMessage(null);
@@ -3573,11 +3589,13 @@ function AppScreen() {
     setSelectedMapSearchPreviewPlace(null);
     setDisplayedMapPreviewPlace(null);
     setShowGuestFavoritePrompt(false);
+    setShowGuestFavoriteBusinessesFilterPrompt(false);
     setShowGuestBusinessClaimPrompt(false);
     setShowGuestAccuracyPrompt(false);
     setShowGuestBottomNavPrompt(false);
     setShowCustomerBusinessClaimPrompt(false);
     setBrowseFiltersExpanded(false);
+    setFavoriteBusinessesOnly(false);
     setGuestBrowseModeLocked(false);
     setLogoutTransitionSession(authenticatedSession);
     setAuthenticatedSession(null);
@@ -3697,6 +3715,8 @@ function AppScreen() {
     });
   }, [
     mapResultsOpacity,
+    favoriteBusinessesFilterActive,
+    favoriteBusinessSlugs,
     mapSearchResultDisplayPool,
     mapSearchResultDisplayPool.length,
     mapSearchResultsKey,
@@ -4261,6 +4281,21 @@ function AppScreen() {
     setConfirmedDealsOnly((current) => !current);
   }
 
+  function handleToggleFavoriteBusinessesOnly() {
+    animateNextLayout();
+
+    if (!authenticatedSession) {
+      setShowGuestFavoriteBusinessesFilterPrompt(true);
+      return;
+    }
+
+    if (authenticatedSession.portal !== 'customer') {
+      return;
+    }
+
+    setFavoriteBusinessesOnly((current) => !current);
+  }
+
   function handleToggleOperatingDay(day: WeekdayFilterValue) {
     animateNextLayout();
     setSelectedOperatingDays((current) => toggleWeekdaySelection(current, day));
@@ -4689,6 +4724,7 @@ function AppScreen() {
       setGuestBrowseModeLocked(false);
     }
     setShowGuestFavoritePrompt(false);
+    setShowGuestFavoriteBusinessesFilterPrompt(false);
     setShowGuestBusinessClaimPrompt(false);
     setShowCustomerBusinessClaimPrompt(false);
     setProfileErrorMessage(null);
@@ -4716,6 +4752,7 @@ function AppScreen() {
       setGuestBrowseModeLocked(false);
     }
     setShowGuestFavoritePrompt(false);
+    setShowGuestFavoriteBusinessesFilterPrompt(false);
     setAuthPortal(portal);
     setAuthMessage(null);
     setProfileErrorMessage(null);
@@ -4731,6 +4768,7 @@ function AppScreen() {
   function handleBackToLanding() {
     dismissKeyboardForScreenTransition();
     setShowGuestFavoritePrompt(false);
+    setShowGuestFavoriteBusinessesFilterPrompt(false);
     setShowGuestBusinessClaimPrompt(false);
     setShowCustomerBusinessClaimPrompt(false);
     setAuthMessage(null);
@@ -4755,6 +4793,7 @@ function AppScreen() {
 
   function resetGuestMapAfterExit() {
     setShowGuestFavoritePrompt(false);
+    setShowGuestFavoriteBusinessesFilterPrompt(false);
     setShowGuestBusinessClaimPrompt(false);
     setShowCustomerBusinessClaimPrompt(false);
     setBrowseFiltersExpanded(false);
@@ -4803,6 +4842,10 @@ function AppScreen() {
     setShowGuestFavoritePrompt(false);
   }
 
+  function handleDismissGuestFavoriteBusinessesFilterPrompt() {
+    setShowGuestFavoriteBusinessesFilterPrompt(false);
+  }
+
   function handleDismissGuestAccuracyPrompt() {
     setShowGuestAccuracyPrompt(false);
   }
@@ -4829,6 +4872,11 @@ function AppScreen() {
     setShowGuestFavoritePrompt(false);
     setSelectedPlaceSlug(null);
     setSelectedLocationId(null);
+    handleOpenProfiles();
+  }
+
+  function handleCreateCustomerAccountFromGuestFavoriteBusinessesFilter() {
+    setShowGuestFavoriteBusinessesFilterPrompt(false);
     handleOpenProfiles();
   }
 
@@ -7401,6 +7449,7 @@ function AppScreen() {
                 <BrowseControls
                   browseMode={browseMode}
                   confirmedDealsOnly={confirmedDealsOnly}
+                  favoriteBusinessesOnly={favoriteBusinessesFilterActive}
                   overlay={browseMode === 'map'}
                   filtersExpanded={browseFiltersExpanded}
                   informalBusinessesOnly={informalBusinessesOnly}
@@ -7415,6 +7464,7 @@ function AppScreen() {
                   onToggleSearchPanelLift={browseMode === 'map' ? handleToggleMapSearchPanelLift : undefined}
                   onToggleConfirmedDealsOnly={handleToggleConfirmedDealsOnly}
                   onToggleDealDay={handleToggleDealDay}
+                  onToggleFavoriteBusinessesOnly={handleToggleFavoriteBusinessesOnly}
                   onToggleFilters={handleToggleBrowseFilters}
                   onToggleInformalBusinessesOnly={handleToggleInformalBusinessesOnly}
                   onToggleMapTheme={browseMode === 'map' ? handleToggleMapTheme : undefined}
@@ -7424,6 +7474,7 @@ function AppScreen() {
                   resultCount={browseResultCount}
                   searchPanelLifted={browseMode === 'map' ? mapSearchPanelLifted : false}
                   searchQuery={searchQuery}
+                  showFavoriteBusinessesFilter={browseMode === 'map' && (!authenticatedSession || authenticatedSession.portal === 'customer')}
                   selectedDealDays={selectedDealDays}
                   selectedCity={selectedCity}
                   selectedOperatingDays={selectedOperatingDays}
@@ -8036,6 +8087,29 @@ function AppScreen() {
       </Modal>
       <Modal
         animationType="fade"
+        onRequestClose={handleDismissGuestFavoriteBusinessesFilterPrompt}
+        transparent
+        visible={showGuestFavoriteBusinessesFilterPrompt}
+      >
+        <View style={styles.guestFavoriteModalBackdrop}>
+          <View style={styles.guestFavoriteModalCard}>
+            <Text style={styles.guestFavoriteModalTitle}>Create a free customer account to filter favorites</Text>
+            <Text style={styles.guestFavoriteModalText}>
+              Create a free customer account to see only your favorite businesses on the map.
+            </Text>
+            <View style={styles.guestFavoriteModalActions}>
+              <Pressable onPress={handleDismissGuestFavoriteBusinessesFilterPrompt} style={styles.guestFavoriteModalSecondaryButton}>
+                <Text style={styles.guestFavoriteModalSecondaryText}>Maybe later</Text>
+              </Pressable>
+              <Pressable onPress={handleCreateCustomerAccountFromGuestFavoriteBusinessesFilter} style={styles.guestFavoriteModalPrimaryButton}>
+                <Text style={styles.guestFavoriteModalPrimaryText}>Create free customer account</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      <Modal
+        animationType="fade"
         onRequestClose={handleDismissGuestAccuracyPrompt}
         transparent
         visible={showGuestAccuracyPrompt}
@@ -8607,6 +8681,8 @@ function getFilteredPlaces(
   places: PlaceListItem[],
   filters: {
     confirmedDealsOnly: boolean;
+    favoriteBusinessesOnly: boolean;
+    favoriteBusinessSlugs: string[];
     informalBusinessesOnly: boolean;
     searchQuery: string;
     selectedCity: CityFilterValue;
@@ -8629,12 +8705,13 @@ function getFilteredPlaces(
       const matchesSearch = filters.searchQuery.length === 0 || score > 0;
       const hasConfirmedDeals = place.deal_count > 0 || getPlaceLocations(place).some((location) => location.deal_count > 0);
       const matchesDeals = !filters.confirmedDealsOnly || hasConfirmedDeals;
+      const matchesFavorites = !filters.favoriteBusinessesOnly || filters.favoriteBusinessSlugs.includes(place.slug);
       const matchesInformal = !filters.informalBusinessesOnly || !!place.is_informal;
       const matchesOperatingDays = !filters.selectedOperatingDays.length || hasAnyMatchingWeekday(place.operating_weekdays, filters.selectedOperatingDays);
       const matchesDealDays = !filters.selectedDealDays.length || hasAnyMatchingWeekday(place.deal_weekdays, filters.selectedDealDays);
       const matchesVerified = !filters.verifiedBusinessesOnly || place.is_claimed;
 
-      return matchesCity && matchesVenueType && matchesSearch && matchesDeals && matchesInformal && matchesOperatingDays && matchesDealDays && matchesVerified;
+      return matchesCity && matchesVenueType && matchesSearch && matchesDeals && matchesFavorites && matchesInformal && matchesOperatingDays && matchesDealDays && matchesVerified;
     })
     .sort((first, second) => {
       if (filters.searchQuery.length === 0) {

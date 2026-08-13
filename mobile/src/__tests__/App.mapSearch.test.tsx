@@ -921,6 +921,32 @@ describe('App browse map search', () => {
     expect(screen.queryByText('Best matches')).toBeNull();
   });
 
+  it('prompts guests to create a customer account before filtering favorite businesses', async () => {
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    fireEvent.press(screen.getByTestId('browse-filters-toggle'));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+
+    expect(screen.getByTestId('browse-favorite-businesses-filter')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('browse-favorite-businesses-filter'));
+
+    expect(screen.getByText('Create a free customer account to filter favorites')).toBeTruthy();
+    fireEvent.press(screen.getByText('Create free customer account'));
+
+    expect(await screen.findByText('Create profile screen')).toBeTruthy();
+  });
+
   it('keeps Focus for multiple results, promotes the focused row to Select, and skips the preview', async () => {
     mockFetchPlaces.mockResolvedValue([samplePlace, secondSamplePlace]);
     mockFetchPlaceDetail.mockResolvedValue({
@@ -1406,6 +1432,91 @@ describe('App browse map search', () => {
     });
 
     expect(screen.getByTestId('browse-summary-label').props.children).toBe('Camarillo');
+  });
+
+  it('filters the authenticated map to the customer favorite businesses', async () => {
+    mockFetchPlaces.mockResolvedValue([samplePlace, secondSamplePlace, thirdSamplePlace]);
+    mockLoginProfile.mockResolvedValue({
+      id: 7,
+      username: 'guestfan',
+      email: 'guestfan@example.com',
+      first_name: 'Guest',
+      last_name: 'Fan',
+      auth_token: 'token-123',
+      portal: 'customer',
+      profile_type: 'customer',
+      email_verified: true,
+      two_factor_enabled: false,
+      can_access_places: true,
+      favorite_businesses: [{
+        slug: secondSamplePlace.slug,
+        name: secondSamplePlace.name,
+        city: secondSamplePlace.city,
+        city_label: secondSamplePlace.city_label,
+        venue_type: secondSamplePlace.venue_type,
+        venue_type_label: secondSamplePlace.venue_type_label,
+        address_line_1: secondSamplePlace.address_line_1,
+        website_url: secondSamplePlace.website_url,
+      }],
+    });
+
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    fireEvent.press(screen.getByLabelText('Open customer login'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    fireEvent.press(screen.getByLabelText('Submit login'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(await screen.findByText('Dashboard screen')).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('Open places'));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    fireEvent.press(screen.getByLabelText('Open map'));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    fireEvent.press(screen.getByTestId('browse-filters-toggle'));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+
+    expect(screen.getByTestId('browse-favorite-businesses-filter')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('browse-favorite-businesses-filter'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+
+    expect(screen.getAllByTestId('mock-map-marker')).toHaveLength(1);
+    expect(screen.getByTestId('mock-map-marker').props.coordinate).toEqual({
+      latitude: secondSamplePlace.latitude,
+      longitude: secondSamplePlace.longitude,
+    });
+    expect(screen.getByTestId('browse-summary-label').props.children).toContain('Favorite Businesses');
   });
 
   it('returns to the login screen after logout and restores the previous guest map without restarting splash', async () => {

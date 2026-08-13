@@ -26,6 +26,7 @@ const dismissKeyboardOnScrollProps = {
 export type BrowseControlsProps = {
   browseMode: BrowseMode;
   confirmedDealsOnly: boolean;
+  favoriteBusinessesOnly: boolean;
   overlay?: boolean;
   filtersExpanded: boolean;
   informalBusinessesOnly: boolean;
@@ -41,6 +42,7 @@ export type BrowseControlsProps = {
   onToggleSearchPanelLift?: () => void;
   onToggleConfirmedDealsOnly: () => void;
   onToggleDealDay: (day: WeekdayFilterValue) => void;
+  onToggleFavoriteBusinessesOnly: () => void;
   onToggleFilters: () => void;
   onToggleInformalBusinessesOnly: () => void;
   onToggleMapTheme?: () => void;
@@ -50,6 +52,7 @@ export type BrowseControlsProps = {
   resultCount: number;
   searchPanelLifted?: boolean;
   searchQuery: string;
+  showFavoriteBusinessesFilter: boolean;
   selectedDealDays: WeekdayFilterValue[];
   selectedCity: CityFilterValue;
   selectedOperatingDays: WeekdayFilterValue[];
@@ -60,6 +63,7 @@ export type BrowseControlsProps = {
 export function BrowseControls({
   browseMode,
   confirmedDealsOnly,
+  favoriteBusinessesOnly,
   overlay = false,
   filtersExpanded,
   informalBusinessesOnly,
@@ -75,6 +79,7 @@ export function BrowseControls({
   onToggleSearchPanelLift,
   onToggleConfirmedDealsOnly,
   onToggleDealDay,
+  onToggleFavoriteBusinessesOnly,
   onToggleFilters,
   onToggleInformalBusinessesOnly,
   onToggleMapTheme,
@@ -84,6 +89,7 @@ export function BrowseControls({
   resultCount,
   searchPanelLifted = false,
   searchQuery,
+  showFavoriteBusinessesFilter,
   selectedDealDays,
   selectedCity,
   selectedOperatingDays,
@@ -426,6 +432,7 @@ export function BrowseControls({
           <Text numberOfLines={1} style={styles.browseStatsSubtleText} testID="browse-summary-label">
             {getBrowseSummaryLabel(selectedCity, selectedVenueTypes, normalizedSearchQuery, {
               confirmedDealsOnly,
+              favoriteBusinessesOnly,
               informalBusinessesOnly,
               selectedDealDays,
               selectedOperatingDays,
@@ -519,6 +526,15 @@ export function BrowseControls({
               >
                 <Text style={[chipTextStyle, confirmedDealsOnly ? chipTextActiveStyle : null]}>Confirmed Happy Hours & Deals</Text>
               </Pressable>
+              {showFavoriteBusinessesFilter ? (
+                <Pressable
+                  onPress={onToggleFavoriteBusinessesOnly}
+                  style={[chipStyle, favoriteBusinessesOnly ? chipActiveStyle : null]}
+                  testID="browse-favorite-businesses-filter"
+                >
+                  <Text style={[chipTextStyle, favoriteBusinessesOnly ? chipTextActiveStyle : null]}>Favorite Businesses</Text>
+                </Pressable>
+              ) : null}
               <Pressable
                 onPress={onToggleInformalBusinessesOnly}
                 style={[chipStyle, informalBusinessesOnly ? chipActiveStyle : null]}
