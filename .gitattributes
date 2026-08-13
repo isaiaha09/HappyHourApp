@@ -1,2 +1,17 @@
 /mobile/ios/.xcode.env text eol=lf
 /mobile/ios/.xcode.env.local text eol=lf
+/mobile/ios/Podfile text eol=lf
+/mobile/ios/Podfile.lock text eol=lf
+/mobile/ios/Podfile.properties.json text eol=lf
+/mobile/ios/**/*.pbxproj text eol=lf
+/mobile/ios/**/*.plist text eol=lf
+/mobile/ios/**/*.entitlements text eol=lf
+/mobile/ios/**/*.xcworkspacedata text eol=lf
+/mobile/ios/**/*.xcscheme text eol=lf
+/mobile/ios/**/*.json text eol=lf
+/mobile/ios/**/*.xcprivacy text eol=lf
+/mobile/ios/**/*.storyboard text eol=lf
+/mobile/ios/**/*.swift text eol=lf
+/mobile/ios/**/*.m text eol=lf
+/mobile/ios/**/*.h text eol=lf
+/mobile/ios/.gitignore text eol=lf
