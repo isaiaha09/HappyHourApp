@@ -15,12 +15,12 @@
 		40546DB82FF5D99D000164D8 /* DiningDealzLiquidGlassBottomNavViewManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 40546DB02FF5D99D000164D8 /* DiningDealzLiquidGlassBottomNavViewManager.m */; };
 		40546DB92FF5D99D000164D8 /* DiningDealzLiquidGlassHeaderButtonViewManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40546DB42FF5D99D000164D8 /* DiningDealzLiquidGlassHeaderButtonViewManager.swift */; };
 		40546DBA2FF5D99D000164D8 /* DiningDealzLiquidGlassBottomNavView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40546DAF2FF5D99D000164D8 /* DiningDealzLiquidGlassBottomNavView.swift */; };
-		E6A1C0013F5D99D000000001 /* DiningDealzMetroHost.m in Sources */ = {isa = PBXBuildFile; fileRef = E6A1C0033F5D99D000000001 /* DiningDealzMetroHost.m */; };
-		E6A1C0023F5D99D000000001 /* DiningDealzMetroHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A1C0043F5D99D000000001 /* DiningDealzMetroHost.swift */; };
 		737124CCA1455B18639BE1D1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = E56C9A26B47FF4BF399FD0E3 /* PrivacyInfo.xcprivacy */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		C0CFB7BC7F32716731521BEC /* libPods-DiningDealz.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B725024709964B4B62A19279 /* libPods-DiningDealz.a */; };
 		D618DE88D4559DEB32EE00A2 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 181E9FAF8A4AC885418EC492 /* ExpoModulesProvider.swift */; };
+		E6A1C0013F5D99D000000001 /* DiningDealzMetroHost.m in Sources */ = {isa = PBXBuildFile; fileRef = E6A1C0033F5D99D000000001 /* DiningDealzMetroHost.m */; };
+		E6A1C0023F5D99D000000001 /* DiningDealzMetroHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A1C0043F5D99D000000001 /* DiningDealzMetroHost.swift */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
@@ -36,13 +36,13 @@
 		40546DB22FF5D99D000164D8 /* DiningDealzLiquidGlassHeaderButtonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiningDealzLiquidGlassHeaderButtonView.swift; sourceTree = "<group>"; };
 		40546DB32FF5D99D000164D8 /* DiningDealzLiquidGlassHeaderButtonViewManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = DiningDealzLiquidGlassHeaderButtonViewManager.m; sourceTree = "<group>"; };
 		40546DB42FF5D99D000164D8 /* DiningDealzLiquidGlassHeaderButtonViewManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiningDealzLiquidGlassHeaderButtonViewManager.swift; sourceTree = "<group>"; };
-		E6A1C0033F5D99D000000001 /* DiningDealzMetroHost.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = DiningDealzMetroHost.m; sourceTree = "<group>"; };
-		E6A1C0043F5D99D000000001 /* DiningDealzMetroHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiningDealzMetroHost.swift; sourceTree = "<group>"; };
 		442BF1F0C82A15A15B590F51 /* Pods-DiningDealz.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DiningDealz.release.xcconfig"; path = "Target Support Files/Pods-DiningDealz/Pods-DiningDealz.release.xcconfig"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = DiningDealz/SplashScreen.storyboard; sourceTree = "<group>"; };
 		B725024709964B4B62A19279 /* libPods-DiningDealz.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-DiningDealz.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
 		E56C9A26B47FF4BF399FD0E3 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = DiningDealz/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		E6A1C0033F5D99D000000001 /* DiningDealzMetroHost.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = DiningDealzMetroHost.m; sourceTree = "<group>"; };
+		E6A1C0043F5D99D000000001 /* DiningDealzMetroHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiningDealzMetroHost.swift; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = DiningDealz/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* DiningDealz-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "DiningDealz-Bridging-Header.h"; path = "DiningDealz/DiningDealz-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -272,14 +272,10 @@
 			);
 			inputPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-DiningDealz/Pods-DiningDealz-frameworks.sh",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
 				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
 			);
 			name = "[CP] Embed Pods Frameworks";
 			outputPaths = (
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
 				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -300,8 +296,11 @@
 				"${PODS_CONFIGURATION_BUILD_DIR}/EXNotifications/ExpoNotifications_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/EXTaskManager/ExpoTaskManager_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/ExpoFileSystem/ExpoFileSystem_privacy.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/RCT-Folly/RCT-Folly_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/React-Core/React-Core_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/React-cxxreact/React-cxxreact_privacy.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/boost/boost_privacy.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/glog/glog_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/react-native-maps/ReactNativeMapsPrivacy.bundle",
 			);
 			name = "[CP] Copy Pods Resources";
@@ -312,8 +311,11 @@
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoNotifications_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoTaskManager_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoFileSystem_privacy.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/RCT-Folly_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/React-Core_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/React-cxxreact_privacy.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/boost_privacy.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/glog_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ReactNativeMapsPrivacy.bundle",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -382,7 +384,7 @@
 					"$(inherited)",
 					"FB_SONARKIT_ENABLED=1",
 				);
-				INFOPLIST_FILE = DiningDealz/Info-Debug.plist;
+				INFOPLIST_FILE = "DiningDealz/Info-Debug.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -400,7 +402,7 @@
 				SWIFT_OBJC_BRIDGING_HEADER = "DiningDealz/DiningDealz-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1";
+				TARGETED_DEVICE_FAMILY = 1;
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Debug;
@@ -411,7 +413,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = DiningDealz/DiningDealz-Release.entitlements;
+				CODE_SIGN_ENTITLEMENTS = "DiningDealz/DiningDealz-Release.entitlements";
 				CURRENT_PROJECT_VERSION = 60;
 				DEVELOPMENT_TEAM = V6MYG36LZ9;
 				INFOPLIST_FILE = DiningDealz/Info.plist;
@@ -431,7 +433,7 @@
 				PRODUCT_NAME = DiningDealz;
 				SWIFT_OBJC_BRIDGING_HEADER = "DiningDealz/DiningDealz-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1";
+				TARGETED_DEVICE_FAMILY = 1;
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Release;
