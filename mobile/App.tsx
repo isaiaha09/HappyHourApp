@@ -610,7 +610,6 @@ function AppScreen() {
   const splashExitOpacity = useRef(new Animated.Value(1)).current;
   const authIntroOpacity = useRef(new Animated.Value(1)).current;
   const loginSuccessTransition = useRef(new Animated.Value(1)).current;
-  const loginSuccessNativeBottomNavReveal = useRef(new Animated.Value(1)).current;
   const guestChromeFadeInOpacity = useRef(new Animated.Value(1)).current;
   const screenTransition = useRef(new Animated.Value(1)).current;
   const profileSceneTransition = useRef(new Animated.Value(1)).current;
@@ -2376,17 +2375,6 @@ function AppScreen() {
       },
     ],
   };
-  const loginSuccessNativeBottomNavStyle = {
-    opacity: loginSuccessNativeBottomNavReveal,
-    transform: [
-      {
-        translateY: loginSuccessNativeBottomNavReveal.interpolate({
-          inputRange: [0, 1],
-          outputRange: [18, 0],
-        }),
-      },
-    ],
-  };
   const logoutOutgoingStyle = {
     transform: [
       {
@@ -3474,7 +3462,6 @@ function AppScreen() {
   function startLoginSuccessTransition() {
     dismissKeyboardForScreenTransition();
     setShouldAutoFocusLoginField(false);
-    const shouldFadeNativeBottomNav = nativeBottomNavAvailable;
     const finishLoginSubmission = () => {
       loginSubmissionInFlightRef.current = false;
       setLoginSubmitting(false);
@@ -3489,9 +3476,7 @@ function AppScreen() {
     setIncomingOnboardingScreen(null);
     setShowLoginSuccessTransition(true);
     loginSuccessTransition.stopAnimation();
-    loginSuccessNativeBottomNavReveal.stopAnimation();
     loginSuccessTransition.setValue(0);
-    loginSuccessNativeBottomNavReveal.setValue(shouldFadeNativeBottomNav ? 0 : 1);
     Animated.timing(loginSuccessTransition, {
       duration: onboardingTransitionDuration,
       toValue: 1,
@@ -3503,28 +3488,9 @@ function AppScreen() {
       }
 
       loginSuccessTransition.setValue(1);
-      if (!shouldFadeNativeBottomNav) {
-        setScreenMode('profiles');
-        setShowLoginSuccessTransition(false);
-        finishLoginSubmission();
-        return;
-      }
-
-      Animated.timing(loginSuccessNativeBottomNavReveal, {
-        duration: 180,
-        easing: Easing.out(Easing.cubic),
-        toValue: 1,
-        useNativeDriver: true,
-      }).start(({ finished: navFadeFinished }) => {
-        if (!navFadeFinished) {
-          finishLoginSubmission();
-          return;
-        }
-
-        setScreenMode('profiles');
-        setShowLoginSuccessTransition(false);
-        finishLoginSubmission();
-      });
+      setScreenMode('profiles');
+      setShowLoginSuccessTransition(false);
+      finishLoginSubmission();
     });
   }
 
@@ -6773,6 +6739,17 @@ function AppScreen() {
   }
 
   function renderAuthenticatedBottomNavLayer(options?: { interactive?: boolean; transitionStyle?: object }) {
+    if (nativeBottomNavAvailable || !options?.transitionStyle) {
+      return (
+        <View
+          pointerEvents={options?.interactive === false ? 'none' : 'box-none'}
+          style={[styles.bottomNavLoginTransitionLayer, { height: bottomNavHeight }]}
+        >
+          {renderBottomNav({ guest: false })}
+        </View>
+      );
+    }
+
     return (
       <Animated.View
         pointerEvents={options?.interactive === false ? 'none' : 'box-none'}
@@ -7768,6 +7745,7 @@ function AppScreen() {
       ? selectedPlaceSlug !== null || authenticatedBottomNavScreens.includes(screenMode)
       : false
   );
+  const shouldRenderAuthenticatedLoginTransitionBottomNav = showLoginSuccessTransition && !isSupportedIOSLiquidGlassRuntime();
 
   function renderConnectivityGateScreen() {
     return (
@@ -7889,14 +7867,10 @@ function AppScreen() {
       ) : (
         renderBrowseScreen()
       )}
-      {authenticatedSession && (showLoginSuccessTransition || shouldRenderPersistentBottomNav) ? (
+      {authenticatedSession && (shouldRenderAuthenticatedLoginTransitionBottomNav || shouldRenderPersistentBottomNav) ? (
         renderAuthenticatedBottomNavLayer({
           interactive: !showLoginSuccessTransition,
-          transitionStyle: showLoginSuccessTransition
-            ? nativeBottomNavAvailable
-              ? loginSuccessNativeBottomNavStyle
-              : loginSuccessBottomNavStyle
-            : undefined,
+          transitionStyle: showLoginSuccessTransition ? loginSuccessBottomNavStyle : undefined,
         })
       ) : shouldRenderPersistentBottomNav ? renderBottomNav({ guest: true }) : null}
       <Modal
