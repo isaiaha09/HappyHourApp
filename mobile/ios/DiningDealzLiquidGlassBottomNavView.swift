@@ -305,7 +305,7 @@ private extension String {
   }
 }
 
-// MARK: — iOS 26 Native TabView (system liquid glass)
+// MARK: — iOS 26 Native Liquid Glass bottom nav
 
 @available(iOS 26.0, *)
 private struct DiningDealzLiquidGlassBottomNavContent: View {
@@ -320,22 +320,58 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     Color(red: 1, green: 0.3, blue: 0.38)
   }
 
+  private var inactiveForegroundColor: Color {
+    switch state.themeVariant {
+    case .mapLight:
+      return Color(red: 0.11, green: 0.15, blue: 0.22).opacity(0.82)
+    case .defaultDark, .mapDark:
+      return Color.white.opacity(0.72)
+    }
+  }
+
+  private var selectedBackgroundColor: Color {
+    switch state.themeVariant {
+    case .mapLight:
+      return Color.black.opacity(0.12)
+    case .defaultDark, .mapDark:
+      return Color.white.opacity(0.14)
+    }
+  }
+
   var body: some View {
-    TabView(selection: Binding(
-      get: { selectedTab },
-      set: { onSelect($0) }
-    )) {
-      ForEach(state.items) { displayItem in
-        Tab(displayItem.title, systemImage: displayItem.systemImageName, value: displayItem.item) {
-          Color.clear
+    VStack(spacing: 0) {
+      HStack(spacing: 6) {
+        ForEach(state.items) { displayItem in
+          Button {
+            onSelect(displayItem.item)
+          } label: {
+            VStack(spacing: 2) {
+              Image(systemName: displayItem.systemImageName)
+                .font(.system(size: 16, weight: displayItem.item == selectedTab ? .bold : .semibold))
+                .frame(height: 18)
+              Text(displayItem.title)
+                .font(.system(size: 10, weight: displayItem.item == selectedTab ? .bold : .medium))
+                .lineLimit(1)
+            }
+            .foregroundStyle(displayItem.item == selectedTab ? accentColor : inactiveForegroundColor)
+            .frame(maxWidth: .infinity, minHeight: 50)
+            .background(
+              displayItem.item == selectedTab
+                ? Capsule().fill(selectedBackgroundColor)
+                : nil
+            )
+          }
+          .buttonStyle(.plain)
         }
       }
+      .padding(.horizontal, 7)
+      .padding(.vertical, 7)
+      .glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
+      .padding(.horizontal, 12)
+      .padding(.bottom, max(state.bottomInset * 0.32, 4))
     }
-    .background(Color.clear)
-    .tabViewStyle(.tabBarOnly)
-    .toolbarBackground(.hidden, for: .tabBar)
-    .tint(accentColor)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    .background(Color.clear)
   }
 }
 
