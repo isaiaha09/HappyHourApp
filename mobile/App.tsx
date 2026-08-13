@@ -593,6 +593,7 @@ export default function App() {
 function AppScreen() {
   const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
+  const supportedIOSLiquidGlassRuntime = isSupportedIOSLiquidGlassRuntime();
   const initialMapRegionRef = useRef<Region>(clampRegionToBounds(allCitiesInitialMapRegion));
   const mapRef = useRef<MapView | null>(null);
   const mapMarkerPressHandlerRef = useRef<(placeKey: string) => void>(() => undefined);
@@ -610,6 +611,7 @@ function AppScreen() {
   const splashExitOpacity = useRef(new Animated.Value(1)).current;
   const authIntroOpacity = useRef(new Animated.Value(1)).current;
   const loginSuccessTransition = useRef(new Animated.Value(1)).current;
+  const loginSuccessNativeBottomNavReveal = useRef(new Animated.Value(1)).current;
   const guestChromeFadeInOpacity = useRef(new Animated.Value(1)).current;
   const screenTransition = useRef(new Animated.Value(1)).current;
   const profileSceneTransition = useRef(new Animated.Value(1)).current;
@@ -722,7 +724,9 @@ function AppScreen() {
   const [pendingBusinessLocationTrackingEnabled, setPendingBusinessLocationTrackingEnabled] = useState<boolean | null>(null);
   const [pendingDirectMessagingEnabled, setPendingDirectMessagingEnabled] = useState<boolean | null>(null);
   const [loggedOutBusinessTrackingSession, setLoggedOutBusinessTrackingSession] = useState<BusinessTrackingSession | null>(null);
-  const [nativeBottomNavAvailable, setNativeBottomNavAvailable] = useState(() => isNativeIOSLiquidGlassBottomNavAvailable());
+  const [nativeBottomNavAvailable, setNativeBottomNavAvailable] = useState(() => (
+    supportedIOSLiquidGlassRuntime && isNativeIOSLiquidGlassBottomNavAvailable()
+  ));
   const [deleteAccountPassword, setDeleteAccountPassword] = useState('');
   const [bottomMoreSheetVisible, setBottomMoreSheetVisible] = useState(false);
   const [shellFadeScope, setShellFadeScope] = useState<ShellFadeScope | null>(null);
@@ -1629,7 +1633,7 @@ function AppScreen() {
   }, [startupImagesReady]);
 
   useEffect(() => {
-    if (nativeBottomNavAvailable) {
+    if (nativeBottomNavAvailable || !supportedIOSLiquidGlassRuntime) {
       return;
     }
 
@@ -1648,7 +1652,7 @@ function AppScreen() {
       cancelled = true;
       timers.forEach((timer) => clearTimeout(timer));
     };
-  }, [authenticatedSession?.auth_token, nativeBottomNavAvailable, showLoginSuccessTransition]);
+  }, [authenticatedSession?.auth_token, nativeBottomNavAvailable, showLoginSuccessTransition, supportedIOSLiquidGlassRuntime]);
 
   const mapSearchResultPool = useMemo(
     () => normalizedDeferredSearchQuery.length ? getMapSearchResults(filteredBrowseLocations) : [],
@@ -2371,6 +2375,17 @@ function AppScreen() {
         translateY: loginSuccessTransition.interpolate({
           inputRange: [0, 1],
           outputRange: [-height, 0],
+        }),
+      },
+    ],
+  };
+  const loginSuccessNativeBottomNavStyle = {
+    opacity: loginSuccessNativeBottomNavReveal,
+    transform: [
+      {
+        translateY: loginSuccessNativeBottomNavReveal.interpolate({
+          inputRange: [0, 1],
+          outputRange: [18, 0],
         }),
       },
     ],
@@ -3462,6 +3477,7 @@ function AppScreen() {
   function startLoginSuccessTransition() {
     dismissKeyboardForScreenTransition();
     setShouldAutoFocusLoginField(false);
+    const shouldFadeNativeBottomNav = nativeBottomNavAvailable;
     const finishLoginSubmission = () => {
       loginSubmissionInFlightRef.current = false;
       setLoginSubmitting(false);
@@ -3476,7 +3492,9 @@ function AppScreen() {
     setIncomingOnboardingScreen(null);
     setShowLoginSuccessTransition(true);
     loginSuccessTransition.stopAnimation();
+    loginSuccessNativeBottomNavReveal.stopAnimation();
     loginSuccessTransition.setValue(0);
+    loginSuccessNativeBottomNavReveal.setValue(shouldFadeNativeBottomNav ? 0 : 1);
     Animated.timing(loginSuccessTransition, {
       duration: onboardingTransitionDuration,
       toValue: 1,
@@ -3488,9 +3506,28 @@ function AppScreen() {
       }
 
       loginSuccessTransition.setValue(1);
-      setScreenMode('profiles');
-      setShowLoginSuccessTransition(false);
-      finishLoginSubmission();
+      if (!shouldFadeNativeBottomNav) {
+        setScreenMode('profiles');
+        setShowLoginSuccessTransition(false);
+        finishLoginSubmission();
+        return;
+      }
+
+      Animated.timing(loginSuccessNativeBottomNavReveal, {
+        duration: 180,
+        easing: Easing.out(Easing.cubic),
+        toValue: 1,
+        useNativeDriver: true,
+      }).start(({ finished: navFadeFinished }) => {
+        if (!navFadeFinished) {
+          finishLoginSubmission();
+          return;
+        }
+
+        setScreenMode('profiles');
+        setShowLoginSuccessTransition(false);
+        finishLoginSubmission();
+      });
     });
   }
 
@@ -6674,6 +6711,7 @@ function AppScreen() {
     const bottomNavThemeVariant = mapScreenActive
       ? (displayedDarkMapMode ? 'map-dark' : 'map-light')
       : 'default-dark';
+    const shouldPreferNativeAuthenticatedBottomNav = !options.guest && supportedIOSLiquidGlassRuntime;
     let activeItem: MainShellBottomNavItem = 'map';
     if (!options.guest) {
       if (screenMode === 'home-feed') {
@@ -6685,7 +6723,7 @@ function AppScreen() {
       }
     }
 
-    if (nativeBottomNavAvailable) {
+    if (nativeBottomNavAvailable || shouldPreferNativeAuthenticatedBottomNav) {
       return (
         <View pointerEvents="box-none" style={styles.bottomNavOverlay}>
           <NativeIOSLiquidGlassBottomNav
@@ -6739,17 +6777,6 @@ function AppScreen() {
   }
 
   function renderAuthenticatedBottomNavLayer(options?: { interactive?: boolean; transitionStyle?: object }) {
-    if (nativeBottomNavAvailable || !options?.transitionStyle) {
-      return (
-        <View
-          pointerEvents={options?.interactive === false ? 'none' : 'box-none'}
-          style={[styles.bottomNavLoginTransitionLayer, { height: bottomNavHeight }]}
-        >
-          {renderBottomNav({ guest: false })}
-        </View>
-      );
-    }
-
     return (
       <Animated.View
         pointerEvents={options?.interactive === false ? 'none' : 'box-none'}
@@ -7745,7 +7772,6 @@ function AppScreen() {
       ? selectedPlaceSlug !== null || authenticatedBottomNavScreens.includes(screenMode)
       : false
   );
-  const shouldRenderAuthenticatedLoginTransitionBottomNav = showLoginSuccessTransition && !isSupportedIOSLiquidGlassRuntime();
 
   function renderConnectivityGateScreen() {
     return (
@@ -7867,10 +7893,14 @@ function AppScreen() {
       ) : (
         renderBrowseScreen()
       )}
-      {authenticatedSession && (shouldRenderAuthenticatedLoginTransitionBottomNav || shouldRenderPersistentBottomNav) ? (
+      {authenticatedSession && (showLoginSuccessTransition || shouldRenderPersistentBottomNav) ? (
         renderAuthenticatedBottomNavLayer({
           interactive: !showLoginSuccessTransition,
-          transitionStyle: showLoginSuccessTransition ? loginSuccessBottomNavStyle : undefined,
+          transitionStyle: showLoginSuccessTransition
+            ? nativeBottomNavAvailable
+              ? loginSuccessNativeBottomNavStyle
+              : loginSuccessBottomNavStyle
+            : undefined,
         })
       ) : shouldRenderPersistentBottomNav ? renderBottomNav({ guest: true }) : null}
       <Modal
