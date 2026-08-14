@@ -1,10 +1,14 @@
-from django.db.models.signals import post_delete, post_save, pre_save
+from django.contrib.auth import get_user_model
+from django.db.models.signals import post_delete, post_save, pre_delete, pre_save
 from django.dispatch import receiver
 
 from .models import AccountProfile, BusinessClaim, BusinessClaimAttachment, BusinessDirectMessage, BusinessMembership, ListingSnapshot
+from .services.account_profiles import remove_favorites_for_business_accounts
 from .services.media_storage import delete_removed_storage_references, delete_storage_names, delete_storage_references
 from .services.source_listings import invalidate_source_place_payload_cache
 
+
+User = get_user_model()
 
 LIVE_LOCATION_SNAPSHOT_FIELDS = {
 	'tracked_location_latitude',
@@ -21,6 +25,11 @@ def _is_only_live_location_update(update_fields, allowed_fields):
 	if update_fields is None:
 		return False
 	return set(update_fields).issubset(allowed_fields)
+
+
+@receiver(pre_delete, sender=User)
+def remove_favorites_for_deleted_user_businesses(sender, instance, **kwargs):
+	remove_favorites_for_business_accounts([instance.pk])
 
 
 @receiver(pre_save, sender=BusinessClaim)

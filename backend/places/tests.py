@@ -6942,7 +6942,9 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(len(mail.outbox), 1)
 		self.assertIn('new-dashboard@example.com', mail.outbox[0].to)
 
-	def test_profile_dashboard_includes_favorite_businesses(self):
+	@patch('places.services.source_listings.get_source_place_payloads')
+	def test_profile_dashboard_includes_favorite_businesses(self, mock_get_source_place_payloads):
+		mock_get_source_place_payloads.return_value = [self.favorite_place_payload]
 		FavoriteBusiness.objects.create(
 			user=self.user,
 			listing_slug='favorite-tacos-ventura',
@@ -6960,6 +6962,49 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(len(response.data['favorite_businesses']), 1)
 		self.assertEqual(response.data['favorite_businesses'][0]['slug'], 'favorite-tacos-ventura')
+
+	@patch('places.services.source_listings.get_source_place_payloads')
+	def test_profile_dashboard_prunes_unavailable_favorite_businesses(self, mock_get_source_place_payloads):
+		FavoriteBusiness.objects.create(
+			user=self.user,
+			listing_slug='deleted-favorite-business',
+			name='Deleted Favorite Business',
+			city=City.VENTURA,
+			city_label='Ventura',
+			venue_type=VenueType.CAFE,
+			venue_type_label='Cafe',
+			address_line_1='123 Main St',
+		)
+		other_customer = User.objects.create_user(
+			username='other_stale_favorite_customer',
+			email='other_stale_favorite_customer@example.com',
+			password='test-pass-123',
+		)
+		FavoriteBusiness.objects.create(
+			user=other_customer,
+			listing_slug='deleted-favorite-business',
+			name='Deleted Favorite Business',
+			city=City.VENTURA,
+			city_label='Ventura',
+			venue_type=VenueType.CAFE,
+			venue_type_label='Cafe',
+			address_line_1='123 Main St',
+		)
+		FavoriteBusinessNotification.objects.create(
+			user=self.user,
+			listing_slug='deleted-favorite-business',
+			business_name='Deleted Favorite Business',
+			event_type=FavoriteBusinessNotification.EventType.SPECIAL,
+			title='Deleted Favorite Business Special',
+		)
+
+		response = self.client.get(reverse('profile-dashboard'), {'portal': 'customer'}, **self.auth_headers())
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data['favorite_businesses'], [])
+		self.assertFalse(FavoriteBusiness.objects.filter(user=self.user, listing_slug='deleted-favorite-business').exists())
+		self.assertFalse(FavoriteBusiness.objects.filter(user=other_customer, listing_slug='deleted-favorite-business').exists())
+		self.assertFalse(FavoriteBusinessNotification.objects.filter(user=self.user, listing_slug='deleted-favorite-business').exists())
 
 	def test_profile_contact_support_sends_email_with_account_context(self):
 		response = self.client.post(
@@ -6995,9 +7040,11 @@ class ProfileDashboardApiTests(APITestCase):
 
 		self.assertEqual(response.status_code, 403)
 
+	@patch('places.services.source_listings.get_source_place_payloads', return_value=[])
 	@patch('places.views.get_source_place_payload')
-	def test_profile_favorites_endpoint_adds_favorite_business(self, mock_get_source_place_payload):
+	def test_profile_favorites_endpoint_adds_favorite_business(self, mock_get_source_place_payload, mock_get_source_place_payloads):
 		mock_get_source_place_payload.return_value = self.favorite_place_payload
+		mock_get_source_place_payloads.return_value = [self.favorite_place_payload]
 
 		response = self.client.post(
 			reverse('profile-favorites'),
@@ -7917,6 +7964,90 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertFalse(FavoriteBusiness.objects.filter(user=self.user, listing_slug=snapshot.listing_slug).exists())
 		business_profile.refresh_from_db()
 		self.assertTrue(bool(business_profile.deleted_at))
+
+	def test_business_account_delete_removes_favorite_slug_alias_for_owned_business(self):
+		business_user = User.objects.create_user(
+			username='favorite_alias_business_owner',
+			email='favorite_alias_business_owner@example.com',
+			password='test-pass-123',
+		)
+		business_token = ProfileAuthToken.objects.create(user=business_user)
+		snapshot = ListingSnapshot.objects.create(
+			name='Favorite Alias Business',
+			listing_slug='source-profile-alias',
+			city=City.VENTURA,
+			venue_type=VenueType.CAFE,
+			address_line_1='14 Main St',
+			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=business_user,
+			listing_snapshot=snapshot,
+			contact_name='Alias Owner',
+			work_email='owner@favorite-alias-business.example.com',
+			verification_summary='I operate this business.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(user=business_user, claim=claim, is_active=True)
+		FavoriteBusiness.objects.create(
+			user=self.user,
+			listing_slug='favorite-alias-business-ventura',
+			name=snapshot.name,
+			city=snapshot.city,
+			city_label='Ventura',
+			venue_type=snapshot.venue_type,
+			venue_type_label='Cafe',
+			address_line_1=snapshot.address_line_1,
+		)
+
+		response = self.client.post(
+			reverse('profile-delete-account'),
+			{'password': 'test-pass-123'},
+			format='json',
+			HTTP_AUTHORIZATION=f'Token {business_token.key}',
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertFalse(FavoriteBusiness.objects.filter(user=self.user, listing_slug='favorite-alias-business-ventura').exists())
+
+	def test_direct_business_user_delete_removes_customer_favorite_for_owned_business(self):
+		business_user = User.objects.create_user(
+			username='direct_delete_business_owner',
+			email='direct_delete_business_owner@example.com',
+			password='test-pass-123',
+		)
+		snapshot = ListingSnapshot.objects.create(
+			name='Directly Deleted Business',
+			listing_slug='directly-deleted-business-ventura',
+			city=City.VENTURA,
+			venue_type=VenueType.CAFE,
+			address_line_1='13 Main St',
+			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=business_user,
+			listing_snapshot=snapshot,
+			contact_name='Direct Delete Owner',
+			work_email='owner@direct-delete-business.example.com',
+			verification_summary='I operate this business.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(user=business_user, claim=claim, is_active=True)
+		FavoriteBusiness.objects.create(
+			user=self.user,
+			listing_slug=snapshot.listing_slug,
+			name=snapshot.name,
+			city=snapshot.city,
+			city_label='Ventura',
+			venue_type=snapshot.venue_type,
+			venue_type_label='Cafe',
+			address_line_1=snapshot.address_line_1,
+		)
+
+		User.objects.filter(pk=business_user.pk).delete()
+
+		self.assertFalse(User.objects.filter(pk=business_user.pk).exists())
+		self.assertFalse(FavoriteBusiness.objects.filter(user=self.user, listing_slug=snapshot.listing_slug).exists())
 
 	def test_delete_account_rejects_incorrect_password(self):
 		response = self.client.post(

@@ -7,6 +7,7 @@ from django.db.models import Count, Q
 from django.core.mail import send_mail
 from django.utils.html import escape
 from django.utils import timezone
+from django.utils.text import slugify
 from email.utils import formataddr, parseaddr
 from uuid import uuid4
 
@@ -138,32 +139,78 @@ def remove_favorites_for_listing_slugs(listing_slugs):
 	return deleted_count
 
 
+def remove_favorites_for_unavailable_businesses(user=None):
+	favorites = FavoriteBusiness.objects.all()
+	if user is not None:
+		favorites = favorites.filter(user=user)
+
+	favorite_slugs = {
+		str(listing_slug or '').strip()
+		for listing_slug in favorites.values_list('listing_slug', flat=True)
+		if str(listing_slug or '').strip()
+	}
+	if not favorite_slugs:
+		return 0
+
+	try:
+		from places.services.source_listings import get_source_place_payloads
+
+		public_slugs = set()
+		for payload in get_source_place_payloads(resolve_missing_coordinates=False):
+			payload_slug = str(payload.get('slug') or '').strip()
+			if payload_slug:
+				public_slugs.add(payload_slug)
+			public_slugs.update(
+				str(location.get('slug') or '').strip()
+				for location in payload.get('locations', [])
+				if str(location.get('slug') or '').strip()
+			)
+	except Exception:
+		logger.exception('Unable to reconcile favorite businesses against the public business list.')
+		return 0
+
+	return remove_favorites_for_listing_slugs(favorite_slugs - public_slugs)
+
+
+def _get_business_claim_listing_slugs(claims):
+	listing_slugs = set()
+	for claim in claims:
+		snapshot = claim.listing_snapshot
+		listing_slugs.update({
+			str(snapshot.listing_slug or '').strip(),
+			slugify(f'{snapshot.name}-{snapshot.city}'),
+		})
+	return {listing_slug for listing_slug in listing_slugs if listing_slug}
+
+
 def remove_favorites_for_business_accounts(user_ids):
 	user_ids = list(user_ids or [])
 	if not user_ids:
 		return 0
 
-	claimed_slugs = set(
+	owned_claims = list(
 		BusinessClaim.objects
 		.filter(claimant_id__in=user_ids)
 		.exclude(status=BusinessClaim.Status.REJECTED)
-		.exclude(listing_snapshot__listing_slug='')
-		.values_list('listing_snapshot__listing_slug', flat=True)
+		.select_related('listing_snapshot')
 	)
+	claimed_slugs = _get_business_claim_listing_slugs(owned_claims)
 	if not claimed_slugs:
 		return 0
 
-	retained_slugs = set(
+	owned_snapshot_ids = {claim.listing_snapshot_id for claim in owned_claims}
+	retained_claims = list(
 		BusinessClaim.objects
 		.filter(
-			listing_snapshot__listing_slug__in=claimed_slugs,
+			listing_snapshot_id__in=owned_snapshot_ids,
 			claimant__is_active=True,
 			claimant__account_profile__deleted_at__isnull=True,
 		)
 		.exclude(claimant_id__in=user_ids)
 		.exclude(status=BusinessClaim.Status.REJECTED)
-		.values_list('listing_snapshot__listing_slug', flat=True)
+		.select_related('listing_snapshot')
 	)
+	retained_slugs = _get_business_claim_listing_slugs(retained_claims)
 	slugs_to_remove = claimed_slugs - retained_slugs
 	if not slugs_to_remove:
 		return 0
@@ -279,6 +326,7 @@ def build_account_response(user, portal, claim=None, token=None):
 		if membership.is_active
 	]
 
+	remove_favorites_for_unavailable_businesses()
 	favorite_businesses = [
 		{
 			'slug': favorite.listing_slug,

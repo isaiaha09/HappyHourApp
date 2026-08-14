@@ -1504,7 +1504,7 @@ describe('App browse map search', () => {
     expect(screen.getByTestId('browse-summary-label').props.children).toBe('Camarillo');
   });
 
-  it('filters the authenticated map to the customer favorite businesses', async () => {
+  it('filters authenticated list and map views to the customer favorite businesses', async () => {
     mockFetchPlaces.mockResolvedValue([samplePlace, secondSamplePlace, thirdSamplePlace]);
     mockLoginProfile.mockResolvedValue({
       id: 7,
@@ -1568,6 +1568,11 @@ describe('App browse map search', () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
     });
 
+    fireEvent.press(screen.getByTestId('browse-list-mode'));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
     fireEvent.press(screen.getByTestId('browse-filters-toggle'));
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 300));
@@ -1578,6 +1583,16 @@ describe('App browse map search', () => {
 
     await act(async () => {
       await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+
+    expect(screen.getByText(secondSamplePlace.name)).toBeTruthy();
+    expect(screen.queryByText(samplePlace.name)).toBeNull();
+    expect(screen.queryByText(thirdSamplePlace.name)).toBeNull();
+    expect(screen.getByTestId('browse-summary-label').props.children).toContain('Favorite Businesses');
+
+    fireEvent.press(screen.getByTestId('browse-map-mode'));
+    await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
     });
 

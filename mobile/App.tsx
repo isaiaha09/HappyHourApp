@@ -4944,11 +4944,16 @@ function AppScreen() {
     navigateScreen('support', 'forward');
   }
 
-  function handleOpenFavoriteBusinesses() {
+  async function openFavoriteBusinessesAfterRefresh(afterRefresh: () => void = () => navigateScreen('favorite-businesses', 'forward')) {
     dismissKeyboardForScreenTransition();
     setProfileErrorMessage(null);
     setProfileMessage(null);
-    navigateScreen('favorite-businesses', 'forward');
+    await refreshDashboard(false);
+    afterRefresh();
+  }
+
+  function handleOpenFavoriteBusinesses() {
+    void openFavoriteBusinessesAfterRefresh();
   }
 
   function handleBackFromFavoriteBusinesses() {
@@ -5257,11 +5262,15 @@ function AppScreen() {
     clearSelectedPlaceRoute();
 
     if (screenMode === 'browse' || screenMode === 'home-feed') {
-      closeBottomMoreSheet(() => navigateBrowseProfileTransition('profiles', 'favorite-businesses'));
+      closeBottomMoreSheet(() => {
+        void openFavoriteBusinessesAfterRefresh(() => navigateBrowseProfileTransition('profiles', 'favorite-businesses'));
+      });
       return;
     }
 
-    closeBottomMoreSheet(() => navigateScreen('favorite-businesses', 'forward'));
+    closeBottomMoreSheet(() => {
+      void openFavoriteBusinessesAfterRefresh();
+    });
   }
 
   function handleBottomMenuOpenBusinessNotifications() {
@@ -7497,7 +7506,7 @@ function AppScreen() {
                   resultCount={browseResultCount}
                   searchPanelLifted={browseMode === 'map' ? mapSearchPanelLifted : false}
                   searchQuery={searchQuery}
-                  showFavoriteBusinessesFilter={browseMode === 'map' && (!authenticatedSession || authenticatedSession.portal === 'customer')}
+                  showFavoriteBusinessesFilter={!authenticatedSession || authenticatedSession.portal === 'customer'}
                   selectedDealDays={selectedDealDays}
                   selectedCity={selectedCity}
                   selectedOperatingDays={selectedOperatingDays}

@@ -330,12 +330,14 @@ export function BrowseControls({
                 <Pressable
                   onPress={() => onBrowseModeChange('list')}
                   style={[styles.modeSwitchOption, { width: modeSwitchThumbWidth }]}
+                  testID="browse-list-mode"
                 >
                   <Animated.Text style={[styles.modeSwitchOptionText, { color: listLabelColor }]}>List</Animated.Text>
                 </Pressable>
                 <Pressable
                   onPress={() => onBrowseModeChange('map')}
                   style={[styles.modeSwitchOption, { width: modeSwitchThumbWidth }]}
+                  testID="browse-map-mode"
                 >
                   <Animated.Text style={[styles.modeSwitchOptionText, { color: mapLabelColor }]}>Map</Animated.Text>
                 </Pressable>
