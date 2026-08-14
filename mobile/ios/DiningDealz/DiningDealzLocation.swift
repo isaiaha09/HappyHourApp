@@ -212,11 +212,18 @@ final class DiningDealzLocation: RCTEventEmitter, CLLocationManagerDelegate {
   }
 
   private func locationPayload(_ location: CLLocation) -> [String: Any] {
-    [
+    let accuracy: Any
+    if location.horizontalAccuracy >= 0 {
+      accuracy = location.horizontalAccuracy
+    } else {
+      accuracy = NSNull()
+    }
+
+    return [
       "coords": [
         "latitude": location.coordinate.latitude,
         "longitude": location.coordinate.longitude,
-        "accuracy": location.horizontalAccuracy >= 0 ? location.horizontalAccuracy : NSNull(),
+        "accuracy": accuracy,
       ],
       "timestamp": location.timestamp.timeIntervalSince1970 * 1000,
     ]
