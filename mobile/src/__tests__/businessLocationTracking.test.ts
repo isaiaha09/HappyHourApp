@@ -15,6 +15,8 @@ jest.mock('expo-secure-store', () => ({
 }));
 
 jest.mock('expo-location', () => ({
+  Accuracy: { BestForNavigation: 6 },
+  ActivityType: { OtherNavigation: 2 },
   hasStartedLocationUpdatesAsync: jest.fn(async () => false),
   startLocationUpdatesAsync: jest.fn(async () => undefined),
   stopLocationUpdatesAsync: jest.fn(async () => undefined),
@@ -35,6 +37,7 @@ jest.mock('react-native', () => {
 
 import {
   commitBusinessLocationReport,
+  ensureBusinessBackgroundLocationTaskStarted,
   persistBusinessTrackingSession,
   reserveBusinessLocationReport,
 } from '../businessLocationTracking';
@@ -80,7 +83,6 @@ describe('business location tracking delivery', () => {
   });
 
   it('retries the same stationary coordinate after a background upload fails', async () => {
-    expect(taskManagerMock.isTaskDefined).toHaveBeenCalled();
     expect(taskManagerMock.defineTask).toHaveBeenCalled();
     await persistBusinessTrackingSession('http://127.0.0.1:8000/api', {
       approvedBusinessSlugs: ['scoops-truck-ventura'],
@@ -106,5 +108,16 @@ describe('business location tracking delivery', () => {
       trackedLocation.coords.longitude,
       { force: true },
     )).toBe(true);
+  });
+
+  it('re-registers the task before starting background location updates', async () => {
+    taskManagerMock.defineTask.mockClear();
+
+    await ensureBusinessBackgroundLocationTaskStarted('http://127.0.0.1:8000/api', {
+      approvedBusinessSlugs: ['scoops-truck-ventura'],
+      authToken: 'token-123',
+    });
+
+    expect(taskManagerMock.defineTask).toHaveBeenCalledTimes(1);
   });
 });

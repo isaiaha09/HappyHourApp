@@ -60,7 +60,7 @@ from .serializers import (
 	build_signup_request_data,
 	sync_listing_snapshot_from_place_payload,
 )
-from .services.account_profiles import build_account_response, build_email_verification_challenge, deactivate_account_for_retained_direct_messages, get_business_access_hold_claim, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, is_deleted_account, send_business_claim_received_email, send_password_reset_email, send_support_contact_email, send_username_reminder_email, send_verification_email
+from .services.account_profiles import build_account_response, build_email_verification_challenge, deactivate_account_for_retained_direct_messages, get_approved_business_claims, get_business_access_hold_claim, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, is_deleted_account, send_business_claim_received_email, send_password_reset_email, send_support_contact_email, send_username_reminder_email, send_verification_email
 from .models import BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedImpression, ListingSnapshot, VenueType
 from .services.favorite_notifications import create_notifications_for_business_profile_update
 from .services.direct_message_push import send_push_notifications_for_direct_message
@@ -1000,11 +1000,11 @@ class BusinessLocationUpdateView(generics.GenericAPIView):
 	def post(self, request):
 		serializer = self.get_serializer(data=request.data)
 		serializer.is_valid(raise_exception=True)
-		membership = request.user.business_memberships.select_related('claim__listing_snapshot').filter(is_active=True).first()
-		if membership is None:
-			return Response({'detail': 'An approved business membership is required before sending location updates.'}, status=status.HTTP_400_BAD_REQUEST)
+		approved_claim = next(iter(get_approved_business_claims(request.user)), None)
+		if approved_claim is None:
+			return Response({'detail': 'An approved business claim is required before sending location updates.'}, status=status.HTTP_400_BAD_REQUEST)
 
-		snapshot = membership.claim.listing_snapshot
+		snapshot = approved_claim.listing_snapshot
 		if snapshot.venue_type != VenueType.MOBILE and not snapshot.serves_multiple_areas:
 			return Response({'detail': 'Live location updates are only required for service area businesses.'}, status=status.HTTP_400_BAD_REQUEST)
 		if not get_or_create_account_profile(request.user).business_location_tracking_enabled:
@@ -1032,11 +1032,11 @@ class BusinessLocationTrackingPreferenceView(generics.GenericAPIView):
 	def post(self, request):
 		serializer = self.get_serializer(data=request.data)
 		serializer.is_valid(raise_exception=True)
-		membership = request.user.business_memberships.select_related('claim__listing_snapshot').filter(is_active=True).first()
-		if membership is None:
-			return Response({'detail': 'An approved business membership is required before changing live location settings.'}, status=status.HTTP_400_BAD_REQUEST)
+		approved_claim = next(iter(get_approved_business_claims(request.user)), None)
+		if approved_claim is None:
+			return Response({'detail': 'An approved business claim is required before changing live location settings.'}, status=status.HTTP_400_BAD_REQUEST)
 
-		snapshot = membership.claim.listing_snapshot
+		snapshot = approved_claim.listing_snapshot
 		if snapshot.venue_type != VenueType.MOBILE and not snapshot.serves_multiple_areas:
 			return Response({'detail': 'Live location settings are only available for service area businesses.'}, status=status.HTTP_400_BAD_REQUEST)
 

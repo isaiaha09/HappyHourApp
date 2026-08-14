@@ -291,9 +291,32 @@ def infer_portal_for_user(user, requested_portal=''):
 	return 'customer'
 
 
+def get_approved_business_claims(user, claims=None, memberships=None):
+	claims = list(claims if claims is not None else user.business_claims.select_related('listing_snapshot').order_by('-created_at'))
+	memberships = list(memberships if memberships is not None else user.business_memberships.select_related('claim__listing_snapshot').all())
+	approved_claims = []
+	seen_snapshot_ids = set()
+
+	for membership in memberships:
+		claim = membership.claim
+		if not membership.is_active or claim.status != BusinessClaim.Status.APPROVED or claim.listing_snapshot_id in seen_snapshot_ids:
+			continue
+		seen_snapshot_ids.add(claim.listing_snapshot_id)
+		approved_claims.append(claim)
+
+	for claim in claims:
+		if claim.status != BusinessClaim.Status.APPROVED or claim.listing_snapshot_id in seen_snapshot_ids:
+			continue
+		seen_snapshot_ids.add(claim.listing_snapshot_id)
+		approved_claims.append(claim)
+
+	return approved_claims
+
+
 def build_account_response(user, portal, claim=None, token=None):
 	claims = list(user.business_claims.select_related('listing_snapshot').order_by('-created_at'))
 	memberships = list(user.business_memberships.select_related('claim__listing_snapshot').all())
+	approved_claims = get_approved_business_claims(user, claims=claims, memberships=memberships)
 	active_membership = next((membership for membership in memberships if membership.is_active), None)
 	active_business_claim = active_membership.claim if active_membership else None
 	primary_claim = claim or (claims[0] if claims else None)
@@ -312,18 +335,17 @@ def build_account_response(user, portal, claim=None, token=None):
 
 	approved_businesses = [
 		{
-			'id': membership.claim.listing_snapshot.id,
-			'slug': membership.claim.listing_snapshot.listing_slug,
-			'name': membership.claim.listing_snapshot.name,
-			'city': membership.claim.listing_snapshot.city,
-			'city_label': membership.claim.listing_snapshot.get_city_display() if membership.claim.listing_snapshot.city else '',
-			'venue_type': membership.claim.listing_snapshot.venue_type,
-			'venue_type_label': membership.claim.listing_snapshot.get_venue_type_display() if membership.claim.listing_snapshot.venue_type else '',
-			'address_line_1': membership.claim.listing_snapshot.address_line_1,
-			'website_url': membership.claim.business_website_url or membership.claim.listing_snapshot.website_url,
+			'id': approved_claim.listing_snapshot.id,
+			'slug': approved_claim.listing_snapshot.listing_slug,
+			'name': approved_claim.listing_snapshot.name,
+			'city': approved_claim.listing_snapshot.city,
+			'city_label': approved_claim.listing_snapshot.get_city_display() if approved_claim.listing_snapshot.city else '',
+			'venue_type': approved_claim.listing_snapshot.venue_type,
+			'venue_type_label': approved_claim.listing_snapshot.get_venue_type_display() if approved_claim.listing_snapshot.venue_type else '',
+			'address_line_1': approved_claim.listing_snapshot.address_line_1,
+			'website_url': approved_claim.business_website_url or approved_claim.listing_snapshot.website_url,
 		}
-		for membership in memberships
-		if membership.is_active
+		for approved_claim in approved_claims
 	]
 
 	remove_favorites_for_unavailable_businesses()

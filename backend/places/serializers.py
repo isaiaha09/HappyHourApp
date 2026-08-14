@@ -13,7 +13,7 @@ from django.utils.text import slugify
 from rest_framework import serializers
 
 from .models import BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessPost, City, FeedEngagement, FeedImpression, ListingSnapshot, SponsoredCampaign, VenueType
-from .services.account_profiles import build_account_response, get_or_create_account_profile, has_active_business_membership, send_business_claim_submission_support_email_safely
+from .services.account_profiles import build_account_response, get_approved_business_claims, get_or_create_account_profile, has_active_business_membership, send_business_claim_submission_support_email_safely
 from .services.business_profile_overrides import (
 	build_deal_payloads,
 	build_operating_hour_payloads,
@@ -576,7 +576,7 @@ class LoginSerializer(serializers.Serializer):
 			raise serializers.ValidationError('Business accounts must sign in through the business account portal.')
 
 		if attrs['portal'] == 'business':
-			if has_active_business_membership(authenticated_user):
+			if has_active_business_membership(authenticated_user) or get_approved_business_claims(authenticated_user):
 				pass
 			elif authenticated_user.business_claims.exists() or authenticated_user.business_memberships.exists():
 				raise serializers.ValidationError('Your business claim must be approved by an admin before you can sign in to the business portal.')

@@ -6127,6 +6127,41 @@ class ProfileSignupApiTests(APITestCase):
 			'Your business claim must be approved by an admin before you can sign in to the business portal.',
 		)
 
+	def test_business_portal_login_allows_approved_claim_without_membership(self):
+		user = User.objects.create_user(username='approved_without_membership', email='approved-without-membership@example.com', password='test-pass-123')
+		AccountProfile.objects.create(user=user, email_verified_at=timezone.now())
+		snapshot = ListingSnapshot.objects.create(
+			name='Approved Mobile Without Membership',
+			listing_slug='approved-mobile-without-membership',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+		)
+		BusinessClaim.objects.create(
+			claimant=user,
+			listing_snapshot=snapshot,
+			contact_name='Approved Owner',
+			work_email='approved-owner@example.com',
+			verification_summary='Approved mobile business.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+
+		response = self.client.post(
+			reverse('profile-login'),
+			{
+				'portal': 'business',
+				'identifier': 'approved_without_membership',
+				'password': 'test-pass-123',
+			},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertTrue(response.data['auth_token'])
+		self.assertEqual(response.data['approved_businesses'][0]['slug'], snapshot.listing_slug)
+		self.assertTrue(response.data['requires_business_location_tracking'])
+
 	def test_login_requires_authenticator_code_when_two_factor_is_enabled(self):
 		user = User.objects.create_user(username='secure_customer', email='secure@example.com', password='test-pass-123')
 		profile = AccountProfile.objects.create(user=user, email_verified_at=timezone.now(), two_factor_enabled=True, two_factor_secret=pyotp.random_base32())
@@ -6480,6 +6515,50 @@ class ProfileDashboardApiTests(APITestCase):
 				},
 			},
 		)
+
+	@patch('places.services.source_listings.load_source_records', return_value=[])
+	def test_approved_claim_without_membership_is_available_for_mobile_location_updates(self, mock_load_source_records):
+		snapshot = ListingSnapshot.objects.create(
+			name='Membership Gap Mobile Vendor',
+			listing_slug='membership-gap-mobile-vendor',
+			city=City.VENTURA,
+			venue_type=VenueType.MOBILE,
+			address_line_1='Approximate live location',
+			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+		)
+		BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			work_email='owner@membership-gap-mobile-vendor.example.com',
+			verification_summary='Approved mobile vendor.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+
+		dashboard_response = self.client.get(reverse('profile-dashboard'), {'portal': 'business'}, **self.auth_headers())
+
+		self.assertEqual(dashboard_response.status_code, 200)
+		self.assertEqual(dashboard_response.data['approved_businesses'][0]['slug'], snapshot.listing_slug)
+		self.assertTrue(dashboard_response.data['requires_business_location_tracking'])
+		public_payload = get_source_place_payload(snapshot.listing_slug)
+		self.assertIsNotNone(public_payload)
+		self.assertIsNone(public_payload['latitude'])
+		self.assertIsNone(public_payload['longitude'])
+
+		location_response = self.client.post(
+			reverse('profile-business-location'),
+			{'latitude': 34.2789, 'longitude': -119.2914, 'accuracy_meters': 12},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(location_response.status_code, 200)
+		snapshot.refresh_from_db()
+		self.assertEqual(snapshot.tracked_location_latitude, 34.2789)
+		self.assertEqual(snapshot.tracked_location_longitude, -119.2914)
+		public_payload = get_source_place_payload(snapshot.listing_slug)
+		self.assertEqual(public_payload['latitude'], 34.2789)
+		self.assertEqual(public_payload['longitude'], -119.2914)
 
 	def test_profile_dashboard_update_allows_approved_business_profile_edits(self):
 		snapshot = ListingSnapshot.objects.create(

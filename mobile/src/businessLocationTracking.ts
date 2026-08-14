@@ -2,6 +2,7 @@ import { AppState, Platform } from 'react-native';
 import * as Location from 'expo-location';
 import * as SecureStore from 'expo-secure-store';
 import * as TaskManager from 'expo-task-manager';
+import type { TaskManagerTaskBody } from 'expo-task-manager';
 import {
   buildBusinessLocationKey,
   businessLocationReportIntervalMs,
@@ -25,6 +26,10 @@ const secureStoreOptions: SecureStore.SecureStoreOptions = {
 export type PersistedBusinessTrackingSession = {
   approvedBusinessSlugs: string[];
   authToken: string;
+};
+
+type BusinessLocationTaskData = {
+  locations?: Location.LocationObject[];
 };
 
 function normalizeApiBaseUrl(baseUrl: string) {
@@ -188,6 +193,7 @@ export async function ensureBusinessBackgroundLocationTaskStarted(
     return;
   }
 
+  registerBusinessLocationTask();
   await persistBusinessTrackingSession(apiBaseUrl, session);
 
   if (!(await TaskManager.isAvailableAsync())) {
@@ -238,47 +244,49 @@ export async function stopBusinessBackgroundLocationTask(options?: { clearPersis
   await clearPersistedBusinessTrackingLastReportedLocation();
 }
 
-if (!TaskManager.isTaskDefined(BUSINESS_LOCATION_TASK_NAME)) {
-  TaskManager.defineTask(BUSINESS_LOCATION_TASK_NAME, async ({ data, error }) => {
-    if (error) {
-      return;
-    }
+async function executeBusinessLocationTask({ data, error }: TaskManagerTaskBody<BusinessLocationTaskData>) {
+  if (error) {
+    return;
+  }
 
-    const taskData = data as { locations?: Location.LocationObject[] } | undefined;
-    const locations = taskData?.locations;
-    const latestLocation = getFreshestBusinessLocation(locations ?? []);
-    if (!latestLocation) {
-      return;
-    }
+  const latestLocation = getFreshestBusinessLocation(data?.locations ?? []);
+  if (!latestLocation) {
+    return;
+  }
 
-    const [apiBaseUrl, session] = await Promise.all([
-      getSecureItem(apiBaseUrlStorageKey),
-      loadPersistedBusinessTrackingSession(),
-    ]);
-    if (!apiBaseUrl || !session?.authToken) {
-      return;
-    }
+  const [apiBaseUrl, session] = await Promise.all([
+    getSecureItem(apiBaseUrlStorageKey),
+    loadPersistedBusinessTrackingSession(),
+  ]);
+  if (!apiBaseUrl || !session?.authToken) {
+    return;
+  }
 
-    if (AppState.currentState === 'active') {
-      return;
-    }
+  if (AppState.currentState === 'active') {
+    return;
+  }
 
-    if (!(await reserveBusinessLocationReport(
-      latestLocation.coords.latitude,
-      latestLocation.coords.longitude,
-    ))) {
-      return;
-    }
+  if (!(await reserveBusinessLocationReport(
+    latestLocation.coords.latitude,
+    latestLocation.coords.longitude,
+  ))) {
+    return;
+  }
 
-    try {
-      await postBusinessLocationUpdate(apiBaseUrl, session.authToken, {
-        accuracy: latestLocation.coords.accuracy ?? null,
-        latitude: latestLocation.coords.latitude,
-        longitude: latestLocation.coords.longitude,
-      });
-      await commitBusinessLocationReport(latestLocation.coords.latitude, latestLocation.coords.longitude);
-    } catch {
-      // Leave the last successful report untouched so the next location sample can retry.
-    }
-  });
+  try {
+    await postBusinessLocationUpdate(apiBaseUrl, session.authToken, {
+      accuracy: latestLocation.coords.accuracy ?? null,
+      latitude: latestLocation.coords.latitude,
+      longitude: latestLocation.coords.longitude,
+    });
+    await commitBusinessLocationReport(latestLocation.coords.latitude, latestLocation.coords.longitude);
+  } catch {
+    // Leave the last successful report untouched so the next location sample can retry.
+  }
 }
+
+export function registerBusinessLocationTask() {
+  TaskManager.defineTask(BUSINESS_LOCATION_TASK_NAME, executeBusinessLocationTask);
+}
+
+registerBusinessLocationTask();

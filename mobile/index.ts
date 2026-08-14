@@ -2,7 +2,9 @@ import { registerRootComponent } from 'expo';
 import { createElement } from 'react';
 import { SafeAreaView, ScrollView, Text } from 'react-native';
 
-import './src/businessLocationTracking';
+import { registerBusinessLocationTask } from './src/businessLocationTracking';
+
+registerBusinessLocationTask();
 
 let RootComponent: () => ReturnType<typeof createElement>;
 
