@@ -89,6 +89,7 @@ jest.mock('../nativeLocation', () => ({
   startNativeLocationUpdates: jest.fn(async () => undefined),
   stopNativeLocationUpdates: jest.fn(async () => undefined),
   watchPositionAsync: jest.fn(async () => ({ remove: jest.fn() })),
+  getLastKnownPositionAsync: jest.fn(async () => null),
 }));
 
 jest.mock('expo-notifications', () => ({
@@ -380,6 +381,7 @@ const networkModule = jest.requireMock('expo-network') as {
 const locationModule = jest.requireMock('../nativeLocation') as {
   getBackgroundPermissionsAsync: jest.Mock;
   getCurrentPositionAsync: jest.Mock;
+  getLastKnownPositionAsync: jest.Mock;
   getForegroundPermissionsAsync: jest.Mock;
   isBackgroundLocationAvailableAsync: jest.Mock;
   requestForegroundPermissionsAsync: jest.Mock;
@@ -503,6 +505,8 @@ describe('App browse map search', () => {
     locationModule.getBackgroundPermissionsAsync.mockReset();
     locationModule.getBackgroundPermissionsAsync.mockResolvedValue({ canAskAgain: false, granted: false });
     locationModule.getCurrentPositionAsync.mockReset();
+      locationModule.getLastKnownPositionAsync.mockReset();
+      locationModule.getLastKnownPositionAsync.mockResolvedValue(null);
     locationModule.getForegroundPermissionsAsync.mockReset();
     locationModule.getForegroundPermissionsAsync.mockResolvedValue({ canAskAgain: false, granted: false });
     locationModule.isBackgroundLocationAvailableAsync.mockReset();
@@ -903,6 +907,8 @@ describe('App browse map search', () => {
       await new Promise((resolve) => setTimeout(resolve, 25));
     });
 
+    mockFetchLiveLocationPlaces.mockClear();
+
     fireEvent.changeText(screen.getByTestId('browse-search-input'), 'ba');
 
     await act(async () => {
@@ -942,6 +948,10 @@ describe('App browse map search', () => {
       'http://127.0.0.1:8000/api',
       samplePlace.slug,
       undefined,
+    );
+    expect(mockFetchLiveLocationPlaces).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api',
+      'all',
     );
     expect(screen.getByTestId('mock-place-detail')).toHaveTextContent(samplePlace.slug);
     expect(screen.queryByText('Best matches')).toBeNull();

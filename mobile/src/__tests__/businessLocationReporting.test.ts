@@ -20,14 +20,14 @@ describe('shouldReportBusinessLocation', () => {
     })).toBe(true);
   });
 
-  it('rejects the same rounded location', () => {
+  it('allows a stationary heartbeat after the reporting interval', () => {
     expect(shouldReportBusinessLocation({
       latitude,
       longitude,
       lastReportedAt: now - businessLocationReportIntervalMs,
       lastReportedLocationKey: buildBusinessLocationKey(latitude, longitude),
       now,
-    })).toBe(false);
+    })).toBe(true);
   });
 
   it('rejects movement before the reporting interval elapses', () => {

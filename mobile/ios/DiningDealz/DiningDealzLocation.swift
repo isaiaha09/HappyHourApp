@@ -6,8 +6,7 @@ import React
 final class DiningDealzLocation: RCTEventEmitter, CLLocationManagerDelegate {
   private let locationManager = CLLocationManager()
   private let geocoder = CLGeocoder()
-  private var currentLocationResolver: RCTPromiseResolveBlock?
-  private var currentLocationRejecter: RCTPromiseRejectBlock?
+  private var currentLocationResolvers: [(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock)] = []
   private var authorizationResolver: RCTPromiseResolveBlock?
   private var authorizationRejecter: RCTPromiseRejectBlock?
   private var requestingAlwaysAuthorization = false
@@ -71,9 +70,21 @@ final class DiningDealzLocation: RCTEventEmitter, CLLocationManagerDelegate {
       return
     }
 
-    currentLocationResolver = resolve
-    currentLocationRejecter = reject
+    currentLocationResolvers.append((resolve: resolve, reject: reject))
     locationManager.requestLocation()
+  }
+
+  @objc(getLastKnownPosition:rejecter:)
+  func getLastKnownPosition(
+    _ resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    guard canUseLocation(), let location = locationManager.location else {
+      resolve(nil)
+      return
+    }
+
+    resolve(locationPayload(location))
   }
 
   @objc(startUpdatingLocation:rejecter:)
@@ -172,23 +183,23 @@ final class DiningDealzLocation: RCTEventEmitter, CLLocationManagerDelegate {
     let payload = locationPayload(location)
     sendEvent(withName: "locationUpdate", body: payload)
 
-    guard let resolver = currentLocationResolver else {
+    guard !currentLocationResolvers.isEmpty else {
       return
     }
 
-    currentLocationResolver = nil
-    currentLocationRejecter = nil
-    resolver(payload)
+    let resolvers = currentLocationResolvers
+    currentLocationResolvers.removeAll()
+    resolvers.forEach { pending in
+      pending.resolve(payload)
+    }
   }
 
   func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-    currentLocationResolver = nil
-    currentLocationRejecter?(
-      "LOCATION_ERROR",
-      error.localizedDescription,
-      error
-    )
-    currentLocationRejecter = nil
+    let rejecters = currentLocationResolvers
+    currentLocationResolvers.removeAll()
+    rejecters.forEach { pending in
+      pending.reject("LOCATION_ERROR", error.localizedDescription, error)
+    }
   }
 
   private func requestAuthorization(

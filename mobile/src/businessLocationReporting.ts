@@ -17,11 +17,6 @@ export function shouldReportBusinessLocation(input: {
   lastReportedLocationKey: string | null;
   now: number;
 }) {
-  const locationKey = buildBusinessLocationKey(input.latitude, input.longitude);
-  if (locationKey === input.lastReportedLocationKey) {
-    return false;
-  }
-
   return input.lastReportedAt === null
     || input.now - input.lastReportedAt >= businessLocationReportIntervalMs;
 }

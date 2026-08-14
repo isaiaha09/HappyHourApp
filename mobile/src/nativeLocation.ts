@@ -39,6 +39,7 @@ type NativeLocationModule = {
   requestBackgroundAuthorization: () => Promise<AuthorizationPayload>;
   hasServicesEnabled: () => Promise<boolean>;
   getCurrentPosition: () => Promise<LocationObject>;
+  getLastKnownPosition: () => Promise<LocationObject | null>;
   reverseGeocode: (latitude: number, longitude: number) => Promise<ReverseGeocodedLocation | null>;
   startUpdatingLocation: () => Promise<void>;
   stopUpdatingLocation: () => Promise<void>;
@@ -135,6 +136,14 @@ export async function stopNativeLocationUpdates() {
 
 export async function getCurrentPositionAsync(_options?: { accuracy?: string }) {
   return requireNativeLocationModule().getCurrentPosition();
+}
+
+export async function getLastKnownPositionAsync() {
+  if (!nativeLocationModule) {
+    return null;
+  }
+
+  return nativeLocationModule.getLastKnownPosition();
 }
 
 export async function reverseGeocodeAsync(latitude: number, longitude: number) {

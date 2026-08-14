@@ -1062,7 +1062,7 @@ function AppScreen() {
   const favoriteHelperText = !showFavoriteControl
     ? null
     : !authenticatedSession
-      ? 'Star this business to keep tabs on it later. Guest stars require a free customer account.'
+      ? 'Heart this business to keep tabs on it later. Favoriting a business requires a free customer account.'
       : selectedPlaceIsFavorited
         ? 'This business is saved to your favorites and will appear on your dashboard.'
         : 'Save this business to your favorites so it appears on your dashboard.';
@@ -1341,6 +1341,14 @@ function AppScreen() {
           });
         };
 
+        const lastKnownPosition = await Location.getLastKnownPositionAsync();
+        if (cancelled) {
+          return;
+        }
+        if (lastKnownPosition) {
+          updateCoordinates(lastKnownPosition.coords);
+        }
+
         const initialPosition = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
         });
@@ -1472,10 +1480,6 @@ function AppScreen() {
           liveLocationAddressLine1?: string | null,
           liveLocationCityLabel?: string | null,
         ) => {
-          if (hasInternetConnectionRef.current === false) {
-            return;
-          }
-
           const activeTrackingSession = authenticatedSessionRef.current?.auth_token
             ? buildBusinessTrackingSession(authenticatedSessionRef.current)
             : currentBusinessTrackingSession;
@@ -1589,6 +1593,7 @@ function AppScreen() {
         }
         latestBusinessPosition = initialPosition;
         businessLocationLatestPositionRef.current = initialPosition;
+        updateLocalBusinessLocation(initialPosition.coords);
         businessLocationReportRef.current = (forceRetry = false) => {
           if (businessLocationLatestPositionRef.current) {
             if (forceRetry) {
@@ -1608,6 +1613,7 @@ function AppScreen() {
           (position) => {
             latestBusinessPosition = position;
             businessLocationLatestPositionRef.current = position;
+            updateLocalBusinessLocation(position.coords);
           },
         );
 
@@ -3870,6 +3876,16 @@ function AppScreen() {
         }
 
         setSelectedPlace(detail);
+        try {
+          const liveLocationUpdates = await fetchLiveLocationPlaces(apiBaseUrl, 'all');
+          if (!isMounted || placeDataGeneration !== placeCacheGenerationRef.current) {
+            return;
+          }
+
+          setSelectedPlace((current) => mergeLiveLocationUpdatesIntoPlaceDetail(current, liveLocationUpdates) ?? current);
+        } catch {
+          // The detail payload remains usable when the best-effort live refresh fails.
+        }
       } catch (error) {
         if (!isMounted || placeDataGeneration !== placeCacheGenerationRef.current) {
           return;
