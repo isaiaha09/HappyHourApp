@@ -5,6 +5,7 @@ import React
 @objc(DiningDealzLocation)
 final class DiningDealzLocation: RCTEventEmitter, CLLocationManagerDelegate {
   private let locationManager = CLLocationManager()
+  private let geocoder = CLGeocoder()
   private var currentLocationResolver: RCTPromiseResolveBlock?
   private var currentLocationRejecter: RCTPromiseRejectBlock?
   private var authorizationResolver: RCTPromiseResolveBlock?
@@ -97,6 +98,45 @@ final class DiningDealzLocation: RCTEventEmitter, CLLocationManagerDelegate {
   ) {
     locationManager.stopUpdatingLocation()
     resolve(nil)
+  }
+
+  @objc(reverseGeocode:longitude:resolver:rejecter:)
+  func reverseGeocode(
+    _ latitude: NSNumber,
+    longitude: NSNumber,
+    resolver resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    let location = CLLocation(latitude: latitude.doubleValue, longitude: longitude.doubleValue)
+    geocoder.reverseGeocodeLocation(location) { placemarks, error in
+      if let error {
+        reject("GEOCODING_ERROR", error.localizedDescription, error)
+        return
+      }
+
+      guard let placemark = placemarks?.first else {
+        resolve(nil)
+        return
+      }
+
+      let street = [placemark.subThoroughfare, placemark.thoroughfare]
+        .compactMap { value in
+          let normalized = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+          return normalized.isEmpty ? nil : normalized
+        }
+        .joined(separator: " ")
+      let city = (
+        placemark.locality
+        ?? placemark.subAdministrativeArea
+        ?? placemark.administrativeArea
+        ?? ""
+      ).trimmingCharacters(in: .whitespacesAndNewlines)
+
+      resolve([
+        "street": street,
+        "city": city,
+      ])
+    }
   }
 
   func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {

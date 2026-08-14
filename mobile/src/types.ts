@@ -536,6 +536,8 @@ export type BusinessLocationUpdateRequest = {
   latitude: number;
   longitude: number;
   accuracy_meters?: number | null;
+  address_line_1?: string;
+  city_label?: string;
 };
 
 export type BusinessLocationTrackingPreferenceRequest = {

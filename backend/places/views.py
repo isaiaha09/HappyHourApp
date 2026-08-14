@@ -1011,11 +1011,15 @@ class BusinessLocationUpdateView(generics.GenericAPIView):
 			return Response({'detail': 'Turn on location services in settings before sending live business location updates.'}, status=status.HTTP_400_BAD_REQUEST)
 
 		now = timezone.now()
+		reported_address_line_1 = str(serializer.validated_data.get('address_line_1') or '').strip()
+		reported_city_label = str(serializer.validated_data.get('city_label') or '').strip()
 		with transaction.atomic():
 			snapshot.tracked_location_latitude = serializer.validated_data['latitude']
 			snapshot.tracked_location_longitude = serializer.validated_data['longitude']
-			snapshot.tracked_location_address_line_1 = ''
-			snapshot.tracked_location_city_label = ''
+			if reported_address_line_1:
+				snapshot.tracked_location_address_line_1 = reported_address_line_1
+			if reported_city_label:
+				snapshot.tracked_location_city_label = reported_city_label
 			snapshot.tracked_location_accuracy_meters = serializer.validated_data.get('accuracy_meters')
 			snapshot.tracked_location_updated_at = now
 			snapshot.save(update_fields=['tracked_location_latitude', 'tracked_location_longitude', 'tracked_location_address_line_1', 'tracked_location_city_label', 'tracked_location_accuracy_meters', 'tracked_location_updated_at', 'updated_at'])

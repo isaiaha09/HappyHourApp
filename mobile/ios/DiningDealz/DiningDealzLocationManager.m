@@ -17,5 +17,9 @@ RCT_EXTERN_METHOD(startUpdatingLocation:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(stopUpdatingLocation:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(reverseGeocode:(nonnull NSNumber *)latitude
+                  longitude:(nonnull NSNumber *)longitude
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
 
 @end

@@ -1548,10 +1548,15 @@ function AppScreen() {
 
           businessLocationLastReportedRef.current = roundedLocationKey;
           try {
+            const reverseGeocodedLocation = await Location.reverseGeocodeAsync(coords.latitude, coords.longitude).catch(() => null);
+            const street = reverseGeocodedLocation?.street?.trim() ?? '';
+            const addressLine1 = street ? `Approximate live location near ${street}` : '';
             const response = await updateBusinessLocation(apiBaseUrl, activeTrackingSession.authToken, {
               latitude: coords.latitude,
               longitude: coords.longitude,
               accuracy_meters: coords.accuracy ?? null,
+              ...(addressLine1 ? { address_line_1: addressLine1 } : {}),
+              ...(reverseGeocodedLocation?.city ? { city_label: reverseGeocodedLocation.city } : {}),
             });
             if (!cancelled) {
               businessLocationLastReportedRef.current = roundedLocationKey;

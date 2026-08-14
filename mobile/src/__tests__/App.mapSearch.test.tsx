@@ -85,6 +85,7 @@ jest.mock('../nativeLocation', () => ({
   isBackgroundLocationAvailableAsync: jest.fn(async () => false),
   requestForegroundPermissionsAsync: jest.fn(async () => ({ canAskAgain: false, granted: false })),
   requestBackgroundPermissionsAsync: jest.fn(async () => ({ canAskAgain: false, granted: false })),
+  reverseGeocodeAsync: jest.fn(async () => null),
   startNativeLocationUpdates: jest.fn(async () => undefined),
   stopNativeLocationUpdates: jest.fn(async () => undefined),
   watchPositionAsync: jest.fn(async () => ({ remove: jest.fn() })),
@@ -382,6 +383,7 @@ const locationModule = jest.requireMock('../nativeLocation') as {
   getForegroundPermissionsAsync: jest.Mock;
   isBackgroundLocationAvailableAsync: jest.Mock;
   requestForegroundPermissionsAsync: jest.Mock;
+  reverseGeocodeAsync: jest.Mock;
   watchPositionAsync: jest.Mock;
 };
 

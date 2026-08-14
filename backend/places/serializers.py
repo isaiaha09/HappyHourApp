@@ -1095,6 +1095,8 @@ class BusinessLocationUpdateSerializer(serializers.Serializer):
 	latitude = serializers.FloatField(min_value=-90, max_value=90)
 	longitude = serializers.FloatField(min_value=-180, max_value=180)
 	accuracy_meters = serializers.FloatField(required=False, allow_null=True, min_value=0)
+	address_line_1 = serializers.CharField(max_length=255, required=False, allow_blank=True)
+	city_label = serializers.CharField(max_length=120, required=False, allow_blank=True)
 
 
 def sync_listing_snapshot_from_place_payload(payload):

@@ -6547,7 +6547,13 @@ class ProfileDashboardApiTests(APITestCase):
 
 		location_response = self.client.post(
 			reverse('profile-business-location'),
-			{'latitude': 34.2789, 'longitude': -119.2914, 'accuracy_meters': 12},
+			{
+				'latitude': 34.2789,
+				'longitude': -119.2914,
+				'accuracy_meters': 12,
+				'address_line_1': 'Approximate live location near Main Street',
+				'city_label': 'Ventura',
+			},
 			format='json',
 			**self.auth_headers(),
 		)
@@ -6556,9 +6562,13 @@ class ProfileDashboardApiTests(APITestCase):
 		snapshot.refresh_from_db()
 		self.assertEqual(snapshot.tracked_location_latitude, 34.2789)
 		self.assertEqual(snapshot.tracked_location_longitude, -119.2914)
+		self.assertEqual(snapshot.tracked_location_address_line_1, 'Approximate live location near Main Street')
+		self.assertEqual(snapshot.tracked_location_city_label, 'Ventura')
 		public_payload = get_source_place_payload(snapshot.listing_slug)
 		self.assertEqual(public_payload['latitude'], 34.2789)
 		self.assertEqual(public_payload['longitude'], -119.2914)
+		self.assertEqual(public_payload['address_line_1'], 'Approximate live location near Main Street')
+		self.assertEqual(public_payload['city_label'], 'Ventura')
 
 	def test_profile_dashboard_update_allows_approved_business_profile_edits(self):
 		snapshot = ListingSnapshot.objects.create(

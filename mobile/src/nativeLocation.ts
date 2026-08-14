@@ -28,12 +28,18 @@ export type LocationSubscription = {
   remove: () => void;
 };
 
+export type ReverseGeocodedLocation = {
+  street: string;
+  city: string;
+};
+
 type NativeLocationModule = {
   getAuthorizationStatus: () => Promise<AuthorizationPayload>;
   requestForegroundAuthorization: () => Promise<AuthorizationPayload>;
   requestBackgroundAuthorization: () => Promise<AuthorizationPayload>;
   hasServicesEnabled: () => Promise<boolean>;
   getCurrentPosition: () => Promise<LocationObject>;
+  reverseGeocode: (latitude: number, longitude: number) => Promise<ReverseGeocodedLocation | null>;
   startUpdatingLocation: () => Promise<void>;
   stopUpdatingLocation: () => Promise<void>;
 };
@@ -129,6 +135,14 @@ export async function stopNativeLocationUpdates() {
 
 export async function getCurrentPositionAsync(_options?: { accuracy?: string }) {
   return requireNativeLocationModule().getCurrentPosition();
+}
+
+export async function reverseGeocodeAsync(latitude: number, longitude: number) {
+  if (!nativeLocationModule) {
+    return null;
+  }
+
+  return nativeLocationModule.reverseGeocode(latitude, longitude);
 }
 
 export async function watchPositionAsync(
