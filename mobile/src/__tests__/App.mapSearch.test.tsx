@@ -428,6 +428,17 @@ const thirdSamplePlace: PlaceListItem = {
   phone_number: '805-555-0103',
 };
 
+const noPinSamplePlace: PlaceListItem = {
+  ...samplePlace,
+  id: 4,
+  name: 'No Pin Cafe',
+  slug: 'no-pin-cafe',
+  address_line_1: '100 Harbor Way',
+  latitude: null,
+  longitude: null,
+  phone_number: '805-555-0104',
+};
+
 describe('App browse map search', () => {
   beforeEach(() => {
     mockAppStateChangeListener = null;
@@ -1022,6 +1033,65 @@ describe('App browse map search', () => {
       undefined,
     );
     expect(screen.getByTestId('mock-place-detail')).toHaveTextContent(secondSamplePlace.slug);
+    expect(screen.queryByText('Best matches')).toBeNull();
+  });
+
+  it('uses Focus then Select for a business without a map pin and opens its profile', async () => {
+    mockFetchPlaces.mockResolvedValue([samplePlace, noPinSamplePlace]);
+    mockFetchPlaceDetail.mockResolvedValue({
+      ...noPinSamplePlace,
+      deals: [],
+      locations: [],
+    });
+
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    fireEvent.changeText(screen.getByTestId('browse-search-input'), 'a');
+
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(screen.getByLabelText('Focus No Pin Cafe')).toBeTruthy();
+    expect(screen.queryByLabelText('Preview No Pin Cafe')).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('Focus No Pin Cafe'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(screen.getByText('Best matches')).toBeTruthy();
+    expect(screen.getByText('Top 1 of 1 in view')).toBeTruthy();
+    expect(screen.getByLabelText('Select No Pin Cafe')).toBeTruthy();
+    expect(screen.queryByLabelText('Focus Baskin-Robbins')).toBeNull();
+    expect(screen.queryByText('Photos from this business page have not been found yet.')).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('Select No Pin Cafe'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(mockFetchPlaceDetail).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api',
+      noPinSamplePlace.slug,
+      undefined,
+    );
+    expect(screen.getByTestId('mock-place-detail')).toHaveTextContent(noPinSamplePlace.slug);
     expect(screen.queryByText('Best matches')).toBeNull();
   });
 

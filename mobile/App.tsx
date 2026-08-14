@@ -220,7 +220,6 @@ const allCitiesInitialMapRegion: Region = {
   latitudeDelta: 0.18,
   longitudeDelta: maxLongitudeDelta,
 };
-const mobileBusinessVenueType = 'mobile';
 const multipleAreasBusinessCityValue = multipleAreasBusinessCityOption.value;
 type AppScreenMode = 'splash' | 'auth' | 'browse' | 'home-feed' | 'profiles' | 'favorite-businesses' | 'business-notifications' | 'business-profile-editor' | 'settings' | 'blocked-direct-message-customers' | 'support' | 'privacy-policy' | 'terms-of-service' | 'business-search' | 'business-claim' | 'manual-business-claim' | 'informal-business-claim' | 'email-verification' | 'business-claim-review-pending' | 'direct-messages';
 type OnboardingTransitionDirection = 'forward' | 'backward';
@@ -663,6 +662,7 @@ function AppScreen() {
   const [selectedPlaceSlug, setSelectedPlaceSlug] = useState<string | null>(null);
   const [selectedPlace, setSelectedPlace] = useState<PlaceDetail | null>(null);
   const [selectedMapPlaceKey, setSelectedMapPlaceKey] = useState<string | null>(null);
+  const [selectedMapSearchResultKey, setSelectedMapSearchResultKey] = useState<string | null>(null);
   const [selectedMapSearchPreviewPlace, setSelectedMapSearchPreviewPlace] = useState<MapPreviewPlace | null>(null);
   const [displayedMapPreviewPlace, setDisplayedMapPreviewPlace] = useState<MapPreviewPlace | null>(null);
   const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null);
@@ -1677,10 +1677,12 @@ function AppScreen() {
     mapSearchResultPool.length === 1 ? mapSearchResultPool[0]?.markerKey ?? null : null
   );
   const focusedMapSearchResult = useMemo(
-    () => selectedMapPlaceKey
-      ? mapSearchResultPool.find((place) => place.markerKey === selectedMapPlaceKey) ?? null
-      : null,
-    [mapSearchResultPool, selectedMapPlaceKey],
+    () => selectedMapSearchResultKey
+      ? mapSearchResultPool.find((place) => place.resultKey === selectedMapSearchResultKey) ?? null
+      : selectedMapPlaceKey
+        ? mapSearchResultPool.find((place) => place.markerKey === selectedMapPlaceKey) ?? null
+        : null,
+    [mapSearchResultPool, selectedMapPlaceKey, selectedMapSearchResultKey],
   );
   const mapSearchResultDisplayPool = useMemo(
     () => focusedMapSearchResult ? [focusedMapSearchResult] : mapSearchResultPool,
@@ -3586,6 +3588,7 @@ function AppScreen() {
     setSelectedPlace(null);
     setSelectedLocationId(null);
     setSelectedMapPlaceKey(null);
+    setSelectedMapSearchResultKey(null);
     setSelectedMapSearchPreviewPlace(null);
     setDisplayedMapPreviewPlace(null);
     setShowGuestFavoritePrompt(false);
@@ -4129,6 +4132,19 @@ function AppScreen() {
   }, [displayedMapPlaces, selectedMapPlaceKey, showMapBrowse]);
 
   useEffect(() => {
+    if (!showMapBrowse || !selectedMapSearchResultKey) {
+      if (!showMapBrowse && selectedMapSearchResultKey !== null) {
+        setSelectedMapSearchResultKey(null);
+      }
+      return;
+    }
+
+    if (!mapSearchResultPool.some((place) => place.resultKey === selectedMapSearchResultKey)) {
+      setSelectedMapSearchResultKey(null);
+    }
+  }, [mapSearchResultPool, selectedMapSearchResultKey, showMapBrowse]);
+
+  useEffect(() => {
     if (!showMapBrowse || !selectedMapSearchPreviewPlace) {
       if (!showMapBrowse && selectedMapSearchPreviewPlace !== null) {
         setSelectedMapSearchPreviewPlace(null);
@@ -4243,6 +4259,7 @@ function AppScreen() {
       scheduleMapMarkersTrackViewChanges(1600);
     }
     setSelectedMapPlaceKey(null);
+    setSelectedMapSearchResultKey(null);
     setSelectedPlaceSlug(null);
     setSelectedPlace(null);
     setSelectedLocationId(null);
@@ -4256,6 +4273,7 @@ function AppScreen() {
     setDetailLoading(true);
     setBrowseFiltersExpanded(false);
     setSelectedMapPlaceKey(null);
+    setSelectedMapSearchResultKey(null);
     setSelectedPlace(null);
     setSelectedLocationId(place.locationId ?? null);
     setSelectedPlaceSlug(place.slug);
@@ -4336,6 +4354,7 @@ function AppScreen() {
 
     setBrowseFiltersExpanded(false);
     setSelectedMapPlaceKey(null);
+    setSelectedMapSearchResultKey(null);
     pendingListRevealRef.current = mode === 'list';
     setListRevealEnabled(false);
     browseModeTransition.stopAnimation();
@@ -4365,6 +4384,7 @@ function AppScreen() {
 
     stopMapMarkersTrackViewChanges();
     setSelectedMapPlaceKey(null);
+    setSelectedMapSearchResultKey(null);
     setSelectedMapSearchPreviewPlace(null);
     setSearchQuery(value);
   }
@@ -4377,6 +4397,7 @@ function AppScreen() {
     clearAutoFitMapRegionTimer();
     setSearchQuery('');
     setSelectedMapPlaceKey(null);
+    setSelectedMapSearchResultKey(null);
     mapResultsOpacity.stopAnimation();
     mapResultsOpacity.setValue(0);
     mapResultsExpandedProgress.stopAnimation();
@@ -6365,6 +6386,7 @@ function AppScreen() {
     }
 
     setSelectedMapPlaceKey(null);
+    setSelectedMapSearchResultKey(null);
     setSelectedMapSearchPreviewPlace(null);
   }
 
@@ -6385,6 +6407,7 @@ function AppScreen() {
     mapResultsOpacity.setValue(0);
     setShowMapResultsCard(false);
     setMapResultsCollapsed(false);
+    setSelectedMapSearchResultKey(null);
     setSelectedMapSearchPreviewPlace(null);
     handleSelectPlace({
       locationId: place.locationId,
@@ -6393,9 +6416,11 @@ function AppScreen() {
   }
 
   function handlePressMapSearchResult(place: MapSearchResultPlace) {
-    const canSelect = !!place.markerKey && (
-      mapSearchResultPool.length === 1
-      || selectedMapPlaceKey === place.markerKey
+    const canSelect = selectedMapSearchResultKey === place.resultKey || (
+      !!place.markerKey && (
+        mapSearchResultPool.length === 1
+        || selectedMapPlaceKey === place.markerKey
+      )
     );
 
     if (canSelect) {
@@ -6410,18 +6435,16 @@ function AppScreen() {
     invalidateMapResultsCardTransitions();
 
     if (!place.markerKey || place.latitude === null || place.longitude === null) {
-      mapResultsOpacity.stopAnimation();
-      mapResultsOpacity.setValue(0);
-      setShowMapResultsCard(false);
       const nextRegion = clampRegionToBounds(defaultMapRegion);
       setSelectedMapPlaceKey(null);
-      setSelectedMapSearchPreviewPlace(place);
+      setSelectedMapSearchResultKey(place.resultKey);
+      setSelectedMapSearchPreviewPlace(null);
       mapRegionRef.current = nextRegion;
       setMapRegion(nextRegion);
-      mapRef.current?.animateToRegion(nextRegion, 250);
       return;
     }
 
+    setSelectedMapSearchResultKey(null);
     setSelectedMapSearchPreviewPlace(null);
     setSelectedMapPlaceKey(place.markerKey);
     const latitude = place.latitude;
@@ -7629,13 +7652,13 @@ function AppScreen() {
                                   style={styles.mapResultsScroll}
                                 >
                                   {renderedMapSearchResults.map((place) => {
-                                    const canSelect = !!place.markerKey && (
-                                      mapSearchResultPool.length === 1
-                                      || selectedMapPlaceKey === place.markerKey
+                                    const canSelect = selectedMapSearchResultKey === place.resultKey || (
+                                      !!place.markerKey && (
+                                        mapSearchResultPool.length === 1
+                                        || selectedMapPlaceKey === place.markerKey
+                                      )
                                     );
-                                    const actionLabel = place.markerKey
-                                      ? canSelect ? 'Select' : 'Focus'
-                                      : 'Preview';
+                                    const actionLabel = canSelect ? 'Select' : 'Focus';
 
                                     return (
                                       <Pressable
