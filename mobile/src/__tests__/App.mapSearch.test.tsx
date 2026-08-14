@@ -745,6 +745,62 @@ describe('App browse map search', () => {
     });
   });
 
+  it('moves the rendered map marker when a later live coordinate changes', async () => {
+    const livePlace = {
+      ...samplePlace,
+      locations: [{
+        ...samplePlace,
+        id: 11,
+        slug: 'baskin-robbins-camarillo',
+      }],
+    } as PlaceListItem;
+    mockFetchPlaces.mockResolvedValue([livePlace]);
+    mockFetchLiveLocationPlaces.mockResolvedValue([{
+      slug: 'baskin-robbins-camarillo',
+      latitude: 34.2789,
+      longitude: -119.2914,
+      updated_at: '2026-08-03T17:33:20Z',
+    }]);
+
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(screen.getByTestId('mock-map-marker').props.coordinate).toEqual({
+      latitude: 34.2789,
+      longitude: -119.2914,
+    });
+
+    mockFetchLiveLocationPlaces.mockResolvedValue([{
+      slug: 'baskin-robbins-camarillo',
+      latitude: 34.3012,
+      longitude: -119.3278,
+      updated_at: '2026-08-03T17:33:50Z',
+    }]);
+
+    act(() => {
+      mockAppStateChangeListener?.('background');
+      mockAppStateChangeListener?.('active');
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('mock-map-marker').props.coordinate).toEqual({
+      latitude: 34.3012,
+      longitude: -119.3278,
+    });
+  });
+
   it('retries a stationary vendor location after the device reconnects', async () => {
     const businessSession = {
       id: 9,

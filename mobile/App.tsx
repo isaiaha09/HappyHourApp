@@ -1585,25 +1585,6 @@ function AppScreen() {
           }
         };
 
-        const initialPosition = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.BestForNavigation,
-        });
-        if (cancelled) {
-          return;
-        }
-        latestBusinessPosition = initialPosition;
-        businessLocationLatestPositionRef.current = initialPosition;
-        updateLocalBusinessLocation(initialPosition.coords);
-        businessLocationReportRef.current = (forceRetry = false) => {
-          if (businessLocationLatestPositionRef.current) {
-            if (forceRetry) {
-              businessLocationNeedsRetryRef.current = true;
-            }
-            void reportLocation(businessLocationLatestPositionRef.current.coords);
-          }
-        };
-        void reportLocation(initialPosition.coords);
-
         const watcher = await Location.watchPositionAsync(
           {
             accuracy: Location.Accuracy.BestForNavigation,
@@ -1614,6 +1595,7 @@ function AppScreen() {
             latestBusinessPosition = position;
             businessLocationLatestPositionRef.current = position;
             updateLocalBusinessLocation(position.coords);
+            void reportLocation(position.coords);
           },
         );
 
@@ -1623,11 +1605,41 @@ function AppScreen() {
         }
 
         businessLocationWatcherRef.current = watcher;
+        businessLocationReportRef.current = (forceRetry = false) => {
+          if (businessLocationLatestPositionRef.current) {
+            if (forceRetry) {
+              businessLocationNeedsRetryRef.current = true;
+            }
+            void reportLocation(businessLocationLatestPositionRef.current.coords);
+          }
+        };
         businessLocationReportTimer = setInterval(() => {
           if (latestBusinessPosition) {
             void reportLocation(latestBusinessPosition.coords);
           }
         }, liveMapPlacesRefreshIntervalMs);
+
+        const lastKnownPosition = await Location.getLastKnownPositionAsync();
+        if (cancelled) {
+          return;
+        }
+        if (lastKnownPosition) {
+          latestBusinessPosition = lastKnownPosition;
+          businessLocationLatestPositionRef.current = lastKnownPosition;
+          updateLocalBusinessLocation(lastKnownPosition.coords);
+          void reportLocation(lastKnownPosition.coords);
+        }
+
+        const initialPosition = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.BestForNavigation,
+        });
+        if (cancelled) {
+          return;
+        }
+        latestBusinessPosition = initialPosition;
+        businessLocationLatestPositionRef.current = initialPosition;
+        updateLocalBusinessLocation(initialPosition.coords);
+        void reportLocation(initialPosition.coords);
       } catch (error) {
         if (!cancelled) {
           setProfileErrorMessage(getErrorMessage(error));
@@ -1984,8 +1996,9 @@ function AppScreen() {
   }, [hasInternetConnection, showMapBrowse]);
 
   useEffect(() => {
+    const profileDetailActive = selectedPlaceSlug !== null;
     if (
-      !showMapBrowse
+      (!showMapBrowse && !profileDetailActive)
       || hasInternetConnection !== true
       || appStateRef.current === 'background'
       || appStateRef.current === 'inactive'
@@ -1995,12 +2008,13 @@ function AppScreen() {
     }
 
     let cancelled = false;
-    const shouldForceImmediateRefresh = lastHandledLiveLocationRefreshTokenRef.current !== liveLocationRefreshToken;
+    const shouldForceImmediateRefresh = profileDetailActive
+      || lastHandledLiveLocationRefreshTokenRef.current !== liveLocationRefreshToken;
     lastHandledLiveLocationRefreshTokenRef.current = liveLocationRefreshToken;
 
     async function refreshLiveLocationPlaces() {
       try {
-        const updates = await fetchLiveLocationPlaces(apiBaseUrl, selectedCity);
+        const updates = await fetchLiveLocationPlaces(apiBaseUrl, profileDetailActive ? 'all' : selectedCity);
         if (cancelled) {
           return;
         }
@@ -2068,7 +2082,7 @@ function AppScreen() {
       cancelled = true;
       pauseLiveLocationRefreshTimer();
     };
-  }, [apiBaseUrl, hasInternetConnection, liveLocationRefreshToken, liveMapPlacesRefreshIntervalMs, reloadCount, selectedCity, showMapBrowse]);
+  }, [apiBaseUrl, hasInternetConnection, liveLocationRefreshToken, liveMapPlacesRefreshIntervalMs, reloadCount, selectedCity, selectedPlaceSlug, showMapBrowse]);
 
   useEffect(() => {
     if (!bottomMoreSheetVisible || authenticatedSession) {
@@ -3876,16 +3890,6 @@ function AppScreen() {
         }
 
         setSelectedPlace(detail);
-        try {
-          const liveLocationUpdates = await fetchLiveLocationPlaces(apiBaseUrl, 'all');
-          if (!isMounted || placeDataGeneration !== placeCacheGenerationRef.current) {
-            return;
-          }
-
-          setSelectedPlace((current) => mergeLiveLocationUpdatesIntoPlaceDetail(current, liveLocationUpdates) ?? current);
-        } catch {
-          // The detail payload remains usable when the best-effort live refresh fails.
-        }
       } catch (error) {
         if (!isMounted || placeDataGeneration !== placeCacheGenerationRef.current) {
           return;
