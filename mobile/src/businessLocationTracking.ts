@@ -1,23 +1,16 @@
-import { AppState, Platform } from 'react-native';
-import * as Location from 'expo-location';
+import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
-import * as TaskManager from 'expo-task-manager';
-import type { TaskManagerTaskBody } from 'expo-task-manager';
+import { startNativeLocationUpdates, stopNativeLocationUpdates } from './nativeLocation';
 import {
   buildBusinessLocationKey,
-  businessLocationReportIntervalMs,
-  getFreshestBusinessLocation,
   shouldReportBusinessLocation,
 } from './businessLocationReporting';
-
-export const BUSINESS_LOCATION_TASK_NAME = 'diningdealz-business-location-updates';
 
 const trackingSessionStorageKey = 'diningdealz.business-location.session';
 const apiBaseUrlStorageKey = 'diningdealz.business-location.api-base-url';
 const lastReportedLocationStorageKey = 'diningdealz.business-location.last-rounded-key';
 const lastReportedAtStorageKey = 'diningdealz.business-location.last-reported-at';
 const trackingConfigVersionStorageKey = 'diningdealz.business-location.config-version';
-const trackingConfigVersion = '3';
 
 const secureStoreOptions: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
@@ -28,22 +21,8 @@ export type PersistedBusinessTrackingSession = {
   authToken: string;
 };
 
-type BusinessLocationTaskData = {
-  locations?: Location.LocationObject[];
-};
-
 function normalizeApiBaseUrl(baseUrl: string) {
   return baseUrl.trim().replace(/\/+$/, '');
-}
-
-function buildApiUrl(baseUrl: string, path: string) {
-  if (/^https?:\/\//i.test(path)) {
-    return path;
-  }
-
-  const normalizedBaseUrl = normalizeApiBaseUrl(baseUrl);
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  return `${normalizedBaseUrl}${normalizedPath}`;
 }
 
 async function getSecureItem(key: string) {
@@ -80,31 +59,6 @@ async function deleteSecureItem(key: string) {
   }
 
   await SecureStore.deleteItemAsync(key, secureStoreOptions);
-}
-
-async function postBusinessLocationUpdate(
-  apiBaseUrl: string,
-  authToken: string,
-  coords: { accuracy?: number | null; latitude: number; longitude: number },
-) {
-  const response = await fetch(buildApiUrl(apiBaseUrl, '/profiles/business-location/'), {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      Authorization: `Token ${authToken}`,
-    },
-    body: JSON.stringify({
-      accuracy_meters: coords.accuracy ?? null,
-      latitude: coords.latitude,
-      longitude: coords.longitude,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorPayload = await response.text().catch(() => '');
-    throw new Error(errorPayload || `Business background location update failed with status ${response.status}.`);
-  }
 }
 
 export async function loadPersistedBusinessTrackingSession() {
@@ -193,47 +147,13 @@ export async function ensureBusinessBackgroundLocationTaskStarted(
     return;
   }
 
-  registerBusinessLocationTask();
   await persistBusinessTrackingSession(apiBaseUrl, session);
-
-  if (!(await TaskManager.isAvailableAsync())) {
-    return;
-  }
-
-  if (await Location.hasStartedLocationUpdatesAsync(BUSINESS_LOCATION_TASK_NAME)) {
-    const activeConfigVersion = await getSecureItem(trackingConfigVersionStorageKey);
-    if (activeConfigVersion === trackingConfigVersion) {
-      return;
-    }
-
-    await Location.stopLocationUpdatesAsync(BUSINESS_LOCATION_TASK_NAME);
-  }
-
-  await Location.startLocationUpdatesAsync(BUSINESS_LOCATION_TASK_NAME, {
-    accuracy: Location.Accuracy.BestForNavigation,
-    activityType: Location.ActivityType.OtherNavigation,
-    deferredUpdatesDistance: 0,
-    deferredUpdatesInterval: businessLocationReportIntervalMs,
-    distanceInterval: 1,
-    foregroundService: {
-      killServiceOnDestroy: false,
-      notificationBody: 'DiningDealz is keeping your business map pin current for guests.',
-      notificationColor: '#080101',
-      notificationTitle: 'Business location tracking active',
-    },
-    pausesUpdatesAutomatically: false,
-    showsBackgroundLocationIndicator: true,
-    timeInterval: businessLocationReportIntervalMs,
-  });
-  await setSecureItem(trackingConfigVersionStorageKey, trackingConfigVersion);
+  await startNativeLocationUpdates();
 }
 
 export async function stopBusinessBackgroundLocationTask(options?: { clearPersistedSession?: boolean }) {
-  if (Platform.OS !== 'web' && await TaskManager.isAvailableAsync()) {
-    const hasStartedLocationUpdates = await Location.hasStartedLocationUpdatesAsync(BUSINESS_LOCATION_TASK_NAME);
-    if (hasStartedLocationUpdates) {
-      await Location.stopLocationUpdatesAsync(BUSINESS_LOCATION_TASK_NAME);
-    }
+  if (Platform.OS !== 'web') {
+    await stopNativeLocationUpdates();
   }
 
   if (options?.clearPersistedSession !== false) {
@@ -243,50 +163,3 @@ export async function stopBusinessBackgroundLocationTask(options?: { clearPersis
 
   await clearPersistedBusinessTrackingLastReportedLocation();
 }
-
-async function executeBusinessLocationTask({ data, error }: TaskManagerTaskBody<BusinessLocationTaskData>) {
-  if (error) {
-    return;
-  }
-
-  const latestLocation = getFreshestBusinessLocation(data?.locations ?? []);
-  if (!latestLocation) {
-    return;
-  }
-
-  const [apiBaseUrl, session] = await Promise.all([
-    getSecureItem(apiBaseUrlStorageKey),
-    loadPersistedBusinessTrackingSession(),
-  ]);
-  if (!apiBaseUrl || !session?.authToken) {
-    return;
-  }
-
-  if (AppState.currentState === 'active') {
-    return;
-  }
-
-  if (!(await reserveBusinessLocationReport(
-    latestLocation.coords.latitude,
-    latestLocation.coords.longitude,
-  ))) {
-    return;
-  }
-
-  try {
-    await postBusinessLocationUpdate(apiBaseUrl, session.authToken, {
-      accuracy: latestLocation.coords.accuracy ?? null,
-      latitude: latestLocation.coords.latitude,
-      longitude: latestLocation.coords.longitude,
-    });
-    await commitBusinessLocationReport(latestLocation.coords.latitude, latestLocation.coords.longitude);
-  } catch {
-    // Leave the last successful report untouched so the next location sample can retry.
-  }
-}
-
-export function registerBusinessLocationTask() {
-  TaskManager.defineTask(BUSINESS_LOCATION_TASK_NAME, executeBusinessLocationTask);
-}
-
-registerBusinessLocationTask();

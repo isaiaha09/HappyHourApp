@@ -3,7 +3,6 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
-import * as Location from 'expo-location';
 import * as Network from 'expo-network';
 import * as Notifications from 'expo-notifications';
 import {
@@ -69,6 +68,7 @@ import {
   updateBusinessLocation,
   verifyEmailCode,
 } from './src/api';
+import * as Location from './src/nativeLocation';
 import {
   clearPersistedBusinessTrackingSession,
   commitBusinessLocationReport,
@@ -1516,7 +1516,7 @@ function AppScreen() {
           const activeTrackingSession = authenticatedSessionRef.current?.auth_token
             ? buildBusinessTrackingSession(authenticatedSessionRef.current)
             : currentBusinessTrackingSession;
-          if (!activeTrackingSession?.authToken || appStateRef.current !== 'active') {
+          if (!activeTrackingSession?.authToken) {
             return;
           }
 
@@ -6066,7 +6066,9 @@ function AppScreen() {
       if (enabled && nextTrackingSession) {
         await ensureBusinessBackgroundLocationTaskStarted(apiBaseUrl, nextTrackingSession);
       } else {
-        await stopBusinessBackgroundLocationTask();
+        try {
+          await stopBusinessBackgroundLocationTask();
+        } catch {}
       }
       if (!enabled && approvedBusinessSlugs.size > 0) {
         clearPlacesCache();

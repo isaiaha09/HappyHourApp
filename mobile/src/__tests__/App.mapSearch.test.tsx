@@ -76,13 +76,17 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
-jest.mock('expo-location', () => ({
+jest.mock('../nativeLocation', () => ({
   Accuracy: { Balanced: 1 },
+  ActivityType: { OtherNavigation: 2 },
   getCurrentPositionAsync: jest.fn(),
   getBackgroundPermissionsAsync: jest.fn(async () => ({ canAskAgain: false, granted: false })),
   getForegroundPermissionsAsync: jest.fn(async () => ({ canAskAgain: false, granted: false })),
   isBackgroundLocationAvailableAsync: jest.fn(async () => false),
   requestForegroundPermissionsAsync: jest.fn(async () => ({ canAskAgain: false, granted: false })),
+  requestBackgroundPermissionsAsync: jest.fn(async () => ({ canAskAgain: false, granted: false })),
+  startNativeLocationUpdates: jest.fn(async () => undefined),
+  stopNativeLocationUpdates: jest.fn(async () => undefined),
   watchPositionAsync: jest.fn(async () => ({ remove: jest.fn() })),
 }));
 
@@ -372,7 +376,7 @@ const mapsModule = jest.requireMock('react-native-maps') as {
 const networkModule = jest.requireMock('expo-network') as {
   __setMockNetworkState: (nextState: { isConnected?: boolean; isInternetReachable?: boolean; type?: string }) => void;
 };
-const locationModule = jest.requireMock('expo-location') as {
+const locationModule = jest.requireMock('../nativeLocation') as {
   getBackgroundPermissionsAsync: jest.Mock;
   getCurrentPositionAsync: jest.Mock;
   getForegroundPermissionsAsync: jest.Mock;
