@@ -225,6 +225,30 @@ export type AuthPortalScreenProps = {
 
 type AuthRecoveryMode = 'username' | 'password' | null;
 
+export type ForgotUsernameScreenProps = {
+  email: string;
+  errorMessage: string | null;
+  isLandscape: boolean;
+  message: string | null;
+  onBack: () => void;
+  onChangeEmail: (value: string) => void;
+  onSubmit: () => void;
+  submitting: boolean;
+};
+
+export type ForgotPasswordScreenProps = {
+  confirmPassword: string;
+  errorMessage: string | null;
+  isLandscape: boolean;
+  message: string | null;
+  newPassword: string;
+  onBack: () => void;
+  onChangeConfirmPassword: (value: string) => void;
+  onChangeNewPassword: (value: string) => void;
+  onSubmit: () => void;
+  submitting: boolean;
+};
+
 export type CreateProfileScreenProps = {
   errorMessage: string | null;
   form: ProfileFormState;
@@ -650,6 +674,136 @@ export function AuthPortalScreen({ authMessage, autoFocusIdentifier, errorMessag
                   </View>
                 </Animated.View>
               ) : null}
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAwareFormScreen>
+    </View>
+  );
+}
+
+export function ForgotUsernameScreen({ email, errorMessage, isLandscape, message, onBack, onChangeEmail, onSubmit, submitting }: ForgotUsernameScreenProps) {
+  const { handleFieldFocus, handleScroll, scrollToTop, scrollViewRef } = useAutoScrollForm();
+  useScrollToTopOnError(errorMessage, scrollToTop);
+
+  return (
+    <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
+      <KeyboardAwareFormScreen>
+        <ScrollView
+          contentContainerStyle={styles.authScrollContent}
+          {...dismissKeyboardOnScrollProps}
+          keyboardShouldPersistTaps="always"
+          onScroll={handleScroll}
+          ref={scrollViewRef}
+          scrollEventThrottle={16}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
+            <OnboardingBackButton label="Back to sign in" onPress={onBack} />
+          </View>
+
+          <View style={styles.authFormStack}>
+            <View style={[styles.profileCard, styles.onboardingCard]}>
+              <Text style={[styles.detailCity, styles.onboardingEyebrow]}>Forgot username</Text>
+              <Text style={[styles.detailTitle, styles.onboardingHeading]}>Find your username</Text>
+              <Text style={[styles.profileIntroText, styles.onboardingBodyText]}>Enter the email address on your DiningDealz account and we will send your username again.</Text>
+
+              {message ? (
+                <View style={styles.profileSuccessBanner}>
+                  <Text style={styles.profileSuccessText}>{message}</Text>
+                </View>
+              ) : null}
+
+              {errorMessage ? (
+                <View style={styles.errorBanner}>
+                  <Text style={styles.errorText}>{errorMessage}</Text>
+                </View>
+              ) : null}
+
+              <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Account email</Text>
+              <AutoScrollTextInput
+                autoCapitalize="none"
+                autoFocus
+                keyboardType="email-address"
+                onBeforeAutoScroll={handleFieldFocus}
+                onChangeText={onChangeEmail}
+                placeholder="Enter your account email"
+                placeholderTextColor={onboardingPlaceholderTextColor}
+                scrollViewRef={scrollViewRef}
+                style={[styles.profileInput, styles.onboardingInput]}
+                value={email}
+              />
+
+              <Pressable disabled={submitting} onPress={onSubmit} style={[styles.linkButton, styles.onboardingPrimaryButton, submitting ? styles.linkButtonDisabled : null]}>
+                <LoadingButtonLabel
+                  color={theme.textDark}
+                  label="Email my username"
+                  loading={submitting}
+                  textStyle={[styles.linkButtonText, styles.onboardingPrimaryButtonText]}
+                />
+              </Pressable>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAwareFormScreen>
+    </View>
+  );
+}
+
+export function ForgotPasswordScreen({ confirmPassword, errorMessage, isLandscape, message, newPassword, onBack, onChangeConfirmPassword, onChangeNewPassword, onSubmit, submitting }: ForgotPasswordScreenProps) {
+  const { handleFieldFocus, handleScroll, scrollToTop, scrollViewRef } = useAutoScrollForm();
+  useScrollToTopOnError(errorMessage, scrollToTop);
+
+  return (
+    <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
+      <KeyboardAwareFormScreen>
+        <ScrollView
+          contentContainerStyle={styles.authScrollContent}
+          {...dismissKeyboardOnScrollProps}
+          keyboardShouldPersistTaps="always"
+          onScroll={handleScroll}
+          ref={scrollViewRef}
+          scrollEventThrottle={16}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
+            <OnboardingBackButton label="Back to sign in" onPress={onBack} />
+          </View>
+
+          <View style={styles.authFormStack}>
+            <View style={[styles.profileCard, styles.onboardingCard]}>
+              <Text style={[styles.detailCity, styles.onboardingEyebrow]}>Forgot password</Text>
+              <Text style={[styles.detailTitle, styles.onboardingHeading]}>Choose a new password</Text>
+              <Text style={[styles.profileIntroText, styles.onboardingBodyText]}>Create a new password for your DiningDealz account, then return to sign in.</Text>
+
+              {message ? (
+                <View style={styles.profileSuccessBanner}>
+                  <Text style={styles.profileSuccessText}>{message}</Text>
+                </View>
+              ) : null}
+
+              {errorMessage ? (
+                <View style={styles.errorBanner}>
+                  <Text style={styles.errorText}>{errorMessage}</Text>
+                </View>
+              ) : null}
+
+              <View style={styles.profileFormSection}>
+                <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>New password</Text>
+                <PasswordField inputStyle={styles.onboardingInput} onBeforeAutoScroll={handleFieldFocus} onChangeText={onChangeNewPassword} scrollViewRef={scrollViewRef} value={newPassword} />
+
+                <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Confirm new password</Text>
+                <PasswordField inputStyle={styles.onboardingInput} onBeforeAutoScroll={handleFieldFocus} onChangeText={onChangeConfirmPassword} scrollViewRef={scrollViewRef} value={confirmPassword} />
+              </View>
+
+              <Pressable disabled={submitting} onPress={onSubmit} style={[styles.linkButton, styles.onboardingPrimaryButton, submitting ? styles.linkButtonDisabled : null]}>
+                <LoadingButtonLabel
+                  color={theme.textDark}
+                  label="Update password"
+                  loading={submitting}
+                  textStyle={[styles.linkButtonText, styles.onboardingPrimaryButtonText]}
+                />
+              </Pressable>
             </View>
           </View>
         </ScrollView>

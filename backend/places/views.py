@@ -1563,6 +1563,7 @@ class PasswordResetView(generics.GenericAPIView):
 		return HttpResponse(self._build_html(title='Reset your password', message='Enter a new password for your account.', token=token))
 
 	def post(self, request, token):
+		wants_json = request.content_type == 'application/json' or 'application/json' in request.headers.get('Accept', '')
 		payload = {
 			'token': token,
 			'new_password': request.data.get('new_password') or request.POST.get('new_password', ''),
@@ -1575,7 +1576,12 @@ class PasswordResetView(generics.GenericAPIView):
 			user.save(update_fields=['password'])
 			profile.clear_password_reset_token()
 			user.profile_auth_tokens.all().delete()
+			if wants_json:
+				return Response({'detail': 'Password updated successfully.'})
 			return HttpResponse(self._build_html(title='Password updated successfully.', message='You can return to the app and sign in with your new password.', token='', success=True))
+
+		if wants_json:
+			return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 		error_message = ' '.join(sum((messages for messages in serializer.errors.values()), [])) or 'Unable to reset the password.'
 		return HttpResponse(self._build_html(title='Reset your password', message='Enter a new password for your account.', token=token, error_message=error_message), status=400)

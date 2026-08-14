@@ -321,6 +321,10 @@ export async function requestPasswordReset(baseUrl: string, identifier: string) 
   return postJson<{ detail: string }>(baseUrl, '/profiles/password-reset-request/', { identifier });
 }
 
+export async function confirmPasswordReset(baseUrl: string, token: string, newPassword: string) {
+  return postJson<{ detail: string }>(baseUrl, `/profiles/reset-password/${encodeURIComponent(token)}/`, { new_password: newPassword });
+}
+
 export async function beginTwoFactorSetup(baseUrl: string, authToken: string) {
   return postAuthedJson<TwoFactorSetupResponse>(baseUrl, '/profiles/two-factor/', authToken, {});
 }

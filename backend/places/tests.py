@@ -7899,6 +7899,8 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(response.data['detail'], 'If that email address is registered, a username reminder has been sent.')
 		self.assertEqual(len(mail.outbox), 1)
 		self.assertIn(self.user.username, mail.outbox[0].body)
+		self.assertIn('diningdealz://forgot-username/', mail.outbox[0].body)
+		self.assertNotIn('127.0.0.1', mail.outbox[0].body)
 
 	def test_password_reset_request_and_confirm_updates_password(self):
 		request_response = self.client.post(
@@ -7912,6 +7914,8 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertTrue(self.profile.password_reset_token)
 		self.assertEqual(len(mail.outbox), 1)
 		self.assertIn(self.profile.password_reset_token, mail.outbox[0].body)
+		self.assertIn(f'diningdealz://forgot-password/{self.profile.password_reset_token}/', mail.outbox[0].body)
+		self.assertNotIn('127.0.0.1', mail.outbox[0].body)
 
 		confirm_response = self.client.post(
 			reverse('profile-password-reset', kwargs={'token': self.profile.password_reset_token}),
@@ -7924,6 +7928,21 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertTrue(self.user.check_password('new-test-pass-123'))
 		self.assertEqual(self.profile.password_reset_token, '')
 		self.assertEqual(self.user.profile_auth_tokens.count(), 0)
+
+	def test_password_reset_confirm_returns_json_for_mobile(self):
+		self.profile.issue_password_reset_token(force=True)
+		self.profile.save(update_fields=['password_reset_token', 'updated_at'])
+
+		response = self.client.post(
+			reverse('profile-password-reset', kwargs={'token': self.profile.password_reset_token}),
+			{'new_password': 'mobile-test-pass-123'},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data, {'detail': 'Password updated successfully.'})
+		self.user.refresh_from_db()
+		self.assertTrue(self.user.check_password('mobile-test-pass-123'))
 
 	def test_delete_account_removes_user_and_related_profile_records(self):
 		FavoriteBusiness.objects.create(

@@ -270,6 +270,15 @@ Optional Sentry sampling environment variables:
 - `NEXT_PUBLIC_SENTRY_REPLAYS_SESSION_SAMPLE_RATE`
 - `NEXT_PUBLIC_SENTRY_REPLAYS_ON_ERROR_SAMPLE_RATE`
 
+## Mobile Account Recovery Links
+
+Account recovery emails open the DiningDealz mobile app through its `diningdealz` URL scheme. Set these backend environment variables on the production service so an older web or localhost override cannot be used:
+
+- `PROFILE_USERNAME_RECOVERY_URL_BASE=diningdealz://forgot-username`
+- `PROFILE_PASSWORD_RESET_URL_BASE=diningdealz://forgot-password`
+
+The mobile app handles the username reminder screen and the token-based password reset screen. Release the updated mobile binary before testing these links on a device; the backend can continue serving the existing browser reset endpoint for direct web requests.
+
 ## Production Rate Limiting
 
 The backend applies scoped DRF throttles to login, signup, verification-code, password-recovery, support, direct-message, favorite, feed-write, and profile mutation endpoints.

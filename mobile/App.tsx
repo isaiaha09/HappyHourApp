@@ -45,6 +45,7 @@ import {
   deleteProfileAccount,
   disableTwoFactor,
   clearPlacesCache,
+  confirmPasswordReset,
   fetchLiveLocationPlaces,
   fetchProfileDashboard,
   fetchPlaceDetail,
@@ -106,6 +107,7 @@ import { SplashScreen } from './src/screens/SplashScreen';
 import { getMappedPlaceRenderKey, shouldSkipBrowseMapAutoFit } from './src/mapBrowseState';
 import { buildSocialProfilesFromInputs, socialProfilesToInputs } from './src/socialProfiles';
 import { buildDealOverridesFromDeals, buildNormalizedDealOverrides, buildNormalizedOperatingHourOverrides, buildOperatingHourOverridesFromWindows } from './src/businessProfileOverrides';
+import { parseRecoveryDeepLink } from './src/recoveryLinks';
 import {
   extractDirectMessageThreadIdFromNotificationData,
   extractFavoriteBusinessSlugFromNotificationData,
@@ -119,6 +121,8 @@ import {
   ContactSupportScreen,
   CreateProfileScreen,
   EmailVerificationScreen,
+  ForgotPasswordScreen,
+  ForgotUsernameScreen,
   PrivacyPolicyScreen,
   TermsOfServiceScreen,
 } from './src/screens/ProfileFlowScreens';
@@ -221,7 +225,7 @@ const allCitiesInitialMapRegion: Region = {
   longitudeDelta: maxLongitudeDelta,
 };
 const multipleAreasBusinessCityValue = multipleAreasBusinessCityOption.value;
-type AppScreenMode = 'splash' | 'auth' | 'browse' | 'home-feed' | 'profiles' | 'favorite-businesses' | 'business-notifications' | 'business-profile-editor' | 'settings' | 'blocked-direct-message-customers' | 'support' | 'privacy-policy' | 'terms-of-service' | 'business-search' | 'business-claim' | 'manual-business-claim' | 'informal-business-claim' | 'email-verification' | 'business-claim-review-pending' | 'direct-messages';
+type AppScreenMode = 'splash' | 'auth' | 'browse' | 'home-feed' | 'profiles' | 'favorite-businesses' | 'business-notifications' | 'business-profile-editor' | 'settings' | 'blocked-direct-message-customers' | 'support' | 'privacy-policy' | 'terms-of-service' | 'business-search' | 'business-claim' | 'manual-business-claim' | 'informal-business-claim' | 'forgot-username' | 'forgot-password' | 'email-verification' | 'business-claim-review-pending' | 'direct-messages';
 type OnboardingTransitionDirection = 'forward' | 'backward';
 type TransitionAxis = 'x' | 'y';
 type ClaimReturnDestination = 'business-search' | 'browse-map' | 'profiles';
@@ -638,6 +642,9 @@ function AppScreen() {
   const [shouldAutoFocusLoginField, setShouldAutoFocusLoginField] = useState(false);
   const [loginSubmitting, setLoginSubmitting] = useState(false);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
+  const [forgotUsernameEmail, setForgotUsernameEmail] = useState('');
+  const [passwordResetToken, setPasswordResetToken] = useState('');
+  const [passwordResetForm, setPasswordResetForm] = useState({ confirmPassword: '', newPassword: '' });
   const [twoFactorSetup, setTwoFactorSetup] = useState<TwoFactorSetupResponse | null>(null);
   const [twoFactorSetupCode, setTwoFactorSetupCode] = useState('');
   const [twoFactorDisableCode, setTwoFactorDisableCode] = useState('');
@@ -2115,7 +2122,10 @@ function AppScreen() {
     };
   }, [apiBaseUrl]);
   const availableClaimPlaces = consolidatePlacesBySlug(availableProfilePlaces);
-  const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'direct-messages', 'business-search', 'business-claim', 'manual-business-claim', 'informal-business-claim', 'email-verification', 'business-claim-review-pending']);
+  const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'direct-messages', 'business-search', 'business-claim', 'manual-business-claim', 'informal-business-claim', 'forgot-username', 'forgot-password', 'email-verification', 'business-claim-review-pending']);
+  const recoveryScreenKeys = new Set<AppScreenMode>(['forgot-username', 'forgot-password']);
+  const isRecoveryScreenTransition = recoveryScreenKeys.has(screenMode)
+    || (incomingOnboardingScreen !== null && recoveryScreenKeys.has(incomingOnboardingScreen));
   const profileStackTransitionScreens = new Set<AppScreenMode>(['profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'direct-messages']);
   const currentOnboardingScreen = onboardingScreenKeys.has(screenMode) ? screenMode : null;
   const usesOnboardingSlideTransition = currentOnboardingScreen !== null || incomingOnboardingScreen !== null;
@@ -2489,6 +2499,35 @@ function AppScreen() {
     try {
       parsedUrl = new URL(normalizedUrl);
     } catch {
+      return;
+    }
+
+    const recoveryLink = parseRecoveryDeepLink(normalizedUrl);
+    if (recoveryLink?.kind === 'forgot-username') {
+      dismissKeyboardForScreenTransition();
+      setForgotUsernameEmail('');
+      setPasswordResetToken('');
+      setPasswordResetForm({ confirmPassword: '', newPassword: '' });
+      setAuthMessage(null);
+      setProfileMessage(null);
+      setProfileErrorMessage(null);
+      setLoginSubmitting(false);
+      setProfileSubmitting(false);
+      navigateScreen('forgot-username', 'forward');
+      return;
+    }
+
+    if (recoveryLink?.kind === 'forgot-password') {
+      dismissKeyboardForScreenTransition();
+      setForgotUsernameEmail('');
+      setPasswordResetToken(recoveryLink.token);
+      setPasswordResetForm({ confirmPassword: '', newPassword: '' });
+      setAuthMessage(null);
+      setProfileMessage(null);
+      setProfileErrorMessage(null);
+      setLoginSubmitting(false);
+      setProfileSubmitting(false);
+      navigateScreen('forgot-password', 'forward');
       return;
     }
 
@@ -3064,6 +3103,9 @@ function AppScreen() {
       case 'manual-business-claim':
       case 'informal-business-claim':
         return { kind: 'onboarding', nextScreen: 'business-search' };
+      case 'forgot-username':
+      case 'forgot-password':
+        return { kind: 'onboarding', nextScreen: 'auth' };
       case 'blocked-direct-message-customers':
       case 'support':
       case 'privacy-policy':
@@ -3158,6 +3200,15 @@ function AppScreen() {
       case 'informal-business-claim':
       case 'direct-messages':
         setProfileErrorMessage(null);
+        break;
+      case 'forgot-username':
+      case 'forgot-password':
+        setForgotUsernameEmail('');
+        setPasswordResetToken('');
+        setPasswordResetForm({ confirmPassword: '', newPassword: '' });
+        setAuthMessage(null);
+        setProfileErrorMessage(null);
+        setProfileMessage(null);
         break;
       case 'support':
         setProfileErrorMessage(null);
@@ -5757,6 +5808,41 @@ function AppScreen() {
     }
   }
 
+  async function handleSubmitPasswordReset() {
+    if (!passwordResetToken) {
+      setProfileErrorMessage('This password reset link is invalid or expired. Request a new one.');
+      return;
+    }
+
+    if (!passwordResetForm.newPassword) {
+      setProfileErrorMessage('Enter a new password.');
+      return;
+    }
+
+    if (passwordResetForm.newPassword !== passwordResetForm.confirmPassword) {
+      setProfileErrorMessage('Password and confirm password must match.');
+      return;
+    }
+
+    setProfileSubmitting(true);
+    setProfileErrorMessage(null);
+
+    try {
+      const response = await confirmPasswordReset(apiBaseUrl, passwordResetToken, passwordResetForm.newPassword);
+      dismissKeyboardForScreenTransition();
+      setPasswordResetToken('');
+      setPasswordResetForm({ confirmPassword: '', newPassword: '' });
+      setProfileMessage(null);
+      setProfileErrorMessage(null);
+      setAuthMessage(response.detail ?? 'Password updated successfully. Sign in with your new password.');
+      navigateScreen('auth', 'backward');
+    } catch (error) {
+      setProfileErrorMessage(getErrorMessage(error));
+    } finally {
+      setProfileSubmitting(false);
+    }
+  }
+
   async function handleSubmitCustomerProfile() {
     if (profileForm.password !== profileForm.confirm_password) {
       setProfileErrorMessage('Password and confirm password must match.');
@@ -6347,6 +6433,17 @@ function AppScreen() {
     setProfileErrorMessage(null);
     setProfileMessage(null);
     setEmailVerificationCode('');
+    navigateScreen('auth', 'backward');
+  }
+
+  function handleBackFromAccountRecovery() {
+    dismissKeyboardForScreenTransition();
+    setForgotUsernameEmail('');
+    setPasswordResetToken('');
+    setPasswordResetForm({ confirmPassword: '', newPassword: '' });
+    setAuthMessage(null);
+    setProfileErrorMessage(null);
+    setProfileMessage(null);
     navigateScreen('auth', 'backward');
   }
 
@@ -7192,6 +7289,38 @@ function AppScreen() {
             />
           </SafeAreaView>
         );
+      case 'forgot-username':
+        return (
+          <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
+            <ForgotUsernameScreen
+              email={forgotUsernameEmail}
+              errorMessage={profileErrorMessage}
+              isLandscape={isLandscape}
+              message={authMessage}
+              onBack={handleBackFromAccountRecovery}
+              onChangeEmail={setForgotUsernameEmail}
+              onSubmit={() => void handleForgotUsername(forgotUsernameEmail)}
+              submitting={loginSubmitting}
+            />
+          </SafeAreaView>
+        );
+      case 'forgot-password':
+        return (
+          <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
+            <ForgotPasswordScreen
+              confirmPassword={passwordResetForm.confirmPassword}
+              errorMessage={profileErrorMessage}
+              isLandscape={isLandscape}
+              message={profileMessage}
+              newPassword={passwordResetForm.newPassword}
+              onBack={handleBackFromAccountRecovery}
+              onChangeConfirmPassword={(value) => setPasswordResetForm((current) => ({ ...current, confirmPassword: value }))}
+              onChangeNewPassword={(value) => setPasswordResetForm((current) => ({ ...current, newPassword: value }))}
+              onSubmit={() => void handleSubmitPasswordReset()}
+              submitting={profileSubmitting}
+            />
+          </SafeAreaView>
+        );
       case 'profiles':
         return renderProfilesScreen(profileSessionOverride, 'profiles');
       case 'favorite-businesses':
@@ -7990,7 +8119,7 @@ function AppScreen() {
             {renderOnboardingScreen('auth')}
           </Animated.View>
         </View>
-      ) : authenticatedSession && (screenMode === 'direct-messages' || (!selectedPlaceSlug && (['profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'browse', 'home-feed'].includes(screenMode) || usesBrowseProfileSlideTransition || usesProfileStackSlideTransition))) ? (
+      ) : authenticatedSession && !isRecoveryScreenTransition && (screenMode === 'direct-messages' || (!selectedPlaceSlug && (['profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'browse', 'home-feed'].includes(screenMode) || usesBrowseProfileSlideTransition || usesProfileStackSlideTransition))) ? (
         renderAuthenticatedMainShell()
       ) : !authenticatedSession && (screenMode === 'browse' || currentOnboardingScreen !== null || usesGuestBrowseSlideTransition || incomingOnboardingScreen !== null || returningToSplashScreen !== null) ? (
         renderGuestMainShell()

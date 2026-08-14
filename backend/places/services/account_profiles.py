@@ -889,10 +889,15 @@ def send_business_claim_rejected_email(user, claim):
 
 
 def send_username_reminder_email(user):
+	recovery_base = str(getattr(settings, 'PROFILE_USERNAME_RECOVERY_URL_BASE', '') or '').rstrip('/')
+	recovery_url = f'{recovery_base}/' if recovery_base else ''
+	recovery_url_html = f'<p><a href="{escape(recovery_url)}">Open DiningDealz</a></p>' if recovery_url else ''
+	recovery_url_text = f'\n\nOpen DiningDealz: {recovery_url}' if recovery_url else ''
 	html_message = (
 		f'<p>Hi {escape(user.first_name or user.username)},</p>'
 		'<p>You requested a reminder for your DiningDealz username.</p>'
 		f'<p><strong>Username:</strong> {escape(user.username)}</p>'
+		f'{recovery_url_html}'
 		'<p>If you did not request this reminder, you can ignore this email.</p>'
 	)
 	send_mail(
@@ -900,7 +905,8 @@ def send_username_reminder_email(user):
 		message=(
 			f'Hi {user.first_name or user.username},\n\n'
 			'You requested a reminder for your DiningDealz username.\n\n'
-			f'Username: {user.username}\n\n'
+			f'Username: {user.username}'
+			f'{recovery_url_text}\n\n'
 			'If you did not request this reminder, you can ignore this email.'
 		),
 		html_message=html_message,
