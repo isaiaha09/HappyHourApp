@@ -162,6 +162,10 @@ export type PlaceDetailScreenProps = {
   favoriteSubmitting: boolean;
   isLandscape: boolean;
   isFavorited: boolean;
+  liveLocationOverride?: {
+    latitude: number;
+    longitude: number;
+  } | null;
   onBack: () => void;
   onSelectLocation: (locationId: number) => void;
   onToggleFavorite: () => void;
@@ -191,6 +195,7 @@ export function PlaceDetailScreen({
   favoriteSubmitting,
   isLandscape,
   isFavorited,
+  liveLocationOverride = null,
   onBack,
   onSelectLocation,
   onToggleFavorite,
@@ -215,11 +220,18 @@ export function PlaceDetailScreen({
   const [attachmentPreview, setAttachmentPreview] = useState<AttachmentPreviewState | null>(null);
   const [attachmentPreviewLoading, setAttachmentPreviewLoading] = useState(false);
   const attachmentPreviewRequestIdRef = useRef(0);
-  const selectedPlaceMapRegion = getPlacePreviewRegion(selectedPlaceLocation ?? selectedPlace);
+  const selectedPlaceAddressSource = selectedPlaceLocation ?? selectedPlace;
+  const selectedPlaceMapSource = selectedPlaceAddressSource && liveLocationOverride
+    ? {
+      ...selectedPlaceAddressSource,
+      latitude: liveLocationOverride.latitude,
+      longitude: liveLocationOverride.longitude,
+    }
+    : selectedPlaceAddressSource;
+  const selectedPlaceMapRegion = getPlacePreviewRegion(selectedPlaceMapSource);
   const showVerifiedBadge = !!selectedPlace?.is_claimed;
   const showGoogleReviews = selectedPlace?.is_informal !== true;
-  const selectedPlaceAddressSource = selectedPlaceLocation ?? selectedPlace;
-  const selectedPlaceLastKnownLocationLabel = selectedPlaceAddressSource
+  const selectedPlaceLastKnownLocationLabel = selectedPlaceAddressSource && !liveLocationOverride
     ? formatLastKnownLocationLabel(
       selectedPlaceAddressSource.live_location_updated_at,
       formatPlaceAddress(selectedPlaceAddressSource),
@@ -481,8 +493,8 @@ export function PlaceDetailScreen({
                 </View>
               </>
             ) : null}
-            <Pressable onPress={() => void openMapsAddress(selectedPlaceLocation ?? selectedPlace)} style={styles.addressButton}>
-              <Text selectable style={styles.detailLinkText}>{formatPlaceAddress(selectedPlaceLocation ?? selectedPlace)}</Text>
+            <Pressable onPress={() => void openMapsAddress(selectedPlaceMapSource ?? selectedPlace)} style={styles.addressButton}>
+              <Text selectable style={styles.detailLinkText}>{formatPlaceAddress(selectedPlaceAddressSource ?? selectedPlace)}</Text>
             </Pressable>
             {selectedPlaceLastKnownLocationLabel ? (
               <Text style={styles.mapLastKnownLocationText}>{selectedPlaceLastKnownLocationLabel}</Text>
@@ -514,7 +526,7 @@ export function PlaceDetailScreen({
 
             {selectedPlaceMapRegion ? (
               <Pressable
-                onPress={() => void openMapsAddress(selectedPlaceLocation ?? selectedPlace)}
+                onPress={() => void openMapsAddress(selectedPlaceMapSource ?? selectedPlace)}
                 style={styles.detailMapCard}
               >
                 <MapView

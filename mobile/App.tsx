@@ -1084,6 +1084,11 @@ function AppScreen() {
 
     return loggedOutBusinessTrackingSession;
   }, [authenticatedSession, loggedOutBusinessTrackingSession]);
+  const selectedPlaceLiveLocationOverride = selectedPlaceIsOwnedByAuthenticatedBusiness
+    && authenticatedSession?.requires_business_location_tracking
+    && userCoordinates
+    ? userCoordinates
+    : null;
 
   function buildBusinessTrackingSession(session: SignupResponse | null): BusinessTrackingSession | null {
     if (!session?.auth_token || session.portal !== 'business' || !session.requires_business_location_tracking) {
@@ -6898,6 +6903,7 @@ function AppScreen() {
           favoriteSubmitting={favoriteSubmitting}
           isLandscape={isLandscape}
           isFavorited={selectedPlaceIsFavorited}
+          liveLocationOverride={selectedPlaceLiveLocationOverride}
           onBack={handleBackToBrowse}
           onClaimBusiness={handleOpenBusinessClaimFromPlaceDetail}
           onEditBusinessProfile={handleOpenBusinessProfileEditor}

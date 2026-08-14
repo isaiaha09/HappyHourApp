@@ -11,6 +11,7 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('react-native-maps', () => {
   const { View } = require('react-native');
   return {
+    __esModule: true,
     Marker: View,
     default: View,
   };
@@ -129,6 +130,31 @@ describe('PlaceDetailScreen live location messaging', () => {
     );
 
     expect(screen.queryByText(/Last known location:/)).toBeNull();
+  });
+
+  it('renders the owner live map card while the API detail still has no coordinates', () => {
+    render(
+      <PlaceDetailScreen
+        detailLoading={false}
+        errorMessage={null}
+        favoriteHelperText={null}
+        favoriteSubmitting={false}
+        isLandscape={false}
+        isFavorited={false}
+        liveLocationOverride={{ latitude: 34.2789, longitude: -119.2914 }}
+        locationStatusNow={Date.parse('2026-08-03T17:33:20Z')}
+        onBack={jest.fn()}
+        onSelectLocation={jest.fn()}
+        onToggleFavorite={jest.fn()}
+        selectedPlace={buildPlace()}
+        selectedPlaceDeals={[]}
+        selectedPlaceLocation={null}
+        selectedPlaceOperatingHours={[]}
+        showFavoriteControl={false}
+      />,
+    );
+
+    expect(screen.getByText('Tap to open in Maps')).toBeTruthy();
   });
 
   it('renders the website and social profiles as proper profile links', () => {
