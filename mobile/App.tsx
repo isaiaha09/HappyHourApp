@@ -604,6 +604,7 @@ function AppScreen() {
   const onboardingNavigationInFlightRef = useRef(false);
   const reversingOnboardingEntryRef = useRef(false);
   const loginSubmissionInFlightRef = useRef(false);
+  const favoriteBusinessesNavigationInFlightRef = useRef(false);
   const interactiveSwipeCleanupFrameRef = useRef<number | null>(null);
   const suppressKeyboardLayoutAnimationUntilRef = useRef(0);
   const browseModeFadePendingRef = useRef(false);
@@ -2940,6 +2941,7 @@ function AppScreen() {
     const resolvedScreenMode = finalScreenMode ?? nextScreen;
 
     if (screenMode === resolvedScreenMode) {
+      onComplete?.();
       return;
     }
 
@@ -2979,6 +2981,7 @@ function AppScreen() {
           setBrowseProfileTransitionFrom(null);
           setIncomingBrowseProfileScreen(null);
           setIncomingBrowseProfileTargetScreen(null);
+          onComplete?.();
           return;
         }
 
@@ -4944,16 +4947,29 @@ function AppScreen() {
     navigateScreen('support', 'forward');
   }
 
-  async function openFavoriteBusinessesAfterRefresh(afterRefresh: () => void = () => navigateScreen('favorite-businesses', 'forward')) {
+  function openFavoriteBusinesses(
+    navigate: (onComplete: () => void) => void = (onComplete) => navigateScreen('favorite-businesses', 'forward', undefined, onComplete),
+  ) {
+    if (favoriteBusinessesNavigationInFlightRef.current) {
+      return;
+    }
+
+    favoriteBusinessesNavigationInFlightRef.current = true;
     dismissKeyboardForScreenTransition();
     setProfileErrorMessage(null);
     setProfileMessage(null);
-    await refreshDashboard(false);
-    afterRefresh();
+    try {
+      navigate(() => {
+        favoriteBusinessesNavigationInFlightRef.current = false;
+        void refreshDashboard(false);
+      });
+    } catch {
+      favoriteBusinessesNavigationInFlightRef.current = false;
+    }
   }
 
   function handleOpenFavoriteBusinesses() {
-    void openFavoriteBusinessesAfterRefresh();
+    openFavoriteBusinesses();
   }
 
   function handleBackFromFavoriteBusinesses() {
@@ -5263,13 +5279,13 @@ function AppScreen() {
 
     if (screenMode === 'browse' || screenMode === 'home-feed') {
       closeBottomMoreSheet(() => {
-        void openFavoriteBusinessesAfterRefresh(() => navigateBrowseProfileTransition('profiles', 'favorite-businesses'));
+        openFavoriteBusinesses((onComplete) => navigateBrowseProfileTransition('profiles', 'favorite-businesses', onComplete));
       });
       return;
     }
 
     closeBottomMoreSheet(() => {
-      void openFavoriteBusinessesAfterRefresh();
+      openFavoriteBusinesses();
     });
   }
 

@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react-n
 import { AppState, NativeModules } from 'react-native';
 
 import { getVenueMarkerStyle } from '../browseConfig';
-import type { PlaceListItem } from '../types';
+import type { PlaceListItem, SignupResponse } from '../types';
 
 type MockNetworkState = {
   isConnected: boolean;
@@ -192,13 +192,22 @@ jest.mock('../screens/DashboardScreen', () => ({
     );
   },
   BusinessProfileEditorScreen: () => null,
-  DashboardScreen: ({ onOpenPlaces, onOpenSettings }: { onOpenPlaces: () => void; onOpenSettings: () => void }) => {
+  FavoriteBusinessesScreen: () => {
+    const React = require('react');
+    const { Text } = require('react-native');
+
+    return <Text>Favorite businesses screen</Text>;
+  },
+  DashboardScreen: ({ onOpenFavoriteBusinesses, onOpenPlaces, onOpenSettings }: { onOpenFavoriteBusinesses: () => void; onOpenPlaces: () => void; onOpenSettings: () => void }) => {
     const React = require('react');
     const { Pressable, Text, View } = require('react-native');
 
     return (
       <View>
         <Text>Dashboard screen</Text>
+        <Pressable accessibilityLabel="Open favorite businesses" onPress={onOpenFavoriteBusinesses}>
+          <Text>Open favorite businesses</Text>
+        </Pressable>
         <Pressable accessibilityLabel="Open places" onPress={onOpenPlaces}>
           <Text>Open places</Text>
         </Pressable>
@@ -1502,6 +1511,76 @@ describe('App browse map search', () => {
     });
 
     expect(screen.getByTestId('browse-summary-label').props.children).toBe('Camarillo');
+  });
+
+  it('treats repeated favorite business taps as one immediate navigation', async () => {
+    const refreshedSession: SignupResponse = {
+      id: 7,
+      username: 'guestfan',
+      email: 'guestfan@example.com',
+      first_name: 'Guest',
+      last_name: 'Fan',
+      auth_token: 'token-123',
+      portal: 'customer',
+      profile_type: 'customer',
+      email_verified: true,
+      two_factor_enabled: false,
+      can_access_places: true,
+      favorite_businesses: [],
+    };
+    let resolveDashboardRefresh: ((session: SignupResponse) => void) | null = null;
+    const dashboardRefreshPromise = new Promise<SignupResponse>((resolve) => {
+      resolveDashboardRefresh = resolve;
+    });
+
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    fireEvent.press(screen.getByLabelText('Open customer login'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    fireEvent.press(screen.getByLabelText('Submit login'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(await screen.findByText('Dashboard screen')).toBeTruthy();
+    mockFetchProfileDashboard.mockClear();
+    mockFetchProfileDashboard.mockReturnValue(dashboardRefreshPromise);
+
+    const favoriteBusinessesButton = screen.getByLabelText('Open favorite businesses');
+    fireEvent.press(favoriteBusinessesButton);
+    fireEvent.press(favoriteBusinessesButton);
+    fireEvent.press(favoriteBusinessesButton);
+
+    expect(mockFetchProfileDashboard).toHaveBeenCalledTimes(0);
+    expect(await screen.findByText('Favorite businesses screen')).toBeTruthy();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 550));
+    });
+
+    expect(mockFetchProfileDashboard).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolveDashboardRefresh?.(refreshedSession);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
   });
 
   it('filters authenticated list and map views to the customer favorite businesses', async () => {
