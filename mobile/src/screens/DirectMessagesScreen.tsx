@@ -83,6 +83,22 @@ function wrapMessageText(value: string, maxCharsPerLine = 30) {
 		.join('\n');
 }
 
+export function getDirectMessageConversationTitle({
+	contextBusinessName,
+	isBusinessPortal,
+	selectedThread,
+}: {
+	contextBusinessName?: string | null;
+	isBusinessPortal: boolean;
+	selectedThread: DirectMessageThread | null;
+}) {
+	if (isBusinessPortal) {
+		return selectedThread?.customer_username || 'Customer';
+	}
+
+	return selectedThread?.business_name || contextBusinessName || 'Conversation';
+}
+
 export function DirectMessagesScreen({
 	backButtonLabel = 'Back',
 	bottomNavOffset = 0,
@@ -249,6 +265,12 @@ export function DirectMessagesScreen({
 		}
 		return thread.business_name;
 	}
+
+	const conversationTitle = getDirectMessageConversationTitle({
+		contextBusinessName,
+		isBusinessPortal,
+		selectedThread,
+	});
 
 	useEffect(() => {
 		let mounted = true;
@@ -784,7 +806,7 @@ export function DirectMessagesScreen({
 						<>
 							<View style={styles.directMessageConversationTitleBar}>
 								<Text style={styles.directMessageConversationTitle}>
-									{selectedThread?.business_name || contextBusinessName || 'Conversation'}
+									{conversationTitle}
 								</Text>
 							</View>
 

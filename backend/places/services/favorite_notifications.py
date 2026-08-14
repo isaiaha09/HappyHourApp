@@ -21,12 +21,12 @@ def create_notifications_for_business_profile_update(claim, changed_field_names)
 
 	labels = _get_profile_update_labels(changed_field_names)
 	business_name = claim.listing_snapshot.name
-	message = f'Updated {labels[0]}.' if len(labels) == 1 else f'Updated {_join_labels(labels)}.'
+	message = (f'Updated {labels[0]}.' if len(labels) == 1 else f'Updated {_join_labels(labels)}.').title()
 	return _create_notifications(
 		listing_slug=listing_slug,
 		business_name=business_name,
 		event_type=FavoriteBusinessNotification.EventType.PROFILE_UPDATE,
-		title=f'{business_name} updated its business profile',
+		title=f'{business_name} Updated Their Business Profile',
 		message=message,
 	)
 

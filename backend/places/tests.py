@@ -3,7 +3,7 @@ from datetime import timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from io import StringIO
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.admin import helpers
@@ -7372,9 +7372,8 @@ class ProfileDashboardApiTests(APITestCase):
 		notification = FavoriteBusinessNotification.objects.get(user=customer_user)
 		self.assertEqual(notification.listing_slug, 'favorite-tacos-ventura')
 		self.assertEqual(notification.event_type, FavoriteBusinessNotification.EventType.PROFILE_UPDATE)
-		self.assertIn('updated its business profile', notification.title)
-		self.assertIn('deals', notification.message)
-		self.assertIn('phone number', notification.message)
+		self.assertEqual(notification.title, 'Favorite Tacos Updated Their Business Profile')
+		self.assertEqual(notification.message, 'Updated Deals And Phone Number.')
 
 		customer_dashboard_response = self.client.get(
 			reverse('profile-dashboard'),
@@ -7450,7 +7449,7 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(response.status_code, 200)
 		notification = FavoriteBusinessNotification.objects.get(user=customer_user)
 		self.assertEqual(notification.event_type, FavoriteBusinessNotification.EventType.PROFILE_UPDATE)
-		self.assertEqual(notification.message, 'Updated photos.')
+		self.assertEqual(notification.message, 'Updated Photos.')
 
 	def test_publishing_business_post_creates_favorite_business_notification(self):
 		snapshot = ListingSnapshot.objects.create(
@@ -7540,7 +7539,7 @@ class ProfileDashboardApiTests(APITestCase):
 
 		notifications = list(FavoriteBusinessNotification.objects.filter(user=customer_user).order_by('-id'))
 		self.assertEqual(len(notifications), 20)
-		self.assertEqual(notifications[0].message, 'Updated phone number.')
+		self.assertEqual(notifications[0].message, 'Updated Phone Number.')
 
 	def test_profile_dashboard_reverts_unverified_email_change_after_24_hours(self):
 		self.profile.email_verified_at = timezone.now()
@@ -8298,6 +8297,17 @@ class ProfileDashboardApiTests(APITestCase):
 		)
 		self.assertEqual(thread_response.status_code, 201)
 		thread_id = thread_response.data['thread']['id']
+		self.assertEqual(
+			mock_send_dm_push.call_args_list[0],
+			call(
+				[self.user.id],
+				thread_id=thread_id,
+				listing_slug='photo-message-bistro',
+				portal='business',
+				title=customer_user.username,
+				message='Hello business profile!',
+			),
+		)
 
 		text_only_response = self.client.post(
 			reverse('profile-direct-messages'),
@@ -8311,6 +8321,17 @@ class ProfileDashboardApiTests(APITestCase):
 		)
 		self.assertEqual(text_only_response.status_code, 201)
 		self.assertEqual(text_only_response.data['message']['message_type'], 'text')
+		self.assertEqual(
+			mock_send_dm_push.call_args_list[1],
+			call(
+				[customer_user.id],
+				thread_id=thread_id,
+				listing_slug='photo-message-bistro',
+				portal='customer',
+				title='Message from Photo Message Bistro',
+				message='Absolutely, thanks for reaching out.',
+			),
+		)
 
 		image_payload = SimpleUploadedFile('dm-photo.png', valid_png_bytes, content_type='image/png')
 		image_send_response = self.client.post(
@@ -8331,6 +8352,17 @@ class ProfileDashboardApiTests(APITestCase):
 			image_send_response.data['message']['image_url'],
 		)
 		self.assertFalse(image_send_response.data['message']['image_expired'])
+		self.assertEqual(
+			mock_send_dm_push.call_args_list[2],
+			call(
+				[customer_user.id],
+				thread_id=thread_id,
+				listing_slug='photo-message-bistro',
+				portal='customer',
+				title='Message from Photo Message Bistro',
+				message='Sent A Photo.',
+			),
+		)
 
 		customer_image_response = self.client.get(
 			reverse('profile-direct-message-image', kwargs={'message_id': image_send_response.data['message']['id']}),

@@ -1182,14 +1182,16 @@ class DirectMessageThreadsView(APIView):
 		message.save()
 		thread.last_message_at = message.created_at
 		thread.save(update_fields=['last_message_at', 'updated_at'])
-		recipient_id = thread.business_claim.claimant_id if request.user.id == thread.customer_id else thread.customer_id
+		sender_is_customer = request.user.id == thread.customer_id
+		recipient_id = thread.business_claim.claimant_id if sender_is_customer else thread.customer_id
+		business_name = str(thread.business_claim.listing_snapshot.name or '').strip() or 'Business'
 		send_push_notifications_for_direct_message(
 			[recipient_id],
 			thread_id=thread.id,
 			listing_slug=thread.business_claim.listing_snapshot.listing_slug,
-			portal='business' if request.user.id == thread.customer_id else 'customer',
-			title=f'New direct message from {request.user.username}',
-			message='Sent a photo.' if message.image else (message.body[:120] or 'Sent you a message.'),
+			portal='business' if sender_is_customer else 'customer',
+			title=request.user.username if sender_is_customer else f'Message from {business_name}',
+			message='Sent A Photo.' if message.image else (message.body or 'Sent You A Message.'),
 		)
 
 		thread_payload = DirectMessageThreadListSerializer(_build_direct_message_thread_payload(thread, request.user)).data
