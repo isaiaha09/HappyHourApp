@@ -45,8 +45,8 @@
 		E56C9A26B47FF4BF399FD0E3 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = DiningDealz/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		E6A1C0033F5D99D000000001 /* DiningDealzMetroHost.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = DiningDealzMetroHost.m; sourceTree = "<group>"; };
 		E6A1C0043F5D99D000000001 /* DiningDealzMetroHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiningDealzMetroHost.swift; sourceTree = "<group>"; };
-		E6A1C0073F5D99D000000001 /* DiningDealzLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiningDealzLocation.swift; sourceTree = "<group>"; };
-		E6A1C0083F5D99D000000001 /* DiningDealzLocationManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = DiningDealzLocationManager.m; sourceTree = "<group>"; };
+		E6A1C0073F5D99D000000001 /* DiningDealzLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiningDealz/DiningDealzLocation.swift; sourceTree = "<group>"; };
+		E6A1C0083F5D99D000000001 /* DiningDealzLocationManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = DiningDealz/DiningDealzLocationManager.m; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = DiningDealz/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* DiningDealz-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "DiningDealz-Bridging-Header.h"; path = "DiningDealz/DiningDealz-Bridging-Header.h"; sourceTree = "<group>"; };
