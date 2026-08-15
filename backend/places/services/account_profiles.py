@@ -11,7 +11,7 @@ from django.utils.text import slugify
 from email.utils import formataddr, parseaddr
 from uuid import uuid4
 
-from places.models import AccountProfile, BusinessClaim, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, ProfileAuthToken, SponsoredCampaign, VenueType
+from places.models import AccountProfile, BusinessClaim, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, HappyHourNotificationDelivery, ProfileAuthToken, SponsoredCampaign, VenueType
 from places.services.business_profile_overrides import build_deal_payloads, build_operating_hour_payloads
 from places.services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
 
@@ -228,6 +228,7 @@ def deactivate_account_for_retained_direct_messages(user):
 	ProfileAuthToken.objects.filter(user=user).delete()
 	FavoriteBusiness.objects.filter(user=user).delete()
 	FavoriteBusinessNotification.objects.filter(user=user).delete()
+	HappyHourNotificationDelivery.objects.filter(user=user).delete()
 	FavoriteBusinessPushDevice.objects.filter(user=user).delete()
 	user.blocked_business_direct_messages.all().delete()
 
@@ -256,6 +257,12 @@ def deactivate_account_for_retained_direct_messages(user):
 	profile.two_factor_pending_secret = ''
 	profile.password_reset_token = ''
 	profile.password_reset_sent_at = None
+	profile.preference_onboarding_completed = False
+	profile.preference_onboarding_skipped = False
+	profile.preferred_cities = []
+	profile.preferred_days = []
+	profile.preferred_time_periods = []
+	profile.notifications_paused = False
 	profile.save(update_fields=[
 		'deleted_at',
 		'pending_email',
@@ -271,6 +278,12 @@ def deactivate_account_for_retained_direct_messages(user):
 		'two_factor_pending_secret',
 		'password_reset_token',
 		'password_reset_sent_at',
+		'preference_onboarding_completed',
+		'preference_onboarding_skipped',
+		'preferred_cities',
+		'preferred_days',
+		'preferred_time_periods',
+		'notifications_paused',
 		'updated_at',
 	])
 
@@ -352,6 +365,7 @@ def build_account_response(user, portal, claim=None, token=None):
 	favorite_businesses = [
 		{
 			'slug': favorite.listing_slug,
+			'location_id': favorite.location_id,
 			'name': favorite.name,
 			'city': favorite.city,
 			'city_label': favorite.city_label,
@@ -359,6 +373,10 @@ def build_account_response(user, portal, claim=None, token=None):
 			'venue_type_label': favorite.venue_type_label,
 			'address_line_1': favorite.address_line_1,
 			'website_url': favorite.website_url,
+			'profile_updates_enabled': favorite.profile_updates_enabled,
+			'happy_hour_notifications_enabled': favorite.happy_hour_notifications_enabled,
+			'deal_updates_enabled': favorite.deal_updates_enabled,
+			'direct_message_notifications_enabled': favorite.direct_message_notifications_enabled,
 		}
 		for favorite in FavoriteBusiness.objects.filter(user=user).order_by('name', 'city_label', '-created_at')
 	]
@@ -466,6 +484,12 @@ def build_account_response(user, portal, claim=None, token=None):
 		'sponsored_campaigns': sponsored_campaigns,
 		'favorite_businesses': favorite_businesses,
 		'favorite_business_notifications': favorite_business_notifications,
+		'preference_onboarding_completed': profile.preference_onboarding_completed,
+		'preference_onboarding_skipped': profile.preference_onboarding_skipped,
+		'preferred_cities': list(profile.preferred_cities or []),
+		'preferred_days': list(profile.preferred_days or []),
+		'preferred_time_periods': list(profile.preferred_time_periods or []),
+		'notifications_paused': profile.notifications_paused,
 		'push_notifications_enabled': push_notifications_enabled,
 		'business_contact': business_contact,
 		'business_location_tracking_available': business_location_tracking_available,

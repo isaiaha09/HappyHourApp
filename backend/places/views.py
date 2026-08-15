@@ -1,5 +1,6 @@
 import logging
 import mimetypes
+import secrets
 
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -29,6 +30,7 @@ from .serializers import (
 	BusinessLocationUpdateSerializer,
 	ClaimedBusinessSignupSerializer,
 	ContactSupportSerializer,
+	CustomerPreferencesSerializer,
 	CustomerSignupSerializer,
 	DeleteAccountSerializer,
 	DealSerializer,
@@ -62,7 +64,9 @@ from .serializers import (
 )
 from .services.account_profiles import build_account_response, build_email_verification_challenge, deactivate_account_for_retained_direct_messages, get_approved_business_claims, get_business_access_hold_claim, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, is_deleted_account, send_business_claim_received_email, send_password_reset_email, send_support_contact_email, send_username_reminder_email, send_verification_email
 from .models import BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedImpression, ListingSnapshot, VenueType
-from .services.favorite_notifications import create_notifications_for_business_profile_update
+from .services.favorite_notifications import create_notifications_for_business_profile_update, should_send_direct_message_notification
+from .services.customer_preferences import get_preference_business_options, resolve_business_location, save_customer_preferences
+from .services.happy_hour_notifications import process_due_happy_hour_notifications
 from .services.direct_message_push import send_push_notifications_for_direct_message
 from .services.home_feed import get_feed_interval, get_feed_queryset, get_organic_page_size, get_ranked_campaigns, get_requested_feed_page_size, mix_feed_items, record_campaign_served
 from .services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
@@ -1088,29 +1092,83 @@ class FavoriteBusinessView(APIView):
 		place_payload = get_source_place_payload(serializer.validated_data['slug'])
 		if place_payload is None:
 			return Response({'detail': 'That business could not be found.'}, status=status.HTTP_404_NOT_FOUND)
+		try:
+			listing_slug, location = resolve_business_location(
+				serializer.validated_data['slug'],
+				serializer.validated_data.get('location_id'),
+				payload=place_payload,
+			)
+		except ValueError as error:
+			return Response({'detail': str(error)}, status=status.HTTP_404_NOT_FOUND)
+		location_id = location.get('id') if serializer.validated_data.get('location_id') is not None else None
 
 		if serializer.validated_data['favorited']:
 			FavoriteBusiness.objects.update_or_create(
 				user=request.user,
-				listing_slug=place_payload['slug'],
+				listing_slug=listing_slug,
+				location_id=location_id,
 				defaults={
-					'name': place_payload.get('name', ''),
-					'city': place_payload.get('city', ''),
-					'city_label': place_payload.get('city_label', ''),
-					'venue_type': place_payload.get('venue_type', ''),
-					'venue_type_label': place_payload.get('venue_type_label', ''),
-					'address_line_1': place_payload.get('address_line_1', ''),
-					'website_url': place_payload.get('website_url', ''),
+					'name': location.get('name', ''),
+					'city': location.get('city', ''),
+					'city_label': location.get('city_label', ''),
+					'venue_type': location.get('venue_type', ''),
+					'venue_type_label': location.get('venue_type_label', ''),
+					'address_line_1': location.get('address_line_1', ''),
+					'website_url': location.get('website_url', ''),
 				},
 			)
 			detail = 'Business favorited.'
 		else:
-			FavoriteBusiness.objects.filter(user=request.user, listing_slug=place_payload['slug']).delete()
+			favorite_query = FavoriteBusiness.objects.filter(user=request.user, listing_slug=listing_slug)
+			if serializer.validated_data.get('location_id') is not None:
+				favorite_query = favorite_query.filter(location_id=location_id)
+			favorite_query.delete()
 			detail = 'Business removed from favorites.'
 
 		response_payload = build_account_response(request.user, portal, token=request.auth)
 		response_payload['detail'] = detail
 		return Response(response_payload)
+
+
+class CustomerPreferencesView(APIView):
+	authentication_classes = [ProfileTokenAuthentication]
+	permission_classes = [IsAuthenticated]
+	throttle_classes = [UserMutationRateThrottle]
+
+	def get(self, request):
+		if infer_portal_for_user(request.user, request.query_params.get('portal')) != 'customer':
+			return Response({'detail': 'Customer accounts only.'}, status=status.HTTP_403_FORBIDDEN)
+		profile = get_or_create_account_profile(request.user)
+		payload = build_account_response(request.user, 'customer', token=request.auth)
+		include_all_businesses = str(request.query_params.get('include_all_businesses') or '').strip().lower() in {'1', 'true', 'yes'}
+		payload['preference_businesses'] = get_preference_business_options(None if include_all_businesses else profile.preferred_cities, only_with_deals=not include_all_businesses)
+		return Response(payload)
+
+	def post(self, request):
+		if infer_portal_for_user(request.user, request.data.get('portal')) != 'customer':
+			return Response({'detail': 'Customer accounts only.'}, status=status.HTTP_403_FORBIDDEN)
+		serializer = CustomerPreferencesSerializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		try:
+			save_customer_preferences(request.user, serializer.validated_data)
+		except ValueError as error:
+			return Response({'detail': str(error)}, status=status.HTTP_400_BAD_REQUEST)
+		profile = get_or_create_account_profile(request.user)
+		payload = build_account_response(request.user, 'customer', token=request.auth)
+		payload['preference_businesses'] = get_preference_business_options(profile.preferred_cities)
+		payload['detail'] = 'Preferences saved.'
+		return Response(payload)
+
+
+class ProcessDueHappyHourNotificationsView(APIView):
+	authentication_classes = []
+	permission_classes = []
+
+	def get(self, request, secret):
+		expected_secret = str(getattr(settings, 'HAPPY_HOUR_NOTIFICATION_SECRET', '') or '').strip()
+		if not expected_secret or not secrets.compare_digest(str(secret or ''), expected_secret):
+			return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+		return Response(process_due_happy_hour_notifications())
 
 
 class DirectMessageThreadsView(APIView):
@@ -1189,14 +1247,15 @@ class DirectMessageThreadsView(APIView):
 		sender_is_customer = request.user.id == thread.customer_id
 		recipient_id = thread.business_claim.claimant_id if sender_is_customer else thread.customer_id
 		business_name = str(thread.business_claim.listing_snapshot.name or '').strip() or 'Business'
-		send_push_notifications_for_direct_message(
-			[recipient_id],
-			thread_id=thread.id,
-			listing_slug=thread.business_claim.listing_snapshot.listing_slug,
-			portal='business' if sender_is_customer else 'customer',
-			title=request.user.username if sender_is_customer else f'Message from {business_name}',
-			message='Sent A Photo.' if message.image else (message.body or 'Sent You A Message.'),
-		)
+		if sender_is_customer or should_send_direct_message_notification(thread.customer, thread.business_claim.listing_snapshot.listing_slug):
+			send_push_notifications_for_direct_message(
+				[recipient_id],
+				thread_id=thread.id,
+				listing_slug=thread.business_claim.listing_snapshot.listing_slug,
+				portal='business' if sender_is_customer else 'customer',
+				title=request.user.username if sender_is_customer else f'Message from {business_name}',
+				message='Sent A Photo.' if message.image else (message.body or 'Sent You A Message.'),
+			)
 
 		thread_payload = DirectMessageThreadListSerializer(_build_direct_message_thread_payload(thread, request.user)).data
 		message_payload = DirectMessageItemSerializer(_build_direct_message_item_payload(message, request=request)).data

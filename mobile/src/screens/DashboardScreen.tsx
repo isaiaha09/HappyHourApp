@@ -54,6 +54,7 @@ export type AccountSettingsScreenProps = {
   onDeleteAccount: () => void;
   onOpenBlockedDirectMessageCustomers: () => void;
   onOpenPrivacyPolicy: () => void;
+  onOpenCustomerPreferences?: () => void;
   onOpenTermsOfService: () => void;
   onToggleDirectMessaging: (value: boolean) => void;
   pendingBusinessLocationTrackingEnabled: boolean | null;
@@ -1298,6 +1299,7 @@ export function AccountSettingsScreen({
   onDeleteAccount,
   onOpenBlockedDirectMessageCustomers,
   onOpenPrivacyPolicy,
+  onOpenCustomerPreferences,
   onOpenTermsOfService,
   onToggleDirectMessaging,
   pendingBusinessLocationTrackingEnabled,
@@ -1366,6 +1368,20 @@ export function AccountSettingsScreen({
               twoFactorSetup={twoFactorSetup}
               twoFactorSetupCode={twoFactorSetupCode}
             />
+
+            {onOpenCustomerPreferences && session.portal === 'customer' ? (
+              <View style={styles.settingsItemRow}>
+                <View style={styles.settingsItemBody}>
+                  <Text style={styles.dashboardSectionTitle}>Happy hour preferences</Text>
+                  <Text style={styles.dashboardSupportText}>Choose favorite locations, notification types, and the days and times you usually go out.</Text>
+                </View>
+                <View style={styles.settingsItemActions}>
+                  <Pressable onPress={onOpenCustomerPreferences} style={[styles.linkButtonSecondaryWide, styles.settingsInlineButton]}>
+                    <Text style={styles.linkButtonSecondaryText}>Edit preferences</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
 
             {session.portal === 'business' && session.business_location_tracking_available ? (
               <View style={styles.settingsItemRow}>

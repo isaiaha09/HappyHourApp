@@ -101,6 +101,7 @@ import { NativeIOSLiquidGlassBottomNav, NativeIOSLiquidGlassHeaderButton, isNati
 import { PhotoLightbox } from './src/components/PhotoLightbox';
 import { VenueMarkerVisual } from './src/components/VenueMarkerVisual';
 import { DirectMessagesScreen } from './src/screens/DirectMessagesScreen';
+import { CustomerPreferencesScreen } from './src/screens/CustomerPreferencesScreen';
 import { HomeFeedScreen } from './src/screens/HomeFeedScreen';
 import { PlaceDetailScreen } from './src/screens/PlaceDetailScreen';
 import { SplashScreen } from './src/screens/SplashScreen';
@@ -225,7 +226,7 @@ const allCitiesInitialMapRegion: Region = {
   longitudeDelta: maxLongitudeDelta,
 };
 const multipleAreasBusinessCityValue = multipleAreasBusinessCityOption.value;
-type AppScreenMode = 'splash' | 'auth' | 'browse' | 'home-feed' | 'profiles' | 'favorite-businesses' | 'business-notifications' | 'business-profile-editor' | 'settings' | 'blocked-direct-message-customers' | 'support' | 'privacy-policy' | 'terms-of-service' | 'business-search' | 'business-claim' | 'manual-business-claim' | 'informal-business-claim' | 'forgot-username' | 'forgot-password' | 'email-verification' | 'business-claim-review-pending' | 'direct-messages';
+type AppScreenMode = 'splash' | 'auth' | 'browse' | 'home-feed' | 'profiles' | 'customer-preferences' | 'favorite-businesses' | 'business-notifications' | 'business-profile-editor' | 'settings' | 'blocked-direct-message-customers' | 'support' | 'privacy-policy' | 'terms-of-service' | 'business-search' | 'business-claim' | 'manual-business-claim' | 'informal-business-claim' | 'forgot-username' | 'forgot-password' | 'email-verification' | 'business-claim-review-pending' | 'direct-messages';
 type OnboardingTransitionDirection = 'forward' | 'backward';
 type TransitionAxis = 'x' | 'y';
 type ClaimReturnDestination = 'business-search' | 'browse-map' | 'profiles';
@@ -649,6 +650,8 @@ function AppScreen() {
   const [twoFactorSetupCode, setTwoFactorSetupCode] = useState('');
   const [twoFactorDisableCode, setTwoFactorDisableCode] = useState('');
   const [authenticatedSession, setAuthenticatedSession] = useState<SignupResponse | null>(null);
+  const [customerPreferenceEntryMode, setCustomerPreferenceEntryMode] = useState<'onboarding' | 'settings'>('onboarding');
+  const [shouldOpenCustomerPreferencesAfterVerification, setShouldOpenCustomerPreferencesAfterVerification] = useState(false);
   const [pushRegistrationAttempt, setPushRegistrationAttempt] = useState(0);
   const [liveLocationRefreshToken, setLiveLocationRefreshToken] = useState(0);
   const [browseMode, setBrowseMode] = useState<BrowseMode>('list');
@@ -949,14 +952,17 @@ function AppScreen() {
         : 'dark')
     : 'light';
 
-  const favoriteBusinessSlugs = useMemo(() => (
-    (authenticatedSession?.favorite_businesses ?? []).map((business) => business.slug)
+  const favoriteBusinessSelections = useMemo(() => (
+    (authenticatedSession?.favorite_businesses ?? []).map((business) => ({
+      locationId: business.location_id ?? null,
+      slug: business.slug,
+    }))
   ), [authenticatedSession?.favorite_businesses]);
   const favoriteBusinessesFilterActive = authenticatedSession?.portal === 'customer' && favoriteBusinessesOnly;
   const filteredPlaces = useMemo(() => getFilteredPlaces(places, {
     confirmedDealsOnly,
     favoriteBusinessesOnly: favoriteBusinessesFilterActive,
-    favoriteBusinessSlugs,
+    favoriteBusinessSelections,
     informalBusinessesOnly,
     searchQuery: normalizedDeferredSearchQuery,
     selectedCity,
@@ -967,7 +973,7 @@ function AppScreen() {
   }), [
     confirmedDealsOnly,
     favoriteBusinessesFilterActive,
-    favoriteBusinessSlugs,
+    favoriteBusinessSelections,
     informalBusinessesOnly,
     normalizedDeferredSearchQuery,
     places,
@@ -980,7 +986,7 @@ function AppScreen() {
   const mapAutoFitCriteriaKey = useMemo(() => [
     confirmedDealsOnly,
     favoriteBusinessesFilterActive,
-    favoriteBusinessSlugs.join('|'),
+    favoriteBusinessSelections.map((selection) => `${selection.slug}:${selection.locationId ?? 'primary'}`).join('|'),
     informalBusinessesOnly,
     normalizedDeferredSearchQuery,
     selectedCity,
@@ -991,7 +997,7 @@ function AppScreen() {
   ].join(':'), [
     confirmedDealsOnly,
     favoriteBusinessesFilterActive,
-    favoriteBusinessSlugs,
+    favoriteBusinessSelections,
     informalBusinessesOnly,
     normalizedDeferredSearchQuery,
     selectedCity,
@@ -1002,12 +1008,16 @@ function AppScreen() {
   ]);
   const filteredBrowseLocations = useMemo(() => getFilteredBrowseLocations(filteredPlaces, {
     confirmedDealsOnly,
+    favoriteBusinessesOnly: favoriteBusinessesFilterActive,
+    favoriteBusinessSelections,
     searchQuery: normalizedDeferredSearchQuery,
     selectedCity,
     selectedDealDays,
     selectedOperatingDays,
   }), [
     confirmedDealsOnly,
+    favoriteBusinessesFilterActive,
+    favoriteBusinessSelections,
     filteredPlaces,
     normalizedDeferredSearchQuery,
     selectedCity,
@@ -1057,7 +1067,10 @@ function AppScreen() {
       ? clampRegionToBounds(allCitiesInitialMapRegion)
       : clampRegionToBounds(getBrowseMapRegion(selectedCity, precomputedMappedPlaces))
   ), [precomputedMappedPlaces, selectedCity]);
-  const selectedPlaceIsFavorited = !!(selectedPlace && authenticatedSession?.favorite_businesses?.some((business) => business.slug === selectedPlace.slug));
+  const selectedPlaceIsFavorited = !!(selectedPlace && authenticatedSession?.favorite_businesses?.some((business) => (
+    business.slug === selectedPlace.slug
+    && (business.location_id == null || selectedLocationId == null || business.location_id === selectedLocationId)
+  )));
   const showFavoriteControl = !authenticatedSession || authenticatedSession.portal === 'customer';
   const showClaimBusinessControl = !!selectedPlace && !selectedPlace.is_claimed && (!authenticatedSession || authenticatedSession.portal === 'customer');
   const showDirectMessageControl = !!(authenticatedSession && selectedPlace?.can_direct_message);
@@ -2122,11 +2135,11 @@ function AppScreen() {
     };
   }, [apiBaseUrl]);
   const availableClaimPlaces = consolidatePlacesBySlug(availableProfilePlaces);
-  const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'direct-messages', 'business-search', 'business-claim', 'manual-business-claim', 'informal-business-claim', 'forgot-username', 'forgot-password', 'email-verification', 'business-claim-review-pending']);
+  const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'customer-preferences', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'direct-messages', 'business-search', 'business-claim', 'manual-business-claim', 'informal-business-claim', 'forgot-username', 'forgot-password', 'email-verification', 'business-claim-review-pending']);
   const recoveryScreenKeys = new Set<AppScreenMode>(['forgot-username', 'forgot-password']);
   const isRecoveryScreenTransition = recoveryScreenKeys.has(screenMode)
     || (incomingOnboardingScreen !== null && recoveryScreenKeys.has(incomingOnboardingScreen));
-  const profileStackTransitionScreens = new Set<AppScreenMode>(['profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'direct-messages']);
+  const profileStackTransitionScreens = new Set<AppScreenMode>(['profiles', 'customer-preferences', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'direct-messages']);
   const currentOnboardingScreen = onboardingScreenKeys.has(screenMode) ? screenMode : null;
   const usesOnboardingSlideTransition = currentOnboardingScreen !== null || incomingOnboardingScreen !== null;
   const usesProfileStackSlideTransition = currentOnboardingScreen !== null
@@ -3099,6 +3112,8 @@ function AppScreen() {
       case 'settings':
       case 'business-search':
         return { kind: 'onboarding', nextScreen: 'profiles' };
+      case 'customer-preferences':
+        return { kind: 'onboarding', nextScreen: customerPreferenceEntryMode === 'settings' ? 'settings' : 'profiles' };
       case 'business-claim':
       case 'manual-business-claim':
       case 'informal-business-claim':
@@ -3191,6 +3206,7 @@ function AppScreen() {
       case 'favorite-businesses':
       case 'business-notifications':
       case 'settings':
+      case 'customer-preferences':
       case 'blocked-direct-message-customers':
       case 'privacy-policy':
       case 'terms-of-service':
@@ -3803,7 +3819,7 @@ function AppScreen() {
   }, [
     mapResultsOpacity,
     favoriteBusinessesFilterActive,
-    favoriteBusinessSlugs,
+    favoriteBusinessSelections,
     mapSearchResultDisplayPool,
     mapSearchResultDisplayPool.length,
     mapSearchResultsKey,
@@ -4806,6 +4822,7 @@ function AppScreen() {
     try {
       const response = await toggleFavoriteBusiness(apiBaseUrl, authenticatedSession.auth_token, {
         slug: selectedPlace.slug,
+        location_id: selectedLocationId,
         favorited: !selectedPlaceIsFavorited,
         portal: authenticatedSession.portal,
       });
@@ -5181,6 +5198,39 @@ function AppScreen() {
     navigateScreen('settings', 'forward');
   }
 
+  function handleOpenCustomerPreferences() {
+    if (!authenticatedSession || authenticatedSession.portal !== 'customer') {
+      return;
+    }
+    dismissKeyboardForScreenTransition();
+    setCustomerPreferenceEntryMode('settings');
+    setProfileErrorMessage(null);
+    setProfileMessage(null);
+    navigateScreen('customer-preferences', 'forward');
+  }
+
+  function handleBackFromCustomerPreferences() {
+    dismissKeyboardForScreenTransition();
+    setProfileErrorMessage(null);
+    if (customerPreferenceEntryMode === 'settings') {
+      navigateScreen('settings', 'backward');
+      return;
+    }
+    navigateScreen('profiles', 'backward');
+  }
+
+  function handleCustomerPreferencesComplete(response: SignupResponse) {
+    setAuthenticatedSession(response);
+    setProfileMessage(response.detail ?? 'Preferences saved.');
+    navigateScreen(customerPreferenceEntryMode === 'settings' ? 'settings' : 'profiles', customerPreferenceEntryMode === 'settings' ? 'backward' : 'forward');
+  }
+
+  function handleCustomerPreferencesSkip(response: SignupResponse) {
+    setAuthenticatedSession(response);
+    setProfileMessage('You can configure preferences later from Settings.');
+    navigateScreen('profiles', 'forward');
+  }
+
   function handleOpenBlockedDirectMessageCustomers() {
     dismissKeyboardForScreenTransition();
     setProfileErrorMessage(null);
@@ -5300,7 +5350,7 @@ function AppScreen() {
     setSelectedLocationId(null);
     setSelectedMapPlaceKey(null);
 
-    if (['favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'direct-messages'].includes(screenMode)) {
+    if (['customer-preferences', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'direct-messages'].includes(screenMode)) {
       navigateScreen('profiles', 'backward');
       return;
     }
@@ -5675,6 +5725,7 @@ function AppScreen() {
       };
       const response = await loginProfile(apiBaseUrl, payload);
       if (response.email_verification_required) {
+        setShouldOpenCustomerPreferencesAfterVerification(false);
         moveToEmailVerification(response);
         return;
       }
@@ -5737,7 +5788,13 @@ function AppScreen() {
       setEmailVerificationCode('');
       setAuthenticatedSession(response);
       setProfileMessage('Email verified successfully.');
-      navigateScreen('profiles', 'forward');
+      if (shouldOpenCustomerPreferencesAfterVerification && response.portal === 'customer') {
+        setShouldOpenCustomerPreferencesAfterVerification(false);
+        setCustomerPreferenceEntryMode('onboarding');
+        navigateScreen('customer-preferences', 'forward');
+      } else {
+        navigateScreen('profiles', 'forward');
+      }
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
     } finally {
@@ -5864,6 +5921,7 @@ function AppScreen() {
       };
       const response = await createCustomerProfile(apiBaseUrl, payload);
       setProfileForm(initialProfileFormState);
+      setShouldOpenCustomerPreferencesAfterVerification(true);
       moveToEmailVerification(response);
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
@@ -6640,6 +6698,23 @@ function AppScreen() {
     const profileSession = profileSessionOverride ?? authenticatedSession;
     const targetScreen = targetScreenOverride ?? screenMode;
 
+    if (targetScreen === 'customer-preferences' && profileSession?.portal === 'customer') {
+      return (
+        <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
+          <CustomerPreferencesScreen
+            apiBaseUrl={apiBaseUrl}
+            authToken={profileSession.auth_token}
+            isLandscape={isLandscape}
+            mode={customerPreferenceEntryMode}
+            onBack={handleBackFromCustomerPreferences}
+            onComplete={handleCustomerPreferencesComplete}
+            onSkip={handleCustomerPreferencesSkip}
+            session={profileSession}
+          />
+        </SafeAreaView>
+      );
+    }
+
     if (targetScreen === 'favorite-businesses' && profileSession?.profile_type !== 'business') {
       return (
         <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
@@ -6743,6 +6818,7 @@ function AppScreen() {
             onToggleBusinessLocationTracking={(value) => void handleToggleBusinessLocationTracking(value)}
             onOpenBlockedDirectMessageCustomers={handleOpenBlockedDirectMessageCustomers}
             onOpenContactSupport={handleOpenSupport}
+            onOpenCustomerPreferences={handleOpenCustomerPreferences}
             onOpenPrivacyPolicy={handleOpenPrivacyPolicy}
             onOpenTermsOfService={handleOpenTermsOfService}
             onToggleDirectMessaging={(value) => void handleToggleDirectMessaging(value)}
@@ -6942,7 +7018,7 @@ function AppScreen() {
     if (!options.guest) {
       if (screenMode === 'home-feed') {
         activeItem = 'home';
-      } else if (['settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'favorite-businesses', 'business-notifications'].includes(screenMode)) {
+      } else if (['settings', 'customer-preferences', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'favorite-businesses', 'business-notifications'].includes(screenMode)) {
         activeItem = 'more';
       } else if (screenMode !== 'browse') {
         activeItem = 'profile';
@@ -7181,7 +7257,7 @@ function AppScreen() {
       && profileStackTransitionScreens.has(currentOnboardingScreen)
       && profileStackTransitionScreens.has(incomingOnboardingScreen);
     const transitionActive = usesBrowseProfileSlideTransition || profileStackTransitionActive;
-    const showingProfile = ['profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'direct-messages'].includes(screenMode);
+    const showingProfile = ['profiles', 'customer-preferences', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'direct-messages'].includes(screenMode);
     const incomingBrowseScreen = transitionActive && incomingBrowseProfileScreen === 'browse'
       ? incomingBrowseProfileTargetScreen ?? 'browse'
       : null;
@@ -7323,6 +7399,8 @@ function AppScreen() {
         );
       case 'profiles':
         return renderProfilesScreen(profileSessionOverride, 'profiles');
+      case 'customer-preferences':
+        return renderProfilesScreen(profileSessionOverride, 'customer-preferences');
       case 'favorite-businesses':
         return renderProfilesScreen(profileSessionOverride, 'favorite-businesses');
       case 'business-notifications':
@@ -8119,7 +8197,7 @@ function AppScreen() {
             {renderOnboardingScreen('auth')}
           </Animated.View>
         </View>
-      ) : authenticatedSession && !isRecoveryScreenTransition && (screenMode === 'direct-messages' || (!selectedPlaceSlug && (['profiles', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'browse', 'home-feed'].includes(screenMode) || usesBrowseProfileSlideTransition || usesProfileStackSlideTransition))) ? (
+      ) : authenticatedSession && !isRecoveryScreenTransition && (screenMode === 'direct-messages' || (!selectedPlaceSlug && (['profiles', 'customer-preferences', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'browse', 'home-feed'].includes(screenMode) || usesBrowseProfileSlideTransition || usesProfileStackSlideTransition))) ? (
         renderAuthenticatedMainShell()
       ) : !authenticatedSession && (screenMode === 'browse' || currentOnboardingScreen !== null || usesGuestBrowseSlideTransition || incomingOnboardingScreen !== null || returningToSplashScreen !== null) ? (
         renderGuestMainShell()
@@ -8892,7 +8970,7 @@ function getFilteredPlaces(
   filters: {
     confirmedDealsOnly: boolean;
     favoriteBusinessesOnly: boolean;
-    favoriteBusinessSlugs: string[];
+    favoriteBusinessSelections: Array<{ locationId: number | null; slug: string }>;
     informalBusinessesOnly: boolean;
     searchQuery: string;
     selectedCity: CityFilterValue;
@@ -8915,7 +8993,10 @@ function getFilteredPlaces(
       const matchesSearch = filters.searchQuery.length === 0 || score > 0;
       const hasConfirmedDeals = place.deal_count > 0 || getPlaceLocations(place).some((location) => location.deal_count > 0);
       const matchesDeals = !filters.confirmedDealsOnly || hasConfirmedDeals;
-      const matchesFavorites = !filters.favoriteBusinessesOnly || filters.favoriteBusinessSlugs.includes(place.slug);
+      const matchesFavorites = !filters.favoriteBusinessesOnly || filters.favoriteBusinessSelections.some((selection) => (
+        selection.slug === place.slug
+        && (selection.locationId === null || getPlaceLocations(place).some((location) => location.id === selection.locationId))
+      ));
       const matchesInformal = !filters.informalBusinessesOnly || !!place.is_informal;
       const matchesOperatingDays = !filters.selectedOperatingDays.length || hasAnyMatchingWeekday(place.operating_weekdays, filters.selectedOperatingDays);
       const matchesDealDays = !filters.selectedDealDays.length || hasAnyMatchingWeekday(place.deal_weekdays, filters.selectedDealDays);
@@ -8937,6 +9018,8 @@ function getFilteredBrowseLocations(
   filteredPlaces: PlaceListItem[],
   filters: {
     confirmedDealsOnly: boolean;
+    favoriteBusinessesOnly: boolean;
+    favoriteBusinessSelections: Array<{ locationId: number | null; slug: string }>;
     searchQuery: string;
     selectedCity: CityFilterValue;
     selectedDealDays: WeekdayFilterValue[];
@@ -8958,10 +9041,13 @@ function getFilteredBrowseLocations(
         const matchesCity = filters.selectedCity === 'all' || location.city === filters.selectedCity;
         const matchesSearch = filters.searchQuery.length === 0 || score > 0;
         const matchesDeals = !filters.confirmedDealsOnly || intValue(location.deal_count) > 0;
+        const matchesFavorite = !filters.favoriteBusinessesOnly || filters.favoriteBusinessSelections.some((selection) => (
+          selection.slug === place.slug && (selection.locationId === null || selection.locationId === location.id)
+        ));
         const matchesOperatingDays = !filters.selectedOperatingDays.length || hasAnyMatchingWeekday(location.operating_weekdays ?? [], filters.selectedOperatingDays);
         const matchesDealDays = !filters.selectedDealDays.length || hasAnyMatchingWeekday(location.deal_weekdays ?? [], filters.selectedDealDays);
 
-        return matchesCity && matchesSearch && matchesDeals && matchesOperatingDays && matchesDealDays;
+        return matchesCity && matchesSearch && matchesDeals && matchesFavorite && matchesOperatingDays && matchesDealDays;
       });
   });
 }

@@ -215,11 +215,45 @@ export type FavoriteBusinessNotification = {
   id: number;
   slug: string;
   business_name: string;
-  event_type: 'profile_update' | 'special' | 'announcement' | 'event' | 'blog';
+  event_type: 'profile_update' | 'happy_hour' | 'special' | 'announcement' | 'event' | 'blog';
   title: string;
   message: string;
   post_id: number | null;
   created_at: string;
+};
+
+export type CustomerPreferenceBusiness = {
+  slug: string;
+  location_id: number | null;
+  name: string;
+  city: string;
+  city_label: string;
+  venue_type: string;
+  venue_type_label: string;
+  address_line_1: string;
+  website_url: string;
+  deal_count?: number;
+  has_deals?: boolean;
+  profile_updates_enabled?: boolean;
+  happy_hour_notifications_enabled?: boolean;
+  deal_updates_enabled?: boolean;
+  direct_message_notifications_enabled?: boolean;
+};
+
+export type CustomerPreferencesRequest = {
+  action: 'complete' | 'skip' | 'save';
+  preferred_cities?: string[];
+  preferred_days?: number[];
+  preferred_time_periods?: string[];
+  notifications_paused?: boolean;
+  businesses?: Array<{
+    slug: string;
+    location_id: number | null;
+    profile_updates_enabled: boolean;
+    happy_hour_notifications_enabled: boolean;
+    deal_updates_enabled: boolean;
+    direct_message_notifications_enabled: boolean;
+  }>;
 };
 
 export type SignupResponse = {
@@ -285,6 +319,7 @@ export type SignupResponse = {
   }>;
   favorite_businesses?: Array<{
     slug: string;
+    location_id?: number | null;
     name: string;
     city: string;
     city_label: string;
@@ -292,8 +327,19 @@ export type SignupResponse = {
     venue_type_label: string;
     address_line_1: string;
     website_url: string;
+    profile_updates_enabled?: boolean;
+    happy_hour_notifications_enabled?: boolean;
+    deal_updates_enabled?: boolean;
+    direct_message_notifications_enabled?: boolean;
   }>;
   favorite_business_notifications?: FavoriteBusinessNotification[];
+  preference_onboarding_completed?: boolean;
+  preference_onboarding_skipped?: boolean;
+  preferred_cities?: string[];
+  preferred_days?: number[];
+  preferred_time_periods?: string[];
+  notifications_paused?: boolean;
+  preference_businesses?: CustomerPreferenceBusiness[];
   business_contact?: {
     contact_name?: string;
     job_title?: string;
@@ -419,6 +465,7 @@ export type DirectMessageSendResponse = {
 
 export type FavoriteBusinessToggleRequest = {
   slug: string;
+  location_id?: number | null;
   favorited: boolean;
   portal?: 'customer' | 'business';
 };

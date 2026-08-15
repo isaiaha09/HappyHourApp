@@ -52,12 +52,10 @@ def create_notifications_for_published_post(post):
 
 
 def _create_notifications(listing_slug, business_name, event_type, title, message='', source_post=None):
-	user_ids = list(
-		FavoriteBusiness.objects
-		.filter(listing_slug=listing_slug)
-		.values_list('user_id', flat=True)
-	)
-	if not user_ids:
+	favorites = list(FavoriteBusiness.objects.select_related('user__account_profile').filter(listing_slug=listing_slug))
+	favorites = [favorite for favorite in favorites if _favorite_allows_event(favorite, event_type)]
+	user_ids = list({favorite.user_id for favorite in favorites})
+	if not favorites:
 		return 0
 
 	FavoriteBusinessNotification.objects.bulk_create([
@@ -81,6 +79,27 @@ def _create_notifications(listing_slug, business_name, event_type, title, messag
 		event_type=event_type,
 	)
 	return len(user_ids)
+
+
+def should_send_direct_message_notification(user, listing_slug):
+	profile = getattr(user, 'account_profile', None)
+	if profile is None or not profile.preference_onboarding_completed:
+		return True
+	if profile.notifications_paused:
+		return False
+	favorite = FavoriteBusiness.objects.filter(user=user, listing_slug=listing_slug).first()
+	return bool(favorite and favorite.direct_message_notifications_enabled)
+
+
+def _favorite_allows_event(favorite, event_type):
+	profile = getattr(favorite.user, 'account_profile', None)
+	if profile is None or not profile.preference_onboarding_completed:
+		return True
+	if profile.notifications_paused:
+		return False
+	if event_type == FavoriteBusinessNotification.EventType.PROFILE_UPDATE:
+		return favorite.profile_updates_enabled
+	return favorite.deal_updates_enabled
 
 
 def _trim_notifications_for_users(user_ids):

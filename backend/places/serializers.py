@@ -336,6 +336,12 @@ class AccountResponseSerializer(serializers.Serializer):
 	approved_businesses = serializers.ListField(child=serializers.DictField(), required=False)
 	sponsored_campaigns = serializers.ListField(child=serializers.DictField(), required=False)
 	favorite_businesses = serializers.ListField(child=serializers.DictField(), required=False)
+	preference_onboarding_completed = serializers.BooleanField(required=False)
+	preference_onboarding_skipped = serializers.BooleanField(required=False)
+	preferred_cities = serializers.ListField(required=False)
+	preferred_days = serializers.ListField(required=False)
+	preferred_time_periods = serializers.ListField(required=False)
+	notifications_paused = serializers.BooleanField(required=False)
 	business_contact = serializers.DictField(required=False)
 	can_access_places = serializers.BooleanField(required=False)
 	two_factor_pending_setup = serializers.BooleanField(required=False)
@@ -459,6 +465,7 @@ class ContactSupportSerializer(serializers.Serializer):
 
 class FavoriteBusinessToggleSerializer(serializers.Serializer):
 	slug = serializers.SlugField(max_length=170)
+	location_id = serializers.IntegerField(required=False, allow_null=True, min_value=1)
 	favorited = serializers.BooleanField()
 	portal = serializers.ChoiceField(choices=['customer', 'business'], required=False, allow_blank=True)
 
@@ -466,6 +473,41 @@ class FavoriteBusinessToggleSerializer(serializers.Serializer):
 		normalized = value.strip()
 		if not normalized:
 			raise serializers.ValidationError('Select a business to favorite.')
+		return normalized
+
+
+class CustomerPreferenceBusinessSerializer(serializers.Serializer):
+	slug = serializers.SlugField(max_length=170)
+	location_id = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+	profile_updates_enabled = serializers.BooleanField(default=False)
+	happy_hour_notifications_enabled = serializers.BooleanField(default=False)
+	deal_updates_enabled = serializers.BooleanField(default=False)
+	direct_message_notifications_enabled = serializers.BooleanField(default=False)
+
+
+class CustomerPreferencesSerializer(serializers.Serializer):
+	action = serializers.ChoiceField(choices=['complete', 'skip', 'save'], default='save')
+	preferred_cities = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
+	preferred_days = serializers.ListField(child=serializers.IntegerField(min_value=0, max_value=6), required=False, allow_empty=True)
+	preferred_time_periods = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
+	notifications_paused = serializers.BooleanField(required=False)
+	businesses = CustomerPreferenceBusinessSerializer(many=True, required=False)
+
+	def validate_preferred_cities(self, value):
+		allowed = {'ventura', 'oxnard', 'camarillo'}
+		normalized = list(dict.fromkeys(str(city).strip().lower() for city in value if str(city).strip()))
+		if any(city not in allowed for city in normalized):
+			raise serializers.ValidationError('Choose Ventura, Oxnard, or Camarillo.')
+		return normalized
+
+	def validate_preferred_days(self, value):
+		return sorted(set(value))
+
+	def validate_preferred_time_periods(self, value):
+		allowed = {'morning', 'afternoon', 'evening'}
+		normalized = list(dict.fromkeys(str(period).strip().lower() for period in value if str(period).strip()))
+		if any(period not in allowed for period in normalized):
+			raise serializers.ValidationError('Choose morning, afternoon, or evening.')
 		return normalized
 
 

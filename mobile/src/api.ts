@@ -10,6 +10,7 @@ import type {
   BusinessLocationUpdateRequest,
   BusinessSignupRequest,
   CustomerSignupRequest,
+  CustomerPreferencesRequest,
   DirectMessageSendResponse,
   DirectMessageSendRequest,
   DirectMessageThreadDetailResponse,
@@ -868,4 +869,16 @@ function buildFriendlyApiFallbackMessage(path: string, status: number) {
   }
 
   return 'We could not complete that request. Check the information you entered and try again.';
+}
+
+export async function fetchCustomerPreferences(baseUrl: string, authToken: string, includeAllBusinesses = false) {
+  const query = includeAllBusinesses ? '?portal=customer&include_all_businesses=true' : '?portal=customer';
+  return fetchAuthedJson<SignupResponse>(baseUrl, `/profiles/preferences/${query}`, authToken);
+}
+
+export async function saveCustomerPreferences(baseUrl: string, authToken: string, payload: CustomerPreferencesRequest) {
+  return postAuthedJson<SignupResponse>(baseUrl, '/profiles/preferences/', authToken, {
+    ...payload,
+    portal: 'customer',
+  });
 }

@@ -10,6 +10,7 @@ import { homeFeedStyles } from './styles/homeFeedStyles';
 import { messagingStyles } from './styles/messagingStyles';
 import { modalStyles } from './styles/modalStyles';
 import { splashStyles } from './styles/splashStyles';
+import { preferenceStyles } from './styles/preferenceStyles';
 
 export const styles = StyleSheet.create({
   ...appShellStyles,
@@ -22,4 +23,5 @@ export const styles = StyleSheet.create({
   ...modalStyles,
   ...editorStyles,
   ...homeFeedStyles,
+  ...preferenceStyles,
 } as const);

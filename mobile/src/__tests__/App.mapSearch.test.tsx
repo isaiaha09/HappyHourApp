@@ -15,6 +15,8 @@ const mockFetchPlaces = jest.fn<Promise<PlaceListItem[]>, [string, string]>();
 const mockFetchLiveLocationPlaces = jest.fn<Promise<Array<{ slug: string; latitude: number | null; longitude: number | null; updated_at: string | null }>>, [string, string]>();
 const mockFetchPlaceDetail = jest.fn();
 const mockFetchProfileDashboard = jest.fn();
+const mockFetchCustomerPreferences = jest.fn();
+const mockSaveCustomerPreferences = jest.fn();
 const mockDeleteProfileAccount = jest.fn();
 const mockClearPlacesCache = jest.fn();
 const mockClearPersistedPlaceCache = jest.fn(async () => undefined);
@@ -52,6 +54,7 @@ jest.mock('../api', () => ({
   fetchPlaceDetail: (...args: unknown[]) => mockFetchPlaceDetail(...args),
   fetchPlaces: (...args: [string, string]) => mockFetchPlaces(...args),
   fetchProfileDashboard: (...args: unknown[]) => mockFetchProfileDashboard(...args),
+  fetchCustomerPreferences: (...args: unknown[]) => mockFetchCustomerPreferences(...args),
   getDefaultApiBaseUrl: jest.fn(() => 'http://127.0.0.1:8000/api'),
   loginProfile: (...args: unknown[]) => mockLoginProfile(...args),
   registerPushDevice: (...args: unknown[]) => mockRegisterPushDevice(...args),
@@ -61,6 +64,7 @@ jest.mock('../api', () => ({
   requestUsernameReminder: jest.fn(),
   resendVerificationCode: jest.fn(),
   resendVerificationEmail: jest.fn(),
+  saveCustomerPreferences: (...args: unknown[]) => mockSaveCustomerPreferences(...args),
   submitSupportRequest: jest.fn(),
   toggleFavoriteBusiness: jest.fn(),
   updateBusinessLocation: (...args: unknown[]) => mockUpdateBusinessLocation(...args),
@@ -178,13 +182,18 @@ jest.mock('../screens/SplashScreen', () => ({
 }));
 
 jest.mock('../screens/DashboardScreen', () => ({
-  AccountSettingsScreen: ({ onChangeDeleteAccountPassword, onDeleteAccount, onLogout }: { onChangeDeleteAccountPassword: (value: string) => void; onDeleteAccount: () => void; onLogout: () => void }) => {
+  AccountSettingsScreen: ({ onChangeDeleteAccountPassword, onDeleteAccount, onLogout, onOpenCustomerPreferences }: { onChangeDeleteAccountPassword: (value: string) => void; onDeleteAccount: () => void; onLogout: () => void; onOpenCustomerPreferences?: () => void }) => {
     const React = require('react');
     const { Pressable, Text, View } = require('react-native');
 
     return (
       <View>
         <Text>Settings screen</Text>
+        {onOpenCustomerPreferences ? (
+          <Pressable accessibilityLabel="Open customer preferences" onPress={onOpenCustomerPreferences}>
+            <Text>Open customer preferences</Text>
+          </Pressable>
+        ) : null}
         <Pressable accessibilityLabel="Set delete password" onPress={() => onChangeDeleteAccountPassword('password123')}>
           <Text>Set delete password</Text>
         </Pressable>
@@ -481,6 +490,21 @@ describe('App browse map search', () => {
     mockFetchLiveLocationPlaces.mockResolvedValue([]);
     mockFetchPlaceDetail.mockReset();
     mockFetchProfileDashboard.mockResolvedValue(null);
+    mockFetchCustomerPreferences.mockResolvedValue({
+      id: 7,
+      username: 'guestfan',
+      email: 'guestfan@example.com',
+      first_name: 'Guest',
+      last_name: 'Fan',
+      auth_token: 'token-123',
+      portal: 'customer',
+      profile_type: 'customer',
+      email_verified: true,
+      two_factor_enabled: false,
+      can_access_places: true,
+      preference_businesses: [],
+    });
+    mockSaveCustomerPreferences.mockResolvedValue({ detail: 'Preferences saved.' });
     mockDeleteProfileAccount.mockReset();
     mockDeleteProfileAccount.mockResolvedValue({ detail: 'Account permanently deleted.' });
     mockClearPlacesCache.mockClear();
@@ -527,6 +551,8 @@ describe('App browse map search', () => {
     mockFetchPlaces.mockReset();
     mockFetchLiveLocationPlaces.mockReset();
     mockFetchProfileDashboard.mockReset();
+    mockFetchCustomerPreferences.mockReset();
+    mockSaveCustomerPreferences.mockReset();
     mockDeleteProfileAccount.mockReset();
     mockClearPlacesCache.mockReset();
     mockClearPersistedPlaceCache.mockReset();
@@ -1816,6 +1842,48 @@ describe('App browse map search', () => {
     });
 
     view.unmount();
+  });
+
+  it('renders customer preferences from Settings instead of falling through to the map shell', async () => {
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    fireEvent.press(screen.getByLabelText('Open customer login'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    fireEvent.press(screen.getByLabelText('Submit login'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(await screen.findByText('Dashboard screen')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Open settings'));
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+
+    expect(screen.getByText('Settings screen')).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('Open customer preferences'));
+
+    expect(await screen.findByText('Happy hour preferences')).toBeTruthy();
+    expect(screen.getByText('Where do you go out?')).toBeTruthy();
   });
 
   it('clears place state and caches after permanently deleting an account', async () => {

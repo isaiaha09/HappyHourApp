@@ -894,6 +894,12 @@ class BusinessAccount(User):
 class AccountProfile(models.Model):
 	user = models.OneToOneField(settings.AUTH_USER_MODEL, related_name='account_profile', on_delete=models.CASCADE)
 	deleted_at = models.DateTimeField(null=True, blank=True)
+	preference_onboarding_completed = models.BooleanField(default=False)
+	preference_onboarding_skipped = models.BooleanField(default=False)
+	preferred_cities = models.JSONField(default=list, blank=True)
+	preferred_days = models.JSONField(default=list, blank=True)
+	preferred_time_periods = models.JSONField(default=list, blank=True)
+	notifications_paused = models.BooleanField(default=False)
 	email_verification_token = models.CharField(max_length=64, blank=True)
 	email_verification_code = models.CharField(max_length=6, blank=True)
 	email_verification_code_sent_at = models.DateTimeField(null=True, blank=True)
@@ -1124,6 +1130,7 @@ class BusinessDirectMessageBlock(models.Model):
 class FavoriteBusiness(models.Model):
 	user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='favorite_businesses', on_delete=models.CASCADE)
 	listing_slug = models.SlugField(max_length=170)
+	location_id = models.PositiveBigIntegerField(null=True, blank=True)
 	name = models.CharField(max_length=150)
 	city = models.CharField(max_length=20, blank=True)
 	city_label = models.CharField(max_length=40, blank=True)
@@ -1131,13 +1138,17 @@ class FavoriteBusiness(models.Model):
 	venue_type_label = models.CharField(max_length=60, blank=True)
 	address_line_1 = models.CharField(max_length=255, blank=True)
 	website_url = models.URLField(blank=True)
+	profile_updates_enabled = models.BooleanField(default=True)
+	happy_hour_notifications_enabled = models.BooleanField(default=False)
+	deal_updates_enabled = models.BooleanField(default=True)
+	direct_message_notifications_enabled = models.BooleanField(default=True)
 	created_at = models.DateTimeField(auto_now_add=True)
 	updated_at = models.DateTimeField(auto_now=True)
 
 	class Meta:
 		ordering = ['name', 'city_label', '-created_at']
 		constraints = [
-			models.UniqueConstraint(fields=['user', 'listing_slug'], name='unique_favorite_business_per_user'),
+			models.UniqueConstraint(fields=['user', 'listing_slug', 'location_id'], name='unique_favorite_business_location_per_user'),
 		]
 
 	def __str__(self):
@@ -1147,6 +1158,7 @@ class FavoriteBusiness(models.Model):
 class FavoriteBusinessNotification(models.Model):
 	class EventType(models.TextChoices):
 		PROFILE_UPDATE = 'profile_update', 'Business Profile Update'
+		HAPPY_HOUR = 'happy_hour', 'Happy Hour'
 		SPECIAL = 'special', 'Special'
 		ANNOUNCEMENT = 'announcement', 'Announcement'
 		EVENT = 'event', 'Event'
@@ -1170,6 +1182,32 @@ class FavoriteBusinessNotification(models.Model):
 
 	def __str__(self):
 		return f'{self.business_name} {self.event_type} notification for {self.user.username}'
+
+
+
+class HappyHourNotificationDelivery(models.Model):
+	user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='happy_hour_notification_deliveries', on_delete=models.CASCADE)
+	listing_slug = models.SlugField(max_length=170)
+	location_id = models.PositiveBigIntegerField(null=True, blank=True)
+	occurrence_key = models.CharField(max_length=255)
+	business_name = models.CharField(max_length=150)
+	title = models.CharField(max_length=180)
+	message = models.CharField(max_length=400, blank=True)
+	started_at = models.DateTimeField()
+	sent_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ['-sent_at', '-id']
+		constraints = [
+			models.UniqueConstraint(fields=['user', 'occurrence_key'], name='unique_happy_hour_delivery_per_user'),
+		]
+		indexes = [
+			models.Index(fields=['occurrence_key']),
+			models.Index(fields=['user', '-sent_at']),
+		]
+
+	def __str__(self):
+		return f'{self.business_name} happy hour notification for {self.user.username}'
 
 
 class FavoriteBusinessPushDevice(models.Model):
