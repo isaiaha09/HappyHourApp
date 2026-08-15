@@ -9,6 +9,10 @@ jest.mock('../../api', () => ({
   saveCustomerPreferences: jest.fn(),
 }));
 
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+}));
+
 jest.mock('../../components/NativeIOSLiquidGlass', () => ({
   NativeIOSLiquidGlassBackButton: ({ label, onPress }: { label: string; onPress: () => void }) => {
     const React = require('react');
@@ -20,6 +24,7 @@ jest.mock('../../components/NativeIOSLiquidGlass', () => ({
       </Pressable>
     );
   },
+  NativeIOSLiquidGlassHeaderButton: ({ fallback }: { fallback: React.ReactNode }) => fallback,
 }));
 
 const mockFetchCustomerPreferences = fetchCustomerPreferences as jest.MockedFunction<typeof fetchCustomerPreferences>;
@@ -88,16 +93,41 @@ describe('CustomerPreferencesScreen', () => {
 
     expect(screen.getByText('Personalize your happy hour experience')).toBeTruthy();
     fireEvent.press(screen.getByText('Start'));
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 360));
+    });
+
     fireEvent.press(screen.getByText('Continue'));
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 360));
+    });
+
     expect(screen.getByText('Choose businesses')).toBeTruthy();
 
     fireEvent.press(screen.getByText('Yard House'));
     fireEvent.press(screen.getByText('Continue'));
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 360));
+    });
+
     expect(screen.getByText('What should each business send you?')).toBeTruthy();
 
-    fireEvent.press(screen.getByText('Happy hour notifications'));
+    fireEvent.press(screen.getByText('Happy Hour Notifications'));
     fireEvent.press(screen.getByText('Continue'));
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 360));
+    });
+
     fireEvent.press(screen.getByText('Continue'));
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 360));
+    });
+
     expect(screen.getByText('Review your preferences')).toBeTruthy();
 
     fireEvent.press(screen.getByText('Finish setup'));
@@ -111,6 +141,7 @@ describe('CustomerPreferencesScreen', () => {
       'token-123',
       expect.objectContaining({
         action: 'complete',
+        notifications_paused: false,
         businesses: [expect.objectContaining({
           slug: 'yard-house',
           location_id: 71,

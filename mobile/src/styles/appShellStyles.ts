@@ -416,14 +416,14 @@ export const appShellStyles = {
   },
   screenHeaderBarSingle: {
     alignItems: 'flex-start',
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
   },
   screenHeaderBarRow: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
     minHeight: 40,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
   },
   guestShellChrome: {
     ...StyleSheet.absoluteFillObject,

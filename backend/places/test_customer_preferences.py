@@ -50,11 +50,14 @@ class CustomerPreferenceApiTests(APITestCase):
 				'preferred_cities': ['oxnard'],
 				'preferred_days': [4, 5],
 				'preferred_time_periods': ['afternoon', 'evening'],
+				'direct_message_notifications_enabled': False,
+				'business_updates_notifications_enabled': True,
+				'happy_hour_notifications_enabled': True,
 				'businesses': [{
 					'slug': 'yard-house',
 					'location_id': 71,
-					'profile_updates_enabled': True,
-					'happy_hour_notifications_enabled': True,
+					'profile_updates_enabled': False,
+					'happy_hour_notifications_enabled': False,
 					'deal_updates_enabled': False,
 					'direct_message_notifications_enabled': False,
 				}],
@@ -68,7 +71,7 @@ class CustomerPreferenceApiTests(APITestCase):
 		favorite = FavoriteBusiness.objects.get(user=self.user)
 		self.assertEqual(favorite.location_id, 71)
 		self.assertTrue(favorite.happy_hour_notifications_enabled)
-		self.assertFalse(favorite.deal_updates_enabled)
+		self.assertTrue(favorite.deal_updates_enabled)
 		self.assertFalse(favorite.direct_message_notifications_enabled)
 
 
@@ -84,6 +87,9 @@ class HappyHourNotificationProcessorTests(APITestCase):
 			preference_onboarding_completed=True,
 			preferred_days=[4],
 			preferred_time_periods=['afternoon'],
+			happy_hour_notifications_enabled=True,
+			business_updates_notifications_enabled=True,
+			direct_message_notifications_enabled=True,
 		)
 		FavoriteBusiness.objects.create(
 			user=user,

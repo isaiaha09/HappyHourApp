@@ -5,6 +5,7 @@ export type AuthPortal = 'customer' | 'business';
 export type ProfileFormState = {
   username: string;
   email: string;
+  confirm_email: string;
   password: string;
   confirm_password: string;
   first_name: string;

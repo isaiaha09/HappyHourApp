@@ -33,6 +33,7 @@ export const detailStyles = {
     paddingTop: 0,
   },
   backButton: {
+    alignItems: 'center',
     alignSelf: 'flex-start',
     backgroundColor: theme.bgElevated,
     borderColor: theme.borderStrong,
@@ -46,6 +47,7 @@ export const detailStyles = {
   backButtonText: {
     color: theme.textPrimary,
     fontWeight: '700',
+    textAlign: 'center',
   },
   linkButtonDisabled: {
     opacity: 0.7,

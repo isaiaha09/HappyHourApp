@@ -246,6 +246,9 @@ export type CustomerPreferencesRequest = {
   preferred_days?: number[];
   preferred_time_periods?: string[];
   notifications_paused?: boolean;
+  direct_message_notifications_enabled?: boolean;
+  business_updates_notifications_enabled?: boolean;
+  happy_hour_notifications_enabled?: boolean;
   businesses?: Array<{
     slug: string;
     location_id: number | null;
@@ -339,6 +342,9 @@ export type SignupResponse = {
   preferred_days?: number[];
   preferred_time_periods?: string[];
   notifications_paused?: boolean;
+  direct_message_notifications_enabled?: boolean;
+  business_updates_notifications_enabled?: boolean;
+  happy_hour_notifications_enabled?: boolean;
   preference_businesses?: CustomerPreferenceBusiness[];
   business_contact?: {
     contact_name?: string;

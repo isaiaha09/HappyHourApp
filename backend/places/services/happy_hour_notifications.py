@@ -107,9 +107,9 @@ def _favorite_matches_location(favorite, occurrence):
 def _eligible_favorites(occurrence):
 	favorites = FavoriteBusiness.objects.select_related('user__account_profile').filter(
 		listing_slug=occurrence['listing_slug'],
-		happy_hour_notifications_enabled=True,
 		user__account_profile__preference_onboarding_completed=True,
 		user__account_profile__notifications_paused=False,
+		user__account_profile__happy_hour_notifications_enabled=True,
 	)
 	return [
 		favorite for favorite in favorites

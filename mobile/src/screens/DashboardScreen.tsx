@@ -818,7 +818,7 @@ export function FavoriteBusinessesScreen({
               <View style={styles.dashboardFieldGrid}>
                 {filteredFavoriteBusinesses.map((business) => (
                   <FavoriteBusinessCard
-                    key={business.slug}
+                    key={`${business.slug}:${business.location_id ?? `${business.city}:${business.address_line_1}`}`}
                     addressLine={business.address_line_1}
                     cityLabel={business.city_label}
                     name={business.name}

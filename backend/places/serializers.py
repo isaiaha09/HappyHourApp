@@ -342,6 +342,9 @@ class AccountResponseSerializer(serializers.Serializer):
 	preferred_days = serializers.ListField(required=False)
 	preferred_time_periods = serializers.ListField(required=False)
 	notifications_paused = serializers.BooleanField(required=False)
+	direct_message_notifications_enabled = serializers.BooleanField(required=False)
+	business_updates_notifications_enabled = serializers.BooleanField(required=False)
+	happy_hour_notifications_enabled = serializers.BooleanField(required=False)
 	business_contact = serializers.DictField(required=False)
 	can_access_places = serializers.BooleanField(required=False)
 	two_factor_pending_setup = serializers.BooleanField(required=False)
@@ -491,6 +494,9 @@ class CustomerPreferencesSerializer(serializers.Serializer):
 	preferred_days = serializers.ListField(child=serializers.IntegerField(min_value=0, max_value=6), required=False, allow_empty=True)
 	preferred_time_periods = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
 	notifications_paused = serializers.BooleanField(required=False)
+	direct_message_notifications_enabled = serializers.BooleanField(required=False)
+	business_updates_notifications_enabled = serializers.BooleanField(required=False)
+	happy_hour_notifications_enabled = serializers.BooleanField(required=False)
 	businesses = CustomerPreferenceBusinessSerializer(many=True, required=False)
 
 	def validate_preferred_cities(self, value):

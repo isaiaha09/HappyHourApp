@@ -861,6 +861,9 @@ export function CreateProfileScreen({ errorMessage, form, isLandscape, message, 
               <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Email</Text>
               <AutoScrollTextInput autoCapitalize="none" keyboardType="email-address" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('email', value)} scrollViewRef={scrollViewRef} style={[styles.profileInput, styles.onboardingInput]} value={form.email} />
 
+              <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Confirm email</Text>
+              <AutoScrollTextInput autoCapitalize="none" keyboardType="email-address" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('confirm_email', value)} scrollViewRef={scrollViewRef} style={[styles.profileInput, styles.onboardingInput]} value={form.confirm_email} />
+
               <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Password</Text>
               <PasswordField inputStyle={styles.onboardingInput} onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('password', value)} scrollViewRef={scrollViewRef} value={form.password} />
 
@@ -1320,7 +1323,7 @@ export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces,
               <View style={styles.claimResultsList}>
                 {results.length ? (
                   results.map((place) => (
-                    <View key={place.slug} style={[styles.claimResultCard, styles.onboardingInfoCard]}>
+                    <View key={`${place.slug}:${place.id}`} style={[styles.claimResultCard, styles.onboardingInfoCard]}>
                       <Text style={styles.placeTitle}>{place.name}</Text>
                       <Text style={styles.placeMeta}>{place.venue_type_label}</Text>
                       <Text style={[styles.claimBusinessHint, styles.onboardingInfoText]}>
@@ -1704,6 +1707,9 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
 
               <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Email</Text>
               <AutoScrollTextInput autoCapitalize="none" editable={!lockAccountIdentityFields} keyboardType="email-address" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('email', value)} scrollViewRef={scrollViewRef} style={[styles.profileInput, styles.onboardingInput]} value={form.email} />
+
+              <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Confirm email</Text>
+              <AutoScrollTextInput autoCapitalize="none" editable={!lockAccountIdentityFields} keyboardType="email-address" onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('confirm_email', value)} scrollViewRef={scrollViewRef} style={[styles.profileInput, styles.onboardingInput]} value={form.confirm_email} />
 
               <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Password</Text>
               <PasswordField inputStyle={styles.onboardingInput} onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('password', value)} scrollViewRef={scrollViewRef} value={form.password} />

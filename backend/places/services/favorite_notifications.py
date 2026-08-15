@@ -87,8 +87,7 @@ def should_send_direct_message_notification(user, listing_slug):
 		return True
 	if profile.notifications_paused:
 		return False
-	favorite = FavoriteBusiness.objects.filter(user=user, listing_slug=listing_slug).first()
-	return bool(favorite and favorite.direct_message_notifications_enabled)
+	return bool(profile.direct_message_notifications_enabled)
 
 
 def _favorite_allows_event(favorite, event_type):
@@ -98,8 +97,8 @@ def _favorite_allows_event(favorite, event_type):
 	if profile.notifications_paused:
 		return False
 	if event_type == FavoriteBusinessNotification.EventType.PROFILE_UPDATE:
-		return favorite.profile_updates_enabled
-	return favorite.deal_updates_enabled
+		return bool(profile.business_updates_notifications_enabled)
+	return bool(profile.business_updates_notifications_enabled)
 
 
 def _trim_notifications_for_users(user_ids):

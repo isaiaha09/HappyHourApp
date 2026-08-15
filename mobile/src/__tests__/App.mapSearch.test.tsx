@@ -602,7 +602,7 @@ describe('App browse map search', () => {
       await new Promise((resolve) => setTimeout(resolve, 25));
     });
 
-    fireEvent.press(screen.getByLabelText('Submit login'));
+    fireEvent.press(await screen.findByLabelText('Submit login'));
 
     await act(async () => {
       await Promise.resolve();

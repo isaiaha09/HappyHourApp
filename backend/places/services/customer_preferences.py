@@ -40,6 +40,13 @@ def _build_business_summary(listing_slug, location):
 	}
 
 
+def _location_has_happy_hour(location):
+	for deal in location.get('deals') or []:
+		if deal.get('is_active', True) and list(deal.get('happy_hours') or []):
+			return True
+	return False
+
+
 def get_preference_business_options(cities=None, only_with_deals=True):
 	selected_cities = set(cities or PREFERENCE_CITIES)
 	options = []
@@ -54,7 +61,7 @@ def get_preference_business_options(cities=None, only_with_deals=True):
 			identity = (listing_slug, _as_int(location_id))
 			if city not in selected_cities or identity in seen:
 				continue
-			if only_with_deals and _as_int(location.get('deal_count')) <= 0 and not location.get('has_deals'):
+			if only_with_deals and not _location_has_happy_hour(location):
 				continue
 			seen.add(identity)
 			options.append(_build_business_summary(listing_slug, location))
@@ -87,8 +94,15 @@ def save_customer_preferences(user, data):
 	if action == 'skip':
 		profile.preference_onboarding_completed = False
 		profile.preference_onboarding_skipped = True
-		profile.save(update_fields=['preference_onboarding_completed', 'preference_onboarding_skipped', 'updated_at'])
+		profile.direct_message_notifications_enabled = False
+		profile.business_updates_notifications_enabled = False
+		profile.happy_hour_notifications_enabled = False
+		profile.save(update_fields=['preference_onboarding_completed', 'preference_onboarding_skipped', 'direct_message_notifications_enabled', 'business_updates_notifications_enabled', 'happy_hour_notifications_enabled', 'updated_at'])
 		return profile
+
+	direct_message_notifications_enabled = bool(data.get('direct_message_notifications_enabled', False))
+	business_updates_notifications_enabled = bool(data.get('business_updates_notifications_enabled', False))
+	happy_hour_notifications_enabled = bool(data.get('happy_hour_notifications_enabled', False))
 
 	business_rows = data.get('businesses')
 	retained_favorite_ids = set()
@@ -118,17 +132,27 @@ def save_customer_preferences(user, data):
 			favorite.venue_type_label = location.get('venue_type_label', '')
 			favorite.address_line_1 = location.get('address_line_1', '')
 			favorite.website_url = location.get('website_url', '')
-			favorite.profile_updates_enabled = bool(row.get('profile_updates_enabled', False))
-			favorite.happy_hour_notifications_enabled = bool(row.get('happy_hour_notifications_enabled', False))
-			favorite.deal_updates_enabled = bool(row.get('deal_updates_enabled', False))
-			favorite.direct_message_notifications_enabled = bool(row.get('direct_message_notifications_enabled', False))
+			favorite.profile_updates_enabled = business_updates_notifications_enabled
+			favorite.happy_hour_notifications_enabled = happy_hour_notifications_enabled
+			favorite.deal_updates_enabled = business_updates_notifications_enabled
+			favorite.direct_message_notifications_enabled = direct_message_notifications_enabled
 			favorite.save()
 			retained_favorite_ids.add(favorite.pk)
 		FavoriteBusiness.objects.filter(user=user).exclude(pk__in=retained_favorite_ids).delete()
 
+	FavoriteBusiness.objects.filter(user=user).update(
+		profile_updates_enabled=business_updates_notifications_enabled,
+		happy_hour_notifications_enabled=happy_hour_notifications_enabled,
+		deal_updates_enabled=business_updates_notifications_enabled,
+		direct_message_notifications_enabled=direct_message_notifications_enabled,
+	)
+
 	for field_name in ('preferred_cities', 'preferred_days', 'preferred_time_periods', 'notifications_paused'):
 		if field_name in data:
 			setattr(profile, field_name, data[field_name])
+	profile.direct_message_notifications_enabled = direct_message_notifications_enabled
+	profile.business_updates_notifications_enabled = business_updates_notifications_enabled
+	profile.happy_hour_notifications_enabled = happy_hour_notifications_enabled
 
 	profile.preference_onboarding_completed = action == 'complete' or profile.preference_onboarding_completed
 	profile.preference_onboarding_skipped = False
@@ -139,6 +163,9 @@ def save_customer_preferences(user, data):
 		'preferred_days',
 		'preferred_time_periods',
 		'notifications_paused',
+		'direct_message_notifications_enabled',
+		'business_updates_notifications_enabled',
+		'happy_hour_notifications_enabled',
 		'updated_at',
 	])
 	return profile

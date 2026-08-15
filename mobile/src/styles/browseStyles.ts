@@ -473,6 +473,7 @@ export const browseStyles = {
     flex: 1,
     fontSize: 15,
     fontWeight: '500',
+    letterSpacing: 0,
     paddingVertical: 0,
   },
   searchClearButton: {

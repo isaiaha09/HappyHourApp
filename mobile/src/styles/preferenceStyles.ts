@@ -5,6 +5,27 @@ export const preferenceStyles = {
     flexGrow: 1,
     paddingBottom: 56,
   },
+  preferenceHeaderBackButton: {
+    minWidth: 88,
+  },
+  preferenceHeaderRowOffset: {
+    transform: [{ translateX: 15 }],
+  },
+  preferenceHeaderActionButton: {
+    minWidth: 116,
+  },
+  preferenceHeaderNextButton: {
+    transform: [{ translateX: 25 }],
+  },
+  preferenceHeaderSkipButton: {
+    transform: [{ translateX: 0 }],
+  },
+  preferenceHeaderActionText: {
+    color: theme.textPrimary,
+  },
+  preferenceHeaderSpacer: {
+    width: 116,
+  },
   preferenceShell: {
     alignSelf: 'center',
     maxWidth: 760,
@@ -309,15 +330,5 @@ export const preferenceStyles = {
     color: theme.textPrimary,
     fontSize: 15,
     fontWeight: '800',
-  },
-  preferenceSkipButton: {
-    alignSelf: 'center',
-    marginTop: 16,
-    padding: 10,
-  },
-  preferenceSkipText: {
-    color: theme.textMuted,
-    fontSize: 13,
-    fontWeight: '700',
   },
 } as const;

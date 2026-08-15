@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Keyboard, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Easing, Keyboard, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fetchCustomerPreferences, saveCustomerPreferences } from '../api';
 import { cityFilters, weekdayFilters, type CityFilterValue } from '../browseConfig';
-import { NativeIOSLiquidGlassBackButton } from '../components/NativeIOSLiquidGlass';
+import { NativeIOSLiquidGlassBackButton, NativeIOSLiquidGlassHeaderButton } from '../components/NativeIOSLiquidGlass';
 import { styles } from '../appStyles';
 import { theme } from '../styles/theme';
 import type { CustomerPreferenceBusiness, SignupResponse } from '../types';
@@ -20,12 +21,7 @@ const allTimeValues = timePeriodOptions.map((option) => option.value);
 
 type PreferenceMode = 'onboarding' | 'settings';
 type PreferenceBusinessInput = Omit<CustomerPreferenceBusiness, 'location_id'> & { location_id?: number | null };
-type PreferenceBusinessDraft = CustomerPreferenceBusiness & {
-  profile_updates_enabled: boolean;
-  happy_hour_notifications_enabled: boolean;
-  deal_updates_enabled: boolean;
-  direct_message_notifications_enabled: boolean;
-};
+type PreferenceBusinessDraft = CustomerPreferenceBusiness;
 
 export type CustomerPreferencesScreenProps = {
   apiBaseUrl: string;
@@ -46,10 +42,6 @@ function buildBusinessDraft(business: PreferenceBusinessInput): PreferenceBusine
   return {
     ...business,
     location_id: business.location_id ?? null,
-    profile_updates_enabled: Boolean(business.profile_updates_enabled),
-    happy_hour_notifications_enabled: Boolean(business.happy_hour_notifications_enabled),
-    deal_updates_enabled: Boolean(business.deal_updates_enabled),
-    direct_message_notifications_enabled: Boolean(business.direct_message_notifications_enabled),
   };
 }
 
@@ -62,17 +54,33 @@ function toggleAll<T>(current: T[], allValues: readonly T[], value: T) {
 }
 
 export function CustomerPreferencesScreen({ apiBaseUrl, authToken, isLandscape, mode, onBack, onComplete, onSkip, session }: CustomerPreferencesScreenProps) {
+  const insets = useSafeAreaInsets();
   const [step, setStep] = useState(mode === 'onboarding' ? 0 : 1);
   const [selectedCities, setSelectedCities] = useState<string[]>(mode === 'settings' && session.preferred_cities?.length ? session.preferred_cities : allCityValues);
   const [selectedDays, setSelectedDays] = useState<number[]>(mode === 'settings' && session.preferred_days?.length ? session.preferred_days : allDayValues);
   const [selectedTimePeriods, setSelectedTimePeriods] = useState<string[]>(mode === 'settings' && session.preferred_time_periods?.length ? session.preferred_time_periods : allTimeValues);
-  const [notificationsPaused, setNotificationsPaused] = useState(Boolean(session.notifications_paused));
   const [businessOptions, setBusinessOptions] = useState<CustomerPreferenceBusiness[]>([]);
   const [selectedBusinesses, setSelectedBusinesses] = useState<PreferenceBusinessDraft[]>(() => (session.favorite_businesses ?? []).map(buildBusinessDraft));
+  const [directMessagesEnabled, setDirectMessagesEnabled] = useState(Boolean(session.direct_message_notifications_enabled));
+  const [businessUpdatesEnabled, setBusinessUpdatesEnabled] = useState(Boolean(session.business_updates_notifications_enabled));
+  const [happyHourNotificationsEnabled, setHappyHourNotificationsEnabled] = useState(Boolean(session.happy_hour_notifications_enabled));
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const stepContentOpacity = useRef(new Animated.Value(1)).current;
+  const stepContentTranslateX = useRef(new Animated.Value(0)).current;
+  const stepTransitionActiveRef = useRef(false);
+  const stepTransitionFrameRef = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (stepTransitionFrameRef.current !== null) {
+      cancelAnimationFrame(stepTransitionFrameRef.current);
+      stepTransitionFrameRef.current = null;
+    }
+    stepContentOpacity.stopAnimation();
+    stepContentTranslateX.stopAnimation();
+  }, [stepContentOpacity, stepContentTranslateX]);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,7 +89,7 @@ export function CustomerPreferencesScreen({ apiBaseUrl, authToken, isLandscape, 
       setLoading(true);
       setErrorMessage(null);
       try {
-        const response = await fetchCustomerPreferences(apiBaseUrl, authToken, mode === 'settings');
+        const response = await fetchCustomerPreferences(apiBaseUrl, authToken, false);
         if (cancelled) {
           return;
         }
@@ -91,7 +99,9 @@ export function CustomerPreferencesScreen({ apiBaseUrl, authToken, isLandscape, 
           setSelectedCities(response.preferred_cities?.length ? response.preferred_cities : allCityValues);
           setSelectedDays(response.preferred_days?.length ? response.preferred_days : allDayValues);
           setSelectedTimePeriods(response.preferred_time_periods?.length ? response.preferred_time_periods : allTimeValues);
-          setNotificationsPaused(Boolean(response.notifications_paused));
+          setDirectMessagesEnabled(Boolean(response.direct_message_notifications_enabled));
+          setBusinessUpdatesEnabled(Boolean(response.business_updates_notifications_enabled));
+          setHappyHourNotificationsEnabled(Boolean(response.happy_hour_notifications_enabled));
         }
       } catch (error) {
         if (!cancelled) {
@@ -122,6 +132,9 @@ export function CustomerPreferencesScreen({ apiBaseUrl, authToken, isLandscape, 
       return [business.name, business.city_label, business.address_line_1].join(' ').toLowerCase().includes(normalizedQuery);
     });
   }, [businessOptions, searchQuery, selectedCities]);
+  const continueDisabled = submitting || (loading && step !== 0);
+
+  const allNotificationsEnabled = directMessagesEnabled && businessUpdatesEnabled && happyHourNotificationsEnabled;
 
   function toggleCity(city: CityFilterValue | 'all') {
     if (city === 'all') {
@@ -144,30 +157,11 @@ export function CustomerPreferencesScreen({ apiBaseUrl, authToken, isLandscape, 
     });
   }
 
-  function toggleBusinessNotification(key: string, field: keyof Pick<PreferenceBusinessDraft, 'profile_updates_enabled' | 'happy_hour_notifications_enabled' | 'deal_updates_enabled' | 'direct_message_notifications_enabled'>) {
-    setSelectedBusinesses((current) => current.map((business) => (
-      getBusinessKey(business) === key ? { ...business, [field]: !business[field] } : business
-    )));
-  }
-
-  function toggleAllBusinessNotifications(business: PreferenceBusinessDraft) {
-    const enabled = !(
-      business.profile_updates_enabled
-      && business.happy_hour_notifications_enabled
-      && business.deal_updates_enabled
-      && business.direct_message_notifications_enabled
-    );
-    setSelectedBusinesses((current) => current.map((item) => (
-      getBusinessKey(item) === getBusinessKey(business)
-        ? {
-            ...item,
-            profile_updates_enabled: enabled,
-            happy_hour_notifications_enabled: enabled,
-            deal_updates_enabled: enabled,
-            direct_message_notifications_enabled: enabled,
-          }
-        : item
-    )));
+  function toggleAllNotifications() {
+    const enabled = !allNotificationsEnabled;
+    setDirectMessagesEnabled(enabled);
+    setBusinessUpdatesEnabled(enabled);
+    setHappyHourNotificationsEnabled(enabled);
   }
 
   function toggleDay(day: number) {
@@ -184,19 +178,26 @@ export function CustomerPreferencesScreen({ apiBaseUrl, authToken, isLandscape, 
       preferred_cities: selectedCities,
       preferred_days: selectedDays,
       preferred_time_periods: selectedTimePeriods,
-      notifications_paused: notificationsPaused,
+      notifications_paused: false,
+      direct_message_notifications_enabled: directMessagesEnabled,
+      business_updates_notifications_enabled: businessUpdatesEnabled,
+      happy_hour_notifications_enabled: happyHourNotificationsEnabled,
       businesses: selectedBusinesses.map((business) => ({
         slug: business.slug,
         location_id: business.location_id,
-        profile_updates_enabled: business.profile_updates_enabled,
-        happy_hour_notifications_enabled: business.happy_hour_notifications_enabled,
-        deal_updates_enabled: business.deal_updates_enabled,
-        direct_message_notifications_enabled: business.direct_message_notifications_enabled,
+        profile_updates_enabled: businessUpdatesEnabled,
+        happy_hour_notifications_enabled: happyHourNotificationsEnabled,
+        deal_updates_enabled: businessUpdatesEnabled,
+        direct_message_notifications_enabled: directMessagesEnabled,
       })),
     } as const;
   }
 
   async function handleSkip() {
+    if (mode === 'onboarding' && step < 5) {
+      goToStep(Math.min(step + 1, 5));
+      return;
+    }
     setSubmitting(true);
     setErrorMessage(null);
     try {
@@ -223,13 +224,74 @@ export function CustomerPreferencesScreen({ apiBaseUrl, authToken, isLandscape, 
   }
 
   function handleContinue() {
-    if (mode === 'onboarding' && step === 0) {
-      setStep(1);
+    if (continueDisabled) {
       return;
     }
-    if (step < 5) {
-      setStep((current) => current + 1);
+    if (mode === 'onboarding' && step === 1 && loading) {
+      return;
     }
+    goToStep(step === 0 && mode === 'onboarding' ? 1 : Math.min(step + 1, 5));
+  }
+
+  function handleBackPress() {
+    if ((mode === 'onboarding' && step > 0) || (mode === 'settings' && step > 1)) {
+      goToStep(step - 1);
+      return;
+    }
+    onBack();
+  }
+
+  function goToStep(nextStep: number) {
+    if (nextStep === step || stepTransitionActiveRef.current) {
+      return;
+    }
+
+    const direction = nextStep > step ? 1 : -1;
+    stepTransitionActiveRef.current = true;
+    stepContentOpacity.stopAnimation();
+    stepContentTranslateX.stopAnimation();
+
+    Animated.parallel([
+      Animated.timing(stepContentOpacity, {
+        duration: 120,
+        easing: Easing.out(Easing.cubic),
+        toValue: 0,
+        useNativeDriver: true,
+      }),
+      Animated.timing(stepContentTranslateX, {
+        duration: 120,
+        easing: Easing.out(Easing.cubic),
+        toValue: direction * -24,
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (!finished) {
+        stepTransitionActiveRef.current = false;
+        return;
+      }
+
+      setStep(nextStep);
+      stepTransitionFrameRef.current = requestAnimationFrame(() => {
+        stepTransitionFrameRef.current = null;
+        stepContentTranslateX.setValue(direction * 24);
+        Animated.parallel([
+          Animated.timing(stepContentOpacity, {
+            duration: 220,
+            easing: Easing.out(Easing.cubic),
+            toValue: 1,
+            useNativeDriver: true,
+          }),
+          Animated.timing(stepContentTranslateX, {
+            duration: 220,
+            easing: Easing.out(Easing.cubic),
+            toValue: 0,
+            useNativeDriver: true,
+          }),
+        ]).start(() => {
+          stepTransitionActiveRef.current = false;
+        });
+      });
+    });
   }
 
   function renderChip(label: string, active: boolean, onPress: () => void, key: string) {
@@ -272,7 +334,7 @@ export function CustomerPreferencesScreen({ apiBaseUrl, authToken, isLandscape, 
                   <Text style={styles.preferenceBusinessDeal}>{`${business.deal_count ?? 1} confirmed deal${business.deal_count === 1 ? '' : 's'}`}</Text>
                 </View>
                 <View style={[styles.preferenceSelectionMark, selected ? styles.preferenceSelectionMarkActive : null]}>
-                  <Text style={styles.preferenceSelectionMarkText}>{selected ? '✓' : '+'}</Text>
+                  <Text style={styles.preferenceSelectionMarkText}>{selected ? '♥' : '+'}</Text>
                 </View>
               </Pressable>
             );
@@ -287,42 +349,16 @@ export function CustomerPreferencesScreen({ apiBaseUrl, authToken, isLandscape, 
     return (
       <View style={styles.preferenceSection}>
         <Text style={styles.preferenceSectionTitle}>What should each business send you?</Text>
-        <Text style={styles.preferenceSupportText}>Choose notifications separately for every location.</Text>
-        <Pressable onPress={() => setNotificationsPaused((current) => !current)} style={styles.preferencePauseRow}>
-          <View style={styles.preferenceBusinessCopy}>
-            <Text style={styles.preferenceToggleLabel}>Pause all notifications</Text>
-            <Text style={styles.preferenceSupportText}>You can pause alerts without changing your saved businesses.</Text>
+        <Text style={styles.preferenceSupportText}>These settings apply to all businesses you favorite and all businesses you directly message.</Text>
+        <View style={styles.preferenceNotificationCard}>
+          <Text style={styles.preferenceSupportText}>Tap the buttons below to choose the notification types you want to turn on overall.</Text>
+          <View style={styles.preferenceChipWrap}>
+            {renderChip('Turn on all notifications', allNotificationsEnabled, toggleAllNotifications, 'notifications:all')}
+            {renderChip('Direct Messages', directMessagesEnabled, () => setDirectMessagesEnabled((current) => !current), 'notifications:dm')}
+            {renderChip('Business Profile/Deal Updates', businessUpdatesEnabled, () => setBusinessUpdatesEnabled((current) => !current), 'notifications:updates')}
+            {renderChip('Happy Hour Notifications', happyHourNotificationsEnabled, () => setHappyHourNotificationsEnabled((current) => !current), 'notifications:happy-hour')}
           </View>
-          <View style={[styles.preferenceToggle, notificationsPaused ? styles.preferenceToggleActive : null]}>
-            <Text style={styles.preferenceToggleText}>{notificationsPaused ? 'On' : 'Off'}</Text>
-          </View>
-        </Pressable>
-        {!selectedBusinesses.length ? <Text style={styles.preferenceEmptyText}>You can favorite businesses now and configure notifications later in Settings.</Text> : null}
-        {selectedBusinesses.map((business) => {
-          const key = getBusinessKey(business);
-          return (
-            <View key={key} style={styles.preferenceNotificationCard}>
-              <Text style={styles.preferenceBusinessName}>{business.name}</Text>
-              <Text style={styles.preferenceBusinessMeta}>{business.city_label} • {business.address_line_1}</Text>
-              <Pressable onPress={() => toggleAllBusinessNotifications(business)} style={styles.preferenceSelectAllButton}>
-                <Text style={styles.preferenceSelectAllText}>Select all / clear all</Text>
-              </Pressable>
-              {([
-                ['profile_updates_enabled', 'Business profile updates'],
-                ['happy_hour_notifications_enabled', 'Happy hour notifications'],
-                ['deal_updates_enabled', 'Deal updates'],
-                ['direct_message_notifications_enabled', 'Direct messages'],
-              ] as const).map(([field, label]) => (
-                <Pressable key={field} onPress={() => toggleBusinessNotification(key, field)} style={styles.preferenceToggleRow}>
-                  <Text style={styles.preferenceToggleLabel}>{label}</Text>
-                  <View style={[styles.preferenceToggle, business[field] ? styles.preferenceToggleActive : null]}>
-                    <Text style={styles.preferenceToggleText}>{business[field] ? 'On' : 'Off'}</Text>
-                  </View>
-                </Pressable>
-              ))}
-            </View>
-          );
-        })}
+        </View>
       </View>
     );
   }
@@ -357,7 +393,11 @@ export function CustomerPreferencesScreen({ apiBaseUrl, authToken, isLandscape, 
         <View style={styles.preferenceReviewBlock}><Text style={styles.preferenceReviewLabel}>Favorite businesses</Text>{selectedBusinesses.length ? selectedBusinesses.map((business) => <Text key={getBusinessKey(business)} style={styles.preferenceReviewValue}>{`${business.name} - ${business.city_label}`}</Text>) : <Text style={styles.preferenceReviewValue}>None selected</Text>}</View>
         <View style={styles.preferenceReviewBlock}><Text style={styles.preferenceReviewLabel}>Days</Text><Text style={styles.preferenceReviewValue}>{dayLabels || 'None selected'}</Text></View>
         <View style={styles.preferenceReviewBlock}><Text style={styles.preferenceReviewLabel}>Times</Text><Text style={styles.preferenceReviewValue}>{timeLabels || 'None selected'}</Text></View>
-        <View style={styles.preferenceReviewBlock}><Text style={styles.preferenceReviewLabel}>Notifications</Text><Text style={styles.preferenceReviewValue}>{notificationsPaused ? 'Paused' : 'Active'}</Text></View>
+        <View style={styles.preferenceReviewBlock}><Text style={styles.preferenceReviewLabel}>Notifications</Text><Text style={styles.preferenceReviewValue}>{[
+          directMessagesEnabled ? 'Direct Messages' : null,
+          businessUpdatesEnabled ? 'Business Profile/Deal Updates' : null,
+          happyHourNotificationsEnabled ? 'Happy Hour Notifications' : null,
+        ].filter(Boolean).join(', ') || 'None selected'}</Text></View>
       </View>
     );
   }
@@ -369,11 +409,34 @@ export function CustomerPreferencesScreen({ apiBaseUrl, authToken, isLandscape, 
   const progressStep = mode === 'onboarding' ? step : step - 1;
   const progress = Math.min(Math.max((progressStep + 1) / 5, 0.2), 1);
 
+  const showStepLoading = mode === 'onboarding' && loading && step === 2;
+  const showHeaderAdvanceAction = step < 5;
+  const headerAdvanceLabel = mode === 'onboarding' ? 'Skip for now' : 'Next';
+  const headerAdvanceStyle = mode === 'onboarding' ? styles.preferenceHeaderSkipButton : styles.preferenceHeaderNextButton;
+  const preferenceScrollContentStyle = [
+    styles.preferenceScrollContent,
+    { paddingBottom: Math.max(176, insets.bottom + 144) },
+  ];
+
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
-      <ScrollView contentContainerStyle={styles.preferenceScrollContent} keyboardShouldPersistTaps="handled" onTouchStart={Keyboard.dismiss} showsVerticalScrollIndicator={false}>
-        <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
-          <NativeIOSLiquidGlassBackButton label={mode === 'settings' ? 'Back to Settings' : 'Skip for now'} onPress={mode === 'settings' ? onBack : handleSkip} />
+      <ScrollView contentContainerStyle={preferenceScrollContentStyle} keyboardShouldPersistTaps="handled" onTouchStart={Keyboard.dismiss} showsVerticalScrollIndicator={false}>
+        <View style={[styles.screenHeaderBar, styles.screenHeaderBarRow, styles.preferenceHeaderRowOffset]}>
+          <NativeIOSLiquidGlassBackButton label={mode === 'settings' ? 'Back to Settings' : 'Back'} onPress={handleBackPress} style={styles.preferenceHeaderBackButton} />
+          {showHeaderAdvanceAction ? (
+            <NativeIOSLiquidGlassHeaderButton
+              fallback={(
+                <Pressable onPress={mode === 'onboarding' ? handleSkip : handleContinue} style={[styles.preferenceHeaderActionButton, headerAdvanceStyle]}>
+                  <Text style={styles.preferenceHeaderActionText}>{headerAdvanceLabel}</Text>
+                </Pressable>
+              )}
+              label={headerAdvanceLabel}
+              onPress={mode === 'onboarding' ? handleSkip : handleContinue}
+              style={[styles.preferenceHeaderActionButton, headerAdvanceStyle]}
+              themeVariant="default-dark"
+              variant="pill"
+            />
+          ) : <View style={styles.preferenceHeaderSpacer} />}
         </View>
         <View style={styles.preferenceShell}>
           <View style={styles.preferenceProgressHeader}>
@@ -384,23 +447,23 @@ export function CustomerPreferencesScreen({ apiBaseUrl, authToken, isLandscape, 
           <Text style={styles.preferenceTitle}>{title}</Text>
           {body ? <Text style={styles.preferenceIntro}>{body}</Text> : null}
           {errorMessage ? <View style={styles.errorBanner}><Text style={styles.errorText}>{errorMessage}</Text></View> : null}
-          {loading && step !== 0 ? <View style={styles.preferenceLoading}><ActivityIndicator color={theme.accent} /><Text style={styles.preferenceSupportText}>Loading your preference options...</Text></View> : null}
-          {step === 0 && mode === 'onboarding' ? (
-            <View style={styles.preferenceWelcomeBlock}>
-              <Text style={styles.preferenceWelcomeTitle}>A few quick choices, then you are ready to explore.</Text>
-              <Text style={styles.preferenceSupportText}>We will show businesses with confirmed happy hours or deals, let you choose alert types for each location, and keep your schedule simple.</Text>
-            </View>
-          ) : null}
-          {step === 1 ? renderLocations() : null}
-          {step === 2 ? renderBusinesses() : null}
-          {step === 3 ? renderNotifications() : null}
-          {step === 4 ? renderDaysAndTimes() : null}
-          {step === 5 ? renderReview() : null}
+          {showStepLoading ? <View style={styles.preferenceLoading}><ActivityIndicator color={theme.accent} /><Text style={styles.preferenceSupportText}>Loading your preference options...</Text></View> : null}
+          <Animated.View style={{ opacity: stepContentOpacity, transform: [{ translateX: stepContentTranslateX }] }}>
+            {step === 0 && mode === 'onboarding' ? (
+              <View style={styles.preferenceWelcomeBlock}>
+                <Text style={styles.preferenceWelcomeTitle}>A few quick choices, then you are ready to explore.</Text>
+                <Text style={styles.preferenceSupportText}>We will show businesses with confirmed happy hours or deals, let you choose alert types for each location, and keep your schedule simple.</Text>
+              </View>
+            ) : null}
+            {step === 1 ? renderLocations() : null}
+            {step === 2 ? renderBusinesses() : null}
+            {step === 3 ? renderNotifications() : null}
+            {step === 4 ? renderDaysAndTimes() : null}
+            {step === 5 ? renderReview() : null}
+          </Animated.View>
           <View style={styles.preferenceActions}>
-            {step > (mode === 'onboarding' ? 0 : 1) ? <Pressable disabled={submitting} onPress={() => setStep((current) => current - 1)} style={styles.preferenceSecondaryButton}><Text style={styles.preferenceSecondaryText}>Back</Text></Pressable> : null}
-            {step < 5 ? <Pressable disabled={submitting} onPress={handleContinue} style={styles.preferencePrimaryButton}><Text style={styles.preferencePrimaryText}>{step === 0 ? 'Start' : 'Continue'}</Text></Pressable> : <Pressable disabled={submitting} onPress={() => void handleFinish()} style={styles.preferencePrimaryButton}>{submitting ? <ActivityIndicator color={theme.textOnAccent} /> : <Text style={styles.preferencePrimaryText}>{mode === 'onboarding' ? 'Finish setup' : 'Save preferences'}</Text>}</Pressable>}
+            {step < 5 ? <Pressable disabled={continueDisabled} onPress={handleContinue} style={[styles.preferencePrimaryButton, continueDisabled ? styles.linkButtonDisabled : null]}><Text style={styles.preferencePrimaryText}>{step === 0 ? 'Start' : 'Continue'}</Text></Pressable> : <Pressable disabled={submitting} onPress={() => void handleFinish()} style={styles.preferencePrimaryButton}>{submitting ? <ActivityIndicator color={theme.textOnAccent} /> : <Text style={styles.preferencePrimaryText}>{mode === 'onboarding' ? 'Finish setup' : 'Save preferences'}</Text>}</Pressable>}
           </View>
-          {mode === 'onboarding' ? <Pressable disabled={submitting} onPress={() => void handleSkip()} style={styles.preferenceSkipButton}><Text style={styles.preferenceSkipText}>Skip for now</Text></Pressable> : null}
         </View>
       </ScrollView>
     </View>

@@ -305,6 +305,7 @@ type BrowsePlace = MapPreviewPlace & {
 const initialProfileFormState: ProfileFormState = {
   username: '',
   email: '',
+  confirm_email: '',
   password: '',
   confirm_password: '',
   first_name: '',
@@ -465,6 +466,9 @@ function getBusinessSignupValidationMessage(form: ProfileFormState, mode: 'claim
   if (!form.email.trim()) {
     missingFields.push('email');
   }
+  if (!form.confirm_email.trim()) {
+    missingFields.push('confirm email');
+  }
   if (!form.password) {
     missingFields.push('password');
   }
@@ -512,8 +516,12 @@ function getBusinessSignupValidationMessage(form: ProfileFormState, mode: 'claim
     return `Please complete: ${missingFields.join(', ')}.`;
   }
 
+  if (form.email.trim().toLowerCase() !== form.confirm_email.trim().toLowerCase()) {
+    return 'Emails do not match.';
+  }
+
   if (form.password !== form.confirm_password) {
-    return 'Password and confirm password must match.';
+    return 'Passwords do not match.';
   }
 
   return null;
@@ -4669,6 +4677,7 @@ function AppScreen() {
       ...resetBusinessVerificationFields(initialProfileFormState),
       username: customerSession?.username ?? '',
       email: customerSession?.email ?? '',
+      confirm_email: customerSession?.email ?? '',
       first_name: customerSession?.first_name ?? '',
       last_name: customerSession?.last_name ?? '',
       business_slug: selectedPlace.slug,
@@ -5222,12 +5231,18 @@ function AppScreen() {
   function handleCustomerPreferencesComplete(response: SignupResponse) {
     setAuthenticatedSession(response);
     setProfileMessage(response.detail ?? 'Preferences saved.');
+    if (customerPreferenceEntryMode === 'onboarding') {
+      handleRefreshPlaces();
+      pendingMapRefreshRef.current = true;
+    }
     navigateScreen(customerPreferenceEntryMode === 'settings' ? 'settings' : 'profiles', customerPreferenceEntryMode === 'settings' ? 'backward' : 'forward');
   }
 
   function handleCustomerPreferencesSkip(response: SignupResponse) {
     setAuthenticatedSession(response);
     setProfileMessage('You can configure preferences later from Settings.');
+    handleRefreshPlaces();
+    pendingMapRefreshRef.current = true;
     navigateScreen('profiles', 'forward');
   }
 
@@ -5901,6 +5916,12 @@ function AppScreen() {
   }
 
   async function handleSubmitCustomerProfile() {
+    if (profileForm.email.trim().toLowerCase() !== profileForm.confirm_email.trim().toLowerCase()) {
+      setProfileErrorMessage('Email and confirm email must match.');
+      setProfileMessage(null);
+      return;
+    }
+
     if (profileForm.password !== profileForm.confirm_password) {
       setProfileErrorMessage('Password and confirm password must match.');
       setProfileMessage(null);
@@ -8095,6 +8116,7 @@ function AppScreen() {
 
   const authenticatedBottomNavScreens: AppScreenMode[] = [
     'profiles',
+    'customer-preferences',
     'favorite-businesses',
     'business-notifications',
     'business-profile-editor',
@@ -8109,7 +8131,9 @@ function AppScreen() {
   ];
   const shouldRenderPersistentBottomNav = !showLoginSuccessTransition && !showLogoutTransition && (
     authenticatedSession
-      ? selectedPlaceSlug !== null || authenticatedBottomNavScreens.includes(screenMode)
+      ? selectedPlaceSlug !== null
+        || authenticatedBottomNavScreens.includes(screenMode)
+        || incomingOnboardingScreen === 'customer-preferences'
       : false
   );
 
