@@ -59,6 +59,7 @@ type NativeIOSLiquidGlassHeaderButtonProps = {
   fallback: ReactNode;
   hideFallbackWhenNativeUnavailable?: boolean;
   label?: string;
+  nativeHorizontalOffset?: number;
   onPress: () => void;
   style?: StyleProp<ViewStyle>;
   systemImage?: string;
@@ -124,14 +125,16 @@ function getBottomNavStyle(bottomInset: number, style?: StyleProp<ViewStyle>) {
   return [{ width: '100%' as const, backgroundColor: 'transparent', height: Math.max(64, 64 + bottomInset), overflow: 'hidden' as const }, style];
 }
 
-function getHeaderButtonStyle(variant: 'pill' | 'icon', label?: string, style?: StyleProp<ViewStyle>) {
+function getHeaderButtonStyle(variant: 'pill' | 'icon', label?: string, style?: StyleProp<ViewStyle>, nativeHorizontalOffset?: number) {
+  const nativePositionStyle = nativeHorizontalOffset === undefined ? null : { left: nativeHorizontalOffset };
+
   if (variant === 'icon') {
-    return [{ width: headerIconButtonSize, height: headerIconButtonSize }, style];
+    return [{ width: headerIconButtonSize, height: headerIconButtonSize }, style, nativePositionStyle];
   }
 
   const resolvedLabel = label?.trim() ?? '';
   const width = Math.max(headerPillButtonHeight, Math.ceil(resolvedLabel.length * averageHeaderPillCharacterWidth + headerPillHorizontalPadding));
-  return [{ width, height: headerPillButtonHeight }, style];
+  return [{ width, height: headerPillButtonHeight }, style, nativePositionStyle];
 }
 
 export function isNativeIOSLiquidGlassBottomNavAvailable() {
@@ -168,7 +171,7 @@ export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, include
   );
 }
 
-export function NativeIOSLiquidGlassHeaderButton({ accessibilityLabel, fallback, hideFallbackWhenNativeUnavailable = false, label, onPress, style, systemImage, themeVariant = 'default-dark', variant }: NativeIOSLiquidGlassHeaderButtonProps) {
+export function NativeIOSLiquidGlassHeaderButton({ accessibilityLabel, fallback, hideFallbackWhenNativeUnavailable = false, label, nativeHorizontalOffset, onPress, style, systemImage, themeVariant = 'default-dark', variant }: NativeIOSLiquidGlassHeaderButtonProps) {
   if (!isNativeIOSLiquidGlassHeaderButtonAvailable()) {
     if (hideFallbackWhenNativeUnavailable && isSupportedIOSLiquidGlassRuntime()) {
       return null;
@@ -182,7 +185,7 @@ export function NativeIOSLiquidGlassHeaderButton({ accessibilityLabel, fallback,
       accessibilityLabel={accessibilityLabel}
       label={label}
       onGlassButtonPress={() => onPress()}
-      style={getHeaderButtonStyle(variant, label, style)}
+      style={getHeaderButtonStyle(variant, label, style, nativeHorizontalOffset)}
       systemImage={systemImage}
       themeVariant={themeVariant}
       variant={variant}

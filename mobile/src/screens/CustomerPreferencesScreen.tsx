@@ -413,6 +413,7 @@ export function CustomerPreferencesScreen({ apiBaseUrl, authToken, isLandscape, 
   const showHeaderAdvanceAction = step < 5;
   const headerAdvanceLabel = mode === 'onboarding' ? 'Skip for now' : 'Next';
   const headerAdvanceStyle = mode === 'onboarding' ? styles.preferenceHeaderSkipButton : styles.preferenceHeaderNextButton;
+  const nativeHeaderActionOffset = mode === 'onboarding' ? -15 : -40;
   const preferenceScrollContentStyle = [
     styles.preferenceScrollContent,
     { paddingBottom: Math.max(176, insets.bottom + 144) },
@@ -431,6 +432,7 @@ export function CustomerPreferencesScreen({ apiBaseUrl, authToken, isLandscape, 
                 </Pressable>
               )}
               label={headerAdvanceLabel}
+              nativeHorizontalOffset={nativeHeaderActionOffset}
               onPress={mode === 'onboarding' ? handleSkip : handleContinue}
               style={[styles.preferenceHeaderActionButton, headerAdvanceStyle]}
               themeVariant="default-dark"
