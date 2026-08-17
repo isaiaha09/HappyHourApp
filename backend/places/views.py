@@ -65,7 +65,7 @@ from .serializers import (
 	sync_listing_snapshot_from_place_payload,
 )
 from .services.account_profiles import build_account_response, build_email_verification_challenge, deactivate_account_for_retained_direct_messages, get_approved_business_claims, get_business_access_hold_claim, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, is_deleted_account, send_business_claim_received_email, send_content_report_support_email_safely, send_password_reset_email, send_support_contact_email, send_username_reminder_email, send_verification_email
-from .models import BusinessClaimAttachment, BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, BusinessPost, ContentReport, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedImpression, ListingSnapshot, VenueType, business_claim_storage_prefix
+from .models import BusinessClaimAttachment, BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, BusinessPost, ContentReport, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedImpression, ListingSnapshot, ProfileAuthToken, VenueType, business_claim_storage_prefix
 from .services.favorite_notifications import create_notifications_for_business_profile_update, should_send_direct_message_notification
 from .services.customer_preferences import get_preference_business_options, resolve_business_location, save_customer_preferences
 from .services.happy_hour_notifications import process_due_happy_hour_notifications
@@ -1794,7 +1794,7 @@ class PasswordResetView(generics.GenericAPIView):
 	def get(self, request, token):
 		from .models import AccountProfile
 		profile = AccountProfile.objects.select_related('user').filter(password_reset_token=token).first()
-		if profile is None:
+		if profile is None or not profile.password_reset_token_is_active():
 			return HttpResponse(self._build_html(title='Password reset link is invalid or expired.', message='', token='', error=True), status=404)
 		return HttpResponse(self._build_html(title='Reset your password', message='Enter a new password for your account.', token=token))
 
@@ -1850,3 +1850,12 @@ class PasswordResetView(generics.GenericAPIView):
 			f'{error_block}{form_block}{success_block}'
 			'</div></div></body></html>'
 		)
+
+
+class LogoutView(APIView):
+	authentication_classes = [ProfileTokenAuthentication]
+	permission_classes = [IsAuthenticated]
+
+	def post(self, request):
+		ProfileAuthToken.objects.filter(pk=getattr(request.auth, 'pk', None), user=request.user).delete()
+		return Response({'detail': 'Signed out.'})

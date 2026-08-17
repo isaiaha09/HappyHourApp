@@ -20,6 +20,7 @@ from django.core.exceptions import ValidationError
 from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.test import APITestCase
 from bs4 import BeautifulSoup
 from email.utils import parseaddr
@@ -29,6 +30,7 @@ import pyotp
 from .admin import BusinessAccountAdmin, BusinessClaimAdmin, CustomerAccountAdmin, DeletedBusinessAdmin, ListingSnapshotAdmin, ListingSnapshotAdminForm, _sync_listing_snapshot_from_imported_place
 from .admin_site import happyhour_admin_site
 from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, BusinessPost, City, ContentReport, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedEngagement, FeedImpression, ListingSnapshot, ProfileAuthToken, SponsoredCampaign, VenueType, Weekday
+from .serializers import _validate_uploaded_deal_attachment
 from .services.importers.base import BaseHtmlImporter
 from .services.importers.business_websites import BusinessWebsiteImporter
 from .services.importers.discovered_json_places import CuratedJsonPlacesImporter, DiscoveryJsonPlacesImporter, load_discovery_json_records, write_discovery_json_records
@@ -6115,6 +6117,13 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(response.data['business_contact']['deal_overrides'][0]['attachment']['name'], 'new-flyer.png')
 		self.assertEqual(response.data['business_contact']['deals'][0]['attachment']['name'], 'new-flyer.png')
 
+	@override_settings(PDF_UPLOAD_MAX_BYTES=4 * 1024 * 1024)
+	def test_pdf_deal_attachment_size_limit_is_enforced_before_storage(self):
+		with self.assertRaises(DRFValidationError) as error:
+			_validate_uploaded_deal_attachment(SimpleUploadedFile('large-flyer.pdf', b'0' * (4 * 1024 * 1024 + 1), content_type='application/pdf'))
+
+		self.assertIn('4 MB or smaller', str(error.exception))
+
 	@patch('places.services.source_listings.load_source_records')
 	def test_profile_dashboard_returns_inherited_source_images_until_owner_overrides_gallery(self, mock_load_source_records):
 		mock_load_source_records.return_value = [
@@ -7199,7 +7208,7 @@ class ProfileDashboardApiTests(APITestCase):
 
 	def test_password_reset_confirm_returns_json_for_mobile(self):
 		self.profile.issue_password_reset_token(force=True)
-		self.profile.save(update_fields=['password_reset_token', 'updated_at'])
+		self.profile.save(update_fields=['password_reset_token', 'password_reset_sent_at', 'updated_at'])
 
 		response = self.client.post(
 			reverse('profile-password-reset', kwargs={'token': self.profile.password_reset_token}),
@@ -7211,6 +7220,36 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(response.data, {'detail': 'Password updated successfully.'})
 		self.user.refresh_from_db()
 		self.assertTrue(self.user.check_password('mobile-test-pass-123'))
+
+	@override_settings(PROFILE_PASSWORD_RESET_TOKEN_TTL_SECONDS=60)
+	def test_password_reset_rejects_expired_token(self):
+		self.profile.issue_password_reset_token(force=True)
+		self.profile.password_reset_sent_at = timezone.now() - timezone.timedelta(seconds=61)
+		self.profile.save(update_fields=['password_reset_token', 'password_reset_sent_at', 'updated_at'])
+
+		page_response = self.client.get(reverse('profile-password-reset', kwargs={'token': self.profile.password_reset_token}))
+		json_response = self.client.post(
+			reverse('profile-password-reset', kwargs={'token': self.profile.password_reset_token}),
+			{'new_password': 'expired-test-pass-123'},
+			format='json',
+		)
+
+		self.assertEqual(page_response.status_code, 404)
+		self.assertEqual(json_response.status_code, 400)
+		self.assertIn('invalid or expired', str(json_response.data['token'][0]))
+
+	def test_logout_revokes_current_profile_token(self):
+		other_token = ProfileAuthToken.objects.create(user=self.user)
+		response = self.client.post(reverse('profile-logout'), {}, format='json', **self.auth_headers())
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data, {'detail': 'Signed out.'})
+		self.assertFalse(ProfileAuthToken.objects.filter(pk=self.token.pk).exists())
+		self.assertTrue(ProfileAuthToken.objects.filter(pk=other_token.pk).exists())
+		self.assertEqual(
+			self.client.get(reverse('profile-dashboard'), **self.auth_headers()).status_code,
+			403,
+		)
 
 	def test_delete_account_removes_user_and_related_profile_records(self):
 		FavoriteBusiness.objects.create(

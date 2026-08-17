@@ -200,6 +200,10 @@ export async function loginProfile(baseUrl: string, payload: LoginRequest) {
   return postJson<EmailVerificationChallengeResponse>(baseUrl, '/profiles/login/', payload);
 }
 
+export async function logoutProfile(baseUrl: string, authToken: string) {
+  return postAuthedJson<{ detail: string }>(baseUrl, '/profiles/logout/', authToken, {});
+}
+
 export async function fetchProfileDashboard(baseUrl: string, authToken: string, portal?: 'customer' | 'business') {
   const query = portal ? `?portal=${encodeURIComponent(portal)}` : '';
   return fetchAuthedJson<SignupResponse>(baseUrl, `/profiles/me/${query}`, authToken);

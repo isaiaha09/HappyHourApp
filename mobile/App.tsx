@@ -54,6 +54,7 @@ import {
   getDefaultApiBaseUrl,
   isMissingProductionApiBaseUrlError,
   loginProfile,
+  logoutProfile,
   registerPushDevice,
   sendDirectMessage,
   sendDirectMessageImage,
@@ -735,6 +736,7 @@ function AppScreen() {
   const mapResultsCardTransitionVersionRef = useRef(0);
   const pendingImmediateMapPinsRefreshRef = useRef(false);
   const pendingMapRefreshRef = useRef(false);
+  const notificationMapReturnPendingRef = useRef(false);
   const pendingListRevealRef = useRef(false);
   const [profileForm, setProfileForm] = useState<ProfileFormState>(initialProfileFormState);
   const [businessAttachments, setBusinessAttachments] = useState<BusinessAttachmentBuckets>(initialBusinessAttachments);
@@ -1177,6 +1179,12 @@ function AppScreen() {
         return;
       }
 
+      setBrowseMode('map');
+      setSelectedCity('all');
+      setReloadCount((current) => current + 1);
+      notificationMapReturnPendingRef.current = true;
+      pendingImmediateMapPinsRefreshRef.current = true;
+      pendingMapRefreshRef.current = true;
       setScreenMode('browse');
       handleOpenFavoriteBusiness(slug);
     };
@@ -4534,6 +4542,13 @@ function AppScreen() {
   function handleBackToBrowse() {
     animateNextLayout();
     Keyboard.dismiss();
+    if (notificationMapReturnPendingRef.current && browseMode === 'map') {
+      notificationMapReturnPendingRef.current = false;
+      pendingImmediateMapPinsRefreshRef.current = true;
+      pendingMapRefreshRef.current = true;
+      setListLoading(true);
+      setReloadCount((current) => current + 1);
+    }
     setSelectedPlaceSlug(null);
 
     if (screenMode === 'profiles' || screenMode === 'business-profile-editor') {
@@ -6512,6 +6527,7 @@ function AppScreen() {
   }
 
   function handleLogout() {
+    const authToken = authenticatedSession?.auth_token;
     setProfileMessage(null);
     setProfileErrorMessage(null);
     setAuthMessage('You have been signed out.');
@@ -6521,6 +6537,9 @@ function AppScreen() {
     setTwoFactorSetup(null);
     setTwoFactorSetupCode('');
     setTwoFactorDisableCode('');
+    if (authToken) {
+      void logoutProfile(apiBaseUrl, authToken).catch(() => undefined);
+    }
     startLogoutTransition();
   }
 

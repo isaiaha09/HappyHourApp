@@ -21,6 +21,7 @@ const mockDeleteProfileAccount = jest.fn();
 const mockClearPlacesCache = jest.fn();
 const mockClearPersistedPlaceCache = jest.fn(async () => undefined);
 const mockLoginProfile = jest.fn();
+const mockLogoutProfile = jest.fn();
 const mockUpdateBusinessLocation = jest.fn();
 const mockRegisterPushDevice = jest.fn();
 let mockNotificationResponseListener: ((response: unknown) => void) | null = null;
@@ -57,6 +58,7 @@ jest.mock('../api', () => ({
   fetchCustomerPreferences: (...args: unknown[]) => mockFetchCustomerPreferences(...args),
   getDefaultApiBaseUrl: jest.fn(() => 'http://127.0.0.1:8000/api'),
   loginProfile: (...args: unknown[]) => mockLoginProfile(...args),
+  logoutProfile: (...args: unknown[]) => mockLogoutProfile(...args),
   registerPushDevice: (...args: unknown[]) => mockRegisterPushDevice(...args),
   recordFeedEngagement: jest.fn(),
   recordFeedImpression: jest.fn(),
@@ -235,11 +237,16 @@ jest.mock('../screens/DashboardScreen', () => ({
 }));
 
 jest.mock('../screens/PlaceDetailScreen', () => ({
-  PlaceDetailScreen: ({ selectedPlace }: { selectedPlace?: { slug?: string } | null }) => {
+  PlaceDetailScreen: ({ onBack, selectedPlace }: { onBack?: () => void; selectedPlace?: { slug?: string } | null }) => {
     const React = require('react');
-    const { Text } = require('react-native');
+    const { Pressable, Text } = require('react-native');
 
-    return selectedPlace ? <Text testID="mock-place-detail">{selectedPlace.slug}</Text> : null;
+    return selectedPlace ? (
+      <>
+        <Text testID="mock-place-detail">{selectedPlace.slug}</Text>
+        {onBack ? <Pressable onPress={onBack} testID="mock-place-detail-back" /> : null}
+      </>
+    ) : null;
   },
 }));
 
@@ -507,6 +514,8 @@ describe('App browse map search', () => {
     mockSaveCustomerPreferences.mockResolvedValue({ detail: 'Preferences saved.' });
     mockDeleteProfileAccount.mockReset();
     mockDeleteProfileAccount.mockResolvedValue({ detail: 'Account permanently deleted.' });
+    mockLogoutProfile.mockReset();
+    mockLogoutProfile.mockResolvedValue({ detail: 'Signed out.' });
     mockClearPlacesCache.mockClear();
     mockClearPersistedPlaceCache.mockClear();
     mockUpdateBusinessLocation.mockReset();
@@ -554,6 +563,7 @@ describe('App browse map search', () => {
     mockFetchCustomerPreferences.mockReset();
     mockSaveCustomerPreferences.mockReset();
     mockDeleteProfileAccount.mockReset();
+    mockLogoutProfile.mockReset();
     mockClearPlacesCache.mockReset();
     mockClearPersistedPlaceCache.mockReset();
     mockLoginProfile.mockReset();
@@ -686,6 +696,84 @@ describe('App browse map search', () => {
       }),
     );
     expect(screen.getByText('Direct messages screen')).toBeTruthy();
+  });
+
+  it('reloads the all-city map data when a favorite-business notification opens', async () => {
+    mockFetchPlaceDetail.mockResolvedValue(samplePlace);
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    mockFetchPlaces.mockClear();
+
+    await act(async () => {
+      mockNotificationResponseListener?.({
+        notification: {
+          request: {
+            identifier: 'favorite-business-map',
+            content: {
+              data: {
+                event_type: 'happy_hour',
+                slug: 'baskin-robbins',
+                type: 'favorite_business_notification',
+              },
+            },
+          },
+        },
+      });
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(mockFetchPlaces).toHaveBeenCalledWith('http://127.0.0.1:8000/api', 'all');
+  });
+
+  it('renders map markers after exiting a notification-opened business profile', async () => {
+    mockFetchPlaceDetail.mockResolvedValue(samplePlace);
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    await act(async () => {
+      mockNotificationResponseListener?.({
+        notification: {
+          request: {
+            identifier: 'favorite-business-map-exit',
+            content: {
+              data: {
+                event_type: 'happy_hour',
+                slug: 'baskin-robbins',
+                type: 'favorite_business_notification',
+              },
+            },
+          },
+        },
+      });
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    mockFetchPlaces.mockClear();
+    fireEvent.press(screen.getByTestId('mock-place-detail-back'));
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 700));
+    });
+
+    expect(screen.getAllByTestId('mock-map-marker')).toHaveLength(1);
+    expect(mockFetchPlaces).toHaveBeenCalledWith('http://127.0.0.1:8000/api', 'all');
   });
 
   it('shows the no-internet gate on startup and blocks the app from loading places', async () => {
@@ -1822,6 +1910,7 @@ describe('App browse map search', () => {
     });
 
     expect(screen.getByText('Auth screen')).toBeTruthy();
+    expect(mockLogoutProfile).toHaveBeenCalledWith('http://127.0.0.1:8000/api', 'token-123');
     expect(screen.queryByText('Settings screen')).toBeNull();
 
     fireEvent.press(screen.getByLabelText('Back to landing'));

@@ -1029,12 +1029,27 @@ class AccountProfile(models.Model):
 	def issue_password_reset_token(self, force=False):
 		if force or not self.password_reset_token:
 			self.password_reset_token = secrets.token_urlsafe(32)
+			self.password_reset_sent_at = timezone.now()
+		elif self.password_reset_sent_at is None:
+			self.password_reset_sent_at = timezone.now()
 		return self.password_reset_token
 
 	def clear_password_reset_token(self):
 		self.password_reset_token = ''
 		self.password_reset_sent_at = None
 		self.save(update_fields=['password_reset_token', 'password_reset_sent_at', 'updated_at'])
+
+	def get_password_reset_token_ttl_seconds(self):
+		return max(int(getattr(settings, 'PROFILE_PASSWORD_RESET_TOKEN_TTL_SECONDS', 3600) or 3600), 1)
+
+	def get_password_reset_token_expires_at(self):
+		if self.password_reset_sent_at is None:
+			return None
+		return self.password_reset_sent_at + timedelta(seconds=self.get_password_reset_token_ttl_seconds())
+
+	def password_reset_token_is_active(self):
+		expires_at = self.get_password_reset_token_expires_at()
+		return bool(self.password_reset_token) and expires_at is not None and timezone.now() < expires_at
 
 
 class BusinessDirectMessageThread(models.Model):

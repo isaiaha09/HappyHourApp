@@ -6,6 +6,7 @@ from uuid import uuid4
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
+from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.files.storage import default_storage
 from django.db import transaction
@@ -189,6 +190,7 @@ def _create_claim_attachments(claim, request):
 		return
 	for request_field_name, attachment_kind in ATTACHMENT_FIELD_NAME_MAP.items():
 		for uploaded_file in request.FILES.getlist(request_field_name):
+			_validate_pdf_upload_size(uploaded_file, 'verification_documents')
 			BusinessClaimAttachment.objects.create(
 				claim=claim,
 				attachment_kind=attachment_kind,
@@ -260,6 +262,7 @@ def _validate_uploaded_deal_attachment(uploaded_file):
 	content_type = str(getattr(uploaded_file, 'content_type', '') or '').strip().lower()
 	file_suffix = Path(getattr(uploaded_file, 'name', '') or '').suffix.lower()
 	if content_type == 'application/pdf' or file_suffix == '.pdf':
+		_validate_pdf_upload_size(uploaded_file, 'deal_overrides')
 		return
 	if content_type.startswith('image/') or file_suffix in SUPPORTED_DEAL_ATTACHMENT_SUFFIXES:
 		try:
@@ -270,6 +273,18 @@ def _validate_uploaded_deal_attachment(uploaded_file):
 			raise serializers.ValidationError({'deal_overrides': [str(error)]})
 		return
 	raise serializers.ValidationError({'deal_overrides': ['Deal attachments must be a photo or PDF file.']})
+
+
+def _validate_pdf_upload_size(uploaded_file, field_name):
+	content_type = str(getattr(uploaded_file, 'content_type', '') or '').strip().lower()
+	file_suffix = Path(getattr(uploaded_file, 'name', '') or '').suffix.lower()
+	if content_type != 'application/pdf' and file_suffix != '.pdf':
+		return
+	max_bytes = max(1, int(getattr(settings, 'PDF_UPLOAD_MAX_BYTES', 10 * 1024 * 1024) or 10 * 1024 * 1024))
+	file_size = getattr(uploaded_file, 'size', None)
+	if file_size not in (None, '') and int(file_size) > max_bytes:
+		max_megabytes = max_bytes / (1024 * 1024)
+		raise serializers.ValidationError({field_name: [f'PDF files must be {max_megabytes:g} MB or smaller.']})
 
 
 def _save_uploaded_deal_attachment(request, claim, uploaded_file):
@@ -769,7 +784,7 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 		from .models import AccountProfile
 
 		profile = AccountProfile.objects.select_related('user').filter(password_reset_token=attrs['token']).first()
-		if profile is None:
+		if profile is None or not profile.password_reset_token_is_active():
 			raise serializers.ValidationError({'token': ['That password reset link is invalid or expired.']})
 
 		try:
