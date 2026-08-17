@@ -33,6 +33,7 @@ export type ProfileFormState = {
   photo_references_text: string;
   verification_summary: string;
   supporting_details: string;
+  verification_data_consent: boolean;
 };
 
 export type LoginFormState = {

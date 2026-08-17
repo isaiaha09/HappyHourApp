@@ -14,6 +14,9 @@ from django.utils.text import slugify
 from pypdf import PdfReader
 import pyotp
 import secrets
+from uuid import uuid4
+
+from .services.content_moderation import get_content_moderation_error
 
 try:
 	from PIL import Image, ImageOps
@@ -248,32 +251,6 @@ class DeletedBusiness(models.Model):
 		super().save(*args, **kwargs)
 
 
-class ProviderUsageWindow(models.Model):
-	class WindowKind(models.TextChoices):
-		DAY = 'day', 'Day'
-		MONTH = 'month', 'Month'
-
-	provider_name = models.CharField(max_length=80)
-	window_kind = models.CharField(max_length=10, choices=WindowKind.choices)
-	window_start = models.DateField()
-	consumed_transactions = models.PositiveIntegerField(default=0)
-	transaction_limit = models.PositiveIntegerField(default=0)
-	reserve_threshold = models.PositiveIntegerField(default=0)
-	created_at = models.DateTimeField(auto_now_add=True)
-	updated_at = models.DateTimeField(auto_now=True)
-
-	class Meta:
-		ordering = ['provider_name', '-window_start']
-		verbose_name = 'Provider Usage Window'
-		verbose_name_plural = 'Provider Usage Windows'
-		constraints = [
-			models.UniqueConstraint(fields=['provider_name', 'window_kind', 'window_start'], name='unique_provider_usage_window'),
-		]
-
-	def __str__(self):
-		return f'{self.provider_name} {self.window_kind} {self.window_start}: {self.consumed_transactions}/{self.transaction_limit}'
-
-
 class BusinessClaim(models.Model):
 	ADMIN_SOURCE_NAME = 'admin_submission'
 	MANUAL_SOURCE_NAME = 'manual_submission'
@@ -343,6 +320,8 @@ class BusinessClaim(models.Model):
 	photo_references = models.JSONField(default=list, blank=True)
 	photo_gallery_overridden = models.BooleanField(default=False)
 	verification_documents = models.JSONField(default=dict, blank=True)
+	verification_data_consent_at = models.DateTimeField(null=True, blank=True)
+	verification_data_consent_version = models.CharField(max_length=40, blank=True)
 	verification_summary = models.TextField(blank=True)
 	supporting_details = models.TextField(blank=True)
 	direct_messaging_enabled = models.BooleanField(default=True)
@@ -767,15 +746,32 @@ class BusinessClaimProfileEntry(models.Model):
 		return f'{self.claim_id} {self.entry_kind}: {self.value[:40]}'
 
 
+def business_claim_storage_prefix(claim):
+	listing_snapshot = getattr(claim, 'listing_snapshot', None)
+	snapshot_id = getattr(claim, 'listing_snapshot_id', None) or 'unknown-snapshot'
+	listing_slug = slugify(getattr(listing_snapshot, 'listing_slug', '') or '') or 'unlisted-business'
+	claim_id = getattr(claim, 'pk', None) or 'pending-claim'
+	return f'businesses/{snapshot_id}-{listing_slug}/claims/{claim_id}'
+
+
 def business_claim_attachment_upload_to(instance, filename):
 	filename_root = Path(filename or 'attachment').stem or 'attachment'
 	filename_suffix = Path(filename or '').suffix
 	safe_name = slugify(filename_root) or 'attachment'
-	return f'business-claim-attachments/{instance.claim_id}/{instance.attachment_kind}/{safe_name}{filename_suffix}'
+	return f'{business_claim_storage_prefix(instance.claim)}/verification/{instance.attachment_kind}/{uuid4().hex}-{safe_name}{filename_suffix}'
 
 
 def get_private_media_storage():
 	return storages['private_media']
+
+
+def content_report_screenshot_upload_to(instance, filename):
+	filename_root = Path(filename or 'report-screenshot').stem or 'report-screenshot'
+	filename_suffix = Path(filename or '').suffix.lower() or '.jpg'
+	safe_name = slugify(filename_root) or 'report-screenshot'
+	reporter_id = getattr(instance, 'reporter_id', None) or 'unknown-user'
+	report_id = getattr(instance, 'pk', None) or 'pending-report'
+	return f'content-reports/user-{reporter_id}/report-{report_id}/{uuid4().hex}-{safe_name}{filename_suffix}'
 
 
 class BusinessClaimAttachment(models.Model):
@@ -1108,6 +1104,76 @@ class BusinessDirectMessage(models.Model):
 				raise ValidationError('Business direct messages must include text or an image.')
 
 
+class ContentReport(models.Model):
+	class TargetType(models.TextChoices):
+		BUSINESS_PROFILE = 'business_profile', 'Business Profile'
+		BUSINESS_POST = 'business_post', 'Business Post'
+		DIRECT_MESSAGE = 'direct_message', 'Direct Message'
+
+	class Reason(models.TextChoices):
+		OBJECTIONABLE_CONTENT = 'objectionable_content', 'Objectionable Content'
+		SPAM_OR_SCAM = 'spam_or_scam', 'Spam or Scam'
+		HARASSMENT_OR_ABUSE = 'harassment_or_abuse', 'Harassment or Abuse'
+		MISLEADING_INFORMATION = 'misleading_information', 'Misleading Information'
+		INTELLECTUAL_PROPERTY = 'intellectual_property', 'Intellectual Property'
+		OTHER = 'other', 'Other'
+
+	class Status(models.TextChoices):
+		OPEN = 'open', 'Open'
+		IN_REVIEW = 'in_review', 'In Review'
+		ACTIONED = 'actioned', 'Actioned'
+		DISMISSED = 'dismissed', 'Dismissed'
+
+	reporter = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='content_reports', null=True, blank=True, on_delete=models.SET_NULL)
+	reporter_username = models.CharField(max_length=150, blank=True)
+	reporter_email = models.EmailField(blank=True)
+	target_type = models.CharField(max_length=30, choices=TargetType.choices)
+	listing_slug = models.SlugField(max_length=170, blank=True)
+	business_name = models.CharField(max_length=160, blank=True)
+	reported_user_username = models.CharField(max_length=150, blank=True)
+	reported_user_email = models.EmailField(blank=True)
+	reported_user_role = models.CharField(max_length=30, blank=True)
+	recipient_username = models.CharField(max_length=150, blank=True)
+	recipient_email = models.EmailField(blank=True)
+	business_post = models.ForeignKey('BusinessPost', related_name='content_reports', null=True, blank=True, on_delete=models.SET_NULL)
+	direct_message = models.ForeignKey('BusinessDirectMessage', related_name='content_reports', null=True, blank=True, on_delete=models.SET_NULL)
+	screenshot = models.ImageField(blank=True, null=True, storage=get_private_media_storage, upload_to=content_report_screenshot_upload_to)
+	reason = models.CharField(max_length=40, choices=Reason.choices)
+	details = models.TextField(blank=True)
+	reported_message = models.TextField(blank=True)
+	reported_message_created_at = models.DateTimeField(null=True, blank=True)
+	status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN)
+	reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='reviewed_content_reports', null=True, blank=True, on_delete=models.SET_NULL)
+	reviewer_notes = models.TextField(blank=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ['status', '-created_at']
+		indexes = [
+			models.Index(fields=['status', '-created_at']),
+			models.Index(fields=['target_type', '-created_at']),
+		]
+		verbose_name = 'Content Report'
+		verbose_name_plural = 'Content Reports'
+
+	def clean(self):
+		target_count = sum(bool(value) for value in (self.listing_slug, self.business_post_id, self.direct_message_id))
+		if target_count != 1:
+			raise ValidationError('A content report must identify exactly one target.')
+
+		if self.target_type == self.TargetType.BUSINESS_PROFILE and not self.listing_slug:
+			raise ValidationError('Business profile reports require a listing slug.')
+		if self.target_type == self.TargetType.BUSINESS_POST and not self.business_post_id:
+			raise ValidationError('Business post reports require a business post.')
+		if self.target_type == self.TargetType.DIRECT_MESSAGE and not self.direct_message_id:
+			raise ValidationError('Direct message reports require a direct message.')
+
+	def __str__(self):
+		target = self.business_name or self.listing_slug or f'Report target {self.pk}'
+		return f'{self.get_reason_display()} - {target}'
+
+
 class BusinessDirectMessageBlock(models.Model):
 	business_claim = models.ForeignKey(BusinessClaim, related_name='direct_message_blocks', on_delete=models.CASCADE)
 	customer = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='blocked_business_direct_messages', on_delete=models.CASCADE)
@@ -1280,6 +1346,16 @@ class BusinessPost(models.Model):
 	def __str__(self):
 		return f'{self.title} ({self.get_content_type_display()})'
 
+	def clean(self):
+		moderation_error = get_content_moderation_error(' '.join([
+			self.title,
+			self.summary,
+			self.body,
+			self.cta_label,
+		]))
+		if moderation_error:
+			raise ValidationError({'body': [moderation_error]})
+
 	def save(self, *args, **kwargs):
 		previous_status = None
 		if self.pk:
@@ -1293,6 +1369,7 @@ class BusinessPost(models.Model):
 		if not self.slug:
 			base_slug = slugify(self.title) or slugify(f'{self.get_content_type_display()}-{self.membership.claim.listing_snapshot.name}') or 'post'
 			self.slug = base_slug
+		self.full_clean()
 		if self.status == self.Status.PUBLISHED and self.published_at is None:
 			self.published_at = timezone.now()
 		super().save(*args, **kwargs)

@@ -11,6 +11,7 @@ import type {
   BusinessSignupRequest,
   CustomerSignupRequest,
   CustomerPreferencesRequest,
+  ContentReportRequest,
   DirectMessageSendResponse,
   DirectMessageSendRequest,
   DirectMessageThreadDetailResponse,
@@ -241,6 +242,28 @@ export async function submitSupportRequest(baseUrl: string, authToken: string, p
   return postAuthedJson<{ detail: string }>(baseUrl, '/profiles/contact-support/', authToken, payload);
 }
 
+export async function submitContentReport(baseUrl: string, authToken: string, payload: ContentReportRequest) {
+  const { screenshot, ...reportFields } = payload;
+  if (!screenshot?.uri) {
+    return postAuthedJson<{ detail: string }>(baseUrl, '/profiles/content-reports/', authToken, reportFields);
+  }
+
+  const formData = new FormData();
+  Object.entries(reportFields).forEach(([key, value]) => {
+    if (value === undefined || value === null) {
+      return;
+    }
+    appendMultipartValue(formData, key, value);
+  });
+  formData.append('screenshot', {
+    uri: screenshot.uri,
+    name: screenshot.name,
+    type: screenshot.mimeType ?? 'image/jpeg',
+  } as any);
+
+  return postMultipartJson<{ detail: string }>(baseUrl, '/profiles/content-reports/', formData, authToken);
+}
+
 export async function toggleFavoriteBusiness(baseUrl: string, authToken: string, payload: FavoriteBusinessToggleRequest) {
   return postAuthedJson<SignupResponse>(baseUrl, '/profiles/favorites/', authToken, payload);
 }
@@ -293,8 +316,15 @@ export async function blockBusinessDirectMessagesForCustomer(baseUrl: string, au
   });
 }
 
-export async function unblockBusinessDirectMessagesForCustomer(baseUrl: string, authToken: string, blockId: number) {
-  return deleteAuthedJson<SignupResponse>(baseUrl, `/profiles/direct-message-blocks/${blockId}/?portal=business`, authToken);
+export async function blockBusinessDirectMessagesForBusiness(baseUrl: string, authToken: string, threadId: number) {
+  return postAuthedJson<SignupResponse>(baseUrl, '/profiles/direct-message-blocks/', authToken, {
+    portal: 'customer',
+    thread_id: threadId,
+  });
+}
+
+export async function unblockBusinessDirectMessagesForCustomer(baseUrl: string, authToken: string, blockId: number, portal: 'customer' | 'business' = 'business') {
+  return deleteAuthedJson<SignupResponse>(baseUrl, `/profiles/direct-message-blocks/${blockId}/?portal=${portal}`, authToken);
 }
 
 export async function registerPushDevice(baseUrl: string, authToken: string, payload: PushDeviceRegistrationRequest) {

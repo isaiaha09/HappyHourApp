@@ -7,13 +7,14 @@ import MapView, { Marker } from 'react-native-maps';
 import { WebView } from 'react-native-webview';
 
 import { styles } from '../appStyles';
+import { ContentReportModal } from '../components/ContentReportModal';
 import { NativeIOSLiquidGlassHeaderButton } from '../components/NativeIOSLiquidGlass';
 import { PhotoLightbox } from '../components/PhotoLightbox';
 import { SocialButton } from '../components/SocialButton';
 import { buildGoogleReviewsUrl, dedupeImageUrls, formatLastKnownLocationLabel, formatPlaceAddress, getPlacePreviewRegion, openMapsAddress } from '../placeHelpers';
 import { getSocialProfilesForDisplay } from '../socialProfiles';
 import { theme } from '../styles/theme';
-import type { Deal, HappyHourWindow, OperatingHourWindow, PlaceDetail, PlaceLocationDetail } from '../types';
+import type { ContentReportReason, ContentReportRequest, ContentReportScreenshotDraft, Deal, HappyHourWindow, OperatingHourWindow, PlaceDetail, PlaceLocationDetail } from '../types';
 
 type AttachmentPreviewState =
   | { kind: 'image'; name: string; uri: string }
@@ -147,11 +148,14 @@ const dismissKeyboardOnScrollProps = {
 export type PlaceDetailScreenProps = {
   backButtonLabel?: string;
   canSubmitPlaceAccuracyReport?: boolean;
+  canSubmitContentReport?: boolean;
   distanceLabel?: string | null;
   onOpenDirectMessages?: () => void;
   onEditBusinessProfile?: () => void;
   onClaimBusiness?: () => void;
   onRequirePlaceAccuracyAccount?: () => void;
+  onRequireContentReportAccount?: () => void;
+  onSubmitContentReport?: (payload: ContentReportRequest) => Promise<string>;
   onSubmitPlaceAccuracyReport?: (subject: string, message: string) => Promise<string>;
   showClaimBusinessControl?: boolean;
   showDirectMessageControl?: boolean;
@@ -179,12 +183,15 @@ export type PlaceDetailScreenProps = {
 
 export function PlaceDetailScreen({
   backButtonLabel = 'Back to Places',
+  canSubmitContentReport = false,
   canSubmitPlaceAccuracyReport = true,
   distanceLabel = null,
   onOpenDirectMessages,
   onEditBusinessProfile,
   onClaimBusiness,
   onRequirePlaceAccuracyAccount,
+  onRequireContentReportAccount,
+  onSubmitContentReport,
   onSubmitPlaceAccuracyReport,
   showClaimBusinessControl = false,
   showDirectMessageControl = false,
@@ -217,6 +224,7 @@ export function PlaceDetailScreen({
   const [accuracySubmitting, setAccuracySubmitting] = useState(false);
   const [accuracyErrorMessage, setAccuracyErrorMessage] = useState<string | null>(null);
   const [accuracySuccessMessage, setAccuracySuccessMessage] = useState<string | null>(null);
+  const [contentReportVisible, setContentReportVisible] = useState(false);
   const [attachmentPreview, setAttachmentPreview] = useState<AttachmentPreviewState | null>(null);
   const [attachmentPreviewLoading, setAttachmentPreviewLoading] = useState(false);
   const attachmentPreviewRequestIdRef = useRef(0);
@@ -258,6 +266,30 @@ export function PlaceDetailScreen({
   const resolvedAccuracySubject = selectedAccuracySubject === 'other'
     ? customAccuracySubject.trim()
     : accuracySubjectOptions.find((option) => option.value === selectedAccuracySubject)?.label ?? '';
+
+  function handleOpenContentReport() {
+    if (!canSubmitContentReport) {
+      onRequireContentReportAccount?.();
+      return;
+    }
+
+    setContentReportVisible(true);
+  }
+
+  async function handleSubmitContentReport(reason: ContentReportReason, details: string, screenshot: ContentReportScreenshotDraft | null) {
+    if (!selectedPlace || !onSubmitContentReport) {
+      throw new Error('This report form is not available right now.');
+    }
+
+    return onSubmitContentReport({
+      business_name: selectedPlace.name,
+      details,
+      listing_slug: selectedPlace.slug,
+      reason,
+      screenshot,
+      target_type: 'business_profile',
+    });
+  }
 
   function handleOpenAccuracyModal() {
     setAccuracyModalVisible(true);
@@ -387,6 +419,12 @@ export function PlaceDetailScreen({
 
   return (
     <View style={[styles.detailScreenRoot, isLandscape ? styles.detailScreenLandscape : null]}>
+      <ContentReportModal
+        onClose={() => setContentReportVisible(false)}
+        onSubmit={handleSubmitContentReport}
+        targetLabel="business profile"
+        visible={contentReportVisible}
+      />
       <ScrollView
         contentContainerStyle={[
           styles.detailScrollContent,
@@ -466,6 +504,9 @@ export function PlaceDetailScreen({
                     />
                   </Pressable>
                 ) : null}
+                <Pressable accessibilityLabel="Report business content" onPress={handleOpenContentReport} style={styles.contentReportButton}>
+                  <Ionicons color={theme.textMuted} name="flag-outline" size={22} />
+                </Pressable>
               </View>
             </View>
             {showFavoriteControl && favoriteHelperText ? <Text style={styles.dashboardSupportText}>{favoriteHelperText}</Text> : null}

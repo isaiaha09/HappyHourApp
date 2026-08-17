@@ -100,10 +100,21 @@ export const homeFeedStyles = {
     maxWidth: '75%',
   },
   homeFeedCardHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     marginBottom: 14,
   },
   homeFeedHeaderCopy: {
+    flex: 1,
     gap: 6,
+  },
+  homeFeedReportButton: {
+    alignItems: 'center',
+    height: 32,
+    justifyContent: 'center',
+    marginLeft: 8,
+    width: 32,
   },
   homeFeedBadgeRow: {
     alignItems: 'center',

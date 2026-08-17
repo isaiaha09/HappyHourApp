@@ -24,19 +24,15 @@ The app is meant to help users find:
 
 For business listing data, the backend treats `source_url` and `website_url` as different roles:
 
-- `source_url`: enrichment/scraping source URL used by pull actions to fetch/update business details (deals, hours, images, and related extracted fields)
+- `source_url`: official first-party website URL used by pull actions to fetch/update business details such as deals and hours
 - `website_url`: public website URL shown and opened in the app business profile
 
 When running admin pull actions (single-business pull or pull-all):
 
-- enrichment tries to use `source_url` first when it is valid for discovery enrichment
-- if `source_url` is not usable, enrichment falls back to `website_url` when `website_url` is usable
+- enrichment tries to use `source_url` first when it is a supported first-party website URL
+- if `source_url` is not usable, enrichment falls back to `website_url` when it is usable
+- Yelp, social, directory, and other blocked URLs may remain as source links, but they are never fetched for enrichment
 - imported values only fill whichever role is blank in the snapshot; they do not collapse both fields into one value
-
-Yelp exception:
-
-- if there is no usable first-party `website_url`, a Yelp business profile `source_url` (for example `/biz/...`) can be used as the enrichment source
-- if a usable first-party `website_url` exists, that first-party website is still preferred over Yelp for enrichment
 
 For the initial launch, I am keeping the scope small on purpose and only targeting these cities in the 805 area:
 
@@ -67,7 +63,7 @@ Current backend work includes:
 
 - Django project setup inside the `backend` folder
 - a `places` app for listings, claims, memberships, and account workflow
-- Django admin setup so I can manage claims, memberships, deleted businesses, provider usage windows, and snapshots through `/admin`
+- Django admin setup so I can manage claims, memberships, deleted businesses, and snapshots through `/admin`
 - API endpoints for health, places, place details, deals, login, signup, profile dashboard, and claim-related profile actions
 - importer and service layers that normalize source records into mobile-friendly JSON
 - local virtual environment and backend requirements file
@@ -181,7 +177,7 @@ Right now, these parts are working:
 - business claim and membership workflow backed by `ListingSnapshot`
 - async search in the List of Businesses admin page without full-page refreshes
 - deleted-business admin controls for restore, hard delete, and suppression through `deleted_from_business_database`
-- automatic cleanup of stale daily `tomtom_places` provider usage rows in admin
+- curated JSON catalog migration with verified business records and non-destructive admin refreshes
 - Expo mobile browse UI with list and map modes
 - mobile search, city filtering, venue filtering, and map/list UX polish
 - mobile auth, profile dashboard, and business claim onboarding flow
@@ -222,6 +218,20 @@ If a future Render deployment needs full image OCR, the backend runtime will nee
 - move image OCR to an external OCR service
 
 Until then, the current code safely degrades instead of breaking uploads or claim review.
+
+## Automated Image Moderation
+
+User-visible business profile photos, deal images, and business direct-message images are screened before they are stored or displayed. Production uses the local, MIT-licensed NudeNet 320n model bundled with the backend for automated exposed-nudity detection. Image bytes stay on the backend; no per-image moderation API is used.
+
+The production backend should define these Render environment variables:
+
+- `IMAGE_MODERATION_PROVIDER=local_nudenet`
+- `IMAGE_MODERATION_BLOCK_SCORE_PERCENT=65`
+- `IMAGE_MODERATION_FAIL_CLOSED=true`
+
+The backend normalizes images, caches repeated results, rejects detections at or above the configured score, and refuses new image uploads if the local model cannot run. Local development defaults to moderation disabled so tests and offline work do not need to load the model.
+
+This local detector is automated coverage for explicit nudity, not a guarantee that every harmful image category will be recognized. Text filtering, reporting, blocking, and support review remain the fallback for threats, hate, violence, scams, and false negatives. There is no separate moderation-provider bill, although image inference uses the backend service's CPU and memory.
 
 ## Monitoring
 
@@ -349,7 +359,6 @@ These database-backed edits will transfer if I export the SQLite data and load i
 
 These need separate handling:
 
-- `backend/config/discovery_exclusions.json` is file-based and must be committed/deployed with the repo
 - `backend/config/discovered_places.json` is also file-based, is not moved by a database migration, and should be treated as generated/cache/seed discovery data rather than durable production business data
 - local uploaded media under `backend/media` is not copied into Postgres
 - file-based caches do not transfer automatically
@@ -367,7 +376,7 @@ This is the most important distinction to keep straight:
 ### Recommended Migration Order
 
 1. Finish the admin edits locally.
-2. Commit any file-based changes that matter in production, especially `backend/config/discovery_exclusions.json`.
+2. Commit any file-based changes that matter in production, especially the current `backend/config/discovered_places.json` seed catalog.
 3. Refresh or review the committed `backend/config/discovered_places.json` seed file if I want a clean first-bootstrap discovery snapshot.
 4. Set the production Postgres environment variables for the backend service.
 5. Create the Render Postgres database and note the internal/external connection string.
@@ -390,7 +399,7 @@ That command creates `backend/backups/admin-backup-YYYYMMDD-HHMMSS/` with:
 - a raw SQLite copy as `db.sqlite3`
 - a portable Django fixture as `database-fixture.json`
 - a `listing-snapshots.json` export that includes each `ListingSnapshot` row, its admin-managed display fields, and any matching stored discovery record from `discovered_places.json`
-- copies of `discovered_places.json` and `discovery_exclusions.json` when those files exist
+- a copy of `discovered_places.json` when it exists
 
 If the admin data gets wiped locally, restoring the copied `db.sqlite3` is the fastest full recovery path.
 
@@ -452,7 +461,7 @@ Before treating Render as the new source of truth, verify:
 - edited business names still appear in admin
 - `website_url` and `source_url` edits are still present on `ListingSnapshot`
 - manual deal and hours overrides still exist
-- deleted businesses and exclusions still behave as expected
+- deleted businesses and curated catalog data still behave as expected
 - `/api/places/` and `/api/places/<slug>/` still reflect the edited snapshot data
 
 If I want the first production runtime discovery cache to be fresher than the committed seed file, I should run a discovery refresh or admin pull flow after deployment.
@@ -461,7 +470,6 @@ If I want the first production runtime discovery cache to be fresher than the co
 
 For this repo, Postgres is not the whole story.
 
-- Keep `backend/config/discovery_exclusions.json` in source control so Render deploys it.
 - Treat `backend/config/discovered_places.json` as seed/cache/generated discovery data only. It can be deployed as a bootstrap snapshot for the runtime discovery file, but it should not be treated as the durable system of record for business edits.
 - If local uploads matter, move `backend/media` to production storage separately.
 
@@ -480,7 +488,7 @@ The local `backup_admin_data` command is an application-level export. It is usef
 
 - a custom-format PostgreSQL dump
 - every object in the public and private Supabase media buckets
-- the runtime discovery file, committed discovery seed, and discovery exclusions file
+- the runtime discovery file and committed discovery seed
 
 The command writes by default to `%USERPROFILE%\DiningDealzBackups`, outside the repository. Keep these bundles in encrypted external storage and never commit them.
 
@@ -588,7 +596,7 @@ The command upserts archived objects and preserves content type and related meta
 
 ### Recovery Track 3: File-Based Discovery Data
 
-The backup contains the runtime discovery JSON, the committed discovery seed, and the discovery exclusions file. Restore only these files with a discovery-only dry run first:
+The backup contains the runtime discovery JSON and the committed discovery seed. Restore only these files with a discovery-only dry run first:
 
 ```powershell
 backend\venv\Scripts\python.exe backend\manage.py restore_production_data `
@@ -596,7 +604,7 @@ backend\venv\Scripts\python.exe backend\manage.py restore_production_data `
 	--skip-media
 ```
 
-1. Confirm the dry run identifies the expected `runtime_discovered_places`, `seed_discovered_places`, and `discovery_exclusions` targets.
+1. Confirm the dry run identifies the expected `runtime_discovered_places` and `seed_discovered_places` targets.
 2. Apply the discovery restore:
 
 ```powershell
@@ -606,8 +614,7 @@ backend\venv\Scripts\python.exe backend\manage.py restore_production_data `
 	--apply
 ```
 
-3. Review `backend/config/discovery_exclusions.json` and deploy that file through source control. Do not rely on a transient Render filesystem copy for permanent exclusions.
-4. Treat the runtime discovery JSON as a cache/bootstrap artifact. Durable admin business edits remain in PostgreSQL `ListingSnapshot` rows.
+3. Treat the runtime discovery JSON as a cache/bootstrap artifact. Durable admin business edits remain in PostgreSQL `ListingSnapshot` rows.
 
 A Render service's runtime filesystem may be replaced on deploy or restart. If the runtime file is lost after recovery, the backend can bootstrap from the committed seed file according to its configured discovery settings.
 
@@ -618,7 +625,7 @@ A Render service's runtime filesystem may be replaced on deploy or restart. If t
 3. Restore Supabase public and private objects into the intended buckets.
 4. Restore discovery files, then review and deploy the source-controlled exclusions file.
 5. Point the backend service at the recovered database's internal URL and redeploy.
-6. Verify admin, account flows, business data, public images, private attachments, discovery exclusions, web behavior, and mobile behavior.
+6. Verify admin, account flows, business data, public images, private attachments, web behavior, and mobile behavior.
 7. Keep the original database and old backup bundle until the recovery has been accepted and a fresh backup has been taken.
 
 PostgreSQL restoration does not restore Supabase file bytes, and Supabase restoration does not restore PostgreSQL rows. Complete all three recovery tracks before declaring production recovered.
@@ -856,7 +863,7 @@ python manage.py test places.tests.PlaceApiTests places.tests.BusinessWebsiteImp
 Run the focused admin and discovery workflow tests used during recent data/admin updates:
 
 ```powershell
-python manage.py test places.tests.ListingSnapshotAdminTests places.tests.ProviderQuotaTests places.tests.ProviderUsageWindowAdminTests places.tests.DiscoveryJsonStorageTests places.tests.HerePlacesImporterTests
+python manage.py test places.tests.ListingSnapshotAdminTests places.tests.DiscoveryJsonStorageTests places.tests.BusinessWebsiteImporterTests
 ```
 
 Run a broader backend validation pass:

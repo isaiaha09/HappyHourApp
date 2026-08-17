@@ -4,7 +4,6 @@ from shutil import copyfile
 
 from django.conf import settings
 
-from places.services.discovery_exclusions import get_source_excluded_businesses, get_source_excluded_external_ids
 from places.services.importers.business_websites import BusinessWebsiteImporter
 from places.services.importers.types import ImportedDeal, ImportedHappyHour, ImportedOperatingHour, ImportedPlace
 
@@ -43,24 +42,7 @@ def _normalize_lookup_text(value):
 
 
 def filter_configured_place_records(place_records):
-	filtered_records = []
-	for place_record in place_records:
-		source_name = str(getattr(place_record, 'source_name', '') or '').strip().lower()
-		external_id = str(getattr(place_record, 'external_id', '') or '').strip().lower()
-		city = _normalize_lookup_text(getattr(place_record, 'city', ''))
-		name = _normalize_lookup_text(getattr(place_record, 'name', ''))
-
-		excluded_external_ids = get_source_excluded_external_ids(source_name)
-		if external_id and external_id in excluded_external_ids:
-			continue
-
-		excluded_businesses = get_source_excluded_businesses(source_name)
-		if city and name and (city, name) in excluded_businesses:
-			continue
-
-		filtered_records.append(place_record)
-
-	return filtered_records
+	return list(place_records)
 
 
 def serialize_imported_place(place_record):

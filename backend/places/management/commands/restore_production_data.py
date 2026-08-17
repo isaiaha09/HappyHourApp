@@ -5,7 +5,6 @@ from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
 
-from places.services.discovery_exclusions import get_discovery_exclusions_path
 from places.services.importers.discovered_json_places import get_discovery_json_path, get_discovery_json_seed_path
 from places.services.production_backup import build_supabase_client, get_supabase_bucket_configs, safe_storage_relative_path
 
@@ -116,7 +115,6 @@ class Command(BaseCommand):
 		targets = {
 			'runtime_discovered_places': Path(get_discovery_json_path()),
 			'seed_discovered_places': Path(get_discovery_json_seed_path()),
-			'discovery_exclusions': Path(get_discovery_exclusions_path()),
 		}
 		checked_count = 0
 		seen_targets = set()

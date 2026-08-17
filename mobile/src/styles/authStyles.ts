@@ -94,6 +94,28 @@ export const authStyles = {
     fontWeight: '700',
     textAlign: 'center',
   },
+  publicLegalLinks: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  publicLegalLinkButton: {
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+  },
+  publicLegalLinkText: {
+    color: theme.accent,
+    fontSize: 13,
+    fontWeight: '800',
+    textDecorationLine: 'underline',
+  },
+  publicLegalSeparator: {
+    color: theme.textMuted,
+    fontSize: 13,
+  },
   authLinkText: {
     color: theme.accent,
     fontSize: 14,
@@ -139,6 +161,58 @@ export const authStyles = {
   profileSuccessText: {
     color: theme.success,
     fontSize: 13,
+    fontWeight: '700',
+  },
+  privacyNoticeCard: {
+    backgroundColor: theme.bgSoft,
+    borderColor: theme.borderStrong,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 10,
+    padding: 14,
+  },
+  privacyNoticeTitle: {
+    color: theme.textPrimary,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  privacyNoticeText: {
+    color: theme.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  privacyNoticeLink: {
+    color: theme.accent,
+    fontWeight: '800',
+    textDecorationLine: 'underline',
+  },
+  privacyConsentButton: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 10,
+    paddingVertical: 2,
+  },
+  privacyConsentIndicator: {
+    alignItems: 'center',
+    borderColor: theme.textMuted,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    height: 22,
+    justifyContent: 'center',
+    marginTop: 1,
+    width: 22,
+  },
+  privacyConsentIndicatorActive: {
+    backgroundColor: theme.accent,
+    borderColor: theme.accent,
+  },
+  privacyConsentIndicatorText: {
+    color: theme.textOnAccent,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  privacyConsentText: {
+    flex: 1,
     fontWeight: '700',
   },
   profileFormSection: {

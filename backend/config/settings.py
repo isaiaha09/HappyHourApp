@@ -296,10 +296,6 @@ DISCOVERY_WEBSITE_BLOCKED_HOST_PREFIXES = (
     'api.',
     'm.',
 )
-PLACE_GEOCODE_CACHE_TIMEOUT = 86400
-PLACE_GEOCODE_TIMEOUT = 5
-PLACE_GEOCODE_URL = 'https://nominatim.openstreetmap.org/search'
-PLACE_GEOCODE_USER_AGENT = 'HappyHourApp/1.0'
 LISTING_SOURCE_NAME = 'curated_json_places'
 DISCOVERY_JSON_SEED_PATH = BASE_DIR / 'config' / 'discovered_places.json'
 DISCOVERY_JSON_PATH = _build_discovery_json_path(BASE_DIR, DATABASES['default'])
@@ -309,46 +305,18 @@ DISCOVERY_JSON_BOOTSTRAP_FROM_SEED = get_bool_env(
     DATABASES['default'].get('ENGINE') == 'django.db.backends.postgresql',
 )
 BUSINESS_SOURCE_STRICT_ERRORS = False
+BUSINESS_SOURCE_IMPORT_IMAGES = get_bool_env('BUSINESS_SOURCE_IMPORT_IMAGES', ENV_VALUES, False)
 BUSINESS_SOURCE_ALLOWED_CITIES = ('ventura', 'oxnard', 'camarillo')
-OSM_PLACE_DISCOVERY_URL = 'https://overpass-api.de/api/interpreter'
-OSM_PLACE_DISCOVERY_TIMEOUT = 45
-OSM_PLACE_DISCOVERY_CACHE_TIMEOUT = 3600
-OSM_PLACE_DISCOVERY_USER_AGENT = 'HappyHourApp/1.0'
-OSM_PLACE_MIN_METADATA_SCORE = 2
-OSM_PLACE_EXCLUDED_BUSINESSES = (
-    ('ventura', 'Barrelhouse 101'),
-)
-OSM_PLACE_EXCLUDED_EXTERNAL_IDS = (
-    'osm:way:410595933',
-)
-HERE_DISCOVERY_URL = 'https://discover.search.hereapi.com/v1/discover'
-HERE_API_KEY = get_env('HERE_API_KEY', ENV_VALUES, '')
-HERE_TIMEOUT = 20
-HERE_CACHE_TIMEOUT = 3600
-HERE_PAGE_SIZE = 100
-HERE_MAX_RESULTS = 600
-HERE_USER_AGENT = 'HappyHourApp/1.0'
-HERE_PLACE_EXCLUDED_BUSINESSES = (
-    ('camarillo', 'Institution Ale Company'),
-)
-HERE_PLACE_EXCLUDED_EXTERNAL_IDS = ()
-HERE_MONTHLY_LIMIT = get_int_env('HERE_MONTHLY_LIMIT', ENV_VALUES, 250000)
-HERE_MONTHLY_RESERVE = get_int_env('HERE_MONTHLY_RESERVE', ENV_VALUES, 1000)
-TOMTOM_CATEGORY_SEARCH_URL = 'https://api.tomtom.com/search/2/categorySearch/{query}.json'
-TOMTOM_API_KEY = get_env('TOMTOM_API_KEY', ENV_VALUES, '')
-TOMTOM_TIMEOUT = 20
-TOMTOM_CACHE_TIMEOUT = 3600
-TOMTOM_PAGE_SIZE = 100
-TOMTOM_MAX_RESULTS = 200
-TOMTOM_USER_AGENT = 'HappyHourApp/1.0'
-TOMTOM_DAILY_LIMIT = get_int_env('TOMTOM_DAILY_LIMIT', ENV_VALUES, 50000)
-TOMTOM_DAILY_RESERVE = get_int_env('TOMTOM_DAILY_RESERVE', ENV_VALUES, 250)
-YELP_FUSION_API_URL = 'https://api.yelp.com/v3/businesses/search'
-YELP_FUSION_API_KEY = get_env('YELP_FUSION_API_KEY', ENV_VALUES, '')
-YELP_FUSION_TIMEOUT = 20
-YELP_FUSION_CACHE_TIMEOUT = 3600
-YELP_FUSION_PAGE_SIZE = 50
-YELP_FUSION_MAX_RESULTS = 150
+IMAGE_MODERATION_PROVIDER = get_env(
+    'IMAGE_MODERATION_PROVIDER',
+    ENV_VALUES,
+    'local_nudenet' if IS_RENDER else 'disabled',
+).strip().lower()
+IMAGE_MODERATION_BLOCK_SCORE_PERCENT = get_int_env('IMAGE_MODERATION_BLOCK_SCORE_PERCENT', ENV_VALUES, 65)
+IMAGE_MODERATION_CACHE_ALIAS = get_env('IMAGE_MODERATION_CACHE_ALIAS', ENV_VALUES, 'default').strip() or 'default'
+IMAGE_MODERATION_CACHE_TIMEOUT = get_int_env('IMAGE_MODERATION_CACHE_TIMEOUT', ENV_VALUES, 86400)
+IMAGE_MODERATION_MAX_UPLOAD_BYTES = get_int_env('IMAGE_MODERATION_MAX_UPLOAD_BYTES', ENV_VALUES, 16 * 1024 * 1024)
+IMAGE_MODERATION_FAIL_CLOSED = get_bool_env('IMAGE_MODERATION_FAIL_CLOSED', ENV_VALUES, IS_RENDER)
 
 
 # Password validation
@@ -389,6 +357,8 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+PRIVATE_MEDIA_URL = '/private-media/'
+PRIVATE_MEDIA_ROOT = BASE_DIR / 'private-media'
 MEDIA_STORAGE_BACKEND = (
     get_env('MEDIA_STORAGE_BACKEND', ENV_VALUES, 'supabase').strip().lower()
     if IS_RENDER
@@ -424,9 +394,17 @@ STORAGES = {
     },
     'private_media': {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        'OPTIONS': {
+            'location': PRIVATE_MEDIA_ROOT,
+            'base_url': PRIVATE_MEDIA_URL,
+        },
     },
     'direct_messages': {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        'OPTIONS': {
+            'location': PRIVATE_MEDIA_ROOT,
+            'base_url': PRIVATE_MEDIA_URL,
+        },
     },
     'staticfiles': {
         'BACKEND': STATICFILES_STORAGE_BACKEND,
@@ -517,6 +495,7 @@ REST_FRAMEWORK = {
         'profile_email_verification_resend': get_env('THROTTLE_PROFILE_EMAIL_VERIFICATION_RESEND', ENV_VALUES, '3/minute'),
         'profile_password_recovery': get_env('THROTTLE_PROFILE_PASSWORD_RECOVERY', ENV_VALUES, '10/hour'),
         'profile_support_contact': get_env('THROTTLE_PROFILE_SUPPORT_CONTACT', ENV_VALUES, '10/hour'),
+        'profile_content_report': get_env('THROTTLE_PROFILE_CONTENT_REPORT', ENV_VALUES, '10/hour'),
         'profile_user_mutation': get_env('THROTTLE_PROFILE_USER_MUTATION', ENV_VALUES, '120/minute'),
         'direct_message_send': get_env('THROTTLE_DIRECT_MESSAGE_SEND', ENV_VALUES, '30/minute'),
     },

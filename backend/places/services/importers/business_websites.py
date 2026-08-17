@@ -227,8 +227,6 @@ class BusinessWebsiteImporter(BaseHtmlImporter):
 		if source_url and self._is_supported_discovery_website_url(source_url):
 			if not website_url or self._is_same_site_url(website_url, source_url):
 				preferred_source_url = source_url
-		if not preferred_source_url and source_url and self._is_allowed_third_party_discovery_source_url(source_url, website_url):
-			preferred_source_url = source_url
 		if not preferred_source_url and website_url and self._is_supported_discovery_website_url(website_url):
 			preferred_source_url = website_url
 		if not preferred_source_url:
@@ -379,22 +377,6 @@ class BusinessWebsiteImporter(BaseHtmlImporter):
 		if '/api/' in path or path.startswith('/api/'):
 			return False
 		return True
-
-	def _is_allowed_third_party_discovery_source_url(self, source_url, website_url=''):
-		normalized_source_url = self._normalized_http_url(source_url)
-		if not normalized_source_url:
-			return False
-
-		normalized_website_url = self._normalized_http_url(website_url)
-		if normalized_website_url and self._is_supported_discovery_website_url(normalized_website_url):
-			return False
-
-		parsed = urlparse(normalized_source_url)
-		host = parsed.netloc.lower().removeprefix('www.')
-		path = (parsed.path or '').lower()
-		if host != 'yelp.com' and not host.endswith('.yelp.com'):
-			return False
-		return path.startswith('/biz/')
 
 	def _with_discovery_enrichment_status(self, place_record, status):
 		setattr(place_record, 'discovery_enrichment_status', status)
@@ -596,6 +578,9 @@ class BusinessWebsiteImporter(BaseHtmlImporter):
 		return None
 
 	def _extract_image_urls(self, source, soups, page_urls):
+		if not getattr(settings, 'BUSINESS_SOURCE_IMPORT_IMAGES', False):
+			return []
+
 		candidates = {}
 		for configured_url in source.get('image_urls', []):
 			self._append_image_candidate(candidates, configured_url, page_urls[0], source='configured', score_bonus=100)

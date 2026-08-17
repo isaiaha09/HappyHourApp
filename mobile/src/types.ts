@@ -181,6 +181,27 @@ export type FeedItem = {
   sponsor_label: string;
 };
 
+export type ContentReportTargetType = 'business_profile' | 'business_post' | 'direct_message';
+
+export type ContentReportReason =
+  | 'objectionable_content'
+  | 'spam_or_scam'
+  | 'harassment_or_abuse'
+  | 'misleading_information'
+  | 'intellectual_property'
+  | 'other';
+
+export type ContentReportRequest = {
+  target_type: ContentReportTargetType;
+  listing_slug?: string;
+  post_id?: number;
+  message_id?: number;
+  business_name?: string;
+  reason: ContentReportReason;
+  details: string;
+  screenshot?: ContentReportScreenshotDraft | null;
+};
+
 export type FeedImpressionRequest = {
   feed_item_id: string;
   post: number;
@@ -440,6 +461,10 @@ export type DirectMessageThread = {
   unread_count: number;
   read_only: boolean;
   read_only_reason: string;
+  blocked?: boolean;
+  blocked_by_current_user?: boolean;
+  blocked_by_other_user?: boolean;
+  block_id?: number | null;
 };
 
 export type DirectMessageItem = {
@@ -533,6 +558,14 @@ export type BusinessAttachmentDraft = {
   size: number | null;
 };
 
+export type ContentReportScreenshotDraft = {
+  id: string;
+  name: string;
+  uri: string;
+  mimeType: string | null;
+  size: number | null;
+};
+
 export type BusinessAttachmentBuckets = Record<BusinessAttachmentKind, BusinessAttachmentDraft[]>;
 
 type SharedBusinessDetails = {
@@ -545,6 +578,7 @@ type SharedBusinessDetails = {
   hours_of_operation_entries: string[];
   photo_references: string[];
   photo_uploads?: BusinessAttachmentDraft[];
+  verification_data_consent: boolean;
 };
 
 export type BusinessSignupRequest = CustomerSignupRequest & SharedBusinessDetails & {

@@ -20,19 +20,18 @@ from django.utils.text import slugify
 from django.utils import timezone
 
 from .admin_site import happyhour_admin_site
-from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessMembership, CustomerAccount, DealType, DeletedBusiness, ListingSnapshot, ProviderUsageWindow, Weekday
+from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessMembership, ContentReport, CustomerAccount, DealType, DeletedBusiness, ListingSnapshot, Weekday
 from .services.account_profiles import remove_favorites_for_business_accounts, remove_favorites_for_listing_slugs
 from .services.business_profile_overrides import format_operating_hour_display, format_time_display, is_open_24_hours_row, normalize_deal_overrides, normalize_operating_hour_overrides, normalize_time_value, summarize_deal_overrides, summarize_operating_hour_overrides
 from .services.importers.discovered_json_places import load_discovery_json_records, merge_discovery_json_records, write_discovery_json_records
 from .services.deleted_businesses import imported_place_from_deleted_business, store_deleted_business
 from .services.importers.business_websites import BusinessWebsiteImporter
-from .services.importers.here_places import HerePlacesImporter
-from .services.provider_quota import delete_stale_provider_usage_windows, get_provider_policy, get_provider_usage_statuses, select_discovery_provider
+from .services.importers.types import ImportedPlace
 from .services.social_profiles import build_social_media_links, normalize_business_contact_channels, normalize_social_profile
 from .services.source_listings import get_source_place_payload, get_source_place_payloads, load_source_records
 
 
-LIVE_DISCOVERY_SOURCE_NAMES = {HerePlacesImporter.source_name}
+LIVE_DISCOVERY_SOURCE_NAMES = {'business_websites', 'verified_businesses'}
 PLAIN_TEXT_HOUR_LINE_PATTERN = re.compile(r'^(?P<weekday>[A-Za-z]+)\s*:?\s*(?P<open>.+?)\s*-\s*(?P<close>.+)$')
 PLAIN_TEXT_HAPPY_HOUR_LINE_PATTERN = re.compile(r'^(?P<weekday>[A-Za-z]+)\s*:?\s*(?P<time_range>all\s+day|.+?)$', re.IGNORECASE)
 
@@ -1003,6 +1002,14 @@ def _apply_snapshot_enrichment_url_override(snapshot, place_record):
 	return replace(place_record, **overrides)
 
 
+def _location_identity_matches_snapshot(snapshot, place_record):
+	return (
+		str(snapshot.city or '').strip().lower() == str(place_record.city or '').strip().lower()
+		and _normalize_lookup_text(snapshot.name) == _normalize_lookup_text(place_record.name)
+		and _normalize_lookup_text(snapshot.address_line_1) == _normalize_lookup_text(place_record.address_line_1)
+	)
+
+
 def _select_best_matching_record(snapshot, place_records):
 	if not place_records:
 		return None
@@ -1379,7 +1386,7 @@ class ListingSnapshotAdmin(admin.ModelAdmin):
 	def _clear_changelist_public_deal_counts(self):
 		self._changelist_public_deal_counts = None
 
-	@admin.display(description='Pull business data')
+	@admin.display(description='Refresh from official website')
 	def pull_business_data_link(self, obj):
 		url = reverse('happyhour_admin:places_listingsnapshot_pull_one', args=[obj.pk])
 		return format_html('<a class="button" href="{}">Pull business data</a>', url)
@@ -1439,17 +1446,59 @@ class ListingSnapshotAdmin(admin.ModelAdmin):
 			self.message_user(request, 'Business row not found.', level=messages.ERROR)
 			return HttpResponseRedirect(reverse('happyhour_admin:places_listingsnapshot_changelist'))
 
-		candidate_records = HerePlacesImporter().load_records_for_search(snapshot.name, city=snapshot.city, limit=25)
-		best_record = _select_best_matching_record(snapshot, candidate_records)
-		if best_record is None:
-			self.message_user(request, f'No matching live business data found for {snapshot.name}.', level=messages.WARNING)
+		if str(snapshot.source_name or '').strip().lower() not in LIVE_DISCOVERY_SOURCE_NAMES:
+			self.message_user(request, 'Live provider discovery refreshes are disabled. Use a verified official website source for this business.', level=messages.WARNING)
 			return HttpResponseRedirect(reverse('happyhour_admin:places_listingsnapshot_changelist'))
 
-		best_record = _apply_snapshot_enrichment_url_override(snapshot, best_record)
-		best_record = BusinessWebsiteImporter().enrich_place_record(best_record)
-		merge_discovery_json_records([best_record])
-		_sync_listing_snapshot_from_imported_place(best_record, snapshot=snapshot)
-		self.message_user(request, f'Pulled business data for {snapshot.name}.', level=messages.SUCCESS)
+		existing_records = load_discovery_json_records()
+		candidate_records = [
+			record
+			for record in existing_records
+			if (
+				str(record.source_name or '').strip().lower() == str(snapshot.source_name or '').strip().lower()
+				and str(record.external_id or '').strip().lower() == str(snapshot.external_id or '').strip().lower()
+			)
+		]
+		if not candidate_records:
+			candidate_records = [
+				record
+				for record in existing_records
+				if _location_identity_matches_snapshot(snapshot, record)
+			]
+
+		if candidate_records:
+			place_record = candidate_records[0]
+		else:
+			place_record = ImportedPlace(
+				name=snapshot.name,
+				profile_name=snapshot.name,
+				profile_slug=snapshot.listing_slug,
+				city=snapshot.city,
+				venue_type=snapshot.venue_type,
+				address_line_1=snapshot.address_line_1,
+				address_line_2=snapshot.address_line_2,
+				neighborhood=snapshot.neighborhood,
+				state=snapshot.state,
+				postal_code=snapshot.postal_code,
+				phone_number=snapshot.phone_number,
+				website_url='' if snapshot.website_url_suppressed else snapshot.website_url,
+				external_id=snapshot.external_id,
+				source_name=snapshot.source_name,
+				source_url=snapshot.source_url or snapshot.website_url,
+			)
+
+		place_record = _apply_snapshot_enrichment_url_override(snapshot, place_record)
+		place_record = replace(
+			place_record,
+			source_name=snapshot.source_name,
+			external_id=snapshot.external_id,
+			image_urls=[],
+		)
+		place_record = BusinessWebsiteImporter().enrich_place_record(place_record)
+		place_record = replace(place_record, image_urls=[])
+		merge_discovery_json_records([place_record])
+		_sync_listing_snapshot_from_imported_place(place_record, snapshot=snapshot)
+		self.message_user(request, f'Refreshed {snapshot.name} from its official website.', level=messages.SUCCESS)
 		return HttpResponseRedirect(reverse('happyhour_admin:places_listingsnapshot_changelist'))
 
 	def _get_active_business_membership(self, obj):
@@ -1913,6 +1962,35 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 		return ', '.join(obj.verification_flags or []) or 'None'
 
 
+@admin.register(ContentReport, site=happyhour_admin_site)
+class ContentReportAdmin(admin.ModelAdmin):
+	list_display = ('created_at', 'target_type', 'target_display', 'reason', 'status', 'reporter')
+	list_filter = ('target_type', 'reason', 'status')
+	search_fields = ('business_name', 'listing_slug', 'details', 'reviewer_notes', 'reporter__username', 'business_post__title', 'reported_user_username', 'recipient_username', 'reported_message')
+	list_select_related = ('reporter', 'business_post__listing_snapshot', 'direct_message__thread__business_claim__listing_snapshot', 'reviewed_by')
+	readonly_fields = ('created_at', 'updated_at', 'reporter', 'business_post', 'direct_message', 'screenshot')
+	fieldsets = (
+		('Report', {
+			'fields': ('target_type', 'business_name', 'listing_slug', 'business_post', 'direct_message', 'reason', 'details', 'reporter', 'reported_user_username', 'reported_user_email', 'reported_user_role', 'recipient_username', 'recipient_email', 'reported_message', 'reported_message_created_at', 'screenshot'),
+		}),
+		('Review', {
+			'fields': ('status', 'reviewed_by', 'reviewer_notes'),
+		}),
+		('Timestamps', {
+			'fields': ('created_at', 'updated_at'),
+			'classes': ('collapse',),
+		}),
+	)
+
+	@admin.display(description='Target')
+	def target_display(self, obj):
+		if obj.target_type == ContentReport.TargetType.BUSINESS_POST and obj.business_post_id:
+			return f'{obj.business_name or obj.business_post.listing_snapshot.name}: {obj.business_post.title}'
+		if obj.target_type == ContentReport.TargetType.DIRECT_MESSAGE and obj.direct_message_id:
+			return f'{obj.business_name or "Business"}: message #{obj.direct_message_id}'
+		return obj.business_name or obj.listing_slug or 'Unavailable target'
+
+
 @admin.register(BusinessMembership, site=happyhour_admin_site)
 class BusinessMembershipAdmin(admin.ModelAdmin):
 	list_display = ('user', 'business_name', 'approved_at', 'approved_by', 'is_active')
@@ -1939,59 +2017,3 @@ class BusinessMembershipAdmin(admin.ModelAdmin):
 		return obj.claim.listing_snapshot.name
 
 
-@admin.register(ProviderUsageWindow, site=happyhour_admin_site)
-class ProviderUsageWindowAdmin(admin.ModelAdmin):
-	list_display = (
-		'provider_name',
-		'window_kind',
-		'window_start',
-		'consumed_transactions',
-		'transaction_limit',
-		'reserve_threshold',
-		'remaining_transactions',
-		'remaining_before_reserve',
-		'is_available',
-		'is_current_provider',
-		'updated_at',
-	)
-	list_filter = ('provider_name', 'window_kind', 'window_start')
-	search_fields = ('provider_name',)
-	readonly_fields = (
-		'provider_name',
-		'window_kind',
-		'window_start',
-		'consumed_transactions',
-		'transaction_limit',
-		'reserve_threshold',
-		'created_at',
-		'updated_at',
-		'remaining_transactions',
-		'remaining_before_reserve',
-		'is_available',
-		'is_current_provider',
-	)
-	ordering = ('provider_name', '-window_start')
-
-	def get_queryset(self, request):
-		delete_stale_provider_usage_windows()
-		get_provider_usage_statuses()
-		return super().get_queryset(request)
-
-	@admin.display(description='Remaining Transactions')
-	def remaining_transactions(self, obj):
-		return max(0, obj.transaction_limit - obj.consumed_transactions)
-
-	@admin.display(description='Remaining Before Reserve')
-	def remaining_before_reserve(self, obj):
-		return max(0, (obj.transaction_limit - obj.reserve_threshold) - obj.consumed_transactions)
-
-	@admin.display(boolean=True, description='Available')
-	def is_available(self, obj):
-		policy = get_provider_policy(obj.provider_name)
-		if policy is None or not policy.api_key:
-			return False
-		return obj.consumed_transactions < max(0, obj.transaction_limit - obj.reserve_threshold)
-
-	@admin.display(boolean=True, description='Current Provider')
-	def is_current_provider(self, obj):
-		return obj.provider_name == select_discovery_provider()

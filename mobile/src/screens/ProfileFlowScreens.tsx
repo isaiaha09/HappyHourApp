@@ -33,6 +33,8 @@ import { theme } from '../styles/theme';
 import type { BusinessAttachmentBuckets, BusinessAttachmentDraft, BusinessAttachmentKind, EmailVerificationChallengeResponse, PlaceListItem, PlaceLocation, SignupResponse } from '../types';
 
 const SUPPORT_EMAIL = 'support@diningdealz.com';
+const PRIVACY_POLICY_URL = 'https://www.diningdealz.com/privacy';
+const TERMS_OF_SERVICE_URL = 'https://www.diningdealz.com/terms';
 const onboardingPlaceholderTextColor = theme.textDarkMuted;
 const dismissKeyboardOnScrollProps = {
   keyboardDismissMode: Platform.OS === 'ios' ? 'interactive' : 'on-drag',
@@ -53,6 +55,20 @@ function OnboardingBackButton({ label, onPress, style }: { label: string; onPres
       textStyle={styles.onboardingBackButtonText}
       themeVariant="default-dark"
     />
+  );
+}
+
+function PublicLegalLinks() {
+  return (
+    <View style={styles.publicLegalLinks}>
+      <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(PRIVACY_POLICY_URL)} style={styles.publicLegalLinkButton}>
+        <Text style={styles.publicLegalLinkText}>Privacy Policy</Text>
+      </Pressable>
+      <Text style={styles.publicLegalSeparator}>•</Text>
+      <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(TERMS_OF_SERVICE_URL)} style={styles.publicLegalLinkButton}>
+        <Text style={styles.publicLegalLinkText}>Terms of Service</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -674,6 +690,8 @@ export function AuthPortalScreen({ authMessage, autoFocusIdentifier, errorMessag
                   </View>
                 </Animated.View>
               ) : null}
+
+              <PublicLegalLinks />
             </View>
           </View>
         </ScrollView>
@@ -884,6 +902,8 @@ export function CreateProfileScreen({ errorMessage, form, isLandscape, message, 
             <Pressable onPress={onOpenBusinessClaim} style={[styles.linkButtonSecondaryWide, styles.onboardingSecondaryButton]}>
               <Text style={[styles.linkButtonSecondaryText, styles.onboardingSecondaryButtonText]}>Claim a Business</Text>
             </Pressable>
+
+            <PublicLegalLinks />
           </View>
         </ScrollView>
       </KeyboardAwareFormScreen>
@@ -1209,7 +1229,7 @@ export function PrivacyPolicyScreen({ isLandscape, onBack }: Pick<LegalDocumentS
       sections={[
         {
           title: 'Information you provide',
-          body: 'DiningDealz collects the information users submit directly, including account details such as username, email address, password, portal type, and profile edits. Business users may also submit claim and onboarding materials such as contact details, work information, verification summaries, social links, public business profile content, uploaded photos, and supporting documents. Users may also send support messages and direct messages, including business-sent direct message images.',
+          body: 'DiningDealz collects the information users submit directly, including account details such as username, email address, password, portal type, and profile edits. Business users may also submit claim and onboarding materials such as contact details, work information, verification summaries, social links, public business profile content, uploaded photos, and supporting documents. Business verification documents are used to confirm authority and regulatory eligibility; selected profile photos and links may be displayed on an approved public business profile. Users may also send support messages, content reports with selected reasons, optional details, and optional screenshot evidence, and direct messages, including business-sent direct message images. Customers and businesses can block the other participant from direct messaging.',
         },
         {
           title: 'Information collected through use of the service',
@@ -1221,19 +1241,19 @@ export function PrivacyPolicyScreen({ isLandscape, onBack }: Pick<LegalDocumentS
         },
         {
           title: 'How DiningDealz uses information',
-          body: 'DiningDealz uses information to create and manage accounts, authenticate sign-ins, send verification and password-reset messages, provide business claim review and account support, operate direct messaging, deliver push notifications, power favorites and feed features, review abuse or misuse, maintain billing-related access where applicable, and improve the reliability and safety of the app and website.',
+          body: 'DiningDealz uses information to create and manage accounts, authenticate sign-ins, send verification and password-reset messages, verify business authority and applicable permits, provide business claim review and account support, operate direct messaging, deliver push notifications, power favorites and feed features, review content reports and abuse or misuse, maintain billing-related access where applicable, and improve the reliability and safety of the app and website.',
         },
         {
           title: 'How information may be shared',
-          body: 'DiningDealz does not sell personal information as part of the standard product experience. Information may be shared with service providers that help operate the platform, such as hosting, database, media storage, email delivery, bot-protection, error-monitoring, mapping, and push-notification providers. Information may also be disclosed when reasonably necessary to enforce the service rules, protect users or businesses, respond to legal requests, or address fraud, security, or safety issues.',
+          body: 'DiningDealz does not sell personal information as part of the standard product experience. Verification documents and optional content-report screenshots are stored in private media storage and may be accessed by authorized DiningDealz reviewers and service providers that securely host or process them for review. When automated image moderation is enabled, user-visible business profile photos, deal images, and business direct-message images are processed locally on the DiningDealz backend with the bundled NudeNet model for exposed-nudity screening before storage or display; those image bytes are not sent to a separate moderation API. An attached report screenshot is also transmitted to the configured DiningDealz support inbox for moderation review. Information may also be shared with service providers that help operate the platform, such as hosting, database, email delivery, bot-protection, error-monitoring, mapping, storage, and push-notification providers. Approved public business photos, links, and profile details may be displayed to app users. Information may also be disclosed when reasonably necessary to enforce the service rules, protect users or businesses, respond to legal requests, or address fraud, security, or safety issues.',
         },
         {
           title: 'Retention, deletion, and direct-message records',
-          body: 'DiningDealz keeps information for as long as reasonably needed to operate the service, support business records, resolve disputes, enforce policies, and meet legal obligations. If an account is deleted, certain information may be removed or anonymized, but some records may be retained to preserve service integrity. For example, direct message threads and receipts may remain available in read-only form for the other participant after one account is deleted. Business direct-message images are designed to disappear from the conversation feed after about 24 hours and may be deleted from storage after they expire.',
+          body: 'DiningDealz retains business verification documents, uploaded claim photos, profile links, and related consent records until the account is deleted. Content reports and moderation review records may be retained as needed to investigate abuse, enforce service rules, resolve disputes, and meet legal or security obligations. Images processed by the local automated moderation model remain subject to the app\'s ordinary storage and deletion rules and are not sent to a separate moderation provider. When a business account is deleted, DiningDealz removes its business-authored posts, sponsored campaigns, claim attachments, uploaded profile photos, verification references, optional report screenshots submitted by that account, and related business profile materials from managed storage and database-backed publication surfaces. The deleted business profile is suppressed from public map and detail results. Limited records may remain when required for legal obligations, fraud or security investigations, dispute resolution, moderation history, or the read-only direct-message history retained for another participant. Business direct-message images are designed to disappear from the conversation feed after about 24 hours and may be deleted from storage after they expire.',
         },
         {
           title: 'Your choices and contact options',
-          body: 'Users can update certain profile details from the product interface, manage direct-messaging settings where available, control device permissions such as notifications or business location access through the device or app settings, and request account deletion from inside the app. Users can also contact DiningDealz support for account, privacy, or policy questions.',
+          body: 'Users can remove selected documents and photos before submitting a claim, update certain profile details from the product interface, block or unblock direct-message participants, manage direct-messaging settings where available, control device permissions such as notifications or business location access through the device or app settings, and request account deletion from inside the app. Account deletion removes managed business content and verification materials as described above. Users can also contact DiningDealz support for account, privacy, or policy questions.',
         },
       ]}
       title="How DiningDealz collects and uses information."
@@ -1259,7 +1279,7 @@ export function TermsOfServiceScreen({ isLandscape, onBack }: Pick<LegalDocument
         },
         {
           title: 'Direct messages, uploads, and user content',
-          body: 'Customers and businesses may use direct messaging only as allowed by the product rules in effect at the time of use. Business accounts may send approved direct-message images, and those images are intended to disappear from the message feed after about 24 hours. Users must not submit unlawful, abusive, infringing, deceptive, or harmful content. By submitting content through DiningDealz, users authorize DiningDealz to host, process, display, transmit, and moderate that content as needed to operate and protect the service.',
+          body: 'Customers and businesses may use direct messaging only as allowed by the product rules in effect at the time of use. Business accounts may send approved direct-message images, and those images are intended to disappear from the message feed after about 24 hours. Users can report inappropriate business profiles, business posts, and direct messages for review, and business users can block customers from direct messaging. Users must not submit unlawful, abusive, infringing, deceptive, or harmful content. By submitting content through DiningDealz, users authorize DiningDealz to host, process, display, transmit, and moderate that content as needed to operate and protect the service.',
         },
         {
           title: 'Business claims, verification, and location features',
@@ -1629,6 +1649,27 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
             <Text style={[styles.detailCity, styles.onboardingEyebrow]}>Verification</Text>
             <Text style={[styles.detailTitle, styles.onboardingHeading]}>{verificationTitle}</Text>
             <Text style={[styles.profileIntroText, styles.onboardingBodyText]}>{verificationIntro}</Text>
+
+            <View style={[styles.privacyNoticeCard, styles.onboardingInfoCard]}>
+              <Text style={[styles.privacyNoticeTitle, styles.onboardingInfoTitle]}>Business verification privacy</Text>
+              <Text style={[styles.privacyNoticeText, styles.onboardingInfoText]}>
+                DiningDealz uses your business details, documents, links, and selected photos to verify your authority and review your business profile. Verification documents stay private and are retained until you delete your account, except where limited records must be kept for legal, security, fraud, or dispute purposes. Approved profile photos may be shown publicly on your business profile.{' '}
+                <Text accessibilityRole="link" onPress={() => void Linking.openURL(PRIVACY_POLICY_URL)} style={styles.privacyNoticeLink}>
+                  See the full Privacy Policy on our website.
+                </Text>
+              </Text>
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: form.verification_data_consent }}
+                onPress={() => onChangeField('verification_data_consent', !form.verification_data_consent)}
+                style={styles.privacyConsentButton}
+              >
+                <View style={[styles.privacyConsentIndicator, form.verification_data_consent ? styles.privacyConsentIndicatorActive : null]}>
+                  {form.verification_data_consent ? <Text style={styles.privacyConsentIndicatorText}>X</Text> : null}
+                </View>
+                <Text style={[styles.privacyConsentText, styles.onboardingInfoText]}>I understand and consent to the collection and use of these business verification materials.</Text>
+              </Pressable>
+            </View>
 
             {isClaimed && selectedPlace ? (
               <View style={[styles.claimResultCard, styles.onboardingInfoCard]}>

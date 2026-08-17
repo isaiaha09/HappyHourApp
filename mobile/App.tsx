@@ -38,6 +38,7 @@ import {
   createInformalBusinessProfile,
   createManualBusinessProfile,
   blockBusinessDirectMessagesForCustomer,
+  blockBusinessDirectMessagesForBusiness,
   clearFavoriteBusinessNotification,
   clearFavoriteBusinessNotifications,
   fetchDirectMessageThreadDetail,
@@ -60,6 +61,7 @@ import {
   requestUsernameReminder,
   resendVerificationCode,
   resendVerificationEmail,
+  submitContentReport,
   submitSupportRequest,
   toggleFavoriteBusiness,
   unblockBusinessDirectMessagesForCustomer,
@@ -146,6 +148,7 @@ import type {
   BusinessAttachmentBuckets,
   BusinessAttachmentDraft,
   BusinessAttachmentKind,
+  ContentReportRequest,
   BusinessVerificationDocuments,
   BusinessDealOverride,
   BusinessSignupRequest,
@@ -333,6 +336,7 @@ const initialProfileFormState: ProfileFormState = {
   photo_references_text: '',
   verification_summary: '',
   supporting_details: '',
+  verification_data_consent: false,
 };
 
 const initialBusinessAttachments: BusinessAttachmentBuckets = {
@@ -440,6 +444,7 @@ function buildSharedBusinessDetails(form: ProfileFormState) {
     offer_entries: splitMultilineEntries(form.offer_entries_text),
     hours_of_operation_entries: splitMultilineEntries(form.hours_of_operation_entries_text),
     photo_references: splitMultilineEntries(form.photo_references_text),
+    verification_data_consent: form.verification_data_consent,
   };
 }
 
@@ -510,6 +515,10 @@ function getBusinessSignupValidationMessage(form: ProfileFormState, mode: 'claim
     if (!hasVerificationSignal && !hasUploadedBusinessPhotos) {
       missingFields.push('website, social link(s), and/or business photo(s)');
     }
+  }
+
+  if (!form.verification_data_consent) {
+    return 'Please review the business verification privacy notice and confirm your consent before submitting.';
   }
 
   if (missingFields.length) {
@@ -583,6 +592,7 @@ function resetBusinessVerificationFields(current: ProfileFormState): ProfileForm
     photo_references_text: '',
     verification_summary: '',
     supporting_details: '',
+    verification_data_consent: false,
   };
 }
 
@@ -749,6 +759,7 @@ function AppScreen() {
     supportedIOSLiquidGlassRuntime && isNativeIOSLiquidGlassBottomNavAvailable()
   ));
   const [deleteAccountPassword, setDeleteAccountPassword] = useState('');
+  const [deleteAccountErrorMessage, setDeleteAccountErrorMessage] = useState<string | null>(null);
   const [bottomMoreSheetVisible, setBottomMoreSheetVisible] = useState(false);
   const [shellFadeScope, setShellFadeScope] = useState<ShellFadeScope | null>(null);
   const [selectedPlaceReturnFadeActive, setSelectedPlaceReturnFadeActive] = useState(false);
@@ -5171,6 +5182,15 @@ function AppScreen() {
     }
   }
 
+  async function handleSubmitContentReport(payload: ContentReportRequest) {
+    if (!authenticatedSession?.auth_token) {
+      throw new Error('Sign in before sending a content report.');
+    }
+
+    const response = await submitContentReport(apiBaseUrl, authenticatedSession.auth_token, payload);
+    return response.detail;
+  }
+
   async function handleSubmitPlaceAccuracyReport(subject: string, message: string) {
     if (!authenticatedSession?.auth_token) {
       throw new Error('Sign in to report business profile updates.');
@@ -5204,6 +5224,7 @@ function AppScreen() {
     dismissKeyboardForScreenTransition();
     setProfileErrorMessage(null);
     setProfileMessage(null);
+    setDeleteAccountErrorMessage(null);
     navigateScreen('settings', 'forward');
   }
 
@@ -5581,12 +5602,6 @@ function AppScreen() {
 
       if (remainingSlots <= 0) {
         setProfileErrorMessage('You can upload up to 8 business photos. Remove one first if you want to replace it.');
-        return;
-      }
-
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        setProfileErrorMessage('Photo library access is required to upload business photos.');
         return;
       }
 
@@ -6380,6 +6395,26 @@ function AppScreen() {
     }
   }
 
+  async function handleBlockBusinessFromDirectMessaging(threadId: number) {
+    if (!authenticatedSession?.auth_token || authenticatedSession.portal !== 'customer') {
+      throw new Error('Sign in with a customer account to block a business.');
+    }
+
+    const currentAuthToken = authenticatedSession.auth_token;
+    const response = await blockBusinessDirectMessagesForBusiness(apiBaseUrl, currentAuthToken, threadId);
+    setAuthenticatedSessionIfCurrentToken(currentAuthToken, response);
+  }
+
+  async function handleUnblockBusinessFromDirectMessaging(blockId: number) {
+    if (!authenticatedSession?.auth_token || authenticatedSession.portal !== 'customer') {
+      throw new Error('Sign in with a customer account to unblock a business.');
+    }
+
+    const currentAuthToken = authenticatedSession.auth_token;
+    const response = await unblockBusinessDirectMessagesForCustomer(apiBaseUrl, currentAuthToken, blockId, 'customer');
+    setAuthenticatedSessionIfCurrentToken(currentAuthToken, response);
+  }
+
   async function handleSaveProfileDetails(payload: ProfileDashboardUpdateRequest, photoUploads: BusinessAttachmentDraft[] = []) {
     if (!authenticatedSession?.auth_token) {
       return;
@@ -6413,7 +6448,8 @@ function AppScreen() {
     }
 
     if (!deleteAccountPassword) {
-      setProfileErrorMessage('Enter your current password to delete your account.');
+      setProfileErrorMessage(null);
+      setDeleteAccountErrorMessage('Enter your current password to delete your account.');
       return;
     }
 
@@ -6427,11 +6463,13 @@ function AppScreen() {
 
     setSettingsSubmittingAction('delete-account');
     setProfileErrorMessage(null);
+    setDeleteAccountErrorMessage(null);
 
     try {
       const response = await deleteProfileAccount(apiBaseUrl, authenticatedSession.auth_token, deleteAccountPassword);
       setProfileMessage(null);
       setProfileErrorMessage(null);
+      setDeleteAccountErrorMessage(null);
       setAuthMessage(response.detail || 'Your account has been permanently deleted.');
       setShouldAutoFocusLoginField(false);
       setDeleteAccountPassword('');
@@ -6464,7 +6502,10 @@ function AppScreen() {
       pendingMapRefreshRef.current = false;
       startLogoutTransition({ preserveBusinessTracking: false });
     } catch (error) {
-      setProfileErrorMessage(getErrorMessage(error));
+      const errorMessage = getErrorMessage(error);
+      setDeleteAccountErrorMessage(errorMessage.toLowerCase().includes('incorrect password')
+        ? 'The password was incorrect. If you forgot your password, go back to the login screen and use the Forgot password process to reset it.'
+        : errorMessage);
     } finally {
       setSettingsSubmittingAction(null);
     }
@@ -6476,6 +6517,7 @@ function AppScreen() {
     setAuthMessage('You have been signed out.');
     setShouldAutoFocusLoginField(false);
     setDeleteAccountPassword('');
+    setDeleteAccountErrorMessage(null);
     setTwoFactorSetup(null);
     setTwoFactorSetupCode('');
     setTwoFactorDisableCode('');
@@ -6824,12 +6866,16 @@ function AppScreen() {
         <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
           <AccountSettingsScreen
             deleteAccountPassword={deleteAccountPassword}
+            deleteAccountErrorMessage={deleteAccountErrorMessage}
             errorMessage={profileErrorMessage}
             isLandscape={isLandscape}
             message={profileMessage}
             onBack={handleBackFromSettings}
             onBeginTwoFactorSetup={() => void handleBeginTwoFactorSetup()}
-            onChangeDeleteAccountPassword={setDeleteAccountPassword}
+            onChangeDeleteAccountPassword={(value) => {
+              setDeleteAccountPassword(value);
+              setDeleteAccountErrorMessage(null);
+            }}
             onChangeTwoFactorDisableCode={setTwoFactorDisableCode}
             onChangeTwoFactorSetupCode={setTwoFactorSetupCode}
             onConfirmTwoFactorSetup={() => void handleConfirmTwoFactorSetup()}
@@ -6882,12 +6928,15 @@ function AppScreen() {
             contextListingSlug={selectedPlaceSlug}
             isLandscape={isLandscape}
             onBack={handleBackFromDirectMessages}
+            onBlockBusinessFromDirectMessaging={(threadId) => void handleBlockBusinessFromDirectMessaging(threadId)}
             onBlockCustomerFromDirectMessaging={(customerUsername) => void handleBlockCustomerFromDirectMessages(customerUsername)}
             onDeleteConversation={(threadId) => void handleDeleteDirectMessageConversation(threadId)}
             onLoadThreadDetail={handleLoadDirectMessageThreadDetail}
             onRefreshThreads={handleRefreshDirectMessageThreads}
+            onSubmitContentReport={handleSubmitContentReport}
             onSendImageMessage={handleSendImageDirectMessage}
             onSendTextMessage={handleSendTextDirectMessage}
+            onUnblockBusinessFromDirectMessaging={(blockId) => void handleUnblockBusinessFromDirectMessaging(blockId)}
             onUnblockCustomerFromDirectMessaging={(blockId) => void handleUnblockCustomerFromDirectMessaging(blockId)}
             session={profileSession}
           />
@@ -6969,6 +7018,7 @@ function AppScreen() {
           refreshProgressViewOffset={Math.max(insets.top + 42, 64)}
           footerContent={<View style={{ height: bottomNavHeight + 16 }} />}
           isLandscape={isLandscape}
+          onSubmitContentReport={handleSubmitContentReport}
           reloadToken={reloadCount}
           searchQuery=""
           selectedCity="all"
@@ -7115,6 +7165,7 @@ function AppScreen() {
       <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
         <PlaceDetailScreen
           backButtonLabel={screenMode === 'profiles' || screenMode === 'business-profile-editor' ? 'Back to Profile' : 'Back to Places'}
+          canSubmitContentReport={!!authenticatedSession?.auth_token}
           canSubmitPlaceAccuracyReport={!!authenticatedSession?.auth_token}
           detailLoading={detailLoading}
           errorMessage={errorMessage}
@@ -7127,8 +7178,10 @@ function AppScreen() {
           onClaimBusiness={handleOpenBusinessClaimFromPlaceDetail}
           onEditBusinessProfile={handleOpenBusinessProfileEditor}
           onOpenDirectMessages={openDirectMessagesScreen}
+          onRequireContentReportAccount={() => setShowGuestAccuracyPrompt(true)}
           onRequirePlaceAccuracyAccount={() => setShowGuestAccuracyPrompt(true)}
           onSelectLocation={setSelectedLocationId}
+          onSubmitContentReport={handleSubmitContentReport}
           onSubmitPlaceAccuracyReport={(subject, message) => handleSubmitPlaceAccuracyReport(subject, message)}
           onToggleFavorite={() => void handleToggleFavoriteBusiness()}
           showClaimBusinessControl={showClaimBusinessControl}
@@ -8431,9 +8484,9 @@ function AppScreen() {
             <Pressable accessibilityLabel="Close account prompt" onPress={handleDismissGuestAccuracyPrompt} style={styles.guestBottomNavCloseButton}>
               <Text style={styles.guestBottomNavCloseButtonText}>X</Text>
             </Pressable>
-            <Text style={styles.guestFavoriteModalTitle}>Create an account to report business profile updates</Text>
+            <Text style={styles.guestFavoriteModalTitle}>Create an account to report business content</Text>
             <Text style={styles.guestFavoriteModalText}>
-              Sign in or create an account to send profile accuracy updates so the team can follow up and review your submission.
+              Sign in or create an account to report inappropriate business content so the DiningDealz team can review it.
             </Text>
             <View style={styles.guestFavoriteModalActions}>
               <Pressable onPress={handleCreateCustomerAccountFromGuestAccuracy} style={styles.guestFavoriteModalPrimaryButton}>

@@ -4,6 +4,7 @@ jest.mock('../components/NativeIOSLiquidGlass', () => ({
   NativeIOSLiquidGlassBottomNav: () => null,
   NativeIOSLiquidGlassHeaderButton: ({ fallback }: { fallback: React.ReactNode }) => fallback,
   isNativeIOSLiquidGlassBottomNavAvailable: () => false,
+  isNativeIOSLiquidGlassHeaderButtonAvailable: () => false,
 }));
 
 jest.mock('react-native-safe-area-context', () => ({

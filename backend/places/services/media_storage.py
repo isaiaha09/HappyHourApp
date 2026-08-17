@@ -7,9 +7,11 @@ from django.core.files.storage import default_storage
 
 
 MANAGED_MEDIA_PREFIXES = (
+	'businesses/',
 	'business-claim-attachments/',
 	'business-deal-attachments/',
 	'business-profile-photos/',
+	'content-reports/',
 )
 
 
@@ -17,6 +19,7 @@ def _iter_media_url_prefix_paths():
 	for raw_prefix in {
 		str(getattr(settings, 'MEDIA_URL', '') or '').strip(),
 		str(getattr(settings, 'MEDIA_PUBLIC_BASE_URL', '') or '').strip(),
+		str(getattr(settings, 'PRIVATE_MEDIA_URL', '') or '').strip(),
 	}:
 		if not raw_prefix:
 			continue
@@ -36,16 +39,15 @@ def extract_managed_storage_name(reference):
 	parsed = urlparse(reference_value)
 	if parsed.scheme or parsed.netloc:
 		candidate_name = unquote(parsed.path or '')
-		if not candidate_name:
-			return None
-		for prefix_path in _iter_media_url_prefix_paths():
-			if candidate_name.startswith(prefix_path):
-				candidate_name = candidate_name[len(prefix_path):]
-				break
-		else:
-			return None
 	else:
 		candidate_name = unquote(reference_value)
+
+	if not candidate_name:
+		return None
+	for prefix_path in _iter_media_url_prefix_paths():
+		if candidate_name.startswith(prefix_path):
+			candidate_name = candidate_name[len(prefix_path):]
+			break
 
 	normalized_name = posixpath.normpath(str(candidate_name).replace('\\', '/').lstrip('/'))
 	if normalized_name in {'', '.', '..'} or normalized_name.startswith('../'):
@@ -80,7 +82,7 @@ def delete_removed_storage_references(previous_references, current_references):
 
 
 def get_active_managed_storage_names():
-	from places.models import BusinessClaim, BusinessClaimAttachment
+	from places.models import BusinessClaim, BusinessClaimAttachment, ContentReport
 
 	active_names = {
 		storage_name
@@ -94,17 +96,26 @@ def get_active_managed_storage_names():
 			attachment = deal.get('attachment') if isinstance(deal, dict) else None
 			if isinstance(attachment, dict):
 				active_names.update(_collect_managed_storage_names([attachment.get('url')]))
+	active_names.update(
+		str(storage_name).strip()
+		for storage_name in ContentReport.objects.exclude(screenshot='').values_list('screenshot', flat=True)
+		if str(storage_name or '').strip()
+	)
 	return active_names
 
 
 def get_local_managed_storage_names():
-	media_root = Path(getattr(settings, 'MEDIA_ROOT', '') or '')
-	if not str(media_root):
-		return set()
-	if not media_root.exists():
-		return set()
-	return {
-		file_path.relative_to(media_root).as_posix()
-		for file_path in media_root.rglob('*')
-		if file_path.is_file() and file_path.relative_to(media_root).as_posix().startswith(MANAGED_MEDIA_PREFIXES)
-	}
+	managed_names = set()
+	for root_value in (
+		getattr(settings, 'MEDIA_ROOT', ''),
+		getattr(settings, 'PRIVATE_MEDIA_ROOT', ''),
+	):
+		media_root = Path(root_value or '')
+		if not str(media_root) or not media_root.exists():
+			continue
+		managed_names.update(
+			file_path.relative_to(media_root).as_posix()
+			for file_path in media_root.rglob('*')
+			if file_path.is_file() and file_path.relative_to(media_root).as_posix().startswith(MANAGED_MEDIA_PREFIXES)
+		)
+	return managed_names

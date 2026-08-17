@@ -1,11 +1,14 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Image, Pressable, Text, View } from 'react-native';
 
 import { styles } from '../appStyles';
+import { theme } from '../styles/theme';
 import type { FeedItem } from '../types';
 
 type HomeFeedCardProps = {
   item: FeedItem;
   isLandscape: boolean;
+  onReport?: () => void;
   onPress: () => void;
 };
 
@@ -31,6 +34,7 @@ function BaseHomeFeedCard({
   badgeLabel,
   item,
   isLandscape,
+  onReport,
   onPress,
 }: HomeFeedCardProps & {
   badgeLabel: string;
@@ -68,6 +72,19 @@ function BaseHomeFeedCard({
           </View>
           <Text style={styles.homeFeedMetaText}>{item.city_label || '805'} • {dateLabel}</Text>
         </View>
+        {onReport ? (
+          <Pressable
+            accessibilityLabel="Report business post"
+            hitSlop={10}
+            onPress={(event) => {
+              event.stopPropagation();
+              onReport();
+            }}
+            style={styles.homeFeedReportButton}
+          >
+            <Ionicons color={theme.textMuted} name="flag-outline" size={18} />
+          </Pressable>
+        ) : null}
       </View>
 
       {hasImage ? (

@@ -40,10 +40,11 @@ function buildSession(portal: SignupResponse['portal']): SignupResponse {
   };
 }
 
-function renderAccountSettings(portal: SignupResponse['portal'], onChangeDeleteAccountPassword: (value: string) => void) {
+function renderAccountSettings(portal: SignupResponse['portal'], onChangeDeleteAccountPassword: (value: string) => void, deleteAccountErrorMessage: string | null = null) {
   return render(
     <AccountSettingsScreen
       deleteAccountPassword=""
+      deleteAccountErrorMessage={deleteAccountErrorMessage}
       errorMessage={null}
       isLandscape={false}
       message={null}
@@ -84,5 +85,11 @@ describe('AccountSettingsScreen delete account field', () => {
     fireEvent.changeText(passwordField, 'current-password');
 
     expect(onChangeDeleteAccountPassword).toHaveBeenCalledWith('current-password');
+  });
+
+  it('shows account deletion errors beside the password field', () => {
+    renderAccountSettings('customer', jest.fn(), 'The password was incorrect. Use Forgot password from the login screen.');
+
+    expect(screen.getByText('The password was incorrect. Use Forgot password from the login screen.')).toBeTruthy();
   });
 });

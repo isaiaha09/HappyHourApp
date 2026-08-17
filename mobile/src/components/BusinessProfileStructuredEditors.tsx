@@ -397,11 +397,6 @@ export function BusinessDealsEditor({ label, onChange, supportText, value }: Bus
 
   async function handleSelectDealPhoto(dealIndex: number) {
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        return;
-      }
-
       const result = await ImagePicker.launchImageLibraryAsync({
         allowsEditing: true,
         allowsMultipleSelection: false,
@@ -508,7 +503,7 @@ export function BusinessDealsEditor({ label, onChange, supportText, value }: Bus
       dealIndex,
       {
         ...value[dealIndex],
-        happy_hours: value[dealIndex].happy_hours.map((window, index) => index === happyHourIndex ? nextWindow : window),
+        happy_hours: value[dealIndex].happy_hours.map((window, windowIndex) => windowIndex === happyHourIndex ? nextWindow : window),
       },
     );
   }

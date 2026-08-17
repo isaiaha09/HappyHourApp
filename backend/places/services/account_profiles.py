@@ -1,17 +1,19 @@
 import json
 import logging
+import mimetypes
+from pathlib import Path
 
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Count, Q
-from django.core.mail import send_mail
+from django.core.mail import EmailMessage, send_mail
 from django.utils.html import escape
 from django.utils import timezone
 from django.utils.text import slugify
 from email.utils import formataddr, parseaddr
 from uuid import uuid4
 
-from places.models import AccountProfile, BusinessClaim, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, HappyHourNotificationDelivery, ProfileAuthToken, SponsoredCampaign, VenueType
+from places.models import AccountProfile, BusinessClaim, BusinessPost, ContentReport, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, HappyHourNotificationDelivery, ProfileAuthToken, SponsoredCampaign, VenueType
 from places.services.business_profile_overrides import build_deal_payloads, build_operating_hour_payloads
 from places.services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
 
@@ -224,6 +226,9 @@ def deactivate_account_for_retained_direct_messages(user):
 	deleted_at = timezone.now()
 	deleted_username = f'deleted-account-{user.pk}-{uuid4().hex[:12]}'
 
+	clear_business_account_content(user)
+	clear_business_claim_materials(user)
+	clear_content_report_screenshots(user)
 	remove_favorites_for_business_accounts([user.pk])
 	ProfileAuthToken.objects.filter(user=user).delete()
 	FavoriteBusiness.objects.filter(user=user).delete()
@@ -286,6 +291,88 @@ def deactivate_account_for_retained_direct_messages(user):
 		'notifications_paused',
 		'updated_at',
 	])
+
+
+def clear_business_account_content(user):
+	claims = list(user.business_claims.select_related('listing_snapshot').all())
+	listing_slugs = {
+		slug
+		for claim in claims
+		for slug in (
+			claim.listing_snapshot.listing_slug,
+			slugify(f'{claim.listing_snapshot.name}-{claim.listing_snapshot.city}'),
+		)
+		if str(slug or '').strip()
+	}
+
+	if listing_slugs:
+		FavoriteBusinessNotification.objects.filter(listing_slug__in=listing_slugs).delete()
+
+	BusinessPost.objects.filter(membership__user=user).delete()
+	for claim in claims:
+		claim.direct_message_blocks.all().delete()
+
+
+def clear_business_claim_materials(user):
+	for claim in user.business_claims.all():
+		claim.attachments.all().delete()
+		claim.profile_entries.all().delete()
+		claim.business_website_url = ''
+		claim.social_profiles = {}
+		claim.social_media_links = []
+		claim.deal_overrides = []
+		claim.operating_hour_overrides = []
+		claim.offer_entries = []
+		claim.hours_of_operation_entries = []
+		claim.photo_references = []
+		claim.photo_gallery_overridden = False
+		claim.verification_documents = {}
+		claim.verification_data_consent_at = None
+		claim.verification_data_consent_version = ''
+		claim.verification_score = 0
+		claim.verification_flags = []
+		claim.rejection_reason_codes = []
+		claim.reviewer_notes = ''
+		claim.contact_name = ''
+		claim.work_email = ''
+		claim.work_phone = ''
+		claim.employer_address = ''
+		claim.supporting_details = ''
+		claim.verification_summary = ''
+		claim.save(update_fields=[
+			'business_website_url',
+			'social_profiles',
+			'social_media_links',
+			'deal_overrides',
+			'operating_hour_overrides',
+			'offer_entries',
+			'hours_of_operation_entries',
+			'photo_references',
+			'photo_gallery_overridden',
+			'verification_documents',
+			'verification_data_consent_at',
+			'verification_data_consent_version',
+			'verification_score',
+			'verification_flags',
+			'rejection_reason_codes',
+			'reviewer_notes',
+			'contact_name',
+			'work_email',
+			'work_phone',
+			'employer_address',
+			'supporting_details',
+			'verification_summary',
+			'updated_at',
+		])
+
+
+def clear_content_report_screenshots(user):
+	for report in ContentReport.objects.filter(reporter_id=user.pk).only('pk', 'screenshot'):
+		if not report.screenshot:
+			continue
+		report.screenshot.delete(save=False)
+		report.screenshot = ''
+		report.save(update_fields=['screenshot', 'updated_at'])
 
 
 def get_or_create_profile_token(user):
@@ -792,6 +879,89 @@ def send_business_claim_submission_support_email_safely(claim):
 			'Business claim support notification failed for claim_id=%s user_id=%s email_backend=%s email_host=%s email_port=%s email_use_tls=%s email_use_ssl=%s',
 			getattr(claim, 'pk', None),
 			getattr(getattr(claim, 'claimant', None), 'pk', None),
+			getattr(settings, 'EMAIL_BACKEND', ''),
+			getattr(settings, 'EMAIL_HOST', ''),
+			getattr(settings, 'EMAIL_PORT', ''),
+			getattr(settings, 'EMAIL_USE_TLS', ''),
+			getattr(settings, 'EMAIL_USE_SSL', ''),
+		)
+
+
+def send_content_report_support_email(report):
+	report = ContentReport.objects.select_related(
+		'reporter',
+		'business_post__listing_snapshot',
+		'direct_message__sender',
+		'direct_message__thread__business_claim__listing_snapshot',
+	).get(pk=report.pk)
+	if report.target_type == ContentReport.TargetType.BUSINESS_POST and report.business_post_id:
+		target_label = f'Business post: {report.business_post.title}'
+		listing_slug = report.business_post.listing_snapshot.listing_slug
+	elif report.target_type == ContentReport.TargetType.DIRECT_MESSAGE and report.direct_message_id:
+		target_label = f'Direct message #{report.direct_message_id}'
+		listing_slug = report.direct_message.thread.business_claim.listing_snapshot.listing_slug
+	else:
+		target_label = f'Business profile: {report.business_name or report.listing_slug}'
+		listing_slug = report.listing_slug
+
+	reporter_label = report.reporter_username or getattr(report.reporter, 'username', '') or 'Deleted or unavailable account'
+	reporter_email = report.reporter_email or getattr(report.reporter, 'email', '') or 'Unavailable'
+	report_lines = [
+		f'Reporter username: {report.reporter_username or reporter_label}',
+		f'Reporter email: {reporter_email}',
+		f'Report recipient: DiningDealz review team <{_get_support_contact_email()}>',
+	]
+	if report.target_type == ContentReport.TargetType.DIRECT_MESSAGE:
+		report_lines.extend([
+			f'Reported sender username: {report.reported_user_username or "Unavailable"}',
+			f'Reported sender email: {report.reported_user_email or "Unavailable"}',
+			f'Reported sender role: {report.reported_user_role or "Unavailable"}',
+			f'Report recipient username: {report.recipient_username or "Unavailable"}',
+			f'Report recipient email: {report.recipient_email or "Unavailable"}',
+			f'Reported message timestamp: {report.reported_message_created_at or "Unavailable"}',
+			f'Reported message: {report.reported_message or "[No text; see image attachment/context if available]"}',
+		])
+	screenshot_attachments = []
+	screenshot_attached = False
+	if report.screenshot:
+		try:
+			with report.screenshot.storage.open(report.screenshot.name, 'rb') as screenshot_file:
+				screenshot_bytes = screenshot_file.read()
+			screenshot_name = Path(report.screenshot.name).name or 'report-screenshot.jpg'
+			screenshot_content_type = mimetypes.guess_type(screenshot_name)[0] or 'image/jpeg'
+			if screenshot_bytes:
+				screenshot_attachments.append((screenshot_name, screenshot_bytes, screenshot_content_type))
+				screenshot_attached = True
+		except (FileNotFoundError, OSError):
+			logger.warning('Content report screenshot is unavailable for report_id=%s', report.pk)
+	report_lines.append(f'Screenshot attached: {"Yes" if screenshot_attached else "No"}')
+	email = EmailMessage(
+		subject=f'DiningDealz content report: {report.get_reason_display()}',
+		body='\n'.join([
+			'New DiningDealz content report',
+			'',
+			f'Target: {target_label}',
+			f'Listing slug: {listing_slug}',
+			f'Reason: {report.get_reason_display()}',
+			*report_lines,
+			f'Details: {report.details or "No additional details provided."}',
+		]),
+		from_email=_get_branded_from_email(),
+		to=[_get_support_contact_email()],
+	)
+	for filename, content, content_type in screenshot_attachments:
+		email.attach(filename, content, content_type)
+	email.send(fail_silently=False)
+
+
+def send_content_report_support_email_safely(report):
+	try:
+		send_content_report_support_email(report)
+	except Exception:
+		logger.exception(
+			'Content report support notification failed for report_id=%s user_id=%s email_backend=%s email_host=%s email_port=%s email_use_tls=%s email_use_ssl=%s',
+			getattr(report, 'pk', None),
+			getattr(getattr(report, 'reporter', None), 'pk', None),
 			getattr(settings, 'EMAIL_BACKEND', ''),
 			getattr(settings, 'EMAIL_HOST', ''),
 			getattr(settings, 'EMAIL_PORT', ''),

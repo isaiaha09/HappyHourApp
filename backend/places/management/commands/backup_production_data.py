@@ -9,7 +9,6 @@ from urllib.parse import parse_qsl, unquote, urlparse
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
-from places.services.discovery_exclusions import get_discovery_exclusions_path
 from places.services.importers.discovered_json_places import get_discovery_json_path, get_discovery_json_seed_path
 from places.services.production_backup import build_supabase_client, get_supabase_bucket_configs, safe_storage_relative_path
 
@@ -238,7 +237,6 @@ class Command(BaseCommand):
 		file_specs = (
 			('runtime_discovered_places', get_discovery_json_path(), 'runtime-discovered_places.json'),
 			('seed_discovered_places', get_discovery_json_seed_path(), 'seed-discovered_places.json'),
-			('discovery_exclusions', get_discovery_exclusions_path(), 'discovery-exclusions.json'),
 		)
 		manifest_entries = []
 		for role, source_path, target_name in file_specs:

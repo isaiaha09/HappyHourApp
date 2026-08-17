@@ -1,9 +1,7 @@
 import re
 from copy import deepcopy
 from hashlib import sha256
-from urllib.parse import urlparse
 
-import requests
 from django.conf import settings
 from django.core.cache import caches
 from django.core.exceptions import ImproperlyConfigured
@@ -21,11 +19,7 @@ from places.services.business_profile_overrides import (
 from places.services.importers.business_websites import BusinessWebsiteImporter
 from places.services.importers.discovered_json_places import CuratedJsonPlacesImporter, DiscoveryJsonPlacesImporter
 from places.services.importers.example_html import ExampleHtmlImporter
-from places.services.importers.here_places import HerePlacesImporter
-from places.services.importers.openstreetmap_places import HybridPlacesImporter, OpenStreetMapPlacesImporter
-from places.services.importers.tomtom_places import TomTomPlacesImporter
 from places.services.importers.types import ImportedPlace
-from places.services.importers.yelp_places import YelpFusionPlacesImporter
 from places.services.social_profiles import build_social_media_links, normalize_social_profiles
 
 
@@ -33,11 +27,6 @@ RUNTIME_IMPORTER_REGISTRY = {
 	'business_websites': BusinessWebsiteImporter,
 	'curated_json_places': CuratedJsonPlacesImporter,
 	'discovery_json_places': DiscoveryJsonPlacesImporter,
-	'here_places': HerePlacesImporter,
-	'hybrid_places': HybridPlacesImporter,
-	'openstreetmap_places': OpenStreetMapPlacesImporter,
-	'tomtom_places': TomTomPlacesImporter,
-	'yelp_fusion_places': YelpFusionPlacesImporter,
 	'example_html': ExampleHtmlImporter,
 }
 
@@ -56,7 +45,8 @@ def get_listing_importer(source_name=None):
 
 def _source_records_cache_key(source_name=None):
 	resolved_source_name = source_name or get_listing_source_name()
-	return f'source-records:{resolved_source_name}'
+	image_policy = int(bool(getattr(settings, 'BUSINESS_SOURCE_IMPORT_IMAGES', False)))
+	return f'source-records:{resolved_source_name}:images-{image_policy}'
 
 
 def _source_place_payload_cache_version_key(source_name=None):
@@ -119,6 +109,7 @@ def _source_place_payload_cache_key(city=None, venue_type=None, source_name=None
 				'venue_type': venue_type,
 				'has_deals': has_deals,
 				'resolve_missing_coordinates': resolve_missing_coordinates,
+				'imported_images_enabled': bool(getattr(settings, 'BUSINESS_SOURCE_IMPORT_IMAGES', False)),
 			}).encode('utf-8')
 		).hexdigest(),
 	])
@@ -1298,9 +1289,7 @@ def _tokenize_address(value):
 def _place_record_quality_score(place_record):
 	source_preference = {
 		'business_websites': 40,
-		'here_places': 20,
-		'tomtom_places': 15,
-		'openstreetmap_places': 10,
+		'verified_businesses': 40,
 	}
 	return (
 		source_preference.get(str(place_record.source_name or ''), 0)
@@ -1428,98 +1417,7 @@ def _get_place_coordinates(place_record, resolve_missing=True):
 	except (TypeError, ValueError):
 		pass
 
-	if not resolve_missing:
-		return (None, None)
-
-	queries = _build_geocode_queries(place_record)
-	if not queries:
-		return (None, None)
-
-	cache = caches[getattr(settings, 'PLACE_GEOCODE_CACHE_ALIAS', 'default')]
-	for query in queries:
-		cache_key = f"place-geocode:{sha256(query.encode('utf-8')).hexdigest()}"
-		cached_coordinates = cache.get(cache_key)
-		if cached_coordinates is not None:
-			if cached_coordinates != (None, None):
-				return cached_coordinates
-			continue
-
-		coordinates = _fetch_place_coordinates(query)
-		cache.set(cache_key, coordinates, getattr(settings, 'PLACE_GEOCODE_CACHE_TIMEOUT', 86400))
-		if coordinates != (None, None):
-			return coordinates
-
 	return (None, None)
-
-
-def _fetch_place_coordinates(full_address):
-	try:
-		response = requests.get(
-			getattr(settings, 'PLACE_GEOCODE_URL', 'https://nominatim.openstreetmap.org/search'),
-			params={
-				'q': full_address,
-				'format': 'jsonv2',
-				'limit': 1,
-				'countrycodes': 'us',
-			},
-			headers={
-				'User-Agent': getattr(settings, 'PLACE_GEOCODE_USER_AGENT', 'HappyHourApp/1.0'),
-			},
-			timeout=getattr(settings, 'PLACE_GEOCODE_TIMEOUT', 5),
-		)
-		response.raise_for_status()
-		payload = response.json()
-	except (requests.RequestException, ValueError, TypeError):
-		return (None, None)
-
-	if not payload:
-		return (None, None)
-
-	first_result = payload[0]
-	try:
-		return (float(first_result['lat']), float(first_result['lon']))
-	except (KeyError, TypeError, ValueError):
-		return (None, None)
-
-
-def _build_full_address(place_record):
-	parts = [
-		place_record.address_line_1,
-		place_record.address_line_2,
-		_label_for_choice(City, place_record.city),
-		place_record.state,
-		place_record.postal_code,
-	]
-	return ', '.join(str(part).strip() for part in parts if str(part).strip())
-
-
-def _build_geocode_queries(place_record):
-	queries = []
-	explicit_query = str(getattr(place_record, 'geocode_query', '') or '').strip()
-	if explicit_query:
-		queries.append(explicit_query)
-
-	full_address = _build_full_address(place_record)
-	if full_address and not _looks_like_url(place_record.address_line_1):
-		queries.append(full_address)
-
-	city_label = _label_for_choice(City, place_record.city)
-	name_query = ', '.join(part for part in [place_record.name, city_label, place_record.state] if part)
-	if name_query:
-		queries.append(name_query)
-
-	normalized_name = ''.join(character for character in str(place_record.name) if character.isalnum() or character.isspace()).strip()
-	if normalized_name and normalized_name != place_record.name:
-		queries.append(', '.join(part for part in [normalized_name, city_label, place_record.state] if part))
-
-	return list(dict.fromkeys(query for query in queries if query))
-
-
-def _looks_like_url(value):
-	if not value:
-		return False
-	parsed = urlparse(str(value).strip())
-	return parsed.scheme in {'http', 'https'} and bool(parsed.netloc)
 
 
 def _build_deal_payload(place_record, deal_record, place_slug):

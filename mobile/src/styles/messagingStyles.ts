@@ -198,7 +198,6 @@ export const messagingStyles = {
     color: theme.textPrimary,
     fontSize: 15,
     fontWeight: '700',
-    
   },
   directMessageThreadPreview: {
     color: theme.textSecondary,
@@ -231,6 +230,12 @@ export const messagingStyles = {
   },
   directMessageBubbleWrapMine: {
     alignItems: 'flex-end',
+  },
+  directMessageReportButton: {
+    alignItems: 'center',
+    height: 30,
+    justifyContent: 'center',
+    width: 30,
   },
   directMessageBubble: {
     backgroundColor: '#2f2f2f',

@@ -201,7 +201,6 @@ class Command(BaseCommand):
 		copied_files = []
 		for source_path, target_name in (
 			(getattr(settings, 'DISCOVERY_JSON_PATH', ''), 'discovered_places.json'),
-			(getattr(settings, 'DISCOVERY_EXCLUSIONS_PATH', ''), 'discovery_exclusions.json'),
 		):
 			copied_name = self._copy_optional_file(source_path, backup_dir / target_name)
 			if copied_name:

@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.db.models.signals import post_delete, post_save, pre_delete, pre_save
 from django.dispatch import receiver
 
-from .models import AccountProfile, BusinessClaim, BusinessClaimAttachment, BusinessDirectMessage, BusinessMembership, ListingSnapshot
+from .models import AccountProfile, BusinessClaim, BusinessClaimAttachment, BusinessDirectMessage, BusinessMembership, ContentReport, ListingSnapshot
 from .services.account_profiles import remove_favorites_for_business_accounts
 from .services.media_storage import delete_removed_storage_references, delete_storage_names, delete_storage_references
 from .services.source_listings import invalidate_source_place_payload_cache
@@ -117,7 +117,7 @@ def cleanup_replaced_business_claim_attachment_file(sender, instance, created, *
 	previous_file_name = getattr(instance, '_previous_file_name', '')
 	current_file_name = str(getattr(instance.file, 'name', '') or '').strip()
 	if previous_file_name and previous_file_name != current_file_name:
-		delete_storage_names([previous_file_name])
+		instance.file.storage.delete(previous_file_name)
 	if hasattr(instance, '_previous_file_name'):
 		delattr(instance, '_previous_file_name')
 
@@ -126,7 +126,7 @@ def cleanup_replaced_business_claim_attachment_file(sender, instance, created, *
 def cleanup_deleted_business_claim_attachment_file(sender, instance, **kwargs):
 	file_name = str(getattr(instance.file, 'name', '') or '').strip()
 	if file_name:
-		delete_storage_names([file_name])
+		instance.file.storage.delete(file_name)
 
 
 @receiver(post_delete, sender=BusinessDirectMessage)
@@ -134,6 +134,13 @@ def cleanup_deleted_direct_message_image(sender, instance, **kwargs):
 	file_name = str(getattr(instance.image, 'name', '') or '').strip()
 	if file_name:
 		instance.image.storage.delete(file_name)
+
+
+@receiver(post_delete, sender=ContentReport)
+def cleanup_deleted_content_report_screenshot(sender, instance, **kwargs):
+	file_name = str(getattr(instance.screenshot, 'name', '') or '').strip()
+	if file_name:
+		instance.screenshot.storage.delete(file_name)
 
 
 def _get_deal_attachment_references(deal_overrides):

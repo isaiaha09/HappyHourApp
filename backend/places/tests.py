@@ -2,7 +2,7 @@ import json
 from datetime import timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from io import StringIO
+from io import BytesIO, StringIO
 from unittest.mock import MagicMock, call, patch
 
 from django.contrib.auth import get_user_model
@@ -23,22 +23,19 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 from bs4 import BeautifulSoup
 from email.utils import parseaddr
+from PIL import Image
 import pyotp
 
-from .admin import BusinessAccountAdmin, BusinessClaimAdmin, CustomerAccountAdmin, DeletedBusinessAdmin, ListingSnapshotAdmin, ListingSnapshotAdminForm, ProviderUsageWindowAdmin, _sync_listing_snapshot_from_imported_place
+from .admin import BusinessAccountAdmin, BusinessClaimAdmin, CustomerAccountAdmin, DeletedBusinessAdmin, ListingSnapshotAdmin, ListingSnapshotAdminForm, _sync_listing_snapshot_from_imported_place
 from .admin_site import happyhour_admin_site
-from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, BusinessPost, City, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedEngagement, FeedImpression, ListingSnapshot, ProfileAuthToken, ProviderUsageWindow, SponsoredCampaign, VenueType, Weekday
+from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, BusinessPost, City, ContentReport, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedEngagement, FeedImpression, ListingSnapshot, ProfileAuthToken, SponsoredCampaign, VenueType, Weekday
 from .services.importers.base import BaseHtmlImporter
 from .services.importers.business_websites import BusinessWebsiteImporter
 from .services.importers.discovered_json_places import CuratedJsonPlacesImporter, DiscoveryJsonPlacesImporter, load_discovery_json_records, write_discovery_json_records
 from .services.deleted_businesses import filter_deleted_business_records
 from .services.demo_home_feed import DEMO_HOME_FEED_SOURCE_NAME, get_demo_home_feed_business_specs
-from .services.importers.here_places import HerePlacesImporter
-from .services.importers.openstreetmap_places import HybridPlacesImporter, OpenStreetMapPlacesImporter
-from .services.importers.tomtom_places import TomTomPlacesImporter
-from .services.provider_quota import consume_provider_transaction, get_provider_usage_statuses, select_discovery_provider
 from .services.favorite_notifications import create_notifications_for_business_profile_update
-from .services.importers.yelp_places import YelpFusionPlacesImporter
+from .services.image_moderation import ImageModerationRejected, ImageModerationUnavailable, moderate_uploaded_image
 from .services.importers.types import ImportedDeal, ImportedHappyHour, ImportedOperatingHour, ImportedPlace
 from .services.source_listings import _build_deal_identity_key, _build_place_payload, get_source_place_payload, get_source_place_payloads, load_source_records
 
@@ -258,7 +255,7 @@ class PlaceApiTests(APITestCase):
 				venue_type=VenueType.RESTAURANT,
 				address_line_1='2 Main St',
 				website_url='https://example.com/deal-spot',
-				source_name='here_places',
+				source_name='verified_businesses',
 				deals=[ImportedDeal(title='Happy Hour', deal_type=DealType.HAPPY_HOUR)],
 			),
 			ImportedPlace(
@@ -267,7 +264,7 @@ class PlaceApiTests(APITestCase):
 				venue_type=VenueType.CAFE,
 				address_line_1='3 Main St',
 				website_url='https://example.com/no-deal-spot',
-				source_name='here_places',
+				source_name='verified_businesses',
 			),
 		]
 
@@ -727,8 +724,8 @@ class DiscoveryJsonStorageTests(TestCase):
 					venue_type=VenueType.RESTAURANT,
 					address_line_1='123 Main St',
 					website_url='https://example.com/stored-spot',
-					source_name='here_places',
-					external_id='here:stored-1',
+					source_name='verified_businesses',
+					external_id='verified-business:stored-1',
 					deals=[
 						ImportedDeal(
 							title='Happy Hour',
@@ -758,8 +755,8 @@ class DiscoveryJsonStorageTests(TestCase):
 					venue_type=VenueType.RESTAURANT,
 					address_line_1='123 Main St',
 					website_url='https://example.com/seeded-spot',
-					source_name='here_places',
-					external_id='here:seeded-1',
+					source_name='verified_businesses',
+					external_id='verified-business:seeded-1',
 				),
 			], file_path=seed_path)
 
@@ -771,11 +768,11 @@ class DiscoveryJsonStorageTests(TestCase):
 				records = DiscoveryJsonPlacesImporter().load_records()
 
 			self.assertEqual(len(records), 1)
-			self.assertEqual(records[0].external_id, 'here:seeded-1')
+			self.assertEqual(records[0].external_id, 'verified-business:seeded-1')
 			self.assertTrue(runtime_path.exists())
 			self.assertEqual(runtime_path.read_text(encoding='utf-8'), seed_path.read_text(encoding='utf-8'))
 
-	def test_refresh_discovery_json_command_writes_enriched_here_records(self):
+	def test_refresh_discovery_json_command_writes_enriched_verified_records(self):
 		with TemporaryDirectory() as temp_dir:
 			json_path = Path(temp_dir) / 'discovered_places.json'
 			output = StringIO()
@@ -785,8 +782,8 @@ class DiscoveryJsonStorageTests(TestCase):
 				venue_type=VenueType.CAFE,
 				address_line_1='2 Main St',
 				website_url='https://example.com/discovery-spot',
-				source_name='here_places',
-				external_id='here:3',
+				source_name='verified_businesses',
+				external_id='verified-business:3',
 			)
 			class DummyDiscoveryImporter:
 				def load_records(self_inner):
@@ -797,19 +794,19 @@ class DiscoveryJsonStorageTests(TestCase):
 				venue_type=VenueType.CAFE,
 				address_line_1='2 Main St',
 				website_url='https://example.com/discovery-spot',
-				source_name='here_places',
-				external_id='here:3',
+				source_name='verified_businesses',
+				external_id='verified-business:3',
 				deals=[ImportedDeal(title='Website Happy Hour', deal_type=DealType.HAPPY_HOUR)],
 			)
 
 			with self.settings(DISCOVERY_JSON_PATH=json_path):
-				with patch.dict('places.management.commands.refresh_discovery_json.IMPORTER_REGISTRY', {'here_places': DummyDiscoveryImporter}, clear=False), patch.object(BusinessWebsiteImporter, 'enrich_place_records', return_value=[enriched_record]):
-					call_command('refresh_discovery_json', '--source', 'here_places', stdout=output)
+				with patch.dict('places.management.commands.refresh_discovery_json.IMPORTER_REGISTRY', {'verified_businesses': DummyDiscoveryImporter}, clear=False), patch.object(BusinessWebsiteImporter, 'enrich_place_records', return_value=[enriched_record]):
+					call_command('refresh_discovery_json', '--source', 'verified_businesses', stdout=output)
 
 			records = load_discovery_json_records(json_path)
 
 		self.assertEqual(len(records), 1)
-		self.assertEqual(records[0].external_id, 'here:3')
+		self.assertEqual(records[0].external_id, 'verified-business:3')
 		self.assertEqual(len(records[0].deals), 1)
 		self.assertEqual(records[0].deals[0].title, 'Website Happy Hour')
 		self.assertIn('Wrote 1 discovery places', output.getvalue())
@@ -827,8 +824,8 @@ class DiscoveryJsonStorageTests(TestCase):
 					venue_type=VenueType.CAFE,
 					address_line_1='2 Main St',
 					website_url='https://example.com/discovery-1',
-					source_name='here_places',
-					external_id='here:1',
+					source_name='verified_businesses',
+					external_id='verified-business:1',
 				),
 				ImportedPlace(
 					name='Discovery Spot 2',
@@ -836,8 +833,8 @@ class DiscoveryJsonStorageTests(TestCase):
 					venue_type=VenueType.RESTAURANT,
 					address_line_1='3 Main St',
 					website_url='https://example.com/discovery-2',
-					source_name='here_places',
-					external_id='here:2',
+					source_name='verified_businesses',
+					external_id='verified-business:2',
 				),
 			]
 
@@ -846,13 +843,13 @@ class DiscoveryJsonStorageTests(TestCase):
 					return records
 
 			with self.settings(DISCOVERY_JSON_PATH=json_path):
-				with patch.dict('places.management.commands.refresh_discovery_json.IMPORTER_REGISTRY', {'here_places': DummyDiscoveryImporter}, clear=False):
-					call_command('refresh_discovery_json', '--source', 'here_places', '--limit', '1', '--skip-enrichment', stdout=output)
+				with patch.dict('places.management.commands.refresh_discovery_json.IMPORTER_REGISTRY', {'verified_businesses': DummyDiscoveryImporter}, clear=False):
+					call_command('refresh_discovery_json', '--source', 'verified_businesses', '--limit', '1', '--skip-enrichment', stdout=output)
 
 			stored_records = load_discovery_json_records(json_path)
 
 		self.assertEqual(len(stored_records), 1)
-		self.assertEqual(stored_records[0].external_id, 'here:1')
+		self.assertEqual(stored_records[0].external_id, 'verified-business:1')
 		self.assertIn('Writing raw discovery results without website enrichment.', output.getvalue())
 
 	def test_refresh_discovery_json_command_merges_into_existing_json_and_filters_city(self):
@@ -864,8 +861,8 @@ class DiscoveryJsonStorageTests(TestCase):
 					city=City.VENTURA,
 					venue_type=VenueType.RESTAURANT,
 					address_line_1='1 Main St',
-					source_name='here_places',
-					external_id='here:existing',
+					source_name='verified_businesses',
+					external_id='verified-business:existing',
 				),
 			], file_path=json_path)
 			output = StringIO()
@@ -875,16 +872,16 @@ class DiscoveryJsonStorageTests(TestCase):
 					city=City.VENTURA,
 					venue_type=VenueType.CAFE,
 					address_line_1='2 Main St',
-					source_name='here_places',
-					external_id='here:new-ventura',
+					source_name='verified_businesses',
+					external_id='verified-business:new-ventura',
 				),
 				ImportedPlace(
 					name='Oxnard Spot',
 					city=City.OXNARD,
 					venue_type=VenueType.BAR,
 					address_line_1='3 Main St',
-					source_name='here_places',
-					external_id='here:oxnard',
+					source_name='verified_businesses',
+					external_id='verified-business:oxnard',
 				),
 			]
 
@@ -893,13 +890,13 @@ class DiscoveryJsonStorageTests(TestCase):
 					return records
 
 			with self.settings(DISCOVERY_JSON_PATH=json_path):
-				with patch.dict('places.management.commands.refresh_discovery_json.IMPORTER_REGISTRY', {'here_places': DummyDiscoveryImporter}, clear=False), patch.object(BusinessWebsiteImporter, 'enrich_place_records', side_effect=lambda place_records: list(place_records)):
-					call_command('refresh_discovery_json', '--source', 'here_places', '--city', 'ventura', stdout=output)
+				with patch.dict('places.management.commands.refresh_discovery_json.IMPORTER_REGISTRY', {'verified_businesses': DummyDiscoveryImporter}, clear=False), patch.object(BusinessWebsiteImporter, 'enrich_place_records', side_effect=lambda place_records: list(place_records)):
+					call_command('refresh_discovery_json', '--source', 'verified_businesses', '--city', 'ventura', stdout=output)
 
 			stored_records = load_discovery_json_records(json_path)
 
 		self.assertEqual(len(stored_records), 2)
-		self.assertEqual({record.external_id for record in stored_records}, {'here:existing', 'here:new-ventura'})
+		self.assertEqual({record.external_id for record in stored_records}, {'verified-business:existing', 'verified-business:new-ventura'})
 
 	def test_curated_json_importer_keeps_curated_and_discovery_records(self):
 		website_record = ImportedPlace(
@@ -915,8 +912,8 @@ class DiscoveryJsonStorageTests(TestCase):
 			city=City.VENTURA,
 			venue_type=VenueType.RESTAURANT,
 			address_line_1='60 S California St',
-			source_name='here_places',
-			external_id='here:1',
+			source_name='verified_businesses',
+			external_id='verified-business:1',
 		)
 
 		class DummyWebsiteImporter:
@@ -933,7 +930,7 @@ class DiscoveryJsonStorageTests(TestCase):
 		).load_records()
 
 		self.assertEqual(len(records), 2)
-		self.assertEqual({record.source_name for record in records}, {'business_websites', 'here_places'})
+		self.assertEqual({record.source_name for record in records}, {'business_websites', 'verified_businesses'})
 
 	def test_refresh_discovery_json_command_skips_deleted_businesses(self):
 		with TemporaryDirectory() as temp_dir:
@@ -944,8 +941,8 @@ class DiscoveryJsonStorageTests(TestCase):
 				city=City.CAMARILLO,
 				venue_type=VenueType.CAFE,
 				address_line_1='2 Main St',
-				source_name='here_places',
-				external_id='here:3',
+				source_name='verified_businesses',
+				external_id='verified-business:3',
 			)
 			discovery_record = ImportedPlace(
 				name='Discovery Spot',
@@ -953,8 +950,8 @@ class DiscoveryJsonStorageTests(TestCase):
 				venue_type=VenueType.CAFE,
 				address_line_1='2 Main St',
 				website_url='https://example.com/discovery-spot',
-				source_name='here_places',
-				external_id='here:3',
+				source_name='verified_businesses',
+				external_id='verified-business:3',
 			)
 
 			class DummyDiscoveryImporter:
@@ -962,73 +959,8 @@ class DiscoveryJsonStorageTests(TestCase):
 					return [discovery_record]
 
 			with self.settings(DISCOVERY_JSON_PATH=json_path):
-				with patch.dict('places.management.commands.refresh_discovery_json.IMPORTER_REGISTRY', {'here_places': DummyDiscoveryImporter}, clear=False), patch.object(BusinessWebsiteImporter, 'enrich_place_records', side_effect=lambda place_records: list(place_records)):
-					call_command('refresh_discovery_json', '--source', 'here_places', stdout=output)
-
-			records = load_discovery_json_records(json_path)
-
-		self.assertEqual(records, [])
-		self.assertIn('Loaded 1 discovery candidates, and 0 businesses to store.', output.getvalue())
-
-	def test_json_importer_skips_records_excluded_by_discovery_exclusions_file(self):
-		with TemporaryDirectory() as temp_dir:
-			json_path = Path(temp_dir) / 'discovered_places.json'
-			exclusions_path = Path(temp_dir) / 'discovery_exclusions.json'
-			exclusions_path.write_text(
-				'{"here_places": {"excluded_businesses": [], "excluded_external_ids": ["here:stored-1"]}}',
-				encoding='utf-8',
-			)
-			write_discovery_json_records([
-				ImportedPlace(
-					name='Stored Spot',
-					city=City.VENTURA,
-					venue_type=VenueType.RESTAURANT,
-					address_line_1='123 Main St',
-					source_name='here_places',
-					external_id='here:stored-1',
-				),
-				ImportedPlace(
-					name='Keep Spot',
-					city=City.VENTURA,
-					venue_type=VenueType.RESTAURANT,
-					address_line_1='124 Main St',
-					source_name='here_places',
-					external_id='here:stored-2',
-				),
-			], file_path=json_path)
-
-			with self.settings(DISCOVERY_JSON_PATH=json_path, DISCOVERY_EXCLUSIONS_PATH=exclusions_path):
-				records = load_discovery_json_records(json_path)
-
-		self.assertEqual(len(records), 1)
-		self.assertEqual(records[0].external_id, 'here:stored-2')
-
-	def test_refresh_discovery_json_command_skips_discovery_file_exclusions(self):
-		with TemporaryDirectory() as temp_dir:
-			json_path = Path(temp_dir) / 'discovered_places.json'
-			exclusions_path = Path(temp_dir) / 'discovery_exclusions.json'
-			exclusions_path.write_text(
-				'{"here_places": {"excluded_businesses": [], "excluded_external_ids": ["here:3"]}}',
-				encoding='utf-8',
-			)
-			output = StringIO()
-			discovery_record = ImportedPlace(
-				name='Discovery Spot',
-				city=City.CAMARILLO,
-				venue_type=VenueType.CAFE,
-				address_line_1='2 Main St',
-				website_url='https://example.com/discovery-spot',
-				source_name='here_places',
-				external_id='here:3',
-			)
-
-			class DummyDiscoveryImporter:
-				def load_records(self_inner):
-					return [discovery_record]
-
-			with self.settings(DISCOVERY_JSON_PATH=json_path, DISCOVERY_EXCLUSIONS_PATH=exclusions_path):
-				with patch.dict('places.management.commands.refresh_discovery_json.IMPORTER_REGISTRY', {'here_places': DummyDiscoveryImporter}, clear=False), patch.object(BusinessWebsiteImporter, 'enrich_place_records', side_effect=lambda place_records: list(place_records)):
-					call_command('refresh_discovery_json', '--source', 'here_places', stdout=output)
+				with patch.dict('places.management.commands.refresh_discovery_json.IMPORTER_REGISTRY', {'verified_businesses': DummyDiscoveryImporter}, clear=False), patch.object(BusinessWebsiteImporter, 'enrich_place_records', side_effect=lambda place_records: list(place_records)):
+					call_command('refresh_discovery_json', '--source', 'verified_businesses', stdout=output)
 
 			records = load_discovery_json_records(json_path)
 
@@ -1044,8 +976,8 @@ class DiscoveryJsonStorageTests(TestCase):
 				city=City.CAMARILLO,
 				venue_type=VenueType.CAFE,
 				address_line_1='2 Main St',
-				source_name='here_places',
-				external_id='here:3',
+				source_name='verified_businesses',
+				external_id='verified-business:3',
 				deleted_from_business_database=False,
 			)
 			discovery_record = ImportedPlace(
@@ -1054,8 +986,8 @@ class DiscoveryJsonStorageTests(TestCase):
 				venue_type=VenueType.CAFE,
 				address_line_1='2 Main St',
 				website_url='https://example.com/discovery-spot',
-				source_name='here_places',
-				external_id='here:3',
+				source_name='verified_businesses',
+				external_id='verified-business:3',
 			)
 
 			class DummyDiscoveryImporter:
@@ -1063,19 +995,18 @@ class DiscoveryJsonStorageTests(TestCase):
 					return [discovery_record]
 
 			with self.settings(DISCOVERY_JSON_PATH=json_path):
-				with patch.dict('places.management.commands.refresh_discovery_json.IMPORTER_REGISTRY', {'here_places': DummyDiscoveryImporter}, clear=False), patch.object(BusinessWebsiteImporter, 'enrich_place_records', side_effect=lambda place_records: list(place_records)):
-					call_command('refresh_discovery_json', '--source', 'here_places', stdout=output)
+				with patch.dict('places.management.commands.refresh_discovery_json.IMPORTER_REGISTRY', {'verified_businesses': DummyDiscoveryImporter}, clear=False), patch.object(BusinessWebsiteImporter, 'enrich_place_records', side_effect=lambda place_records: list(place_records)):
+					call_command('refresh_discovery_json', '--source', 'verified_businesses', stdout=output)
 
 			records = load_discovery_json_records(json_path)
 
 		self.assertEqual(len(records), 1)
-		self.assertEqual(records[0].external_id, 'here:3')
+		self.assertEqual(records[0].external_id, 'verified-business:3')
 
 	def test_backup_admin_data_command_creates_backup_bundle_with_snapshot_export(self):
 		with TemporaryDirectory() as temp_dir:
 			output_dir = Path(temp_dir) / 'backups'
 			discovery_json_path = Path(temp_dir) / 'discovered_places.json'
-			exclusions_path = Path(temp_dir) / 'discovery_exclusions.json'
 			stdout = StringIO()
 
 			def fake_sqlite_backup(_command, backup_dir):
@@ -1090,8 +1021,8 @@ class DiscoveryJsonStorageTests(TestCase):
 				venue_type=VenueType.RESTAURANT,
 				address_line_1='123 Main St',
 				website_url='https://example.com/backup-bistro',
-				source_name='here_places',
-				external_id='here:backup-1',
+				source_name='verified_businesses',
+				external_id='verified-business:backup-1',
 				deal_overrides=[{
 					'title': 'Admin Deal',
 					'description': 'Saved by admin',
@@ -1107,13 +1038,11 @@ class DiscoveryJsonStorageTests(TestCase):
 					city=City.VENTURA,
 					venue_type=VenueType.RESTAURANT,
 					address_line_1='123 Main St',
-					source_name='here_places',
-					external_id='here:backup-1',
+					source_name='verified_businesses',
+					external_id='verified-business:backup-1',
 				),
 			], file_path=discovery_json_path)
-			exclusions_path.write_text('{"here_places": {"excluded_businesses": [], "excluded_external_ids": []}}', encoding='utf-8')
-
-			with self.settings(DISCOVERY_JSON_PATH=discovery_json_path, DISCOVERY_EXCLUSIONS_PATH=exclusions_path):
+			with self.settings(DISCOVERY_JSON_PATH=discovery_json_path):
 				with patch('places.management.commands.backup_admin_data.Command._backup_sqlite_database', autospec=True, side_effect=fake_sqlite_backup):
 					call_command('backup_admin_data', '--output-dir', str(output_dir), '--label', 'manual-admin', stdout=stdout)
 
@@ -1126,7 +1055,6 @@ class DiscoveryJsonStorageTests(TestCase):
 			self.assertTrue((backup_dir / 'listing-snapshots.json').exists())
 			self.assertTrue((backup_dir / 'manifest.json').exists())
 			self.assertTrue((backup_dir / 'discovered_places.json').exists())
-			self.assertTrue((backup_dir / 'discovery_exclusions.json').exists())
 
 			manifest = json.loads((backup_dir / 'manifest.json').read_text(encoding='utf-8'))
 			self.assertEqual(manifest['database_vendor'], 'sqlite')
@@ -1136,7 +1064,7 @@ class DiscoveryJsonStorageTests(TestCase):
 			snapshot_export = json.loads((backup_dir / 'listing-snapshots.json').read_text(encoding='utf-8'))
 			self.assertEqual(snapshot_export['snapshot_count'], 1)
 			self.assertEqual(snapshot_export['snapshots'][0]['fields']['name'], 'Backup Bistro')
-			self.assertEqual(snapshot_export['snapshots'][0]['display_data']['stored_discovery_record']['external_id'], 'here:backup-1')
+			self.assertEqual(snapshot_export['snapshots'][0]['display_data']['stored_discovery_record']['external_id'], 'verified-business:backup-1')
 			self.assertEqual(snapshot_export['snapshots'][0]['display_data']['manual_deal_overrides'][0]['title'], 'Admin Deal')
 			self.assertIn('Created backup bundle at', stdout.getvalue())
 
@@ -1145,12 +1073,10 @@ class DiscoveryJsonStorageTests(TestCase):
 			output_dir = Path(temp_dir) / 'backups'
 			runtime_path = Path(temp_dir) / '.runtime' / 'discovered_places.json'
 			seed_path = Path(temp_dir) / 'config' / 'discovered_places.json'
-			exclusions_path = Path(temp_dir) / 'config' / 'discovery_exclusions.json'
 			runtime_path.parent.mkdir(parents=True)
 			seed_path.parent.mkdir(parents=True)
 			runtime_path.write_text('[{"name": "Runtime Spot"}]', encoding='utf-8')
 			seed_path.write_text('[{"name": "Seed Spot"}]', encoding='utf-8')
-			exclusions_path.write_text('{}', encoding='utf-8')
 
 			fake_client = MagicMock()
 			fake_client.get_paginator.return_value.paginate.side_effect = lambda Bucket: [{
@@ -1179,7 +1105,6 @@ class DiscoveryJsonStorageTests(TestCase):
 				with self.settings(
 					DISCOVERY_JSON_PATH=runtime_path,
 					DISCOVERY_JSON_SEED_PATH=seed_path,
-					DISCOVERY_EXCLUSIONS_PATH=exclusions_path,
 					SUPABASE_STORAGE_BUCKET='public-bucket',
 					SUPABASE_PRIVATE_STORAGE_BUCKET='private-bucket',
 					SUPABASE_STORAGE_ENDPOINT='https://storage.example.test/s3',
@@ -1199,7 +1124,6 @@ class DiscoveryJsonStorageTests(TestCase):
 			self.assertTrue((backup_dir / 'supabase' / 'public-media' / 'business-profile-photos' / 'test.jpg').exists())
 			self.assertTrue((backup_dir / 'discovery' / 'runtime-discovered_places.json').exists())
 			self.assertTrue((backup_dir / 'discovery' / 'seed-discovered_places.json').exists())
-			self.assertTrue((backup_dir / 'discovery' / 'discovery-exclusions.json').exists())
 			self.assertNotIn('backup-password', captured_pg_dump['command'])
 			self.assertEqual(captured_pg_dump['environment']['PGPASSWORD'], 'backup-password')
 
@@ -1237,7 +1161,7 @@ class DiscoveryJsonStorageTests(TestCase):
 				}],
 			}, indent=2), encoding='utf-8')
 
-			with self.settings(DISCOVERY_JSON_PATH=target_path, DISCOVERY_JSON_SEED_PATH=target_path, DISCOVERY_EXCLUSIONS_PATH=target_path.parent / 'discovery_exclusions.json'):
+			with self.settings(DISCOVERY_JSON_PATH=target_path, DISCOVERY_JSON_SEED_PATH=target_path):
 				call_command('restore_production_data', '--backup-dir', str(backup_dir), '--skip-media')
 				self.assertIn('Current Spot', target_path.read_text(encoding='utf-8'))
 				call_command('restore_production_data', '--backup-dir', str(backup_dir), '--skip-media', '--apply')
@@ -1805,7 +1729,7 @@ class BusinessWebsiteImporterTests(TestCase):
 			venue_type=VenueType.RESTAURANT,
 			address_line_1='123 Main St',
 			website_url='https://broken-pdf.example.com/home',
-			source_name='here_places',
+			source_name='verified_businesses',
 		)
 
 		enriched_record = importer.enrich_place_record(place_record)
@@ -1860,9 +1784,9 @@ class BusinessWebsiteImporterTests(TestCase):
 			venue_type=VenueType.RESTAURANT,
 			address_line_1='123 Main St',
 			website_url='https://example.com/discovery-bistro',
-			external_id='here:1',
-			source_name='here_places',
-			source_url='https://discover.search.hereapi.com/v1/discover',
+			external_id='verified-business:1',
+			source_name='verified_businesses',
+			source_url='https://discovery.example.net/v1/discover',
 		)
 
 		enriched_record = importer.enrich_place_record(place_record)
@@ -1908,7 +1832,7 @@ class BusinessWebsiteImporterTests(TestCase):
 			venue_type=VenueType.RESTAURANT,
 			address_line_1='123 Main St',
 			website_url='https://fallback-bistro.example.com/home',
-			source_name='here_places',
+			source_name='verified_businesses',
 		)
 
 		enriched_record = importer.enrich_place_record(place_record)
@@ -1950,7 +1874,7 @@ class BusinessWebsiteImporterTests(TestCase):
 			venue_type=VenueType.RESTAURANT,
 			address_line_1='123 Main St',
 			website_url='https://public.example.com/split-url-bistro',
-			source_name='here_places',
+			source_name='verified_businesses',
 			source_url='https://public.example.com/specials/',
 		)
 
@@ -1970,7 +1894,7 @@ class BusinessWebsiteImporterTests(TestCase):
 			venue_type=VenueType.RESTAURANT,
 			address_line_1='123 Main St',
 			website_url='',
-			source_name='here_places',
+			source_name='verified_businesses',
 		)
 
 		enriched_record = importer.enrich_place_record(place_record)
@@ -1990,7 +1914,7 @@ class BusinessWebsiteImporterTests(TestCase):
 			venue_type=VenueType.RESTAURANT,
 			address_line_1='123 Main St',
 			website_url='https://www.facebook.com/restaurant-page',
-			source_name='here_places',
+			source_name='verified_businesses',
 		)
 
 		enriched_record = importer.enrich_place_record(place_record)
@@ -1998,22 +1922,10 @@ class BusinessWebsiteImporterTests(TestCase):
 		self.assertEqual(getattr(enriched_record, 'discovery_enrichment_status', ''), 'blocked_url')
 		self.assertEqual(enriched_record, place_record)
 
-	def test_importer_allows_yelp_business_source_url_when_no_supported_website_exists(self):
-		html = """
-		<html>
-			<body>
-				<section class="promo">Happy Hour Monday-Friday 3pm to 6pm. $5 margaritas and $2 off tacos.</section>
-			</body>
-		</html>
-		"""
-
+	def test_importer_does_not_fetch_yelp_business_source_url_when_no_supported_website_exists(self):
 		class StubSession:
-			def __init__(self):
-				self.calls = []
-
 			def get(self, url, headers=None, timeout=None):
-				self.calls.append(url)
-				return StubResponse(html)
+				raise AssertionError('Yelp URLs must not be fetched by website enrichment')
 
 		session = StubSession()
 		importer = BusinessWebsiteImporter(session=session, business_sources=[])
@@ -2023,15 +1935,14 @@ class BusinessWebsiteImporterTests(TestCase):
 			venue_type=VenueType.RESTAURANT,
 			address_line_1='123 Main St',
 			website_url='',
-			source_name='here_places',
+			source_name='verified_businesses',
 			source_url='https://www.yelp.com/biz/yelp-bistro-ventura',
 		)
 
 		enriched_record = importer.enrich_place_record(place_record)
 
-		self.assertGreaterEqual(len(enriched_record.deals), 1)
-		self.assertEqual(getattr(enriched_record, 'discovery_enrichment_status', ''), 'auto_confirmed')
-		self.assertEqual(session.calls, ['https://www.yelp.com/biz/yelp-bistro-ventura'])
+		self.assertEqual(getattr(enriched_record, 'discovery_enrichment_status', ''), 'blocked_url')
+		self.assertEqual(enriched_record, place_record)
 
 	def test_importer_keeps_preferring_supported_first_party_website_over_yelp_source_url(self):
 		class StubSession:
@@ -2050,7 +1961,7 @@ class BusinessWebsiteImporterTests(TestCase):
 			venue_type=VenueType.RESTAURANT,
 			address_line_1='123 Main St',
 			website_url='https://firstparty.example.com/menu',
-			source_name='here_places',
+			source_name='verified_businesses',
 			source_url='https://www.yelp.com/biz/first-party-bistro-ventura',
 		)
 
@@ -2067,7 +1978,7 @@ class BusinessWebsiteImporterTests(TestCase):
 			venue_type=VenueType.RESTAURANT,
 			address_line_1='123 Main St',
 			website_url='https://plain-bistro.example.com/home',
-			source_name='here_places',
+			source_name='verified_businesses',
 		)
 
 		enriched_record = importer.enrich_place_record(place_record)
@@ -2106,7 +2017,7 @@ class BusinessWebsiteImporterTests(TestCase):
 			venue_type=VenueType.RESTAURANT,
 			address_line_1='123 Main St',
 			website_url='https://example.com/chain-bistro',
-			source_name='here_places',
+			source_name='verified_businesses',
 		)
 
 		enriched_record = importer.enrich_place_record(place_record)
@@ -2142,49 +2053,6 @@ class BusinessWebsiteImporterTests(TestCase):
 		self.assertEqual(records[0].postal_code, '93036')
 		self.assertEqual(records[0].phone_number, '(805)555-0101')
 
-	def test_here_importer_combines_house_number_and_street_for_address_line_1(self):
-		importer = HerePlacesImporter(session=MagicMock())
-		item = {
-			'id': 'test-place-1',
-			'title': 'Test Bistro',
-			'address': {
-				'houseNumber': '123',
-				'street': 'Main St',
-				'postalCode': '93001',
-				'stateCode': 'CA',
-			},
-			'position': {'lat': 34.28, 'lng': -119.29},
-			'contacts': [{'phone': [{'value': '805-555-0101'}], 'www': [{'value': 'https://example.com'}]}],
-			'href': 'https://discover.search.hereapi.com/v1/discover/test-place-1',
-		}
-
-		record = importer._build_place_record(City.VENTURA, VenueType.RESTAURANT, item)
-
-		self.assertIsNotNone(record)
-		self.assertEqual(record.address_line_1, '123 Main St')
-
-	def test_here_importer_keeps_suite_number_in_address_line_1_when_label_includes_it(self):
-		importer = HerePlacesImporter(session=MagicMock())
-		item = {
-			'id': 'test-place-suite-1',
-			'title': 'Suite Test Bistro',
-			'address': {
-				'houseNumber': '501',
-				'street': 'Collection Blvd',
-				'label': '501 Collection Blvd Ste # 4130, Oxnard, CA 93036, United States',
-				'postalCode': '93036',
-				'stateCode': 'CA',
-			},
-			'position': {'lat': 34.22, 'lng': -119.18},
-			'contacts': [{'phone': [{'value': '805-555-0101'}], 'www': [{'value': 'https://example.com'}]}],
-			'href': 'https://discover.search.hereapi.com/v1/discover/test-place-suite-1',
-		}
-
-		record = importer._build_place_record(City.OXNARD, VenueType.RESTAURANT, item)
-
-		self.assertIsNotNone(record)
-		self.assertEqual(record.address_line_1, '501 Collection Blvd Ste # 4130')
-
 	def test_importer_extracts_city_scoped_contact_details_from_embedded_location_payload(self):
 		html = """
 		<html>
@@ -2217,6 +2085,7 @@ class BusinessWebsiteImporterTests(TestCase):
 		self.assertEqual(records[0].postal_code, '93036')
 		self.assertEqual(records[0].phone_number, '(805) 351-4888')
 
+	@override_settings(BUSINESS_SOURCE_IMPORT_IMAGES=True)
 	def test_importer_extracts_preview_image_urls(self):
 		html = """
 		<html>
@@ -2256,6 +2125,7 @@ class BusinessWebsiteImporterTests(TestCase):
 			],
 		)
 
+	@override_settings(BUSINESS_SOURCE_IMPORT_IMAGES=True)
 	def test_importer_deduplicates_same_photo_variants(self):
 		html = """
 		<html>
@@ -2289,6 +2159,7 @@ class BusinessWebsiteImporterTests(TestCase):
 			],
 		)
 
+	@override_settings(BUSINESS_SOURCE_IMPORT_IMAGES=True)
 	def test_importer_extracts_background_and_data_background_images(self):
 		html = """
 		<html>
@@ -2321,6 +2192,7 @@ class BusinessWebsiteImporterTests(TestCase):
 			],
 		)
 
+	@override_settings(BUSINESS_SOURCE_IMPORT_IMAGES=True)
 	def test_importer_rejects_placeholder_video_and_page_urls(self):
 		html = """
 		<html>
@@ -2414,36 +2286,7 @@ class SourceListingIdentityTests(TestCase):
 
 		self.assertNotEqual(_build_deal_identity_key(first_deal), _build_deal_identity_key(second_deal))
 
-	@patch('places.services.source_listings.requests.get')
-	def test_place_payload_includes_cached_coordinates(self, mock_get):
-		caches[getattr(settings, 'PLACE_GEOCODE_CACHE_ALIAS', 'default')].clear()
-
-		mock_response = mock_get.return_value
-		mock_response.raise_for_status.return_value = None
-		mock_response.json.return_value = [{'lat': '34.2783', 'lon': '-119.2931'}]
-
-		payload = _build_place_payload(
-			ImportedPlace(
-				name='805 Tacos',
-				city=City.VENTURA,
-				venue_type=VenueType.RESTAURANT,
-				address_line_1='123 Main St',
-				state='CA',
-				postal_code='93001',
-				operating_hours=[ImportedOperatingHour(weekday=Weekday.MONDAY, open_time='11:00', close_time='22:00')],
-				source_name='business_websites',
-				source_url='https://example.com/805-tacos',
-			)
-		)
-
-		self.assertEqual(payload['latitude'], 34.2783)
-		self.assertEqual(payload['longitude'], -119.2931)
-		self.assertEqual(payload['image_urls'], [])
-		self.assertEqual(payload['operating_hours'][0]['open_time'], '11:00')
-		self.assertEqual(payload['operating_hours'][0]['close_time'], '22:00')
-
-	@patch('places.services.source_listings.requests.get')
-	def test_place_payload_prefers_imported_coordinates(self, mock_get):
+	def test_place_payload_uses_imported_coordinates_without_external_geocoding(self):
 		payload = _build_place_payload(
 			ImportedPlace(
 				name='Aloha Steakhouse',
@@ -2454,14 +2297,13 @@ class SourceListingIdentityTests(TestCase):
 				postal_code='93001',
 				latitude=34.2763384,
 				longitude=-119.2929831,
-				source_name='openstreetmap_places',
-				source_url='https://www.openstreetmap.org/node/369154702',
+				source_name='verified_businesses',
+				source_url='https://example.com/aloha-steakhouse',
 			)
 		)
 
 		self.assertEqual(payload['latitude'], 34.2763384)
 		self.assertEqual(payload['longitude'], -119.2929831)
-		mock_get.assert_not_called()
 
 	@patch('places.services.source_listings._get_place_coordinates')
 	@patch('places.services.source_listings.load_source_records')
@@ -2698,8 +2540,8 @@ class SourceListingIdentityTests(TestCase):
 				state='CA',
 				postal_code='93001',
 				website_url='https://facebook.com/cafe805',
-				external_id='here:cafe-805',
-				source_name='here_places',
+				external_id='verified-business:cafe-805',
+				source_name='verified_businesses',
 				source_url='https://facebook.com/cafe805',
 			),
 		]
@@ -2709,8 +2551,8 @@ class SourceListingIdentityTests(TestCase):
 			city=City.VENTURA,
 			venue_type=VenueType.CAFE,
 			address_line_1='123 Main St',
-			source_name='here_places',
-			external_id='here:cafe-805',
+			source_name='verified_businesses',
+			external_id='verified-business:cafe-805',
 			website_url='',
 			source_url='',
 			social_profiles={
@@ -3328,8 +3170,8 @@ class SourceListingIdentityTests(TestCase):
 				state='CA',
 				postal_code='93010',
 				website_url='',
-				external_id='here:999-pizza',
-				source_name='here_places',
+				external_id='verified-business:999-pizza',
+				source_name='verified_businesses',
 			),
 		]
 		ListingSnapshot.objects.create(
@@ -3338,8 +3180,8 @@ class SourceListingIdentityTests(TestCase):
 			city=City.CAMARILLO,
 			venue_type=VenueType.RESTAURANT,
 			address_line_1='Ventura Blvd',
-			external_id='here:999-pizza',
-			source_name='here_places',
+			external_id='verified-business:999-pizza',
+			source_name='verified_businesses',
 			website_url='https://admin.example.com/999-pizza',
 		)
 
@@ -3429,8 +3271,8 @@ class SourceListingIdentityTests(TestCase):
 				state='CA',
 				postal_code='93010',
 				phone_number='805-555-0101',
-				external_id='here:baskin-camarillo',
-				source_name='here_places',
+				external_id='verified-business:baskin-camarillo',
+				source_name='verified_businesses',
 			),
 			ImportedPlace(
 				name='Baskin-Robbins',
@@ -3442,8 +3284,8 @@ class SourceListingIdentityTests(TestCase):
 				state='CA',
 				postal_code='93035',
 				phone_number='805-555-0202',
-				external_id='here:baskin-oxnard',
-				source_name='here_places',
+				external_id='verified-business:baskin-oxnard',
+				source_name='verified_businesses',
 			),
 		]
 		ListingSnapshot.objects.create(
@@ -3454,8 +3296,8 @@ class SourceListingIdentityTests(TestCase):
 			address_line_1='738 Arneill Rd',
 			postal_code='93012',
 			phone_number='805-555-9999',
-			external_id='here:baskin-camarillo',
-			source_name='here_places',
+			external_id='verified-business:baskin-camarillo',
+			source_name='verified_businesses',
 		)
 
 		payload = get_source_place_payload('baskin-robbins')
@@ -3484,8 +3326,8 @@ class SourceListingIdentityTests(TestCase):
 				address_line_1='738 Arneill Rd',
 				state='CA',
 				postal_code='93010',
-				external_id='here:baskin-camarillo',
-				source_name='here_places',
+				external_id='verified-business:baskin-camarillo',
+				source_name='verified_businesses',
 				operating_hours=[ImportedOperatingHour(weekday=Weekday.MONDAY, open_time='10:00', close_time='20:00')],
 			),
 			ImportedPlace(
@@ -3497,8 +3339,8 @@ class SourceListingIdentityTests(TestCase):
 				address_line_1='1251 S Victoria Ave',
 				state='CA',
 				postal_code='93035',
-				external_id='here:baskin-oxnard',
-				source_name='here_places',
+				external_id='verified-business:baskin-oxnard',
+				source_name='verified_businesses',
 				operating_hours=[ImportedOperatingHour(weekday=Weekday.TUESDAY, open_time='11:00', close_time='21:00')],
 			),
 		]
@@ -3508,8 +3350,8 @@ class SourceListingIdentityTests(TestCase):
 			city=City.CAMARILLO,
 			venue_type=VenueType.CAFE,
 			address_line_1='738 Arneill Rd',
-			external_id='here:baskin-camarillo',
-			source_name='here_places',
+			external_id='verified-business:baskin-camarillo',
+			source_name='verified_businesses',
 			operating_hour_overrides=[{'weekday': Weekday.FRIDAY, 'open_time': '12:00', 'close_time': '22:00'}],
 		)
 
@@ -3615,8 +3457,8 @@ class SourceListingIdentityTests(TestCase):
 				postal_code='93010',
 				phone_number='(805) 388-5556',
 				website_url='http://www.lurefishhouse.com',
-				source_name='here_places',
-				source_url='https://discover.search.hereapi.com/v1/discover',
+				source_name='verified_businesses',
+				source_url='https://example.com/verified-discovery',
 			),
 		]
 		mock_get_place_coordinates.side_effect = [(34.2801, -119.2929), (34.2187, -119.0739)]
@@ -3658,8 +3500,8 @@ class SourceListingIdentityTests(TestCase):
 				postal_code='93001-2595',
 				phone_number='(805) 567-4400',
 				website_url='http://www.lurefishhouse.com',
-				source_name='here_places',
-				source_url='https://discover.search.hereapi.com/v1/discover',
+				source_name='verified_businesses',
+				source_url='https://example.com/verified-discovery',
 			),
 		]
 		mock_get_place_coordinates.side_effect = [(34.2801, -119.2929), (34.28011, -119.2928)]
@@ -3694,8 +3536,8 @@ class SourceListingIdentityTests(TestCase):
 				address_line_1='N Lantana St',
 				state='CA',
 				postal_code='93010',
-				source_name='here_places',
-				source_url='https://discover.search.hereapi.com/v1/discover',
+				source_name='verified_businesses',
+				source_url='https://example.com/verified-discovery',
 			),
 			ImportedPlace(
 				name='Cronies Sports Grill Camarillo',
@@ -3755,8 +3597,8 @@ class SourceListingIdentityTests(TestCase):
 				address_line_1='456 Ventura Blvd',
 				state='CA',
 				postal_code='93010',
-				source_name='here_places',
-				source_url='https://discover.search.hereapi.com/v1/discover',
+				source_name='verified_businesses',
+				source_url='https://example.com/verified-discovery',
 				deals=[ImportedDeal(title='Late Night', deal_type=DealType.DAILY_SPECIAL)],
 			),
 			ImportedPlace(
@@ -3766,8 +3608,8 @@ class SourceListingIdentityTests(TestCase):
 				address_line_1='789 Harbor Blvd',
 				state='CA',
 				postal_code='93035',
-				source_name='here_places',
-				source_url='https://discover.search.hereapi.com/v1/discover',
+				source_name='verified_businesses',
+				source_url='https://example.com/verified-discovery',
 			),
 		]
 		mock_get_place_coordinates.side_effect = lambda place_record, resolve_missing=True: coordinates_by_address[place_record.address_line_1]
@@ -3927,620 +3769,6 @@ class SourceListingIdentityTests(TestCase):
 		self.assertEqual(payloads[0]['venue_type_label'], 'Cafe')
 		self.assertTrue(payloads[0]['is_verified'])
 		self.assertEqual(payloads[0]['locations'][0]['city'], City.CAMARILLO)
-
-	@override_settings(HERE_API_KEY='', TOMTOM_API_KEY='')
-	def test_hybrid_importer_adds_osm_places_without_duplicating_curated_sources(self):
-		class StaticImporter:
-			def __init__(self, records, source_name='static'):
-				self.records = records
-				self.source_name = source_name
-
-			def load_records(self):
-				return list(self.records)
-
-		website_records = [
-			ImportedPlace(
-				name='Lure Fish House',
-				city=City.VENTURA,
-				venue_type=VenueType.RESTAURANT,
-				address_line_1='60 S California St',
-				source_name='business_websites',
-				source_url='https://example.com/lure-ventura',
-			),
-		]
-		osm_records = [
-			ImportedPlace(
-				name='Lure Fish House',
-				city=City.VENTURA,
-				venue_type=VenueType.RESTAURANT,
-				address_line_1='60 S California Street',
-				latitude=34.2801,
-				longitude=-119.2929,
-				source_name='openstreetmap_places',
-				source_url='https://www.openstreetmap.org/node/1',
-			),
-			ImportedPlace(
-				name='Aloha Steakhouse',
-				city=City.VENTURA,
-				venue_type=VenueType.RESTAURANT,
-				address_line_1='364 S California St',
-				latitude=34.2763384,
-				longitude=-119.2929831,
-				source_name='openstreetmap_places',
-				source_url='https://www.openstreetmap.org/node/369154702',
-			),
-		]
-
-		importer = HybridPlacesImporter(
-			website_importer=StaticImporter(website_records, 'business_websites'),
-			osm_importer=StaticImporter(osm_records, 'openstreetmap_places'),
-		)
-
-		records = importer.load_records()
-
-		self.assertEqual(len(records), 2)
-		self.assertEqual([record.name for record in records], ['Lure Fish House', 'Aloha Steakhouse'])
-
-	@override_settings(OSM_PLACE_EXCLUDED_BUSINESSES=(('ventura', 'Barrelhouse 101'),))
-	def test_osm_importer_skips_configured_excluded_businesses(self):
-		importer = OpenStreetMapPlacesImporter()
-		record = importer._build_place_record(
-			City.VENTURA,
-			{
-				'type': 'way',
-				'id': 410595933,
-				'center': {'lat': 34.2785079, 'lon': -119.2923931},
-				'tags': {
-					'name': 'Barrelhouse 101',
-					'amenity': 'restaurant',
-					'addr:housenumber': '545',
-					'addr:street': 'East Thompson Boulevard',
-				},
-			},
-		)
-
-		self.assertIsNone(record)
-
-	@override_settings(OSM_PLACE_EXCLUDED_EXTERNAL_IDS=('osm:way:410595933',))
-	def test_osm_importer_skips_configured_excluded_external_ids(self):
-		importer = OpenStreetMapPlacesImporter()
-		record = importer._build_place_record(
-			City.VENTURA,
-			{
-				'type': 'way',
-				'id': 410595933,
-				'center': {'lat': 34.2785079, 'lon': -119.2923931},
-				'tags': {
-					'name': 'Some Business',
-					'amenity': 'restaurant',
-					'addr:housenumber': '545',
-					'addr:street': 'East Thompson Boulevard',
-					'website': 'https://example.com',
-				},
-			},
-		)
-
-		self.assertIsNone(record)
-
-	def test_osm_importer_skips_disused_businesses(self):
-		importer = OpenStreetMapPlacesImporter()
-		record = importer._build_place_record(
-			City.VENTURA,
-			{
-				'type': 'node',
-				'id': 42,
-				'lat': 34.27,
-				'lon': -119.29,
-				'tags': {
-					'name': 'Closed Cafe',
-					'amenity': 'cafe',
-					'disused:amenity': 'cafe',
-				},
-			},
-		)
-
-		self.assertIsNone(record)
-
-	@override_settings(OSM_PLACE_MIN_METADATA_SCORE=2)
-	def test_osm_importer_skips_weak_metadata_records(self):
-		importer = OpenStreetMapPlacesImporter()
-		record = importer._build_place_record(
-			City.VENTURA,
-			{
-				'type': 'node',
-				'id': 99,
-				'lat': 34.27,
-				'lon': -119.29,
-				'tags': {
-					'name': 'Sparse Listing',
-					'amenity': 'restaurant',
-				},
-			},
-		)
-
-		self.assertIsNone(record)
-
-	@override_settings(HERE_API_KEY='here-token', TOMTOM_API_KEY='tomtom-token', HERE_MONTHLY_LIMIT=10, HERE_MONTHLY_RESERVE=1, TOMTOM_DAILY_LIMIT=10, TOMTOM_DAILY_RESERVE=1)
-	def test_hybrid_importer_prefers_here_then_tomtom_before_osm_duplicates(self):
-		class StaticImporter:
-			def __init__(self, records, source_name):
-				self.records = records
-				self.source_name = source_name
-
-			def load_records(self):
-				return list(self.records)
-
-		website_records = []
-		here_records = [
-			ImportedPlace(
-				name='Aloha Steakhouse',
-				city=City.VENTURA,
-				venue_type=VenueType.RESTAURANT,
-				address_line_1='364 S California St',
-				latitude=34.2763384,
-				longitude=-119.2929831,
-				source_name='here_places',
-				source_url='https://discover.search.hereapi.com/v1/discover',
-			),
-		]
-		tomtom_records = [
-			ImportedPlace(
-				name='Aloha Steakhouse',
-				city=City.VENTURA,
-				venue_type=VenueType.RESTAURANT,
-				address_line_1='364 S California St',
-				latitude=34.2763384,
-				longitude=-119.2929831,
-				source_name='tomtom_places',
-				source_url='https://api.tomtom.com/search/2/categorySearch/restaurant.json',
-			),
-		]
-		osm_records = [
-			ImportedPlace(
-				name='Aloha Steakhouse',
-				city=City.VENTURA,
-				venue_type=VenueType.RESTAURANT,
-				address_line_1='364 S California Street',
-				latitude=34.2763384,
-				longitude=-119.2929831,
-				source_name='openstreetmap_places',
-				source_url='https://www.openstreetmap.org/node/369154702',
-			),
-		]
-
-		importer = HybridPlacesImporter(
-			website_importer=StaticImporter(website_records, 'business_websites'),
-			here_importer=StaticImporter(here_records, 'here_places'),
-			tomtom_importer=StaticImporter(tomtom_records, 'tomtom_places'),
-			osm_importer=StaticImporter(osm_records, 'openstreetmap_places'),
-		)
-
-		records = importer.load_records()
-
-		self.assertEqual(len(records), 1)
-		self.assertEqual(records[0].source_name, 'here_places')
-
-	@override_settings(HERE_API_KEY='here-token', TOMTOM_API_KEY='tomtom-token', HERE_MONTHLY_LIMIT=10, HERE_MONTHLY_RESERVE=2, TOMTOM_DAILY_LIMIT=10, TOMTOM_DAILY_RESERVE=1)
-	def test_hybrid_importer_falls_back_to_tomtom_when_here_budget_is_exhausted(self):
-		class StaticImporter:
-			def __init__(self, records, source_name):
-				self.records = records
-				self.source_name = source_name
-
-			def load_records(self):
-				return list(self.records)
-
-		ProviderUsageWindow.objects.create(
-			provider_name='here_places',
-			window_kind=ProviderUsageWindow.WindowKind.MONTH,
-			window_start=timezone.localdate().replace(day=1),
-			consumed_transactions=8,
-			transaction_limit=10,
-			reserve_threshold=2,
-		)
-
-		importer = HybridPlacesImporter(
-			website_importer=StaticImporter([], 'business_websites'),
-			here_importer=StaticImporter([], 'here_places'),
-			tomtom_importer=StaticImporter([
-				ImportedPlace(
-					name='TomTom Backup Spot',
-					city=City.VENTURA,
-					venue_type=VenueType.RESTAURANT,
-					address_line_1='123 Main St',
-					source_name='tomtom_places',
-					source_url='https://api.tomtom.com/search/2/categorySearch/restaurant.json',
-				),
-			], 'tomtom_places'),
-			osm_importer=StaticImporter([], 'openstreetmap_places'),
-		)
-
-		records = importer.load_records()
-
-		self.assertEqual(len(records), 1)
-		self.assertEqual(records[0].source_name, 'tomtom_places')
-
-	@override_settings(HERE_API_KEY='here-token', TOMTOM_API_KEY='tomtom-token', HERE_MONTHLY_LIMIT=10, HERE_MONTHLY_RESERVE=1, TOMTOM_DAILY_LIMIT=10, TOMTOM_DAILY_RESERVE=1)
-	def test_hybrid_importer_enriches_discovery_records_through_website_importer(self):
-		class WebsiteImporter:
-			source_name = 'business_websites'
-
-			def load_records(self):
-				return []
-
-			def enrich_place_records(self, records):
-				return [
-					ImportedPlace(
-						name=record.name,
-						profile_name=record.profile_name,
-						profile_slug=record.profile_slug,
-						city=record.city,
-						venue_type=record.venue_type,
-						address_line_1=record.address_line_1,
-						address_line_2=record.address_line_2,
-						neighborhood=record.neighborhood,
-						state=record.state,
-						postal_code=record.postal_code,
-						latitude=record.latitude,
-						longitude=record.longitude,
-						geocode_query=record.geocode_query,
-						phone_number=record.phone_number,
-						website_url=record.website_url,
-						image_urls=list(record.image_urls),
-						operating_hours=list(record.operating_hours),
-						is_active=record.is_active,
-						external_id=record.external_id,
-						source_name=record.source_name,
-						source_url=record.source_url,
-						deals=[ImportedDeal(title='Happy Hour', deal_type=DealType.HAPPY_HOUR)],
-					)
-					for record in records
-				]
-
-		class StaticImporter:
-			def __init__(self, records, source_name):
-				self.records = records
-				self.source_name = source_name
-
-			def load_records(self):
-				return list(self.records)
-
-		importer = HybridPlacesImporter(
-			website_importer=WebsiteImporter(),
-			here_importer=StaticImporter([
-				ImportedPlace(
-					name='Discovery Bistro',
-					city=City.VENTURA,
-					venue_type=VenueType.RESTAURANT,
-					address_line_1='123 Main St',
-					website_url='https://example.com/discovery-bistro',
-					source_name='here_places',
-				)
-			], 'here_places'),
-			tomtom_importer=StaticImporter([], 'tomtom_places'),
-			osm_importer=StaticImporter([], 'openstreetmap_places'),
-		)
-
-		records = importer.load_records()
-
-		self.assertEqual(len(records), 1)
-		self.assertEqual(len(records[0].deals), 1)
-		self.assertEqual(records[0].deals[0].title, 'Happy Hour')
-
-
-class HerePlacesImporterTests(TestCase):
-	@override_settings(HERE_API_KEY='test-token', HERE_CACHE_TIMEOUT=0)
-	def test_here_importer_builds_places_from_discover_results(self):
-		class StubSession:
-			def get(self, url, params=None, headers=None, timeout=None):
-				class Response:
-					def raise_for_status(self_inner):
-						return None
-
-					def json(self_inner):
-						return {
-							'items': [
-								{
-									'id': 'here-1',
-									'title': 'Open Here Spot',
-									'position': {'lat': 34.28, 'lng': -119.29},
-									'address': {'street': '123 Main St', 'postalCode': '93001', 'stateCode': 'CA'},
-									'contacts': [{'phone': [{'value': '(805) 555-0101'}], 'www': [{'value': 'https://example.com'}]}],
-								},
-							],
-						}
-
-				return Response()
-
-		importer = HerePlacesImporter(session=StubSession())
-		records = importer.load_records()
-
-		self.assertEqual(len(records), 1)
-		self.assertEqual(records[0].source_name, 'here_places')
-
-	@override_settings(HERE_API_KEY='test-token', HERE_CACHE_TIMEOUT=0)
-	def test_here_importer_filters_non_food_and_closed_results(self):
-		importer = HerePlacesImporter()
-		items = [
-			{
-				'id': 'here-food-1',
-				'title': 'Harbor Tacos',
-				'position': {'lat': 34.28, 'lng': -119.29},
-				'address': {'street': '123 Main St', 'postalCode': '93001', 'stateCode': 'CA'},
-				'categories': [{'name': 'Restaurant', 'primary': True}],
-			},
-			{
-				'id': 'here-junk-1',
-				'title': 'Point Mugu Fitness Center',
-				'position': {'lat': 34.20, 'lng': -119.17},
-				'address': {'street': '1 Base Rd', 'postalCode': '93042', 'stateCode': 'CA'},
-				'categories': [{'name': 'Fitness/Health Club', 'primary': True}],
-			},
-			{
-				'id': 'here-junk-2',
-				'title': 'Mugu Lanes',
-				'position': {'lat': 34.12, 'lng': -119.10},
-				'address': {
-					'street': 'Mugu Lanes, Point Mugu Naws',
-					'label': 'Mugu Lanes, Point Mugu Naws, CA 93042, United States',
-					'postalCode': '93042',
-					'stateCode': 'CA',
-				},
-				'categories': [{'name': 'Bar', 'primary': True}],
-			},
-			{
-				'id': 'here-junk-3',
-				'title': 'In Between 5 and Club House',
-				'position': {'lat': 34.23, 'lng': -119.02},
-				'address': {
-					'street': 'In Between 5 and Club House',
-					'label': 'In Between 5 and Club House, Camarillo, CA 93012, United States',
-					'postalCode': '93012',
-					'stateCode': 'CA',
-				},
-				'categories': [{'name': 'Bar', 'primary': True}],
-			},
-			{
-				'id': 'here-closed-1',
-				'title': 'Closed Burger Spot',
-				'position': {'lat': 34.30, 'lng': -119.30},
-				'address': {'street': '999 Shoreline Dr', 'postalCode': '93001', 'stateCode': 'CA'},
-				'categories': [{'name': 'Restaurant', 'primary': True}],
-				'businessStatus': 'permanently closed',
-			},
-			{
-				'id': 'here-label-1',
-				'title': 'Camarillo, CA, United States',
-				'position': {'lat': 34.21, 'lng': -119.03},
-				'address': {'label': 'Camarillo, CA, United States', 'street': '', 'postalCode': '93010', 'stateCode': 'CA'},
-				'categories': [{'name': 'Restaurant', 'primary': True}],
-			},
-			{
-				'id': 'here-supplier-1',
-				'title': 'Bimbo Bakeries USA',
-				'position': {'lat': 34.22, 'lng': -119.04},
-				'address': {'street': '456 Industry Way', 'postalCode': '93010', 'stateCode': 'CA'},
-				'categories': [{'name': 'Bakery', 'primary': True}],
-			},
-		]
-
-		kept_names = [item['title'] for item in items if importer._should_keep_item(item, search_term='bar')]
-
-		self.assertEqual(kept_names, ['Harbor Tacos'])
-
-	@override_settings(
-		HERE_API_KEY='test-token',
-		HERE_CACHE_TIMEOUT=0,
-		HERE_PLACE_EXCLUDED_BUSINESSES=((City.CAMARILLO, 'Institution Ale Company'),),
-	)
-	def test_here_importer_skips_configured_excluded_businesses(self):
-		class StubSession:
-			def get(self, url, params=None, headers=None, timeout=None):
-				class Response:
-					def raise_for_status(self_inner):
-						return None
-
-					def json(self_inner):
-						return {
-							'items': [
-								{
-									'id': 'here-inst-1',
-									'title': 'Institution Ale Company',
-									'position': {'lat': 34.2164, 'lng': -119.0376},
-									'address': {
-										'street': '3841 Mission Oaks Blvd',
-										'postalCode': '93012',
-										'stateCode': 'CA',
-										'city': 'camarillo',
-										'label': '3841 Mission Oaks Blvd, Camarillo, CA 93012, United States',
-									},
-									'categories': [{'name': 'Brewery', 'primary': True}],
-								},
-								{
-									'id': 'here-ok-1',
-									'title': 'Harbor Tacos',
-									'position': {'lat': 34.28, 'lng': -119.29},
-									'address': {
-										'street': '123 Main St',
-										'postalCode': '93001',
-										'stateCode': 'CA',
-										'city': 'ventura',
-									},
-									'categories': [{'name': 'Restaurant', 'primary': True}],
-								},
-							],
-						}
-
-				return Response()
-
-		importer = HerePlacesImporter(session=StubSession())
-		records = importer.load_records()
-
-		self.assertEqual([record.name for record in records], ['Harbor Tacos'])
-
-	@override_settings(HERE_API_KEY='test-token', HERE_CACHE_TIMEOUT=0)
-	def test_here_importer_skips_file_backed_excluded_external_ids(self):
-		with TemporaryDirectory() as temp_dir:
-			exclusions_path = Path(temp_dir) / 'discovery_exclusions.json'
-			exclusions_path.write_text(
-				'{"here_places": {"excluded_businesses": [], "excluded_external_ids": ["here:here-bad-1"]}}',
-				encoding='utf-8',
-			)
-
-			class StubSession:
-				def get(self, url, params=None, headers=None, timeout=None):
-					class Response:
-						def raise_for_status(self_inner):
-							return None
-
-						def json(self_inner):
-							return {
-								'items': [
-									{
-										'id': 'here-bad-1',
-										'title': 'Bubble Bakery',
-										'position': {'lat': 34.20, 'lng': -119.00},
-										'address': {'street': '1 Main St', 'postalCode': '93010', 'stateCode': 'CA', 'city': 'camarillo'},
-										'categories': [{'name': 'Bakery', 'primary': True}],
-									},
-									{
-										'id': 'here-good-1',
-										'title': 'Harbor Tacos',
-										'position': {'lat': 34.28, 'lng': -119.29},
-										'address': {'street': '123 Main St', 'postalCode': '93001', 'stateCode': 'CA', 'city': 'ventura'},
-										'categories': [{'name': 'Restaurant', 'primary': True}],
-									},
-								],
-							}
-
-					return Response()
-
-			with self.settings(DISCOVERY_EXCLUSIONS_PATH=exclusions_path):
-				importer = HerePlacesImporter(session=StubSession())
-				records = importer.load_records()
-
-		self.assertEqual([record.name for record in records], ['Harbor Tacos'])
-
-
-class TomTomPlacesImporterTests(TestCase):
-	@override_settings(TOMTOM_API_KEY='test-token')
-	def test_tomtom_importer_builds_places_from_category_search_results(self):
-		class StubSession:
-			def get(self, url, params=None, headers=None, timeout=None):
-				class Response:
-					def raise_for_status(self_inner):
-						return None
-
-					def json(self_inner):
-						return {
-							'results': [
-								{
-									'id': 'tt-1',
-									'poi': {'name': 'Open TomTom Spot', 'phone': '(805) 555-0102', 'url': 'https://example.org'},
-									'position': {'lat': 34.29, 'lon': -119.28},
-									'address': {'streetNumber': '456', 'streetName': 'Oak St', 'postalCode': '93001', 'countrySubdivision': 'CA'},
-								},
-							],
-						}
-
-				return Response()
-
-		importer = TomTomPlacesImporter(session=StubSession())
-		records = importer.load_records()
-
-		self.assertEqual(len(records), 1)
-		self.assertEqual(records[0].source_name, 'tomtom_places')
-
-
-class ProviderQuotaTests(TestCase):
-	@override_settings(HERE_API_KEY='here-token', TOMTOM_API_KEY='tomtom-token', HERE_MONTHLY_LIMIT=10, HERE_MONTHLY_RESERVE=2, TOMTOM_DAILY_LIMIT=5, TOMTOM_DAILY_RESERVE=1)
-	def test_provider_selection_prefers_here_until_monthly_reserve_then_switches(self):
-		self.assertEqual(select_discovery_provider(), 'here_places')
-
-		ProviderUsageWindow.objects.update_or_create(
-			provider_name='here_places',
-			window_kind=ProviderUsageWindow.WindowKind.MONTH,
-			window_start=timezone.localdate().replace(day=1),
-			defaults={
-				'consumed_transactions': 8,
-				'transaction_limit': 10,
-				'reserve_threshold': 2,
-			},
-		)
-
-		self.assertEqual(select_discovery_provider(), 'tomtom_places')
-
-		ProviderUsageWindow.objects.update_or_create(
-			provider_name='tomtom_places',
-			window_kind=ProviderUsageWindow.WindowKind.DAY,
-			window_start=timezone.localdate(),
-			defaults={
-				'consumed_transactions': 4,
-				'transaction_limit': 5,
-				'reserve_threshold': 1,
-			},
-		)
-
-		self.assertEqual(select_discovery_provider(), 'openstreetmap_places')
-
-	@override_settings(HERE_API_KEY='here-token', HERE_MONTHLY_LIMIT=3, HERE_MONTHLY_RESERVE=1)
-	def test_consume_provider_transaction_stops_at_reserve_cutoff(self):
-		self.assertTrue(consume_provider_transaction('here_places'))
-		self.assertTrue(consume_provider_transaction('here_places'))
-		self.assertFalse(consume_provider_transaction('here_places'))
-
-		statuses = get_provider_usage_statuses()
-		here_status = next(status for status in statuses if status['provider_name'] == 'here_places')
-		self.assertEqual(here_status['consumed_transactions'], 2)
-		self.assertEqual(here_status['remaining_transactions'], 1)
-		self.assertEqual(here_status['remaining_before_reserve'], 0)
-		self.assertFalse(here_status['available'])
-
-
-class YelpFusionPlacesImporterTests(TestCase):
-	@override_settings(YELP_FUSION_API_KEY='test-token')
-	def test_yelp_importer_skips_closed_businesses(self):
-		class StubSession:
-			def __init__(self):
-				self.calls = []
-
-			def get(self, url, params=None, headers=None, timeout=None):
-				self.calls.append({'url': url, 'params': params, 'headers': headers, 'timeout': timeout})
-
-				class Response:
-					def raise_for_status(self_inner):
-						return None
-
-					def json(self_inner):
-						return {
-							'businesses': [
-								{
-									'id': 'closed-one',
-									'name': 'Closed Spot',
-									'is_closed': True,
-									'location': {'address1': '123 Main St', 'state': 'CA', 'zip_code': '93001'},
-									'coordinates': {'latitude': 34.27, 'longitude': -119.29},
-								},
-								{
-									'id': 'open-one',
-									'name': 'Open Spot',
-									'is_closed': False,
-									'location': {'address1': '456 Main St', 'state': 'CA', 'zip_code': '93001'},
-									'coordinates': {'latitude': 34.28, 'longitude': -119.28},
-									'url': 'https://www.yelp.com/biz/open-one',
-								},
-							],
-						}
-
-				return Response()
-
-		importer = YelpFusionPlacesImporter(session=StubSession())
-		records = importer.load_records()
-
-		self.assertEqual(len(records), 1)
-		self.assertEqual(records[0].name, 'Open Spot')
-		self.assertEqual(records[0].source_name, 'yelp_fusion_places')
-
 
 @override_settings(
 	CACHES={
@@ -5007,6 +4235,7 @@ class ProfileSignupApiTests(APITestCase):
 				'username': 'finneys_owner',
 				'email': 'owner@example.com',
 				'password': 'test-pass-123',
+				'verification_data_consent': True,
 				'first_name': 'Pat',
 				'last_name': 'Owner',
 				'business_slug': 'finneys-crafthouse',
@@ -5049,6 +4278,8 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(claim.employer_address, '494 E Main St, Ventura, CA 93001')
 		self.assertEqual(claim.pathway, BusinessClaim.Pathway.CLAIMED)
 		self.assertEqual(claim.business_website_url, 'https://finneysventura.example.com')
+		self.assertIsNotNone(claim.verification_data_consent_at)
+		self.assertEqual(claim.verification_data_consent_version, '2026-08-16')
 		self.assertEqual(
 			claim.social_profiles,
 			{
@@ -5102,6 +4333,7 @@ class ProfileSignupApiTests(APITestCase):
 				'username': 'finneys_override_owner',
 				'email': 'override-owner@example.com',
 				'password': 'test-pass-123',
+				'verification_data_consent': True,
 				'first_name': 'Pat',
 				'last_name': 'Owner',
 				'business_slug': 'finneys-crafthouse',
@@ -5167,6 +4399,7 @@ class ProfileSignupApiTests(APITestCase):
 				'username': 'finneys_long_offer_owner',
 				'email': 'long-offer@example.com',
 				'password': 'test-pass-123',
+				'verification_data_consent': True,
 				'first_name': 'Pat',
 				'last_name': 'Owner',
 				'business_slug': 'finneys-crafthouse',
@@ -5219,6 +4452,7 @@ class ProfileSignupApiTests(APITestCase):
 						'username': 'photo_claim_owner',
 						'email': 'photo-claim@example.com',
 						'password': 'test-pass-123',
+						'verification_data_consent': True,
 						'first_name': 'Pat',
 						'last_name': 'Owner',
 						'business_slug': 'finneys-crafthouse',
@@ -5248,7 +4482,10 @@ class ProfileSignupApiTests(APITestCase):
 		claim = BusinessClaim.objects.get(claimant__username='photo_claim_owner')
 		self.assertEqual(len(claim.photo_references), 2)
 		self.assertTrue(claim.photo_gallery_overridden)
-		self.assertTrue(all('/business-profile-photos/' in photo_url for photo_url in claim.photo_references))
+		self.assertTrue(all(
+			f'/businesses/{claim.listing_snapshot_id}-finneys-crafthouse/claims/{claim.id}/profile-photos/' in photo_url
+			for photo_url in claim.photo_references
+		))
 		self.assertEqual(
 			claim.get_profile_entry_values(BusinessClaim.ProfileEntryKind.PHOTO_REFERENCE),
 			claim.photo_references,
@@ -5264,6 +4501,7 @@ class ProfileSignupApiTests(APITestCase):
 						'username': 'photo_only_vendor',
 						'email': 'photo-only@example.com',
 						'password': 'test-pass-123',
+						'verification_data_consent': True,
 						'first_name': 'Photo',
 						'last_name': 'Vendor',
 						'business_name': 'Photo Only Snacks',
@@ -5312,6 +4550,7 @@ class ProfileSignupApiTests(APITestCase):
 						'username': 'deal_attachment_owner',
 						'email': 'deal-attachment@example.com',
 						'password': 'test-pass-123',
+						'verification_data_consent': True,
 						'first_name': 'Pat',
 						'last_name': 'Owner',
 						'business_slug': 'finneys-crafthouse',
@@ -5344,7 +4583,10 @@ class ProfileSignupApiTests(APITestCase):
 		claim = BusinessClaim.objects.get(claimant__username='deal_attachment_owner')
 		self.assertEqual(claim.deal_overrides[0]['attachment']['name'], 'happy-hour-flyer.pdf')
 		self.assertEqual(claim.deal_overrides[0]['attachment']['content_type'], 'application/pdf')
-		self.assertIn('/business-deal-attachments/', claim.deal_overrides[0]['attachment']['url'])
+		self.assertIn(
+			f'/businesses/{claim.listing_snapshot_id}-finneys-crafthouse/claims/{claim.id}/deal-attachments/',
+			claim.deal_overrides[0]['attachment']['url'],
+		)
 
 	@patch('places.views.get_source_place_payload')
 	def test_claimed_business_signup_reuses_matching_existing_snapshot_even_when_slug_changes(self, mock_get_source_place_payload):
@@ -5380,6 +4622,7 @@ class ProfileSignupApiTests(APITestCase):
 				'username': 'yard_house_owner',
 				'email': 'owner@yardhouse.example.com',
 				'password': 'test-pass-123',
+				'verification_data_consent': True,
 				'first_name': 'Yard',
 				'last_name': 'Owner',
 				'business_slug': 'yard-house',
@@ -5417,6 +4660,7 @@ class ProfileSignupApiTests(APITestCase):
 				'username': 'new_bistro_owner',
 				'email': 'newbistro@example.com',
 				'password': 'test-pass-123',
+				'verification_data_consent': True,
 				'first_name': 'Casey',
 				'last_name': 'Founder',
 				'business_name': 'Corner Bistro',
@@ -5467,6 +4711,7 @@ class ProfileSignupApiTests(APITestCase):
 				'username': 'pending_bistro_owner',
 				'email': 'pendingbistro@example.com',
 				'password': 'test-pass-123',
+				'verification_data_consent': True,
 				'first_name': 'Casey',
 				'last_name': 'Founder',
 				'business_name': 'Pending Bistro',
@@ -5552,6 +4797,7 @@ class ProfileSignupApiTests(APITestCase):
 				'username': 'claimed_pending_owner',
 				'email': 'claimed-pending@example.com',
 				'password': 'test-pass-123',
+				'verification_data_consent': True,
 				'first_name': 'Pat',
 				'last_name': 'Claimant',
 				'business_slug': 'finneys-crafthouse',
@@ -5600,6 +4846,7 @@ class ProfileSignupApiTests(APITestCase):
 				'username': 'icecream_truck_owner',
 				'email': 'icecream@example.com',
 				'password': 'test-pass-123',
+				'verification_data_consent': True,
 				'first_name': 'Taylor',
 				'last_name': 'Driver',
 				'business_name': 'Scoops Truck',
@@ -5666,6 +4913,7 @@ class ProfileSignupApiTests(APITestCase):
 				'username': 'retry_bistro_owner',
 				'email': 'retry@example.com',
 				'password': 'new-pass-123',
+				'verification_data_consent': True,
 				'first_name': 'Retry',
 				'last_name': 'Owner',
 				'business_name': 'Retry Bistro',
@@ -5735,6 +4983,7 @@ class ProfileSignupApiTests(APITestCase):
 				'username': 'customer_to_business',
 				'email': 'customer@example.com',
 				'password': 'new-pass-123',
+				'verification_data_consent': True,
 				'first_name': 'Casey',
 				'last_name': 'Customer',
 				'business_slug': 'finneys-crafthouse',
@@ -5818,6 +5067,7 @@ class ProfileSignupApiTests(APITestCase):
 				'username': 'finneys_retry',
 				'email': 'finneys-retry@example.com',
 				'password': 'test-pass-123',
+				'verification_data_consent': True,
 				'first_name': 'Pat',
 				'last_name': 'Owner',
 				'business_slug': 'finneys-crafthouse',
@@ -5853,6 +5103,7 @@ class ProfileSignupApiTests(APITestCase):
 				'username': 'street_vendor',
 				'email': 'vendor@example.com',
 				'password': 'test-pass-123',
+				'verification_data_consent': True,
 				'first_name': 'Riley',
 				'last_name': 'Vendor',
 				'business_name': 'Riley Snacks',
@@ -5885,6 +5136,7 @@ class ProfileSignupApiTests(APITestCase):
 				'username': 'vendor_with_address',
 				'email': 'vendor-with-address@example.com',
 				'password': 'test-pass-123',
+				'verification_data_consent': True,
 				'first_name': 'Riley',
 				'last_name': 'Vendor',
 				'business_name': 'Riley Snacks Cart',
@@ -5913,6 +5165,7 @@ class ProfileSignupApiTests(APITestCase):
 				'username': 'email_failure_vendor',
 				'email': 'email-failure-vendor@example.com',
 				'password': 'test-pass-123',
+				'verification_data_consent': True,
 				'first_name': 'Riley',
 				'last_name': 'Vendor',
 				'business_name': 'Email Failure Snacks',
@@ -5942,6 +5195,7 @@ class ProfileSignupApiTests(APITestCase):
 						'username': 'vendor_with_photos',
 						'email': 'vendor-photos@example.com',
 						'password': 'test-pass-123',
+						'verification_data_consent': True,
 						'first_name': 'Riley',
 						'last_name': 'Vendor',
 						'business_name': 'Riley Snacks',
@@ -5975,6 +5229,7 @@ class ProfileSignupApiTests(APITestCase):
 				'username': 'empty_vendor',
 				'email': 'empty@example.com',
 				'password': 'test-pass-123',
+				'verification_data_consent': True,
 				'first_name': 'Empty',
 				'last_name': 'Vendor',
 				'business_name': 'Empty Booth',
@@ -5996,6 +5251,7 @@ class ProfileSignupApiTests(APITestCase):
 						'username': 'attachment_owner',
 						'email': 'attachment@example.com',
 						'password': 'test-pass-123',
+						'verification_data_consent': True,
 						'first_name': 'File',
 						'last_name': 'Owner',
 						'business_name': 'Attachment Bistro',
@@ -6046,6 +5302,11 @@ class ProfileSignupApiTests(APITestCase):
 						BusinessClaimAttachment.AttachmentKind.SOCIAL_MEDIA,
 					],
 				)
+				self.assertTrue(all(
+					attachment.file.name.startswith(f'businesses/{claim.listing_snapshot_id}-')
+					and f'/claims/{claim.id}/verification/{attachment.attachment_kind}/' in attachment.file.name
+					for attachment in attachments
+				))
 
 	def test_manual_business_signup_accepts_uploaded_business_photos(self):
 		with TemporaryDirectory() as temp_dir:
@@ -6056,6 +5317,7 @@ class ProfileSignupApiTests(APITestCase):
 						'username': 'manual_photo_owner',
 						'email': 'manual-photo@example.com',
 						'password': 'test-pass-123',
+						'verification_data_consent': True,
 						'first_name': 'Casey',
 						'last_name': 'Founder',
 						'business_name': 'Corner Bistro',
@@ -6769,7 +6031,10 @@ class ProfileDashboardApiTests(APITestCase):
 		claim.refresh_from_db()
 		self.assertEqual(len(claim.photo_references), 2)
 		self.assertEqual(claim.photo_references[0], 'https://cdn.example.com/approvedspot/front.jpg')
-		self.assertIn('/business-profile-photos/', claim.photo_references[1])
+		self.assertIn(
+			f'/businesses/{claim.listing_snapshot_id}-approved-spot-ventura/claims/{claim.id}/profile-photos/',
+			claim.photo_references[1],
+		)
 		self.assertTrue(claim.photo_gallery_overridden)
 		self.assertIn(claim.photo_references[1], response.data['business_contact']['photo_references'])
 
@@ -6843,7 +6108,10 @@ class ProfileDashboardApiTests(APITestCase):
 		claim.refresh_from_db()
 		self.assertEqual(claim.deal_overrides[0]['attachment']['name'], 'new-flyer.png')
 		self.assertEqual(claim.deal_overrides[0]['attachment']['content_type'], 'image/png')
-		self.assertIn('/business-deal-attachments/', claim.deal_overrides[0]['attachment']['url'])
+		self.assertIn(
+			f'/businesses/{claim.listing_snapshot_id}-approved-spot/claims/{claim.id}/deal-attachments/',
+			claim.deal_overrides[0]['attachment']['url'],
+		)
 		self.assertEqual(response.data['business_contact']['deal_overrides'][0]['attachment']['name'], 'new-flyer.png')
 		self.assertEqual(response.data['business_contact']['deals'][0]['attachment']['name'], 'new-flyer.png')
 
@@ -7974,6 +7242,98 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(ProfileAuthToken.objects.filter(user_id=self.user.pk).count(), 0)
 		self.assertEqual(FavoriteBusiness.objects.filter(user_id=self.user.pk).count(), 0)
 
+	def test_delete_account_removes_business_verification_materials(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Private Materials Bistro',
+			listing_slug='private-materials-bistro',
+			city=City.VENTURA,
+			venue_type=VenueType.CAFE,
+			address_line_1='123 Ventura Ave',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			pathway=BusinessClaim.Pathway.ESTABLISHED,
+			status=BusinessClaim.Status.SUBMITTED,
+			contact_name='Dash Board',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='owner@private-materials.example.com',
+			work_phone='805-555-0100',
+			employer_address='123 Ventura Ave',
+			business_website_url='https://private-materials.example.com',
+			verification_documents={'business_registration': ['private license']},
+			verification_data_consent_at=timezone.now(),
+			verification_data_consent_version='2026-08-16',
+			verification_summary='Private verification materials.',
+		)
+		attachment = BusinessClaimAttachment.objects.create(
+			claim=claim,
+			attachment_kind=BusinessClaimAttachment.AttachmentKind.BUSINESS_REGISTRATION,
+			file=ContentFile(b'private document', name='private-license.pdf'),
+			original_filename='private-license.pdf',
+			content_type='application/pdf',
+			file_size=15,
+		)
+		attachment_name = attachment.file.name
+		photo_name = default_storage.save('business-profile-photos/private-materials/photo.jpg', ContentFile(b'public photo'))
+		claim.photo_references = [f'{settings.MEDIA_URL}{photo_name}']
+		claim.save(update_fields=['photo_references', 'updated_at'])
+
+		response = self.client.post(
+			reverse('profile-delete-account'),
+			{'password': 'test-pass-123'},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 200)
+		claim.refresh_from_db()
+		self.assertFalse(BusinessClaimAttachment.objects.filter(pk=attachment.pk).exists())
+		self.assertFalse(attachment.file.storage.exists(attachment_name))
+		self.assertFalse(default_storage.exists(photo_name))
+		self.assertEqual(claim.verification_documents, {})
+		self.assertEqual(claim.photo_references, [])
+		self.assertIsNone(claim.verification_data_consent_at)
+		self.assertEqual(claim.verification_data_consent_version, '')
+
+	def test_private_claim_attachment_url_requires_staff_access(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Private Access Bistro',
+			listing_slug='private-access-bistro',
+			city=City.VENTURA,
+			venue_type=VenueType.CAFE,
+			address_line_1='123 Ventura Ave',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			work_email='owner@private-access.example.com',
+			verification_summary='Private verification materials.',
+		)
+		attachment = BusinessClaimAttachment.objects.create(
+			claim=claim,
+			attachment_kind=BusinessClaimAttachment.AttachmentKind.PROOF_OF_AUTHORITY,
+			file=ContentFile(b'private proof', name='private-proof.pdf'),
+			original_filename='private-proof.pdf',
+			content_type='application/pdf',
+			file_size=13,
+		)
+
+		self.assertTrue(attachment.file.url.startswith('/private-media/'))
+		self.assertEqual(self.client.get(attachment.file.url).status_code, 404)
+		self.assertEqual(self.client.get(f'{settings.MEDIA_URL}{attachment.file.name}').status_code, 404)
+
+		admin_user = User.objects.create_superuser(
+			username='private-media-admin',
+			email='private-media-admin@example.com',
+			password='admin-pass-123',
+		)
+		self.client.force_login(admin_user)
+		private_response = self.client.get(attachment.file.url)
+		self.assertEqual(private_response.status_code, 200)
+		self.assertEqual(b''.join(private_response.streaming_content), b'private proof')
+
 	@patch('places.services.source_listings.load_source_records', return_value=[])
 	def test_delete_account_removes_owned_business_from_public_places_and_live_locations(self, mock_load_source_records):
 		snapshot = ListingSnapshot.objects.create(
@@ -8312,6 +7672,100 @@ class ProfileDashboardApiTests(APITestCase):
 		)
 		self.assertEqual(blocked_thread_detail.status_code, 404)
 
+	def test_customer_can_block_and_unblock_business_direct_messages(self):
+		business_user = User.objects.create_user(
+			username='blocked_business_owner',
+			email='blocked_business_owner@example.com',
+			password='test-pass-123',
+		)
+		business_token = ProfileAuthToken.objects.create(user=business_user)
+		snapshot = ListingSnapshot.objects.create(
+			name='Customer Block Bistro',
+			listing_slug='customer-block-bistro',
+			city=City.VENTURA,
+			venue_type=VenueType.CAFE,
+			address_line_1='43 Main St',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=business_user,
+			listing_snapshot=snapshot,
+			contact_name='Blocked Owner',
+			job_title='Owner',
+			work_email='owner@customer-block.example.com',
+			work_phone='805-555-1235',
+			employer_address='43 Main St, Ventura, CA 93001',
+			verification_summary='I own the business.',
+			status=BusinessClaim.Status.APPROVED,
+			direct_messaging_enabled=True,
+		)
+		BusinessMembership.objects.create(claim=claim, user=business_user, is_active=True)
+
+		thread_response = self.client.post(
+			reverse('profile-direct-messages'),
+			{
+				'portal': 'customer',
+				'listing_slug': snapshot.listing_slug,
+				'message': 'Starting a conversation before blocking.',
+			},
+			format='json',
+			**self.auth_headers(),
+		)
+		self.assertEqual(thread_response.status_code, 201)
+		thread_id = thread_response.data['thread']['id']
+
+		block_response = self.client.post(
+			reverse('profile-direct-message-blocks'),
+			{
+				'portal': 'customer',
+				'thread_id': thread_id,
+			},
+			format='json',
+			**self.auth_headers(),
+		)
+		self.assertEqual(block_response.status_code, 200)
+		block = BusinessDirectMessageBlock.objects.get(business_claim=claim, customer=self.user)
+		self.assertEqual(block.blocked_by_id, self.user.id)
+
+		threads_response = self.client.get(
+			reverse('profile-direct-messages'),
+			{'portal': 'customer'},
+			**self.auth_headers(),
+		)
+		self.assertEqual(threads_response.status_code, 200)
+		self.assertTrue(threads_response.data['threads'][0]['blocked_by_current_user'])
+		self.assertEqual(threads_response.data['threads'][0]['block_id'], block.id)
+
+		customer_blocked_send = self.client.post(
+			reverse('profile-direct-messages'),
+			{'portal': 'customer', 'thread_id': thread_id, 'message': 'This should not send while blocked.'},
+			format='json',
+			**self.auth_headers(),
+		)
+		self.assertEqual(customer_blocked_send.status_code, 403)
+
+		business_blocked_send = self.client.post(
+			reverse('profile-direct-messages'),
+			{'portal': 'business', 'thread_id': thread_id, 'message': 'This should not send while blocked.'},
+			format='json',
+			HTTP_AUTHORIZATION=f'Token {business_token.key}',
+		)
+		self.assertEqual(business_blocked_send.status_code, 403)
+
+		unblock_response = self.client.delete(
+			reverse('profile-direct-message-block-detail', kwargs={'block_id': block.id}) + '?portal=customer',
+			HTTP_AUTHORIZATION=f'Token {self.token.key}',
+		)
+		self.assertEqual(unblock_response.status_code, 200)
+		self.assertFalse(BusinessDirectMessageBlock.objects.filter(pk=block.id).exists())
+
+		customer_unblocked_send = self.client.post(
+			reverse('profile-direct-messages'),
+			{'portal': 'customer', 'thread_id': thread_id, 'message': 'Messaging works again.'},
+			format='json',
+			**self.auth_headers(),
+		)
+		self.assertEqual(customer_unblocked_send.status_code, 201)
+
 	def test_customer_existing_direct_message_thread_hidden_when_business_disables_direct_messaging(self):
 		snapshot = ListingSnapshot.objects.create(
 			name='Toggle Hidden Thread Cafe',
@@ -8573,16 +8027,19 @@ class ProfileDashboardApiTests(APITestCase):
 		)
 
 		image_payload = SimpleUploadedFile('dm-photo.png', valid_png_bytes, content_type='image/png')
-		image_send_response = self.client.post(
-			reverse('profile-direct-messages'),
-			{
-				'portal': 'business',
-				'thread_id': thread_id,
-				'image': image_payload,
-			},
-			format='multipart',
-			**self.auth_headers(),
-		)
+		with patch('places.views.moderate_uploaded_image') as mock_moderate_uploaded_image:
+			image_send_response = self.client.post(
+				reverse('profile-direct-messages'),
+				{
+					'portal': 'business',
+					'thread_id': thread_id,
+					'image': image_payload,
+				},
+				format='multipart',
+				**self.auth_headers(),
+			)
+		mock_moderate_uploaded_image.assert_called_once()
+		self.assertEqual(mock_moderate_uploaded_image.call_args.kwargs['surface'], 'direct_message_image')
 		self.assertEqual(image_send_response.status_code, 201)
 		self.assertEqual(image_send_response.data['message']['message_type'], 'image')
 		self.assertTrue(bool(image_send_response.data['message']['image_url']))
@@ -8774,6 +8231,23 @@ class ProfileDashboardApiTests(APITestCase):
 			direct_messaging_enabled=True,
 		)
 		BusinessMembership.objects.create(claim=claim, user=business_user, is_active=True)
+		membership = BusinessMembership.objects.get(claim=claim)
+		post = BusinessPost.objects.create(
+			membership=membership,
+			listing_snapshot=snapshot,
+			content_type=BusinessPost.ContentType.ANNOUNCEMENT,
+			status=BusinessPost.Status.PUBLISHED,
+			title='Business update that must be removed',
+			slug='business-update-that-must-be-removed',
+			body='This business content should disappear with the account.',
+		)
+		campaign = SponsoredCampaign.objects.create(
+			membership=membership,
+			post=post,
+			name='Business campaign that must be removed',
+			status=SponsoredCampaign.Status.ACTIVE,
+			starts_at=timezone.now(),
+		)
 
 		customer_user = User.objects.create_user(username='readonly_business_customer', email='readonly_business_customer@example.com', password='test-pass-123')
 		customer_token = ProfileAuthToken.objects.create(user=customer_user)
@@ -8798,6 +8272,17 @@ class ProfileDashboardApiTests(APITestCase):
 			HTTP_AUTHORIZATION=f'Token {business_token.key}',
 		)
 		self.assertEqual(delete_response.status_code, 200)
+		self.assertFalse(BusinessPost.objects.filter(pk=post.pk).exists())
+		self.assertFalse(SponsoredCampaign.objects.filter(pk=campaign.pk).exists())
+
+		feed_response = self.client.get(reverse('home-feed'))
+		self.assertEqual(feed_response.status_code, 200)
+		self.assertFalse(any(item['post_id'] == post.pk for item in feed_response.data['results']))
+		place_detail_response = self.client.get(
+			reverse('place-detail', kwargs={'slug': snapshot.listing_slug}),
+			HTTP_AUTHORIZATION=f'Token {customer_token.key}',
+		)
+		self.assertEqual(place_detail_response.status_code, 404)
 
 		customer_threads_response = self.client.get(
 			reverse('profile-direct-messages'),
@@ -9247,9 +8732,9 @@ class ListingSnapshotAdminTests(TestCase):
 		form = ListingSnapshotAdminForm(data={
 			'name': '999 Pizza',
 			'listing_slug': '999-pizza',
-			'source_name': 'here_places',
+			'source_name': 'verified_businesses',
 			'source_url': '',
-			'external_id': 'here:999-pizza',
+			'external_id': 'verified-business:999-pizza',
 			'city': City.CAMARILLO,
 			'venue_type': VenueType.RESTAURANT,
 			'address_line_1': 'Ventura Blvd',
@@ -9285,9 +8770,9 @@ class ListingSnapshotAdminTests(TestCase):
 		form = ListingSnapshotAdminForm(data={
 			'name': '999 Pizza',
 			'listing_slug': '999-pizza',
-			'source_name': 'here_places',
+			'source_name': 'verified_businesses',
 			'source_url': '',
-			'external_id': 'here:999-pizza',
+			'external_id': 'verified-business:999-pizza',
 			'city': City.CAMARILLO,
 			'venue_type': VenueType.RESTAURANT,
 			'address_line_1': 'Ventura Blvd',
@@ -9330,9 +8815,9 @@ class ListingSnapshotAdminTests(TestCase):
 		form = ListingSnapshotAdminForm(data={
 			'name': 'Cafe 805',
 			'listing_slug': 'cafe-805',
-			'source_name': 'here_places',
+			'source_name': 'verified_businesses',
 			'source_url': 'https://facebook.com/cafe805',
-			'external_id': 'here:cafe-805',
+			'external_id': 'verified-business:cafe-805',
 			'city': City.VENTURA,
 			'venue_type': VenueType.CAFE,
 			'address_line_1': '123 Main St',
@@ -9372,9 +8857,9 @@ class ListingSnapshotAdminTests(TestCase):
 		form = ListingSnapshotAdminForm(data={
 			'name': 'Eggs Y Mas',
 			'listing_slug': 'eggs-y-mas',
-			'source_name': 'here_places',
+			'source_name': 'verified_businesses',
 			'source_url': '',
-			'external_id': 'here:eggs-y-mas',
+			'external_id': 'verified-business:eggs-y-mas',
 			'city': City.VENTURA,
 			'venue_type': VenueType.RESTAURANT,
 			'address_line_1': '123 Breakfast Ave',
@@ -9493,8 +8978,8 @@ class ListingSnapshotAdminTests(TestCase):
 			city=City.VENTURA,
 			venue_type=VenueType.RESTAURANT,
 			address_line_1='123 Main St',
-			source_name='here_places',
-			external_id='here:photo-spot',
+			source_name='verified_businesses',
+			external_id='verified-business:photo-spot',
 			imported_image_urls=[
 				'https://images.example.com/keep.jpg',
 				'https://images.example.com/remove.jpg',
@@ -9504,9 +8989,9 @@ class ListingSnapshotAdminTests(TestCase):
 		form = ListingSnapshotAdminForm(instance=snapshot, data={
 			'name': 'Photo Spot',
 			'listing_slug': 'photo-spot',
-			'source_name': 'here_places',
+			'source_name': 'verified_businesses',
 			'source_url': '',
-			'external_id': 'here:photo-spot',
+			'external_id': 'verified-business:photo-spot',
 			'city': City.VENTURA,
 			'venue_type': VenueType.RESTAURANT,
 			'address_line_1': '123 Main St',
@@ -9549,9 +9034,9 @@ class ListingSnapshotAdminTests(TestCase):
 				'https://images.example.com/remove.jpg',
 				'https://images.example.com/new.jpg',
 			],
-			external_id='here:photo-spot',
-			source_name='here_places',
-			source_url='https://here.example.com/photo-spot',
+			external_id='verified-business:photo-spot',
+			source_name='verified_businesses',
+			source_url='https://example.com/verified/photo-spot',
 		), snapshot=snapshot)
 
 		snapshot.refresh_from_db()
@@ -9566,9 +9051,9 @@ class ListingSnapshotAdminTests(TestCase):
 		form = ListingSnapshotAdminForm(data={
 			'name': 'No Website Cafe',
 			'listing_slug': 'no-website-cafe',
-			'source_name': 'here_places',
+			'source_name': 'verified_businesses',
 			'source_url': '',
-			'external_id': 'here:no-website-cafe',
+			'external_id': 'verified-business:no-website-cafe',
 			'city': City.VENTURA,
 			'venue_type': VenueType.CAFE,
 			'address_line_1': '123 Main St',
@@ -9638,8 +9123,8 @@ class ListingSnapshotAdminTests(TestCase):
 			city=City.VENTURA,
 			venue_type=VenueType.CAFE,
 			address_line_1='123 Main St',
-			source_name='here_places',
-			external_id='here:no-website-cafe',
+			source_name='verified_businesses',
+			external_id='verified-business:no-website-cafe',
 			website_url='',
 			website_url_suppressed=True,
 		)
@@ -9654,9 +9139,9 @@ class ListingSnapshotAdminTests(TestCase):
 			state='CA',
 			postal_code='93001',
 			website_url='https://wrong.example.com',
-			external_id='here:no-website-cafe',
-			source_name='here_places',
-			source_url='https://here.example.com/no-website-cafe',
+			external_id='verified-business:no-website-cafe',
+			source_name='verified_businesses',
+			source_url='https://example.com/verified/no-website-cafe',
 		), snapshot=snapshot)
 
 		snapshot.refresh_from_db()
@@ -9668,9 +9153,9 @@ class ListingSnapshotAdminTests(TestCase):
 		form = ListingSnapshotAdminForm(data={
 			'name': '999 Pizza',
 			'listing_slug': '999-pizza',
-			'source_name': 'here_places',
+			'source_name': 'verified_businesses',
 			'source_url': '',
-			'external_id': 'here:999-pizza',
+			'external_id': 'verified-business:999-pizza',
 			'city': City.CAMARILLO,
 			'venue_type': VenueType.RESTAURANT,
 			'address_line_1': 'Ventura Blvd',
@@ -9787,9 +9272,9 @@ class ListingSnapshotAdminTests(TestCase):
 		form = ListingSnapshotAdminForm(data={
 			'name': 'Night Owl Diner',
 			'listing_slug': 'night-owl-diner',
-			'source_name': 'here_places',
+			'source_name': 'verified_businesses',
 			'source_url': '',
-			'external_id': 'here:night-owl-diner',
+			'external_id': 'verified-business:night-owl-diner',
 			'city': City.CAMARILLO,
 			'venue_type': VenueType.RESTAURANT,
 			'address_line_1': '100 Harbor Blvd',
@@ -9994,6 +9479,9 @@ class ListingSnapshotAdminTests(TestCase):
 				venue_type=VenueType.BAR,
 				address_line_1='2855 Johnson Dr',
 				website_url='https://www.cronies.com/',
+				source_name='verified_businesses',
+				source_url='https://www.cronies.com/',
+				external_id='verified-business:test-cronies',
 			)
 			place_record = ImportedPlace(
 				name='Cronies Sports Grill',
@@ -10002,38 +9490,38 @@ class ListingSnapshotAdminTests(TestCase):
 				address_line_1='2855 Johnson Dr',
 				phone_number='(805) 650-6026',
 				website_url='https://www.cronies.com/',
-				external_id='here:cronies-ventura',
-				source_name='here_places',
-				source_url='https://discover.search.hereapi.com/v1/discover',
+				external_id='verified-business:test-cronies',
+				source_name='verified_businesses',
+				source_url='https://www.cronies.com/',
 			)
 
-			with override_settings(DISCOVERY_JSON_PATH=json_path), patch.object(HerePlacesImporter, 'load_records_for_search', return_value=[place_record]), patch.object(BusinessWebsiteImporter, 'enrich_place_record', return_value=place_record):
+			with override_settings(DISCOVERY_JSON_PATH=json_path), patch.object(BusinessWebsiteImporter, 'enrich_place_record', return_value=place_record):
 				response = self.admin.pull_business_data_view(self._build_request(f'/admin/places/listingsnapshot/{snapshot.pk}/pull-business-data/'), str(snapshot.pk))
 
 				self.assertEqual(response.status_code, 302)
 				snapshot.refresh_from_db()
-				self.assertEqual(snapshot.source_name, 'here_places')
-				self.assertEqual(snapshot.external_id, 'here:cronies-ventura')
+				self.assertEqual(snapshot.source_name, 'verified_businesses')
+				self.assertEqual(snapshot.external_id, 'verified-business:test-cronies')
 				stored_records = load_discovery_json_records(file_path=json_path)
 				self.assertEqual(len(stored_records), 1)
-				self.assertEqual(stored_records[0].external_id, 'here:cronies-ventura')
+				self.assertEqual(stored_records[0].external_id, 'verified-business:test-cronies')
 
 				self.admin.delete_model(self._build_request('/admin/places/listingsnapshot/'), snapshot)
 
 				self.assertFalse(ListingSnapshot.objects.filter(pk=snapshot.pk).exists())
 				self.assertEqual(load_discovery_json_records(file_path=json_path), [])
-				deleted_business = DeletedBusiness.objects.get(external_id='here:cronies-ventura')
+				deleted_business = DeletedBusiness.objects.get(external_id='verified-business:test-cronies')
 				self.assertEqual(deleted_business.name, 'Cronies Sports Grill')
 
 				response = self.deleted_admin.restore_business_view(self._build_request(f'/admin/places/deletedbusiness/{deleted_business.pk}/restore-business/'), str(deleted_business.pk))
 
 				self.assertEqual(response.status_code, 302)
 				self.assertFalse(DeletedBusiness.objects.filter(pk=deleted_business.pk).exists())
-				restored_snapshot = ListingSnapshot.objects.get(external_id='here:cronies-ventura')
+				restored_snapshot = ListingSnapshot.objects.get(external_id='verified-business:test-cronies')
 				self.assertEqual(restored_snapshot.name, 'Cronies Sports Grill')
 				restored_records = load_discovery_json_records(file_path=json_path)
 				self.assertEqual(len(restored_records), 1)
-				self.assertEqual(restored_records[0].external_id, 'here:cronies-ventura')
+				self.assertEqual(restored_records[0].external_id, 'verified-business:test-cronies')
 
 	def test_delete_model_removes_customer_favorites_for_deleted_snapshot(self):
 		snapshot = ListingSnapshot.objects.create(
@@ -10060,261 +9548,13 @@ class ListingSnapshotAdminTests(TestCase):
 		self.assertFalse(FavoriteBusiness.objects.filter(user=customer, listing_slug=snapshot.listing_slug).exists())
 		self.assertTrue(DeletedBusiness.objects.filter(name=snapshot.name).exists())
 
-	@override_settings(DISCOVERY_JSON_PATH='')
-	def test_pull_business_data_view_preserves_manual_website_and_overrides_when_pulled_record_has_no_website(self):
-		with TemporaryDirectory() as temp_dir:
-			json_path = Path(temp_dir) / 'discovered_places.json'
-			snapshot = ListingSnapshot.objects.create(
-				name='Cronies Sports Grill',
-				city=City.VENTURA,
-				venue_type=VenueType.BAR,
-				address_line_1='2855 Johnson Dr',
-				website_url='https://admin.example.com/cronies',
-				deal_overrides=[{
-					'title': 'Admin Deal',
-					'description': 'Still here',
-					'deal_type': DealType.OTHER,
-					'price_text': '$10',
-					'terms': '',
-					'happy_hours': [],
-				}],
-				operating_hour_overrides=[{'weekday': Weekday.MONDAY, 'open_time': '11:00', 'close_time': '21:00'}],
-			)
-			place_record = ImportedPlace(
-				name='Cronies Sports Grill',
-				city=City.VENTURA,
-				venue_type=VenueType.BAR,
-				address_line_1='2855 Johnson Dr',
-				phone_number='(805) 650-6026',
-				website_url='',
-				external_id='here:cronies-ventura',
-				source_name='here_places',
-				source_url='https://discover.search.hereapi.com/v1/discover',
-			)
-
-			with override_settings(DISCOVERY_JSON_PATH=json_path), patch.object(HerePlacesImporter, 'load_records_for_search', return_value=[place_record]), patch.object(BusinessWebsiteImporter, 'enrich_place_record', return_value=place_record):
-				response = self.admin.pull_business_data_view(self._build_request(f'/admin/places/listingsnapshot/{snapshot.pk}/pull-business-data/'), str(snapshot.pk))
-
-			self.assertEqual(response.status_code, 302)
-			snapshot.refresh_from_db()
-			self.assertEqual(snapshot.website_url, 'https://admin.example.com/cronies')
-			self.assertEqual(snapshot.deal_overrides[0]['title'], 'Admin Deal')
-			self.assertEqual(snapshot.operating_hour_overrides[0]['weekday'], Weekday.MONDAY)
-
-	@override_settings(DISCOVERY_JSON_PATH='')
-	def test_pull_business_data_view_keeps_snapshot_website_public_and_snapshot_source_for_enrichment(self):
-		with TemporaryDirectory() as temp_dir:
-			json_path = Path(temp_dir) / 'discovered_places.json'
-			snapshot = ListingSnapshot.objects.create(
-				name='Cronies Sports Grill',
-				city=City.VENTURA,
-				venue_type=VenueType.BAR,
-				address_line_1='2855 Johnson Dr',
-				website_url='https://admin.example.com/cronies',
-				source_url='https://admin.example.com/cronies/menu',
-			)
-			place_record = ImportedPlace(
-				name='Cronies Sports Grill',
-				city=City.VENTURA,
-				venue_type=VenueType.BAR,
-				address_line_1='2855 Johnson Dr',
-				phone_number='(805) 650-6026',
-				website_url='https://wrong.example.com/cronies',
-				external_id='here:cronies-ventura',
-				source_name='here_places',
-				source_url='https://discover.search.hereapi.com/v1/discover',
-			)
-
-			def assert_enrichment_input(record):
-				self.assertEqual(record.website_url, 'https://admin.example.com/cronies')
-				self.assertEqual(record.source_url, 'https://admin.example.com/cronies/menu')
-				return record
-
-			with override_settings(DISCOVERY_JSON_PATH=json_path), patch.object(HerePlacesImporter, 'load_records_for_search', return_value=[place_record]), patch.object(BusinessWebsiteImporter, 'enrich_place_record', side_effect=assert_enrichment_input):
-				response = self.admin.pull_business_data_view(self._build_request(f'/admin/places/listingsnapshot/{snapshot.pk}/pull-business-data/'), str(snapshot.pk))
-
-			self.assertEqual(response.status_code, 302)
-
-	@override_settings(DISCOVERY_JSON_PATH='')
-	def test_pull_business_data_view_falls_back_to_snapshot_source_url_for_enrichment(self):
-		with TemporaryDirectory() as temp_dir:
-			json_path = Path(temp_dir) / 'discovered_places.json'
-			snapshot = ListingSnapshot.objects.create(
-				name='Cronies Sports Grill',
-				city=City.VENTURA,
-				venue_type=VenueType.BAR,
-				address_line_1='2855 Johnson Dr',
-				source_url='https://admin.example.com/cronies-source',
-			)
-			place_record = ImportedPlace(
-				name='Cronies Sports Grill',
-				city=City.VENTURA,
-				venue_type=VenueType.BAR,
-				address_line_1='2855 Johnson Dr',
-				phone_number='(805) 650-6026',
-				website_url='https://wrong.example.com/cronies',
-				external_id='here:cronies-ventura',
-				source_name='here_places',
-				source_url='https://discover.search.hereapi.com/v1/discover',
-			)
-
-			def assert_enrichment_input(record):
-				self.assertEqual(record.website_url, 'https://wrong.example.com/cronies')
-				self.assertEqual(record.source_url, 'https://admin.example.com/cronies-source')
-				return record
-
-			with override_settings(DISCOVERY_JSON_PATH=json_path), patch.object(HerePlacesImporter, 'load_records_for_search', return_value=[place_record]), patch.object(BusinessWebsiteImporter, 'enrich_place_record', side_effect=assert_enrichment_input):
-				response = self.admin.pull_business_data_view(self._build_request(f'/admin/places/listingsnapshot/{snapshot.pk}/pull-business-data/'), str(snapshot.pk))
-
-			self.assertEqual(response.status_code, 302)
-
-	@override_settings(DISCOVERY_JSON_PATH='')
-	def test_pull_business_data_view_preserves_existing_admin_text_fields_when_pulled_record_has_new_values(self):
-		with TemporaryDirectory() as temp_dir:
-			json_path = Path(temp_dir) / 'discovered_places.json'
-			snapshot = ListingSnapshot.objects.create(
-				name='Admin Name',
-				city=City.VENTURA,
-				venue_type=VenueType.BAR,
-				address_line_1='2855 Johnson Dr',
-				address_line_2='Suite 100',
-				neighborhood='Midtown',
-				postal_code='93003',
-				phone_number='805-555-9999',
-				website_url='https://admin.example.com/cronies',
-				deal_overrides=[{
-					'title': 'Admin Deal',
-					'description': 'Still here',
-					'deal_type': DealType.OTHER,
-					'price_text': '$10',
-					'terms': '',
-					'happy_hours': [],
-				}],
-				operating_hour_overrides=[{'weekday': Weekday.MONDAY, 'open_time': '11:00', 'close_time': '21:00'}],
-			)
-			place_record = ImportedPlace(
-				name='Pulled Name',
-				profile_name='Pulled Profile Name',
-				city=City.OXNARD,
-				venue_type=VenueType.RESTAURANT,
-				address_line_1='2855 Johnson Dr',
-				address_line_2='Suite 200',
-				neighborhood='Downtown',
-				postal_code='93030',
-				phone_number='805-555-0101',
-				website_url='https://pulled.example.com/cronies',
-				external_id='here:cronies-ventura',
-				source_name='here_places',
-				source_url='https://discover.search.hereapi.com/v1/discover',
-			)
-
-			with override_settings(DISCOVERY_JSON_PATH=json_path), patch.object(HerePlacesImporter, 'load_records_for_search', return_value=[place_record]), patch.object(BusinessWebsiteImporter, 'enrich_place_record', return_value=place_record):
-				response = self.admin.pull_business_data_view(self._build_request(f'/admin/places/listingsnapshot/{snapshot.pk}/pull-business-data/'), str(snapshot.pk))
-
-			self.assertEqual(response.status_code, 302)
-			snapshot.refresh_from_db()
-			self.assertEqual(snapshot.name, 'Admin Name')
-			self.assertEqual(snapshot.city, City.VENTURA)
-			self.assertEqual(snapshot.venue_type, VenueType.BAR)
-			self.assertEqual(snapshot.address_line_2, 'Suite 100')
-			self.assertEqual(snapshot.neighborhood, 'Midtown')
-			self.assertEqual(snapshot.postal_code, '93003')
-			self.assertEqual(snapshot.phone_number, '805-555-9999')
-			self.assertEqual(snapshot.website_url, 'https://admin.example.com/cronies')
-			self.assertEqual(snapshot.source_name, 'here_places')
-
-	@override_settings(DISCOVERY_JSON_PATH='')
-	def test_pull_business_data_view_preserves_all_saved_admin_editable_fields(self):
-		with TemporaryDirectory() as temp_dir:
-			json_path = Path(temp_dir) / 'discovered_places.json'
-			snapshot = ListingSnapshot.objects.create(
-				name='Admin Name',
-				listing_slug='admin-name',
-				city=City.VENTURA,
-				venue_type=VenueType.BAR,
-				address_line_1='2855 Johnson Dr',
-				address_line_2='Suite 100',
-				neighborhood='Midtown',
-				state='CA',
-				postal_code='93003',
-				phone_number='805-555-9999',
-				website_url='https://admin.example.com/cronies',
-				source_name='manual_admin_source',
-				source_url='https://admin.example.com/source',
-				external_id='admin-external-id',
-				social_profiles={
-					'facebook': {
-						'url': 'https://facebook.com/adminspot',
-						'username': 'adminspot',
-					},
-				},
-				social_media_links=['https://facebook.com/adminspot'],
-				deal_overrides=[{
-					'title': 'Admin Deal',
-					'description': 'Still here',
-					'deal_type': DealType.OTHER,
-					'price_text': '$10',
-					'terms': '',
-					'happy_hours': [],
-				}],
-				operating_hour_overrides=[{'weekday': Weekday.MONDAY, 'open_time': '11:00', 'close_time': '21:00'}],
-			)
-			place_record = ImportedPlace(
-				name='Pulled Name',
-				profile_name='Pulled Profile Name',
-				city=City.OXNARD,
-				venue_type=VenueType.RESTAURANT,
-				address_line_1='999 Wrong St',
-				address_line_2='Suite 200',
-				neighborhood='Downtown',
-				state='NV',
-				postal_code='93030',
-				phone_number='805-555-0101',
-				website_url='https://pulled.example.com/cronies',
-				external_id='here:cronies-ventura',
-				source_name='here_places',
-				source_url='https://discover.search.hereapi.com/v1/discover',
-			)
-
-			with override_settings(DISCOVERY_JSON_PATH=json_path), patch.object(HerePlacesImporter, 'load_records_for_search', return_value=[place_record]), patch.object(BusinessWebsiteImporter, 'enrich_place_record', return_value=place_record):
-				response = self.admin.pull_business_data_view(self._build_request(f'/admin/places/listingsnapshot/{snapshot.pk}/pull-business-data/'), str(snapshot.pk))
-
-			self.assertEqual(response.status_code, 302)
-			snapshot.refresh_from_db()
-			self.assertEqual(snapshot.name, 'Admin Name')
-			self.assertEqual(snapshot.listing_slug, 'admin-name')
-			self.assertEqual(snapshot.city, City.VENTURA)
-			self.assertEqual(snapshot.venue_type, VenueType.BAR)
-			self.assertEqual(snapshot.address_line_1, '2855 Johnson Dr')
-			self.assertEqual(snapshot.address_line_2, 'Suite 100')
-			self.assertEqual(snapshot.neighborhood, 'Midtown')
-			self.assertEqual(snapshot.state, 'CA')
-			self.assertEqual(snapshot.postal_code, '93003')
-			self.assertEqual(snapshot.phone_number, '805-555-9999')
-			self.assertEqual(snapshot.website_url, 'https://admin.example.com/cronies')
-			self.assertEqual(snapshot.source_name, 'manual_admin_source')
-			self.assertEqual(snapshot.source_url, 'https://admin.example.com/source')
-			self.assertEqual(snapshot.external_id, 'admin-external-id')
-			self.assertEqual(
-				snapshot.social_profiles,
-				{
-					'facebook': {
-						'url': 'https://facebook.com/adminspot',
-						'username': 'adminspot',
-					},
-				},
-			)
-			self.assertEqual(snapshot.social_media_links, ['https://facebook.com/adminspot'])
-			self.assertEqual(snapshot.deal_overrides[0]['title'], 'Admin Deal')
-			self.assertEqual(snapshot.operating_hour_overrides[0]['weekday'], Weekday.MONDAY)
-
 	def test_get_queryset_includes_admin_created_manual_submissions_but_excludes_unmanaged_claim_submissions(self):
 		public_snapshot = ListingSnapshot.objects.create(
 			name='Pulled Place',
 			city=City.VENTURA,
 			venue_type=VenueType.RESTAURANT,
 			address_line_1='123 Main St',
-			source_name='here_places',
+			source_name='verified_businesses',
 		)
 		manual_claim_snapshot = ListingSnapshot.objects.create(
 			name='Draft Manual Claim Place',
@@ -10374,7 +9614,7 @@ class ListingSnapshotAdminTests(TestCase):
 			city=City.VENTURA,
 			venue_type=VenueType.RESTAURANT,
 			address_line_1='123 Main St',
-			source_name='here_places',
+			source_name='verified_businesses',
 		)
 		unmanaged_snapshot = ListingSnapshot.objects.create(
 			name='Unmanaged Spot',
@@ -10382,7 +9622,7 @@ class ListingSnapshotAdminTests(TestCase):
 			city=City.OXNARD,
 			venue_type=VenueType.CAFE,
 			address_line_1='456 Harbor Blvd',
-			source_name='here_places',
+			source_name='verified_businesses',
 		)
 		owner = User.objects.create_user(username='managed_snapshot_owner', email='managed_snapshot_owner@example.com', password='test-pass-123')
 		claim = BusinessClaim.objects.create(
@@ -10415,7 +9655,7 @@ class ListingSnapshotAdminTests(TestCase):
 			city=City.VENTURA,
 			venue_type=VenueType.RESTAURANT,
 			address_line_1='123 Main St',
-			source_name='here_places',
+			source_name='verified_businesses',
 			imported_image_urls=['https://images.example.com/photo-spot.jpg'],
 		)
 		without_images_snapshot = ListingSnapshot.objects.create(
@@ -10424,7 +9664,7 @@ class ListingSnapshotAdminTests(TestCase):
 			city=City.OXNARD,
 			venue_type=VenueType.CAFE,
 			address_line_1='456 Harbor Blvd',
-			source_name='here_places',
+			source_name='verified_businesses',
 			imported_image_urls=[],
 		)
 		self.client.force_login(self.admin_user)
@@ -10448,7 +9688,7 @@ class ListingSnapshotAdminTests(TestCase):
 			city=City.VENTURA,
 			venue_type=VenueType.RESTAURANT,
 			address_line_1='123 Main St',
-			source_name='here_places',
+			source_name='verified_businesses',
 		)
 		owner = User.objects.create_user(username='linked_manager', email='linked_manager@example.com', password='test-pass-123')
 		claim = BusinessClaim.objects.create(
@@ -10477,14 +9717,14 @@ class ListingSnapshotAdminTests(TestCase):
 			city=City.VENTURA,
 			venue_type=VenueType.RESTAURANT,
 			address_line_1='60 S California St',
-			source_name='here_places',
+			source_name='verified_businesses',
 		)
 		ListingSnapshot.objects.create(
 			name='Harbor Tacos',
 			city=City.VENTURA,
 			venue_type=VenueType.RESTAURANT,
 			address_line_1='123 Main St',
-			source_name='here_places',
+			source_name='verified_businesses',
 		)
 
 		response = self.admin.search_businesses_view(self._build_request('/admin/places/listingsnapshot/search-businesses/?q=Lure'))
@@ -11014,6 +10254,299 @@ class BusinessClaimAdminTests(TestCase):
 
 
 
+@override_settings(
+	IMAGE_MODERATION_PROVIDER='local_nudenet',
+	IMAGE_MODERATION_BLOCK_SCORE_PERCENT=60,
+	IMAGE_MODERATION_FAIL_CLOSED=True,
+)
+class ImageModerationServiceTests(TestCase):
+	def setUp(self):
+		caches['default'].clear()
+
+	def build_uploaded_image(self):
+		buffer = BytesIO()
+		Image.new('RGB', (50, 50), (255, 255, 255)).save(buffer, format='PNG')
+		return SimpleUploadedFile('moderation-test.png', buffer.getvalue(), content_type='image/png')
+
+	@patch('places.services.image_moderation._detect_with_local_model', return_value=[])
+	def test_safe_image_is_allowed_and_local_model_receives_normalized_image(self, mock_detect):
+
+		moderate_uploaded_image(self.build_uploaded_image(), surface='test_profile_photo')
+
+		mock_detect.assert_called_once()
+		with Image.open(BytesIO(mock_detect.call_args.args[0])) as normalized_image:
+			self.assertEqual(normalized_image.format, 'JPEG')
+			self.assertEqual(normalized_image.size, (50, 50))
+
+	@patch(
+		'places.services.image_moderation._detect_with_local_model',
+		return_value=[{'class': 'FEMALE_BREAST_EXPOSED', 'score': 0.60}],
+	)
+	def test_block_score_or_higher_is_rejected(self, mock_detect):
+
+		with self.assertRaises(ImageModerationRejected):
+			moderate_uploaded_image(self.build_uploaded_image(), surface='test_direct_message')
+
+	@patch(
+		'places.services.image_moderation._detect_with_local_model',
+		side_effect=ImageModerationUnavailable('model unavailable'),
+	)
+	def test_local_model_failure_is_fail_closed(self, mock_detect):
+		with self.assertRaises(ImageModerationUnavailable):
+			moderate_uploaded_image(self.build_uploaded_image(), surface='test_deal_image')
+
+
+@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+class ContentReportApiTests(APITestCase):
+	def setUp(self):
+		self.reporter = User.objects.create_user(
+			username='content_reporter',
+			email='content-reporter@example.com',
+			password='test-pass-123',
+		)
+		AccountProfile.objects.create(user=self.reporter, email_verified_at=timezone.now())
+		self.reporter_token = ProfileAuthToken.objects.create(user=self.reporter)
+		self.other_user = User.objects.create_user(
+			username='content_report_other',
+			email='content-report-other@example.com',
+			password='test-pass-123',
+		)
+		AccountProfile.objects.create(user=self.other_user, email_verified_at=timezone.now())
+		self.other_token = ProfileAuthToken.objects.create(user=self.other_user)
+		self.business_user = User.objects.create_user(
+			username='content_report_business',
+			email='content-report-business@example.com',
+			password='test-pass-123',
+		)
+		AccountProfile.objects.create(user=self.business_user, email_verified_at=timezone.now())
+		self.business_token = ProfileAuthToken.objects.create(user=self.business_user)
+		self.snapshot = ListingSnapshot.objects.create(
+			name='Report Test Bistro',
+			listing_slug='report-test-bistro',
+			city=City.VENTURA,
+			venue_type=VenueType.CAFE,
+			address_line_1='123 Main St',
+		)
+		self.claim = BusinessClaim.objects.create(
+			claimant=self.business_user,
+			listing_snapshot=self.snapshot,
+			status=BusinessClaim.Status.APPROVED,
+			contact_name='Report Test Owner',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='owner@report-test.example.com',
+			work_phone='805-555-0100',
+			employer_address='123 Main St',
+			verification_summary='Approved report test claim.',
+		)
+		self.membership = BusinessMembership.objects.create(user=self.business_user, claim=self.claim, is_active=True)
+		self.post = BusinessPost.objects.create(
+			membership=self.membership,
+			listing_snapshot=self.snapshot,
+			content_type=BusinessPost.ContentType.ANNOUNCEMENT,
+			status=BusinessPost.Status.PUBLISHED,
+			title='Report test announcement',
+			slug='report-test-announcement',
+			body='Report test content.',
+		)
+		self.thread = BusinessDirectMessageThread.objects.create(
+			business_claim=self.claim,
+			customer=self.reporter,
+		)
+		self.message = BusinessDirectMessage.objects.create(
+			thread=self.thread,
+			sender=self.business_user,
+			body='Report test message.',
+		)
+		self.customer_message = BusinessDirectMessage.objects.create(
+			thread=self.thread,
+			sender=self.reporter,
+			body='Customer report test message.',
+		)
+
+	def auth_headers(self, token=None):
+		return {'HTTP_AUTHORIZATION': f'Token {(token or self.reporter_token).key}'}
+
+	def test_report_business_profile_creates_open_report_and_notifies_support(self):
+		response = self.client.post(
+			reverse('profile-content-reports'),
+			{
+				'target_type': ContentReport.TargetType.BUSINESS_PROFILE,
+				'listing_slug': self.snapshot.listing_slug,
+				'business_name': self.snapshot.name,
+				'reason': ContentReport.Reason.MISLEADING_INFORMATION,
+				'details': 'The public business details appear incorrect.',
+			},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 201)
+		report = ContentReport.objects.get()
+		self.assertEqual(report.target_type, ContentReport.TargetType.BUSINESS_PROFILE)
+		self.assertEqual(report.listing_slug, self.snapshot.listing_slug)
+		self.assertEqual(report.status, ContentReport.Status.OPEN)
+		report_email = next(message for message in mail.outbox if 'content report' in message.subject.lower())
+		self.assertIn('Reporter username: content_reporter', report_email.body)
+		self.assertIn('Reporter email: content-reporter@example.com', report_email.body)
+		self.assertIn('Report recipient: DiningDealz review team', report_email.body)
+
+	def test_report_screenshot_is_private_attached_to_email_and_removed_on_account_deletion(self):
+		valid_png_bytes = (
+			b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89'
+			b'\x00\x00\x00\x0cIDATx\x9cc```\x00\x00\x00\x04\x00\x01\xf6\x178U\x00\x00\x00\x00IEND\xaeB`\x82'
+		)
+		response = self.client.post(
+			reverse('profile-content-reports'),
+			{
+				'target_type': ContentReport.TargetType.DIRECT_MESSAGE,
+				'message_id': self.message.id,
+				'reason': ContentReport.Reason.HARASSMENT_OR_ABUSE,
+				'details': 'The screenshot shows the context clearly.',
+				'screenshot': SimpleUploadedFile('conversation-screen.png', valid_png_bytes, content_type='image/png'),
+			},
+			format='multipart',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 201)
+		report = ContentReport.objects.get()
+		screenshot_name = report.screenshot.name
+		self.assertTrue(screenshot_name.startswith('content-reports/'))
+		self.assertTrue(report.screenshot.storage.exists(screenshot_name))
+		self.assertTrue(report.screenshot.url.startswith('/private-media/'))
+		self.assertEqual(self.client.get(report.screenshot.url).status_code, 404)
+		report_email = next(message for message in mail.outbox if 'content report' in message.subject.lower())
+		self.assertIn('Screenshot attached: Yes', report_email.body)
+		self.assertEqual(len(report_email.attachments), 1)
+
+		delete_response = self.client.post(
+			reverse('profile-delete-account'),
+			{'password': 'test-pass-123'},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(delete_response.status_code, 200)
+		report.refresh_from_db()
+		self.assertEqual(report.screenshot.name, '')
+		self.assertFalse(report.screenshot.storage.exists(screenshot_name))
+
+	def test_report_business_post_and_direct_message(self):
+		post_response = self.client.post(
+			reverse('profile-content-reports'),
+			{
+				'target_type': ContentReport.TargetType.BUSINESS_POST,
+				'post_id': self.post.id,
+				'reason': ContentReport.Reason.OBJECTIONABLE_CONTENT,
+				'details': 'The post contains inappropriate content.',
+			},
+			format='json',
+			**self.auth_headers(),
+		)
+		message_response = self.client.post(
+			reverse('profile-content-reports'),
+			{
+				'target_type': ContentReport.TargetType.DIRECT_MESSAGE,
+				'message_id': self.message.id,
+				'reason': ContentReport.Reason.HARASSMENT_OR_ABUSE,
+				'details': 'The message is abusive.',
+			},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(post_response.status_code, 201)
+		self.assertEqual(message_response.status_code, 201)
+		self.assertEqual(ContentReport.objects.count(), 2)
+		self.assertTrue(ContentReport.objects.filter(business_post=self.post).exists())
+		self.assertTrue(ContentReport.objects.filter(direct_message=self.message).exists())
+		direct_report = ContentReport.objects.get(direct_message=self.message)
+		self.assertEqual(direct_report.reporter_username, 'content_reporter')
+		self.assertEqual(direct_report.reported_user_username, 'content_report_business')
+		self.assertEqual(direct_report.recipient_username, 'content_reporter')
+		self.assertEqual(direct_report.reported_message, 'Report test message.')
+		direct_report_email = next(message for message in mail.outbox if 'Harassment or Abuse' in message.subject)
+		self.assertIn('Reported sender username: content_report_business', direct_report_email.body)
+		self.assertIn('Report recipient username: content_reporter', direct_report_email.body)
+		self.assertIn('Reported message: Report test message.', direct_report_email.body)
+
+	def test_duplicate_report_is_rejected(self):
+		payload = {
+			'target_type': ContentReport.TargetType.BUSINESS_PROFILE,
+			'listing_slug': self.snapshot.listing_slug,
+			'reason': ContentReport.Reason.SPAM_OR_SCAM,
+			'details': '',
+		}
+		first_response = self.client.post(reverse('profile-content-reports'), payload, format='json', **self.auth_headers())
+		second_response = self.client.post(reverse('profile-content-reports'), payload, format='json', **self.auth_headers())
+
+		self.assertEqual(first_response.status_code, 201)
+		self.assertEqual(second_response.status_code, 400)
+		self.assertEqual(ContentReport.objects.count(), 1)
+
+	def test_user_cannot_report_message_from_another_thread(self):
+		response = self.client.post(
+			reverse('profile-content-reports'),
+			{
+				'target_type': ContentReport.TargetType.DIRECT_MESSAGE,
+				'message_id': self.message.id,
+				'reason': ContentReport.Reason.OTHER,
+				'details': 'Unauthorized test report.',
+			},
+			format='json',
+			**self.auth_headers(self.other_token),
+		)
+
+		self.assertEqual(response.status_code, 404)
+		self.assertEqual(ContentReport.objects.count(), 0)
+
+	def test_business_user_can_report_customer_message(self):
+		response = self.client.post(
+			reverse('profile-content-reports'),
+			{
+				'target_type': ContentReport.TargetType.DIRECT_MESSAGE,
+				'message_id': self.customer_message.id,
+				'reason': ContentReport.Reason.SPAM_OR_SCAM,
+				'details': 'Customer message appears to be spam.',
+			},
+			format='json',
+			**self.auth_headers(self.business_token),
+		)
+
+		self.assertEqual(response.status_code, 201)
+		report = ContentReport.objects.get()
+		self.assertEqual(report.reporter_id, self.business_user.id)
+		self.assertEqual(report.direct_message_id, self.customer_message.id)
+
+	def test_direct_message_filter_rejects_explicit_threats(self):
+		response = self.client.post(
+			reverse('profile-direct-messages'),
+			{
+				'portal': 'customer',
+				'listing_slug': self.snapshot.listing_slug,
+				'message': 'I am going to hurt you.',
+			},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 400)
+		self.assertIn('cannot be posted', str(response.data).lower())
+		self.assertFalse(BusinessDirectMessage.objects.filter(body='I am going to hurt you.').exists())
+
+	def test_business_post_filter_rejects_explicit_threats(self):
+		with self.assertRaises(ValidationError):
+			BusinessPost.objects.create(
+				membership=self.membership,
+				listing_snapshot=self.snapshot,
+				content_type=BusinessPost.ContentType.ANNOUNCEMENT,
+				status=BusinessPost.Status.DRAFT,
+				title='Unsafe post',
+				slug='unsafe-post',
+				body='I am going to hurt you.',
+			)
+
+
 class MediaStorageCleanupTests(TestCase):
 	def setUp(self):
 		self.claimant = User.objects.create_user(username='media_cleanup_owner', email='media-cleanup@example.com', password='test-pass-123')
@@ -11040,17 +10573,50 @@ class MediaStorageCleanupTests(TestCase):
 		claim_data.update(overrides)
 		return BusinessClaim.objects.create(**claim_data)
 
+	def test_remote_managed_storage_listing_recurses_business_prefixes(self):
+		from places.management.commands.cleanup_orphaned_media import get_remote_managed_storage_names
+
+		class FakeStorage:
+			paths = {
+				'businesses': (['39-finney-s-crafthouse'], []),
+				'businesses/39-finney-s-crafthouse': (['claims'], []),
+				'businesses/39-finney-s-crafthouse/claims': (['82'], []),
+				'businesses/39-finney-s-crafthouse/claims/82': (['profile-photos'], []),
+				'businesses/39-finney-s-crafthouse/claims/82/profile-photos': ([], ['front.jpg']),
+			}
+
+			def listdir(self, path):
+				return self.paths.get(path, ([], []))
+
+		self.assertEqual(
+			get_remote_managed_storage_names(FakeStorage()),
+			{'businesses/39-finney-s-crafthouse/claims/82/profile-photos/front.jpg'},
+		)
+
 	def _filesystem_storage_settings(self, temp_dir):
+		private_media_root = Path(temp_dir) / 'private-media'
 		return {
 			'MEDIA_ROOT': Path(temp_dir),
+			'PRIVATE_MEDIA_ROOT': private_media_root,
 			'MEDIA_STORAGE_BACKEND': 'local',
 			'DIRECT_MESSAGE_MEDIA_STORAGE_BACKEND': 'local',
 			'STORAGES': {
 				'default': {
 					'BACKEND': 'django.core.files.storage.FileSystemStorage',
 				},
+				'private_media': {
+					'BACKEND': 'django.core.files.storage.FileSystemStorage',
+					'OPTIONS': {
+						'location': private_media_root,
+						'base_url': '/private-media/',
+					},
+				},
 				'direct_messages': {
 					'BACKEND': 'django.core.files.storage.FileSystemStorage',
+					'OPTIONS': {
+						'location': private_media_root,
+						'base_url': '/private-media/',
+					},
 				},
 				'staticfiles': {
 					'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
@@ -11096,6 +10662,21 @@ class MediaStorageCleanupTests(TestCase):
 
 				self.assertFalse(photo_path.exists())
 
+	@override_settings(MEDIA_PUBLIC_BASE_URL='https://project.supabase.co/storage/v1/object/public/business-media')
+	@patch('places.services.media_storage.default_storage.delete')
+	def test_removed_supabase_photo_reference_deletes_storage_key(self, mock_delete):
+		claim = self.create_claim(
+			photo_references=[
+				'https://project.supabase.co/storage/v1/object/public/business-media/business-profile-photos/47/old-photo.jpg',
+			],
+			photo_gallery_overridden=True,
+		)
+
+		claim.photo_references = []
+		claim.save(update_fields=['photo_references', 'updated_at'])
+
+		mock_delete.assert_called_once_with('business-profile-photos/47/old-photo.jpg')
+
 	def test_cleanup_orphaned_media_command_deletes_unreferenced_local_files(self):
 		with TemporaryDirectory() as temp_dir:
 			with override_settings(**self._filesystem_storage_settings(temp_dir)):
@@ -11140,50 +10721,3 @@ class HappyHourAdminSiteTests(TestCase):
 		self.assertContains(response, '0.0073 GB')
 
 
-class ProviderUsageWindowAdminTests(TestCase):
-	def setUp(self):
-		self.site = AdminSite()
-		self.admin = ProviderUsageWindowAdmin(ProviderUsageWindow, self.site)
-		self.request_factory = RequestFactory()
-		self.admin_user = User.objects.create_superuser(username='provider_usage_admin', email='provider_usage_admin@example.com', password='test-pass-123')
-
-	def _build_request(self, path='/admin/'):
-		request = self.request_factory.get(path)
-		request.user = self.admin_user
-		setattr(request, 'session', {})
-		setattr(request, '_messages', FallbackStorage(request))
-		return request
-
-	def test_get_queryset_deletes_stale_tomtom_daily_windows(self):
-		today = timezone.localdate()
-		stale_window = ProviderUsageWindow.objects.create(
-			provider_name='tomtom_places',
-			window_kind=ProviderUsageWindow.WindowKind.DAY,
-			window_start=today - timedelta(days=1),
-			consumed_transactions=3,
-			transaction_limit=50000,
-			reserve_threshold=250,
-		)
-		current_window = ProviderUsageWindow.objects.create(
-			provider_name='tomtom_places',
-			window_kind=ProviderUsageWindow.WindowKind.DAY,
-			window_start=today,
-			consumed_transactions=1,
-			transaction_limit=50000,
-			reserve_threshold=250,
-		)
-		here_window = ProviderUsageWindow.objects.create(
-			provider_name='here_places',
-			window_kind=ProviderUsageWindow.WindowKind.MONTH,
-			window_start=today.replace(day=1),
-			consumed_transactions=20,
-			transaction_limit=250000,
-			reserve_threshold=1000,
-		)
-
-		queryset = self.admin.get_queryset(self._build_request('/admin/places/providerusagewindow/'))
-
-		self.assertFalse(ProviderUsageWindow.objects.filter(pk=stale_window.pk).exists())
-		self.assertTrue(ProviderUsageWindow.objects.filter(pk=current_window.pk).exists())
-		self.assertTrue(ProviderUsageWindow.objects.filter(pk=here_window.pk).exists())
-		self.assertIn(current_window.pk, queryset.values_list('pk', flat=True))

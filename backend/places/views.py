@@ -9,6 +9,7 @@ from django.core.files.storage import default_storage
 from django.db import connection, transaction
 from django.db.models import Q
 from django.http import FileResponse, Http404, HttpResponse
+from django.views import View
 from django.urls import reverse
 from django.utils.text import slugify
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -30,6 +31,7 @@ from .serializers import (
 	BusinessLocationUpdateSerializer,
 	ClaimedBusinessSignupSerializer,
 	ContactSupportSerializer,
+	ContentReportSerializer,
 	CustomerPreferencesSerializer,
 	CustomerSignupSerializer,
 	DeleteAccountSerializer,
@@ -62,22 +64,51 @@ from .serializers import (
 	build_signup_request_data,
 	sync_listing_snapshot_from_place_payload,
 )
-from .services.account_profiles import build_account_response, build_email_verification_challenge, deactivate_account_for_retained_direct_messages, get_approved_business_claims, get_business_access_hold_claim, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, is_deleted_account, send_business_claim_received_email, send_password_reset_email, send_support_contact_email, send_username_reminder_email, send_verification_email
-from .models import BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedImpression, ListingSnapshot, VenueType
+from .services.account_profiles import build_account_response, build_email_verification_challenge, deactivate_account_for_retained_direct_messages, get_approved_business_claims, get_business_access_hold_claim, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, is_deleted_account, send_business_claim_received_email, send_content_report_support_email_safely, send_password_reset_email, send_support_contact_email, send_username_reminder_email, send_verification_email
+from .models import BusinessClaimAttachment, BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, BusinessPost, ContentReport, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedImpression, ListingSnapshot, VenueType, business_claim_storage_prefix
 from .services.favorite_notifications import create_notifications_for_business_profile_update, should_send_direct_message_notification
 from .services.customer_preferences import get_preference_business_options, resolve_business_location, save_customer_preferences
 from .services.happy_hour_notifications import process_due_happy_hour_notifications
 from .services.direct_message_push import send_push_notifications_for_direct_message
 from .services.home_feed import get_feed_interval, get_feed_queryset, get_organic_page_size, get_ranked_campaigns, get_requested_feed_page_size, mix_feed_items, record_campaign_served
+from .services.image_moderation import ImageModerationRejected, ImageModerationUnavailable, moderate_uploaded_image
 from .services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
 from .services.source_listings import get_deleted_business_snapshot_ids, get_disabled_live_location_slugs, get_live_location_display_fields, get_source_deal_payloads, get_source_place_payload, get_source_place_payloads, is_live_location_tracking_enabled_for_snapshot, load_source_records
-from .throttles import DirectMessageSendRateThrottle, EmailVerificationRateThrottle, EmailVerificationResendRateThrottle, LoginRateThrottle, PasswordRecoveryRateThrottle, SignupRateThrottle, SupportContactRateThrottle, UserMutationRateThrottle
+from .throttles import ContentReportRateThrottle, DirectMessageSendRateThrottle, EmailVerificationRateThrottle, EmailVerificationResendRateThrottle, LoginRateThrottle, PasswordRecoveryRateThrottle, SignupRateThrottle, SupportContactRateThrottle, UserMutationRateThrottle
 
 
 class SourcePlacePagination(PageNumberPagination):
 	page_size = 100
 	page_size_query_param = 'page_size'
 	max_page_size = 500
+
+
+class PrivateBusinessClaimAttachmentView(View):
+	def get(self, request, name):
+		if not getattr(request.user, 'is_authenticated', False) or not getattr(request.user, 'is_staff', False):
+			raise Http404
+
+		attachment = BusinessClaimAttachment.objects.filter(file=name).first()
+		if attachment is not None and attachment.file:
+			file_field = attachment.file
+			content_type = attachment.content_type or 'application/octet-stream'
+			original_filename = attachment.original_filename
+		else:
+			report = ContentReport.objects.filter(screenshot=name).first()
+			if report is None or not report.screenshot:
+				raise Http404
+			file_field = report.screenshot
+			content_type = mimetypes.guess_type(str(file_field.name or ''))[0] or 'image/jpeg'
+			original_filename = Path(str(file_field.name or '')).name
+
+		try:
+			file_handle = file_field.open('rb')
+		except FileNotFoundError:
+			raise Http404
+
+		response = FileResponse(file_handle, content_type=content_type)
+		response['Content-Disposition'] = f'attachment; filename="{original_filename}"'
+		return response
 
 
 class HomeFeedPagination(PageNumberPagination):
@@ -96,11 +127,12 @@ def _save_uploaded_profile_photo_urls(request, claim):
 		file_suffix = Path(getattr(uploaded_file, 'name', '') or '').suffix.lower()
 		if not (content_type.startswith('image/') or file_suffix in SUPPORTED_PROFILE_PHOTO_SUFFIXES):
 			raise ValueError('Only image uploads from your photo library are supported.')
+		moderate_uploaded_image(uploaded_file, surface='business_profile_photo')
 
 		filename_root = Path(getattr(uploaded_file, 'name', '') or 'business-photo').stem or 'business-photo'
 		safe_name = slugify(filename_root) or 'business-photo'
 		saved_name = default_storage.save(
-			f'business-profile-photos/{claim.id}/{uuid4().hex}-{safe_name}{file_suffix}',
+			f'{business_claim_storage_prefix(claim)}/profile-photos/{uuid4().hex}-{safe_name}{file_suffix}',
 			uploaded_file,
 		)
 		photo_urls.append(request.build_absolute_uri(default_storage.url(saved_name)))
@@ -179,6 +211,9 @@ def _apply_direct_message_access(payload, user=None):
 def _build_direct_message_thread_payload(thread, user):
 	last_message = thread.messages.select_related('sender').order_by('-id').first()
 	unread_query = thread.messages.exclude(sender_id=user.id).filter(read_at__isnull=True)
+	direct_message_block = thread.business_claim.direct_message_blocks.filter(customer_id=thread.customer_id).first()
+	blocked_by_current_user = bool(direct_message_block and direct_message_block.blocked_by_id == user.id)
+	blocked_by_other_user = bool(direct_message_block and not blocked_by_current_user)
 	if last_message is not None and last_message.image:
 		last_message_preview = 'Photo expired' if last_message.image_has_expired() else 'Sent a photo'
 	elif last_message is not None:
@@ -196,6 +231,10 @@ def _build_direct_message_thread_payload(thread, user):
 		'unread_count': unread_query.count(),
 		'read_only': bool(read_only_reason),
 		'read_only_reason': read_only_reason,
+		'blocked': bool(direct_message_block),
+		'blocked_by_current_user': blocked_by_current_user,
+		'blocked_by_other_user': blocked_by_other_user,
+		'block_id': direct_message_block.id if direct_message_block else None,
 	}
 
 
@@ -205,6 +244,9 @@ def _customer_can_access_direct_message_thread(user, thread):
 	if is_deleted_account(user):
 		return False
 	if not _thread_has_active_business_participant(thread):
+		return True
+	direct_message_block = thread.business_claim.direct_message_blocks.filter(customer_id=user.id).first()
+	if direct_message_block is not None and direct_message_block.blocked_by_id == user.id:
 		return True
 	can_direct_message, _ = _can_customer_direct_message_claim(user, thread.business_claim)
 	return can_direct_message
@@ -889,6 +931,10 @@ class ProfileDashboardView(APIView):
 			changed_business_fields = set()
 			try:
 				uploaded_photo_urls = _save_uploaded_profile_photo_urls(request, claim)
+			except ImageModerationUnavailable as error:
+				return Response({'detail': str(error)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+			except ImageModerationRejected as error:
+				return Response({'detail': str(error)}, status=status.HTTP_400_BAD_REQUEST)
 			except ValueError as error:
 				return Response({'detail': str(error)}, status=status.HTTP_400_BAD_REQUEST)
 			claim_update_fields = []
@@ -1234,6 +1280,14 @@ class DirectMessageThreadsView(APIView):
 			if not message_text and message_image is None:
 				return Response({'detail': 'Business direct messages must include text or an image.'}, status=status.HTTP_400_BAD_REQUEST)
 
+		if message_image is not None:
+			try:
+				moderate_uploaded_image(message_image, surface='direct_message_image')
+			except ImageModerationUnavailable as error:
+				return Response({'detail': str(error)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+			except ImageModerationRejected as error:
+				return Response({'detail': str(error)}, status=status.HTTP_400_BAD_REQUEST)
+
 		message = BusinessDirectMessage(
 			thread=thread,
 			sender=request.user,
@@ -1411,22 +1465,42 @@ class DirectMessageBlocksView(APIView):
 
 	def get(self, request):
 		portal = infer_portal_for_user(request.user, request.query_params.get('portal'))
-		if portal != 'business':
-			return Response({'detail': 'Only business accounts can manage direct message restrictions.'}, status=status.HTTP_403_FORBIDDEN)
+		if portal not in {'customer', 'business'}:
+			return Response({'detail': 'Sign in with a customer or business account to manage direct message restrictions.'}, status=status.HTTP_403_FORBIDDEN)
 		return Response(build_account_response(request.user, portal, token=request.auth))
 
 	def post(self, request):
 		serializer = DirectMessageBlockSerializer(data=request.data)
 		serializer.is_valid(raise_exception=True)
 		portal = infer_portal_for_user(request.user, serializer.validated_data.get('portal'))
+		if portal == 'customer':
+			thread = BusinessDirectMessageThread.objects.select_related('business_claim__listing_snapshot').filter(
+				id=serializer.validated_data.get('thread_id'),
+				customer=request.user,
+			).first()
+			if thread is None or not _customer_can_access_direct_message_thread(request.user, thread):
+				return Response({'detail': 'That direct message thread could not be found.'}, status=status.HTTP_404_NOT_FOUND)
+
+			BusinessDirectMessageBlock.objects.update_or_create(
+				business_claim=thread.business_claim,
+				customer=request.user,
+				defaults={'blocked_by': request.user},
+			)
+			response_payload = build_account_response(request.user, portal, token=request.auth)
+			response_payload['detail'] = f'Direct messaging blocked for {thread.business_claim.listing_snapshot.name}.'
+			return Response(response_payload)
+
 		if portal != 'business':
 			return Response({'detail': 'Only business accounts can block customer direct messages.'}, status=status.HTTP_403_FORBIDDEN)
+		customer_username = str(serializer.validated_data.get('customer_username') or '').strip()
+		if not customer_username:
+			return Response({'customer_username': ['Enter the customer username to block.']}, status=status.HTTP_400_BAD_REQUEST)
 
 		membership = request.user.business_memberships.select_related('claim').filter(is_active=True).first()
 		if membership is None:
 			return Response({'detail': 'An approved business membership is required before blocking direct messages.'}, status=status.HTTP_400_BAD_REQUEST)
 
-		customer = User.objects.filter(username__iexact=serializer.validated_data['customer_username']).first()
+		customer = User.objects.filter(username__iexact=customer_username).first()
 		if customer is None:
 			return Response({'detail': 'That customer account could not be found.'}, status=status.HTTP_404_NOT_FOUND)
 		if infer_portal_for_user(customer, 'customer') != 'customer':
@@ -1448,6 +1522,19 @@ class DirectMessageBlockDetailView(APIView):
 
 	def delete(self, request, block_id):
 		portal = infer_portal_for_user(request.user, request.query_params.get('portal') or request.data.get('portal'))
+		if portal == 'customer':
+			deleted_count, _ = BusinessDirectMessageBlock.objects.filter(
+				id=block_id,
+				customer=request.user,
+				blocked_by=request.user,
+			).delete()
+			if not deleted_count:
+				return Response({'detail': 'That direct message block could not be found.'}, status=status.HTTP_404_NOT_FOUND)
+
+			response_payload = build_account_response(request.user, portal, token=request.auth)
+			response_payload['detail'] = 'Business unblocked from direct messages.'
+			return Response(response_payload)
+
 		if portal != 'business':
 			return Response({'detail': 'Only business accounts can unblock customer direct messages.'}, status=status.HTTP_403_FORBIDDEN)
 
@@ -1520,6 +1607,96 @@ class FavoriteBusinessNotificationsView(APIView):
 		response_payload = build_account_response(request.user, portal, token=request.auth)
 		response_payload['detail'] = 'Business notification cleared.'
 		return Response(response_payload)
+
+
+class ContentReportView(generics.GenericAPIView):
+	serializer_class = ContentReportSerializer
+	authentication_classes = [ProfileTokenAuthentication]
+	permission_classes = [IsAuthenticated]
+	throttle_classes = [ContentReportRateThrottle]
+	parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+	def post(self, request):
+		serializer = self.get_serializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		validated_data = serializer.validated_data
+		target_type = validated_data['target_type']
+		screenshot = validated_data.get('screenshot')
+		report_kwargs = {
+			'reporter': request.user,
+			'reporter_username': request.user.username,
+			'reporter_email': request.user.email,
+			'target_type': target_type,
+			'reason': validated_data['reason'],
+			'details': validated_data.get('details', ''),
+			'business_name': validated_data.get('business_name', ''),
+		}
+
+		if target_type == ContentReport.TargetType.BUSINESS_PROFILE:
+			listing_slug = validated_data.get('listing_slug', '')
+			if not listing_slug:
+				return Response({'listing_slug': ['A business profile report requires a listing slug.']}, status=status.HTTP_400_BAD_REQUEST)
+			place_payload = get_source_place_payload(listing_slug)
+			listing_snapshot = ListingSnapshot.objects.filter(listing_slug=listing_slug).first() if place_payload is None else None
+			if place_payload is None and listing_snapshot is None:
+				return Response({'detail': 'That business profile could not be found.'}, status=status.HTTP_404_NOT_FOUND)
+			report_kwargs['listing_slug'] = listing_slug
+			report_kwargs['business_name'] = (place_payload or {}).get('name') or getattr(listing_snapshot, 'name', '') or report_kwargs['business_name']
+		elif target_type == ContentReport.TargetType.BUSINESS_POST:
+			post = BusinessPost.objects.select_related('listing_snapshot').filter(pk=validated_data.get('post_id')).first()
+			if post is None:
+				return Response({'detail': 'That business post could not be found.'}, status=status.HTTP_404_NOT_FOUND)
+			report_kwargs['business_post'] = post
+			report_kwargs['business_name'] = report_kwargs['business_name'] or post.listing_snapshot.name
+		elif target_type == ContentReport.TargetType.DIRECT_MESSAGE:
+			message = BusinessDirectMessage.objects.select_related(
+				'sender',
+				'thread__business_claim__listing_snapshot',
+				'thread__customer',
+			).filter(pk=validated_data.get('message_id')).first()
+			if message is None:
+				return Response({'detail': 'That direct message could not be found.'}, status=status.HTTP_404_NOT_FOUND)
+			can_access_message = message.thread.customer_id == request.user.id or BusinessMembership.objects.filter(
+				claim=message.thread.business_claim,
+				user=request.user,
+				is_active=True,
+			).exists()
+			if not can_access_message:
+				return Response({'detail': 'That direct message could not be found.'}, status=status.HTTP_404_NOT_FOUND)
+			reported_user = message.sender
+			recipient = message.thread.customer if reported_user.id != message.thread.customer_id else message.thread.business_claim.claimant
+			report_kwargs['direct_message'] = message
+			report_kwargs['business_name'] = report_kwargs['business_name'] or message.thread.business_claim.listing_snapshot.name
+			report_kwargs['reported_user_username'] = reported_user.username
+			report_kwargs['reported_user_email'] = reported_user.email
+			report_kwargs['reported_user_role'] = 'customer' if reported_user.id == message.thread.customer_id else 'business'
+			report_kwargs['recipient_username'] = recipient.username
+			report_kwargs['recipient_email'] = recipient.email
+			report_kwargs['reported_message'] = message.body or ('[Image message]' if message.image else '')
+			report_kwargs['reported_message_created_at'] = message.created_at
+
+		duplicate_query = ContentReport.objects.filter(reporter=request.user, target_type=target_type)
+		if target_type == ContentReport.TargetType.BUSINESS_PROFILE:
+			duplicate_query = duplicate_query.filter(listing_slug=report_kwargs['listing_slug'])
+		elif target_type == ContentReport.TargetType.BUSINESS_POST:
+			duplicate_query = duplicate_query.filter(business_post=report_kwargs['business_post'])
+		else:
+			duplicate_query = duplicate_query.filter(direct_message=report_kwargs['direct_message'])
+		if duplicate_query.exists():
+			return Response({'detail': 'You have already reported this content. Our team will review it.'}, status=status.HTTP_400_BAD_REQUEST)
+
+		report = ContentReport(**report_kwargs)
+		report.full_clean()
+		try:
+			report.save()
+			if screenshot is not None:
+				report.screenshot = screenshot
+				report.save(update_fields=['screenshot', 'updated_at'])
+		except Exception:
+			report.delete()
+			raise
+		send_content_report_support_email_safely(report)
+		return Response({'detail': 'Thanks. Your report was sent to the DiningDealz review team.'}, status=status.HTTP_201_CREATED)
 
 
 class ContactSupportView(generics.GenericAPIView):

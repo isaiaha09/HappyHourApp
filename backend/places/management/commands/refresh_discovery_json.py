@@ -2,24 +2,19 @@ from django.core.management.base import BaseCommand, CommandError
 
 from places.services.importers.business_websites import BusinessWebsiteImporter
 from places.services.importers.discovered_json_places import filter_configured_place_records, merge_discovery_json_records, write_discovery_json_records
-from places.services.importers.here_places import HerePlacesImporter
-from places.services.importers.openstreetmap_places import OpenStreetMapPlacesImporter
-from places.services.importers.tomtom_places import TomTomPlacesImporter
 from places.services.deleted_businesses import filter_deleted_business_records
 
 
 IMPORTER_REGISTRY = {
-	'here_places': HerePlacesImporter,
-	'tomtom_places': TomTomPlacesImporter,
-	'openstreetmap_places': OpenStreetMapPlacesImporter,
+	'business_websites': BusinessWebsiteImporter,
 }
 
 
 class Command(BaseCommand):
-	help = 'Fetch discovery businesses from live providers, enrich them from business websites when possible, and store them in a JSON file instead of the database.'
+	help = 'Refresh configured business website records, enrich them when possible, and store them in a JSON file instead of the database.'
 
 	def add_arguments(self, parser):
-		parser.add_argument('--source', default='here_places', choices=sorted(IMPORTER_REGISTRY.keys()))
+		parser.add_argument('--source', default='business_websites', choices=sorted(IMPORTER_REGISTRY.keys()))
 		parser.add_argument('--city', choices=['ventura', 'oxnard', 'camarillo'])
 		parser.add_argument('--limit', type=int, default=0)
 		parser.add_argument('--replace', action='store_true')

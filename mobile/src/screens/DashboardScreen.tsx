@@ -38,6 +38,7 @@ export type DashboardScreenProps = {
 
 export type AccountSettingsScreenProps = {
   deleteAccountPassword: string;
+  deleteAccountErrorMessage?: string | null;
   errorMessage: string | null;
   isLandscape: boolean;
   message: string | null;
@@ -217,7 +218,6 @@ function buildDashboardDraft(session: SignupResponse): BusinessProfileDraft {
   const operatingHourDraftRows = buildOperatingHourOverridesFromWindows((businessContact.operating_hour_overrides as never[] | undefined) ?? (businessContact.operating_hours ?? []));
 
   return {
-    portal: session.portal,
     username: session.username,
     email: session.email,
     first_name: session.first_name,
@@ -1103,11 +1103,6 @@ export function BusinessProfileEditorScreen({
         return;
       }
 
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        return;
-      }
-
       const result = await ImagePicker.launchImageLibraryAsync({
         allowsEditing: true,
         allowsMultipleSelection: false,
@@ -1283,6 +1278,7 @@ export function BusinessProfileEditorScreen({
 
 export function AccountSettingsScreen({
   deleteAccountPassword,
+  deleteAccountErrorMessage = null,
   errorMessage,
   isLandscape,
   message,
@@ -1480,6 +1476,11 @@ export function AccountSettingsScreen({
                   style={styles.profileInput}
                   value={deleteAccountPassword}
                 />
+                {deleteAccountErrorMessage ? (
+                  <View style={styles.errorBanner}>
+                    <Text style={styles.errorText}>{deleteAccountErrorMessage}</Text>
+                  </View>
+                ) : null}
               </View>
               <View style={styles.settingsItemActions}>
                 <Pressable onPress={onDeleteAccount} style={[styles.destructiveButton, styles.settingsInlineButton, submitting ? styles.linkButtonDisabled : null]}>

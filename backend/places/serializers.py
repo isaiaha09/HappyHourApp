@@ -9,10 +9,11 @@ from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.files.storage import default_storage
 from django.db import transaction
+from django.utils import timezone
 from django.utils.text import slugify
 from rest_framework import serializers
 
-from .models import BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessPost, City, FeedEngagement, FeedImpression, ListingSnapshot, SponsoredCampaign, VenueType
+from .models import BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessPost, City, ContentReport, FeedEngagement, FeedImpression, ListingSnapshot, SponsoredCampaign, VenueType, business_claim_storage_prefix
 from .services.account_profiles import build_account_response, get_approved_business_claims, get_or_create_account_profile, has_active_business_membership, send_business_claim_submission_support_email_safely
 from .services.business_profile_overrides import (
 	build_deal_payloads,
@@ -22,6 +23,8 @@ from .services.business_profile_overrides import (
 	summarize_deal_overrides,
 	summarize_operating_hour_overrides,
 )
+from .services.content_moderation import get_content_moderation_error
+from .services.image_moderation import ImageModerationRejected, ImageModerationUnavailable, moderate_uploaded_image
 from .services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
 
 
@@ -64,6 +67,8 @@ DICT_JSON_FIELD_NAMES = (
 	'verification_documents',
 	'social_profiles',
 )
+
+BUSINESS_VERIFICATION_CONSENT_VERSION = '2026-08-16'
 
 
 def _normalize_social_profile_payload(raw_profiles=None, business_website_url='', social_media_links=None):
@@ -155,6 +160,21 @@ def _normalize_document_map(value):
 	}
 
 
+def _require_verification_data_consent(attrs):
+	if not attrs.get('verification_data_consent'):
+		raise serializers.ValidationError({
+			'verification_data_consent': ['Confirm that you understand how business verification materials are collected, used, stored, and deleted.'],
+		})
+
+
+def _pop_verification_data_consent(validated_data):
+	validated_data.pop('verification_data_consent', None)
+	return {
+		'verification_data_consent_at': timezone.now(),
+		'verification_data_consent_version': BUSINESS_VERIFICATION_CONSENT_VERSION,
+	}
+
+
 def _normalize_url_identity(value):
 	parsed = urlparse(str(value or '').strip())
 	netloc = str(parsed.netloc or '').strip().lower().removeprefix('www.')
@@ -242,6 +262,12 @@ def _validate_uploaded_deal_attachment(uploaded_file):
 	if content_type == 'application/pdf' or file_suffix == '.pdf':
 		return
 	if content_type.startswith('image/') or file_suffix in SUPPORTED_DEAL_ATTACHMENT_SUFFIXES:
+		try:
+			moderate_uploaded_image(uploaded_file, surface='business_deal_attachment')
+		except ImageModerationRejected as error:
+			raise serializers.ValidationError({'deal_overrides': [str(error)]})
+		except ImageModerationUnavailable as error:
+			raise serializers.ValidationError({'deal_overrides': [str(error)]})
 		return
 	raise serializers.ValidationError({'deal_overrides': ['Deal attachments must be a photo or PDF file.']})
 
@@ -255,7 +281,7 @@ def _save_uploaded_deal_attachment(request, claim, uploaded_file):
 	filename_root = Path(getattr(uploaded_file, 'name', '') or 'deal-attachment').stem or 'deal-attachment'
 	safe_name = slugify(filename_root) or 'deal-attachment'
 	saved_name = default_storage.save(
-		f'business-deal-attachments/{claim.id}/{uuid4().hex}-{safe_name}{file_suffix}',
+		f'{business_claim_storage_prefix(claim)}/deal-attachments/{uuid4().hex}-{safe_name}{file_suffix}',
 		uploaded_file,
 	)
 	attachment_payload = {
@@ -280,13 +306,19 @@ def _append_uploaded_profile_photos_to_claim(request, claim):
 		file_suffix = Path(getattr(uploaded_file, 'name', '') or '').suffix.lower()
 		if content_type == 'application/pdf' or file_suffix == '.pdf' or not (content_type.startswith('image/') or file_suffix in SUPPORTED_DEAL_ATTACHMENT_SUFFIXES):
 			raise serializers.ValidationError({'photo_uploads': ['Only image uploads from your photo library are supported.']})
+		try:
+			moderate_uploaded_image(uploaded_file, surface='business_profile_photo')
+		except ImageModerationRejected as error:
+			raise serializers.ValidationError({'photo_uploads': [str(error)]})
+		except ImageModerationUnavailable as error:
+			raise serializers.ValidationError({'photo_uploads': [str(error)]})
 		if not file_suffix:
 			file_suffix = '.jpg'
 
 		filename_root = Path(getattr(uploaded_file, 'name', '') or 'business-photo').stem or 'business-photo'
 		safe_name = slugify(filename_root) or 'business-photo'
 		saved_name = default_storage.save(
-			f'business-profile-photos/{claim.id}/{uuid4().hex}-{safe_name}{file_suffix}',
+			f'{business_claim_storage_prefix(claim)}/profile-photos/{uuid4().hex}-{safe_name}{file_suffix}',
 			uploaded_file,
 		)
 		uploaded_photo_urls.append(request.build_absolute_uri(default_storage.url(saved_name)))
@@ -466,6 +498,31 @@ class ContactSupportSerializer(serializers.Serializer):
 		return normalized
 
 
+class ContentReportSerializer(serializers.Serializer):
+	target_type = serializers.ChoiceField(choices=ContentReport.TargetType.values)
+	listing_slug = serializers.SlugField(max_length=170, required=False, allow_blank=True)
+	post_id = serializers.IntegerField(required=False, min_value=1)
+	message_id = serializers.IntegerField(required=False, min_value=1)
+	business_name = serializers.CharField(max_length=160, required=False, allow_blank=True)
+	reason = serializers.ChoiceField(choices=ContentReport.Reason.values)
+	details = serializers.CharField(max_length=4000, required=False, allow_blank=True)
+	screenshot = serializers.ImageField(required=False, allow_null=True, write_only=True)
+
+	def validate_listing_slug(self, value):
+		return value.strip().lower()
+
+	def validate_business_name(self, value):
+		return value.strip()
+
+	def validate_details(self, value):
+		return value.strip()
+
+	def validate_screenshot(self, value):
+		if value is not None and value.size > 10 * 1024 * 1024:
+			raise serializers.ValidationError('Screenshots must be 10 MB or smaller.')
+		return value
+
+
 class FavoriteBusinessToggleSerializer(serializers.Serializer):
 	slug = serializers.SlugField(max_length=170)
 	location_id = serializers.IntegerField(required=False, allow_null=True, min_value=1)
@@ -526,6 +583,9 @@ class DirectMessageSendSerializer(serializers.Serializer):
 
 	def validate_message(self, value):
 		normalized = value.strip()
+		moderation_error = get_content_moderation_error(normalized)
+		if moderation_error:
+			raise serializers.ValidationError(moderation_error)
 		return normalized
 
 	def validate(self, attrs):
@@ -547,6 +607,10 @@ class DirectMessageThreadListSerializer(serializers.Serializer):
 	unread_count = serializers.IntegerField()
 	read_only = serializers.BooleanField(required=False, default=False)
 	read_only_reason = serializers.CharField(required=False, allow_blank=True, default='')
+	blocked = serializers.BooleanField(required=False, default=False)
+	blocked_by_current_user = serializers.BooleanField(required=False, default=False)
+	blocked_by_other_user = serializers.BooleanField(required=False, default=False)
+	block_id = serializers.IntegerField(required=False, allow_null=True, default=None)
 
 
 class DirectMessageItemSerializer(serializers.Serializer):
@@ -563,13 +627,19 @@ class DirectMessageItemSerializer(serializers.Serializer):
 
 class DirectMessageBlockSerializer(serializers.Serializer):
 	portal = serializers.ChoiceField(choices=['customer', 'business'], required=False, allow_blank=True)
-	customer_username = serializers.CharField(max_length=150)
+	customer_username = serializers.CharField(max_length=150, required=False, allow_blank=True)
+	thread_id = serializers.IntegerField(required=False, min_value=1)
 
 	def validate_customer_username(self, value):
 		normalized = value.strip()
 		if not normalized:
 			raise serializers.ValidationError('Enter the username you want to block from direct messaging.')
 		return normalized
+
+	def validate(self, attrs):
+		if attrs.get('thread_id') is None and not str(attrs.get('customer_username') or '').strip():
+			raise serializers.ValidationError('Provide a direct message thread or customer username to block.')
+		return attrs
 
 
 class PushDeviceRegistrationSerializer(serializers.Serializer):
@@ -829,6 +899,7 @@ class ClaimedBusinessSignupSerializer(CustomerSignupSerializer):
 	hours_of_operation_entries = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
 	photo_references = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
 	verification_documents = serializers.JSONField(required=False)
+	verification_data_consent = serializers.BooleanField(required=True)
 	supporting_details = serializers.CharField(max_length=4000, required=False, allow_blank=True)
 
 	def allows_rejected_business_reregistration(self):
@@ -836,6 +907,7 @@ class ClaimedBusinessSignupSerializer(CustomerSignupSerializer):
 
 	def validate(self, attrs):
 		attrs = super().validate(attrs)
+		_require_verification_data_consent(attrs)
 		if attrs.get('address_not_applicable'):
 			raise serializers.ValidationError({'address_not_applicable': ['Address Not Applicable is only available when you create a new business profile.']})
 		attrs['social_media_links'] = _normalize_string_list(attrs.get('social_media_links', []))
@@ -857,6 +929,7 @@ class ClaimedBusinessSignupSerializer(CustomerSignupSerializer):
 		return attrs
 
 	def create(self, validated_data):
+		verification_data_consent_fields = _pop_verification_data_consent(validated_data)
 		listing_snapshot = validated_data.pop('listing_snapshot')
 		validated_data.pop('business_slug', None)
 		listing_snapshot.website_url = validated_data.pop('business_website_url', '') or listing_snapshot.website_url
@@ -878,6 +951,7 @@ class ClaimedBusinessSignupSerializer(CustomerSignupSerializer):
 			'hours_of_operation_entries': validated_data.pop('hours_of_operation_entries', []),
 			'photo_references': validated_data.pop('photo_references', []),
 			'verification_documents': validated_data.pop('verification_documents', {}),
+			**verification_data_consent_fields,
 			'verification_summary': 'Submitted through the claimed business verification flow.',
 			'supporting_details': validated_data.pop('supporting_details', ''),
 		}
@@ -924,6 +998,7 @@ class EstablishedBusinessSignupSerializer(CustomerSignupSerializer):
 	hours_of_operation_entries = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
 	photo_references = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
 	verification_documents = serializers.JSONField(required=False)
+	verification_data_consent = serializers.BooleanField(required=True)
 	supporting_details = serializers.CharField(max_length=4000, required=False, allow_blank=True)
 
 	def allows_rejected_business_reregistration(self):
@@ -937,6 +1012,7 @@ class EstablishedBusinessSignupSerializer(CustomerSignupSerializer):
 
 	def validate(self, attrs):
 		attrs = super().validate(attrs)
+		_require_verification_data_consent(attrs)
 		serves_multiple_areas = attrs.get('business_city') == BusinessClaim.MULTIPLE_AREAS_VALUE
 		attrs['serves_multiple_areas'] = serves_multiple_areas
 		if serves_multiple_areas and not attrs.get('employer_address'):
@@ -964,6 +1040,7 @@ class EstablishedBusinessSignupSerializer(CustomerSignupSerializer):
 		return attrs
 
 	def create(self, validated_data):
+		verification_data_consent_fields = _pop_verification_data_consent(validated_data)
 		business_venue_type = validated_data.pop('business_venue_type')
 		serves_multiple_areas = validated_data.pop('serves_multiple_areas', False)
 		listing_address = validated_data.get('employer_address') or ('Approximate live location' if serves_multiple_areas else 'Address Not Applicable')
@@ -996,6 +1073,7 @@ class EstablishedBusinessSignupSerializer(CustomerSignupSerializer):
 			'hours_of_operation_entries': validated_data.pop('hours_of_operation_entries', []),
 			'photo_references': validated_data.pop('photo_references', []),
 			'verification_documents': validated_data.pop('verification_documents', {}),
+			**verification_data_consent_fields,
 			'verification_summary': 'Submitted through the established business creation flow.',
 			'supporting_details': validated_data.pop('supporting_details', ''),
 		}
@@ -1035,6 +1113,7 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 	offer_entries = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
 	hours_of_operation_entries = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
 	photo_references = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
+	verification_data_consent = serializers.BooleanField(required=True)
 	supporting_details = serializers.CharField(max_length=4000, required=False, allow_blank=True)
 
 	def allows_rejected_business_reregistration(self):
@@ -1048,6 +1127,7 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 
 	def validate(self, attrs):
 		attrs = super().validate(attrs)
+		_require_verification_data_consent(attrs)
 		attrs['serves_multiple_areas'] = attrs.get('business_city') == BusinessClaim.MULTIPLE_AREAS_VALUE
 		if attrs['serves_multiple_areas']:
 			attrs['business_city'] = ''
@@ -1069,6 +1149,7 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 		return attrs
 
 	def create(self, validated_data):
+		verification_data_consent_fields = _pop_verification_data_consent(validated_data)
 		serves_multiple_areas = validated_data.pop('serves_multiple_areas', False)
 		social_media_links = validated_data.pop('social_media_links', [])
 		social_profiles = validated_data.pop('social_profiles', {})
@@ -1111,6 +1192,7 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 				offer_entries=offer_entries,
 				hours_of_operation_entries=hours_of_operation_entries,
 				photo_references=photo_references,
+				**verification_data_consent_fields,
 				verification_summary='Submitted through the small startup and vendor flow.',
 				supporting_details=supporting_details,
 			)

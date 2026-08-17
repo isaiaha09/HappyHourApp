@@ -204,6 +204,17 @@ export const detailStyles = {
     backgroundColor: theme.accentSoft,
     borderColor: theme.accent,
   },
+  contentReportButton: {
+    alignItems: 'center',
+    backgroundColor: theme.bgElevated,
+    borderColor: theme.border,
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 48,
+    justifyContent: 'center',
+    marginTop: 4,
+    width: 48,
+  },
   favoriteHeartIcon: {
     color: theme.textMuted,
     fontSize: 26,

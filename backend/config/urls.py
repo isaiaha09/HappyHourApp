@@ -19,9 +19,11 @@ from django.conf.urls.static import static
 from django.urls import include, path
 
 from places.admin_site import happyhour_admin_site
+from places.views import PrivateBusinessClaimAttachmentView
 
 urlpatterns = [
     path(f'{settings.ADMIN_URL_PATH}/', happyhour_admin_site.urls),
+    path('private-media/<path:name>', PrivateBusinessClaimAttachmentView.as_view(), name='private-business-claim-attachment'),
     path('api/', include('places.urls')),
 ]
 

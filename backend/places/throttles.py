@@ -60,6 +60,11 @@ class SupportContactRateThrottle(ScopedRateThrottle):
 	scope = 'profile_support_contact'
 
 
+class ContentReportRateThrottle(ScopedRateThrottle):
+	scope = 'profile_content_report'
+	identity_fields = ('target_type', 'post_id', 'message_id', 'listing_slug')
+
+
 class UserMutationRateThrottle(ScopedRateThrottle):
 	scope = 'profile_user_mutation'
 

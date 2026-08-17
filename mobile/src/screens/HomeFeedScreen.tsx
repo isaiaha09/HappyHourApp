@@ -11,8 +11,9 @@ import {
 
 import { fetchHomeFeed, recordFeedEngagement, recordFeedImpression } from '../api';
 import { styles } from '../appStyles';
+import { ContentReportModal } from '../components/ContentReportModal';
 import { HomeFeedCard } from '../components/HomeFeedCards';
-import type { FeedItem } from '../types';
+import type { ContentReportReason, ContentReportRequest, ContentReportScreenshotDraft, FeedItem } from '../types';
 
 type FeedCacheEntry = {
   impressionIds: Record<string, number>;
@@ -35,6 +36,7 @@ type HomeFeedScreenProps = {
   selectedCity: string;
   selectedVenueTypes: string[];
   onVisibleCountChange?: (count: number) => void;
+  onSubmitContentReport: (payload: ContentReportRequest) => Promise<string>;
   showFeedHeader?: boolean;
 };
 
@@ -119,6 +121,7 @@ export function HomeFeedScreen({
   selectedCity,
   selectedVenueTypes,
   onVisibleCountChange,
+  onSubmitContentReport,
   showFeedHeader = true,
 }: HomeFeedScreenProps) {
   const cacheKey = getFeedCacheKey(apiBaseUrl, reloadToken, selectedCity);
@@ -128,6 +131,7 @@ export function HomeFeedScreen({
   const [initialLoading, setInitialLoading] = useState(!hasResolvedInitialFeedPage(cachedEntry));
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [reportItem, setReportItem] = useState<FeedItem | null>(null);
   const [nextPage, setNextPage] = useState<number | null>(cachedEntry.nextPage);
   const impressionIdsRef = useRef<Record<string, number>>({ ...cachedEntry.impressionIds });
   const seenImpressionsRef = useRef<Set<string>>(new Set(cachedEntry.seenImpressionIds));
@@ -382,32 +386,56 @@ export function HomeFeedScreen({
     </Animated.View>
   );
 
+  async function handleSubmitFeedReport(reason: ContentReportReason, details: string, screenshot: ContentReportScreenshotDraft | null) {
+    if (!reportItem) {
+      throw new Error('Choose a business post to report.');
+    }
+
+    return onSubmitContentReport({
+      business_name: reportItem.business_name,
+      details,
+      post_id: reportItem.post_id,
+      reason,
+      screenshot,
+      target_type: 'business_post',
+    });
+  }
+
   return (
-    <FlatList
-      contentContainerStyle={styles.homeFeedListContent}
-      data={filteredItems}
-      key={isLandscape ? 'home-feed-landscape' : 'home-feed-portrait'}
-      keyExtractor={(item) => item.id}
-      ListEmptyComponent={listEmpty}
-      ListFooterComponent={listFooter}
-      ListHeaderComponent={listHeader}
-      onEndReached={handleLoadMore}
-      onEndReachedThreshold={0.45}
-      onRefresh={() => void handleRefresh()}
-      onViewableItemsChanged={onViewableItemsChanged}
-      progressViewOffset={refreshProgressViewOffset}
-      refreshing={refreshing}
-      renderItem={({ item, index }) => (
-        <Animated.View style={feedAnimatedStyle}>
-          <HomeFeedCard
-            isLandscape={isLandscape}
-            item={item}
-            onPress={() => void handlePressItem(item, index)}
-          />
-        </Animated.View>
-      )}
-      showsVerticalScrollIndicator={false}
-      viewabilityConfig={viewabilityConfig}
-    />
+    <>
+      <FlatList
+        contentContainerStyle={styles.homeFeedListContent}
+        data={filteredItems}
+        key={isLandscape ? 'home-feed-landscape' : 'home-feed-portrait'}
+        keyExtractor={(item) => item.id}
+        ListEmptyComponent={listEmpty}
+        ListFooterComponent={listFooter}
+        ListHeaderComponent={listHeader}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.45}
+        onRefresh={() => void handleRefresh()}
+        onViewableItemsChanged={onViewableItemsChanged}
+        progressViewOffset={refreshProgressViewOffset}
+        refreshing={refreshing}
+        renderItem={({ item, index }) => (
+          <Animated.View style={feedAnimatedStyle}>
+            <HomeFeedCard
+              isLandscape={isLandscape}
+              item={item}
+              onPress={() => void handlePressItem(item, index)}
+              onReport={() => setReportItem(item)}
+            />
+          </Animated.View>
+        )}
+        showsVerticalScrollIndicator={false}
+        viewabilityConfig={viewabilityConfig}
+      />
+      <ContentReportModal
+        onClose={() => setReportItem(null)}
+        onSubmit={handleSubmitFeedReport}
+        targetLabel="business post"
+        visible={reportItem !== null}
+      />
+    </>
   );
 }
