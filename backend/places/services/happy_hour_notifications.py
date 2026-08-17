@@ -128,20 +128,47 @@ def _favorite_matches_location(favorite, occurrence):
 	)
 
 
-def _eligible_favorites(occurrence):
-	favorites = FavoriteBusiness.objects.select_related('user__account_profile').filter(
+def _eligible_favorites_with_counts(occurrence):
+	favorites = list(FavoriteBusiness.objects.select_related('user__account_profile').filter(
 		listing_slug=occurrence['listing_slug'],
-		happy_hour_notifications_enabled=True,
-		user__account_profile__preference_onboarding_completed=True,
-		user__account_profile__notifications_paused=False,
-		user__account_profile__happy_hour_notifications_enabled=True,
-	)
-	return [
-		favorite for favorite in favorites
-		if _favorite_matches_location(favorite, occurrence)
-		and occurrence['weekday'] in list(favorite.user.account_profile.preferred_days or [])
-		and occurrence['period'] in list(favorite.user.account_profile.preferred_time_periods or [])
-	]
+	))
+	counts = {
+		'favorite_candidates': len(favorites),
+		'location_matches': 0,
+		'favorite_notifications_enabled': 0,
+		'account_notifications_enabled': 0,
+		'notifications_not_paused': 0,
+		'preferred_day_matches': 0,
+		'preferred_time_matches': 0,
+	}
+	eligible = []
+	for favorite in favorites:
+		if not _favorite_matches_location(favorite, occurrence):
+			continue
+		counts['location_matches'] += 1
+		if not favorite.happy_hour_notifications_enabled:
+			continue
+		counts['favorite_notifications_enabled'] += 1
+		profile = getattr(favorite.user, 'account_profile', None)
+		if profile is None or not profile.happy_hour_notifications_enabled:
+			continue
+		counts['account_notifications_enabled'] += 1
+		if profile.notifications_paused:
+			continue
+		counts['notifications_not_paused'] += 1
+		if occurrence['weekday'] not in list(profile.preferred_days or []):
+			continue
+		counts['preferred_day_matches'] += 1
+		if occurrence['period'] not in list(profile.preferred_time_periods or []):
+			continue
+		counts['preferred_time_matches'] += 1
+		eligible.append(favorite)
+	return eligible, counts
+
+
+def _eligible_favorites(occurrence):
+	eligible, _ = _eligible_favorites_with_counts(occurrence)
+	return eligible
 
 
 def _normalize_push_delivery_count(value):
@@ -206,10 +233,21 @@ def process_due_happy_hour_notifications(reference_time=None):
 	occurrence_count = 0
 	eligible_favorite_count = 0
 	push_delivery_count = 0
+	eligibility_counts = {
+		'favorite_candidates': 0,
+		'location_matches': 0,
+		'favorite_notifications_enabled': 0,
+		'account_notifications_enabled': 0,
+		'notifications_not_paused': 0,
+		'preferred_day_matches': 0,
+		'preferred_time_matches': 0,
+	}
 	for occurrence in _due_occurrences(now_local, window_minutes):
 		occurrence_count += 1
-		eligible_favorites = _eligible_favorites(occurrence)
+		eligible_favorites, occurrence_counts = _eligible_favorites_with_counts(occurrence)
 		eligible_favorite_count += len(eligible_favorites)
+		for key, value in occurrence_counts.items():
+			eligibility_counts[key] += value
 		for favorite in eligible_favorites:
 			created, delivered = _create_delivery(favorite, occurrence)
 			if created:
@@ -221,4 +259,5 @@ def process_due_happy_hour_notifications(reference_time=None):
 		'notifications_sent': sent_count,
 		'push_notifications_delivered': push_delivery_count,
 		'window_minutes': int(window_minutes),
+		**eligibility_counts,
 	}

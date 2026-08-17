@@ -225,7 +225,8 @@ class HappyHourNotificationProcessorTests(APITestCase):
 		AccountProfile.objects.create(
 			user=user,
 			email_verified_at=timezone.now(),
-			preference_onboarding_completed=True,
+			preference_onboarding_completed=False,
+			preference_onboarding_skipped=True,
 			preferred_days=[4],
 			preferred_time_periods=['afternoon'],
 			happy_hour_notifications_enabled=True,
@@ -280,6 +281,10 @@ class HappyHourNotificationProcessorTests(APITestCase):
 
 		self.assertEqual(first_result['notifications_sent'], 1)
 		self.assertEqual(first_result['eligible_favorites'], 1)
+		self.assertEqual(first_result['favorite_candidates'], 2)
+		self.assertEqual(first_result['location_matches'], 1)
+		self.assertEqual(first_result['account_notifications_enabled'], 1)
+		self.assertEqual(first_result['preferred_time_matches'], 1)
 		self.assertEqual(first_result['push_notifications_delivered'], 1)
 		self.assertEqual(second_result['notifications_sent'], 0)
 		self.assertEqual(HappyHourNotificationDelivery.objects.filter(user=user).count(), 1)
