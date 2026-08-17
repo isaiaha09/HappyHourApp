@@ -56,6 +56,28 @@ def _active_on_date(deal, local_date):
 	return not (starts_on and local_date < starts_on) and not (ends_on and local_date > ends_on)
 
 
+def _operating_hours_start_time(location, weekday):
+	for operating_hour in location.get('operating_hours') or []:
+		try:
+			operating_weekday = int(operating_hour.get('weekday', -1))
+		except (TypeError, ValueError):
+			continue
+		if operating_weekday != weekday:
+			continue
+		if operating_hour.get('open_24_hours'):
+			return time(0, 0)
+		start_time = _parse_time(operating_hour.get('open_time'))
+		if start_time is not None:
+			return start_time
+	return None
+
+
+def _happy_hour_start_time(happy_hour, location, weekday):
+	if happy_hour.get('all_day'):
+		return _operating_hours_start_time(location, weekday) or _parse_time(happy_hour.get('start_time')) or time(0, 0)
+	return _parse_time(happy_hour.get('start_time'))
+
+
 def _due_occurrences(now_local, window_minutes):
 	occurrences = []
 	window_seconds = max(int(window_minutes), 1) * 60
@@ -72,7 +94,7 @@ def _due_occurrences(now_local, window_minutes):
 					weekday = int(happy_hour.get('weekday', -1))
 					if weekday != now_local.weekday():
 						continue
-					start_time = time(0, 0) if happy_hour.get('all_day') else _parse_time(happy_hour.get('start_time'))
+					start_time = _happy_hour_start_time(happy_hour, location, weekday)
 					if start_time is None:
 						continue
 					started_at = datetime.combine(now_local.date(), start_time, tzinfo=BUSINESS_TIME_ZONE)

@@ -246,6 +246,7 @@ Recommended monitoring setup:
 - UptimeRobot: point it at the Render backend health URL, for example `https://your-render-service.onrender.com/api/health/`
 - UptimeRobot notification processor: add a second five-minute HTTP monitor after deploying the preference migration. Point it at `https://your-render-service.onrender.com/api/internal/process-due-happy-hour-notifications/<secret>/` and set the same randomly generated value as Render's `HAPPY_HOUR_NOTIFICATION_SECRET` environment variable.
 - Set `HAPPY_HOUR_NOTIFICATION_WINDOW_MINUTES=10` unless a different stale-alert window is intentionally needed. The processor re-reads current deal data, sends eligible happy-hour pushes once, and skips occurrences older than the configured window.
+- All-day happy-hour windows use the matching location's operating-hours opening time as their notification start; legacy records with no operating-hours start fall back to their stored happy-hour start time.
 - Keep the notification processor monitor separate from `/api/health/`; the health endpoint stays read-only and diagnostic.
 - Backend Sentry: set `SENTRY_DSN` in Render to capture Django runtime errors
 - Frontend Sentry: set `NEXT_PUBLIC_SENTRY_DSN` and `SENTRY_DSN` in Vercel to capture browser and Next.js server errors

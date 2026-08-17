@@ -46,10 +46,18 @@ function buildBusinessDraft(business: PreferenceBusinessInput): PreferenceBusine
 }
 
 function filterToAvailablePreferenceBusinesses(businesses: PreferenceBusinessInput[], options: CustomerPreferenceBusiness[]) {
-  const availableKeys = new Set(options.map(getBusinessKey));
+  const availableKeys = new Set(options.filter((business) => business.has_happy_hours === true).map(getBusinessKey));
+  const seenKeys = new Set<string>();
   return businesses
     .map(buildBusinessDraft)
-    .filter((business) => availableKeys.has(getBusinessKey(business)));
+    .filter((business) => {
+      const key = getBusinessKey(business);
+      if (!availableKeys.has(key) || seenKeys.has(key)) {
+        return false;
+      }
+      seenKeys.add(key);
+      return true;
+    });
 }
 
 function toggleAll<T>(current: T[], allValues: readonly T[], value: T) {
@@ -67,7 +75,7 @@ export function CustomerPreferencesScreen({ apiBaseUrl, authToken, isLandscape, 
   const [selectedDays, setSelectedDays] = useState<number[]>(mode === 'settings' && session.preferred_days?.length ? session.preferred_days : allDayValues);
   const [selectedTimePeriods, setSelectedTimePeriods] = useState<string[]>(mode === 'settings' && session.preferred_time_periods?.length ? session.preferred_time_periods : allTimeValues);
   const [businessOptions, setBusinessOptions] = useState<CustomerPreferenceBusiness[]>([]);
-  const [selectedBusinesses, setSelectedBusinesses] = useState<PreferenceBusinessDraft[]>(() => (session.favorite_businesses ?? []).map(buildBusinessDraft));
+  const [selectedBusinesses, setSelectedBusinesses] = useState<PreferenceBusinessDraft[]>(() => mode === 'settings' ? [] : (session.favorite_businesses ?? []).map(buildBusinessDraft));
   const [directMessagesEnabled, setDirectMessagesEnabled] = useState(Boolean(session.direct_message_notifications_enabled));
   const [businessUpdatesEnabled, setBusinessUpdatesEnabled] = useState(Boolean(session.business_updates_notifications_enabled));
   const [happyHourNotificationsEnabled, setHappyHourNotificationsEnabled] = useState(Boolean(session.happy_hour_notifications_enabled));
@@ -100,7 +108,7 @@ export function CustomerPreferencesScreen({ apiBaseUrl, authToken, isLandscape, 
         if (cancelled) {
           return;
         }
-        const availablePreferenceBusinesses = response.preference_businesses ?? [];
+        const availablePreferenceBusinesses = (response.preference_businesses ?? []).filter((business) => business.has_happy_hours === true);
         setBusinessOptions(availablePreferenceBusinesses);
         setSelectedBusinesses(filterToAvailablePreferenceBusinesses(response.favorite_businesses ?? [], availablePreferenceBusinesses));
         if (mode === 'settings') {
@@ -140,7 +148,7 @@ export function CustomerPreferencesScreen({ apiBaseUrl, authToken, isLandscape, 
       return [business.name, business.city_label, business.address_line_1].join(' ').toLowerCase().includes(normalizedQuery);
     });
   }, [businessOptions, searchQuery, selectedCities]);
-  const continueDisabled = submitting || (loading && step !== 0);
+  const continueDisabled = submitting || (loading && (mode === 'onboarding' ? step !== 0 : step >= 2));
 
   const allNotificationsEnabled = directMessagesEnabled && businessUpdatesEnabled && happyHourNotificationsEnabled;
 
@@ -327,10 +335,10 @@ export function CustomerPreferencesScreen({ apiBaseUrl, authToken, isLandscape, 
     return (
       <View style={styles.preferenceSection}>
         <Text style={styles.preferenceSectionTitle}>Choose businesses</Text>
-        <Text style={styles.preferenceSupportText}>These are the exact locations currently shown by Confirmed Happy Hours & Deals.</Text>
+        <Text style={styles.preferenceSupportText}>These are the exact locations with current confirmed happy hours.</Text>
         <TextInput onChangeText={setSearchQuery} placeholder="Search businesses" placeholderTextColor={theme.textDarkMuted} style={styles.preferenceSearchInput} value={searchQuery} />
         {loading ? <ActivityIndicator color={theme.accent} /> : null}
-        {!loading && !visibleBusinessOptions.length ? <Text style={styles.preferenceEmptyText}>No confirmed deals matched these areas yet.</Text> : null}
+        {!loading && !visibleBusinessOptions.length ? <Text style={styles.preferenceEmptyText}>No confirmed happy-hour locations matched these areas yet.</Text> : null}
         <View style={styles.preferenceBusinessList}>
           {visibleBusinessOptions.map((business) => {
             const selected = selectedBusinesses.some((item) => getBusinessKey(item) === getBusinessKey(business));

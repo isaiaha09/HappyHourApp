@@ -37,12 +37,16 @@ def _build_business_summary(listing_slug, location):
 		'website_url': location.get('website_url', ''),
 		'deal_count': _as_int(location.get('deal_count')),
 		'has_deals': bool(location.get('has_deals')),
+		'has_happy_hours': _location_has_happy_hour(location),
 	}
 
 
 def _location_has_happy_hour(location):
 	for deal in location.get('deals') or []:
-		if deal.get('is_active', True) and list(deal.get('happy_hours') or []):
+		if deal.get('is_active', True) and any(
+			bool(happy_hour.get('all_day')) or bool(str(happy_hour.get('start_time') or '').strip())
+			for happy_hour in deal.get('happy_hours') or []
+		):
 			return True
 	return False
 

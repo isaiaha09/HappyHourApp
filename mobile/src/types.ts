@@ -255,6 +255,7 @@ export type CustomerPreferenceBusiness = {
   website_url: string;
   deal_count?: number;
   has_deals?: boolean;
+  has_happy_hours?: boolean;
   profile_updates_enabled?: boolean;
   happy_hour_notifications_enabled?: boolean;
   deal_updates_enabled?: boolean;

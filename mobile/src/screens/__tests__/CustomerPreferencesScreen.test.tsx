@@ -61,6 +61,7 @@ describe('CustomerPreferencesScreen', () => {
         website_url: 'https://example.com/yard-house',
         deal_count: 1,
         has_deals: true,
+        has_happy_hours: true,
       }],
     });
     mockSaveCustomerPreferences.mockResolvedValue({ ...buildSession(), detail: 'Preferences saved.' });
@@ -151,5 +152,87 @@ describe('CustomerPreferencesScreen', () => {
     );
     expect(onComplete).toHaveBeenCalledTimes(1);
     expect(onSkip).not.toHaveBeenCalled();
+  });
+
+  it('lets settings advance from the first screen while preferences load', async () => {
+    mockFetchCustomerPreferences.mockReturnValue(new Promise(() => undefined));
+
+    render(
+      <CustomerPreferencesScreen
+        apiBaseUrl="https://api.example.com"
+        authToken="token-123"
+        isLandscape={false}
+        mode="settings"
+        onBack={jest.fn()}
+        onComplete={jest.fn()}
+        onSkip={jest.fn()}
+        session={buildSession()}
+      />,
+    );
+
+    fireEvent.press(screen.getByText('Continue'));
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 360));
+    });
+
+    expect(screen.getByText('Choose businesses')).toBeTruthy();
+  });
+
+  it('does not display preference businesses without happy hours', async () => {
+    mockFetchCustomerPreferences.mockResolvedValue({
+      ...buildSession(),
+      preference_businesses: [
+        {
+          slug: 'yard-house',
+          location_id: 71,
+          name: 'Yard House',
+          city: 'oxnard',
+          city_label: 'Oxnard',
+          venue_type: 'bar',
+          venue_type_label: 'Bar',
+          address_line_1: '501 Collection Blvd',
+          website_url: 'https://example.com/yard-house',
+          has_happy_hours: true,
+        },
+        {
+          slug: 'regular-deal-business',
+          location_id: 72,
+          name: 'Regular Deal Business',
+          city: 'oxnard',
+          city_label: 'Oxnard',
+          venue_type: 'restaurant',
+          venue_type_label: 'Restaurant',
+          address_line_1: '502 Collection Blvd',
+          website_url: 'https://example.com/regular-deal-business',
+          has_happy_hours: false,
+        },
+      ],
+    });
+
+    render(
+      <CustomerPreferencesScreen
+        apiBaseUrl="https://api.example.com"
+        authToken="token-123"
+        isLandscape={false}
+        mode="settings"
+        onBack={jest.fn()}
+        onComplete={jest.fn()}
+        onSkip={jest.fn()}
+        session={buildSession()}
+      />,
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    fireEvent.press(screen.getByText('Continue'));
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 360));
+    });
+
+    expect(screen.getByText('Yard House')).toBeTruthy();
+    expect(screen.queryByText('Regular Deal Business')).toBeNull();
   });
 });
