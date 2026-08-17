@@ -461,15 +461,15 @@ def _get_matching_listing_snapshot_override_payload(override_payloads, payload_s
 
 
 def _get_matching_listing_snapshot_override_payload_for_record(override_payloads, place_record):
-	source_identity = _build_place_record_source_identity(place_record)
-	if source_identity:
-		matched_payload = override_payloads['by_source_identity'].get(source_identity)
-		if matched_payload is not None:
-			return matched_payload
-
 	location_identity = _build_place_record_location_identity(place_record)
 	if location_identity:
 		matched_payload = override_payloads['by_location_identity'].get(location_identity)
+		if matched_payload is not None:
+			return matched_payload
+
+	source_identity = _build_place_record_source_identity(place_record)
+	if source_identity:
+		matched_payload = override_payloads['by_source_identity'].get(source_identity)
 		if matched_payload is not None:
 			return matched_payload
 
@@ -599,18 +599,18 @@ def _build_snapshot_location_identity(snapshot):
 	city = str(snapshot.city or '').strip().lower()
 	name = _normalize_location_text(snapshot.name)
 	address_line_1 = _normalize_location_text(snapshot.address_line_1)
-	if not city or not name:
+	if not city:
 		return None
-	return (city, name, address_line_1)
+	return (city, 'address', address_line_1) if address_line_1 else (city, 'name', name)
 
 
 def _build_place_record_location_identity(place_record):
 	city = str(getattr(place_record, 'city', '') or '').strip().lower()
 	name = _normalize_location_text(getattr(place_record, 'name', ''))
 	address_line_1 = _normalize_location_text(getattr(place_record, 'address_line_1', ''))
-	if not city or not name:
+	if not city:
 		return None
-	return (city, name, address_line_1)
+	return (city, 'address', address_line_1) if address_line_1 else (city, 'name', name)
 
 
 def _get_claimed_listing_slugs():

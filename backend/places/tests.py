@@ -2955,6 +2955,68 @@ class SourceListingIdentityTests(TestCase):
 
 	@patch('places.services.source_listings._get_place_coordinates')
 	@patch('places.services.source_listings.load_source_records')
+	def test_multi_location_overrides_prefer_location_identity_when_source_identity_is_shared(self, mock_load_source_records, mock_get_place_coordinates):
+		mock_get_place_coordinates.side_effect = [(34.2477, -119.19652), (34.21961, -119.05442)]
+		shared_external_id = 'www-cronies-com-locations-shared'
+		mock_load_source_records.return_value = [
+			ImportedPlace(
+				name='Cronies Sports Grill',
+				profile_name='Cronies Sports Grill',
+				profile_slug='cronies-sports-grill',
+				city=City.VENTURA,
+				venue_type=VenueType.BAR,
+				address_line_1='2855 Johnson Dr',
+				state='CA',
+				postal_code='93003',
+				external_id=shared_external_id,
+				source_name='business_websites',
+			),
+			ImportedPlace(
+				name='Cronies Sports Grill Camarillo',
+				profile_name='Cronies Sports Grill',
+				profile_slug='cronies-sports-grill',
+				city=City.CAMARILLO,
+				venue_type=VenueType.BAR,
+				address_line_1='370 N Lantana St',
+				state='CA',
+				postal_code='93010',
+				external_id=shared_external_id,
+				source_name='business_websites',
+			),
+		]
+		ListingSnapshot.objects.create(
+			name='Cronies Sports Grill',
+			listing_slug='cronies-sports-grill',
+			city=City.VENTURA,
+			venue_type=VenueType.BAR,
+			address_line_1='2855 Johnson Dr',
+			postal_code='93003',
+			external_id=shared_external_id,
+			source_name='business_websites',
+			phone_number='805-650-6026',
+		)
+		ListingSnapshot.objects.create(
+			name='Cronies Sports Grill',
+			listing_slug='cronies-sports-grill',
+			city=City.CAMARILLO,
+			venue_type=VenueType.BAR,
+			address_line_1='370 N Lantana St',
+			postal_code='93010',
+			external_id=shared_external_id,
+			source_name='business_websites',
+			phone_number='805-482-5900',
+		)
+
+		payload = get_source_place_payload('cronies-sports-grill')
+
+		locations_by_city = {location['city']: location for location in payload['locations']}
+		self.assertEqual(locations_by_city[City.VENTURA]['address_line_1'], '2855 Johnson Dr')
+		self.assertEqual(locations_by_city[City.VENTURA]['phone_number'], '805-650-6026')
+		self.assertEqual(locations_by_city[City.CAMARILLO]['address_line_1'], '370 N Lantana St')
+		self.assertEqual(locations_by_city[City.CAMARILLO]['phone_number'], '805-482-5900')
+
+	@patch('places.services.source_listings._get_place_coordinates')
+	@patch('places.services.source_listings.load_source_records')
 	def test_public_place_payload_allows_snapshot_to_explicitly_clear_imported_deals(self, mock_load_source_records, mock_get_place_coordinates):
 		mock_get_place_coordinates.return_value = (34.21681, -119.07423)
 		mock_load_source_records.return_value = [
