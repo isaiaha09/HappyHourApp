@@ -95,6 +95,17 @@ export const businessWeekdayOptions = weekdayLabels.map((label, weekday) => ({
     }));
   }
 
+  export function buildEditableDealOverrides(overrides: BusinessDealOverride[]): BusinessDealOverride[] {
+    return overrides.map((deal) => ({
+      ...deal,
+      happy_hours: deal.happy_hours.map((window) => ({
+        ...window,
+        start_time: formatTime(window.start_time),
+        end_time: formatTime(window.end_time),
+      })),
+    }));
+  }
+
   export function buildNormalizedOperatingHourOverrides(overrides: BusinessOperatingHourOverride[]) {
     return overrides
       .flatMap((override, index) => expandOperatingHourOverride(override)

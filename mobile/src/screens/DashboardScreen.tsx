@@ -5,7 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { ActivityIndicator, Image, Keyboard, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 
 import { styles } from '../appStyles';
-import { buildDealOverridesFromDeals, buildNormalizedDealOverrides, buildNormalizedOperatingHourOverrides, buildOperatingHourOverridesFromWindows } from '../businessProfileOverrides';
+import { buildDealOverridesFromDeals, buildEditableDealOverrides, buildNormalizedDealOverrides, buildNormalizedOperatingHourOverrides, buildOperatingHourOverridesFromWindows } from '../businessProfileOverrides';
 import { AutoScrollTextInput, useAutoScrollForm } from '../components/AutoScrollTextInput';
 import { BusinessDealsEditor, BusinessHoursEditor } from '../components/BusinessProfileStructuredEditors';
 import { NativeIOSLiquidGlassBackButton, NativeIOSLiquidGlassHeaderButton } from '../components/NativeIOSLiquidGlass';
@@ -232,7 +232,9 @@ function buildDashboardDraft(session: SignupResponse): BusinessProfileDraft {
     facebook_profile: socialInputs.facebook,
     tiktok_profile: socialInputs.tiktok,
     youtube_profile: socialInputs.youtube,
-    deal_overrides: businessContact.deal_overrides ?? buildDealOverridesFromDeals(businessContact.deals ?? []),
+    deal_overrides: businessContact.deal_overrides
+      ? buildEditableDealOverrides(businessContact.deal_overrides)
+      : buildDealOverridesFromDeals(businessContact.deals ?? []),
     operating_hour_overrides: operatingHourDraftRows,
     offer_entries_text: joinDraftEntries(businessContact.offer_entries),
     hours_of_operation_entries_text: joinDraftEntries(businessContact.hours_of_operation_entries),
@@ -1154,18 +1156,6 @@ export function BusinessProfileEditorScreen({
             {approvedBusiness?.address_line_1 ? <Text style={styles.detailMeta}>{approvedBusiness.address_line_1}</Text> : null}
             <Text style={styles.profileIntroText}>Update the public-facing details for your approved business profile. Your approved business phone and address override pulled source data in the app.</Text>
 
-            {message ? (
-              <View style={styles.profileSuccessBanner}>
-                <Text style={styles.profileSuccessText}>{message}</Text>
-              </View>
-            ) : null}
-
-            {errorMessage ? (
-              <View style={styles.errorBanner}>
-                <Text style={styles.errorText}>{errorMessage}</Text>
-              </View>
-            ) : null}
-
             <View style={styles.dashboardSection}>
               <Text style={styles.dashboardSectionTitle}>Business profile details</Text>
               <View style={styles.dashboardFieldGrid}>
@@ -1257,6 +1247,16 @@ export function BusinessProfileEditorScreen({
                 ) : null}
               </View>
               <DashboardMultilineField label="Business details" onChangeText={(value) => setProfileDraft((current) => ({ ...current, supporting_details: value }))} value={profileDraft.supporting_details ?? ''} />
+              {errorMessage ? (
+                <View style={styles.errorBanner}>
+                  <Text style={styles.errorText}>{errorMessage}</Text>
+                </View>
+              ) : null}
+              {message ? (
+                <View style={styles.profileSuccessBanner}>
+                  <Text style={styles.profileSuccessText}>{message}</Text>
+                </View>
+              ) : null}
               <View style={styles.dashboardInlineActions}>
                 <Pressable
                   onPress={handleSaveBusinessProfile}

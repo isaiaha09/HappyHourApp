@@ -12,6 +12,7 @@ import {
   createEmptyDealOverride,
   createEmptyHappyHourOverride,
   createEmptyOperatingHourOverride,
+  formatTime,
   formatHappyHourGroups,
   formatOperatingHourGroups,
 } from '../businessProfileOverrides';
@@ -240,6 +241,7 @@ export function BusinessHoursEditor({ label, onChange, supportText, value }: Bus
           {row.open_24_hours ? null : (
             <View style={styles.structuredTimeRow}>
               <TextInput
+                onBlur={() => updateRow(index, { ...row, open_time: formatTime(row.open_time), close_time: formatTime(row.close_time) })}
                 onChangeText={(open_time) => updateRow(index, { ...row, open_time })}
                 placeholder="11:00 AM"
                 placeholderTextColor="#9a7f6c"
@@ -247,6 +249,7 @@ export function BusinessHoursEditor({ label, onChange, supportText, value }: Bus
                 value={row.open_time}
               />
               <TextInput
+                onBlur={() => updateRow(index, { ...row, open_time: formatTime(row.open_time), close_time: formatTime(row.close_time) })}
                 onChangeText={(close_time) => updateRow(index, { ...row, close_time })}
                 placeholder="10:00 PM"
                 placeholderTextColor="#9a7f6c"
@@ -694,6 +697,7 @@ export function BusinessDealsEditor({ label, onChange, supportText, value }: Bus
               {!window.all_day ? (
                 <View style={styles.structuredTimeRow}>
                   <TextInput
+                    onBlur={() => updateHappyHour(dealIndex, happyHourIndex, { ...window, start_time: formatTime(window.start_time), end_time: formatTime(window.end_time) })}
                     onChangeText={(start_time) => updateHappyHour(dealIndex, happyHourIndex, { ...window, start_time })}
                     placeholder="3:00 PM"
                     placeholderTextColor="#9a7f6c"
@@ -701,6 +705,7 @@ export function BusinessDealsEditor({ label, onChange, supportText, value }: Bus
                     value={window.start_time}
                   />
                   <TextInput
+                    onBlur={() => updateHappyHour(dealIndex, happyHourIndex, { ...window, start_time: formatTime(window.start_time), end_time: formatTime(window.end_time) })}
                     onChangeText={(end_time) => updateHappyHour(dealIndex, happyHourIndex, { ...window, end_time })}
                     placeholder="6:00 PM"
                     placeholderTextColor="#9a7f6c"
