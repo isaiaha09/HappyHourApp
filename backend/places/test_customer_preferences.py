@@ -167,6 +167,53 @@ class CustomerPreferenceApiTests(APITestCase):
 		self.assertEqual([option['slug'] for option in options], ['yard-house'])
 		self.assertTrue(options[0]['has_happy_hours'])
 
+	@patch('places.services.customer_preferences.get_source_place_payloads')
+	def test_preference_business_options_include_service_area_business_happy_hours(self, mock_get_source_place_payloads):
+		mock_get_source_place_payloads.return_value = [{
+			'slug': 'huh-unknown',
+			'name': 'HUH',
+			'city': '',
+			'city_label': 'Oxnard',
+			'locations': [{
+				'id': 664455675575486,
+				'name': 'HUH',
+				'city': '',
+				'city_label': 'Oxnard',
+				'deal_count': 1,
+				'has_deals': True,
+				'deals': [{
+					'id': 95,
+					'title': 'yuh',
+					'is_active': True,
+					'happy_hours': [{
+						'id': 96,
+						'weekday': 0,
+						'start_time': '11:55',
+						'end_time': '18:00',
+						'all_day': False,
+					}],
+				}],
+			}],
+		}]
+
+		options = get_preference_business_options(['oxnard'])
+
+		self.assertEqual([option['slug'] for option in options], ['huh-unknown'])
+		self.assertEqual(options[0]['city'], 'oxnard')
+		self.assertTrue(options[0]['has_happy_hours'])
+
+	@patch('places.services.customer_preferences.get_source_place_payloads')
+	def test_preference_options_cover_areas_outside_saved_cities(self, mock_get_source_place_payloads):
+		mock_get_source_place_payloads.return_value = [self.place_payload]
+		profile = AccountProfile.objects.get(user=self.user)
+		profile.preferred_cities = ['ventura']
+		profile.save(update_fields=['preferred_cities', 'updated_at'])
+
+		response = self.client.get(reverse('profile-preferences'))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual([business['slug'] for business in response.data['preference_businesses']], ['yard-house'])
+
 
 class HappyHourNotificationProcessorTests(APITestCase):
 	@override_settings(EXPO_PUSH_NOTIFICATIONS_ENABLED=True)

@@ -6,6 +6,7 @@ from places.services.source_listings import get_source_place_payload, get_source
 
 TIME_PERIODS = ('morning', 'afternoon', 'evening')
 PREFERENCE_CITIES = tuple(City.values)
+CITY_VALUES_BY_LABEL = {str(label).strip().lower(): value for value, label in City.choices}
 
 
 def _as_int(value, default=0):
@@ -13,6 +14,27 @@ def _as_int(value, default=0):
 		return int(value)
 	except (TypeError, ValueError):
 		return default
+
+
+def _resolve_location_city(location, payload=None):
+	resolved_payload = payload or {}
+	for value in (location.get('city'), resolved_payload.get('city')):
+		normalized = str(value or '').strip().lower()
+		if normalized in PREFERENCE_CITIES:
+			return normalized
+	# Service-area businesses can publish a city label without a fixed city value.
+	for label in (location.get('city_label'), resolved_payload.get('city_label')):
+		normalized_label = str(label or '').strip().lower()
+		if normalized_label in CITY_VALUES_BY_LABEL:
+			return CITY_VALUES_BY_LABEL[normalized_label]
+	return ''
+
+
+def _with_resolved_city(location, payload=None):
+	city = _resolve_location_city(location, payload)
+	if city == str(location.get('city') or '').strip().lower():
+		return location
+	return {**location, 'city': city}
 
 
 def _get_location_payload(payload, location_id=None):
@@ -59,8 +81,9 @@ def get_preference_business_options(cities=None, only_with_deals=True):
 		listing_slug = str(payload.get('slug') or '').strip()
 		if not listing_slug:
 			continue
-		for location in payload.get('locations') or [payload]:
-			city = str(location.get('city') or '').strip().lower()
+		for raw_location in payload.get('locations') or [payload]:
+			location = _with_resolved_city(raw_location, payload)
+			city = location.get('city')
 			location_id = location.get('id')
 			identity = (listing_slug, _as_int(location_id))
 			if city not in selected_cities or identity in seen:
@@ -84,7 +107,7 @@ def resolve_business_location(listing_slug, location_id=None, payload=None):
 	location = _get_location_payload(payload, location_id)
 	if location is None:
 		raise ValueError('One of the selected business locations could not be found.')
-	return listing_slug, location
+	return listing_slug, _with_resolved_city(location, payload)
 
 
 def _resolve_happy_hour_business_row(row):

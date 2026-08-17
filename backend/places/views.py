@@ -1184,10 +1184,10 @@ class CustomerPreferencesView(APIView):
 	def get(self, request):
 		if infer_portal_for_user(request.user, request.query_params.get('portal')) != 'customer':
 			return Response({'detail': 'Customer accounts only.'}, status=status.HTTP_403_FORBIDDEN)
-		profile = get_or_create_account_profile(request.user)
+		get_or_create_account_profile(request.user)
 		payload = build_account_response(request.user, 'customer', token=request.auth)
 		include_all_businesses = str(request.query_params.get('include_all_businesses') or '').strip().lower() in {'1', 'true', 'yes'}
-		payload['preference_businesses'] = get_preference_business_options(None if include_all_businesses else profile.preferred_cities, only_with_deals=not include_all_businesses)
+		payload['preference_businesses'] = get_preference_business_options(None, only_with_deals=not include_all_businesses)
 		return Response(payload)
 
 	def post(self, request):
@@ -1199,9 +1199,9 @@ class CustomerPreferencesView(APIView):
 			save_customer_preferences(request.user, serializer.validated_data)
 		except ValueError as error:
 			return Response({'detail': str(error)}, status=status.HTTP_400_BAD_REQUEST)
-		profile = get_or_create_account_profile(request.user)
+		get_or_create_account_profile(request.user)
 		payload = build_account_response(request.user, 'customer', token=request.auth)
-		payload['preference_businesses'] = get_preference_business_options(profile.preferred_cities)
+		payload['preference_businesses'] = get_preference_business_options(None)
 		payload['detail'] = 'Preferences saved.'
 		return Response(payload)
 
