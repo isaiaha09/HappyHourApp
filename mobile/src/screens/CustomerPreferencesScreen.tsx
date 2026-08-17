@@ -45,6 +45,13 @@ function buildBusinessDraft(business: PreferenceBusinessInput): PreferenceBusine
   };
 }
 
+function filterToAvailablePreferenceBusinesses(businesses: PreferenceBusinessInput[], options: CustomerPreferenceBusiness[]) {
+  const availableKeys = new Set(options.map(getBusinessKey));
+  return businesses
+    .map(buildBusinessDraft)
+    .filter((business) => availableKeys.has(getBusinessKey(business)));
+}
+
 function toggleAll<T>(current: T[], allValues: readonly T[], value: T) {
   if (current.includes(value)) {
     const next = current.filter((item) => item !== value);
@@ -93,9 +100,10 @@ export function CustomerPreferencesScreen({ apiBaseUrl, authToken, isLandscape, 
         if (cancelled) {
           return;
         }
-        setBusinessOptions(response.preference_businesses ?? []);
+        const availablePreferenceBusinesses = response.preference_businesses ?? [];
+        setBusinessOptions(availablePreferenceBusinesses);
+        setSelectedBusinesses(filterToAvailablePreferenceBusinesses(response.favorite_businesses ?? [], availablePreferenceBusinesses));
         if (mode === 'settings') {
-          setSelectedBusinesses((response.favorite_businesses ?? []).map(buildBusinessDraft));
           setSelectedCities(response.preferred_cities?.length ? response.preferred_cities : allCityValues);
           setSelectedDays(response.preferred_days?.length ? response.preferred_days : allDayValues);
           setSelectedTimePeriods(response.preferred_time_periods?.length ? response.preferred_time_periods : allTimeValues);

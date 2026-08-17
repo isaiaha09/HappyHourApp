@@ -1,8 +1,12 @@
 from django.conf import settings
 from django.utils import timezone
+import logging
 import requests
 
 from places.models import FavoriteBusinessPushDevice
+
+
+logger = logging.getLogger(__name__)
 
 
 def send_push_notifications_for_favorite_business_event(user_ids, *, listing_slug, title, message='', event_type=''):
@@ -17,6 +21,7 @@ def send_push_notifications_for_favorite_business_event(user_ids, *, listing_slu
 		.exclude(expo_push_token='')
 	)
 	if not devices:
+		logger.warning('Favorite-business push skipped because no active devices are registered for %s user(s).', len(user_ids))
 		return 0
 
 	body = str(message or '').strip() or title
@@ -55,6 +60,7 @@ def send_push_notifications_for_favorite_business_event(user_ids, *, listing_slu
 			response.raise_for_status()
 			payload = response.json() if response.content else {}
 		except (requests.RequestException, ValueError, TypeError) as error:
+			logger.exception('Favorite-business push request failed for %s device(s).', len(device_chunk))
 			FavoriteBusinessPushDevice.objects.filter(pk__in=[device.pk for device in device_chunk]).update(last_error=str(error))
 			continue
 
@@ -75,6 +81,8 @@ def send_push_notifications_for_favorite_business_event(user_ids, *, listing_slu
 				device.last_error = error
 			else:
 				device.last_error = error or 'Expo push delivery failed.'
+			if status != 'ok':
+				logger.warning('Favorite-business push was rejected for device_id=%s status=%s error=%s.', device.pk, status or 'missing', error or 'unknown')
 			devices_to_update.append(device)
 
 		if devices_to_update:

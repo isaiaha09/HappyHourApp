@@ -1,4 +1,5 @@
 from datetime import datetime, time
+import logging
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
@@ -10,6 +11,7 @@ from places.services.favorite_push import send_push_notifications_for_favorite_b
 from places.services.source_listings import get_source_place_payloads
 
 
+logger = logging.getLogger(__name__)
 BUSINESS_TIME_ZONE = ZoneInfo('America/Los_Angeles')
 TIME_PERIOD_BOUNDS = {
 	'morning': (time(5, 0), time(12, 0)),
@@ -107,6 +109,7 @@ def _favorite_matches_location(favorite, occurrence):
 def _eligible_favorites(occurrence):
 	favorites = FavoriteBusiness.objects.select_related('user__account_profile').filter(
 		listing_slug=occurrence['listing_slug'],
+		happy_hour_notifications_enabled=True,
 		user__account_profile__preference_onboarding_completed=True,
 		user__account_profile__notifications_paused=False,
 		user__account_profile__happy_hour_notifications_enabled=True,
@@ -117,6 +120,13 @@ def _eligible_favorites(occurrence):
 		and occurrence['weekday'] in list(favorite.user.account_profile.preferred_days or [])
 		and occurrence['period'] in list(favorite.user.account_profile.preferred_time_periods or [])
 	]
+
+
+def _normalize_push_delivery_count(value):
+	try:
+		return max(int(value), 0)
+	except (TypeError, ValueError):
+		return 0
 
 
 def _create_delivery(favorite, occurrence):
@@ -137,7 +147,7 @@ def _create_delivery(favorite, occurrence):
 				},
 			)
 			if not created:
-				return False
+				return False, 0
 			FavoriteBusinessNotification.objects.create(
 				user=favorite.user,
 				listing_slug=occurrence['listing_slug'],
@@ -149,14 +159,21 @@ def _create_delivery(favorite, occurrence):
 	except IntegrityError:
 		return False
 
-	send_push_notifications_for_favorite_business_event(
+	push_delivery_count = _normalize_push_delivery_count(send_push_notifications_for_favorite_business_event(
 		[favorite.user_id],
 		listing_slug=occurrence['listing_slug'],
 		title=title,
 		message=message,
 		event_type=FavoriteBusinessNotification.EventType.HAPPY_HOUR,
-	)
-	return True
+	))
+	if push_delivery_count == 0:
+		logger.warning(
+			'Happy-hour notification created without Expo delivery for user_id=%s listing_slug=%s location_id=%s.',
+			favorite.user_id,
+			occurrence['listing_slug'],
+			occurrence['location_id'],
+		)
+	return True, push_delivery_count
 
 
 def process_due_happy_hour_notifications(reference_time=None):
@@ -165,13 +182,21 @@ def process_due_happy_hour_notifications(reference_time=None):
 	window_minutes = getattr(settings, 'HAPPY_HOUR_NOTIFICATION_WINDOW_MINUTES', 10)
 	sent_count = 0
 	occurrence_count = 0
+	eligible_favorite_count = 0
+	push_delivery_count = 0
 	for occurrence in _due_occurrences(now_local, window_minutes):
 		occurrence_count += 1
-		for favorite in _eligible_favorites(occurrence):
-			if _create_delivery(favorite, occurrence):
+		eligible_favorites = _eligible_favorites(occurrence)
+		eligible_favorite_count += len(eligible_favorites)
+		for favorite in eligible_favorites:
+			created, delivered = _create_delivery(favorite, occurrence)
+			if created:
 				sent_count += 1
+				push_delivery_count += delivered
 	return {
 		'occurrences_checked': occurrence_count,
+		'eligible_favorites': eligible_favorite_count,
 		'notifications_sent': sent_count,
+		'push_notifications_delivered': push_delivery_count,
 		'window_minutes': int(window_minutes),
 	}

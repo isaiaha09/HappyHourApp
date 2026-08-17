@@ -83,8 +83,14 @@ def resolve_business_location(listing_slug, location_id=None, payload=None):
 	return listing_slug, location
 
 
-def _resolve_business_row(row):
-	return resolve_business_location(row.get('slug'), row.get('location_id'))
+def _resolve_happy_hour_business_row(row):
+	try:
+		listing_slug, location = resolve_business_location(row.get('slug'), row.get('location_id'))
+	except ValueError:
+		return None
+	if not _location_has_happy_hour(location):
+		return None
+	return listing_slug, location
 
 
 @transaction.atomic
@@ -105,10 +111,13 @@ def save_customer_preferences(user, data):
 	happy_hour_notifications_enabled = bool(data.get('happy_hour_notifications_enabled', False))
 
 	business_rows = data.get('businesses')
-	retained_favorite_ids = set()
 	if business_rows is not None:
+		FavoriteBusiness.objects.filter(user=user).update(happy_hour_notifications_enabled=False)
 		for row in business_rows:
-			listing_slug, location = _resolve_business_row(row)
+			resolved_business = _resolve_happy_hour_business_row(row)
+			if resolved_business is None:
+				continue
+			listing_slug, location = resolved_business
 			location_id = location.get('id')
 			favorite = FavoriteBusiness.objects.filter(
 				user=user,
@@ -137,12 +146,9 @@ def save_customer_preferences(user, data):
 			favorite.deal_updates_enabled = business_updates_notifications_enabled
 			favorite.direct_message_notifications_enabled = direct_message_notifications_enabled
 			favorite.save()
-			retained_favorite_ids.add(favorite.pk)
-		FavoriteBusiness.objects.filter(user=user).exclude(pk__in=retained_favorite_ids).delete()
 
 	FavoriteBusiness.objects.filter(user=user).update(
 		profile_updates_enabled=business_updates_notifications_enabled,
-		happy_hour_notifications_enabled=happy_hour_notifications_enabled,
 		deal_updates_enabled=business_updates_notifications_enabled,
 		direct_message_notifications_enabled=direct_message_notifications_enabled,
 	)
