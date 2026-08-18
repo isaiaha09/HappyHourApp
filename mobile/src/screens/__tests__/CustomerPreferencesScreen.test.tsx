@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 import { fetchCustomerPreferences, saveCustomerPreferences } from '../../api';
 import { CustomerPreferencesScreen } from '../CustomerPreferencesScreen';
-import type { SignupResponse } from '../../types';
+import type { CustomerPreferenceBusiness, SignupResponse } from '../../types';
 
 jest.mock('../../api', () => ({
   fetchCustomerPreferences: jest.fn(),
@@ -11,6 +11,15 @@ jest.mock('../../api', () => ({
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+}));
+
+jest.mock('@expo/vector-icons', () => ({
+  Ionicons: ({ name }: { name: string }) => {
+    const React = require('react');
+    const { Text } = require('react-native');
+
+    return <Text testID={`icon-${name}`}>{name}</Text>;
+  },
 }));
 
 jest.mock('../../components/NativeIOSLiquidGlass', () => ({
@@ -42,6 +51,24 @@ function buildSession(): SignupResponse {
     profile_type: 'customer',
     two_factor_enabled: false,
     username: 'customer',
+  };
+}
+
+function buildPreferenceBusiness(overrides: Partial<CustomerPreferenceBusiness> = {}): CustomerPreferenceBusiness {
+  return {
+    address_line_1: '100 Main Street',
+    city: 'oxnard',
+    city_label: 'Oxnard',
+    deal_count: 1,
+    has_deals: true,
+    has_happy_hours: true,
+    location_id: 1,
+    name: 'Preference Business',
+    slug: 'preference-business',
+    venue_type: 'bar',
+    venue_type_label: 'Bar',
+    website_url: 'https://example.com/preference-business',
+    ...overrides,
   };
 }
 
@@ -234,5 +261,65 @@ describe('CustomerPreferencesScreen', () => {
 
     expect(screen.getByText('Yard House')).toBeTruthy();
     expect(screen.queryByText('Regular Deal Business')).toBeNull();
+  });
+
+  it('groups businesses by city and loads more independently for each city', async () => {
+    mockFetchCustomerPreferences.mockResolvedValue({
+      ...buildSession(),
+      preference_businesses: [
+        ...Array.from({ length: 6 }, (_, index) => buildPreferenceBusiness({
+          city: 'camarillo',
+          city_label: 'Camarillo',
+          location_id: 100 + index,
+          name: `Camarillo Business ${index + 1}`,
+          slug: `camarillo-business-${index + 1}`,
+        })),
+        ...Array.from({ length: 6 }, (_, index) => buildPreferenceBusiness({
+          city: 'oxnard',
+          city_label: 'Oxnard',
+          location_id: 200 + index,
+          name: `Oxnard Business ${index + 1}`,
+          slug: `oxnard-business-${index + 1}`,
+        })),
+      ],
+    });
+
+    render(
+      <CustomerPreferencesScreen
+        apiBaseUrl="https://api.example.com"
+        authToken="token-123"
+        isLandscape={false}
+        mode="settings"
+        onBack={jest.fn()}
+        onComplete={jest.fn()}
+        onSkip={jest.fn()}
+        session={buildSession()}
+      />,
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    fireEvent.press(screen.getByText('Continue'));
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 360));
+    });
+
+    expect(screen.getByTestId('preference-city-camarillo')).toBeTruthy();
+    expect(screen.getByTestId('preference-city-oxnard')).toBeTruthy();
+    expect(screen.getByText('Camarillo Business 5')).toBeTruthy();
+    expect(screen.queryByText('Camarillo Business 6')).toBeNull();
+    expect(screen.getByText('Oxnard Business 5')).toBeTruthy();
+    expect(screen.queryByText('Oxnard Business 6')).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('Load more Camarillo businesses'));
+
+    expect(screen.getByText('Camarillo Business 6')).toBeTruthy();
+    expect(screen.queryByText('Oxnard Business 6')).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('Load more Oxnard businesses'));
+
+    expect(screen.getByText('Oxnard Business 6')).toBeTruthy();
   });
 });

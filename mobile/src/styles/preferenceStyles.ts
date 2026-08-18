@@ -164,6 +164,18 @@ export const preferenceStyles = {
   preferenceBusinessList: {
     gap: 10,
   },
+  preferenceBusinessGroups: {
+    gap: 22,
+  },
+  preferenceBusinessGroup: {
+    gap: 10,
+  },
+  preferenceBusinessCity: {
+    color: theme.textPrimary,
+    fontSize: 16,
+    fontWeight: '800',
+    marginTop: 4,
+  },
   preferenceBusinessCard: {
     alignItems: 'center',
     backgroundColor: theme.bgRaised,
@@ -196,6 +208,25 @@ export const preferenceStyles = {
   preferenceBusinessDeal: {
     color: theme.success,
     fontSize: 12,
+    fontWeight: '800',
+  },
+  preferenceLoadMoreButton: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: theme.bgElevated,
+    borderColor: theme.borderStrong,
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'center',
+    minHeight: 44,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  preferenceLoadMoreText: {
+    color: theme.accentStrong,
+    fontSize: 13,
     fontWeight: '800',
   },
   preferenceSelectionMark: {

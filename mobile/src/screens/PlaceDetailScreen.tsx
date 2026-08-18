@@ -479,7 +479,6 @@ export function PlaceDetailScreen({
                 <Text style={styles.detailCity}>{selectedPlaceLocation?.city_label ?? selectedPlace.city_label}</Text>
                 <Text style={styles.detailTitle}>{selectedPlace.name}</Text>
                 <Text style={styles.detailMeta}>{selectedPlace.venue_type_label}</Text>
-                {distanceLabel ? <Text style={styles.detailMeta}>{distanceLabel}</Text> : null}
               </View>
               <View style={styles.detailHeaderActions}>
                 {showVerifiedBadge ? (
@@ -510,6 +509,107 @@ export function PlaceDetailScreen({
               </View>
             </View>
             {showFavoriteControl && favoriteHelperText ? <Text style={styles.dashboardSupportText}>{favoriteHelperText}</Text> : null}
+            {selectedPlaceImageUrls.length ? (
+              <>
+                <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>Photos</Text>
+                <ScrollView
+                  contentContainerStyle={styles.photoGalleryRow}
+                  horizontal
+                  {...dismissKeyboardOnScrollProps}
+                  keyboardShouldPersistTaps="handled"
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.photoGalleryScroll}
+                >
+                  {selectedPlaceImageUrls.map((imageUrl, index) => (
+                    <Pressable key={imageUrl} onPress={() => handleOpenPhotoLightbox(index)} style={styles.photoGalleryCard}>
+                      <Image resizeMode="cover" source={{ uri: imageUrl }} style={styles.photoGalleryImage} />
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </>
+            ) : null}
+
+            <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>Current Deals</Text>
+
+            {selectedPlaceDeals.length ? (
+              selectedPlaceDeals.map((deal) => (
+                <View key={deal.id} style={styles.dealCard}>
+                  {deal.attachment?.url && getAttachmentPreviewKind(deal.attachment.content_type, deal.attachment.name) === 'image' ? (
+                    <Pressable onPress={() => void handleOpenDealAttachment(deal)} style={styles.dealAttachmentImageButton}>
+                      <Image resizeMode="cover" source={{ uri: deal.attachment.url }} style={styles.dealAttachmentImage} />
+                    </Pressable>
+                  ) : null}
+                  <View style={styles.dealHeaderRow}>
+                    <Text style={styles.dealTitle}>{deal.title}</Text>
+                    <View style={styles.pill}>
+                      <Text style={styles.pillText}>{deal.deal_type_label}</Text>
+                    </View>
+                  </View>
+                  {deal.attachment?.url && getAttachmentPreviewKind(deal.attachment.content_type, deal.attachment.name) === 'pdf' ? (
+                    <Pressable onPress={() => void handleOpenDealAttachment(deal)} style={[styles.attachmentCard, styles.dealAttachmentPdfCard]}>
+                      <View style={styles.attachmentMeta}>
+                        <Text style={styles.attachmentName}>{deal.attachment.name}</Text>
+                        <Text style={styles.attachmentDetail}>PDF attachment • Tap to view</Text>
+                      </View>
+                    </Pressable>
+                  ) : null}
+                  {deal.price_text ? <Text style={styles.dealPrice}>{deal.price_text}</Text> : null}
+                  {deal.description ? <Text style={styles.dealDescription}>{deal.description}</Text> : null}
+                  {deal.terms ? <Text style={styles.dealTerms}>Terms: {deal.terms}</Text> : null}
+                  <View style={styles.hourList}>
+                    {formatHappyHourGroups(deal.happy_hours, selectedPlaceOperatingHours).map((group) => (
+                      <View key={group.id} style={styles.hourGroupCard}>
+                        <Text style={styles.hourGroupDays}>{group.dayLabel}</Text>
+                        <Text style={styles.hourRow}>{group.timeLabel}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.emptyStateText}>No active deals were returned for this place yet.</Text>
+            )}
+
+            {selectedPlace.offer_entries?.length && !selectedPlace.deal_overrides ? (
+              <>
+                <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>More Deals and Specials</Text>
+                <View style={styles.hourList}>
+                  {selectedPlace.offer_entries.map((entry) => (
+                    <View key={entry} style={styles.hourGroupCard}>
+                      <Text style={styles.hourRow}>{entry}</Text>
+                    </View>
+                  ))}
+                </View>
+              </>
+            ) : null}
+
+            {selectedPlaceOperatingHours.length ? (
+              <>
+                <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>Hours of Operations</Text>
+                <View style={styles.hourList}>
+                  {formatOperatingHourGroups(selectedPlaceOperatingHours).map((group) => (
+                    <View key={group.id} style={styles.hourGroupCard}>
+                      <Text style={styles.hourGroupDays}>{group.dayLabel}</Text>
+                      <Text style={styles.hourRow}>{group.timeLabel}</Text>
+                    </View>
+                  ))}
+                </View>
+              </>
+            ) : null}
+
+            {selectedPlace.hours_of_operation_entries?.length && !selectedPlace.operating_hour_overrides ? (
+              <>
+                <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>Additional Hours Information</Text>
+                <View style={styles.hourList}>
+                  {selectedPlace.hours_of_operation_entries.map((entry) => (
+                    <View key={entry} style={styles.hourGroupCard}>
+                      <Text style={styles.hourRow}>{entry}</Text>
+                    </View>
+                  ))}
+                </View>
+              </>
+            ) : null}
+
             {selectedPlace.locations.length ? (
               <>
                 <Text style={[styles.sectionTitle, styles.locationsSectionTitle]}>
@@ -545,25 +645,7 @@ export function PlaceDetailScreen({
               <Text selectable style={styles.detailMeta}>Phone: {selectedPlaceLocation?.phone_number ?? selectedPlace.phone_number}</Text>
             ) : null}
 
-            {selectedPlaceImageUrls.length ? (
-              <>
-                <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>Photos</Text>
-                <ScrollView
-                  contentContainerStyle={styles.photoGalleryRow}
-                  horizontal
-                  {...dismissKeyboardOnScrollProps}
-                  keyboardShouldPersistTaps="handled"
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.photoGalleryScroll}
-                >
-                  {selectedPlaceImageUrls.map((imageUrl, index) => (
-                    <Pressable key={imageUrl} onPress={() => handleOpenPhotoLightbox(index)} style={styles.photoGalleryCard}>
-                      <Image resizeMode="cover" source={{ uri: imageUrl }} style={styles.photoGalleryImage} />
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              </>
-            ) : null}
+            {distanceLabel ? <Text style={styles.detailMeta}>{distanceLabel}</Text> : null}
 
             {selectedPlaceMapRegion ? (
               <Pressable
@@ -627,87 +709,6 @@ export function PlaceDetailScreen({
               <Pressable onPress={onEditBusinessProfile} style={styles.linkButtonSecondaryWide}>
                 <Text style={styles.linkButtonSecondaryText}>Edit Business Profile</Text>
               </Pressable>
-            ) : null}
-
-            {selectedPlaceOperatingHours.length ? (
-              <>
-                <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>Hours of Operations</Text>
-                <View style={styles.hourList}>
-                  {formatOperatingHourGroups(selectedPlaceOperatingHours).map((group) => (
-                    <View key={group.id} style={styles.hourGroupCard}>
-                      <Text style={styles.hourGroupDays}>{group.dayLabel}</Text>
-                      <Text style={styles.hourRow}>{group.timeLabel}</Text>
-                    </View>
-                  ))}
-                </View>
-              </>
-            ) : null}
-
-            {selectedPlace.hours_of_operation_entries?.length && !selectedPlace.operating_hour_overrides ? (
-              <>
-                <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>Additional Hours Information</Text>
-                <View style={styles.hourList}>
-                  {selectedPlace.hours_of_operation_entries.map((entry) => (
-                    <View key={entry} style={styles.hourGroupCard}>
-                      <Text style={styles.hourRow}>{entry}</Text>
-                    </View>
-                  ))}
-                </View>
-              </>
-            ) : null}
-
-            <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>Current Deals</Text>
-
-            {selectedPlaceDeals.length ? (
-              selectedPlaceDeals.map((deal) => (
-                <View key={deal.id} style={styles.dealCard}>
-                  {deal.attachment?.url && getAttachmentPreviewKind(deal.attachment.content_type, deal.attachment.name) === 'image' ? (
-                    <Pressable onPress={() => void handleOpenDealAttachment(deal)} style={styles.dealAttachmentImageButton}>
-                      <Image resizeMode="cover" source={{ uri: deal.attachment.url }} style={styles.dealAttachmentImage} />
-                    </Pressable>
-                  ) : null}
-                  <View style={styles.dealHeaderRow}>
-                    <Text style={styles.dealTitle}>{deal.title}</Text>
-                    <View style={styles.pill}>
-                      <Text style={styles.pillText}>{deal.deal_type_label}</Text>
-                    </View>
-                  </View>
-                  {deal.attachment?.url && getAttachmentPreviewKind(deal.attachment.content_type, deal.attachment.name) === 'pdf' ? (
-                    <Pressable onPress={() => void handleOpenDealAttachment(deal)} style={[styles.attachmentCard, styles.dealAttachmentPdfCard]}>
-                      <View style={styles.attachmentMeta}>
-                        <Text style={styles.attachmentName}>{deal.attachment.name}</Text>
-                        <Text style={styles.attachmentDetail}>PDF attachment • Tap to view</Text>
-                      </View>
-                    </Pressable>
-                  ) : null}
-                  {deal.price_text ? <Text style={styles.dealPrice}>{deal.price_text}</Text> : null}
-                  {deal.description ? <Text style={styles.dealDescription}>{deal.description}</Text> : null}
-                  {deal.terms ? <Text style={styles.dealTerms}>Terms: {deal.terms}</Text> : null}
-                  <View style={styles.hourList}>
-                    {formatHappyHourGroups(deal.happy_hours, selectedPlaceOperatingHours).map((group) => (
-                      <View key={group.id} style={styles.hourGroupCard}>
-                        <Text style={styles.hourGroupDays}>{group.dayLabel}</Text>
-                        <Text style={styles.hourRow}>{group.timeLabel}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              ))
-            ) : (
-              <Text style={styles.emptyStateText}>No active deals were returned for this place yet.</Text>
-            )}
-
-            {selectedPlace.offer_entries?.length && !selectedPlace.deal_overrides ? (
-              <>
-                <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>More Deals and Specials</Text>
-                <View style={styles.hourList}>
-                  {selectedPlace.offer_entries.map((entry) => (
-                    <View key={entry} style={styles.hourGroupCard}>
-                      <Text style={styles.hourRow}>{entry}</Text>
-                    </View>
-                  ))}
-                </View>
-              </>
             ) : null}
 
             {selectedPlace.supporting_details ? (

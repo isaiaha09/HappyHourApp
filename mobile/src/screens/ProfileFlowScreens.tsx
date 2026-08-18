@@ -858,7 +858,7 @@ export function CreateProfileScreen({ errorMessage, form, isLandscape, message, 
           <View style={[styles.profileCard, styles.onboardingCard]}>
             <Text style={[styles.detailCity, styles.onboardingEyebrow]}>Create Profile</Text>
             <Text style={[styles.detailTitle, styles.onboardingHeading]}>Create a customer account</Text>
-            <Text style={[styles.profileIntroText, styles.onboardingBodyText]}>Customer accounts now move into a short email code check after signup before the dashboard unlocks.</Text>
+            <Text style={[styles.profileIntroText, styles.onboardingBodyText]}>Create a Free Customer Account and receive notifications about new offers, updates, and happy hour deals from your favorite businesses!</Text>
 
             {message ? (
               <View style={styles.profileSuccessBanner}>

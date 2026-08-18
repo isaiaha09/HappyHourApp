@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Animated, Easing, Keyboard, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -18,10 +19,16 @@ const timePeriodOptions = [
 const allCityValues = cityFilters.filter((filter) => filter.value !== 'all').map((filter) => filter.value);
 const allDayValues = weekdayFilters.map((filter) => filter.value);
 const allTimeValues = timePeriodOptions.map((option) => option.value);
+const businessesPerCityPage = 5;
 
 type PreferenceMode = 'onboarding' | 'settings';
 type PreferenceBusinessInput = Omit<CustomerPreferenceBusiness, 'location_id'> & { location_id?: number | null };
 type PreferenceBusinessDraft = CustomerPreferenceBusiness;
+type PreferenceBusinessCityGroup = {
+  businesses: CustomerPreferenceBusiness[];
+  city: string;
+  cityLabel: string;
+};
 
 export type CustomerPreferencesScreenProps = {
   apiBaseUrl: string;
@@ -80,6 +87,7 @@ export function CustomerPreferencesScreen({ apiBaseUrl, authToken, isLandscape, 
   const [businessUpdatesEnabled, setBusinessUpdatesEnabled] = useState(Boolean(session.business_updates_notifications_enabled));
   const [happyHourNotificationsEnabled, setHappyHourNotificationsEnabled] = useState(Boolean(session.happy_hour_notifications_enabled));
   const [searchQuery, setSearchQuery] = useState('');
+  const [visibleBusinessCounts, setVisibleBusinessCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -136,17 +144,36 @@ export function CustomerPreferencesScreen({ apiBaseUrl, authToken, isLandscape, 
     };
   }, [apiBaseUrl, authToken, mode]);
 
-  const visibleBusinessOptions = useMemo(() => {
+  useEffect(() => {
+    setVisibleBusinessCounts({});
+  }, [businessOptions, searchQuery, selectedCities]);
+
+  const visibleBusinessGroups = useMemo<PreferenceBusinessCityGroup[]>(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
-    return businessOptions.filter((business) => {
+    const groupedBusinesses = new Map<string, PreferenceBusinessCityGroup>();
+
+    businessOptions.forEach((business) => {
       if (!selectedCities.includes(business.city)) {
-        return false;
+        return;
       }
-      if (!normalizedQuery) {
-        return true;
+      if (normalizedQuery && ![business.name, business.city_label, business.address_line_1].join(' ').toLowerCase().includes(normalizedQuery)) {
+        return;
       }
-      return [business.name, business.city_label, business.address_line_1].join(' ').toLowerCase().includes(normalizedQuery);
+
+      const existingGroup = groupedBusinesses.get(business.city);
+      if (existingGroup) {
+        existingGroup.businesses.push(business);
+        return;
+      }
+
+      groupedBusinesses.set(business.city, {
+        businesses: [business],
+        city: business.city,
+        cityLabel: business.city_label || cityFilters.find((filter) => filter.value === business.city)?.label || business.city,
+      });
     });
+
+    return Array.from(groupedBusinesses.values());
   }, [businessOptions, searchQuery, selectedCities]);
   const continueDisabled = submitting || (loading && (mode === 'onboarding' ? step !== 0 : step >= 2));
 
@@ -171,6 +198,13 @@ export function CustomerPreferencesScreen({ apiBaseUrl, authToken, isLandscape, 
       }
       return [...current, buildBusinessDraft(option)];
     });
+  }
+
+  function loadMoreBusinesses(city: string) {
+    setVisibleBusinessCounts((current) => ({
+      ...current,
+      [city]: (current[city] ?? businessesPerCityPage) + businessesPerCityPage,
+    }));
   }
 
   function toggleAllNotifications() {
@@ -338,21 +372,45 @@ export function CustomerPreferencesScreen({ apiBaseUrl, authToken, isLandscape, 
         <Text style={styles.preferenceSupportText}>These are the exact locations with current confirmed happy hours.</Text>
         <TextInput onChangeText={setSearchQuery} placeholder="Search businesses" placeholderTextColor={theme.textDarkMuted} style={styles.preferenceSearchInput} value={searchQuery} />
         {loading ? <ActivityIndicator color={theme.accent} /> : null}
-        {!loading && !visibleBusinessOptions.length ? <Text style={styles.preferenceEmptyText}>No confirmed happy-hour locations matched these areas yet.</Text> : null}
-        <View style={styles.preferenceBusinessList}>
-          {visibleBusinessOptions.map((business) => {
-            const selected = selectedBusinesses.some((item) => getBusinessKey(item) === getBusinessKey(business));
+        {!loading && !visibleBusinessGroups.length ? <Text style={styles.preferenceEmptyText}>No confirmed happy-hour locations matched these areas yet.</Text> : null}
+        <View style={styles.preferenceBusinessGroups}>
+          {visibleBusinessGroups.map((group) => {
+            const visibleCount = visibleBusinessCounts[group.city] ?? businessesPerCityPage;
+            const visibleBusinesses = group.businesses.slice(0, visibleCount);
+            const hasMoreBusinesses = visibleCount < group.businesses.length;
+
             return (
-              <Pressable key={getBusinessKey(business)} onPress={() => toggleBusiness(business)} style={[styles.preferenceBusinessCard, selected ? styles.preferenceBusinessCardActive : null]}>
-                <View style={styles.preferenceBusinessCopy}>
-                  <Text style={styles.preferenceBusinessName}>{business.name}</Text>
-                  <Text style={styles.preferenceBusinessMeta}>{business.city_label} • {business.address_line_1}</Text>
-                  <Text style={styles.preferenceBusinessDeal}>{`${business.deal_count ?? 1} confirmed deal${business.deal_count === 1 ? '' : 's'}`}</Text>
+              <View key={group.city} style={styles.preferenceBusinessGroup}>
+                <Text testID={`preference-city-${group.city}`} style={styles.preferenceBusinessCity}>{group.cityLabel}</Text>
+                <View style={styles.preferenceBusinessList}>
+                  {visibleBusinesses.map((business) => {
+                    const selected = selectedBusinesses.some((item) => getBusinessKey(item) === getBusinessKey(business));
+                    return (
+                      <Pressable key={getBusinessKey(business)} onPress={() => toggleBusiness(business)} style={[styles.preferenceBusinessCard, selected ? styles.preferenceBusinessCardActive : null]}>
+                        <View style={styles.preferenceBusinessCopy}>
+                          <Text style={styles.preferenceBusinessName}>{business.name}</Text>
+                          <Text style={styles.preferenceBusinessMeta}>{business.city_label} • {business.address_line_1}</Text>
+                          <Text style={styles.preferenceBusinessDeal}>{`${business.deal_count ?? 1} confirmed deal${business.deal_count === 1 ? '' : 's'}`}</Text>
+                        </View>
+                        <View style={[styles.preferenceSelectionMark, selected ? styles.preferenceSelectionMarkActive : null]}>
+                          <Text style={styles.preferenceSelectionMarkText}>{selected ? '♥' : '+'}</Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
                 </View>
-                <View style={[styles.preferenceSelectionMark, selected ? styles.preferenceSelectionMarkActive : null]}>
-                  <Text style={styles.preferenceSelectionMarkText}>{selected ? '♥' : '+'}</Text>
-                </View>
-              </Pressable>
+                {hasMoreBusinesses ? (
+                  <Pressable
+                    accessibilityLabel={`Load more ${group.cityLabel} businesses`}
+                    accessibilityRole="button"
+                    onPress={() => loadMoreBusinesses(group.city)}
+                    style={styles.preferenceLoadMoreButton}
+                  >
+                    <Text style={styles.preferenceLoadMoreText}>Load More</Text>
+                    <Ionicons color={theme.accentStrong} name="chevron-down" size={18} />
+                  </Pressable>
+                ) : null}
+              </View>
             );
           })}
         </View>

@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen } from '@testing-library/react-native';
 
 import { PlaceDetailScreen } from '../screens/PlaceDetailScreen';
-import type { PlaceDetail } from '../types';
+import type { Deal, PlaceDetail } from '../types';
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
@@ -189,6 +189,90 @@ describe('PlaceDetailScreen live location messaging', () => {
     expect(screen.getByText('instagram:yardhouseoxnard')).toBeTruthy();
     expect(screen.getByText('website:yardhouse.com')).toBeTruthy();
     expect(screen.queryByText('Open website')).toBeNull();
+  });
+
+  it('renders the business profile sections in the requested order', () => {
+    const deal: Deal = {
+      id: 7,
+      title: 'Order Deal',
+      description: '',
+      deal_type: 'special',
+      deal_type_label: 'Special',
+      price_text: '',
+      terms: '',
+      attachment: null,
+      is_active: true,
+      starts_on: null,
+      ends_on: null,
+      happy_hours: [],
+    };
+
+    render(
+      <PlaceDetailScreen
+        detailLoading={false}
+        distanceLabel="2 miles away"
+        errorMessage={null}
+        favoriteHelperText={null}
+        favoriteSubmitting={false}
+        isLandscape={false}
+        isFavorited={false}
+        locationStatusNow={Date.parse('2026-08-03T17:33:20Z')}
+        onBack={jest.fn()}
+        onSelectLocation={jest.fn()}
+        onToggleFavorite={jest.fn()}
+        selectedPlace={buildPlace({
+          address_line_1: '123 Main Street',
+          city_label: 'Oxnard',
+          image_urls: ['https://example.com/order-bistro.jpg'],
+          latitude: 34.2,
+          longitude: -119.2,
+          name: 'Order Bistro',
+          social_profiles: {
+            instagram: {
+              url: 'https://instagram.com/order-bistro',
+              username: 'order-bistro',
+            },
+          },
+          state: 'CA',
+          postal_code: '93030',
+          venue_type_label: 'Restaurant',
+        })}
+        selectedPlaceDeals={[deal]}
+        selectedPlaceLocation={null}
+        selectedPlaceOperatingHours={[{
+          close_time: '10:00 PM',
+          group_id: 'hours-1',
+          group_rank: 0,
+          id: 8,
+          open_time: '9:00 AM',
+          weekday: 1,
+          weekday_label: 'Monday',
+        }]}
+        showFavoriteControl={false}
+      />,
+    );
+
+    const renderedOutput = JSON.stringify(screen.toJSON());
+    const orderedLabels = [
+      'Order Bistro',
+      'Restaurant',
+      'Photos',
+      'Current Deals',
+      'Order Deal',
+      'Hours of Operations',
+      '123 Main Street, Oxnard, CA 93030',
+      '2 miles away',
+      'Tap to open in Maps',
+      'Social Media',
+      'instagram:order-bistro',
+    ];
+
+    let previousIndex = -1;
+    orderedLabels.forEach((label) => {
+      const nextIndex = renderedOutput.indexOf(label);
+      expect(nextIndex).toBeGreaterThan(previousIndex);
+      previousIndex = nextIndex;
+    });
   });
 });
 
