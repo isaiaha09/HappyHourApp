@@ -15,6 +15,7 @@ from .services.admin_operations import (
     get_content_report_queue_queryset,
     get_cached_analytics_data,
 )
+from .services.render_storage import fetch_render_storage
 
 
 class HappyHourAdminSite(UnfoldAdminSite):
@@ -234,6 +235,7 @@ class HappyHourAdminSite(UnfoldAdminSite):
 
     def storage_view(self, request):
         storage = self.get_total_admin_storage_breakdown()
+        render_storage = self.get_render_storage()
         context = {
             **self.each_context(request),
             'title': 'Storage and Health Status',
@@ -243,6 +245,10 @@ class HappyHourAdminSite(UnfoldAdminSite):
                 for key, value in storage.items()
                 if key.endswith('_bytes')
             },
+            'render_storage': render_storage,
+            'render_storage_usage_display': self.format_optional_storage_size(render_storage.get('usage_bytes')),
+            'render_storage_capacity_display': self.format_optional_storage_size(render_storage.get('capacity_bytes')),
+            'render_storage_percent_display': self.format_storage_percent(render_storage.get('usage_percent')),
             'catalog_health': get_catalog_health(limit=12),
         }
         return TemplateResponse(request, 'admin/operations/storage.html', context)
@@ -400,6 +406,48 @@ class HappyHourAdminSite(UnfoldAdminSite):
                 pass
         return storage
 
+    def get_render_storage(self, allow_compute=True):
+        enabled = bool(getattr(settings, 'RENDER_STORAGE_ENABLED', True))
+        resource_id = str(getattr(settings, 'RENDER_POSTGRES_ID', '') or '').strip()
+        cache_key = f'admin-render-postgres-storage:{int(enabled)}:{resource_id or "unconfigured"}'
+        cache_timeout = getattr(settings, 'RENDER_STORAGE_CACHE_TIMEOUT', 300)
+        try:
+            cache_timeout = max(int(cache_timeout), 0)
+        except (TypeError, ValueError):
+            cache_timeout = 300
+
+        if cache_timeout > 0:
+            try:
+                cached_storage = cache.get(cache_key)
+            except Exception:
+                cached_storage = None
+            if cached_storage is not None:
+                return cached_storage
+
+        configured = enabled and bool(
+            str(getattr(settings, 'RENDER_API_KEY', '') or '').strip()
+            and str(getattr(settings, 'RENDER_POSTGRES_ID', '') or '').strip()
+        )
+        unavailable_storage = {
+            'configured': configured,
+            'available': False,
+            'usage_bytes': None,
+            'capacity_bytes': None,
+            'usage_percent': None,
+            'usage_timestamp': None,
+            'capacity_timestamp': None,
+        }
+        if not allow_compute or not enabled:
+            return unavailable_storage
+
+        storage = fetch_render_storage()
+        if cache_timeout > 0:
+            try:
+                cache.set(cache_key, storage, cache_timeout)
+            except Exception:
+                pass
+        return storage
+
     def format_storage_size(self, total_bytes):
         size = float(total_bytes)
         for unit in ('bytes', 'KB', 'MB', 'GB', 'TB'):
@@ -411,9 +459,22 @@ class HappyHourAdminSite(UnfoldAdminSite):
 
         return '0 bytes'
 
+    def format_optional_storage_size(self, total_bytes):
+        if total_bytes is None:
+            return 'Unavailable'
+        return self.format_storage_size(total_bytes)
+
+    def format_storage_percent(self, percentage):
+        if percentage is None:
+            return '—'
+        return f'{percentage:.2f}%'
+
     def each_context(self, request):
         context = super().each_context(request)
         storage = self.get_total_admin_storage_breakdown(
+            allow_compute=bool(getattr(request.user, 'is_authenticated', False)),
+        )
+        render_storage = self.get_render_storage(
             allow_compute=bool(getattr(request.user, 'is_authenticated', False)),
         )
         total_bytes = storage['total_bytes']
@@ -424,6 +485,11 @@ class HappyHourAdminSite(UnfoldAdminSite):
         context['admin_total_storage_bytes'] = total_bytes
         context['admin_total_storage_display'] = self.format_storage_size(total_bytes)
         context['admin_total_storage_gb'] = f'{total_bytes / (1024 ** 3):.4f}'
+        context['admin_render_storage_configured'] = render_storage['configured']
+        context['admin_render_storage_available'] = render_storage['available']
+        context['admin_render_storage_display'] = self.format_optional_storage_size(render_storage.get('usage_bytes'))
+        context['admin_render_storage_capacity_display'] = self.format_optional_storage_size(render_storage.get('capacity_bytes'))
+        context['admin_render_storage_percent_display'] = self.format_storage_percent(render_storage.get('usage_percent'))
         return context
 
 

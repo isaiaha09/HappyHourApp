@@ -32,6 +32,15 @@
                 <span class="dd-admin-storage-summary__breakdown">
                     DB {{ admin_database_storage_display }} <span aria-hidden="true">•</span> uploads {{ admin_media_storage_display }} <span aria-hidden="true">•</span> discovery {{ admin_discovery_storage_display }}
                 </span>
+                {% if admin_render_storage_configured %}
+                    <span class="dd-admin-storage-summary__render">
+                        {% if admin_render_storage_available %}
+                            Render DB {{ admin_render_storage_display }} / {{ admin_render_storage_capacity_display }} ({{ admin_render_storage_percent_display }})
+                        {% else %}
+                            Render DB unavailable
+                        {% endif %}
+                    </span>
+                {% endif %}
             </span>
         {% endif %}
     </h1>

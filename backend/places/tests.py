@@ -41,6 +41,7 @@ from .services.favorite_notifications import create_notifications_for_business_p
 from .services.image_moderation import ImageModerationRejected, ImageModerationUnavailable, moderate_uploaded_image
 from .services.importers.types import ImportedDeal, ImportedHappyHour, ImportedOperatingHour, ImportedPlace
 from .services.admin_operations import _get_catalog_health_payload_map, command_search, dashboard_callback, get_catalog_health, get_operations_dashboard_data
+from .services.render_storage import fetch_render_storage
 from .services.source_listings import _build_deal_identity_key, _build_place_payload, get_source_place_payload, get_source_place_payloads, load_source_records
 
 
@@ -10899,7 +10900,15 @@ class HappyHourAdminSiteTests(TestCase):
 				'discovery_bytes': 512 * 1024,
 				'total_bytes': (5 * 1024 * 1024) + (2 * 1024 * 1024) + (512 * 1024),
 			},
-		):
+		), patch('places.admin_site.fetch_render_storage', return_value={
+			'configured': False,
+			'available': False,
+			'usage_bytes': None,
+			'capacity_bytes': None,
+			'usage_percent': None,
+			'usage_timestamp': None,
+			'capacity_timestamp': None,
+		}):
 			response = self.client.get(reverse('happyhour_admin:index'))
 
 		self.assertEqual(response.status_code, 200)
@@ -10910,6 +10919,62 @@ class HappyHourAdminSiteTests(TestCase):
 		self.assertContains(response, 'discovery 512.00 KB')
 		self.assertContains(response, '5.00 MB')
 		self.assertContains(response, '0.0073 GB')
+
+	@override_settings(RENDER_STORAGE_ENABLED=True, RENDER_API_KEY='test-render-key', RENDER_POSTGRES_ID='dpg-test')
+	@patch('places.admin_site.fetch_render_storage')
+	def test_admin_index_shows_render_storage_metric(self, mock_fetch_render_storage):
+		self.client.force_login(self.admin_user)
+		mock_fetch_render_storage.return_value = {
+			'configured': True,
+			'available': True,
+			'usage_bytes': int(87.6 * 1024 * 1024),
+			'capacity_bytes': 1024 ** 3,
+			'usage_percent': 8.55,
+			'usage_timestamp': '2026-08-19T12:00:00Z',
+			'capacity_timestamp': '2026-08-19T12:00:00Z',
+		}
+
+		response = self.client.get(reverse('happyhour_admin:index'))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'Render DB 87.60 MB / 1.00 GB (8.55%)')
+
+
+class RenderStorageTests(TestCase):
+	@override_settings(
+		RENDER_STORAGE_ENABLED=True,
+		RENDER_API_KEY='test-render-key',
+		RENDER_POSTGRES_ID='dpg-test',
+		RENDER_METRICS_TIMEOUT_SECONDS=2,
+	)
+	@patch('places.services.render_storage.requests.get')
+	def test_fetch_render_storage_reads_latest_usage_and_capacity(self, mock_get):
+		usage_response = MagicMock()
+		usage_response.json.return_value = [{
+			'labels': [{'field': 'service', 'value': 'dpg-test'}],
+			'values': [
+				{'timestamp': '2026-08-19T11:00:00Z', 'value': 80, 'unit': 'MB'},
+				{'timestamp': '2026-08-19T12:00:00Z', 'value': 87.6, 'unit': 'MB'},
+			],
+			'unit': 'MB',
+		}]
+		capacity_response = MagicMock()
+		capacity_response.json.return_value = [{
+			'labels': [{'field': 'service', 'value': 'dpg-test'}],
+			'values': [{'timestamp': '2026-08-19T12:00:00Z', 'value': 1, 'unit': 'GB'}],
+			'unit': 'GB',
+		}]
+		mock_get.side_effect = [usage_response, capacity_response]
+
+		result = fetch_render_storage()
+
+		self.assertTrue(result['available'])
+		self.assertEqual(result['usage_bytes'], int(87.6 * 1024 * 1024))
+		self.assertEqual(result['capacity_bytes'], 1024 ** 3)
+		self.assertAlmostEqual(result['usage_percent'], 8.5546875)
+		self.assertEqual(mock_get.call_count, 2)
+		self.assertEqual(mock_get.call_args_list[0].kwargs['headers']['Authorization'], 'Bearer test-render-key')
+		self.assertEqual(mock_get.call_args_list[0].kwargs['params']['resource'], 'dpg-test')
 
 
 class AdminOperationsTests(TestCase):

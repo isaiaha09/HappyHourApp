@@ -68,6 +68,15 @@
         {% component "unfold/components/card.html" with href=storage_url size="md" class="dd-operations-card" %}
             <p class="dd-operations-card-label">Total stored data</p>
             <p class="dd-operations-card-value dd-operations-card-value--storage">{{ admin_total_storage_display }}</p>
+            {% if admin_render_storage_configured %}
+                <p class="dd-operations-card-detail">
+                    {% if admin_render_storage_available %}
+                        Render DB {{ admin_render_storage_display }} / {{ admin_render_storage_capacity_display }} ({{ admin_render_storage_percent_display }})
+                    {% else %}
+                        Render DB storage unavailable
+                    {% endif %}
+                </p>
+            {% endif %}
             <p class="dd-operations-card-detail">DB {{ admin_database_storage_display }} · uploads {{ admin_media_storage_display }} · discovery {{ admin_discovery_storage_display }} · {{ admin_total_storage_gb }} GB</p>
         {% endcomponent %}
     </div>
