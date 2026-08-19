@@ -1,0 +1,85 @@
+{% extends "admin/base.html" %}
+
+{% load i18n %}
+
+{% block title %}{{ title }} | {{ site_title }}{% endblock %}
+
+{% block content %}
+<div class="dd-public-preview">
+    <div class="dd-public-preview-heading">
+        <div>
+            <p class="dd-operations-kicker">Customer-facing payload</p>
+            <h1>{{ payload.name|default:snapshot.name }}</h1>
+            <p>This is the normalized business data currently available to the public place-detail API. It is a staff preview, not an editor.</p>
+        </div>
+        <div class="dd-public-preview-heading-actions">
+            <a class="button" href="{{ change_url }}">Back to business</a>
+            {% if api_url %}<a class="button" href="{{ api_url }}" target="_blank" rel="noopener">Open public business profile</a>{% endif %}
+            {% if website_url %}<a class="button" href="{{ website_url }}" target="_blank" rel="noopener">Open business website</a>{% endif %}
+            {% if mobile_deep_link %}<a class="button" href="{{ mobile_deep_link }}">Open in DiningDealz mobile app</a>{% endif %}
+        </div>
+    </div>
+
+    <section class="dd-public-preview-panel">
+        <h2>Customer view links</h2>
+        <p class="dd-public-preview-copy">Use the public profile link for the normalized customer payload, the website link for the business-owned destination, and the mobile link to test the installed app deep link. This page is the staff preview of exactly the fields exposed to customers.</p>
+        <div class="dd-public-preview-heading-actions">
+            {% if api_url %}<a class="button" href="{{ api_url }}" target="_blank" rel="noopener">Public profile</a>{% endif %}
+            {% if website_url %}<a class="button" href="{{ website_url }}" target="_blank" rel="noopener">Website</a>{% endif %}
+            {% if mobile_deep_link %}<a class="button" href="{{ mobile_deep_link }}">Mobile deep link</a>{% endif %}
+            <a class="button" href="{{ change_url }}">Staff customer preview</a>
+        </div>
+    </section>
+
+    <div class="dd-public-preview-grid">
+        <section class="dd-public-preview-panel">
+            <h2>Public business details</h2>
+            <dl class="dd-public-preview-list">
+                <div><dt>City</dt><dd>{{ payload.city_label|default:snapshot.get_city_display }}</dd></div>
+                <div><dt>Type</dt><dd>{{ payload.venue_type_label|default:snapshot.get_venue_type_display }}</dd></div>
+                <div><dt>Address</dt><dd>{{ payload.address_line_1|default:snapshot.address_line_1 }}{% if payload.address_line_2 %}, {{ payload.address_line_2 }}{% endif %}</dd></div>
+                <div><dt>Phone</dt><dd>{{ payload.phone_number|default:snapshot.phone_number|default:"Not published" }}</dd></div>
+                <div><dt>Website</dt><dd>{% if payload.website_url %}<a href="{{ payload.website_url }}" target="_blank" rel="noopener">{{ payload.website_url }}</a>{% else %}Not published{% endif %}</dd></div>
+                <div><dt>Claimed</dt><dd>{{ payload.is_claimed|yesno:"Yes,No" }}</dd></div>
+            </dl>
+        </section>
+        <section class="dd-public-preview-panel">
+            <h2>Public images</h2>
+            {% if payload.image_urls %}
+                <div class="dd-public-preview-gallery">
+                    {% for image_url in payload.image_urls|slice:":8" %}<img src="{{ image_url }}" alt="{{ payload.name|default:snapshot.name }} public image" />{% endfor %}
+                </div>
+            {% else %}
+                <p class="dd-operations-empty">No public images are currently available.</p>
+            {% endif %}
+        </section>
+    </div>
+
+    <div class="dd-public-preview-grid">
+        <section class="dd-public-preview-panel">
+            <h2>Deals and specials</h2>
+            {% for deal in payload.deals %}
+                <article class="dd-public-preview-entry">
+                    <h3>{{ deal.title }}{% if deal.price_text %} · {{ deal.price_text }}{% endif %}</h3>
+                    {% if deal.description %}<p class="dd-public-preview-copy">{{ deal.description }}</p>{% endif %}
+                    {% if deal.terms %}<p class="dd-public-preview-copy">Terms: {{ deal.terms }}</p>{% endif %}
+                    {% for happy_hour in deal.happy_hours %}<span class="dd-operations-status">{{ happy_hour.weekday_label|default:happy_hour.weekday }} · {% if happy_hour.all_day %}All day{% else %}{{ happy_hour.start_time }}–{{ happy_hour.end_time }}{% endif %}</span>{% endfor %}
+                </article>
+            {% empty %}
+                <p class="dd-operations-empty">No public deals are currently available.</p>
+            {% endfor %}
+        </section>
+        <section class="dd-public-preview-panel">
+            <h2>Operating hours</h2>
+            {% for operating_hour in payload.operating_hours %}
+                <article class="dd-public-preview-entry">
+                    <h3>{{ operating_hour.weekday_label|default:operating_hour.weekday }}</h3>
+                    <p class="dd-public-preview-copy">{% if operating_hour.open_24_hours %}Open 24 hours{% else %}{{ operating_hour.open_time }}–{{ operating_hour.close_time }}{% endif %}</p>
+                </article>
+            {% empty %}
+                <p class="dd-operations-empty">No public operating hours are currently available.</p>
+            {% endfor %}
+        </section>
+    </div>
+</div>
+{% endblock %}

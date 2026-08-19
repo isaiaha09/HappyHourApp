@@ -251,6 +251,42 @@ class DeletedBusiness(models.Model):
 		super().save(*args, **kwargs)
 
 
+class AdminAuditEvent(models.Model):
+	"""Durable record for staff operations that are not ordinary model edits."""
+
+	actor = models.ForeignKey(
+		settings.AUTH_USER_MODEL,
+		related_name='admin_audit_events',
+		null=True,
+		blank=True,
+		on_delete=models.SET_NULL,
+	)
+	content_type = models.ForeignKey(
+		'contenttypes.ContentType',
+		null=True,
+		blank=True,
+		on_delete=models.SET_NULL,
+	)
+	object_id = models.CharField(max_length=64, blank=True)
+	object_repr = models.CharField(max_length=255, blank=True)
+	event_type = models.CharField(max_length=80, default='admin_operation')
+	message = models.TextField()
+	metadata = models.JSONField(default=dict, blank=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ['-created_at', '-pk']
+		indexes = [
+			models.Index(fields=['created_at', '-id']),
+			models.Index(fields=['content_type', 'object_id', '-created_at']),
+		]
+		verbose_name = 'Admin Audit Event'
+		verbose_name_plural = 'Admin Audit Events'
+
+	def __str__(self):
+		return f'{self.event_type}: {self.message}'
+
+
 class BusinessClaim(models.Model):
 	ADMIN_SOURCE_NAME = 'admin_submission'
 	MANUAL_SOURCE_NAME = 'manual_submission'

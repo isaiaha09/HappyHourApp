@@ -1,0 +1,43 @@
+{% extends "admin/base.html" %}
+
+{% load i18n unfold %}
+
+{% block title %}{{ title }} | {{ site_title }}{% endblock %}
+
+{% block content %}
+<div class="dd-operations-page">
+    <div class="dd-operations-page-heading"><p class="dd-operations-kicker">Growth analytics</p><h1>Audience and campaign performance</h1><p>Rolling {{ analytics.window_days }}-day activity based on recorded feed events, favorite activity, account signups, claim conversion, and campaign delivery.</p><div class="dd-public-preview-heading-actions"><a class="button" href="?days=7">7 days</a><a class="button" href="?days=30">30 days</a></div></div>
+    <div class="dd-operations-metric-grid">
+        {% component "unfold/components/card.html" with size="md" class="dd-operations-card" %}<p class="dd-operations-card-label">Impressions</p><p class="dd-operations-card-value">{{ analytics.impressions }}</p>{% endcomponent %}
+        {% component "unfold/components/card.html" with size="md" class="dd-operations-card" %}<p class="dd-operations-card-label">Engagements</p><p class="dd-operations-card-value">{{ analytics.engagements }}</p>{% endcomponent %}
+        {% component "unfold/components/card.html" with size="md" class="dd-operations-card" %}<p class="dd-operations-card-label">Engagement rate</p><p class="dd-operations-card-value">{{ analytics.engagement_rate }}%</p>{% endcomponent %}
+        {% component "unfold/components/card.html" with size="md" class="dd-operations-card" %}<p class="dd-operations-card-label">Clicks</p><p class="dd-operations-card-value">{{ analytics.clicks }}</p>{% endcomponent %}
+        {% component "unfold/components/card.html" with size="md" class="dd-operations-card" %}<p class="dd-operations-card-label">Saves / shares</p><p class="dd-operations-card-value">{{ analytics.saves }} / {{ analytics.shares }}</p>{% endcomponent %}
+        {% component "unfold/components/card.html" with size="md" class="dd-operations-card" %}<p class="dd-operations-card-label">Click-through rate</p><p class="dd-operations-card-value">{{ analytics.click_through_rate }}%</p>{% endcomponent %}
+        {% component "unfold/components/card.html" with size="md" class="dd-operations-card" %}<p class="dd-operations-card-label">Favorites added</p><p class="dd-operations-card-value">{{ analytics.favorites_added }}</p>{% endcomponent %}
+        {% component "unfold/components/card.html" with size="md" class="dd-operations-card" %}<p class="dd-operations-card-label">Direct messages</p><p class="dd-operations-card-value">{{ analytics.direct_messages }}</p><p class="dd-operations-card-detail">{{ analytics.direct_message_threads }} new threads</p>{% endcomponent %}
+        {% component "unfold/components/card.html" with size="md" class="dd-operations-card" %}<p class="dd-operations-card-label">Customer signups</p><p class="dd-operations-card-value">{{ analytics.customer_signups }}</p>{% endcomponent %}
+        {% component "unfold/components/card.html" with size="md" class="dd-operations-card" %}<p class="dd-operations-card-label">Business signups</p><p class="dd-operations-card-value">{{ analytics.business_signups }}</p><p class="dd-operations-card-detail">{{ analytics.business_applications }} claim applications</p>{% endcomponent %}
+    </div>
+    <div class="dd-operations-layout">
+        {% component "unfold/components/card.html" with title="Daily feed impressions and engagement events" class="dd-operations-panel" %}{% component "unfold/components/chart/line.html" with data=analytics.feed_chart_json height=280 %}{% endcomponent %}{% endcomponent %}
+        {% component "unfold/components/card.html" with title="Customer and business signups" class="dd-operations-panel" %}{% component "unfold/components/chart/bar.html" with data=analytics.signup_chart_json height=280 %}{% endcomponent %}{% endcomponent %}
+    </div>
+    <div class="dd-operations-layout">
+        {% component "unfold/components/card.html" with title="Top businesses" class="dd-operations-panel" %}
+            <table class="dd-operations-table"><thead><tr><th>Business</th><th>Impressions</th><th>Engagements</th><th>Rate</th></tr></thead><tbody>{% for item in analytics.top_businesses %}<tr><td><strong>{% if item.change_url %}<a href="{{ item.change_url }}">{{ item.business.name }}</a>{% else %}{{ item.business.name }}{% endif %}</strong><span>{{ item.business.get_city_display }}</span></td><td>{{ item.impression_count }}</td><td>{{ item.engagement_count }}</td><td>{{ item.engagement_rate }}%</td></tr>{% empty %}<tr><td colspan="4">No business activity in this window.</td></tr>{% endfor %}</tbody></table>
+        {% endcomponent %}
+        {% component "unfold/components/card.html" with title="Top posts" class="dd-operations-panel" %}
+            <table class="dd-operations-table"><thead><tr><th>Post</th><th>Impressions</th><th>Engagements</th><th>Rate</th></tr></thead><tbody>{% for item in analytics.top_posts %}<tr><td><strong>{% if item.change_url %}<a href="{{ item.change_url }}">{{ item.post.title }}</a>{% else %}{{ item.post.title }}{% endif %}</strong><span>{{ item.post.listing_snapshot.name }}</span></td><td>{{ item.impression_count }}</td><td>{{ item.engagement_count }}</td><td>{{ item.engagement_rate }}%</td></tr>{% empty %}<tr><td colspan="4">No published posts have engagement data in this window.</td></tr>{% endfor %}</tbody></table>
+        {% endcomponent %}
+        {% component "unfold/components/card.html" with title="Campaign delivery" class="dd-operations-panel" %}
+            <table class="dd-operations-table"><thead><tr><th>Campaign</th><th>Delivered</th><th>Remaining</th><th>CTR</th></tr></thead><tbody>{% for item in analytics.campaigns %}<tr><td><strong>{% if item.change_url %}<a href="{{ item.change_url }}">{{ item.campaign.name }}</a>{% else %}{{ item.campaign.name }}{% endif %}</strong><span>{{ item.campaign.membership.claim.listing_snapshot.name }}</span></td><td>{{ item.impression_count }}</td><td>{{ item.remaining_quota }}</td><td>{{ item.click_through_rate }}%</td></tr>{% empty %}<tr><td colspan="4">No active campaigns are delivering right now.</td></tr>{% endfor %}</tbody></table>
+        {% endcomponent %}
+    </div>
+    <div class="dd-operations-layout">
+        {% component "unfold/components/card.html" with title="Claim conversion funnel" class="dd-operations-panel" %}
+            <table class="dd-operations-table"><thead><tr><th>Stage</th><th>Claims</th></tr></thead><tbody><tr><td>Submitted</td><td>{{ analytics.claim_funnel.submitted }}</td></tr><tr><td>Under review</td><td>{{ analytics.claim_funnel.under_review }}</td></tr><tr><td>Approved</td><td>{{ analytics.claim_funnel.approved }}</td></tr><tr><td>Rejected</td><td>{{ analytics.claim_funnel.rejected }}</td></tr></tbody></table>
+        {% endcomponent %}
+    </div>
+</div>
+{% endblock %}

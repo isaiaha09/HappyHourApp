@@ -1,0 +1,166 @@
+{% extends "admin/base.html" %}
+
+{% load i18n unfold %}
+
+{% block title %}{{ title }} | {{ site_title }}{% endblock %}
+
+{% block content %}
+{% url 'happyhour_admin:operations_review_queue' as claim_review_url %}
+{% url 'happyhour_admin:operations_report_queue' as report_queue_url %}
+{% url 'happyhour_admin:operations_catalog_health' as catalog_health_url %}
+{% url 'happyhour_admin:operations_analytics' as analytics_url %}
+{% url 'happyhour_admin:operations_audit_timeline' as audit_timeline_url %}
+{% url 'happyhour_admin:operations_storage' as storage_url %}
+{% url 'happyhour_admin:places_businessmembership_changelist' as memberships_url %}
+{% url 'happyhour_admin:places_sponsoredcampaign_changelist' as campaigns_url %}
+
+<div class="dd-operations-dashboard">
+    <div class="dd-operations-heading">
+        <div>
+            <p class="dd-operations-kicker">Operations Control Room</p>
+            <h1>DiningDealz operations</h1>
+            <p>Claims, trust and safety, catalog readiness, audience activity, and campaign delivery in one view.</p>
+        </div>
+        <p class="dd-operations-generated">Updated {{ operations.generated_at|date:"M j, Y, g:i a" }}</p>
+    </div>
+
+    <div class="dd-operations-metric-grid">
+        {% component "unfold/components/card.html" with href=claim_review_url size="md" class="dd-operations-card" %}
+            <p class="dd-operations-card-label">Claims to review</p>
+            <p class="dd-operations-card-value">{{ operations.metrics.claims_needing_review }}</p>
+            <p class="dd-operations-card-detail">{{ operations.metrics.overdue_claims }} older than the {{ operations.metrics.review_sla_hours }}-hour SLA</p>
+        {% endcomponent %}
+        {% component "unfold/components/card.html" with href=claim_review_url size="md" class="dd-operations-card" %}
+            <p class="dd-operations-card-label">Oldest pending claim</p>
+            {% if operations.metrics.oldest_pending_claim %}
+                <p class="dd-operations-card-value dd-operations-card-value--compact">{{ operations.metrics.oldest_pending_claim.listing_snapshot.name }}</p>
+                <p class="dd-operations-card-detail">{{ operations.metrics.oldest_pending_claim.submitted_at|default:operations.metrics.oldest_pending_claim.created_at|date:"M j, Y, g:i a" }}</p>
+            {% else %}
+                <p class="dd-operations-card-value">—</p>
+                <p class="dd-operations-card-detail">No pending claims</p>
+            {% endif %}
+        {% endcomponent %}
+        {% component "unfold/components/card.html" with href=report_queue_url size="md" class="dd-operations-card" %}
+            <p class="dd-operations-card-label">Open reports</p>
+            <p class="dd-operations-card-value">{{ operations.metrics.open_reports }}</p>
+            <p class="dd-operations-card-detail">Content and direct-message safety queue</p>
+        {% endcomponent %}
+        {% component "unfold/components/card.html" with href=catalog_health_url size="md" class="dd-operations-card" %}
+            <p class="dd-operations-card-label">Catalog attention</p>
+            <p class="dd-operations-card-value">{{ operations.metrics.catalog_attention }}</p>
+            <p class="dd-operations-card-detail">{{ operations.catalog_health.healthy_count }} healthy stored snapshots · {{ operations.catalog_health.issues|length }} issue types</p>
+        {% endcomponent %}
+        {% component "unfold/components/card.html" with href=memberships_url size="md" class="dd-operations-card" %}
+            <p class="dd-operations-card-label">Active memberships</p>
+            <p class="dd-operations-card-value">{{ operations.metrics.active_business_memberships }}</p>
+            <p class="dd-operations-card-detail">Approved business access</p>
+        {% endcomponent %}
+        {% component "unfold/components/card.html" with href=campaigns_url size="md" class="dd-operations-card" %}
+            <p class="dd-operations-card-label">Active campaigns</p>
+            <p class="dd-operations-card-value">{{ operations.metrics.active_campaigns }}</p>
+            <p class="dd-operations-card-detail">{{ operations.metrics.remaining_campaign_quota }} impressions remaining · {{ operations.analytics.click_through_rate }}% feed CTR</p>
+        {% endcomponent %}
+        {% component "unfold/components/card.html" with href=catalog_health_url size="md" class="dd-operations-card" %}
+            <p class="dd-operations-card-label">Live locations offline</p>
+            <p class="dd-operations-card-value">{{ operations.metrics.live_location_offline }}</p>
+            <p class="dd-operations-card-detail">Service-area businesses overdue for a location report</p>
+        {% endcomponent %}
+        {% component "unfold/components/card.html" with href=storage_url size="md" class="dd-operations-card" %}
+            <p class="dd-operations-card-label">Total stored data</p>
+            <p class="dd-operations-card-value dd-operations-card-value--storage">{{ admin_total_storage_display }}</p>
+            <p class="dd-operations-card-detail">DB {{ admin_database_storage_display }} · uploads {{ admin_media_storage_display }} · discovery {{ admin_discovery_storage_display }} · {{ admin_total_storage_gb }} GB</p>
+        {% endcomponent %}
+    </div>
+
+    <div class="dd-operations-layout">
+        {% component "unfold/components/card.html" with title="Claim review queue" class="dd-operations-panel" %}
+            {% if operations.claim_queue %}
+                <div class="dd-operations-table-wrap">
+                    <table class="dd-operations-table">
+                        <thead>
+                            <tr><th>Business</th><th>Status</th><th>Trust</th><th>Submitted</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                            {% for claim in operations.claim_queue %}
+                                <tr>
+                                    <td><strong>{{ claim.listing_snapshot.name }}</strong><span>{{ claim.contact_name }} · {{ claim.claimant.email }}</span></td>
+                                    <td><span class="dd-operations-status dd-operations-status--{{ claim.status }}">{{ claim.get_status_display }}</span></td>
+                                    <td>{{ claim.verification_score }}/100</td>
+                                    <td>{{ claim.submitted_at|default:claim.created_at|date:"M j, g:i a" }}</td>
+                                    <td><a href="{% url 'happyhour_admin:places_businessclaim_change' claim.pk %}">Review</a></td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="dd-operations-empty">No claims need review right now.</p>
+            {% endif %}
+        {% endcomponent %}
+
+        {% component "unfold/components/card.html" with title="Content report queue" class="dd-operations-panel" %}
+            {% if operations.report_queue %}
+                <div class="dd-operations-table-wrap">
+                    <table class="dd-operations-table">
+                        <thead>
+                            <tr><th>Target</th><th>Reason</th><th>Status</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                            {% for report in operations.report_queue %}
+                                <tr>
+                                    <td><strong>{{ report.business_name|default:report.listing_slug|default:"Unavailable target" }}</strong><span>{{ report.created_at|date:"M j, g:i a" }}</span></td>
+                                    <td>{{ report.get_reason_display }}</td>
+                                    <td><span class="dd-operations-status dd-operations-status--{{ report.status }}">{{ report.get_status_display }}</span></td>
+                                    <td><a href="{% url 'happyhour_admin:places_contentreport_change' report.pk %}">Review</a></td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="dd-operations-empty">No open reports right now.</p>
+            {% endif %}
+        {% endcomponent %}
+    </div>
+
+    <div class="dd-operations-layout">
+        {% component "unfold/components/card.html" with title="Feed impressions, clicks, saves, and shares · {{ operations.analytics.window_days }} days" class="dd-operations-panel" %}
+            {% component "unfold/components/chart/line.html" with data=operations.analytics.feed_chart_json height=260 %}{% endcomponent %}
+        {% endcomponent %}
+        {% component "unfold/components/card.html" with title="Customer and business signups · {{ operations.analytics.window_days }} days" class="dd-operations-panel" %}
+            {% component "unfold/components/chart/bar.html" with data=operations.analytics.signup_chart_json height=260 %}{% endcomponent %}
+        {% endcomponent %}
+    </div>
+
+    <div class="dd-operations-layout">
+        {% component "unfold/components/card.html" with title="Catalog health" class="dd-operations-panel" %}
+            <div class="dd-operations-health-summary">
+                {% for issue in operations.catalog_health.issues %}
+                    <a href="{{ catalog_health_url }}?issue={{ issue.code }}" class="dd-operations-health-item dd-operations-health-item--{{ issue.severity }}">
+                        <strong>{{ issue.count }}</strong><span>{{ issue.label }}</span>
+                    </a>
+                {% empty %}
+                    <p class="dd-operations-empty">All stored catalog checks are healthy.</p>
+                {% endfor %}
+            </div>
+        {% endcomponent %}
+        {% component "unfold/components/card.html" with title="Recent staff activity" class="dd-operations-panel" %}
+            <div class="dd-operations-audit-list">
+                {% for event in operations.audit_events %}
+                    <div class="dd-operations-audit-item">
+                        <span class="dd-operations-status">{{ event.action_label }}</span>
+                        <div><strong>{% if event.object_url %}<a href="{{ event.object_url }}">{{ event.object_repr }}</a>{% else %}{{ event.object_repr }}{% endif %}</strong><span>{{ event.user }} · {{ event.action_time|date:"M j, g:i a" }}</span></div>
+                    </div>
+                {% empty %}
+                    <p class="dd-operations-empty">No staff activity is recorded yet.</p>
+                {% endfor %}
+            </div>
+        {% endcomponent %}
+    </div>
+
+    <section class="dd-operations-tools">
+        <div><p class="dd-operations-kicker">Administrative tools</p><h2>Data and account management</h2></div>
+        {% include "unfold/helpers/app_list_default.html" %}
+    </section>
+</div>
+{% endblock %}

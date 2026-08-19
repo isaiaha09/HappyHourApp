@@ -1,0 +1,24 @@
+{% extends "admin/base.html" %}
+
+{% load i18n %}
+
+{% block title %}{{ title }} | {{ site_title }}{% endblock %}
+
+{% block content %}
+<div class="dd-operations-page">
+    <div class="dd-operations-page-heading"><p class="dd-operations-kicker">Operational record</p><h1>Audit timeline</h1><p>Django admin history plus durable custom staff operations, including review, approval, moderation, refresh, restore, deletion, and public override changes.</p></div>
+    <div class="dd-operations-panel-surface">
+        <div class="dd-operations-audit-list dd-operations-audit-list--page">
+            {% for event in audit_events %}
+                <div class="dd-operations-audit-item">
+                    <span class="dd-operations-status">{{ event.action_label }}</span>
+                    <div><strong>{% if event.object_url %}<a href="{{ event.object_url }}">{{ event.object_repr }}</a>{% else %}{{ event.object_repr }}{% endif %}</strong><span>{{ event.message }}</span></div>
+                    <time>{{ event.user }} · {{ event.action_time|date:"M j, Y, g:i a" }}</time>
+                </div>
+            {% empty %}
+                <p class="dd-operations-empty">No staff activity is recorded yet.</p>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

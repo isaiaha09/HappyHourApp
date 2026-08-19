@@ -1,0 +1,21 @@
+{% extends "admin/base.html" %}
+
+{% load i18n %}
+
+{% block title %}{{ title }} | {{ site_title }}{% endblock %}
+
+{% block content %}
+<div class="dd-operations-page">
+    <div class="dd-operations-page-heading"><p class="dd-operations-kicker">Platform status</p><h1>Storage and health status</h1><p>Operational storage totals alongside the current catalog quality summary.</p></div>
+    <div class="dd-operations-metric-grid">
+        <div class="dd-operations-card"><p class="dd-operations-card-label">Total stored data</p><p class="dd-operations-card-value">{{ storage_display.total_bytes }}</p></div>
+        <div class="dd-operations-card"><p class="dd-operations-card-label">Database</p><p class="dd-operations-card-value">{{ storage_display.database_bytes }}</p></div>
+        <div class="dd-operations-card"><p class="dd-operations-card-label">Uploads</p><p class="dd-operations-card-value">{{ storage_display.media_bytes }}</p></div>
+        <div class="dd-operations-card"><p class="dd-operations-card-label">Discovery data</p><p class="dd-operations-card-value">{{ storage_display.discovery_bytes }}</p></div>
+        <div class="dd-operations-card"><p class="dd-operations-card-label">Catalog needing attention</p><p class="dd-operations-card-value">{{ catalog_health.attention_count }}</p></div>
+    </div>
+    <div class="dd-operations-panel-surface">
+        <table class="dd-operations-table"><thead><tr><th>Health issue</th><th>Businesses</th><th>Severity</th></tr></thead><tbody>{% for issue in catalog_health.issues %}<tr><td>{{ issue.label }}</td><td>{{ issue.count }}</td><td><span class="dd-operations-status dd-operations-status--{{ issue.severity }}">{{ issue.severity }}</span></td></tr>{% empty %}<tr><td colspan="3">All stored catalog checks are healthy.</td></tr>{% endfor %}</tbody></table>
+    </div>
+</div>
+{% endblock %}

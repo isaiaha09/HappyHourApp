@@ -1,16 +1,19 @@
 import ast
 from dataclasses import replace
+from datetime import timedelta
 import json
 import re
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from django import forms
 from django.contrib import admin, messages
+from django.contrib.admin.models import DELETION
 from django.contrib.auth.admin import GroupAdmin, UserAdmin
 from django.contrib.auth.models import Group, User
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Exists, OuterRef, Prefetch, Q, Subquery
+from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.http import HttpResponseRedirect
 from django.template.response import TemplateResponse
@@ -18,13 +21,19 @@ from django.urls import path, reverse
 from django.utils.html import format_html, format_html_join
 from django.utils.text import slugify
 from django.utils import timezone
+from unfold.admin import ModelAdmin as UnfoldModelAdmin
+from unfold.admin import TabularInline as UnfoldTabularInline
+from unfold.decorators import action as unfold_action
+from unfold.enums import ActionVariant
+from unfold.forms import BaseDialogForm
 
 from .admin_site import happyhour_admin_site
-from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessMembership, ContentReport, CustomerAccount, DealType, DeletedBusiness, ListingSnapshot, Weekday
+from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessDirectMessage, BusinessDirectMessageThread, BusinessMembership, BusinessPost, ContentReport, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, FavoriteBusinessNotification, FeedEngagement, FeedImpression, ListingSnapshot, SponsoredCampaign, Weekday
 from .services.account_profiles import remove_favorites_for_business_accounts, remove_favorites_for_listing_slugs
+from .services.admin_operations import get_catalog_health, get_listing_snapshot_health_issues, get_review_sla_delta, record_admin_audit_event
 from .services.business_profile_overrides import format_operating_hour_display, format_time_display, is_open_24_hours_row, normalize_deal_overrides, normalize_operating_hour_overrides, normalize_time_value, summarize_deal_overrides, summarize_operating_hour_overrides
 from .services.importers.discovered_json_places import load_discovery_json_records, merge_discovery_json_records, write_discovery_json_records
-from .services.deleted_businesses import imported_place_from_deleted_business, store_deleted_business
+from .services.deleted_businesses import imported_place_from_deleted_business, purge_deleted_business_data, store_deleted_business
 from .services.importers.business_websites import BusinessWebsiteImporter
 from .services.importers.types import ImportedPlace
 from .services.social_profiles import build_social_media_links, normalize_business_contact_channels, normalize_social_profile
@@ -328,6 +337,42 @@ class HasImportedImagesFilter(admin.SimpleListFilter):
 		return queryset
 
 
+class CatalogHealthFilter(admin.SimpleListFilter):
+	title = 'Catalog health'
+	parameter_name = 'catalog_health'
+
+	def lookups(self, request, model_admin):
+		return (
+			('attention', 'Needs attention'),
+			('healthy', 'No stored-data gaps'),
+			('stale', 'Stale metadata'),
+			('missing_address', 'Missing street address'),
+			('missing_phone', 'Missing public phone'),
+			('missing_coordinates', 'Missing coordinates'),
+			('missing_hours', 'Missing operating hours'),
+			('missing_active_deals', 'No active deals'),
+			('missing_images', 'Missing images'),
+			('missing_website', 'Missing website'),
+			('duplicate_listing_identity', 'Duplicate listing identity'),
+			('live_location_not_reporting', 'Live location offline'),
+		)
+
+	def queryset(self, request, queryset):
+		if self.value() == 'attention':
+			issue_map = get_catalog_health(limit=0).get('issue_map', {})
+			return queryset.filter(pk__in=[pk for pk, issues in issue_map.items() if issues])
+		if self.value() == 'healthy':
+			issue_map = get_catalog_health(limit=0).get('issue_map', {})
+			return queryset.exclude(pk__in=[pk for pk, issues in issue_map.items() if issues])
+		if self.value() == 'stale':
+			issue_map = get_catalog_health(limit=0).get('issue_map', {})
+			return queryset.filter(pk__in=[pk for pk, issues in issue_map.items() if 'stale_snapshot' in issues])
+		if self.value() in {'missing_address', 'missing_phone', 'missing_coordinates', 'missing_hours', 'missing_active_deals', 'missing_images', 'missing_website', 'duplicate_listing_identity', 'live_location_not_reporting'}:
+			issue_map = get_catalog_health(limit=0).get('issue_map', {})
+			return queryset.filter(pk__in=[pk for pk, issues in issue_map.items() if self.value() in issues])
+		return queryset
+
+
 def _operating_hour_override_text_for_admin(value):
 	if value in (None, [], {}):
 		return ''
@@ -561,6 +606,34 @@ class BusinessClaimAdminForm(forms.ModelForm):
 	def save(self, commit=True):
 		self.instance.rejection_reason_codes = self.cleaned_data.get('rejection_reason_codes') or []
 		return super().save(commit=commit)
+
+
+class BusinessClaimRejectDialogForm(BaseDialogForm):
+	rejection_reason_codes = forms.MultipleChoiceField(
+		label='Rejection reasons',
+		choices=BusinessClaim.RejectionReason.choices,
+		required=True,
+		widget=forms.CheckboxSelectMultiple,
+	)
+	reviewer_notes = forms.CharField(
+		label='Reviewer notes',
+		required=False,
+		widget=forms.Textarea(attrs={'rows': 4}),
+	)
+
+	def clean(self):
+		cleaned_data = super().clean()
+		if BusinessClaim.RejectionReason.OTHER in (cleaned_data.get('rejection_reason_codes') or []) and not str(cleaned_data.get('reviewer_notes') or '').strip():
+			raise forms.ValidationError('Reviewer notes are required when "Other issue not covered above" is selected.')
+		return cleaned_data
+
+
+class BusinessClaimRequestInfoDialogForm(BaseDialogForm):
+	reviewer_notes = forms.CharField(
+		label='Information requested',
+		required=True,
+		widget=forms.Textarea(attrs={'rows': 4}),
+	)
 
 
 class ListingSnapshotAdminForm(forms.ModelForm):
@@ -1028,7 +1101,7 @@ def _select_best_matching_record(snapshot, place_records):
 	return best_record
 
 
-class StaffUserAdmin(UserAdmin):
+class StaffUserAdmin(UnfoldModelAdmin, UserAdmin):
 	list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'is_superuser', 'is_active')
 	list_filter = ('is_staff', 'is_superuser', 'is_active')
 	search_fields = ('username', 'first_name', 'last_name', 'email')
@@ -1038,6 +1111,10 @@ class StaffUserAdmin(UserAdmin):
 			changelist_url = reverse('happyhour_admin:auth_user_changelist')
 			return HttpResponseRedirect(f'{changelist_url}?is_staff__exact=1')
 		return super().changelist_view(request, extra_context)
+
+
+class StaffGroupAdmin(UnfoldModelAdmin, GroupAdmin):
+	pass
 
 
 class HardDeleteUserAdminMixin:
@@ -1052,11 +1129,11 @@ class HardDeleteUserAdminMixin:
 
 
 happyhour_admin_site.register(User, StaffUserAdmin)
-happyhour_admin_site.register(Group, GroupAdmin)
+happyhour_admin_site.register(Group, StaffGroupAdmin)
 
 
 @admin.register(CustomerAccount, site=happyhour_admin_site)
-class CustomerAccountAdmin(HardDeleteUserAdminMixin, UserAdmin):
+class CustomerAccountAdmin(HardDeleteUserAdminMixin, UnfoldModelAdmin, UserAdmin):
 	delete_confirmation_template = 'admin/places/customeraccount/delete_confirmation.html'
 	delete_selected_confirmation_template = 'admin/places/customeraccount/delete_selected_confirmation.html'
 	list_display = (
@@ -1103,7 +1180,7 @@ class CustomerAccountAdmin(HardDeleteUserAdminMixin, UserAdmin):
 			return False
 
 @admin.register(BusinessAccount, site=happyhour_admin_site)
-class BusinessAccountAdmin(HardDeleteUserAdminMixin, UserAdmin):
+class BusinessAccountAdmin(HardDeleteUserAdminMixin, UnfoldModelAdmin, UserAdmin):
 	delete_confirmation_template = 'admin/places/businessaccount/delete_confirmation.html'
 	delete_selected_confirmation_template = 'admin/places/businessaccount/delete_selected_confirmation.html'
 	list_display = (
@@ -1316,54 +1393,64 @@ class BusinessAccountAdmin(HardDeleteUserAdminMixin, UserAdmin):
 
 
 @admin.register(ListingSnapshot, site=happyhour_admin_site)
-class ListingSnapshotAdmin(admin.ModelAdmin):
+class ListingSnapshotAdmin(UnfoldModelAdmin):
 	form = ListingSnapshotAdminForm
 	change_list_template = 'admin/places/listingsnapshot/change_list.html'
-	list_display = ('name', 'city', 'venue_type', 'source_name', 'imported_image_count', 'current_public_deal_count', 'manual_deal_override_count', 'pull_business_data_link', 'captured_at', 'updated_at')
-	list_filter = ('city', 'venue_type', 'source_name', HasImportedImagesFilter, ManagedByBusinessUserFilter)
+	list_display = ('name', 'city', 'venue_type', 'catalog_health_status', 'source_name', 'imported_image_count', 'current_public_deal_count', 'manual_deal_override_count', 'public_profile_preview_link', 'pull_business_data_link', 'captured_at', 'updated_at')
+	list_filter = ('city', 'venue_type', 'source_name', CatalogHealthFilter, HasImportedImagesFilter, ManagedByBusinessUserFilter)
 	search_fields = ('name', 'address_line_1', 'external_id', 'website_url')
-	readonly_fields = ('managed_business_account_link', 'imported_image_count', 'current_public_images_preview', 'current_public_deals_preview', 'current_public_hours_preview', 'manual_deal_override_summary', 'manual_operating_hour_override_summary', 'captured_at', 'updated_at')
+	readonly_fields = ('managed_business_account_link', 'catalog_health_summary', 'public_profile_preview_link', 'imported_image_count', 'current_public_images_preview', 'current_public_deals_preview', 'current_public_hours_preview', 'manual_deal_override_summary', 'manual_operating_hour_override_summary', 'captured_at', 'updated_at')
 	fieldsets = (
-		('Snapshot identity', {
-			'fields': ('name', 'listing_slug', 'source_name', 'source_url', 'external_id', 'managed_business_account_link'),
+		('Identity', {
+			'fields': ('name', 'listing_slug', 'managed_business_account_link', 'catalog_health_summary', 'public_profile_preview_link'),
+			'classes': ('tab',),
 		}),
 		('Business details', {
 			'fields': ('city', 'venue_type', 'address_line_1', 'address_line_2', 'neighborhood', 'state', 'postal_code'),
+			'classes': ('tab',),
 		}),
-		('Contact', {
-			'fields': ('phone_number', 'website_url', 'website_url_suppressed'),
-		}),
-		('Social media', {
-			'fields': ('instagram_url', 'facebook_url', 'tiktok_url', 'youtube_url'),
+		('Contact and social media', {
+			'fields': ('phone_number', 'website_url', 'website_url_suppressed', 'instagram_url', 'facebook_url', 'tiktok_url', 'youtube_url'),
 			'description': 'Store third-party profile URLs here instead of putting them in Website or Source URL.',
+			'classes': ('tab',),
 		}),
-		('Current app data', {
+		('Public app data', {
 			'fields': ('imported_image_count', 'imported_image_urls', 'current_public_images_preview', 'current_public_deals_preview', 'current_public_hours_preview'),
 			'description': 'These previews show the imported images, deals, and hours currently available for this business after importer enrichment and any overrides. Removing imported image URLs here suppresses those pulled images from future admin pulls.',
+			'classes': ('tab',),
 		}),
 		('Admin overrides for unclaimed businesses', {
 			'fields': ('deal_overrides', 'manual_deal_override_summary', 'operating_hour_overrides', 'manual_operating_hour_override_summary'),
 			'description': 'Use these structured overrides to fix or add legitimate deals and hours for existing unclaimed businesses. Once a business is claimed, the owner claim overrides take precedence.',
+			'classes': ('tab',),
 		}),
-		('Timestamps', {
-			'fields': ('captured_at', 'updated_at'),
-			'classes': ('collapse',),
+		('Import history', {
+			'fields': ('source_name', 'source_url', 'external_id', 'captured_at', 'updated_at'),
+			'description': 'The source identity and timestamps for the latest normalized listing snapshot.',
+			'classes': ('tab',),
 		}),
 	)
 
 	def get_queryset(self, request):
 		queryset = super().get_queryset(request)
+		if request.GET.get('include_unmanaged') == '1':
+			return queryset.distinct().prefetch_related(
+				Prefetch('business_claims', queryset=BusinessClaim.objects.select_related('membership'))
+			)
 		return queryset.filter(
 			(
 				~Q(source_name__in=(BusinessClaim.ADMIN_SOURCE_NAME, *BusinessClaim.USER_SOURCE_NAMES))
 				| Q(source_name=BusinessClaim.ADMIN_SOURCE_NAME, business_claims__isnull=True)
 			)
 			| Q(business_claims__membership__is_active=True)
-		).distinct()
+		).distinct().prefetch_related(
+			Prefetch('business_claims', queryset=BusinessClaim.objects.select_related('membership'))
+		)
 
 	def get_urls(self):
 		custom_urls = [
 			path('search-businesses/', self.admin_site.admin_view(self.search_businesses_view), name='places_listingsnapshot_search'),
+			path('<path:object_id>/preview-public-profile/', self.admin_site.admin_view(self.preview_public_profile_view), name='places_listingsnapshot_preview_public_profile'),
 			path('<path:object_id>/pull-business-data/', self.admin_site.admin_view(self.pull_business_data_view), name='places_listingsnapshot_pull_one'),
 		]
 		return custom_urls + super().get_urls()
@@ -1371,6 +1458,7 @@ class ListingSnapshotAdmin(admin.ModelAdmin):
 	def changelist_view(self, request, extra_context=None):
 		extra_context = extra_context or {}
 		extra_context['search_businesses_url'] = reverse('happyhour_admin:places_listingsnapshot_search')
+		self._changelist_health_issues = get_catalog_health(limit=0).get('issue_map', {})
 		self._changelist_public_deal_counts = {
 			payload.get('slug'): len(list(payload.get('deals', [])))
 			for payload in get_source_place_payloads(resolve_missing_coordinates=False)
@@ -1385,11 +1473,39 @@ class ListingSnapshotAdmin(admin.ModelAdmin):
 
 	def _clear_changelist_public_deal_counts(self):
 		self._changelist_public_deal_counts = None
+		self._changelist_health_issues = None
 
 	@admin.display(description='Refresh from official website')
 	def pull_business_data_link(self, obj):
 		url = reverse('happyhour_admin:places_listingsnapshot_pull_one', args=[obj.pk])
 		return format_html('<a class="button" href="{}">Pull business data</a>', url)
+
+	@admin.display(description='Customer view')
+	def public_profile_preview_link(self, obj):
+		if not obj or not obj.pk:
+			return 'Save this business before opening the customer view.'
+		url = reverse('happyhour_admin:places_listingsnapshot_preview_public_profile', args=[obj.pk])
+		return format_html('<a class="button" href="{}">Preview customer view</a>', url)
+
+	@admin.display(description='Catalog health')
+	def catalog_health_status(self, obj):
+		issues = (getattr(self, '_changelist_health_issues', None) or {}).get(obj.pk)
+		if issues is None:
+			issues = get_listing_snapshot_health_issues(obj)
+		if not issues:
+			return format_html('<span class="dd-admin-health dd-admin-health--healthy">Healthy</span>')
+		labels = ', '.join(issue.replace('_', ' ') for issue in issues)
+		severity = 'danger' if any(issue in {'missing_address', 'missing_website', 'missing_coordinates', 'duplicate_listing_identity', 'live_location_not_reporting'} for issue in issues) else 'warning'
+		return format_html('<span class="dd-admin-health dd-admin-health--{}">{}</span>', severity, labels)
+
+	@admin.display(description='Stored-data checks')
+	def catalog_health_summary(self, obj):
+		issues = (getattr(self, '_changelist_health_issues', None) or {}).get(obj.pk)
+		if issues is None:
+			issues = get_listing_snapshot_health_issues(obj)
+		if not issues:
+			return 'No stored-data gaps are currently detected.'
+		return ', '.join(issue.replace('_', ' ').capitalize() for issue in issues)
 
 	@admin.display(description='Images')
 	def imported_image_count(self, obj):
@@ -1498,8 +1614,34 @@ class ListingSnapshotAdmin(admin.ModelAdmin):
 		place_record = replace(place_record, image_urls=[])
 		merge_discovery_json_records([place_record])
 		_sync_listing_snapshot_from_imported_place(place_record, snapshot=snapshot)
+		record_admin_audit_event(request, snapshot, 'Refreshed business data from its official website.')
 		self.message_user(request, f'Refreshed {snapshot.name} from its official website.', level=messages.SUCCESS)
 		return HttpResponseRedirect(reverse('happyhour_admin:places_listingsnapshot_changelist'))
+
+	def preview_public_profile_view(self, request, object_id):
+		if not self.has_view_or_change_permission(request):
+			return HttpResponseRedirect(reverse('happyhour_admin:index'))
+
+		snapshot = ListingSnapshot.objects.filter(pk=object_id).first()
+		if snapshot is None:
+			self.message_user(request, 'Business row not found.', level=messages.ERROR)
+			return HttpResponseRedirect(reverse('happyhour_admin:places_listingsnapshot_changelist'))
+
+		payload = get_source_place_payload(snapshot.listing_slug) if snapshot.listing_slug else None
+		payload = payload or {}
+		public_profile_slug = str(snapshot.listing_slug or '').strip()
+		api_url = request.build_absolute_uri(reverse('place-detail', args=[public_profile_slug])) if public_profile_slug else ''
+		context = {
+			**self.admin_site.each_context(request),
+			'title': f'Public app preview: {snapshot.name}',
+			'snapshot': snapshot,
+			'payload': payload,
+			'api_url': api_url,
+			'website_url': payload.get('website_url') or ('' if snapshot.website_url_suppressed else snapshot.website_url),
+			'mobile_deep_link': f'diningdealz://place/{quote(public_profile_slug, safe="")}' if public_profile_slug else '',
+			'change_url': reverse('happyhour_admin:places_listingsnapshot_change', args=[snapshot.pk]),
+		}
+		return TemplateResponse(request, 'admin/places/listingsnapshot/public_profile_preview.html', context)
 
 	def _get_active_business_membership(self, obj):
 		return (
@@ -1548,6 +1690,24 @@ class ListingSnapshotAdmin(admin.ModelAdmin):
 		preview_lines = _format_public_hours_preview_lines(operating_hours)
 		return format_html_join('', '{}<br>', ((line,) for line in preview_lines))
 
+	def save_model(self, request, obj, form, change):
+		public_override_fields = {
+			'deal_overrides',
+			'deal_overrides_cleared',
+			'operating_hour_overrides',
+			'operating_hour_overrides_cleared',
+			'website_url',
+			'website_url_suppressed',
+			'imported_image_urls',
+			'suppressed_imported_image_urls',
+			'social_profiles',
+			'social_media_links',
+		}
+		overrides_changed = change and bool(public_override_fields.intersection(set(getattr(form, 'changed_data', []))))
+		super().save_model(request, obj, form, change)
+		if overrides_changed:
+			record_admin_audit_event(request, obj, 'Changed the public business profile override data.')
+
 	@admin.display(description='Saved deal override summary')
 	def manual_deal_override_summary(self, obj):
 		summaries = summarize_deal_overrides(obj.deal_overrides or [])
@@ -1563,6 +1723,7 @@ class ListingSnapshotAdmin(admin.ModelAdmin):
 		return format_html_join('', '{}<br>', ((line,) for line in summaries))
 
 	def delete_model(self, request, obj):
+		record_admin_audit_event(request, obj, 'Deleted business and moved it to Deleted Businesses.', action_flag=DELETION)
 		deleted_business, removed_records = _delete_snapshot_to_deleted_business(obj)
 		super().delete_model(request, obj)
 		message = f'Moved {obj.name} to Deleted Businesses.'
@@ -1574,6 +1735,7 @@ class ListingSnapshotAdmin(admin.ModelAdmin):
 		removed_count = 0
 		moved_count = 0
 		for snapshot in queryset:
+			record_admin_audit_event(request, snapshot, 'Deleted business and moved it to Deleted Businesses.', action_flag=DELETION)
 			_, removed_records = _delete_snapshot_to_deleted_business(snapshot)
 			removed_count += len(removed_records)
 			moved_count += 1
@@ -1585,13 +1747,14 @@ class ListingSnapshotAdmin(admin.ModelAdmin):
 
 
 @admin.register(DeletedBusiness, site=happyhour_admin_site)
-class DeletedBusinessAdmin(admin.ModelAdmin):
+class DeletedBusinessAdmin(UnfoldModelAdmin):
 	actions = ['restore_selected_businesses']
-	list_display = ('name', 'deleted_from_business_database', 'city', 'venue_type', 'source_name', 'restore_business_link', 'deleted_at')
-	list_editable = ('deleted_from_business_database',)
+	delete_confirmation_template = 'admin/places/deletedbusiness/delete_confirmation.html'
+	delete_selected_confirmation_template = 'admin/places/deletedbusiness/delete_selected_confirmation.html'
+	list_display = ('name', 'deleted_from_business_database', 'city', 'venue_type', 'source_name', 'restore_business_link', 'permanent_delete_link', 'deleted_at')
 	list_filter = ('deleted_from_business_database', 'city', 'venue_type', 'source_name', 'deleted_at')
 	search_fields = ('name', 'address_line_1', 'external_id', 'website_url')
-	readonly_fields = ('deleted_at', 'updated_at', 'payload')
+	readonly_fields = ('deleted_from_business_database', 'deleted_at', 'updated_at', 'payload')
 	fieldsets = (
 		('Status', {
 			'fields': ('deleted_from_business_database',),
@@ -1629,13 +1792,69 @@ class DeletedBusinessAdmin(admin.ModelAdmin):
 		url = reverse('happyhour_admin:places_deletedbusiness_restore_one', args=[obj.pk])
 		return format_html('<a class="button" href="{}">Restore business</a>', url)
 
+	@admin.display(description='Permanent delete')
+	def permanent_delete_link(self, obj):
+		url = reverse('happyhour_admin:places_deletedbusiness_delete', args=[obj.pk])
+		return format_html('<a class="button" href="{}">Delete forever</a>', url)
+
 	@admin.action(description='Restore selected businesses')
 	def restore_selected_businesses(self, request, queryset):
 		restored_count = 0
 		for deleted_business in list(queryset):
-			self._restore_deleted_business(deleted_business)
+			self._restore_deleted_business(deleted_business, request=request)
 			restored_count += 1
 		self.message_user(request, f'Restored {restored_count} business(es).', level=messages.SUCCESS)
+
+	def delete_model(self, request, obj):
+		with transaction.atomic():
+			purge_summary = purge_deleted_business_data(obj)
+			record_admin_audit_event(
+				request,
+				obj,
+				'Permanently deleted business and purged its catalog/source metadata.',
+				action_flag=DELETION,
+			)
+			super().delete_model(request, obj)
+		self.message_user(request, self._permanent_delete_message(obj, purge_summary), level=messages.SUCCESS)
+
+	def delete_queryset(self, request, queryset):
+		deleted_businesses = list(queryset)
+		purge_totals = {
+			'removed_discovery_records': 0,
+			'removed_favorites': 0,
+			'removed_snapshots': 0,
+		}
+		with transaction.atomic():
+			for deleted_business in deleted_businesses:
+				purge_summary = purge_deleted_business_data(deleted_business)
+				for key in purge_totals:
+					purge_totals[key] += purge_summary[key]
+				record_admin_audit_event(
+					request,
+					deleted_business,
+					'Permanently deleted business and purged its catalog/source metadata.',
+					action_flag=DELETION,
+				)
+			super().delete_queryset(request, queryset)
+		message = f'Permanently deleted {len(deleted_businesses)} business(es).'
+		if purge_totals['removed_snapshots'] or purge_totals['removed_discovery_records'] or purge_totals['removed_favorites']:
+			message += (
+				f" Removed {purge_totals['removed_snapshots']} matching catalog snapshot(s), "
+				f"{purge_totals['removed_discovery_records']} source record(s), and "
+				f"{purge_totals['removed_favorites']} favorite(s)."
+			)
+		self.message_user(request, message, level=messages.SUCCESS)
+
+	@staticmethod
+	def _permanent_delete_message(obj, purge_summary):
+		message = f'Permanently deleted {obj.name}.'
+		if purge_summary['removed_snapshots'] or purge_summary['removed_discovery_records'] or purge_summary['removed_favorites']:
+			message += (
+				f" Removed {purge_summary['removed_snapshots']} matching catalog snapshot(s), "
+				f"{purge_summary['removed_discovery_records']} source record(s), and "
+				f"{purge_summary['removed_favorites']} favorite(s)."
+			)
+		return message
 
 	def restore_business_view(self, request, object_id):
 		if not self.has_change_permission(request):
@@ -1646,11 +1865,11 @@ class DeletedBusinessAdmin(admin.ModelAdmin):
 			self.message_user(request, 'Deleted business not found.', level=messages.ERROR)
 			return HttpResponseRedirect(reverse('happyhour_admin:places_deletedbusiness_changelist'))
 
-		self._restore_deleted_business(deleted_business)
+		self._restore_deleted_business(deleted_business, request=request)
 		self.message_user(request, f'Restored {deleted_business.name}.', level=messages.SUCCESS)
 		return HttpResponseRedirect(reverse('happyhour_admin:places_deletedbusiness_changelist'))
 
-	def _restore_deleted_business(self, deleted_business):
+	def _restore_deleted_business(self, deleted_business, request=None):
 		place_record = imported_place_from_deleted_business(deleted_business)
 		if str(place_record.source_name or '').strip().lower() in LIVE_DISCOVERY_SOURCE_NAMES:
 			merge_discovery_json_records([place_record])
@@ -1659,10 +1878,12 @@ class DeletedBusinessAdmin(admin.ModelAdmin):
 			snapshot.website_url_suppressed = True
 			snapshot.website_url = ''
 			snapshot.save(update_fields=['website_url_suppressed', 'website_url', 'updated_at'])
+		if request is not None:
+			record_admin_audit_event(request, deleted_business, f'Restored business as {snapshot.name if snapshot is not None else deleted_business.name}.')
 		deleted_business.delete()
 
 
-class BusinessClaimProfileEntryInline(admin.TabularInline):
+class BusinessClaimProfileEntryInline(UnfoldTabularInline):
 	model = BusinessClaimProfileEntry
 	extra = 0
 	can_delete = False
@@ -1684,7 +1905,7 @@ class BusinessClaimProfileEntryInline(admin.TabularInline):
 		return value
 
 
-class BusinessClaimAttachmentInline(admin.TabularInline):
+class BusinessClaimAttachmentInline(UnfoldTabularInline):
 	model = BusinessClaimAttachment
 	extra = 0
 	can_delete = False
@@ -1706,7 +1927,7 @@ class BusinessClaimAttachmentInline(admin.TabularInline):
 
 
 @admin.register(BusinessClaim, site=happyhour_admin_site)
-class BusinessClaimAdmin(admin.ModelAdmin):
+class BusinessClaimAdmin(UnfoldModelAdmin):
 	approve_override_confirmation_template = 'admin/places/businessclaim/approve_override_confirmation.html'
 	delete_confirmation_template = 'admin/places/businessclaim/delete_confirmation.html'
 	delete_selected_confirmation_template = 'admin/places/businessclaim/delete_selected_confirmation.html'
@@ -1737,47 +1958,76 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 	change_list_template = 'admin/places/businessclaim/change_list.html'
 	form = BusinessClaimAdminForm
 	actions = ['mark_under_review', 'approve_selected_claims', 'reject_selected_claims']
+	actions_row = ('mark_under_review_row', 'approve_row', 'reject_row', 'request_information_row')
 	inlines = (BusinessClaimProfileEntryInline, BusinessClaimAttachmentInline)
-	list_display = ('listing_snapshot', 'contact_name', 'claimant_email_display', 'claimant', 'status', 'attempt_number_display', 'current_attempt_display', 'prior_rejection_count_display', 'verification_score_display', 'verification_flags_display', 'work_email', 'submitted_at', 'reviewed_at')
+	list_display = ('listing_snapshot', 'contact_name', 'claimant_email_display', 'status', 'review_sla_display', 'attempt_number_display', 'current_attempt_display', 'prior_rejection_count_display', 'verification_score_display', 'verification_blocker_count_display', 'verification_flags_display', 'submitted_at', 'reviewed_at')
 	list_filter = ('status', 'listing_snapshot__city', PriorRejectionFilter)
-	search_fields = ('listing_snapshot__name', 'contact_name', 'claimant__username', 'work_email')
-	readonly_fields = ('verification_score', 'verification_flags_display', 'attempt_number_display', 'current_attempt_display', 'prior_rejection_count_display', 'attempt_history_display', 'submitted_at', 'reviewed_at', 'reviewed_by', 'created_at', 'updated_at')
+	search_fields = ('listing_snapshot__name', 'listing_snapshot__listing_slug', 'listing_snapshot__external_id', 'contact_name', 'claimant__username', 'claimant__email', 'work_email', 'work_phone')
+	readonly_fields = ('verification_score', 'verification_flags_display', 'verification_blocker_count_display', 'review_sla_display', 'attempt_number_display', 'current_attempt_display', 'prior_rejection_count_display', 'attempt_history_display', 'submitted_at', 'reviewed_at', 'reviewed_by', 'created_at', 'updated_at')
 	autocomplete_fields = ('claimant', 'listing_snapshot', 'reviewed_by')
 	list_select_related = ('listing_snapshot', 'claimant', 'reviewed_by')
 	list_per_page = 25
 	fieldsets = (
-		('Claim status', {
-			'fields': ('status', 'pathway', 'listing_snapshot', 'claimant'),
+		('Review', {
+			'fields': ('status', 'pathway', 'listing_snapshot', 'claimant', 'verification_score', 'verification_blocker_count_display', 'verification_flags_display', 'review_sla_display'),
+			'classes': ('tab',),
 		}),
 		('Business contact', {
 			'fields': ('contact_name', 'job_title', 'work_email', 'work_phone', 'employer_address', 'address_not_applicable', 'serves_multiple_areas', 'business_website_url'),
+			'classes': ('tab',),
 		}),
-		('Verification details', {
-			'fields': ('verification_summary', 'supporting_details', 'verification_score', 'verification_flags_display'),
+		('Verification evidence', {
+			'fields': ('verification_summary', 'verification_documents', 'verification_data_consent_at', 'verification_data_consent_version'),
 			'description': 'These are the claim-level materials submitted by the business claimant for review. Uploaded files and structured profile details appear in the inline sections below.',
+			'classes': ('tab',),
 		}),
-		('Admin review', {
+		('Submitted profile', {
+			'fields': ('supporting_details', 'social_profiles', 'social_media_links', 'deal_overrides', 'operating_hour_overrides', 'offer_entries', 'hours_of_operation_entries', 'photo_references', 'photo_gallery_overridden', 'direct_messaging_enabled'),
+			'description': 'The profile content submitted by the claimant, including public-facing profile entries and overrides.',
+			'classes': ('tab',),
+		}),
+		('Admin notes', {
 			'fields': ('rejection_reason_codes', 'reviewer_notes', 'reviewed_by', 'reviewed_at'),
 			'description': 'Select structured rejection reasons before rejecting a claim. Reviewer notes remain available for additional claim-specific detail.',
+			'classes': ('tab',),
 		}),
 		('Attempt history', {
 			'fields': ('attempt_number_display', 'current_attempt_display', 'prior_rejection_count_display', 'attempt_history_display'),
 			'description': 'Older attempts for the same claimant account email stay in the database for audit history. Approval should be treated as the current winning outcome, while prior attempts remain visible here.',
+			'classes': ('tab',),
 		}),
 		('Timestamps', {
 			'fields': ('submitted_at', 'created_at', 'updated_at'),
-			'classes': ('collapse',),
+			'classes': ('tab',),
 		}),
 	)
 
 	def get_queryset(self, request):
 		queryset = self.model._default_manager.get_queryset()
+		explicit_status_filter = any(
+			key in request.GET
+			for key in ('status', 'status__exact', 'status__in')
+		)
+		if request.GET.get('status__in'):
+			requested_statuses = [value.strip() for value in request.GET.get('status__in', '').split(',') if value.strip()]
+			queryset = queryset.filter(status__in=requested_statuses)
+		elif not explicit_status_filter and 'has_prior_rejections' not in request.GET:
+			# Keep the operational queue focused while retaining earlier rejected
+			# attempts for the same claimant so the attempt history remains useful.
+			reviewable_claimants = BusinessClaim.objects.filter(
+				status__in=(BusinessClaim.Status.SUBMITTED, BusinessClaim.Status.UNDER_REVIEW, BusinessClaim.Status.NEEDS_INFO),
+			).values('claimant_id')
+			queryset = queryset.filter(
+				Q(status__in=(BusinessClaim.Status.SUBMITTED, BusinessClaim.Status.UNDER_REVIEW, BusinessClaim.Status.NEEDS_INFO))
+				| Q(status=BusinessClaim.Status.REJECTED, claimant_id__in=Subquery(reviewable_claimants))
+			)
 		same_email_attempts = BusinessClaim.objects.filter(
 			claimant__email=OuterRef('claimant__email'),
 		).order_by('-created_at', '-pk')
 		queryset = queryset.annotate(
 			attempt_group_latest_created_at=Subquery(same_email_attempts.values('created_at')[:1]),
 			attempt_group_latest_pk=Subquery(same_email_attempts.values('pk')[:1]),
+			review_order_at=Coalesce('submitted_at', 'created_at'),
 		)
 		ordering = self.get_ordering(request)
 		if ordering:
@@ -1785,7 +2035,7 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 		return queryset
 
 	def get_ordering(self, request):
-		return ('-attempt_group_latest_created_at', '-attempt_group_latest_pk', '-created_at', '-pk')
+		return ('review_order_at', 'pk')
 
 	def _get_attempt_history_queryset(self, obj):
 		if not obj or not obj.pk:
@@ -1806,8 +2056,113 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 
 	@admin.action(description='Mark selected claims under review')
 	def mark_under_review(self, request, queryset):
-		updated = queryset.exclude(status=BusinessClaim.Status.APPROVED).update(status=BusinessClaim.Status.UNDER_REVIEW)
+		updated = 0
+		for claim in queryset.exclude(status=BusinessClaim.Status.APPROVED):
+			claim.status = BusinessClaim.Status.UNDER_REVIEW
+			if not claim.reviewed_by_id:
+				claim.reviewed_by = request.user
+			claim.save(update_fields=['status', 'reviewed_by', 'updated_at'])
+			record_admin_audit_event(request, claim, 'Marked claim under review.')
+			updated += 1
 		self.message_user(request, f'{updated} claim(s) marked under review.')
+
+	@unfold_action(
+		permissions=['change'],
+		description='Mark under review',
+		icon='rate_review',
+		variant=ActionVariant.WARNING,
+		dialog={
+			'title': 'Mark claim under review?',
+			'description': 'This assigns the current staff user as reviewer when the claim has not yet been assigned.',
+			'form_class': None,
+			'form_submit_text': 'Mark under review',
+		},
+	)
+	def mark_under_review_row(self, request, form, object_id):
+		claim = self.get_object(request, object_id)
+		if claim is None:
+			self.message_user(request, 'Business claim not found.', level=messages.ERROR)
+			return HttpResponseRedirect(reverse('happyhour_admin:places_businessclaim_changelist'))
+		if claim.status != BusinessClaim.Status.APPROVED:
+			claim.status = BusinessClaim.Status.UNDER_REVIEW
+			if not claim.reviewed_by_id:
+				claim.reviewed_by = request.user
+			claim.save(update_fields=['status', 'reviewed_by', 'updated_at'])
+			record_admin_audit_event(request, claim, 'Marked claim under review from the review queue.')
+			self.message_user(request, f'{claim.listing_snapshot.name} is now under review.', level=messages.SUCCESS)
+		return HttpResponseRedirect(reverse('happyhour_admin:places_businessclaim_change', args=[claim.pk]))
+
+	@unfold_action(
+		permissions=['change'],
+		description='Approve',
+		icon='check_circle',
+		variant=ActionVariant.SUCCESS,
+	)
+	def approve_row(self, request, object_id):
+		claim = self.get_object(request, object_id)
+		if claim is None:
+			self.message_user(request, 'Business claim not found.', level=messages.ERROR)
+			return HttpResponseRedirect(reverse('happyhour_admin:places_businessclaim_changelist'))
+		try:
+			claim.approve(reviewed_by=request.user)
+			record_admin_audit_event(request, claim, 'Approved claim and created an active business membership.')
+			self.message_user(request, f'{claim.listing_snapshot.name} was approved.', level=messages.SUCCESS)
+		except ValidationError as error:
+			self.message_user(request, f'Could not approve {claim}: {error}', level=messages.ERROR)
+			return HttpResponseRedirect(reverse('happyhour_admin:places_businessclaim_change', args=[claim.pk]))
+		return HttpResponseRedirect(reverse('happyhour_admin:places_businessclaim_changelist'))
+
+	@unfold_action(
+		permissions=['change'],
+		description='Reject',
+		icon='cancel',
+		variant=ActionVariant.DANGER,
+		dialog={
+			'title': 'Reject business claim',
+			'description': 'Choose one or more structured reasons. Reviewer notes are required for an uncategorized issue.',
+			'form_class': BusinessClaimRejectDialogForm,
+			'form_submit_text': 'Reject claim',
+		},
+	)
+	def reject_row(self, request, form, object_id):
+		claim = self.get_object(request, object_id)
+		if claim is None:
+			self.message_user(request, 'Business claim not found.', level=messages.ERROR)
+			return HttpResponseRedirect(reverse('happyhour_admin:places_businessclaim_changelist'))
+		claim.rejection_reason_codes = form.cleaned_data['rejection_reason_codes']
+		try:
+			claim.reject(reviewed_by=request.user, reviewer_notes=form.cleaned_data.get('reviewer_notes', ''))
+			record_admin_audit_event(request, claim, 'Rejected claim with structured rejection reasons.')
+			self.message_user(request, f'{claim.listing_snapshot.name} was rejected.', level=messages.SUCCESS)
+		except ValidationError as error:
+			self.message_user(request, f'Could not reject {claim}: {error}', level=messages.ERROR)
+			return HttpResponseRedirect(reverse('happyhour_admin:places_businessclaim_change', args=[claim.pk]))
+		return HttpResponseRedirect(reverse('happyhour_admin:places_businessclaim_changelist'))
+
+	@unfold_action(
+		permissions=['change'],
+		description='Request information',
+		icon='help',
+		variant=ActionVariant.WARNING,
+		dialog={
+			'title': 'Request more information',
+			'description': 'Add the exact information the claimant needs to provide before review can continue.',
+			'form_class': BusinessClaimRequestInfoDialogForm,
+			'form_submit_text': 'Request information',
+		},
+	)
+	def request_information_row(self, request, form, object_id):
+		claim = self.get_object(request, object_id)
+		if claim is None:
+			self.message_user(request, 'Business claim not found.', level=messages.ERROR)
+			return HttpResponseRedirect(reverse('happyhour_admin:places_businessclaim_changelist'))
+		claim.status = BusinessClaim.Status.NEEDS_INFO
+		claim.reviewed_by = request.user
+		claim.reviewer_notes = form.cleaned_data['reviewer_notes'].strip()
+		claim.save(update_fields=['status', 'reviewed_by', 'reviewer_notes', 'updated_at'])
+		record_admin_audit_event(request, claim, 'Requested more information from the business claimant.')
+		self.message_user(request, f'Information requested for {claim.listing_snapshot.name}.', level=messages.SUCCESS)
+		return HttpResponseRedirect(reverse('happyhour_admin:places_businessclaim_change', args=[claim.pk]))
 
 	@admin.action(description='Approve selected claims and create memberships')
 	def approve_selected_claims(self, request, queryset):
@@ -1816,6 +2171,7 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 			for claim in queryset:
 				try:
 					claim.approve(reviewed_by=request.user, force=True)
+					record_admin_audit_event(request, claim, 'Force-approved claim after verification blocker review.')
 					approved += 1
 				except ValidationError as error:
 					self.message_user(request, f'Could not approve {claim}: {error}', level='ERROR')
@@ -1850,6 +2206,7 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 		for claim in queryset:
 			try:
 				claim.approve(reviewed_by=request.user)
+				record_admin_audit_event(request, claim, 'Approved claim and created an active business membership.')
 				approved += 1
 			except ValidationError as error:
 				self.message_user(request, f'Could not approve {claim}: {error}', level='ERROR')
@@ -1861,6 +2218,7 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 		for claim in queryset:
 			try:
 				claim.reject(reviewed_by=request.user, reviewer_notes=claim.reviewer_notes)
+				record_admin_audit_event(request, claim, 'Rejected claim with structured rejection reasons.')
 				rejected += 1
 			except ValidationError as error:
 				self.message_user(request, f'Could not reject {claim}: {error}', level='ERROR')
@@ -1874,10 +2232,12 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 
 		if change and obj.status == BusinessClaim.Status.APPROVED and previous_status != BusinessClaim.Status.APPROVED:
 			obj.approve(reviewed_by=request.user, reviewer_notes=obj.reviewer_notes)
+			record_admin_audit_event(request, obj, 'Approved claim from the claim form and created an active business membership.')
 			return
 
 		if change and obj.status == BusinessClaim.Status.REJECTED and previous_status != BusinessClaim.Status.REJECTED:
 			obj.reject(reviewed_by=request.user, reviewer_notes=obj.reviewer_notes)
+			record_admin_audit_event(request, obj, 'Rejected claim from the claim form.')
 			return
 
 		if obj.status == BusinessClaim.Status.UNDER_REVIEW and not obj.reviewed_by:
@@ -1886,6 +2246,7 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 
 	def delete_model(self, request, obj):
 		with transaction.atomic():
+			record_admin_audit_event(request, obj, 'Deleted business claim and its submitted review data.', action_flag=DELETION)
 			orphaned_claimant_ids = _collect_orphaned_claimant_ids_for_deleted_claims(self.model.objects.filter(pk=obj.pk))
 			if orphaned_claimant_ids:
 				remove_favorites_for_business_accounts(orphaned_claimant_ids)
@@ -1895,6 +2256,8 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 
 	def delete_queryset(self, request, queryset):
 		with transaction.atomic():
+			for claim in queryset:
+				record_admin_audit_event(request, claim, 'Deleted business claim and its submitted review data.', action_flag=DELETION)
 			orphaned_claimant_ids = _collect_orphaned_claimant_ids_for_deleted_claims(queryset)
 			if orphaned_claimant_ids:
 				remove_favorites_for_business_accounts(orphaned_claimant_ids)
@@ -1904,7 +2267,36 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 
 	@admin.display(description='Trust score')
 	def verification_score_display(self, obj):
-		return obj.verification_score
+		score = int(obj.verification_score or 0)
+		variant = 'healthy' if score >= 80 else 'info' if score >= 60 else 'warning' if score >= 40 else 'danger'
+		return format_html('<span class="dd-admin-score dd-admin-score--{}">{}/100</span>', variant, score)
+
+	@admin.display(description='Blockers')
+	def verification_blocker_count_display(self, obj):
+		try:
+			blocker_count = len(obj.evaluate_verification().get('blockers', []))
+		except (AttributeError, ValueError, TypeError):
+			blocker_count = 0
+		variant = 'danger' if blocker_count else 'healthy'
+		return format_html('<span class="dd-admin-score dd-admin-score--{}">{}</span>', variant, blocker_count)
+
+	@admin.display(description='Review SLA')
+	def review_sla_display(self, obj):
+		if obj.status not in (BusinessClaim.Status.SUBMITTED, BusinessClaim.Status.UNDER_REVIEW, BusinessClaim.Status.NEEDS_INFO):
+			return '—'
+		submitted_at = obj.submitted_at or obj.created_at
+		if not submitted_at:
+			return '—'
+		age = timezone.now() - submitted_at
+		is_overdue = age > get_review_sla_delta()
+		age_hours = max(int(age.total_seconds() // 3600), 0)
+		if age_hours >= 24:
+			age_label = f'{age_hours // 24}d {age_hours % 24}h'
+		else:
+			age_label = f'{age_hours}h'
+		label = f'Overdue · {age_label}' if is_overdue else f'Within SLA · {age_label}'
+		variant = 'danger' if is_overdue else 'healthy'
+		return format_html('<span class="dd-admin-score dd-admin-score--{}">{}</span>', variant, label)
 
 	@admin.display(description='Account email', ordering='claimant__email')
 	def claimant_email_display(self, obj):
@@ -1963,7 +2355,8 @@ class BusinessClaimAdmin(admin.ModelAdmin):
 
 
 @admin.register(ContentReport, site=happyhour_admin_site)
-class ContentReportAdmin(admin.ModelAdmin):
+class ContentReportAdmin(UnfoldModelAdmin):
+	actions = ('mark_in_review', 'mark_actioned', 'dismiss_selected_reports')
 	list_display = ('created_at', 'target_type', 'target_display', 'reason', 'status', 'reporter')
 	list_filter = ('target_type', 'reason', 'status')
 	search_fields = ('business_name', 'listing_slug', 'details', 'reviewer_notes', 'reporter__username', 'business_post__title', 'reported_user_username', 'recipient_username', 'reported_message')
@@ -1972,13 +2365,15 @@ class ContentReportAdmin(admin.ModelAdmin):
 	fieldsets = (
 		('Report', {
 			'fields': ('target_type', 'business_name', 'listing_slug', 'business_post', 'direct_message', 'reason', 'details', 'reporter', 'reported_user_username', 'reported_user_email', 'reported_user_role', 'recipient_username', 'recipient_email', 'reported_message', 'reported_message_created_at', 'screenshot'),
+			'classes': ('tab',),
 		}),
 		('Review', {
 			'fields': ('status', 'reviewed_by', 'reviewer_notes'),
+			'classes': ('tab',),
 		}),
 		('Timestamps', {
 			'fields': ('created_at', 'updated_at'),
-			'classes': ('collapse',),
+			'classes': ('tab',),
 		}),
 	)
 
@@ -1990,9 +2385,32 @@ class ContentReportAdmin(admin.ModelAdmin):
 			return f'{obj.business_name or "Business"}: message #{obj.direct_message_id}'
 		return obj.business_name or obj.listing_slug or 'Unavailable target'
 
+	@admin.action(description='Mark selected reports in review')
+	def mark_in_review(self, request, queryset):
+		self._set_report_status(request, queryset, ContentReport.Status.IN_REVIEW, 'Marked report in review.')
+
+	@admin.action(description='Mark selected reports actioned')
+	def mark_actioned(self, request, queryset):
+		self._set_report_status(request, queryset, ContentReport.Status.ACTIONED, 'Marked report actioned.')
+
+	@admin.action(description='Dismiss selected reports')
+	def dismiss_selected_reports(self, request, queryset):
+		self._set_report_status(request, queryset, ContentReport.Status.DISMISSED, 'Dismissed report.')
+
+	def _set_report_status(self, request, queryset, status_value, audit_message):
+		updated = 0
+		for report in queryset.exclude(status=status_value):
+			report.status = status_value
+			report.reviewed_by = request.user
+			report.save(update_fields=['status', 'reviewed_by', 'updated_at'])
+			record_admin_audit_event(request, report, audit_message)
+			updated += 1
+		status_label = dict(ContentReport.Status.choices).get(status_value, status_value)
+		self.message_user(request, f'{updated} report(s) updated to {status_label}.')
+
 
 @admin.register(BusinessMembership, site=happyhour_admin_site)
-class BusinessMembershipAdmin(admin.ModelAdmin):
+class BusinessMembershipAdmin(UnfoldModelAdmin):
 	list_display = ('user', 'business_name', 'approved_at', 'approved_by', 'is_active')
 	list_filter = ('is_active', 'claim__listing_snapshot__city')
 	search_fields = ('user__username', 'claim__listing_snapshot__name')
@@ -2015,5 +2433,157 @@ class BusinessMembershipAdmin(admin.ModelAdmin):
 	@admin.display(description='Business')
 	def business_name(self, obj):
 		return obj.claim.listing_snapshot.name
+
+
+@admin.register(BusinessPost, site=happyhour_admin_site)
+class BusinessPostAdmin(UnfoldModelAdmin):
+	list_display = ('title', 'listing_snapshot', 'content_type', 'status', 'published_at', 'starts_at', 'ends_at')
+	list_filter = ('status', 'content_type', 'listing_snapshot__city')
+	search_fields = ('title', 'summary', 'body', 'listing_snapshot__name')
+	list_select_related = ('membership', 'listing_snapshot')
+	autocomplete_fields = ('membership', 'listing_snapshot')
+	readonly_fields = ('listing_snapshot', 'published_at', 'created_at', 'updated_at')
+	fieldsets = (
+		('Publication', {
+			'fields': ('membership', 'listing_snapshot', 'content_type', 'status', 'title', 'slug'),
+		}),
+		('Content', {
+			'fields': ('summary', 'body', 'hero_image_url', 'cta_label', 'cta_url'),
+		}),
+		('Schedule', {
+			'fields': ('starts_at', 'ends_at', 'published_at'),
+		}),
+		('Timestamps', {
+			'fields': ('created_at', 'updated_at'),
+			'classes': ('collapse',),
+		}),
+	)
+
+
+@admin.register(SponsoredCampaign, site=happyhour_admin_site)
+class SponsoredCampaignAdmin(UnfoldModelAdmin):
+	actions = ('activate_selected_campaigns', 'pause_selected_campaigns')
+	list_display = ('name', 'business_name', 'status', 'billing_model', 'weekly_price_display', 'weekly_impression_quota', 'starts_at', 'ends_at', 'last_served_at')
+	list_filter = ('status', 'billing_model', 'membership__claim__listing_snapshot__city')
+	search_fields = ('name', 'post__title', 'membership__claim__listing_snapshot__name')
+	list_select_related = ('membership', 'membership__claim__listing_snapshot', 'post')
+	autocomplete_fields = ('membership', 'post')
+	readonly_fields = ('last_served_at', 'created_at', 'updated_at')
+	fieldsets = (
+		('Campaign', {
+			'fields': ('name', 'membership', 'post', 'status', 'billing_model'),
+		}),
+		('Delivery', {
+			'fields': ('weekly_price_cents', 'weekly_impression_quota', 'target_cities', 'target_venue_types', 'starts_at', 'ends_at', 'last_served_at'),
+		}),
+		('Timestamps', {
+			'fields': ('created_at', 'updated_at'),
+			'classes': ('collapse',),
+		}),
+	)
+
+	@admin.display(description='Business')
+	def business_name(self, obj):
+		return obj.membership.claim.listing_snapshot.name
+
+	@admin.display(description='Weekly price')
+	def weekly_price_display(self, obj):
+		return f'${obj.weekly_price_cents / 100:.2f}'
+
+	@admin.action(description='Activate selected campaigns')
+	def activate_selected_campaigns(self, request, queryset):
+		self._set_campaign_status(request, queryset, SponsoredCampaign.Status.ACTIVE, 'Activated sponsored campaign.')
+
+	@admin.action(description='Pause selected campaigns')
+	def pause_selected_campaigns(self, request, queryset):
+		self._set_campaign_status(request, queryset, SponsoredCampaign.Status.PAUSED, 'Paused sponsored campaign.')
+
+	def _set_campaign_status(self, request, queryset, status_value, audit_message):
+		updated = 0
+		for campaign in queryset.exclude(status=status_value):
+			campaign.status = status_value
+			campaign.save(update_fields=['status', 'updated_at'])
+			record_admin_audit_event(request, campaign, audit_message)
+			updated += 1
+		status_label = dict(SponsoredCampaign.Status.choices).get(status_value, status_value)
+		self.message_user(request, f'{updated} campaign(s) updated to {status_label}.')
+
+
+class ReadOnlyAnalyticsAdmin(UnfoldModelAdmin):
+	def has_add_permission(self, request):
+		return False
+
+	def has_change_permission(self, request, obj=None):
+		return False
+
+
+@admin.register(FeedImpression, site=happyhour_admin_site)
+class FeedImpressionAdmin(ReadOnlyAnalyticsAdmin):
+	list_display = ('created_at', 'placement_type', 'post', 'campaign', 'feed_item_id', 'session_key', 'page_number', 'position')
+	list_filter = ('placement_type', 'post__listing_snapshot__city', 'created_at')
+	search_fields = ('feed_item_id', 'session_key', 'request_id', 'post__title', 'campaign__name')
+	list_select_related = ('post', 'campaign')
+	readonly_fields = ('post', 'campaign', 'placement_type', 'feed_item_id', 'session_key', 'request_id', 'page_number', 'position', 'created_at')
+
+
+@admin.register(FeedEngagement, site=happyhour_admin_site)
+class FeedEngagementAdmin(ReadOnlyAnalyticsAdmin):
+	list_display = ('created_at', 'event_type', 'post', 'campaign', 'impression', 'feed_item_id', 'session_key', 'position')
+	list_filter = ('event_type', 'post__listing_snapshot__city', 'created_at')
+	search_fields = ('feed_item_id', 'session_key', 'destination_url', 'post__title', 'campaign__name')
+	list_select_related = ('post', 'campaign', 'impression')
+	readonly_fields = ('post', 'campaign', 'impression', 'event_type', 'feed_item_id', 'session_key', 'destination_url', 'page_number', 'position', 'created_at')
+
+
+@admin.register(FavoriteBusiness, site=happyhour_admin_site)
+class FavoriteBusinessAdmin(ReadOnlyAnalyticsAdmin):
+	list_display = ('name', 'user', 'city_label', 'venue_type_label', 'profile_updates_enabled', 'deal_updates_enabled', 'happy_hour_notifications_enabled', 'created_at')
+	list_filter = ('city', 'venue_type', 'profile_updates_enabled', 'deal_updates_enabled', 'happy_hour_notifications_enabled')
+	search_fields = ('name', 'listing_slug', 'user__username', 'user__email')
+	list_select_related = ('user',)
+	readonly_fields = ('user', 'listing_slug', 'location_id', 'name', 'city', 'city_label', 'venue_type', 'venue_type_label', 'address_line_1', 'website_url', 'profile_updates_enabled', 'happy_hour_notifications_enabled', 'deal_updates_enabled', 'direct_message_notifications_enabled', 'created_at', 'updated_at')
+
+
+@admin.register(FavoriteBusinessNotification, site=happyhour_admin_site)
+class FavoriteBusinessNotificationAdmin(ReadOnlyAnalyticsAdmin):
+	list_display = ('created_at', 'business_name', 'event_type', 'title', 'user', 'source_post')
+	list_filter = ('event_type', 'created_at')
+	search_fields = ('business_name', 'listing_slug', 'title', 'message', 'user__username')
+	list_select_related = ('user', 'source_post')
+	readonly_fields = ('user', 'listing_slug', 'business_name', 'event_type', 'title', 'message', 'source_post', 'created_at')
+
+
+@admin.register(BusinessDirectMessageThread, site=happyhour_admin_site)
+class BusinessDirectMessageThreadAdmin(ReadOnlyAnalyticsAdmin):
+	list_display = ('business_name', 'customer', 'last_message_at', 'business_hidden_at', 'created_at')
+	list_filter = ('business_claim__listing_snapshot__city', 'created_at')
+	search_fields = ('business_claim__listing_snapshot__name', 'customer__username', 'customer__email')
+	list_select_related = ('business_claim__listing_snapshot', 'customer')
+	readonly_fields = ('business_claim', 'customer', 'business_hidden_at', 'last_message_at', 'created_at', 'updated_at')
+
+	@admin.display(description='Business')
+	def business_name(self, obj):
+		return obj.business_claim.listing_snapshot.name
+
+
+@admin.register(BusinessDirectMessage, site=happyhour_admin_site)
+class BusinessDirectMessageAdmin(ReadOnlyAnalyticsAdmin):
+	list_display = ('created_at', 'business_name', 'customer_name', 'sender', 'message_type', 'read_at')
+	list_filter = ('created_at', 'read_at')
+	search_fields = ('thread__business_claim__listing_snapshot__name', 'thread__customer__username', 'sender__username', 'body')
+	list_select_related = ('thread__business_claim__listing_snapshot', 'thread__customer', 'sender')
+	readonly_fields = ('thread', 'sender', 'body', 'image', 'read_at', 'created_at')
+
+	@admin.display(description='Business')
+	def business_name(self, obj):
+		return obj.thread.business_claim.listing_snapshot.name
+
+	@admin.display(description='Customer')
+	def customer_name(self, obj):
+		return obj.thread.customer.username
+
+	@admin.display(description='Type')
+	def message_type(self, obj):
+		return 'Image' if obj.image else 'Text'
 
 

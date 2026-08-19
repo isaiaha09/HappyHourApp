@@ -138,6 +138,7 @@ def remove_favorites_for_listing_slugs(listing_slugs):
 
 	deleted_count, _ = FavoriteBusiness.objects.filter(listing_slug__in=listing_slugs).delete()
 	FavoriteBusinessNotification.objects.filter(listing_slug__in=listing_slugs).delete()
+	HappyHourNotificationDelivery.objects.filter(listing_slug__in=listing_slugs).delete()
 	return deleted_count
 
 

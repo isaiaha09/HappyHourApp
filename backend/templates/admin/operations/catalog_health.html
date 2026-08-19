@@ -1,0 +1,38 @@
+{% extends "admin/base.html" %}
+
+{% load i18n %}
+
+{% block title %}{{ title }} | {{ site_title }}{% endblock %}
+
+{% block content %}
+<div class="dd-operations-page">
+    <div class="dd-operations-page-heading"><p class="dd-operations-kicker">Catalog quality</p><h1>Catalog health{% if issue_filter %}: {{ issue_filter|cut:"_" }}{% endif %}</h1><p>{% if issue_filter %}{{ filtered_attention_count }} businesses match this health issue.{% else %}{{ catalog_health.healthy_count }} of {{ catalog_health.total_snapshots }} stored snapshots pass the current stored-data checks.{% endif %}</p>{% if issue_filter %}<a class="button" href="{{ clear_issue_url }}">Show all businesses</a>{% endif %}</div>
+    <div class="dd-operations-health-summary dd-operations-health-summary--page">
+        {% for issue in catalog_health.issues %}
+            <a href="{{ issue.url }}" class="dd-operations-health-item dd-operations-health-item--link dd-operations-health-item--{{ issue.severity }}{% if issue.active %} dd-operations-health-item--active{% endif %}"><strong>{{ issue.count }}</strong><span>{{ issue.label }}</span></a>
+        {% empty %}
+            <p class="dd-operations-empty">All stored catalog checks are healthy.</p>
+        {% endfor %}
+    </div>
+    <div class="dd-operations-panel-surface">
+        {% if catalog_health.attention %}
+            <table class="dd-operations-table dd-operations-table--queue">
+                <thead><tr>{% for header in sort_headers %}<th><a class="dd-catalog-sort-link{% if header.active %} dd-catalog-sort-link--active{% endif %}" href="{{ header.url }}">{{ header.label }}{% if header.active %}<span class="dd-catalog-sort-arrow">{{ header.arrow }}</span>{% endif %}</a></th>{% endfor %}<th></th></tr></thead>
+                <tbody>
+                    {% for item in catalog_health.attention %}
+                        <tr>
+                            <td><strong>{{ item.snapshot.name }}</strong><span>{{ item.snapshot.get_venue_type_display }}</span></td>
+                            <td>{{ item.snapshot.get_city_display }}</td>
+                            <td>{% for issue in item.issues %}<span class="dd-operations-status dd-operations-status--{{ issue.severity }}">{{ issue.label }}</span>{% endfor %}</td>
+                            <td>{{ item.snapshot.updated_at|date:"M j, Y" }}</td>
+                            <td class="dd-catalog-health-actions">{% if item.change_url %}<a href="{{ item.change_url }}">Open business</a>{% endif %}{% if item.delete_url %}<a class="dd-catalog-delete-link" href="{{ item.delete_url }}">Delete metadata</a>{% endif %}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="dd-operations-empty">No stored business records need attention.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

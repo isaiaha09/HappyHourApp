@@ -19,6 +19,13 @@ describe('parseRecoveryDeepLink', () => {
     });
   });
 
+  it('parses business profile deep links', () => {
+    expect(parseRecoveryDeepLink('diningdealz://place/yard-house')).toEqual({
+      kind: 'business-profile',
+      slug: 'yard-house',
+    });
+  });
+
   it('ignores unrelated or incomplete links', () => {
     expect(parseRecoveryDeepLink('diningdealz://open')).toBeNull();
     expect(parseRecoveryDeepLink('diningdealz://forgot-password/')).toBeNull();

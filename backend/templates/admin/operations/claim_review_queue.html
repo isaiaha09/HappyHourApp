@@ -1,0 +1,34 @@
+{% extends "admin/base.html" %}
+
+{% load i18n %}
+
+{% block title %}{{ title }} | {{ site_title }}{% endblock %}
+
+{% block content %}
+<div class="dd-operations-page">
+    <div class="dd-operations-page-heading"><p class="dd-operations-kicker">Operations</p><h1>Claim review queue</h1><p>Work claims from oldest submission first. Verification flags remain visible before you open a review.</p></div>
+    <div class="dd-operations-page-actions"><a class="button" href="{% url 'happyhour_admin:places_businessclaim_changelist' %}?status__in=submitted,under_review,needs_info">Open full claim list</a></div>
+    <div class="dd-operations-panel-surface">
+        {% if claim_queue %}
+            <table class="dd-operations-table dd-operations-table--queue">
+                <thead><tr><th>Business</th><th>Claimant</th><th>Status</th><th>Trust</th><th>Flags</th><th>Submitted</th><th></th></tr></thead>
+                <tbody>
+                    {% for claim in claim_queue %}
+                        <tr>
+                            <td><strong>{{ claim.listing_snapshot.name }}</strong><span>{{ claim.listing_snapshot.get_city_display }} · {{ claim.listing_snapshot.get_venue_type_display }}</span></td>
+                            <td><strong>{{ claim.contact_name }}</strong><span>{{ claim.work_email }}</span></td>
+                            <td><span class="dd-operations-status dd-operations-status--{{ claim.status }}">{{ claim.get_status_display }}</span></td>
+                            <td>{{ claim.verification_score }}/100</td>
+                            <td>{{ claim.verification_flags|join:", "|default:"None" }}</td>
+                            <td>{{ claim.submitted_at|default:claim.created_at|date:"M j, Y, g:i a" }}</td>
+                            <td><a href="{% url 'happyhour_admin:places_businessclaim_change' claim.pk %}">Open review</a></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="dd-operations-empty">No claims need review right now.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

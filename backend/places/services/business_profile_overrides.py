@@ -199,7 +199,13 @@ def summarize_deal_overrides(overrides):
         if deal['happy_hours']:
             sections.append(
                 'Happy hour: ' + ', '.join(
-                    f"{_label_for_choice(Weekday, window['weekday'])}: {'all day' if window['all_day'] else f'{format_time_display(window['start_time'])} - {format_time_display(window['end_time'])}'}"
+					'{}: {}'.format(
+						_label_for_choice(Weekday, window['weekday']),
+						'all day' if window['all_day'] else '{} - {}'.format(
+							format_time_display(window['start_time']),
+							format_time_display(window['end_time']),
+						),
+					)
                     for window in deal['happy_hours']
                 )
             )

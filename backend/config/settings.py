@@ -13,6 +13,9 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlparse
 
+from django.urls import reverse_lazy
+from django.templatetags.static import static
+
 from .business_sources import BUSINESS_SOURCE_PAGES
 from .env import get_bool_env, get_env, get_int_env, get_list_env, load_env_file
 
@@ -94,6 +97,7 @@ SECURE_HSTS_PRELOAD = get_bool_env('DJANGO_SECURE_HSTS_PRELOAD', ENV_VALUES, Fal
 # Application definition
 
 INSTALLED_APPS = [
+    'unfold',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -104,6 +108,222 @@ INSTALLED_APPS = [
     'rest_framework',
     'places.apps.PlacesConfig',
 ]
+
+UNFOLD = {
+    'SITE_TITLE': 'DiningDealz Admin',
+    'SITE_HEADER': 'DiningDealz',
+    'SITE_SUBHEADER': 'Discover - Eat - Save',
+    'SITE_URL': 'https://www.diningdealz.com',
+    'SITE_SYMBOL': 'restaurant',
+    'THEME': 'dark',
+    'BORDER_RADIUS': '6px',
+    'COLORS': {
+        'base': {
+            '50': '#f4f4f4',
+            '100': '#e5e5e5',
+            '200': '#c9c9c9',
+            '300': '#a3a3a3',
+            '400': '#737373',
+            '500': '#525252',
+            '600': '#333333',
+            '700': '#202020',
+            '800': '#111111',
+            '900': '#050505',
+            '950': '#000000',
+        },
+        'primary': {
+            '50': '#fff0f1',
+            '100': '#ffd9dd',
+            '200': '#ffb1b9',
+            '300': '#ff7a87',
+            '400': '#ff4658',
+            '500': '#f21f36',
+            '600': '#d80f29',
+            '700': '#b10d23',
+            '800': '#8d1021',
+            '900': '#681321',
+            '950': '#400a15',
+        },
+        'font': {
+            'subtle-light': '#7d6254',
+            'subtle-dark': '#d8b7a0',
+            'default-light': '#4a2a20',
+            'default-dark': '#fceede',
+            'important-light': '#24120e',
+            'important-dark': '#fff8ef',
+        },
+    },
+    'STYLES': [
+        lambda request: static('places/admin/unfold_brand.css'),
+    ],
+    'DASHBOARD_CALLBACK': 'places.services.admin_operations.dashboard_callback',
+    'COMMAND': {
+        'search_models': True,
+        'search_callback': 'places.services.admin_operations.command_search',
+    },
+    'SIDEBAR': {
+        'show_search': True,
+        'navigation': [
+            {
+                'title': 'Operations',
+                'items': [
+                    {
+                        'title': 'Operations Dashboard',
+                        'icon': 'dashboard',
+                        'link': reverse_lazy('happyhour_admin:index'),
+                    },
+                    {
+                        'title': 'Claim Review',
+                        'icon': 'rate_review',
+                        'link': reverse_lazy('happyhour_admin:operations_review_queue'),
+                        'badge': 'places.services.admin_operations.overdue_claim_badge',
+                        'badge_variant': 'danger',
+                        'badge_style': 'solid',
+                    },
+                    {
+                        'title': 'Content Reports',
+                        'icon': 'flag',
+                        'link': reverse_lazy('happyhour_admin:operations_report_queue'),
+                        'badge': 'places.services.admin_operations.open_report_badge',
+                        'badge_variant': 'danger',
+                        'badge_style': 'solid',
+                    },
+                    {
+                        'title': 'Catalog Health',
+                        'icon': 'health_and_safety',
+                        'link': reverse_lazy('happyhour_admin:operations_catalog_health'),
+                        'badge': 'places.services.admin_operations.catalog_attention_badge',
+                        'badge_variant': 'warning',
+                        'badge_style': 'solid',
+                    },
+                    {
+                        'title': 'Analytics',
+                        'icon': 'query_stats',
+                        'link': reverse_lazy('happyhour_admin:operations_analytics'),
+                    },
+                    {
+                        'title': 'Audit Timeline',
+                        'icon': 'history',
+                        'link': reverse_lazy('happyhour_admin:operations_audit_timeline'),
+                    },
+                ],
+            },
+            {
+                'title': 'Accounts and Claims',
+                'separator': True,
+                'items': [
+                    {
+                        'title': 'Customer Accounts',
+                        'icon': 'person',
+                        'link': reverse_lazy('happyhour_admin:places_customeraccount_changelist'),
+                    },
+                    {
+                        'title': 'Business Accounts',
+                        'icon': 'storefront',
+                        'link': reverse_lazy('happyhour_admin:places_businessaccount_changelist'),
+                    },
+                    {
+                        'title': 'Business Claims',
+                        'icon': 'assignment_ind',
+                        'link': reverse_lazy('happyhour_admin:places_businessclaim_changelist'),
+                        'badge': 'places.services.admin_operations.pending_claim_badge',
+                        'badge_variant': 'warning',
+                        'badge_style': 'solid',
+                    },
+                    {
+                        'title': 'Business Memberships',
+                        'icon': 'workspace_premium',
+                        'link': reverse_lazy('happyhour_admin:places_businessmembership_changelist'),
+                        'badge': 'places.services.admin_operations.active_membership_badge',
+                        'badge_variant': 'success',
+                        'badge_style': 'solid',
+                    },
+                ],
+            },
+            {
+                'title': 'Businesses and Growth',
+                'separator': True,
+                'items': [
+                    {
+                        'title': 'List of Businesses',
+                        'icon': 'store',
+                        'link': reverse_lazy('happyhour_admin:places_listingsnapshot_changelist'),
+                        'badge': 'places.services.admin_operations.catalog_attention_badge',
+                        'badge_variant': 'warning',
+                        'badge_style': 'solid',
+                    },
+                    {
+                        'title': 'Deleted Businesses',
+                        'icon': 'delete',
+                        'link': reverse_lazy('happyhour_admin:places_deletedbusiness_changelist'),
+                    },
+                    {
+                        'title': 'Business Posts',
+                        'icon': 'post_add',
+                        'link': reverse_lazy('happyhour_admin:places_businesspost_changelist'),
+                    },
+                    {
+                        'title': 'Sponsored Campaigns',
+                        'icon': 'campaign',
+                        'link': reverse_lazy('happyhour_admin:places_sponsoredcampaign_changelist'),
+                        'badge': 'places.services.admin_operations.active_campaign_badge',
+                        'badge_variant': 'success',
+                        'badge_style': 'solid',
+                    },
+                    {
+                        'title': 'Feed Impressions',
+                        'icon': 'visibility',
+                        'link': reverse_lazy('happyhour_admin:places_feedimpression_changelist'),
+                    },
+                    {
+                        'title': 'Feed Engagements',
+                        'icon': 'touch_app',
+                        'link': reverse_lazy('happyhour_admin:places_feedengagement_changelist'),
+                    },
+                    {
+                        'title': 'Favorite Businesses',
+                        'icon': 'bookmark',
+                        'link': reverse_lazy('happyhour_admin:places_favoritebusiness_changelist'),
+                    },
+                    {
+                        'title': 'Business Notifications',
+                        'icon': 'notifications',
+                        'link': reverse_lazy('happyhour_admin:places_favoritebusinessnotification_changelist'),
+                    },
+                    {
+                        'title': 'Direct Message Threads',
+                        'icon': 'forum',
+                        'link': reverse_lazy('happyhour_admin:places_businessdirectmessagethread_changelist'),
+                    },
+                    {
+                        'title': 'Direct Messages',
+                        'icon': 'chat',
+                        'link': reverse_lazy('happyhour_admin:places_businessdirectmessage_changelist'),
+                    },
+                ],
+            },
+            {
+                'title': 'Administration',
+                'separator': True,
+                'items': [
+                    {
+                        'title': 'Staff Users',
+                        'icon': 'manage_accounts',
+                        'link': reverse_lazy('happyhour_admin:auth_user_changelist'),
+                    },
+                    {
+                        'title': 'Groups',
+                        'icon': 'group',
+                        'link': reverse_lazy('happyhour_admin:auth_group_changelist'),
+                    },
+                ],
+            },
+        ],
+    },
+}
+
+# Claims are highlighted as overdue in the operations queue after this window.
+BUSINESS_CLAIM_REVIEW_SLA_HOURS = get_int_env('BUSINESS_CLAIM_REVIEW_SLA_HOURS', ENV_VALUES, 48)
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

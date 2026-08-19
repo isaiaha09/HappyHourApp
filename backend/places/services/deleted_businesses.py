@@ -1,7 +1,12 @@
 from urllib.parse import urlparse
 
-from places.models import DeletedBusiness
+from django.db.models import Q
+from django.utils.text import slugify
+
+from places.models import DeletedBusiness, ListingSnapshot
+from places.services.account_profiles import remove_favorites_for_listing_slugs
 from places.services.importers.discovered_json_places import deserialize_imported_place, serialize_imported_place
+from places.services.importers.discovered_json_places import load_discovery_json_records, write_discovery_json_records
 from places.services.importers.types import ImportedPlace
 
 
@@ -128,3 +133,60 @@ def store_deleted_business(snapshot, removed_records=None):
 
 	deleted_business, _ = DeletedBusiness.objects.update_or_create(**lookup, defaults=defaults)
 	return deleted_business
+
+
+def _deleted_business_listing_slugs(deleted_business):
+	return {
+		str(listing_slug or '').strip()
+		for listing_slug in (
+			deleted_business.listing_slug,
+			slugify(f'{deleted_business.name}-{deleted_business.city}'),
+		)
+		if str(listing_slug or '').strip()
+	}
+
+
+def _matching_snapshot_queryset(deleted_business):
+	identity_query = Q()
+	source_name = str(deleted_business.source_name or '').strip()
+	external_id = str(deleted_business.external_id or '').strip()
+	listing_slug = str(deleted_business.listing_slug or '').strip()
+	if source_name and external_id:
+		identity_query = Q(source_name__iexact=source_name, external_id__iexact=external_id)
+	elif listing_slug:
+		identity_query = Q(listing_slug=listing_slug)
+	if not identity_query:
+		return ListingSnapshot.objects.none()
+	return ListingSnapshot.objects.filter(identity_query).order_by('pk')
+
+
+def purge_deleted_business_data(deleted_business):
+	"""Permanently remove catalog/source data for a deleted business.
+
+	The DeletedBusiness row is intentionally not deleted here. The admin caller
+	removes that final restore record only after this cleanup succeeds, so a
+	failed purge cannot silently remove the restore option.
+	"""
+	listing_slugs = _deleted_business_listing_slugs(deleted_business)
+
+	existing_records = load_discovery_json_records()
+	kept_records = []
+	removed_records = []
+	for place_record in existing_records:
+		if deleted_business_matches_place_record(deleted_business, place_record):
+			removed_records.append(place_record)
+		else:
+			kept_records.append(place_record)
+
+	removed_favorites = remove_favorites_for_listing_slugs(listing_slugs)
+	matching_snapshots = list(_matching_snapshot_queryset(deleted_business))
+	for snapshot in matching_snapshots:
+		snapshot.delete()
+	if removed_records:
+		write_discovery_json_records(kept_records)
+
+	return {
+		'removed_discovery_records': len(removed_records),
+		'removed_favorites': removed_favorites,
+		'removed_snapshots': len(matching_snapshots),
+	}

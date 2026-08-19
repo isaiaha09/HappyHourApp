@@ -1,6 +1,7 @@
 export type RecoveryDeepLink =
   | { kind: 'forgot-password'; token: string }
   | { kind: 'forgot-username' }
+  | { kind: 'business-profile'; slug: string }
   | null;
 
 function decodePathSegment(value: string) {
@@ -20,6 +21,11 @@ export function parseRecoveryDeepLink(value: string): RecoveryDeepLink {
   }
 
   const route = parsedUrl.host.toLowerCase();
+  if (route === 'place' || route === 'places') {
+    const slug = decodePathSegment(parsedUrl.pathname.split('/').filter(Boolean)[0] ?? parsedUrl.searchParams.get('slug') ?? '').trim();
+    return slug ? { kind: 'business-profile', slug } : null;
+  }
+
   if (route === 'forgot-username') {
     return { kind: 'forgot-username' };
   }

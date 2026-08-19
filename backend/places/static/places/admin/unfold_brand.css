@@ -1,0 +1,672 @@
+:root {
+  --dd-neon-red: #f21f36;
+  --dd-neon-yellow: #ffd21a;
+  --dd-diner-black: #000000;
+  --dd-warm-white: #fff8ef;
+  --dd-category-surface: rgba(255, 255, 255, 0.035);
+  --dd-category-border: rgba(255, 255, 255, 0.1);
+}
+
+#main {
+  border-top: 3px solid var(--dd-neon-red);
+}
+
+#site-name {
+  gap: 12px;
+}
+
+#site-name > a {
+  color: var(--dd-neon-yellow) !important;
+  text-shadow: 0 0 14px rgba(255, 210, 26, 0.3);
+}
+
+#site-name > span {
+  box-sizing: border-box;
+}
+
+.dd-admin-storage-summary {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-left: 1rem;
+  min-width: 0;
+  white-space: normal;
+}
+
+.dd-admin-storage-summary__total,
+.dd-admin-storage-summary__breakdown {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.25;
+  padding: 0.35rem 0.6rem;
+  white-space: nowrap;
+}
+
+.dd-admin-storage-summary__total {
+  background: var(--color-primary-700);
+  color: var(--dd-warm-white);
+}
+
+.dd-admin-storage-summary__breakdown {
+  background: #111111;
+  border: 1px solid var(--dd-neon-yellow);
+  color: var(--dd-neon-yellow);
+}
+
+@media (max-width: 1100px) {
+  .dd-admin-storage-summary {
+    margin-left: 0.5rem;
+  }
+
+  .dd-admin-storage-summary__total,
+  .dd-admin-storage-summary__breakdown {
+    max-width: 22rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+#nav-sidebar {
+  border-right-color: var(--color-base-700);
+}
+
+#nav-sidebar a:hover,
+#nav-sidebar .current-model a {
+  color: var(--dd-neon-yellow) !important;
+}
+
+#content-main #changelist {
+  background-color: rgba(255, 255, 255, 0.035);
+  border-radius: var(--border-radius, 6px);
+}
+
+body.change-form #content-main .aligned {
+  border: 1px solid rgba(255, 255, 255, 0.24) !important;
+}
+
+#content > div > div > .grow > .module > div,
+#nav-sidebar-apps > .module > div {
+  background-color: var(--dd-category-surface) !important;
+  border: 1px solid var(--dd-category-border);
+  box-sizing: border-box;
+}
+
+#content > div > div > .grow > .module > div > table,
+#nav-sidebar-apps > .module > div > table {
+  background-color: rgba(255, 255, 255, 0.012);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+#content a:not(.button):not([class*='bg-']) {
+  color: var(--color-primary-400);
+}
+
+#content a:not(.button):not([class*='bg-']):hover {
+  color: var(--dd-neon-yellow);
+}
+
+#content input:focus,
+#content select:focus,
+#content textarea:focus {
+  border-color: var(--dd-neon-red) !important;
+  box-shadow: 0 0 0 2px rgba(242, 31, 54, 0.2) !important;
+}
+
+#content .button,
+#content input[type='submit'],
+#content button[type='submit'] {
+  border-color: var(--color-primary-600) !important;
+}
+
+#content .button:hover,
+#content input[type='submit']:hover,
+#content button[type='submit']:hover {
+  border-color: var(--dd-neon-yellow) !important;
+}
+
+.structured-admin-editor__button,
+.structured-admin-editor__button--danger,
+.structured-admin-editor__toggle,
+.structured-admin-image-editor__button,
+.structured-admin-image-editor__button--danger,
+.structured-admin-image-editor__button--undo {
+  border-color: var(--color-primary-400);
+}
+
+.structured-admin-editor__button:hover,
+.structured-admin-editor__button--danger:hover,
+.structured-admin-editor__toggle:hover,
+.structured-admin-image-editor__button:hover,
+.structured-admin-image-editor__button--danger:hover,
+.structured-admin-image-editor__button--undo:hover {
+  border-color: var(--dd-neon-yellow);
+  background: #3a211d;
+}
+
+.dd-operations-dashboard,
+.dd-operations-page,
+.dd-public-preview {
+  display: grid;
+  gap: 24px;
+  padding: 8px 0 28px;
+}
+
+.dd-operations-heading,
+.dd-operations-page-heading,
+.dd-public-preview-heading {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  justify-content: space-between;
+}
+
+.dd-operations-heading h1,
+.dd-operations-page-heading h1,
+.dd-public-preview-heading h1 {
+  color: var(--dd-warm-white);
+  font-size: 24px;
+  line-height: 1.2;
+  margin: 4px 0 8px;
+}
+
+.dd-operations-heading p,
+.dd-operations-page-heading p,
+.dd-public-preview-heading p {
+  color: var(--color-font-subtle-dark);
+  margin: 0;
+  max-width: 760px;
+}
+
+.dd-operations-kicker {
+  color: var(--dd-neon-yellow) !important;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dd-operations-generated {
+  color: var(--color-font-subtle-dark) !important;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.dd-operations-metric-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.dd-operations-card {
+  background: rgba(255, 255, 255, 0.035) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  min-height: 142px;
+}
+
+.dd-operations-card:hover {
+  border-color: var(--dd-neon-yellow) !important;
+}
+
+.dd-operations-card-label,
+.dd-operations-card-detail {
+  color: var(--color-font-subtle-dark);
+  margin: 0;
+}
+
+.dd-operations-card-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.dd-operations-card-value {
+  color: var(--dd-warm-white);
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1;
+  margin: 14px 0 10px;
+}
+
+.dd-operations-card-value--storage {
+  font-size: 20px;
+}
+
+.dd-operations-card-value--compact {
+  font-size: 19px;
+  line-height: 1.2;
+  min-height: 38px;
+}
+
+.dd-operations-card-detail {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.dd-operations-layout {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dd-operations-panel,
+.dd-operations-panel-surface,
+.dd-public-preview-panel {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--border-radius, 6px);
+}
+
+.dd-operations-panel-surface {
+  overflow: auto;
+}
+
+.dd-operations-table-wrap {
+  overflow-x: auto;
+}
+
+.dd-operations-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.dd-operations-table th,
+.dd-operations-table td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  padding: 11px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.dd-operations-table th {
+  color: var(--color-font-subtle-dark);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.dd-operations-table td {
+  color: var(--dd-warm-white);
+  font-size: 13px;
+}
+
+.dd-operations-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.dd-operations-table strong,
+.dd-operations-table span {
+  display: block;
+}
+
+.dd-operations-table span,
+.dd-operations-audit-item span,
+.dd-public-preview-copy {
+  color: var(--color-font-subtle-dark);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.dd-operations-table a,
+.dd-operations-audit-item a,
+.dd-public-preview a {
+  color: var(--color-primary-400);
+}
+
+.dd-operations-table a:hover,
+.dd-operations-audit-item a:hover,
+.dd-public-preview a:hover {
+  color: var(--dd-neon-yellow);
+}
+
+.dd-catalog-sort-link {
+  align-items: center;
+  display: inline-flex !important;
+  gap: 5px;
+  text-decoration: none;
+}
+
+.dd-catalog-sort-link--active {
+  color: var(--dd-neon-yellow) !important;
+}
+
+.dd-catalog-sort-arrow {
+  color: var(--dd-neon-yellow) !important;
+  display: inline !important;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.dd-catalog-health-actions {
+  min-width: 130px;
+}
+
+.dd-catalog-health-actions a {
+  display: block;
+  margin-bottom: 5px;
+}
+
+.dd-catalog-delete-link {
+  color: #ff7180 !important;
+}
+
+.dd-operations-status,
+.dd-admin-health {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  color: var(--dd-warm-white) !important;
+  display: inline-flex !important;
+  font-size: 11px !important;
+  font-weight: 700;
+  line-height: 1.15;
+  margin: 0 4px 4px 0;
+  padding: 4px 8px;
+  text-transform: capitalize;
+}
+
+.dd-operations-status--submitted,
+.dd-operations-status--under_review,
+.dd-operations-status--needs_info,
+.dd-operations-status--open,
+.dd-operations-status--in_review,
+.dd-operations-status--warning,
+.dd-admin-health--warning {
+  border-color: rgba(255, 210, 26, 0.7);
+  color: var(--dd-neon-yellow) !important;
+}
+
+.dd-operations-status--approved,
+.dd-operations-status--actioned,
+.dd-operations-status--healthy,
+.dd-admin-health--healthy {
+  border-color: rgba(34, 197, 94, 0.7);
+  color: #86efac !important;
+}
+
+.dd-operations-status--rejected,
+.dd-operations-status--dismissed,
+.dd-operations-status--danger,
+.dd-admin-health--danger {
+  border-color: rgba(242, 31, 54, 0.8);
+  color: #ff8a98 !important;
+}
+
+/* Keep the business-list health column readable without pill/circle badges. */
+.dd-admin-health {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  display: inline !important;
+  margin: 0;
+  padding: 0;
+}
+
+.dd-operations-empty {
+  color: var(--color-font-subtle-dark);
+  margin: 0;
+  padding: 18px 0;
+}
+
+.dd-operations-health-summary {
+  display: grid;
+  gap: 9px;
+}
+
+.dd-operations-health-summary--page {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.dd-operations-health-item {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: var(--border-radius, 6px);
+  color: var(--dd-warm-white);
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+}
+
+.dd-operations-health-item--link {
+  text-decoration: none;
+  transition: border-color 140ms ease, background-color 140ms ease, transform 140ms ease;
+}
+
+.dd-operations-health-item--link:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--dd-warm-white);
+  transform: translateY(-1px);
+}
+
+.dd-operations-health-item--active {
+  background: rgba(255, 210, 26, 0.1);
+  box-shadow: 0 0 0 1px rgba(255, 210, 26, 0.35);
+}
+
+.dd-operations-health-item strong {
+  color: var(--dd-neon-yellow);
+  font-size: 20px;
+}
+
+.dd-operations-health-item span {
+  color: var(--color-font-subtle-dark);
+  font-size: 12px;
+}
+
+.dd-operations-health-item--danger {
+  border-color: rgba(242, 31, 54, 0.55);
+}
+
+.dd-operations-health-item--warning {
+  border-color: rgba(255, 210, 26, 0.45);
+}
+
+.dd-operations-audit-list {
+  display: grid;
+  gap: 10px;
+}
+
+.dd-operations-audit-item {
+  align-items: flex-start;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding-bottom: 10px;
+}
+
+.dd-operations-audit-list--page .dd-operations-audit-item {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: 14px;
+}
+
+.dd-operations-audit-item:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.dd-operations-audit-item strong,
+.dd-operations-audit-item span,
+.dd-operations-audit-item time {
+  display: block;
+}
+
+.dd-operations-audit-item time {
+  color: var(--color-font-subtle-dark);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.dd-operations-tools {
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding-top: 24px;
+}
+
+.dd-operations-tools h2 {
+  color: var(--dd-warm-white);
+  font-size: 17px;
+  margin: 5px 0 18px;
+}
+
+.dd-operations-page-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.dd-public-preview-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.dd-public-preview-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+}
+
+.dd-public-preview-panel {
+  padding: 18px;
+}
+
+.dd-public-preview-panel h2 {
+  color: var(--dd-warm-white);
+  font-size: 16px;
+  margin: 0 0 12px;
+}
+
+.dd-public-preview-list {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+}
+
+.dd-public-preview-list div {
+  align-items: baseline;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 120px minmax(0, 1fr);
+  padding-bottom: 8px;
+}
+
+.dd-public-preview-list dt {
+  color: var(--color-font-subtle-dark);
+  font-size: 12px;
+}
+
+.dd-public-preview-list dd {
+  color: var(--dd-warm-white);
+  margin: 0;
+}
+
+.dd-public-preview-gallery {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}
+
+.dd-public-preview-gallery img {
+  aspect-ratio: 4 / 3;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--border-radius, 6px);
+  object-fit: cover;
+  width: 100%;
+}
+
+.dd-public-preview-entry {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  padding: 12px 0;
+}
+
+.dd-public-preview-entry:first-of-type {
+  padding-top: 0;
+}
+
+.dd-public-preview-entry:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.dd-public-preview-entry h3 {
+  color: var(--dd-warm-white);
+  font-size: 14px;
+  margin: 0 0 5px;
+}
+
+@media (max-width: 1280px) {
+  .dd-operations-metric-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 860px) {
+  .dd-operations-layout,
+  .dd-public-preview-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dd-operations-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dd-operations-audit-list--page .dd-operations-audit-item {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .dd-operations-audit-item time {
+    grid-column: 2;
+    white-space: normal;
+  }
+}
+
+@media (max-width: 560px) {
+  .dd-operations-metric-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dd-operations-table--queue {
+    min-width: 760px;
+  }
+
+  .dd-public-preview-list div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.dd-admin-score {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.15;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.dd-admin-score--healthy {
+  border-color: rgba(34, 197, 94, 0.7);
+  color: #86efac;
+}
+
+.dd-admin-score--info {
+  border-color: rgba(96, 165, 250, 0.75);
+  color: #93c5fd;
+}
+
+.dd-admin-score--warning {
+  border-color: rgba(255, 210, 26, 0.75);
+  color: var(--dd-neon-yellow);
+}
+
+.dd-admin-score--danger {
+  border-color: rgba(242, 31, 54, 0.85);
+  color: #ff8a98;
+}

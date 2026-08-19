@@ -1,0 +1,9 @@
+{% extends "admin/delete_selected_confirmation.html" %}
+
+{% block content %}
+<div style="margin:0 0 20px;padding:16px 18px;border:1px solid #8f3a3a;border-radius:12px;background:rgba(143,58,58,.14);">
+  <h2 style="margin:0 0 8px;">Permanently delete these businesses?</h2>
+  <p style="margin:0;">This removes each Deleted Business record, matching catalog snapshots, source metadata, discovery records, and customer favorites. These businesses cannot be restored after this confirmation.</p>
+</div>
+{{ block.super }}
+{% endblock %}

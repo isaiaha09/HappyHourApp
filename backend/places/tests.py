@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, call, patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.admin import helpers
+from django.contrib.admin.models import LogEntry
 from django.contrib.admin.sites import AdminSite
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.conf import settings
@@ -27,7 +28,7 @@ from email.utils import parseaddr
 from PIL import Image
 import pyotp
 
-from .admin import BusinessAccountAdmin, BusinessClaimAdmin, CustomerAccountAdmin, DeletedBusinessAdmin, ListingSnapshotAdmin, ListingSnapshotAdminForm, _sync_listing_snapshot_from_imported_place
+from .admin import BusinessAccountAdmin, BusinessClaimAdmin, ContentReportAdmin, CustomerAccountAdmin, DeletedBusinessAdmin, ListingSnapshotAdmin, ListingSnapshotAdminForm, SponsoredCampaignAdmin, _sync_listing_snapshot_from_imported_place
 from .admin_site import happyhour_admin_site
 from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, BusinessPost, City, ContentReport, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedEngagement, FeedImpression, ListingSnapshot, ProfileAuthToken, SponsoredCampaign, VenueType, Weekday
 from .serializers import _validate_uploaded_deal_attachment
@@ -39,6 +40,7 @@ from .services.demo_home_feed import DEMO_HOME_FEED_SOURCE_NAME, get_demo_home_f
 from .services.favorite_notifications import create_notifications_for_business_profile_update
 from .services.image_moderation import ImageModerationRejected, ImageModerationUnavailable, moderate_uploaded_image
 from .services.importers.types import ImportedDeal, ImportedHappyHour, ImportedOperatingHour, ImportedPlace
+from .services.admin_operations import command_search, dashboard_callback, get_operations_dashboard_data
 from .services.source_listings import _build_deal_identity_key, _build_place_payload, get_source_place_payload, get_source_place_payloads, load_source_records
 
 
@@ -9842,6 +9844,94 @@ class ListingSnapshotAdminTests(TestCase):
 		self.assertTrue(self.deleted_admin.has_delete_permission(request))
 		self.assertIn('delete_selected', self.deleted_admin.get_actions(request))
 
+	def test_deleted_business_admin_bulk_delete_uses_request_and_queryset(self):
+		deleted_business = DeletedBusiness.objects.create(
+			name='Bulk Purge Cafe',
+			city=City.VENTURA,
+			venue_type=VenueType.CAFE,
+			address_line_1='40 Main St',
+		)
+
+		self.deleted_admin.delete_queryset(
+			self._build_request('/admin/places/deletedbusiness/'),
+			DeletedBusiness.objects.filter(pk=deleted_business.pk),
+		)
+
+		self.assertFalse(DeletedBusiness.objects.filter(pk=deleted_business.pk).exists())
+
+	@override_settings(DISCOVERY_JSON_PATH='')
+	def test_deleting_deleted_business_permanently_purges_catalog_and_source_metadata(self):
+		with TemporaryDirectory() as temp_dir:
+			json_path = Path(temp_dir) / 'discovered_places.json'
+			owner = User.objects.create_user(
+				username='purge_business_owner',
+				email='purge_business_owner@example.com',
+				password='test-pass-123',
+			)
+			snapshot = ListingSnapshot.objects.create(
+				name='Purge Me Cafe',
+				listing_slug='purge-me-cafe',
+				city=City.VENTURA,
+				venue_type=VenueType.CAFE,
+				address_line_1='40 Main St',
+				source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+				external_id='manual:purge-me-cafe',
+			)
+			claim = BusinessClaim.objects.create(
+				claimant=owner,
+				listing_snapshot=snapshot,
+				contact_name='Purge Owner',
+				work_email='purge-owner@example.com',
+				verification_summary='Business to permanently purge.',
+			)
+			BusinessMembership.objects.create(user=owner, claim=claim, is_active=True)
+			customer = User.objects.create_user(
+				username='purge_favorite_customer',
+				email='purge_favorite_customer@example.com',
+				password='test-pass-123',
+			)
+			FavoriteBusiness.objects.create(
+				user=customer,
+				listing_slug=snapshot.listing_slug,
+				name=snapshot.name,
+				city=snapshot.city,
+				city_label='Ventura',
+				venue_type=snapshot.venue_type,
+				venue_type_label='Cafe',
+				address_line_1=snapshot.address_line_1,
+			)
+			DeletedBusiness.objects.create(
+				name=snapshot.name,
+				listing_slug=snapshot.listing_slug,
+				city=snapshot.city,
+				venue_type=snapshot.venue_type,
+				address_line_1=snapshot.address_line_1,
+				source_name=snapshot.source_name,
+				external_id=snapshot.external_id,
+			)
+			write_discovery_json_records([
+				ImportedPlace(
+					name=snapshot.name,
+					city=snapshot.city,
+					venue_type=snapshot.venue_type,
+					address_line_1=snapshot.address_line_1,
+					external_id=snapshot.external_id,
+					source_name=snapshot.source_name,
+					profile_slug=snapshot.listing_slug,
+				),
+			], file_path=json_path)
+
+			with override_settings(DISCOVERY_JSON_PATH=json_path):
+				deleted_business = DeletedBusiness.objects.get(listing_slug=snapshot.listing_slug)
+				self.deleted_admin.delete_model(self._build_request('/admin/places/deletedbusiness/'), deleted_business)
+
+			self.assertFalse(DeletedBusiness.objects.filter(listing_slug=snapshot.listing_slug).exists())
+			self.assertFalse(ListingSnapshot.objects.filter(pk=snapshot.pk).exists())
+			self.assertFalse(BusinessClaim.objects.filter(pk=claim.pk).exists())
+			self.assertFalse(BusinessMembership.objects.filter(user=owner, claim_id=claim.pk).exists())
+			self.assertFalse(FavoriteBusiness.objects.filter(user=customer, listing_slug=snapshot.listing_slug).exists())
+			self.assertEqual(load_discovery_json_records(file_path=json_path), [])
+
 
 class BusinessClaimAdminTests(TestCase):
 	def setUp(self):
@@ -10822,3 +10912,187 @@ class HappyHourAdminSiteTests(TestCase):
 		self.assertContains(response, '0.0073 GB')
 
 
+class AdminOperationsTests(TestCase):
+	def setUp(self):
+		self.request_factory = RequestFactory()
+		self.admin_user = User.objects.create_superuser(username='operations_admin', email='operations-admin@example.com', password='test-pass-123')
+		self.claimant = User.objects.create_user(username='operations_claimant', email='operations-claimant@example.com', password='test-pass-123')
+		self.snapshot = ListingSnapshot.objects.create(
+			name='Operations Restaurant',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='123 Operations Way',
+			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+			listing_slug='operations-restaurant',
+		)
+		self.claim = BusinessClaim.objects.create(
+			claimant=self.claimant,
+			listing_snapshot=self.snapshot,
+			pathway=BusinessClaim.Pathway.ESTABLISHED,
+			status=BusinessClaim.Status.SUBMITTED,
+			contact_name='Operations Owner',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='owner@operations.example.com',
+			work_phone='805-555-0199',
+			employer_address='123 Operations Way',
+			business_website_url='https://operations.example.com',
+			verification_summary='Operations claim ready for review.',
+		)
+		self.report = ContentReport.objects.create(
+			target_type=ContentReport.TargetType.BUSINESS_PROFILE,
+			listing_slug=self.snapshot.listing_slug,
+			business_name=self.snapshot.name,
+			reason=ContentReport.Reason.MISLEADING_INFORMATION,
+			reporter=self.claimant,
+			reporter_username=self.claimant.username,
+			reporter_email=self.claimant.email,
+		)
+		self.campaign = self._create_campaign()
+
+	def _create_campaign(self):
+		campaign_snapshot = ListingSnapshot.objects.create(
+			name='Campaign Restaurant',
+			city=City.OXNARD,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='456 Campaign Way',
+			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+			listing_slug='campaign-restaurant',
+		)
+		campaign_owner = User.objects.create_user(username='campaign_owner', email='campaign-owner@example.com', password='test-pass-123')
+		campaign_claim = BusinessClaim.objects.create(
+			claimant=campaign_owner,
+			listing_snapshot=campaign_snapshot,
+			pathway=BusinessClaim.Pathway.ESTABLISHED,
+			status=BusinessClaim.Status.APPROVED,
+			contact_name='Campaign Owner',
+			work_email='campaign-owner@example.com',
+			verification_summary='Approved campaign claim.',
+		)
+		membership = BusinessMembership.objects.create(user=campaign_owner, claim=campaign_claim, is_active=True)
+		post = BusinessPost.objects.create(
+			membership=membership,
+			listing_snapshot=campaign_snapshot,
+			content_type=BusinessPost.ContentType.SPECIAL,
+			status=BusinessPost.Status.PUBLISHED,
+			title='Operations lunch special',
+		)
+		FeedImpression.objects.create(
+			post=post,
+			placement_type=FeedImpression.PlacementType.ORGANIC,
+			feed_item_id=f'post-{post.pk}',
+		)
+		FeedEngagement.objects.create(
+			post=post,
+			event_type=FeedEngagement.EventType.CLICK,
+			feed_item_id=f'post-{post.pk}',
+		)
+		return SponsoredCampaign.objects.create(
+			membership=membership,
+			post=post,
+			name='Operations sponsored special',
+			status=SponsoredCampaign.Status.DRAFT,
+			starts_at=timezone.now(),
+		)
+
+	def _build_request(self):
+		request = self.request_factory.post('/admin/operations/')
+		request.user = self.admin_user
+		setattr(request, 'session', {})
+		setattr(request, '_messages', FallbackStorage(request))
+		return request
+
+	def test_dashboard_data_includes_review_report_health_and_feed_metrics(self):
+		operations = get_operations_dashboard_data()
+
+		self.assertGreaterEqual(operations['metrics']['claims_needing_review'], 1)
+		self.assertGreaterEqual(operations['metrics']['open_reports'], 1)
+		self.assertGreaterEqual(operations['metrics']['catalog_attention'], 1)
+		self.assertGreaterEqual(operations['analytics']['impressions'], 1)
+		self.assertGreaterEqual(operations['analytics']['clicks'], 1)
+		self.assertTrue(operations['analytics']['top_posts'])
+
+	def test_dashboard_callback_injects_operations_context(self):
+		context = dashboard_callback(self.request_factory.get('/admin/'), {})
+
+		self.assertIn('operations', context)
+		self.assertIn('analytics', context['operations'])
+
+	def test_command_search_returns_operations_shortcuts(self):
+		results = command_search(self.request_factory.get('/admin/search/'), 'analytics')
+
+		self.assertEqual(len(results), 1)
+		self.assertEqual(results[0].title, 'Analytics')
+		self.assertEqual(results[0].link, reverse('happyhour_admin:operations_analytics'))
+
+	def test_unfold_command_search_renders_operations_shortcut(self):
+		self.client.force_login(self.admin_user)
+
+		response = self.client.get(reverse('happyhour_admin:search'), {'s': 'analytics'})
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'Analytics')
+		self.assertContains(response, 'View feed, signup, campaign, and engagement performance.')
+
+	def test_operation_pages_and_public_preview_render_for_staff(self):
+		self.client.force_login(self.admin_user)
+		for view_name, expected_text in (
+			('operations_review_queue', 'Claim review queue'),
+			('operations_report_queue', 'Content report queue'),
+			('operations_catalog_health', 'Catalog health'),
+			('operations_analytics', 'Audience and campaign performance'),
+			('operations_audit_timeline', 'Audit timeline'),
+		):
+			response = self.client.get(reverse(f'happyhour_admin:{view_name}'))
+			self.assertEqual(response.status_code, 200)
+			self.assertContains(response, expected_text)
+
+		payload = {
+			'name': self.snapshot.name,
+			'city_label': 'Ventura',
+			'venue_type_label': 'Restaurant',
+			'address_line_1': self.snapshot.address_line_1,
+			'image_urls': [],
+			'deals': [],
+			'operating_hours': [],
+		}
+		with patch('places.admin.get_source_place_payload', return_value=payload):
+			response = self.client.get(
+				reverse('happyhour_admin:places_listingsnapshot_preview_public_profile', args=[self.snapshot.pk])
+			)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'Customer-facing payload')
+		self.assertContains(response, self.snapshot.name)
+
+	def test_report_and_campaign_actions_create_audit_events(self):
+		request = self._build_request()
+		report_admin = ContentReportAdmin(ContentReport, AdminSite())
+		campaign_admin = SponsoredCampaignAdmin(SponsoredCampaign, AdminSite())
+
+		report_admin.mark_in_review(request, ContentReport.objects.filter(pk=self.report.pk))
+		campaign_admin.activate_selected_campaigns(request, SponsoredCampaign.objects.filter(pk=self.campaign.pk))
+
+		self.report.refresh_from_db()
+		self.campaign.refresh_from_db()
+		self.assertEqual(self.report.status, ContentReport.Status.IN_REVIEW)
+		self.assertEqual(self.report.reviewed_by, self.admin_user)
+		self.assertEqual(self.campaign.status, SponsoredCampaign.Status.ACTIVE)
+		self.assertTrue(LogEntry.objects.filter(user=self.admin_user, object_id=str(self.report.pk), change_message='Marked report in review.').exists())
+		self.assertTrue(LogEntry.objects.filter(user=self.admin_user, object_id=str(self.campaign.pk), change_message='Activated sponsored campaign.').exists())
+
+	def test_claim_row_action_requires_dialog_post_before_changing_status(self):
+		self.client.force_login(self.admin_user)
+		action_url = reverse('happyhour_admin:places_businessclaim_mark_under_review_row', args=[self.claim.pk])
+
+		response = self.client.get(action_url)
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'Mark claim under review?')
+		self.claim.refresh_from_db()
+		self.assertEqual(self.claim.status, BusinessClaim.Status.SUBMITTED)
+
+		response = self.client.post(action_url, {'_form_submitted': 'on'})
+		self.assertEqual(response.status_code, 302)
+		self.claim.refresh_from_db()
+		self.assertEqual(self.claim.status, BusinessClaim.Status.UNDER_REVIEW)
+		self.assertEqual(self.claim.reviewed_by, self.admin_user)
+		self.assertTrue(LogEntry.objects.filter(user=self.admin_user, object_id=str(self.claim.pk), change_message='Marked claim under review from the review queue.').exists())

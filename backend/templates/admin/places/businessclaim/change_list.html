@@ -98,14 +98,15 @@
     });
 
     groups.forEach(function (group) {
-      const currentAttemptCell = group.leadRow.querySelector('.field-current_attempt_display');
-      const listingCell = group.leadRow.querySelector('.field-listing_snapshot');
+      const allRows = [group.leadRow].concat(group.historyRows);
+      const currentRow = allRows.find(function (row) {
+        const currentAttemptCell = row.querySelector('.field-current_attempt_display');
+        return currentAttemptCell && currentAttemptCell.textContent.trim() === 'Yes';
+      });
+      const previousRows = allRows.filter(function (row) { return row !== currentRow; });
+      const listingCell = currentRow ? currentRow.querySelector('.field-listing_snapshot') : null;
 
-      if (!group.historyRows.length || !currentAttemptCell || !listingCell) {
-        return;
-      }
-
-      if (currentAttemptCell.textContent.trim() !== 'Yes') {
+      if (!previousRows.length || !currentRow || !listingCell) {
         return;
       }
 
@@ -128,7 +129,7 @@
       toggle.appendChild(label);
       listingCell.prepend(toggle);
 
-      group.historyRows.forEach(function (row) {
+      previousRows.forEach(function (row) {
         row.hidden = true;
         row.classList.add('claim-attempt-history-row');
       });
@@ -139,7 +140,7 @@
         toggle.setAttribute('aria-label', nextExpanded ? 'Hide previous attempts for this account email' : 'Show previous attempts for this account email');
         group.leadRow.classList.toggle('claim-attempt-group-open', nextExpanded);
 
-        group.historyRows.forEach(function (row) {
+        previousRows.forEach(function (row) {
           row.hidden = !nextExpanded;
         });
       });

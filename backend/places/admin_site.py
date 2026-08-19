@@ -1,11 +1,21 @@
 from pathlib import Path
 
 from django.conf import settings
-from django.contrib.admin import AdminSite
 from django.db import connection
+from django.template.response import TemplateResponse
+from django.urls import path
+from unfold.sites import UnfoldAdminSite
+
+from .services.admin_operations import (
+    get_analytics_data,
+    get_audit_timeline,
+    get_catalog_health,
+    get_claim_review_queryset,
+    get_content_report_queue_queryset,
+)
 
 
-class HappyHourAdminSite(AdminSite):
+class HappyHourAdminSite(UnfoldAdminSite):
     site_header = 'DiningDealz Administration'
     site_title = 'DiningDealz Admin'
     index_title = 'Operations Dashboard'
@@ -44,13 +54,175 @@ class HappyHourAdminSite(AdminSite):
             ],
         },
         {
-            'name': 'Operations',
-            'app_label': 'operations',
+            'name': 'Growth and Analytics',
+            'app_label': 'growth_and_analytics',
             'models': [
-                'Provider Usage Windows',
+                'Business posts',
+                'Sponsored campaigns',
+                'Feed impressions',
+                'Feed engagements',
+            ],
+        },
+        {
+            'name': 'Trust and Safety',
+            'app_label': 'trust_and_safety',
+            'models': [
+                'Content Reports',
+                'Business direct message threads',
+                'Business direct messages',
+            ],
+        },
+        {
+            'name': 'Customer Engagement',
+            'app_label': 'customer_engagement',
+            'models': [
+                'Favorite businesss',
+                'Favorite business notifications',
             ],
         },
     ]
+
+    def get_urls(self):
+        operation_urls = [
+            path('operations/claim-review/', self.admin_view(self.claim_review_queue_view), name='operations_review_queue'),
+            path('operations/content-reports/', self.admin_view(self.content_report_queue_view), name='operations_report_queue'),
+            path('operations/catalog-health/', self.admin_view(self.catalog_health_view), name='operations_catalog_health'),
+            path('operations/analytics/', self.admin_view(self.analytics_view), name='operations_analytics'),
+            path('operations/audit/', self.admin_view(self.audit_timeline_view), name='operations_audit_timeline'),
+            path('operations/storage/', self.admin_view(self.storage_view), name='operations_storage'),
+        ]
+        return operation_urls + super().get_urls()
+
+    def claim_review_queue_view(self, request):
+        context = {
+            **self.each_context(request),
+            'title': 'Claim Review Queue',
+            'claim_queue': get_claim_review_queryset(),
+        }
+        return TemplateResponse(request, 'admin/operations/claim_review_queue.html', context)
+
+    def content_report_queue_view(self, request):
+        context = {
+            **self.each_context(request),
+            'title': 'Content Report Queue',
+            'report_queue': get_content_report_queue_queryset(),
+        }
+        return TemplateResponse(request, 'admin/operations/content_report_queue.html', context)
+
+    def catalog_health_view(self, request):
+        issue_filter = str(request.GET.get('issue') or '').strip()
+        catalog_health = get_catalog_health(limit=None)
+        if issue_filter:
+            catalog_health['attention'] = [
+                item for item in catalog_health['attention']
+                if issue_filter in {issue['code'] for issue in item['issues']}
+            ]
+        sort_defaults = {
+            'business': 'asc',
+            'city': 'asc',
+            'issues': 'desc',
+            'last_saved': 'desc',
+        }
+        sort_key = request.GET.get('sort', 'business')
+        if sort_key not in sort_defaults:
+            sort_key = 'business'
+        direction = request.GET.get('direction')
+        if direction not in {'asc', 'desc'}:
+            direction = sort_defaults[sort_key]
+
+        def sort_value(item):
+            snapshot = item['snapshot']
+            name = str(snapshot.name or '').casefold()
+            city = str(snapshot.get_city_display() or snapshot.city or '').casefold()
+            issue_count = len(item['issues'])
+            updated_at = snapshot.updated_at.timestamp() if snapshot.updated_at else float('-inf')
+            return {
+                'business': (name, city, snapshot.pk),
+                'city': (city, name, snapshot.pk),
+                'issues': (issue_count, name, snapshot.pk),
+                'last_saved': (updated_at, name, snapshot.pk),
+            }[sort_key]
+
+        catalog_health['attention'].sort(key=sort_value, reverse=direction == 'desc')
+
+        def sort_url(header_key):
+            query = request.GET.copy()
+            query['sort'] = header_key
+            if header_key == sort_key:
+                query['direction'] = 'desc' if direction == 'asc' else 'asc'
+            else:
+                query['direction'] = sort_defaults[header_key]
+            return f'?{query.urlencode()}'
+
+        sort_headers = [
+            {'key': 'business', 'label': 'Business', 'url': sort_url('business')},
+            {'key': 'city', 'label': 'City', 'url': sort_url('city')},
+            {'key': 'issues', 'label': 'Issues', 'url': sort_url('issues')},
+            {'key': 'last_saved', 'label': 'Last saved', 'url': sort_url('last_saved')},
+        ]
+        for header in sort_headers:
+            header['active'] = header['key'] == sort_key
+            header['arrow'] = '↑' if direction == 'asc' else '↓'
+
+        def issue_url(issue_code):
+            query = request.GET.copy()
+            query['issue'] = issue_code
+            return f'?{query.urlencode()}'
+
+        for issue in catalog_health['issues']:
+            issue['url'] = issue_url(issue['code'])
+            issue['active'] = issue['code'] == issue_filter
+
+        clear_issue_query = request.GET.copy()
+        clear_issue_query.pop('issue', None)
+        clear_issue_url = f'?{clear_issue_query.urlencode()}' if clear_issue_query else '?'
+        context = {
+            **self.each_context(request),
+            'title': 'Catalog Health',
+            'catalog_health': catalog_health,
+            'issue_filter': issue_filter,
+            'filtered_attention_count': len(catalog_health['attention']) if issue_filter else catalog_health['attention_count'],
+            'sort_headers': sort_headers,
+            'sort_key': sort_key,
+            'sort_direction': direction,
+            'clear_issue_url': clear_issue_url,
+        }
+        return TemplateResponse(request, 'admin/operations/catalog_health.html', context)
+
+    def analytics_view(self, request):
+        try:
+            days = 30 if int(request.GET.get('days', 7)) >= 30 else 7
+        except (TypeError, ValueError):
+            days = 7
+        context = {
+            **self.each_context(request),
+            'title': 'Analytics',
+            'analytics': get_analytics_data(days=days),
+        }
+        return TemplateResponse(request, 'admin/operations/analytics.html', context)
+
+    def audit_timeline_view(self, request):
+        context = {
+            **self.each_context(request),
+            'title': 'Audit Timeline',
+            'audit_events': get_audit_timeline(limit=200),
+        }
+        return TemplateResponse(request, 'admin/operations/audit_timeline.html', context)
+
+    def storage_view(self, request):
+        storage = self.get_total_admin_storage_breakdown()
+        context = {
+            **self.each_context(request),
+            'title': 'Storage and Health Status',
+            'storage': storage,
+            'storage_display': {
+                key: self.format_storage_size(value)
+                for key, value in storage.items()
+                if key.endswith('_bytes')
+            },
+            'catalog_health': get_catalog_health(limit=12),
+        }
+        return TemplateResponse(request, 'admin/operations/storage.html', context)
 
     def get_app_list(self, request, app_label=None):
         original_app_list = super().get_app_list(request, app_label)

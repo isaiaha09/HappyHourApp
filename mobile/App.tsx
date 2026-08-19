@@ -2571,6 +2571,21 @@ function AppScreen() {
       return;
     }
 
+    if (recoveryLink?.kind === 'business-profile') {
+      dismissKeyboardForScreenTransition();
+      setErrorMessage(null);
+      setDetailLoading(true);
+      setBrowseFiltersExpanded(false);
+      setBrowseMode('list');
+      setSelectedMapPlaceKey(null);
+      setSelectedMapSearchResultKey(null);
+      setSelectedPlace(null);
+      setSelectedLocationId(null);
+      setScreenMode('browse');
+      setSelectedPlaceSlug(recoveryLink.slug);
+      return;
+    }
+
     const route = `${parsedUrl.host}${parsedUrl.pathname}`.replace(/^\/+|\/+$/g, '').toLowerCase();
     if (route !== 'email-verification') {
       return;
