@@ -5,6 +5,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.contrib.admin.models import ADDITION, CHANGE, DELETION, LogEntry
 from django.contrib.contenttypes.models import ContentType
+from django.core.cache import cache
 from django.db.models import Count, Prefetch, Q
 from django.db.models.functions import Coalesce, TruncDate
 from django.urls import NoReverseMatch, reverse
@@ -43,6 +44,8 @@ OPEN_REPORT_STATUSES = (
 HEALTH_STALE_AFTER_DAYS = 30
 LIVE_LOCATION_STALE_AFTER_MINUTES = 45
 REVIEW_SLA_HOURS = 48
+ADMIN_CACHE_VERSION_KEY = 'admin-operations-cache-version'
+_PAYLOAD_NOT_PROVIDED = object()
 
 HEALTH_ISSUE_DETAILS = {
 	'missing_address': {'label': 'Missing street address', 'severity': 'danger'},
@@ -56,6 +59,70 @@ HEALTH_ISSUE_DETAILS = {
 	'duplicate_listing_identity': {'label': 'Duplicate listing identity', 'severity': 'danger'},
 	'live_location_not_reporting': {'label': 'Live location is not reporting', 'severity': 'danger'},
 }
+
+
+def _admin_cache_timeout(setting_name, default):
+	try:
+		return max(int(getattr(settings, setting_name, default)), 0)
+	except (TypeError, ValueError):
+		return default
+
+
+def _admin_cache_get(key):
+	try:
+		return cache.get(key)
+	except Exception:
+		# A cache outage should never take the staff admin offline.
+		return None
+
+
+def _admin_cache_set(key, value, timeout):
+	try:
+		cache.set(key, value, timeout)
+	except Exception:
+		# Fall back to the uncached result when Redis or another cache backend is unavailable.
+		return None
+	return value
+
+
+def _admin_cache_version():
+	version = _admin_cache_get(ADMIN_CACHE_VERSION_KEY)
+	if version is not None:
+		return version
+	try:
+		cache.add(ADMIN_CACHE_VERSION_KEY, 1, None)
+		return _admin_cache_get(ADMIN_CACHE_VERSION_KEY) or 1
+	except Exception:
+		return 1
+
+
+def _admin_cache_key(name, *parts):
+	return ':'.join(
+		['admin-operations', str(_admin_cache_version()), name, *(str(part) for part in parts)]
+	)
+
+
+def invalidate_admin_operations_cache():
+	"""Invalidate derived admin metrics after catalog/account changes."""
+	try:
+		version = _admin_cache_version()
+		cache.set(ADMIN_CACHE_VERSION_KEY, int(version) + 1, None)
+	except Exception:
+		return None
+
+
+def _get_cached_admin_value(name, builder, timeout, *parts):
+	if timeout <= 0:
+		return builder()
+
+	cache_key = _admin_cache_key(name, *parts)
+	cached_value = _admin_cache_get(cache_key)
+	if cached_value is not None:
+		return cached_value
+
+	value = builder()
+	_admin_cache_set(cache_key, value, timeout)
+	return value
 
 
 def get_review_sla_hours():
@@ -100,7 +167,7 @@ def _get_catalog_health_payload_map():
 		from places.services.source_listings import get_source_place_payloads
 
 		payload_map = {}
-		for payload in get_source_place_payloads(resolve_missing_coordinates=False):
+		for payload in get_source_place_payloads(resolve_missing_coordinates=False, allow_network=False):
 			for slug in [payload.get('slug'), *(location.get('slug') for location in payload.get('locations', []))]:
 				if slug:
 					payload_map[str(slug)] = payload
@@ -132,12 +199,14 @@ def _get_duplicate_listing_identity_keys(snapshots):
 	}
 
 
-def get_listing_snapshot_health_issues(snapshot, now=None, payload=None, duplicate_identity=False):
+def get_listing_snapshot_health_issues(snapshot, now=None, payload=_PAYLOAD_NOT_PROVIDED, duplicate_identity=False):
 	reference_time = now or timezone.now()
 	issues = []
 	public_payload = payload
-	if public_payload is None and snapshot.listing_slug:
+	if public_payload is _PAYLOAD_NOT_PROVIDED and snapshot.listing_slug:
 		public_payload = _get_catalog_health_payload_map().get(snapshot.listing_slug)
+	if public_payload is _PAYLOAD_NOT_PROVIDED:
+		public_payload = None
 	has_public_payload = public_payload is not None
 	public_payload = public_payload or {}
 
@@ -190,10 +259,28 @@ def get_listing_snapshot_health_issues(snapshot, now=None, payload=None, duplica
 
 def get_catalog_health(now=None, limit=12):
 	reference_time = now or timezone.now()
-	all_snapshots = list(ListingSnapshot.objects.order_by('name', 'pk'))
-	payload_map = _get_catalog_health_payload_map()
-	duplicate_identity_keys = _get_duplicate_listing_identity_keys(all_snapshots)
-	snapshots = (
+	if now is not None:
+		return _build_catalog_health(reference_time, limit=limit)
+
+	timeout = _admin_cache_timeout('ADMIN_OPERATIONS_CACHE_TIMEOUT', 30)
+	if timeout <= 0:
+		return _build_catalog_health(reference_time, limit=limit)
+
+	cache_key = _admin_cache_key(
+		'catalog-health',
+		'all' if limit is None else limit,
+	)
+	cached_health = _admin_cache_get(cache_key)
+	if cached_health is not None:
+		return cached_health
+
+	health = _build_catalog_health(reference_time, limit=limit)
+	_admin_cache_set(cache_key, health, timeout)
+	return health
+
+
+def _build_catalog_health(reference_time, limit=12):
+	snapshots = list(
 		ListingSnapshot.objects
 		.prefetch_related(
 			Prefetch(
@@ -203,9 +290,12 @@ def get_catalog_health(now=None, limit=12):
 		)
 		.order_by('name', 'pk')
 	)
+	payload_map = _get_catalog_health_payload_map()
+	duplicate_identity_keys = _get_duplicate_listing_identity_keys(snapshots)
 	issue_counts = Counter()
 	attention = []
 	total_snapshots = 0
+	attention_count = 0
 	issue_map = {}
 
 	for snapshot in snapshots:
@@ -228,6 +318,9 @@ def get_catalog_health(now=None, limit=12):
 		issue_counts.update(issues)
 		if not issues:
 			continue
+		attention_count += 1
+		if limit == 0:
+			continue
 		attention.append({
 			'snapshot': snapshot,
 			'issues': [HEALTH_ISSUE_DETAILS[issue] | {'code': issue} for issue in issues],
@@ -246,8 +339,8 @@ def get_catalog_health(now=None, limit=12):
 
 	return {
 		'total_snapshots': total_snapshots,
-		'attention_count': len(attention),
-		'healthy_count': max(total_snapshots - len(attention), 0),
+		'attention_count': attention_count,
+		'healthy_count': max(total_snapshots - attention_count, 0),
 		'issues': [
 			{
 				'code': code,
@@ -406,7 +499,10 @@ def get_operations_dashboard_data(now=None, days=7):
 	reference_time = now or timezone.now()
 	claim_queue = get_claim_review_queryset()
 	report_queue = get_content_report_queue_queryset()
-	health = get_catalog_health(now=reference_time)
+	# Let catalog health use its own short-lived cache. The dashboard already
+	# carries the generated timestamp, and a few milliseconds of reference-time
+	# difference do not change the operational meaning of these metrics.
+	health = get_catalog_health()
 	active_campaigns = _get_active_campaign_queryset(reference_time)
 	overdue_threshold = reference_time - get_review_sla_delta()
 	overdue_claims = claim_queue.filter(
@@ -444,8 +540,26 @@ def dashboard_callback(request, context):
 		days = 30 if int(request.GET.get('days', 7)) >= 30 else 7
 	except (TypeError, ValueError):
 		days = 7
-	context['operations'] = get_operations_dashboard_data(days=days)
+	context['operations'] = _get_cached_admin_value(
+		'dashboard',
+		lambda: get_operations_dashboard_data(days=days),
+		_admin_cache_timeout('ADMIN_OPERATIONS_CACHE_TIMEOUT', 30),
+		days,
+	)
 	return context
+
+
+def get_cached_analytics_data(days=7):
+	try:
+		days = 30 if int(days or 7) >= 30 else 7
+	except (TypeError, ValueError):
+		days = 7
+	return _get_cached_admin_value(
+		'analytics',
+		lambda: get_analytics_data(days=days),
+		_admin_cache_timeout('ADMIN_OPERATIONS_CACHE_TIMEOUT', 30),
+		days,
+	)
 
 
 def get_audit_timeline(limit=50):
@@ -506,32 +620,65 @@ def record_admin_audit_event(request, obj, message, action_flag=CHANGE):
 
 
 def pending_claim_badge(_request):
-	return get_claim_review_queryset().count()
+	return _get_cached_admin_value(
+		'badge',
+		lambda: get_claim_review_queryset().count(),
+		_admin_cache_timeout('ADMIN_BADGE_CACHE_TIMEOUT', 15),
+		'pending-claims',
+	)
 
 
 def overdue_claim_badge(_request):
-	now = timezone.now()
-	threshold = now - get_review_sla_delta()
-	return get_claim_review_queryset().filter(
-		Q(submitted_at__lte=threshold)
-		| Q(submitted_at__isnull=True, created_at__lte=threshold)
-	).count()
+	def count_overdue_claims():
+		now = timezone.now()
+		threshold = now - get_review_sla_delta()
+		return get_claim_review_queryset().filter(
+			Q(submitted_at__lte=threshold)
+			| Q(submitted_at__isnull=True, created_at__lte=threshold)
+		).count()
+
+	return _get_cached_admin_value(
+		'badge',
+		count_overdue_claims,
+		_admin_cache_timeout('ADMIN_BADGE_CACHE_TIMEOUT', 15),
+		'overdue-claims',
+	)
 
 
 def open_report_badge(_request):
-	return get_content_report_queue_queryset().count()
+	return _get_cached_admin_value(
+		'badge',
+		lambda: get_content_report_queue_queryset().count(),
+		_admin_cache_timeout('ADMIN_BADGE_CACHE_TIMEOUT', 15),
+		'open-reports',
+	)
 
 
 def catalog_attention_badge(_request):
-	return get_catalog_health(limit=0)['attention_count']
+	return _get_cached_admin_value(
+		'badge',
+		lambda: get_catalog_health(limit=0)['attention_count'],
+		_admin_cache_timeout('ADMIN_BADGE_CACHE_TIMEOUT', 15),
+		'catalog-attention',
+	)
 
 
 def active_membership_badge(_request):
-	return BusinessMembership.objects.filter(is_active=True).count()
+	return _get_cached_admin_value(
+		'badge',
+		lambda: BusinessMembership.objects.filter(is_active=True).count(),
+		_admin_cache_timeout('ADMIN_BADGE_CACHE_TIMEOUT', 15),
+		'active-memberships',
+	)
 
 
 def active_campaign_badge(_request):
-	return _get_active_campaign_queryset(timezone.now()).count()
+	return _get_cached_admin_value(
+		'badge',
+		lambda: _get_active_campaign_queryset(timezone.now()).count(),
+		_admin_cache_timeout('ADMIN_BADGE_CACHE_TIMEOUT', 15),
+		'active-campaigns',
+	)
 
 
 def command_search(_request, search_term):

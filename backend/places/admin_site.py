@@ -1,17 +1,19 @@
 from pathlib import Path
 
 from django.conf import settings
+from django.core.cache import cache
+from django.core.paginator import Paginator
 from django.db import connection
 from django.template.response import TemplateResponse
 from django.urls import path
 from unfold.sites import UnfoldAdminSite
 
 from .services.admin_operations import (
-    get_analytics_data,
     get_audit_timeline,
     get_catalog_health,
     get_claim_review_queryset,
     get_content_report_queue_queryset,
+    get_cached_analytics_data,
 )
 
 
@@ -112,8 +114,9 @@ class HappyHourAdminSite(UnfoldAdminSite):
     def catalog_health_view(self, request):
         issue_filter = str(request.GET.get('issue') or '').strip()
         catalog_health = get_catalog_health(limit=None)
+        attention = list(catalog_health.get('attention') or [])
         if issue_filter:
-            catalog_health['attention'] = [
+            attention = [
                 item for item in catalog_health['attention']
                 if issue_filter in {issue['code'] for issue in item['issues']}
             ]
@@ -143,11 +146,20 @@ class HappyHourAdminSite(UnfoldAdminSite):
                 'last_saved': (updated_at, name, snapshot.pk),
             }[sort_key]
 
-        catalog_health['attention'].sort(key=sort_value, reverse=direction == 'desc')
+        attention.sort(key=sort_value, reverse=direction == 'desc')
+
+        try:
+            page_size = max(int(getattr(settings, 'ADMIN_CATALOG_HEALTH_PAGE_SIZE', 50)), 1)
+        except (TypeError, ValueError):
+            page_size = 50
+        paginator = Paginator(attention, page_size)
+        page = paginator.get_page(request.GET.get('page') or 1)
+        catalog_health = {**catalog_health, 'attention': page.object_list}
 
         def sort_url(header_key):
             query = request.GET.copy()
             query['sort'] = header_key
+            query.pop('page', None)
             if header_key == sort_key:
                 query['direction'] = 'desc' if direction == 'asc' else 'asc'
             else:
@@ -167,6 +179,7 @@ class HappyHourAdminSite(UnfoldAdminSite):
         def issue_url(issue_code):
             query = request.GET.copy()
             query['issue'] = issue_code
+            query.pop('page', None)
             return f'?{query.urlencode()}'
 
         for issue in catalog_health['issues']:
@@ -175,17 +188,27 @@ class HappyHourAdminSite(UnfoldAdminSite):
 
         clear_issue_query = request.GET.copy()
         clear_issue_query.pop('issue', None)
+        clear_issue_query.pop('page', None)
         clear_issue_url = f'?{clear_issue_query.urlencode()}' if clear_issue_query else '?'
+
+        def page_url(page_number):
+            query = request.GET.copy()
+            query['page'] = page_number
+            return f'?{query.urlencode()}'
+
         context = {
             **self.each_context(request),
             'title': 'Catalog Health',
             'catalog_health': catalog_health,
             'issue_filter': issue_filter,
-            'filtered_attention_count': len(catalog_health['attention']) if issue_filter else catalog_health['attention_count'],
+            'filtered_attention_count': len(attention) if issue_filter else catalog_health['attention_count'],
             'sort_headers': sort_headers,
             'sort_key': sort_key,
             'sort_direction': direction,
             'clear_issue_url': clear_issue_url,
+            'catalog_page': page,
+            'catalog_previous_page_url': page_url(page.previous_page_number()) if page.has_previous() else '',
+            'catalog_next_page_url': page_url(page.next_page_number()) if page.has_next() else '',
         }
         return TemplateResponse(request, 'admin/operations/catalog_health.html', context)
 
@@ -197,7 +220,7 @@ class HappyHourAdminSite(UnfoldAdminSite):
         context = {
             **self.each_context(request),
             'title': 'Analytics',
-            'analytics': get_analytics_data(days=days),
+            'analytics': get_cached_analytics_data(days=days),
         }
         return TemplateResponse(request, 'admin/operations/analytics.html', context)
 
@@ -335,18 +358,47 @@ class HappyHourAdminSite(UnfoldAdminSite):
 
         return 0
 
-    def get_total_admin_storage_breakdown(self):
+    def get_total_admin_storage_breakdown(self, allow_compute=True):
+        cache_key = 'admin-storage-breakdown'
+        cache_timeout = getattr(settings, 'ADMIN_STORAGE_CACHE_TIMEOUT', 60)
+        try:
+            cache_timeout = max(int(cache_timeout), 0)
+        except (TypeError, ValueError):
+            cache_timeout = 60
+
+        if cache_timeout > 0:
+            try:
+                cached_storage = cache.get(cache_key)
+            except Exception:
+                cached_storage = None
+            if cached_storage is not None:
+                return cached_storage
+
+        if not allow_compute:
+            return {
+                'database_bytes': 0,
+                'media_bytes': 0,
+                'discovery_bytes': 0,
+                'total_bytes': 0,
+            }
+
         database_bytes = self.get_database_storage_bytes()
         media_bytes = self.get_path_storage_bytes(settings.MEDIA_ROOT)
         discovery_bytes = self.get_path_storage_bytes(getattr(settings, 'DISCOVERY_JSON_PATH', None))
         total_bytes = database_bytes + media_bytes + discovery_bytes
 
-        return {
+        storage = {
             'database_bytes': database_bytes,
             'media_bytes': media_bytes,
             'discovery_bytes': discovery_bytes,
             'total_bytes': total_bytes,
         }
+        if cache_timeout > 0:
+            try:
+                cache.set(cache_key, storage, cache_timeout)
+            except Exception:
+                pass
+        return storage
 
     def format_storage_size(self, total_bytes):
         size = float(total_bytes)
@@ -361,7 +413,9 @@ class HappyHourAdminSite(UnfoldAdminSite):
 
     def each_context(self, request):
         context = super().each_context(request)
-        storage = self.get_total_admin_storage_breakdown()
+        storage = self.get_total_admin_storage_breakdown(
+            allow_compute=bool(getattr(request.user, 'is_authenticated', False)),
+        )
         total_bytes = storage['total_bytes']
         context['admin_database_storage_bytes'] = storage['database_bytes']
         context['admin_database_storage_display'] = self.format_storage_size(storage['database_bytes'])

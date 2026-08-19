@@ -2,7 +2,8 @@ from django.contrib.auth import get_user_model
 from django.db.models.signals import post_delete, post_save, pre_delete, pre_save
 from django.dispatch import receiver
 
-from .models import AccountProfile, BusinessClaim, BusinessClaimAttachment, BusinessDirectMessage, BusinessMembership, ContentReport, ListingSnapshot
+from .models import AccountProfile, BusinessClaim, BusinessClaimAttachment, BusinessDirectMessage, BusinessMembership, ContentReport, ListingSnapshot, SponsoredCampaign
+from .services.admin_operations import invalidate_admin_operations_cache
 from .services.account_profiles import remove_favorites_for_business_accounts
 from .services.media_storage import delete_removed_storage_references, delete_storage_names, delete_storage_references
 from .services.source_listings import invalidate_source_place_payload_cache
@@ -65,6 +66,7 @@ def cleanup_deleted_business_claim_photo_references(sender, instance, **kwargs):
 
 @receiver(post_save, sender=ListingSnapshot)
 def invalidate_listing_snapshot_place_payload_cache_on_save(sender, instance, created, update_fields=None, **kwargs):
+	invalidate_admin_operations_cache()
 	if not created and _is_only_live_location_update(update_fields, LIVE_LOCATION_SNAPSHOT_FIELDS):
 		return
 	invalidate_source_place_payload_cache(invalidate_all=True)
@@ -72,31 +74,37 @@ def invalidate_listing_snapshot_place_payload_cache_on_save(sender, instance, cr
 
 @receiver(post_delete, sender=ListingSnapshot)
 def invalidate_listing_snapshot_place_payload_cache_on_delete(sender, instance, **kwargs):
+	invalidate_admin_operations_cache()
 	invalidate_source_place_payload_cache(invalidate_all=True)
 
 
 @receiver(post_save, sender=BusinessClaim)
 def invalidate_business_claim_place_payload_cache_on_save(sender, instance, **kwargs):
+	invalidate_admin_operations_cache()
 	invalidate_source_place_payload_cache(invalidate_all=True)
 
 
 @receiver(post_delete, sender=BusinessClaim)
 def invalidate_business_claim_place_payload_cache_on_delete(sender, instance, **kwargs):
+	invalidate_admin_operations_cache()
 	invalidate_source_place_payload_cache(invalidate_all=True)
 
 
 @receiver(post_save, sender=BusinessMembership)
 def invalidate_business_membership_place_payload_cache_on_save(sender, instance, **kwargs):
+	invalidate_admin_operations_cache()
 	invalidate_source_place_payload_cache(invalidate_all=True)
 
 
 @receiver(post_delete, sender=BusinessMembership)
 def invalidate_business_membership_place_payload_cache_on_delete(sender, instance, **kwargs):
+	invalidate_admin_operations_cache()
 	invalidate_source_place_payload_cache(invalidate_all=True)
 
 
 @receiver(post_save, sender=AccountProfile)
 def invalidate_account_profile_place_payload_cache_on_save(sender, instance, created, update_fields=None, **kwargs):
+	invalidate_admin_operations_cache()
 	if not created and _is_only_live_location_update(update_fields, {'business_location_tracking_enabled', 'updated_at'}):
 		return
 	invalidate_source_place_payload_cache(invalidate_all=True)
@@ -138,9 +146,25 @@ def cleanup_deleted_direct_message_image(sender, instance, **kwargs):
 
 @receiver(post_delete, sender=ContentReport)
 def cleanup_deleted_content_report_screenshot(sender, instance, **kwargs):
+	invalidate_admin_operations_cache()
 	file_name = str(getattr(instance.screenshot, 'name', '') or '').strip()
 	if file_name:
 		instance.screenshot.storage.delete(file_name)
+
+
+@receiver(post_save, sender=ContentReport)
+def invalidate_content_report_admin_cache(sender, instance, **kwargs):
+	invalidate_admin_operations_cache()
+
+
+@receiver(post_save, sender=SponsoredCampaign)
+def invalidate_sponsored_campaign_admin_cache_on_save(sender, instance, **kwargs):
+	invalidate_admin_operations_cache()
+
+
+@receiver(post_delete, sender=SponsoredCampaign)
+def invalidate_sponsored_campaign_admin_cache_on_delete(sender, instance, **kwargs):
+	invalidate_admin_operations_cache()
 
 
 def _get_deal_attachment_references(deal_overrides):

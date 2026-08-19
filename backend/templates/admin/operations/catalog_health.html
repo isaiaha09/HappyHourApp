@@ -30,6 +30,16 @@
                     {% endfor %}
                 </tbody>
             </table>
+            {% if catalog_page.paginator.num_pages > 1 %}
+                <div class="dd-operations-pagination">
+                    <span>Page {{ catalog_page.number }} of {{ catalog_page.paginator.num_pages }}</span>
+                    <span>{{ filtered_attention_count }} businesses need attention</span>
+                    <span>
+                        {% if catalog_previous_page_url %}<a class="button" href="{{ catalog_previous_page_url }}">Previous</a>{% endif %}
+                        {% if catalog_next_page_url %}<a class="button" href="{{ catalog_next_page_url }}">Next</a>{% endif %}
+                    </span>
+                </div>
+            {% endif %}
         {% else %}
             <p class="dd-operations-empty">No stored business records need attention.</p>
         {% endif %}

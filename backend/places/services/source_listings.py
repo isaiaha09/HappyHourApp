@@ -115,7 +115,15 @@ def _source_place_payload_cache_key(city=None, venue_type=None, source_name=None
 	])
 
 
-def load_source_records(source_name=None, force_refresh=False):
+def _load_cache_only_source_records(source_name=None):
+	"""Return locally stored source data without fetching configured websites."""
+	resolved_source_name = source_name or get_listing_source_name()
+	if resolved_source_name in {'curated_json_places', 'discovery_json_places'}:
+		return DiscoveryJsonPlacesImporter().load_records()
+	return []
+
+
+def load_source_records(source_name=None, force_refresh=False, cache_only=False):
 	cache = caches[getattr(settings, 'SOURCE_FETCH_CACHE_ALIAS', 'default')]
 	cache_key = _source_records_cache_key(source_name=source_name)
 	if force_refresh:
@@ -124,6 +132,8 @@ def load_source_records(source_name=None, force_refresh=False):
 		cached_records = cache.get(cache_key)
 		if cached_records is not None:
 			return cached_records
+	if cache_only:
+		return _load_cache_only_source_records(source_name=source_name)
 
 	records = get_listing_importer(source_name=source_name).load_records()
 	cache_timeout = getattr(settings, 'SOURCE_FETCH_CACHE_TIMEOUT', 0)
@@ -149,7 +159,7 @@ def _normalize_structured_override_value(value, cleared=False):
 	return value
 
 
-def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_deals=None, resolve_missing_coordinates=True):
+def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_deals=None, resolve_missing_coordinates=True, allow_network=True):
 	cache = _get_source_place_payload_cache(source_name=source_name)
 	cache_key = _source_place_payload_cache_key(
 		city=city,
@@ -168,7 +178,11 @@ def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_
 	snapshot_overrides_by_slug = _get_listing_snapshot_override_payloads()
 	claimed_listing_slugs = _get_claimed_listing_slugs()
 	deleted_business_public_slugs = get_deleted_business_public_slugs()
-	for place_records in _group_source_records(load_source_records(source_name=source_name)).values():
+	if allow_network:
+		source_records = load_source_records(source_name=source_name)
+	else:
+		source_records = load_source_records(source_name=source_name, cache_only=True)
+	for place_records in _group_source_records(source_records).values():
 		payload = _build_grouped_place_payload(
 			place_records,
 			preferred_city=city,
@@ -247,7 +261,7 @@ def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_
 	_apply_current_live_location_state(sorted_payloads)
 	sorted_payloads = _suppress_deleted_business_payloads(_suppress_disabled_live_location_payloads(sorted_payloads))
 	cache_timeout = _get_source_place_payload_cache_timeout()
-	if cache_timeout and cache_timeout > 0:
+	if allow_network and cache_timeout and cache_timeout > 0:
 		cache.set(cache_key, deepcopy(sorted_payloads), cache_timeout)
 	return sorted_payloads
 
@@ -660,8 +674,12 @@ def get_deleted_business_public_slugs():
 	return deleted_slugs
 
 
-def get_source_place_payload(slug, source_name=None):
-	for payload in get_source_place_payloads(source_name=source_name, resolve_missing_coordinates=True):
+def get_source_place_payload(slug, source_name=None, allow_network=True):
+	for payload in get_source_place_payloads(
+		source_name=source_name,
+		resolve_missing_coordinates=True,
+		allow_network=allow_network,
+	):
 		if payload['slug'] == slug:
 			return payload
 		for location in payload.get('locations', []):

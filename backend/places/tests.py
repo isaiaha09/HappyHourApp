@@ -40,7 +40,7 @@ from .services.demo_home_feed import DEMO_HOME_FEED_SOURCE_NAME, get_demo_home_f
 from .services.favorite_notifications import create_notifications_for_business_profile_update
 from .services.image_moderation import ImageModerationRejected, ImageModerationUnavailable, moderate_uploaded_image
 from .services.importers.types import ImportedDeal, ImportedHappyHour, ImportedOperatingHour, ImportedPlace
-from .services.admin_operations import command_search, dashboard_callback, get_operations_dashboard_data
+from .services.admin_operations import _get_catalog_health_payload_map, command_search, dashboard_callback, get_catalog_health, get_operations_dashboard_data
 from .services.source_listings import _build_deal_identity_key, _build_place_payload, get_source_place_payload, get_source_place_payloads, load_source_records
 
 
@@ -9517,7 +9517,7 @@ class ListingSnapshotAdminTests(TestCase):
 			result = self.admin.changelist_view(self._build_request('/admin/places/listingsnapshot/'))
 
 		self.assertEqual(result, 2)
-		mock_get_source_place_payloads.assert_called_once_with(resolve_missing_coordinates=False)
+		mock_get_source_place_payloads.assert_called_once_with(resolve_missing_coordinates=False, allow_network=False)
 		mock_get_source_place_payload.assert_not_called()
 
 	@patch('places.admin.get_source_place_payloads')
@@ -11010,6 +11010,31 @@ class AdminOperationsTests(TestCase):
 		self.assertGreaterEqual(operations['analytics']['impressions'], 1)
 		self.assertGreaterEqual(operations['analytics']['clicks'], 1)
 		self.assertTrue(operations['analytics']['top_posts'])
+
+	def test_catalog_health_loads_source_payloads_once_per_build(self):
+		with patch('places.services.admin_operations._get_catalog_health_payload_map', wraps=_get_catalog_health_payload_map) as payload_map:
+			get_catalog_health(now=timezone.now(), limit=0)
+
+		self.assertEqual(payload_map.call_count, 1)
+
+	@override_settings(ADMIN_CATALOG_HEALTH_PAGE_SIZE=1)
+	def test_catalog_health_paginates_attention_rows(self):
+		ListingSnapshot.objects.create(
+			name='Second Operations Restaurant',
+			city=City.OXNARD,
+			venue_type=VenueType.CAFE,
+			address_line_1='456 Operations Way',
+			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+			listing_slug='second-operations-restaurant',
+		)
+		self.client.force_login(self.admin_user)
+
+		response = self.client.get(reverse('happyhour_admin:operations_catalog_health'))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.context['catalog_page'].paginator.count, 3)
+		self.assertEqual(response.context['catalog_page'].number, 1)
+		self.assertContains(response, 'Next')
 
 	def test_dashboard_callback_injects_operations_context(self):
 		context = dashboard_callback(self.request_factory.get('/admin/'), {})

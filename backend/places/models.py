@@ -187,6 +187,10 @@ class ListingSnapshot(models.Model):
 
 	class Meta:
 		ordering = ['name', '-captured_at']
+		indexes = [
+			models.Index(fields=['name', '-captured_at'], name='places_list_name_cap_idx'),
+			models.Index(fields=['city', 'name'], name='places_list_city_name_idx'),
+		]
 		verbose_name = 'Business'
 		verbose_name_plural = 'List of Businesses'
 
@@ -379,6 +383,11 @@ class BusinessClaim(models.Model):
 
 	class Meta:
 		ordering = ['-created_at']
+		indexes = [
+			models.Index(fields=['status', 'submitted_at'], name='places_claim_status_sub_idx'),
+			models.Index(fields=['status', 'created_at'], name='places_claim_status_cre_idx'),
+			models.Index(fields=['claimant', 'created_at'], name='places_claim_cl_created_idx'),
+		]
 		verbose_name = 'Business Claim'
 		verbose_name_plural = 'Business Claims'
 		constraints = [
@@ -446,6 +455,9 @@ class BusinessClaim(models.Model):
 	def _has_profile_entry_kind(self, entry_kind):
 		if not self.pk:
 			return False
+		prefetched_entries = (getattr(self, '_prefetched_objects_cache', None) or {}).get('profile_entries')
+		if prefetched_entries is not None:
+			return any(entry.entry_kind == entry_kind for entry in prefetched_entries)
 		return self.profile_entries.filter(entry_kind=entry_kind).exists()
 
 	def has_authority_attachment(self):
@@ -474,7 +486,15 @@ class BusinessClaim(models.Model):
 			return {'penalty': 0, 'flags': [], 'blockers': []}
 
 		required_kinds = self.get_required_attachment_kinds_for_validation()
-		attachments = list(self.attachments.filter(attachment_kind__in=required_kinds))
+		prefetched_attachments = (getattr(self, '_prefetched_objects_cache', None) or {}).get('attachments')
+		if prefetched_attachments is not None:
+			attachments = [
+				attachment
+				for attachment in prefetched_attachments
+				if attachment.attachment_kind in required_kinds
+			]
+		else:
+			attachments = list(self.attachments.filter(attachment_kind__in=required_kinds))
 		if not attachments:
 			return {'penalty': 0, 'flags': [], 'blockers': []}
 
@@ -693,6 +713,9 @@ class BusinessClaim(models.Model):
 	def has_attachment_kind(self, attachment_kind):
 		if not self.pk:
 			return False
+		prefetched_attachments = (getattr(self, '_prefetched_objects_cache', None) or {}).get('attachments')
+		if prefetched_attachments is not None:
+			return any(attachment.attachment_kind == attachment_kind for attachment in prefetched_attachments)
 		return self.attachments.filter(attachment_kind=attachment_kind).exists()
 
 	def submit_for_review(self):
@@ -875,6 +898,9 @@ class BusinessMembership(models.Model):
 
 	class Meta:
 		ordering = ['claim__listing_snapshot__name', 'user__username']
+		indexes = [
+			models.Index(fields=['is_active'], name='places_member_active_idx'),
+		]
 		verbose_name = 'Business Membership'
 		verbose_name_plural = 'Business Memberships'
 
@@ -1459,6 +1485,9 @@ class SponsoredCampaign(models.Model):
 
 	class Meta:
 		ordering = ['status', 'starts_at', 'pk']
+		indexes = [
+			models.Index(fields=['status', 'starts_at', 'ends_at'], name='places_camp_status_window_idx'),
+		]
 
 	def __str__(self):
 		return self.name
@@ -1497,6 +1526,7 @@ class FeedImpression(models.Model):
 	class Meta:
 		ordering = ['-created_at']
 		indexes = [
+			models.Index(fields=['created_at'], name='places_impr_created_idx'),
 			models.Index(fields=['campaign', 'created_at']),
 			models.Index(fields=['post', 'created_at']),
 		]
@@ -1526,6 +1556,8 @@ class FeedEngagement(models.Model):
 	class Meta:
 		ordering = ['-created_at']
 		indexes = [
+			models.Index(fields=['created_at'], name='places_eng_created_idx'),
+			models.Index(fields=['event_type', 'created_at'], name='places_eng_event_created_idx'),
 			models.Index(fields=['campaign', 'event_type', 'created_at']),
 			models.Index(fields=['post', 'event_type', 'created_at']),
 		]

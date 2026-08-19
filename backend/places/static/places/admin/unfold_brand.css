@@ -265,6 +265,22 @@ body.change-form #content-main .aligned {
   overflow: auto;
 }
 
+.dd-operations-pagination {
+  align-items: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+  color: var(--color-font-subtle-dark);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 14px 10px;
+}
+
+.dd-operations-pagination > span:last-child {
+  display: inline-flex;
+  gap: 8px;
+}
+
 .dd-operations-table-wrap {
   overflow-x: auto;
 }

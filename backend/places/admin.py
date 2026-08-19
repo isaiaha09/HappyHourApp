@@ -12,7 +12,7 @@ from django.contrib.auth.admin import GroupAdmin, UserAdmin
 from django.contrib.auth.models import Group, User
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Exists, OuterRef, Prefetch, Q, Subquery
+from django.db.models import Count, Exists, IntegerField, OuterRef, Prefetch, Q, Subquery, Value
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.http import HttpResponseRedirect
@@ -1292,34 +1292,43 @@ class BusinessAccountAdmin(HardDeleteUserAdminMixin, UnfoldModelAdmin, UserAdmin
 		return 'No active business'
 
 	def _get_active_membership(self, obj):
+		if hasattr(obj, '_admin_active_membership_cache'):
+			return obj._admin_active_membership_cache
 		memberships = [membership for membership in obj.business_memberships.all() if membership.is_active]
 		if not memberships:
-			return None
-		memberships.sort(key=lambda membership: (membership.approved_at or membership.created_at, membership.pk), reverse=True)
-		return memberships[0]
+			active_membership = None
+		else:
+			memberships.sort(key=lambda membership: (membership.approved_at or membership.created_at, membership.pk), reverse=True)
+			active_membership = memberships[0]
+		obj._admin_active_membership_cache = active_membership
+		return active_membership
 
 	def _get_active_managed_business_payload(self, obj):
+		if hasattr(obj, '_admin_managed_business_payload_cache'):
+			return obj._admin_managed_business_payload_cache
 		membership = self._get_active_membership(obj)
 		if membership is None:
-			return None
-		snapshot = membership.claim.listing_snapshot
-		if snapshot.listing_slug:
-			payload = get_source_place_payload(snapshot.listing_slug)
-			if payload is not None:
-				return payload
-		return {
-			'name': snapshot.name,
-			'address_line_1': membership.claim.employer_address or snapshot.address_line_1,
-			'address_line_2': snapshot.address_line_2,
-			'city_label': snapshot.get_city_display() or snapshot.city,
-			'state': snapshot.state,
-			'postal_code': snapshot.postal_code,
-			'phone_number': membership.claim.work_phone or snapshot.phone_number,
-			'website_url': membership.claim.business_website_url or snapshot.website_url,
-			'deals': [],
-			'operating_hours': [],
-			'supporting_details': membership.claim.supporting_details,
-		}
+			payload = None
+		else:
+			snapshot = membership.claim.listing_snapshot
+			if snapshot.listing_slug:
+				payload = get_source_place_payload(snapshot.listing_slug)
+			if payload is None:
+				payload = {
+					'name': snapshot.name,
+					'address_line_1': membership.claim.employer_address or snapshot.address_line_1,
+					'address_line_2': snapshot.address_line_2,
+					'city_label': snapshot.get_city_display() or snapshot.city,
+					'state': snapshot.state,
+					'postal_code': snapshot.postal_code,
+					'phone_number': membership.claim.work_phone or snapshot.phone_number,
+					'website_url': membership.claim.business_website_url or snapshot.website_url,
+					'deals': [],
+					'operating_hours': [],
+					'supporting_details': membership.claim.supporting_details,
+				}
+		obj._admin_managed_business_payload_cache = payload
+		return payload
 
 	def _get_active_managed_claim(self, obj):
 		membership = self._get_active_membership(obj)
@@ -1461,7 +1470,7 @@ class ListingSnapshotAdmin(UnfoldModelAdmin):
 		self._changelist_health_issues = get_catalog_health(limit=0).get('issue_map', {})
 		self._changelist_public_deal_counts = {
 			payload.get('slug'): len(list(payload.get('deals', [])))
-			for payload in get_source_place_payloads(resolve_missing_coordinates=False)
+			for payload in get_source_place_payloads(resolve_missing_coordinates=False, allow_network=False)
 			if payload.get('slug')
 		}
 		response = super().changelist_view(request, extra_context=extra_context)
@@ -1660,13 +1669,20 @@ class ListingSnapshotAdmin(UnfoldModelAdmin):
 		change_url = reverse('happyhour_admin:places_businessaccount_change', args=[membership.user_id])
 		return format_html('<a class="button" href="{}">Open {}</a>', change_url, membership.user.username)
 
+	def _get_current_public_payload(self, obj):
+		if hasattr(obj, '_admin_current_public_payload_cache'):
+			return obj._admin_current_public_payload_cache
+		payload = get_source_place_payload(obj.listing_slug) if obj.listing_slug else None
+		obj._admin_current_public_payload_cache = payload or {}
+		return obj._admin_current_public_payload_cache
+
 	@admin.display(description='Public deals')
 	def current_public_deal_count(self, obj):
 		deal_counts = getattr(self, '_changelist_public_deal_counts', None)
 		if deal_counts is not None:
 			return int(deal_counts.get(obj.listing_slug, 0))
-		payload = get_source_place_payload(obj.listing_slug) if obj.listing_slug else None
-		return len(list((payload or {}).get('deals', [])))
+		payload = self._get_current_public_payload(obj)
+		return len(list(payload.get('deals', [])))
 
 	@admin.display(description='Manual deal overrides')
 	def manual_deal_override_count(self, obj):
@@ -1674,8 +1690,8 @@ class ListingSnapshotAdmin(UnfoldModelAdmin):
 
 	@admin.display(description='Current public deals')
 	def current_public_deals_preview(self, obj):
-		payload = get_source_place_payload(obj.listing_slug) if obj.listing_slug else None
-		deals = list((payload or {}).get('deals', []))
+		payload = self._get_current_public_payload(obj)
+		deals = list(payload.get('deals', []))
 		if not deals:
 			return 'No deals currently surfaced.'
 		preview_lines = _format_public_deals_preview_lines(deals)
@@ -1683,8 +1699,8 @@ class ListingSnapshotAdmin(UnfoldModelAdmin):
 
 	@admin.display(description='Current public hours')
 	def current_public_hours_preview(self, obj):
-		payload = get_source_place_payload(obj.listing_slug) if obj.listing_slug else None
-		operating_hours = list((payload or {}).get('operating_hours', []))
+		payload = self._get_current_public_payload(obj)
+		operating_hours = list(payload.get('operating_hours', []))
 		if not operating_hours:
 			return 'No operating hours currently surfaced.'
 		preview_lines = _format_public_hours_preview_lines(operating_hours)
@@ -2024,11 +2040,49 @@ class BusinessClaimAdmin(UnfoldModelAdmin):
 		same_email_attempts = BusinessClaim.objects.filter(
 			claimant__email=OuterRef('claimant__email'),
 		).order_by('-created_at', '-pk')
-		queryset = queryset.annotate(
-			attempt_group_latest_created_at=Subquery(same_email_attempts.values('created_at')[:1]),
-			attempt_group_latest_pk=Subquery(same_email_attempts.values('pk')[:1]),
-			review_order_at=Coalesce('submitted_at', 'created_at'),
+		attempt_number = (
+			BusinessClaim.objects
+			.filter(claimant__email=OuterRef('claimant__email'))
+			.filter(
+				Q(created_at__lt=OuterRef('created_at'))
+				| Q(created_at=OuterRef('created_at'), pk__lte=OuterRef('pk'))
+			)
+			.order_by()
+			.values('claimant__email')
+			.annotate(attempt_count=Count('pk'))
+			.values('attempt_count')[:1]
 		)
+		prior_rejection_count = (
+			BusinessClaim.objects
+			.filter(
+				claimant__email=OuterRef('claimant__email'),
+				status=BusinessClaim.Status.REJECTED,
+			)
+			.exclude(pk=OuterRef('pk'))
+			.order_by()
+			.values('claimant__email')
+			.annotate(rejection_count=Count('pk'))
+			.values('rejection_count')[:1]
+		)
+		queryset = queryset.annotate(
+			attempt_group_latest_pk=Subquery(same_email_attempts.values('pk')[:1]),
+			attempt_number_value=Coalesce(
+				Subquery(attempt_number),
+				Value(1),
+				output_field=IntegerField(),
+			),
+			prior_rejection_count_value=Coalesce(
+				Subquery(prior_rejection_count),
+				Value(0),
+				output_field=IntegerField(),
+			),
+			review_order_at=Coalesce('submitted_at', 'created_at'),
+		).select_related(
+			'listing_snapshot',
+			'claimant',
+			'claimant__account_profile',
+			'reviewed_by',
+		).prefetch_related('attachments', 'profile_entries')
 		ordering = self.get_ordering(request)
 		if ordering:
 			queryset = queryset.order_by(*ordering)
@@ -2300,10 +2354,17 @@ class BusinessClaimAdmin(UnfoldModelAdmin):
 
 	@admin.display(description='Account email', ordering='claimant__email')
 	def claimant_email_display(self, obj):
-		return getattr(obj.claimant, 'email', '')
+		email = getattr(obj.claimant, 'email', '')
+		username = getattr(obj.claimant, 'username', '')
+		if email and username:
+			return format_html('<span title="Account username: {}">{}</span>', username, email)
+		return email
 
 	@admin.display(description='Attempt #')
 	def attempt_number_display(self, obj):
+		annotated_attempt_number = getattr(obj, 'attempt_number_value', None)
+		if annotated_attempt_number is not None:
+			return int(annotated_attempt_number)
 		for index, claim in enumerate(self._get_attempt_group_claims(obj), start=1):
 			if claim.pk == obj.pk:
 				return index
@@ -2311,6 +2372,9 @@ class BusinessClaimAdmin(UnfoldModelAdmin):
 
 	@admin.display(description='Current attempt')
 	def current_attempt_display(self, obj):
+		annotated_latest_pk = getattr(obj, 'attempt_group_latest_pk', None)
+		if annotated_latest_pk is not None:
+			return 'Yes' if annotated_latest_pk == obj.pk else 'No'
 		attempts = self._get_attempt_group_claims(obj)
 		if not attempts:
 			return 'Yes'
@@ -2321,6 +2385,9 @@ class BusinessClaimAdmin(UnfoldModelAdmin):
 
 	@admin.display(description='Prior rejections')
 	def prior_rejection_count_display(self, obj):
+		annotated_rejection_count = getattr(obj, 'prior_rejection_count_value', None)
+		if annotated_rejection_count is not None:
+			return int(annotated_rejection_count)
 		return sum(1 for claim in self._get_attempt_history_claims(obj) if claim.status == BusinessClaim.Status.REJECTED)
 
 	@admin.display(description='Attempt history')
