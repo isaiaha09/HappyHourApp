@@ -1344,7 +1344,7 @@ export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces,
                 {results.length ? (
                   results.map((place) => (
                     <View key={`${place.slug}:${place.id}`} style={[styles.claimResultCard, styles.onboardingInfoCard]}>
-                      <Text style={styles.placeTitle}>{place.name}</Text>
+                      <Text style={[styles.placeTitle, styles.onboardingInfoTitle]}>{place.name}</Text>
                       <Text style={styles.placeMeta}>{place.venue_type_label}</Text>
                       <Text style={[styles.claimBusinessHint, styles.onboardingInfoText]}>
                         {getPlaceLocations(place).length > 1 ? 'Choose the specific address to verify this claim.' : 'Choose this address to continue to verification.'}
@@ -1673,7 +1673,7 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
 
             {isClaimed && selectedPlace ? (
               <View style={[styles.claimResultCard, styles.onboardingInfoCard]}>
-                <Text style={styles.placeTitle}>{selectedPlace.name}</Text>
+                <Text style={[styles.placeTitle, styles.onboardingInfoTitle]}>{selectedPlace.name}</Text>
                 <Text style={styles.placeMeta}>{selectedPlace.venue_type_label}</Text>
                 {selectedLocation ? (
                   <>
