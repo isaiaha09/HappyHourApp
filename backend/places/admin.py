@@ -1405,13 +1405,13 @@ class BusinessAccountAdmin(HardDeleteUserAdminMixin, UnfoldModelAdmin, UserAdmin
 class ListingSnapshotAdmin(UnfoldModelAdmin):
 	form = ListingSnapshotAdminForm
 	change_list_template = 'admin/places/listingsnapshot/change_list.html'
-	list_display = ('name', 'city', 'venue_type', 'catalog_health_status', 'source_name', 'imported_image_count', 'current_public_deal_count', 'manual_deal_override_count', 'public_profile_preview_link', 'pull_business_data_link', 'captured_at', 'updated_at')
+	list_display = ('name', 'city', 'venue_type', 'is_starred', 'catalog_health_status', 'source_name', 'imported_image_count', 'current_public_deal_count', 'manual_deal_override_count', 'public_profile_preview_link', 'pull_business_data_link', 'captured_at', 'updated_at')
 	list_filter = ('city', 'venue_type', 'source_name', CatalogHealthFilter, HasImportedImagesFilter, ManagedByBusinessUserFilter)
 	search_fields = ('name', 'address_line_1', 'external_id', 'website_url')
 	readonly_fields = ('managed_business_account_link', 'catalog_health_summary', 'public_profile_preview_link', 'imported_image_count', 'current_public_images_preview', 'current_public_deals_preview', 'current_public_hours_preview', 'manual_deal_override_summary', 'manual_operating_hour_override_summary', 'captured_at', 'updated_at')
 	fieldsets = (
 		('Identity', {
-			'fields': ('name', 'listing_slug', 'managed_business_account_link', 'catalog_health_summary', 'public_profile_preview_link'),
+			'fields': ('name', 'listing_slug', 'is_starred', 'managed_business_account_link', 'catalog_health_summary', 'public_profile_preview_link'),
 			'classes': ('tab',),
 		}),
 		('Business details', {
@@ -1717,6 +1717,7 @@ class ListingSnapshotAdmin(UnfoldModelAdmin):
 			'imported_image_urls',
 			'suppressed_imported_image_urls',
 			'social_profiles',
+			'is_starred',
 			'social_media_links',
 		}
 		overrides_changed = change and bool(public_override_fields.intersection(set(getattr(form, 'changed_data', []))))

@@ -47,7 +47,19 @@ const venueMarkerStyles = {
   other: { icon: 'map-marker-outline', fill: '#ff8f70', stroke: '#c46247' },
 } as const;
 
-export function getVenueMarkerStyle(venueType: string) {
+const starredVenueMarkerStyle = {
+  icon: 'star',
+  fill: '#ffffff',
+  stroke: '#ffffff',
+  core: '#ffffff',
+  iconColor: '#e5b63d',
+} as const;
+
+export function getVenueMarkerStyle(venueType: string, isStarred = false) {
+  if (isStarred) {
+    return starredVenueMarkerStyle;
+  }
+
   return venueMarkerStyles[venueType as keyof typeof venueMarkerStyles] ?? venueMarkerStyles.other;
 }
 

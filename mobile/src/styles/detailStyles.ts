@@ -68,20 +68,24 @@ export const detailStyles = {
     width: '100%',
   },
   detailHeaderRow: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'space-between',
+    alignItems: 'stretch',
+    flexDirection: 'column',
+    gap: 4,
+    width: '100%',
   },
   detailHeaderActions: {
     alignItems: 'center',
+    alignSelf: 'stretch',
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
+    justifyContent: 'flex-end',
     marginTop: 4,
+    width: '100%',
   },
   detailHeaderCopy: {
-    flex: 1,
     minWidth: 0,
+    width: '100%',
   },
   detailCity: {
     color: theme.accentStrong,
@@ -198,6 +202,7 @@ export const detailStyles = {
     height: 48,
     justifyContent: 'center',
     marginTop: 4,
+    flexShrink: 0,
     width: 48,
   },
   favoriteHeartButtonActive: {
@@ -213,6 +218,7 @@ export const detailStyles = {
     height: 48,
     justifyContent: 'center',
     marginTop: 4,
+    flexShrink: 0,
     width: 48,
   },
   favoriteHeartIcon: {
@@ -224,6 +230,23 @@ export const detailStyles = {
   favoriteHeartIconActive: {
     color: theme.accent,
   },
+  starredBusinessBadge: {
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderColor: '#d9aa32',
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 48,
+    justifyContent: 'center',
+    flexShrink: 0,
+    width: 48,
+  },
+  starredBusinessBadgeIcon: {
+    color: '#d9aa32',
+    fontSize: 26,
+    lineHeight: 28,
+    textAlign: 'center',
+  },
   verifiedStatusBadge: {
     alignItems: 'center',
     backgroundColor: '#e7f7ef',
@@ -232,6 +255,7 @@ export const detailStyles = {
     borderWidth: 1,
     height: 48,
     justifyContent: 'center',
+    flexShrink: 0,
     width: 48,
   },
   verifiedStatusBadgeIcon: {

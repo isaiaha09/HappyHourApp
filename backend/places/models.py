@@ -164,6 +164,11 @@ class ListingSnapshot(models.Model):
 	name = models.CharField(max_length=150)
 	city = models.CharField(max_length=20, choices=City.choices, blank=True)
 	venue_type = models.CharField(max_length=20, choices=VenueType.choices, blank=True)
+	is_starred = models.BooleanField(
+		default=False,
+		verbose_name='Star this business',
+		help_text='Show a white map marker with a gold star and a star badge on the public business profile. This does not change the business type or filters.',
+	)
 	address_line_1 = models.CharField(max_length=255)
 	address_line_2 = models.CharField(max_length=255, blank=True)
 	neighborhood = models.CharField(max_length=120, blank=True)

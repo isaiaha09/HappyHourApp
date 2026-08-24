@@ -237,6 +237,8 @@ export function PlaceDetailScreen({
     }
     : selectedPlaceAddressSource;
   const selectedPlaceMapRegion = getPlacePreviewRegion(selectedPlaceMapSource);
+  const selectedPlaceCityLabel = (selectedPlaceLocation?.city_label ?? selectedPlace?.city_label ?? '').trim();
+  const showStarredBadge = !!(selectedPlace?.is_starred || selectedPlaceLocation?.is_starred);
   const showVerifiedBadge = !!selectedPlace?.is_claimed;
   const showGoogleReviews = selectedPlace?.is_informal !== true;
   const selectedPlaceLastKnownLocationLabel = selectedPlaceAddressSource && !liveLocationOverride
@@ -475,12 +477,12 @@ export function PlaceDetailScreen({
         {selectedPlace ? (
           <View style={[styles.detailCard, isLandscape ? styles.detailCardLandscape : null]}>
             <View style={styles.detailHeaderRow}>
-              <View style={styles.detailHeaderCopy}>
-                <Text style={styles.detailCity}>{selectedPlaceLocation?.city_label ?? selectedPlace.city_label}</Text>
-                <Text style={styles.detailTitle}>{selectedPlace.name}</Text>
-                <Text style={styles.detailMeta}>{selectedPlace.venue_type_label}</Text>
-              </View>
               <View style={styles.detailHeaderActions}>
+                {showStarredBadge ? (
+                  <View accessibilityLabel="Starred business" style={styles.starredBusinessBadge}>
+                    <Text style={styles.starredBusinessBadgeIcon}>★</Text>
+                  </View>
+                ) : null}
                 {showVerifiedBadge ? (
                   <View accessibilityLabel="Claimed business" style={styles.verifiedStatusBadge}>
                     <Text style={styles.verifiedStatusBadgeIcon}>✓</Text>
@@ -506,6 +508,11 @@ export function PlaceDetailScreen({
                 <Pressable accessibilityLabel="Report business content" onPress={handleOpenContentReport} style={styles.contentReportButton}>
                   <Ionicons color={theme.textMuted} name="flag-outline" size={22} />
                 </Pressable>
+              </View>
+              <View style={styles.detailHeaderCopy}>
+                {selectedPlaceCityLabel ? <Text style={styles.detailCity}>{selectedPlaceCityLabel}</Text> : null}
+                <Text style={styles.detailTitle}>{selectedPlace.name}</Text>
+                <Text style={styles.detailMeta}>{selectedPlace.venue_type_label}</Text>
               </View>
             </View>
             {showFavoriteControl && favoriteHelperText ? <Text style={styles.dashboardSupportText}>{favoriteHelperText}</Text> : null}

@@ -8754,7 +8754,7 @@ const BrowseMapMarkers = memo(function BrowseMapMarkers({
   width,
 }: BrowseMapMarkersProps) {
   return places.map((place, index) => {
-    const markerStyle = getVenueMarkerStyle(place.venue_type);
+    const markerStyle = getVenueMarkerStyle(place.venue_type, !!place.is_starred);
     const animatedMarkerStyle = hasDeferredSearch
       ? { opacity: 1, transform: [] }
       : getAnimatedMapMarkerStyle(place, mapRegion, width, height, mapPinsTransition);

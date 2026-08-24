@@ -448,6 +448,7 @@ def _get_listing_snapshot_override_payloads():
 			'deal_overrides': normalized_deal_overrides,
 			'deal_overrides_cleared': bool(getattr(snapshot, 'deal_overrides_cleared', False)),
 			'operating_hour_overrides': normalized_operating_hour_overrides,
+			'is_starred': bool(getattr(snapshot, 'is_starred', False)),
 			'operating_hour_overrides_cleared': bool(getattr(snapshot, 'operating_hour_overrides_cleared', False)),
 		}
 		if snapshot.listing_slug and snapshot.listing_slug not in override_payloads['by_slug']:
@@ -511,6 +512,8 @@ def _apply_multi_location_snapshot_overrides(payload, place_records, override_pa
 			matched_payload,
 			payload_namespace=f"{payload.get('slug', 'location')}:{location_id}",
 		)
+		location['is_starred'] = bool(matched_payload.get('is_starred', False))
+		payload['is_starred'] = bool(payload.get('is_starred') or location['is_starred'])
 		if location_id == primary_location_id:
 			primary_location = location
 			_apply_snapshot_contact_override_to_payload(payload, location)
@@ -531,6 +534,7 @@ def _apply_multi_location_snapshot_overrides(payload, place_records, override_pa
 		for weekday in location.get('deal_weekdays', [])
 	})
 	payload['has_deals'] = any(bool(location.get('has_deals')) for location in payload.get('locations', []))
+	payload['is_starred'] = any(bool(location.get('is_starred')) for location in payload.get('locations', []))
 	payload['deal_count'] = sum(int(location.get('deal_count', 0) or 0) for location in payload.get('locations', []))
 
 
@@ -740,6 +744,7 @@ def _build_grouped_place_payload(place_records, preferred_city=None, resolve_mis
 		'id': _stable_numeric_id(primary_place_record.source_name, profile_slug, profile_name),
 		'name': profile_name,
 		'slug': profile_slug,
+		'is_starred': False,
 		'is_claimed': False,
 		'social_profiles': {},
 		'direct_messaging_enabled': False,
@@ -832,6 +837,9 @@ def _build_manual_admin_snapshot_payload(snapshot, resolve_missing_coordinates=T
 		return None
 	_apply_live_location_timestamp(payload, snapshot)
 	payload['is_claimed'] = False
+	payload['is_starred'] = bool(snapshot.is_starred)
+	for location in payload.get('locations', []):
+		location['is_starred'] = payload['is_starred']
 	payload['is_informal'] = False
 	payload['social_profiles'] = normalized_social_profiles
 	payload['social_media_links'] = build_social_media_links(normalized_social_profiles)
@@ -845,6 +853,7 @@ def _build_manual_admin_snapshot_payload(snapshot, resolve_missing_coordinates=T
 		'deal_overrides': normalized_deal_overrides,
 		'deal_overrides_cleared': bool(getattr(snapshot, 'deal_overrides_cleared', False)),
 		'operating_hour_overrides': normalized_operating_hour_overrides,
+		'is_starred': bool(getattr(snapshot, 'is_starred', False)),
 		'operating_hour_overrides_cleared': bool(getattr(snapshot, 'operating_hour_overrides_cleared', False)),
 		'website_url': snapshot.website_url,
 		'phone_number': snapshot.phone_number,
@@ -1004,6 +1013,9 @@ def _build_snapshot_place_payload(claim, resolve_missing_coordinates=True):
 	)
 	payload = _build_place_payload(place_record, resolve_missing_coordinates=should_resolve_coordinates)
 	if payload is not None:
+		payload['is_starred'] = bool(snapshot.is_starred)
+		for location in payload.get('locations', []):
+			location['is_starred'] = payload['is_starred']
 		_apply_live_location_timestamp(payload, snapshot)
 		payload.update(_build_claim_override_payload(
 			claim,
@@ -1105,6 +1117,9 @@ def _merge_claimed_snapshot_payload(existing_payload, snapshot_payload):
 			merged_location['phone_number'] = owner_phone_number
 		if owner_image_urls:
 			merged_location['image_urls'] = owner_image_urls
+		merged_location['is_starred'] = bool(
+			merged_location.get('is_starred') or snapshot_payload.get('is_starred')
+		)
 		merged_locations.append(merged_location)
 
 	merged_payload.update({
@@ -1123,6 +1138,7 @@ def _merge_claimed_snapshot_payload(existing_payload, snapshot_payload):
 		'longitude': snapshot_payload['longitude'] if is_live_location_business else existing_payload['longitude'],
 		'phone_number': owner_phone_number,
 		'website_url': owner_website_url,
+		'is_starred': bool(existing_payload.get('is_starred') or snapshot_payload.get('is_starred')),
 		'image_urls': owner_image_urls,
 		'is_verified': True,
 		'locations': merged_locations or existing_payload.get('locations', []),
@@ -1162,6 +1178,11 @@ def _apply_claim_structured_overrides(payload, claim=None, payload_namespace='',
 	operating_hour_overrides = resolved_source_payload.get('operating_hour_overrides') if source_payload is not None else getattr(claim, 'operating_hour_overrides', None)
 	deal_overrides = _normalize_structured_override_value(deal_overrides, cleared=bool(resolved_source_payload.get('deal_overrides_cleared')) if source_payload is not None else False)
 	operating_hour_overrides = _normalize_structured_override_value(operating_hour_overrides, cleared=bool(resolved_source_payload.get('operating_hour_overrides_cleared')) if source_payload is not None else False)
+	if source_payload is not None and 'is_starred' in resolved_source_payload:
+		payload['is_starred'] = bool(resolved_source_payload.get('is_starred'))
+		for location in payload.get('locations', []):
+			location['is_starred'] = payload['is_starred']
+
 
 	if name_override:
 		payload['name'] = name_override

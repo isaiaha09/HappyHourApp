@@ -277,6 +277,36 @@ describe('PlaceDetailScreen live location messaging', () => {
 });
 
 describe('PlaceDetailScreen favorites', () => {
+  it('renders the recovered star badge for an admin-starred business', () => {
+    const { toJSON } = render(
+      <PlaceDetailScreen
+        detailLoading={false}
+        errorMessage={null}
+        favoriteHelperText={null}
+        favoriteSubmitting={false}
+        isLandscape={false}
+        isFavorited={false}
+        locationStatusNow={Date.parse('2026-08-03T17:33:20Z')}
+        onBack={jest.fn()}
+        onSelectLocation={jest.fn()}
+        onToggleFavorite={jest.fn()}
+        selectedPlace={buildPlace({ is_claimed: true, is_starred: true })}
+        selectedPlaceDeals={[]}
+        selectedPlaceLocation={null}
+        selectedPlaceOperatingHours={[]}
+        showFavoriteControl
+      />,
+    );
+
+    expect(screen.getByLabelText('Starred business')).toBeTruthy();
+    expect(screen.getByLabelText('Claimed business')).toBeTruthy();
+    expect(screen.getByLabelText('Add to favorites')).toBeTruthy();
+    expect(screen.getByLabelText('Report business content')).toBeTruthy();
+    expect(screen.getByText('★')).toBeTruthy();
+    const renderedOutput = JSON.stringify(toJSON());
+    expect(renderedOutput.indexOf('★')).toBeLessThan(renderedOutput.indexOf('Startup Scoops'));
+  });
+
   it('renders an outline heart when the business is not favorited', () => {
     render(
       <PlaceDetailScreen

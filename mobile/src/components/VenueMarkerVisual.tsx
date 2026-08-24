@@ -16,6 +16,8 @@ export const VenueMarkerVisual = memo(function VenueMarkerVisual({ markerStyle, 
   const innerBodySize = 27;
   const markerCoreSize = 14;
   const iconSize = 11;
+  const coreColor = 'core' in markerStyle ? markerStyle.core : markerStyle.stroke;
+  const iconColor = 'iconColor' in markerStyle ? markerStyle.iconColor : '#fffaf4';
 
   return (
     <View style={[styles.mapMarker, style]}>
@@ -53,7 +55,7 @@ export const VenueMarkerVisual = memo(function VenueMarkerVisual({ markerStyle, 
         style={[
           styles.mapMarkerCore,
           {
-            backgroundColor: markerStyle.stroke,
+            backgroundColor: coreColor,
             borderColor: markerStyle.fill,
             height: markerCoreSize,
             left: (markerSize - markerCoreSize) / 2,
@@ -75,7 +77,7 @@ export const VenueMarkerVisual = memo(function VenueMarkerVisual({ markerStyle, 
         ]}
       >
         <MaterialCommunityIcons
-          color="#fffaf4"
+          color={iconColor}
           name={markerStyle.icon}
           size={iconSize}
           style={styles.mapMarkerIconGlyph}

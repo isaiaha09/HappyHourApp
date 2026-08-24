@@ -2750,6 +2750,7 @@ class SourceListingIdentityTests(TestCase):
 				'happy_hours': [{'weekday': Weekday.THURSDAY, 'start_time': '15:00', 'end_time': '18:00', 'all_day': False}],
 			}],
 			operating_hour_overrides=[{'weekday': Weekday.THURSDAY, 'open_time': '11:00', 'close_time': '22:00'}],
+			is_starred=True,
 		)
 
 		payload = get_source_place_payload('yard-house')
@@ -2758,6 +2759,7 @@ class SourceListingIdentityTests(TestCase):
 		self.assertEqual(payload['deals'][0]['title'], 'Admin Happy Hour')
 		self.assertEqual(payload['deals'][0]['happy_hours'][0]['weekday'], Weekday.THURSDAY)
 		self.assertEqual(payload['operating_hours'][0]['weekday'], Weekday.THURSDAY)
+		self.assertEqual(payload['venue_type'], VenueType.BAR)
 		self.assertEqual(payload['address_line_1'], '999 Admin Plaza')
 		self.assertEqual(payload['address_line_2'], 'Suite 500')
 		self.assertEqual(payload['neighborhood'], 'Collection District')
@@ -2768,6 +2770,8 @@ class SourceListingIdentityTests(TestCase):
 		self.assertEqual(payload['locations'][0]['postal_code'], '93030')
 		self.assertEqual(payload['image_urls'], ['https://images.example.com/yard-house-imported.jpg'])
 		self.assertEqual(payload['locations'][0]['image_urls'], ['https://images.example.com/yard-house-imported.jpg'])
+		self.assertTrue(payload['is_starred'])
+		self.assertTrue(payload['locations'][0]['is_starred'])
 
 	@patch('places.services.source_listings._get_place_coordinates')
 	@patch('places.services.source_listings.load_source_records')

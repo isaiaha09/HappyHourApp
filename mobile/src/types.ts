@@ -78,6 +78,7 @@ export type PlaceLocation = {
   id: number;
   name: string;
   slug: string;
+  is_starred?: boolean;
   city: string;
   city_label: string;
   venue_type: string;

@@ -473,6 +473,14 @@ const noPinSamplePlace: PlaceListItem = {
 };
 
 describe('App browse map search', () => {
+  it('provides a white and gold star marker style for admin-starred businesses', () => {
+    expect(getVenueMarkerStyle('bar', true)).toEqual(expect.objectContaining({
+      icon: 'star',
+      fill: '#ffffff',
+      iconColor: '#e5b63d',
+    }));
+  });
+
   beforeEach(() => {
     mockAppStateChangeListener = null;
     jest.spyOn(AppState, 'addEventListener').mockImplementation(((type: string, listener: (state: string) => void) => {
