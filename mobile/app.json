@@ -13,7 +13,7 @@
       "backgroundColor": "#080101"
     },
     "ios": {
-      "buildNumber": "75",
+      "buildNumber": "76",
       "infoPlist": {
         "NSLocationAlwaysAndWhenInUseUsageDescription": "When you enable live location for an approved business, DiningDealz uses your location to keep that business pin updated while the app is closed.",
         "NSLocationAlwaysUsageDescription": "When you enable live location for an approved business, DiningDealz uses your location to keep that business pin updated while the app is closed.",
