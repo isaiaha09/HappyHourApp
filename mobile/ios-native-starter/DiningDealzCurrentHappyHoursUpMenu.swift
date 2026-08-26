@@ -309,7 +309,6 @@ private struct DiningDealzCurrentHappyHoursUpMenuRow: View {
         .stroke(theme.border.opacity(0.52), lineWidth: 1)
     )
     .accessibilityLabel(accessibilityLabel)
-    .accessibilityRole(.button)
   }
 }
 
