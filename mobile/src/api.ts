@@ -12,6 +12,7 @@ import type {
   CustomerSignupRequest,
   CustomerPreferencesRequest,
   ContentReportRequest,
+  CurrentHappyHoursResponse,
   DirectMessageSendResponse,
   DirectMessageSendRequest,
   DirectMessageThreadDetailResponse,
@@ -151,6 +152,17 @@ export async function fetchLiveLocationPlaces(baseUrl: string, city: string) {
 
   const query = queryParams.size ? `?${queryParams.toString()}` : '';
   return fetchJson<LiveLocationPlaceUpdate[]>(baseUrl, `/places/live-locations/${query}`);
+}
+
+export async function fetchCurrentHappyHourPlaces(baseUrl: string, city: string) {
+  const queryParams = new URLSearchParams();
+  if (city !== 'all') {
+    queryParams.set('city', city);
+  }
+
+  const queryString = queryParams.toString();
+  const query = queryString ? `?${queryString}` : '';
+  return fetchJson<CurrentHappyHoursResponse>(baseUrl, `/places/current-happy-hours/${query}`);
 }
 
 export async function fetchPlaceDetail(baseUrl: string, slug: string, authToken?: string) {

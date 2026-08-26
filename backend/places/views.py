@@ -34,6 +34,7 @@ from .serializers import (
 	ContentReportSerializer,
 	CustomerPreferencesSerializer,
 	CustomerSignupSerializer,
+	CurrentHappyHoursResponseSerializer,
 	DeleteAccountSerializer,
 	DealSerializer,
 	DirectMessageBlockSerializer,
@@ -73,6 +74,7 @@ from .services.direct_message_push import send_push_notifications_for_direct_mes
 from .services.home_feed import get_feed_interval, get_feed_queryset, get_organic_page_size, get_ranked_campaigns, get_requested_feed_page_size, mix_feed_items, record_campaign_served
 from .services.image_moderation import ImageModerationRejected, ImageModerationUnavailable, moderate_uploaded_image
 from .services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
+from .services.current_happy_hours import get_current_happy_hours_payload
 from .services.source_listings import get_deleted_business_snapshot_ids, get_disabled_live_location_slugs, get_live_location_display_fields, get_source_deal_payloads, get_source_place_payload, get_source_place_payloads, is_live_location_tracking_enabled_for_snapshot, load_source_records
 from .throttles import ContentReportRateThrottle, DirectMessageSendRateThrottle, EmailVerificationRateThrottle, EmailVerificationResendRateThrottle, LoginRateThrottle, PasswordRecoveryRateThrottle, SignupRateThrottle, SupportContactRateThrottle, UserMutationRateThrottle
 
@@ -436,6 +438,20 @@ class PlaceListView(generics.GenericAPIView):
 		if normalized in {'0', 'false', 'no'}:
 			return False
 		return None
+
+
+class CurrentHappyHoursView(generics.GenericAPIView):
+	serializer_class = CurrentHappyHoursResponseSerializer
+	permission_classes = []
+
+	def get(self, request):
+		city = str(request.query_params.get('city') or '').strip().lower()
+		payload = get_current_happy_hours_payload(city=city)
+		response = Response(self.get_serializer(payload).data)
+		response['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+		response['Pragma'] = 'no-cache'
+		response['Expires'] = '0'
+		return response
 
 
 class PlaceDetailView(generics.GenericAPIView):

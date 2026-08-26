@@ -1453,6 +1453,35 @@ class LiveLocationPlaceSerializer(serializers.Serializer):
 	city_label = serializers.CharField(required=False, allow_blank=True, default='')
 
 
+class CurrentHappyHourWindowSerializer(serializers.Serializer):
+	deal_id = serializers.IntegerField(allow_null=True)
+	title = serializers.CharField()
+	price_text = serializers.CharField(allow_blank=True)
+	weekday_label = serializers.CharField(allow_blank=True)
+	start_time = serializers.CharField(allow_blank=True)
+	end_time = serializers.CharField(allow_blank=True)
+	all_day = serializers.BooleanField()
+
+
+class CurrentHappyHourPlaceSerializer(serializers.Serializer):
+	slug = serializers.SlugField()
+	location_id = serializers.IntegerField()
+	name = serializers.CharField()
+	city = serializers.CharField(allow_blank=True)
+	city_label = serializers.CharField(allow_blank=True)
+	venue_type_label = serializers.CharField(allow_blank=True)
+	address_line_1 = serializers.CharField(allow_blank=True)
+	address_line_2 = serializers.CharField(allow_blank=True)
+	latitude = serializers.FloatField(allow_null=True)
+	longitude = serializers.FloatField(allow_null=True)
+	happy_hours = CurrentHappyHourWindowSerializer(many=True)
+
+
+class CurrentHappyHoursResponseSerializer(serializers.Serializer):
+	observed_at = serializers.DateTimeField()
+	places = CurrentHappyHourPlaceSerializer(many=True)
+
+
 class PlaceListSerializer(serializers.Serializer):
 	id = serializers.IntegerField()
 	name = serializers.CharField()

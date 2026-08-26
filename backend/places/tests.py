@@ -1,9 +1,10 @@
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from io import BytesIO, StringIO
 from unittest.mock import MagicMock, call, patch
+from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
 from django.contrib.admin import helpers
@@ -41,6 +42,7 @@ from .services.favorite_notifications import create_notifications_for_business_p
 from .services.image_moderation import ImageModerationRejected, ImageModerationUnavailable, moderate_uploaded_image
 from .services.importers.types import ImportedDeal, ImportedHappyHour, ImportedOperatingHour, ImportedPlace
 from .services.admin_operations import _get_catalog_health_payload_map, command_search, dashboard_callback, get_catalog_health, get_operations_dashboard_data
+from .services.current_happy_hours import get_current_happy_hours_payload
 from .services.render_storage import fetch_render_storage
 from .services.source_listings import _build_deal_identity_key, _build_place_payload, get_source_place_payload, get_source_place_payloads, load_source_records
 
@@ -218,6 +220,41 @@ class PlaceApiTests(APITestCase):
 		self.assertEqual(response.json()['results'][0]['name'], '805 Tacos')
 		self.assertEqual(response.json()['results'][0]['deal_weekdays'], [Weekday.TUESDAY])
 		self.assertTrue(response.json()['results'][0]['is_verified'])
+
+	@patch('places.views.get_current_happy_hours_payload')
+	def test_current_happy_hours_endpoint_is_public_and_uncached(self, mock_get_current_happy_hours):
+		mock_get_current_happy_hours.return_value = {
+			'observed_at': '2026-08-26T15:00:00-07:00',
+			'places': [{
+				'slug': '805-tacos-ventura',
+				'location_id': 505,
+				'name': '805 Tacos',
+				'city': City.VENTURA,
+				'city_label': 'Ventura',
+				'venue_type_label': 'Restaurant',
+				'address_line_1': '123 Main St',
+				'address_line_2': '',
+				'latitude': 34.2783,
+				'longitude': -119.2931,
+				'happy_hours': [{
+					'deal_id': 202,
+					'title': 'Taco Tuesday',
+					'price_text': '$3 tacos',
+					'weekday_label': 'Wednesday',
+					'start_time': '15:00',
+					'end_time': '18:00',
+					'all_day': False,
+				}],
+			}],
+		}
+
+		response = self.client.get(reverse('place-current-happy-hours'), {'city': City.VENTURA})
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.json()['places'][0]['name'], '805 Tacos')
+		mock_get_current_happy_hours.assert_called_once_with(city=City.VENTURA)
+		self.assertEqual(response['Cache-Control'], 'no-store, no-cache, must-revalidate')
+		self.assertEqual(response['Pragma'], 'no-cache')
 
 	def test_place_list_endpoint_passes_has_deals_filter(self):
 		with patch('places.views.get_source_place_payloads', return_value=[self.place_payload]) as mock_get_source_place_payloads:
@@ -464,6 +501,124 @@ class PlaceApiTests(APITestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response.json()['count'], 1)
 		self.assertEqual(response.json()['results'][0]['title'], 'Taco Tuesday')
+
+
+class CurrentHappyHoursServiceTests(TestCase):
+	business_time_zone = ZoneInfo('America/Los_Angeles')
+
+	def _window(self, weekday, start_time='15:00', end_time='18:00', all_day=False, weekday_label=None):
+		return {
+			'weekday': weekday,
+			'weekday_label': weekday_label or ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][weekday],
+			'start_time': start_time,
+			'end_time': end_time,
+			'all_day': all_day,
+		}
+
+	def _deal(self, deal_id, title, happy_hours, *, is_active=True, starts_on=None, ends_on=None):
+		return {
+			'id': deal_id,
+			'title': title,
+			'price_text': '$5',
+			'is_active': is_active,
+			'starts_on': starts_on,
+			'ends_on': ends_on,
+			'happy_hours': happy_hours,
+		}
+
+	def _payload(self, deals, *, city=City.VENTURA, slug='the-place'):
+		return {
+			'id': 1,
+			'slug': slug,
+			'name': 'The Place',
+			'city': city,
+			'city_label': city.title(),
+			'venue_type_label': 'Restaurant',
+			'locations': [{
+				'id': 10,
+				'slug': slug,
+				'name': 'The Place',
+				'city': city,
+				'city_label': city.title(),
+				'venue_type_label': 'Restaurant',
+				'address_line_1': '1 Main St',
+				'address_line_2': '',
+				'latitude': 34.2,
+				'longitude': -119.2,
+				'deals': deals,
+			}],
+		}
+
+	def test_returns_window_active_at_reference_time(self):
+		reference = datetime(2026, 8, 26, 15, 0, tzinfo=self.business_time_zone)
+		payload = self._payload([
+			self._deal(1, 'Afternoon Special', [self._window(Weekday.WEDNESDAY)]),
+		])
+
+		with patch('places.services.current_happy_hours.get_source_place_payloads', return_value=[payload]):
+			result = get_current_happy_hours_payload(reference=reference)
+
+		self.assertEqual(len(result['places']), 1)
+		self.assertEqual(result['places'][0]['happy_hours'][0]['title'], 'Afternoon Special')
+		self.assertEqual(result['places'][0]['location_id'], 10)
+
+		with patch('places.services.current_happy_hours.get_source_place_payloads', return_value=[payload]):
+			boundary_result = get_current_happy_hours_payload(reference=reference.replace(hour=18))
+		self.assertEqual(boundary_result['places'], [])
+
+	def test_supports_all_day_and_overnight_windows(self):
+		all_day_payload = self._payload([
+			self._deal(1, 'All Day', [self._window(Weekday.WEDNESDAY, '', '', all_day=True)]),
+		], slug='all-day-place')
+		overnight_payload = self._payload([
+			self._deal(2, 'Late Night', [self._window(1, '22:00', '02:00')]),
+		], slug='overnight-place')
+		reference = datetime(2026, 8, 26, 1, 30, tzinfo=self.business_time_zone)
+
+		with patch('places.services.current_happy_hours.get_source_place_payloads', return_value=[all_day_payload, overnight_payload]):
+			result = get_current_happy_hours_payload(reference=reference)
+
+		self.assertEqual(len(result['places']), 2)
+		self.assertEqual(
+			{window['title'] for place in result['places'] for window in place['happy_hours']},
+			{'All Day', 'Late Night'},
+		)
+
+	def test_ignores_inactive_date_expired_and_malformed_windows(self):
+		payload = self._payload([
+			self._deal(1, 'Inactive', [self._window(2)], is_active=False),
+			self._deal(2, 'Not Started', [self._window(2)], starts_on='2026-08-27'),
+			self._deal(3, 'Expired', [self._window(2)], ends_on='2026-08-25'),
+			self._deal(4, 'Malformed', [self._window(2, 'later', 'never')]),
+		])
+		reference = datetime(2026, 8, 26, 15, 0, tzinfo=self.business_time_zone)
+
+		with patch('places.services.current_happy_hours.get_source_place_payloads', return_value=[payload]):
+			result = get_current_happy_hours_payload(reference=reference)
+
+		self.assertEqual(result['places'], [])
+
+	def test_filters_city_and_merges_duplicate_location_windows(self):
+		ventura_payload = self._payload([
+			self._deal(1, 'First Deal', [self._window(2)]),
+		], city=City.VENTURA, slug='shared-place')
+		ventura_duplicate_payload = self._payload([
+			self._deal(2, 'Second Deal', [self._window(2)]),
+		], city=City.VENTURA, slug='shared-place')
+		oxnard_payload = self._payload([
+			self._deal(3, 'Other City', [self._window(2)]),
+		], city=City.OXNARD, slug='other-place')
+		reference = datetime(2026, 8, 26, 15, 0, tzinfo=self.business_time_zone)
+
+		with patch('places.services.current_happy_hours.get_source_place_payloads', return_value=[ventura_payload, ventura_duplicate_payload, oxnard_payload]) as mock_get_source_place_payloads:
+			result = get_current_happy_hours_payload(reference=reference, city=City.VENTURA)
+
+		self.assertEqual(len(result['places']), 1)
+		self.assertEqual(
+			{window['title'] for window in result['places'][0]['happy_hours']},
+			{'First Deal', 'Second Deal'},
+		)
+		mock_get_source_place_payloads.assert_called_once_with(city=City.VENTURA, resolve_missing_coordinates=True)
 
 
 class HomeFeedApiTests(APITestCase):

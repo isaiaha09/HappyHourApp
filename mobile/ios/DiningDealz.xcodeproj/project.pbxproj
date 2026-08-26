@@ -23,6 +23,7 @@
 		E6A1C0023F5D99D000000001 /* DiningDealzMetroHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A1C0043F5D99D000000001 /* DiningDealzMetroHost.swift */; };
 		E6A1C0053F5D99D000000001 /* DiningDealzLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A1C0073F5D99D000000001 /* DiningDealzLocation.swift */; };
 		E6A1C0063F5D99D000000001 /* DiningDealzLocationManager.m in Sources */ = {isa = PBXBuildFile; fileRef = E6A1C0083F5D99D000000001 /* DiningDealzLocationManager.m */; };
+		E6A1C00A3F5D99D000000001 /* DiningDealzCurrentHappyHoursUpMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A1C0093F5D99D000000001 /* DiningDealzCurrentHappyHoursUpMenu.swift */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
@@ -47,6 +48,7 @@
 		E6A1C0043F5D99D000000001 /* DiningDealzMetroHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiningDealzMetroHost.swift; sourceTree = "<group>"; };
 		E6A1C0073F5D99D000000001 /* DiningDealzLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiningDealz/DiningDealzLocation.swift; sourceTree = "<group>"; };
 		E6A1C0083F5D99D000000001 /* DiningDealzLocationManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = DiningDealz/DiningDealzLocationManager.m; sourceTree = "<group>"; };
+		E6A1C0093F5D99D000000001 /* DiningDealzCurrentHappyHoursUpMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiningDealzCurrentHappyHoursUpMenu.swift; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = DiningDealz/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* DiningDealz-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "DiningDealz-Bridging-Header.h"; path = "DiningDealz/DiningDealz-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -67,6 +69,7 @@
 		13B07FAE1A68108700A75B9A /* DiningDealz */ = {
 			isa = PBXGroup;
 			children = (
+				E6A1C0093F5D99D000000001 /* DiningDealzCurrentHappyHoursUpMenu.swift */,
 				40546DAF2FF5D99D000164D8 /* DiningDealzLiquidGlassBottomNavView.swift */,
 				40546DB02FF5D99D000164D8 /* DiningDealzLiquidGlassBottomNavViewManager.m */,
 				40546DB12FF5D99D000164D8 /* DiningDealzLiquidGlassBottomNavViewManager.swift */,
@@ -371,6 +374,7 @@
 				E6A1C0023F5D99D000000001 /* DiningDealzMetroHost.swift in Sources */,
 				E6A1C0053F5D99D000000001 /* DiningDealzLocation.swift in Sources */,
 				E6A1C0063F5D99D000000001 /* DiningDealzLocationManager.m in Sources */,
+				E6A1C00A3F5D99D000000001 /* DiningDealzCurrentHappyHoursUpMenu.swift in Sources */,
 				D618DE88D4559DEB32EE00A2 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -385,7 +389,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = DiningDealz/DiningDealz.entitlements;
-				CURRENT_PROJECT_VERSION = 76;
+				CURRENT_PROJECT_VERSION = 77;
 				DEVELOPMENT_TEAM = V6MYG36LZ9;
 				ENABLE_BITCODE = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -422,7 +426,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = "DiningDealz/DiningDealz-Release.entitlements";
-				CURRENT_PROJECT_VERSION = 76;
+				CURRENT_PROJECT_VERSION = 77;
 				DEVELOPMENT_TEAM = V6MYG36LZ9;
 				INFOPLIST_FILE = DiningDealz/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;

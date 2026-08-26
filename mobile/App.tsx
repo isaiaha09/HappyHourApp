@@ -47,6 +47,7 @@ import {
   disableTwoFactor,
   clearPlacesCache,
   confirmPasswordReset,
+  fetchCurrentHappyHourPlaces,
   fetchLiveLocationPlaces,
   fetchProfileDashboard,
   fetchPlaceDetail,
@@ -100,6 +101,7 @@ import {
 import { AccountSettingsScreen, BlockedDirectMessageCustomersScreen, BusinessProfileEditorScreen, DashboardScreen, FavoriteBusinessNotificationsScreen, FavoriteBusinessesScreen } from './src/screens/DashboardScreen';
 import { BrowseControls } from './src/screens/BrowseControls';
 import { GuestShellChrome } from './src/components/GuestShellChrome';
+import { CurrentHappyHoursUpMenu } from './src/components/CurrentHappyHoursUpMenu';
 import { NativeIOSLiquidGlassBottomNav, NativeIOSLiquidGlassHeaderButton, isNativeIOSLiquidGlassBottomNavAvailable, isNativeIOSLiquidGlassHeaderButtonAvailable, isSupportedIOSLiquidGlassRuntime } from './src/components/NativeIOSLiquidGlass';
 import { PhotoLightbox } from './src/components/PhotoLightbox';
 import { VenueMarkerVisual } from './src/components/VenueMarkerVisual';
@@ -154,6 +156,7 @@ import type {
   BusinessDealOverride,
   BusinessSignupRequest,
   CustomerSignupRequest,
+  CurrentHappyHourPlace,
   Deal,
   EmailVerificationChallengeResponse,
   HappyHourWindow,
@@ -673,6 +676,7 @@ function AppScreen() {
   const [shouldOpenCustomerPreferencesAfterVerification, setShouldOpenCustomerPreferencesAfterVerification] = useState(false);
   const [pushRegistrationAttempt, setPushRegistrationAttempt] = useState(0);
   const [liveLocationRefreshToken, setLiveLocationRefreshToken] = useState(0);
+  const [currentHappyHoursRefreshToken, setCurrentHappyHoursRefreshToken] = useState(0);
   const [browseMode, setBrowseMode] = useState<BrowseMode>('list');
   const [browseFiltersExpanded, setBrowseFiltersExpanded] = useState(false);
   const [mapSearchPanelLifted, setMapSearchPanelLifted] = useState(false);
@@ -718,6 +722,8 @@ function AppScreen() {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [networkState, setNetworkState] = useState<Network.NetworkState | null>(null);
   const [networkRefreshPending, setNetworkRefreshPending] = useState(false);
+  const [currentHappyHourPlaces, setCurrentHappyHourPlaces] = useState<CurrentHappyHourPlace[]>([]);
+  const [currentHappyHoursMenuExpanded, setCurrentHappyHoursMenuExpanded] = useState(false);
   const [showMapResultsCard, setShowMapResultsCard] = useState(false);
   const [mapResultsCollapsed, setMapResultsCollapsed] = useState(false);
   const [renderedMapSearchResults, setRenderedMapSearchResults] = useState<MapSearchResultPlace[]>([]);
@@ -922,6 +928,8 @@ function AppScreen() {
   const liveLocationRefreshStartedAtRef = useRef<number | null>(null);
   const liveLocationRefreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastHandledLiveLocationRefreshTokenRef = useRef(0);
+  const currentHappyHoursRefreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const currentHappyHoursCityRef = useRef<string | null>(null);
   const authPortalRef = useRef<AuthPortal>(authPortal);
   const pushRegistrationAuthTokenRef = useRef('');
   const lastHandledNotificationResponseIdRef = useRef('');
@@ -934,6 +942,7 @@ function AppScreen() {
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const normalizedDeferredSearchQuery = normalizeSearchText(deferredSearchQuery);
   const liveMapPlacesRefreshIntervalMs = 30_000;
+  const currentHappyHoursRefreshIntervalMs = 60_000;
   const onboardingTransitionDuration = 500;
   const showTransitionMapBrowse = browseProfileTransitionFrom !== null
     && incomingBrowseProfileScreen !== null
@@ -1987,6 +1996,15 @@ function AppScreen() {
     liveLocationRefreshTimeoutRef.current = null;
   }
 
+  function clearCurrentHappyHoursRefreshTimer() {
+    if (currentHappyHoursRefreshTimeoutRef.current === null) {
+      return;
+    }
+
+    clearTimeout(currentHappyHoursRefreshTimeoutRef.current);
+    currentHappyHoursRefreshTimeoutRef.current = null;
+  }
+
   function pauseLiveLocationRefreshTimer() {
     clearLiveLocationRefreshTimer();
     if (liveLocationRefreshStartedAtRef.current === null) {
@@ -2004,6 +2022,7 @@ function AppScreen() {
     clearAutoFitMapRegionTimer();
     clearMapMarkersTrackViewChangesTimer();
     clearLiveLocationRefreshTimer();
+    clearCurrentHappyHoursRefreshTimer();
   }, []);
 
   useEffect(() => {
@@ -2016,6 +2035,7 @@ function AppScreen() {
         clearAutoFitMapRegionTimer();
         clearMapMarkersTrackViewChangesTimer();
         pauseLiveLocationRefreshTimer();
+        clearCurrentHappyHoursRefreshTimer();
         return;
       }
 
@@ -2024,6 +2044,7 @@ function AppScreen() {
         setPushRegistrationAttempt((current) => current + 1);
         if (showMapBrowse && hasInternetConnection === true) {
           setLiveLocationRefreshToken((current) => current + 1);
+          setCurrentHappyHoursRefreshToken((current) => current + 1);
         }
         if (hasInternetConnection === true) {
           businessLocationReportRef.current?.(businessLocationNeedsRetryRef.current);
@@ -2130,6 +2151,70 @@ function AppScreen() {
       pauseLiveLocationRefreshTimer();
     };
   }, [apiBaseUrl, hasInternetConnection, liveLocationRefreshToken, liveMapPlacesRefreshIntervalMs, reloadCount, selectedCity, selectedPlaceSlug, showMapBrowse]);
+
+  useEffect(() => {
+    const cityChanged = currentHappyHoursCityRef.current !== null && currentHappyHoursCityRef.current !== selectedCity;
+    currentHappyHoursCityRef.current = selectedCity;
+
+    if (cityChanged) {
+      setCurrentHappyHourPlaces([]);
+      setCurrentHappyHoursMenuExpanded(false);
+    }
+
+    if (
+      !showMapBrowse
+      || hasInternetConnection !== true
+      || appStateRef.current !== 'active'
+    ) {
+      clearCurrentHappyHoursRefreshTimer();
+      return;
+    }
+
+    let cancelled = false;
+
+    async function refreshCurrentHappyHours() {
+      try {
+        const response = await fetchCurrentHappyHourPlaces(apiBaseUrl, selectedCity);
+        if (cancelled) {
+          return;
+        }
+
+        setCurrentHappyHourPlaces(response.places);
+        if (response.places.length === 0) {
+          setCurrentHappyHoursMenuExpanded(false);
+        }
+      } catch {
+        // Keep the last successful snapshot when this best-effort refresh fails.
+      }
+    }
+
+    function scheduleNextCurrentHappyHoursRefresh() {
+      if (cancelled) {
+        return;
+      }
+
+      clearCurrentHappyHoursRefreshTimer();
+      currentHappyHoursRefreshTimeoutRef.current = setTimeout(() => {
+        currentHappyHoursRefreshTimeoutRef.current = null;
+        void refreshCurrentHappyHours().finally(() => {
+          if (!cancelled) {
+            scheduleNextCurrentHappyHoursRefresh();
+          }
+        });
+      }, currentHappyHoursRefreshIntervalMs);
+    }
+
+    void refreshCurrentHappyHours().finally(() => {
+      if (!cancelled) {
+        scheduleNextCurrentHappyHoursRefresh();
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      clearCurrentHappyHoursRefreshTimer();
+    };
+  }, [apiBaseUrl, currentHappyHoursRefreshIntervalMs, currentHappyHoursRefreshToken, hasInternetConnection, selectedCity, showMapBrowse]);
 
   useEffect(() => {
     if (!bottomMoreSheetVisible || authenticatedSession) {
@@ -4412,6 +4497,7 @@ function AppScreen() {
   const handleSelectPlace = useCallback((place: { slug: string; locationId?: number }) => {
     dismissKeyboardForScreenTransition();
     animateNextLayout();
+    setCurrentHappyHoursMenuExpanded(false);
     setDetailLoading(true);
     setBrowseFiltersExpanded(false);
     setSelectedMapPlaceKey(null);
@@ -7956,7 +8042,7 @@ function AppScreen() {
                           </View>
                         )}
                       </Animated.View>
-                    ) : showMapResultsCard ? (
+                    ) : showMapResultsCard && !currentHappyHoursMenuExpanded ? (
                       <Animated.View style={{ opacity: mapResultsOpacity }}>
                         <Animated.View style={[styles.mapResultsCard, { maxHeight: mapResultsCardAnimatedMaxHeight }]}>
                           <View style={styles.mapResultsHeader}>
@@ -8115,6 +8201,17 @@ function AppScreen() {
                     ) : null}
                   </Animated.View>
                 </View>
+
+                {showMapBrowse ? (
+                  <CurrentHappyHoursUpMenu
+                    bottomOffset={mapOverlayBottomPadding + (showMapResultsCard && !currentHappyHoursMenuExpanded ? 96 : 0)}
+                    expanded={currentHappyHoursMenuExpanded}
+                    onSelectPlace={handleSelectPlace}
+                    onToggle={() => setCurrentHappyHoursMenuExpanded((current) => !current)}
+                    places={currentHappyHourPlaces}
+                    theme={displayedDarkMapMode ? 'dark' : 'light'}
+                  />
+                ) : null}
 
                 {authenticatedSession && browseMode === 'map' ? (
                   <NativeIOSLiquidGlassHeaderButton

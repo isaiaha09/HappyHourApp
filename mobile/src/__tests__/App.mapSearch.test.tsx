@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react-n
 import { AppState, NativeModules } from 'react-native';
 
 import { getVenueMarkerStyle } from '../browseConfig';
-import type { PlaceListItem, SignupResponse } from '../types';
+import type { CurrentHappyHourPlace, PlaceListItem, SignupResponse } from '../types';
 
 type MockNetworkState = {
   isConnected: boolean;
@@ -13,6 +13,7 @@ type MockNetworkState = {
 
 const mockFetchPlaces = jest.fn<Promise<PlaceListItem[]>, [string, string]>();
 const mockFetchLiveLocationPlaces = jest.fn<Promise<Array<{ slug: string; latitude: number | null; longitude: number | null; updated_at: string | null }>>, [string, string]>();
+const mockFetchCurrentHappyHourPlaces = jest.fn<Promise<{ observed_at: string; places: CurrentHappyHourPlace[] }>, [string, string]>();
 const mockFetchPlaceDetail = jest.fn();
 const mockFetchProfileDashboard = jest.fn();
 const mockFetchCustomerPreferences = jest.fn();
@@ -51,6 +52,7 @@ jest.mock('../api', () => ({
   deleteProfileAccount: (baseUrl: string, authToken: string, password: string) => mockDeleteProfileAccount(baseUrl, authToken, password),
   disableTwoFactor: jest.fn(),
   fetchFeed: jest.fn(),
+  fetchCurrentHappyHourPlaces: (...args: [string, string]) => mockFetchCurrentHappyHourPlaces(...args),
   fetchLiveLocationPlaces: (...args: [string, string]) => mockFetchLiveLocationPlaces(...args),
   fetchPlaceDetail: (...args: unknown[]) => mockFetchPlaceDetail(...args),
   fetchPlaces: (...args: [string, string]) => mockFetchPlaces(...args),
@@ -436,6 +438,28 @@ const samplePlace: PlaceListItem = {
   locations: [],
 };
 
+const currentHappyHourPlace: CurrentHappyHourPlace = {
+  slug: samplePlace.slug,
+  location_id: samplePlace.id,
+  name: samplePlace.name,
+  city: samplePlace.city,
+  city_label: samplePlace.city_label,
+  venue_type_label: samplePlace.venue_type_label,
+  address_line_1: samplePlace.address_line_1,
+  address_line_2: samplePlace.address_line_2,
+  latitude: samplePlace.latitude,
+  longitude: samplePlace.longitude,
+  happy_hours: [{
+    deal_id: 11,
+    title: 'Afternoon scoop special',
+    price_text: '$5 wells',
+    weekday_label: 'Wednesday',
+    start_time: '15:00',
+    end_time: '18:00',
+    all_day: false,
+  }],
+};
+
 const secondSamplePlace: PlaceListItem = {
   ...samplePlace,
   id: 2,
@@ -503,6 +527,8 @@ describe('App browse map search', () => {
     mockFetchPlaces.mockResolvedValue([samplePlace]);
     mockFetchLiveLocationPlaces.mockReset();
     mockFetchLiveLocationPlaces.mockResolvedValue([]);
+    mockFetchCurrentHappyHourPlaces.mockReset();
+    mockFetchCurrentHappyHourPlaces.mockResolvedValue({ observed_at: '2026-08-26T15:00:00-07:00', places: [] });
     mockFetchPlaceDetail.mockReset();
     mockFetchProfileDashboard.mockResolvedValue(null);
     mockFetchCustomerPreferences.mockResolvedValue({
@@ -567,6 +593,7 @@ describe('App browse map search', () => {
     mockNetworkListeners.clear();
     mockFetchPlaces.mockReset();
     mockFetchLiveLocationPlaces.mockReset();
+    mockFetchCurrentHappyHourPlaces.mockReset();
     mockFetchProfileDashboard.mockReset();
     mockFetchCustomerPreferences.mockReset();
     mockSaveCustomerPreferences.mockReset();
@@ -1478,6 +1505,71 @@ describe('App browse map search', () => {
     });
 
     expect(screen.getByTestId('browse-search-input')).toBeTruthy();
+  });
+
+  it('shows current happy hours and opens a place from the guest map', async () => {
+    mockFetchCurrentHappyHourPlaces.mockResolvedValue({
+      observed_at: '2026-08-26T15:00:00-07:00',
+      places: [currentHappyHourPlace],
+    });
+    mockFetchPlaceDetail.mockResolvedValue({ ...samplePlace, deals: [], locations: [] });
+
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+
+    expect(await screen.findByTestId('current-happy-hours-toggle')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('current-happy-hours-toggle'));
+
+    expect(screen.getByTestId('current-happy-hours-menu')).toBeTruthy();
+    expect(screen.getByText('Afternoon scoop special')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('current-happy-hours-row-baskin-robbins:1'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(mockFetchPlaceDetail).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api',
+      'baskin-robbins',
+      undefined,
+    );
+  });
+
+  it('shows the same current happy hours menu on the authenticated map', async () => {
+    mockFetchCurrentHappyHourPlaces.mockResolvedValue({
+      observed_at: '2026-08-26T15:00:00-07:00',
+      places: [currentHappyHourPlace],
+    });
+
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+    fireEvent.press(screen.getByLabelText('Open customer login'));
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+    fireEvent.press(await screen.findByLabelText('Submit login'));
+
+    expect(await screen.findByText('Dashboard screen')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Open places'));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    fireEvent.press(screen.getByLabelText('Open map'));
+
+    expect(await screen.findByTestId('current-happy-hours-toggle')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('current-happy-hours-toggle'));
+    expect(screen.getByTestId('current-happy-hours-menu')).toBeTruthy();
+    expect(screen.getByText('Baskin-Robbins')).toBeTruthy();
   });
 
   it('does not cover the guest map with an empty panel during an auth back swipe', async () => {

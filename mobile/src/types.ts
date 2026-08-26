@@ -149,6 +149,35 @@ export type LiveLocationPlaceUpdate = {
   city_label?: string | null;
 };
 
+export type CurrentHappyHourWindow = {
+  deal_id: number | null;
+  title: string;
+  price_text: string;
+  weekday_label: string;
+  start_time: string;
+  end_time: string;
+  all_day: boolean;
+};
+
+export type CurrentHappyHourPlace = {
+  slug: string;
+  location_id: number;
+  name: string;
+  city: string;
+  city_label: string;
+  venue_type_label: string;
+  address_line_1: string;
+  address_line_2: string;
+  latitude: number | null;
+  longitude: number | null;
+  happy_hours: CurrentHappyHourWindow[];
+};
+
+export type CurrentHappyHoursResponse = {
+  observed_at: string;
+  places: CurrentHappyHourPlace[];
+};
+
 export type PaginatedResponse<T> = {
   count: number;
   next: string | null;
