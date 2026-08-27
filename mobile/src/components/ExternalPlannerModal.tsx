@@ -20,17 +20,13 @@ import ViewShot, { type ViewShotRef } from 'react-native-view-shot';
 import {
   buildCalendarDraftFromParts,
   buildCalendarNotes,
-  buildShareText,
   formatDateLabel,
-  formatPlannerContentSummary,
   formatPlannerDateInput,
-  formatPlannerOperatingHours,
   formatPlannerTimeInput,
   formatTimeLabel,
   getDefaultCalendarSelection,
   getDefaultShareSelection,
-  getPlannerContentCounts,
-  getPlannerContentTitles,
+  getPlannerShareCardDetails,
   getPlannerSchedules,
   parsePlannerDateInput,
   parsePlannerTimeInput,
@@ -169,7 +165,6 @@ function getPlannerColorStyles(palette: PlannerPalette) {
     shareCardMeta: { color: palette.shareCardMeta },
     shareCardName: { color: palette.text },
     shareCardPlaceholder: { backgroundColor: palette.shareCardPlaceholder },
-    shareTextPreview: { color: palette.muted },
   };
 }
 
@@ -509,8 +504,6 @@ function ShareComposer({ context, onClose, onSubmit, palette }: ShareComposerPro
     setValidationMessage(null);
   }, [context, defaultMyTime]);
 
-  const shareText = useMemo(() => buildShareText(context, selection), [context, selection]);
-
   function updateSelection(patch: Partial<RestaurantShareSelection>) {
     setSelection((current) => ({ ...current, ...patch }));
     setValidationMessage(null);
@@ -721,7 +714,6 @@ function ShareComposer({ context, onClose, onSubmit, palette }: ShareComposerPro
       <ViewShot ref={shareCardRef} options={{ format: 'png', quality: 1, result: 'tmpfile' }} style={styles.shareCardCapture}>
         <ShareCardPreview context={context} selection={selection} palette={palette} />
       </ViewShot>
-      <Text style={[styles.shareTextPreview, colorStyles.shareTextPreview]}>{shareText}</Text>
       {validationMessage ? <Text style={[styles.errorText, colorStyles.errorText]}>{validationMessage}</Text> : null}
       <Text style={[styles.disclaimer, colorStyles.disclaimer]}>Your device opens the share sheet. DiningDealz never sends the message automatically.</Text>
       <View style={styles.footerActions}>
@@ -751,10 +743,7 @@ function ShareCardPreview({ context, palette, selection }: { context: PlannerPla
   const colorStyles = getPlannerColorStyles(palette);
   const photoUri = selection.includePhotos ? selection.selectedPhotoUri ?? context.imageUrls[0] : undefined;
   const [photoLoadFailed, setPhotoLoadFailed] = useState(false);
-  const selectedDeals = context.deals.filter((deal) => selection.selectedDealIds.includes(deal.id));
-  const contentCounts = getPlannerContentCounts(context);
-  const contentTitles = getPlannerContentTitles(context);
-  const operatingHours = formatPlannerOperatingHours(context);
+  const cardDetails = getPlannerShareCardDetails(context, selection);
   const placeholderIcon = getCategoryIcon(context.venueTypeLabel);
 
   useEffect(() => {
@@ -776,18 +765,7 @@ function ShareCardPreview({ context, palette, selection }: { context: PlannerPla
       )}
       <Text style={[styles.shareCardName, colorStyles.shareCardName]}>{context.name}</Text>
       <Text style={[styles.shareCardMeta, colorStyles.shareCardMeta]}>{[context.cityLabel, context.venueTypeLabel].filter(Boolean).join(' · ')}</Text>
-      {selection.mode === 'my-time' ? (
-        <Text style={[styles.shareCardDetail, colorStyles.shareCardDetail]}>{[selection.date ? formatPlannerDateInput(selection.date) : '', selection.startTime && selection.endTime ? `${formatPlannerTimeInput(selection.startTime)} - ${formatPlannerTimeInput(selection.endTime)}` : ''].filter(Boolean).join('\n')}</Text>
-      ) : (
-        <Text numberOfLines={5} style={[styles.shareCardDetail, colorStyles.shareCardDetail]}>
-          {[
-            selection.includeHappyHours && contentCounts.happyHourSpecials ? formatPlannerContentSummary('Happy Hours and Deals', contentCounts.happyHourSpecials, 'special', contentTitles.happyHourTitles) : '',
-            selection.includeOperatingHours && operatingHours ? `Hours of operation: ${operatingHours}` : '',
-            selection.includeDealsAndMenu && selectedDeals.length ? formatPlannerContentSummary('Specials and Menu', selectedDeals.length, 'deal', selectedDeals.map((deal) => deal.title)) : '',
-            selection.includeLocation ? context.address : '',
-          ].filter(Boolean).join('\n')}
-        </Text>
-      )}
+      <Text style={[styles.shareCardDetail, colorStyles.shareCardDetail]}>{cardDetails.join('\n')}</Text>
     </View>
   );
 }
@@ -1163,12 +1141,6 @@ const styles = StyleSheet.create({
     height: 124,
     justifyContent: 'center',
   },
-  shareTextPreview: {
-    color: palette.muted,
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 9,
-  },
   timeField: {
     flex: 1,
   },
@@ -1177,7 +1149,7 @@ const styles = StyleSheet.create({
   },
   timeRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 16,
     marginTop: 10,
   },
 });

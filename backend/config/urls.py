@@ -19,11 +19,15 @@ from django.conf.urls.static import static
 from django.urls import include, path
 
 from places.admin_site import happyhour_admin_site
+from places.share_links import apple_app_site_association, share_place_redirect
 from places.views import PrivateBusinessClaimAttachmentView
 
 urlpatterns = [
+    path('.well-known/apple-app-site-association', apple_app_site_association, name='apple-app-site-association'),
     path(f'{settings.ADMIN_URL_PATH}/', happyhour_admin_site.urls),
     path('private-media/<path:name>', PrivateBusinessClaimAttachmentView.as_view(), name='private-business-claim-attachment'),
+    path('share/place/<slug:slug>/', share_place_redirect, name='share-place'),
+    path('share/places/<slug:slug>/', share_place_redirect, name='share-places'),
     path('api/', include('places.urls')),
 ]
 

@@ -248,10 +248,10 @@ final class DiningDealzExternalPlanner: NSObject {
       let image = self.diningDealzRenderShareCard(context: context, selection: selection, photo: photo)
       var items: [Any] = [message]
       if let profileLinks = diningDealzShareProfileLinks(context),
-         let profileURL = URL(string: profileLinks.web) {
+         let profileURL = URL(string: profileLinks.app) {
         items.append(DiningDealzProfileLinkActivityItemSource(
           profileURL: profileURL,
-          title: "(context.name) on DiningDealz",
+          title: "\(context.name) on DiningDealz",
           previewImage: image
         ))
       } else if let image {
@@ -347,161 +347,33 @@ final class DiningDealzExternalPlanner: NSObject {
 }
 
 private func diningDealzShareText(context: DiningDealzPlannerContext, selection: DiningDealzNativeShareSelection) -> String {
-  var lines = ["DiningDealz restaurant recommendation", context.name]
-  if selection.mode == "my-time" {
-    let date = selection.date.map(diningDealzShareDisplayDate) ?? ""
-    let start = selection.startTime.map(diningDealzShareDisplayTime) ?? ""
-    let end = selection.endTime.map(diningDealzShareDisplayTime) ?? ""
-    let range = [start, end].filter { !$0.isEmpty }.joined(separator: " - ")
-    let details = [date, range].filter { !$0.isEmpty }.joined(separator: " · ")
-    if !details.isEmpty { lines.append("My time: \(details)") }
-  } else {
-    let counts = diningDealzShareContentCounts(context)
-    let selectedDeals = context.deals.filter { selection.selectedDealIds.contains($0.id) }
-    let titles = diningDealzShareContentTitles(context)
-    let operatingHours = diningDealzShareOperatingHoursText(context)
-    if selection.includeHappyHours {
-      if counts.happyHourSpecials > 0 {
-        lines.append(diningDealzShareContentSummary(
-          label: "Happy Hours and Deals",
-          count: counts.happyHourSpecials,
-          singular: "special",
-          titles: titles.happyHourTitles
-        ))
-      }
-    }
-    if selection.includeOperatingHours {
-      if !operatingHours.isEmpty {
-        lines.append("Hours of operation: \(operatingHours)")
-      }
-    }
-    if selection.includeDealsAndMenu && !selectedDeals.isEmpty {
-      lines.append(diningDealzShareContentSummary(
-        label: "Specials and Menu",
-        count: selectedDeals.count,
-        singular: "deal",
-        titles: diningDealzShareUniqueTitles(selectedDeals.map { Optional($0.title) })
-      ))
-    }
-  }
-  if selection.includeLocation && !context.address.isEmpty { lines.append("Location: \(context.address)") }
-  if selection.includeLocation, let mapURL = diningDealzPlannerMapURL(context) { lines.append("DiningDealz map: \(mapURL)") }
-  if let profileLinks = diningDealzShareProfileLinks(context) {
-    lines.append("Open in DiningDealz: \(profileLinks.app)")
-    lines.append("Business profile: \(profileLinks.web)")
-    lines.append("Download DiningDealz (iPhone): \(profileLinks.iosStore)")
-    lines.append("Download DiningDealz (Android): \(profileLinks.androidStore)")
-  }
-  lines.append("Shared from the DiningDealz app")
-  return lines.filter { !$0.isEmpty }.joined(separator: "\n")
-}
-
-private func diningDealzShareContentCounts(_ context: DiningDealzPlannerContext) -> (happyHourSpecials: Int, operatingHourSchedules: Int) {
-  let happyHourSchedules = context.schedules.filter { $0.kind == "happy-hour" }
-  let knownDealIDs = Set(happyHourSchedules.compactMap(\.dealId))
-  let schedulesWithoutDeal = happyHourSchedules.filter { $0.dealId == nil }.count
-  return (
-    happyHourSpecials: knownDealIDs.count + schedulesWithoutDeal,
-    operatingHourSchedules: context.schedules.filter { $0.kind == "operating-hours" }.count
-  )
-}
-
-private func diningDealzShareCountLabel(_ count: Int, singular: String) -> String {
-  "\(count) \(count == 1 ? singular : singular + "s")"
-}
-
-private func diningDealzShareContentSummary(label: String, count: Int, singular: String, titles: [String]) -> String {
-  let titleSuffix = titles.isEmpty ? "" : " — \(titles.joined(separator: ", "))"
-  return "\(label): \(diningDealzShareCountLabel(count, singular: singular))\(titleSuffix)"
-}
-
-private func diningDealzShareUniqueTitles(_ values: [String?]) -> [String] {
-  var seen = Set<String>()
-  return values.compactMap { value in
-    let title = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    guard !title.isEmpty, !seen.contains(title) else { return nil }
-    seen.insert(title)
-    return title
-  }
-}
-
-private func diningDealzShareContentTitles(_ context: DiningDealzPlannerContext) -> (happyHourTitles: [String], dealTitles: [String]) {
-  let happyHourTitles = context.schedules
-    .filter { $0.kind == "happy-hour" }
-    .map { schedule -> String? in
-      if let title = schedule.dealTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
-        return title
-      }
-      let fallback = schedule.label.trimmingCharacters(in: .whitespacesAndNewlines)
-      return fallback.isEmpty || fallback.lowercased() == "happy hour" ? nil : fallback
-    }
-
-  return (
-    happyHourTitles: diningDealzShareUniqueTitles(happyHourTitles),
-    dealTitles: diningDealzShareUniqueTitles(context.deals.map { Optional($0.title) })
-  )
+  _ = selection
+  return "Check out \(context.name) on DiningDealz"
 }
 
 private struct DiningDealzShareProfileLinks {
   let app: String
-  let web: String
-  let iosStore: String
-  let androidStore: String
+}
+
+private func diningDealzIOSProfileLinkBaseURL() -> String {
+  let configured = (Bundle.main.object(forInfoDictionaryKey: "DiningDealzProfileLinkBaseURL") as? String)?
+    .trimmingCharacters(in: .whitespacesAndNewlines)
+    .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+  if let configured, !configured.isEmpty {
+    return configured
+  }
+  return "https://backend.diningdealz.com/share/place"
 }
 
 private func diningDealzShareProfileLinks(_ context: DiningDealzPlannerContext) -> DiningDealzShareProfileLinks? {
   let slug = context.reference.slug.trimmingCharacters(in: .whitespacesAndNewlines)
   guard !slug.isEmpty else { return nil }
-  let encodedSlug = slug.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? slug
+  var allowedCharacters = CharacterSet.urlPathAllowed
+  allowedCharacters.remove(charactersIn: "/")
+  let encodedSlug = slug.addingPercentEncoding(withAllowedCharacters: allowedCharacters) ?? slug
   return DiningDealzShareProfileLinks(
-    app: "diningdealz://place/\(encodedSlug)",
-    web: "https://www.diningdealz.com/place/\(encodedSlug)",
-    iosStore: "https://apps.apple.com/us/search?term=DiningDealz",
-    androidStore: "https://play.google.com/store/search?q=DiningDealz&c=apps"
+    app: "\(diningDealzIOSProfileLinkBaseURL())/\(encodedSlug)/"
   )
-}
-
-private func diningDealzShareOperatingHoursText(_ context: DiningDealzPlannerContext) -> String {
-  context.schedules
-    .filter { $0.kind == "operating-hours" }
-    .map { schedule in
-      let day = schedule.weekdayLabel.map { "\($0): " } ?? ""
-      if schedule.allDay {
-        return "\(day)Open 24 hours"
-      }
-      let start = diningDealzShareDisplayTime(schedule.startTime)
-      let end = diningDealzShareDisplayTime(schedule.endTime)
-      let range = [start, end].filter { !$0.isEmpty }.joined(separator: " - ")
-      return "\(day)\(range.isEmpty ? schedule.label : range)"
-    }
-    .filter { !$0.isEmpty }
-    .joined(separator: "; ")
-}
-
-private func diningDealzShareDisplayDate(_ value: String) -> String {
-  let parts = value.split(separator: "-")
-  guard parts.count == 3 else { return value }
-  if parts[0].count == 4 {
-    return String(format: "%02d-%02d-%04d", Int(parts[1]) ?? 0, Int(parts[2]) ?? 0, Int(parts[0]) ?? 0)
-  }
-  return value
-}
-
-private func diningDealzShareDisplayTime(_ value: String) -> String {
-  let parts = value.split(separator: ":").compactMap { Int($0) }
-  guard let hour = parts.first, let minute = parts.dropFirst().first, (0...23).contains(hour), (0...59).contains(minute) else {
-    return value
-  }
-  return "\(hour % 12 == 0 ? 12 : hour % 12):\(String(format: "%02d", minute)) \(hour >= 12 ? "PM" : "AM")"
-}
-
-private func diningDealzPlannerMapURL(_ context: DiningDealzPlannerContext) -> String? {
-  if let latitude = context.latitude, let longitude = context.longitude {
-    return "https://www.google.com/maps/search/?api=1&query=\(latitude),\(longitude)"
-  }
-  guard !context.address.isEmpty else { return nil }
-  let query = "\(context.name), \(context.address)".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-  return "https://www.google.com/maps/search/?api=1&query=\(query)"
 }
 
 private func diningDealzICSData(for draft: DiningDealzNativeCalendarDraft) throws -> Data {

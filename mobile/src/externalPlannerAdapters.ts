@@ -143,8 +143,10 @@ export async function openExternalShare(
   selection: RestaurantShareSelection,
   cardRef: RefObject<ViewShotRef | null>,
 ) {
-  const message = buildShareText(context, selection);
   const profileLinks = getBusinessProfileLinks(context);
+  const profileLink = profileLinks
+    ? Platform.OS === 'ios' ? profileLinks.iosProfile : profileLinks.app
+    : undefined;
   let cardUri: string | null = null;
 
   try {
@@ -154,23 +156,30 @@ export async function openExternalShare(
       result: 'tmpfile',
     });
   } catch {
-    // Text and the map link still provide a useful share if an image capture fails.
+    // The short message and app profile link still provide a useful share if capture fails.
   }
 
-  const linkedCardSource = Platform.OS === 'ios' && cardUri && profileLinks
+  const linkedCardSource = Platform.OS === 'ios' && cardUri && profileLink
     ? [{
       item: {
-        default: { content: profileLinks.web, type: 'url' as const },
+        default: { content: profileLink, type: 'url' as const },
       },
       linkMetadata: {
         image: cardUri,
-        originalUrl: profileLinks.web,
+        originalUrl: profileLink,
         title: `${context.name} on DiningDealz`,
-        url: profileLinks.web,
+        url: profileLink,
       },
-      placeholderItem: { content: profileLinks.web, type: 'url' as const },
+      // Keep the preview provider from replacing the branded image with the
+      // redirect endpoint's App Store metadata. The actual item remains the
+      // universal link above, so the recipient still gets app-first routing.
+      placeholderItem: { content: profileLinks?.app ?? profileLink, type: 'url' as const },
     }]
     : undefined;
+  const message = buildShareText(context, selection, {
+    includeProfileLink: !linkedCardSource,
+    profileLink,
+  });
 
   await getShareModule().open({
     activityItemSources: linkedCardSource,

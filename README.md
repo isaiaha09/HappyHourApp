@@ -293,6 +293,18 @@ Account recovery emails open the DiningDealz mobile app through its `diningdealz
 
 The mobile app handles the username reminder screen and the token-based password reset screen. Release the updated mobile binary before testing these links on a device; the backend can continue serving the existing browser reset endpoint for direct web requests.
 
+## Mobile Business Profile Share Links
+
+Restaurant sharing uses `https://backend.diningdealz.com/share/place/<slug>/` as an iOS Universal Link. An installed DiningDealz app opens the business profile directly; otherwise the backend redirects to the iOS App Store. The route never renders or redirects to the public business website.
+
+The iOS build declares `applinks:backend.diningdealz.com`, and the backend serves the required association document at `/.well-known/apple-app-site-association`. Set these production values when the App Store listing has a stable URL:
+
+- `PROFILE_IOS_APP_STORE_URL=https://apps.apple.com/us/app/<app-name>/id<app-id>`
+- `DININGDEALZ_IOS_TEAM_ID=V6MYG36LZ9`
+- `DININGDEALZ_IOS_BUNDLE_ID=com.ia09.diningdealz`
+
+Until `PROFILE_IOS_APP_STORE_URL` is set, the fallback uses an App Store search for DiningDealz. The mobile build can use `EXPO_PUBLIC_IOS_PROFILE_LINK_BASE_URL` to point at a different HTTPS share-link host only when that host serves the matching AASA document.
+
 ## Production Rate Limiting
 
 The backend applies scoped DRF throttles to login, signup, verification-code, password-recovery, support, direct-message, favorite, feed-write, and profile mutation endpoints.

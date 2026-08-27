@@ -579,16 +579,9 @@ struct DiningDealzNativeShareCardView: View {
       Text([context.cityLabel, context.venueTypeLabel].filter { !$0.isEmpty }.joined(separator: " · "))
         .font(.caption)
         .foregroundStyle(DiningDealzPlannerPalette.muted(for: resolvedColorScheme))
-      if selection.mode == "my-time" {
-        Text([selection.date.map(diningDealzPlannerDisplayDate), selection.startTime.map(diningDealzPlannerDisplayTime), selection.endTime.map(diningDealzPlannerDisplayTime)].compactMap { $0 }.joined(separator: " · "))
-          .font(.subheadline.weight(.semibold))
-          .foregroundStyle(DiningDealzPlannerPalette.foreground(for: resolvedColorScheme))
-      } else {
-        Text(nativeShareCardDetails)
-          .font(.caption)
-          .foregroundStyle(DiningDealzPlannerPalette.foreground(for: resolvedColorScheme).opacity(0.88))
-          .lineLimit(5)
-      }
+      Text(nativeShareCardDetails)
+        .font(.caption)
+        .foregroundStyle(DiningDealzPlannerPalette.foreground(for: resolvedColorScheme).opacity(0.88))
     }
     .padding(14)
     .background(DiningDealzPlannerPalette.card(for: resolvedColorScheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -605,11 +598,23 @@ struct DiningDealzNativeShareCardView: View {
   }
 
   private var nativeShareCardDetails: String {
+    var lines: [String] = []
+    if selection.mode == "my-time" {
+      let date = selection.date.map(diningDealzPlannerDisplayDate) ?? ""
+      let start = selection.startTime.map(diningDealzPlannerDisplayTime) ?? ""
+      let end = selection.endTime.map(diningDealzPlannerDisplayTime) ?? ""
+      let range = [start, end].filter { !$0.isEmpty }.joined(separator: " - ")
+      let details = [date, range].filter { !$0.isEmpty }.joined(separator: " · ")
+      if !details.isEmpty {
+        lines.append("My time: \(details)")
+      }
+    }
+
     let counts = diningDealzPlannerContentCounts(context)
     let selectedDeals = context.deals.filter { selection.selectedDealIds.contains($0.id) }
     let titles = diningDealzPlannerContentTitles(context)
     let operatingHours = diningDealzPlannerOperatingHoursText(context)
-    return [
+    lines.append(contentsOf: [
       selection.includeHappyHours && counts.happyHourSpecials > 0 ? diningDealzPlannerContentSummary(
         label: "Happy Hours and Deals",
         count: counts.happyHourSpecials,
@@ -624,7 +629,8 @@ struct DiningDealzNativeShareCardView: View {
         titles: selectedDeals.compactMap { $0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0.title.trimmingCharacters(in: .whitespacesAndNewlines) }
       ) : nil,
       selection.includeLocation ? context.address : nil,
-    ].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n")
+    ].compactMap { $0 }.filter { !$0.isEmpty })
+    return lines.joined(separator: "\n")
   }
 }
 
@@ -828,16 +834,17 @@ private func diningDealzPlannerContentTitles(_ context: DiningDealzPlannerContex
     }
   }
 
+  let happyHourSchedules = context.schedules.filter { $0.kind == "happy-hour" }
+    + context.deals.flatMap { $0.happyHours }
+
   return (
-    happyHourTitles: uniqueTitles(context.schedules
-      .filter { $0.kind == "happy-hour" }
-      .map { schedule in
-        if let title = schedule.dealTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
-          return title
-        }
-        let fallback = schedule.label.trimmingCharacters(in: .whitespacesAndNewlines)
-        return fallback.isEmpty || fallback.lowercased() == "happy hour" ? nil : fallback
-      }),
+    happyHourTitles: uniqueTitles(happyHourSchedules.map { schedule in
+      if let title = schedule.dealTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
+        return title
+      }
+      let fallback = schedule.label.trimmingCharacters(in: .whitespacesAndNewlines)
+      return fallback.isEmpty || fallback.lowercased() == "happy hour" ? nil : fallback
+    }),
     dealTitles: uniqueTitles(context.deals.map { Optional($0.title) })
   )
 }

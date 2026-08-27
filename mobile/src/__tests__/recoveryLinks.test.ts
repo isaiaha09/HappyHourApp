@@ -28,6 +28,10 @@ describe('parseRecoveryDeepLink', () => {
       kind: 'business-profile',
       slug: 'yard-house',
     });
+    expect(parseRecoveryDeepLink('https://backend.diningdealz.com/share/place/yard-house/')).toEqual({
+      kind: 'business-profile',
+      slug: 'yard-house',
+    });
   });
 
   it('ignores unrelated or incomplete links', () => {

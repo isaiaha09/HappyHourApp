@@ -87,12 +87,13 @@ export type PlannerContentTitles = {
 
 export type BusinessProfileLinks = {
   app: string;
-  web: string;
+  iosProfile: string;
   iosStore: string;
   androidStore: string;
 };
 
-const diningDealzWebsiteURL = 'https://www.diningdealz.com';
+const diningDealzIOSProfileLinkBaseURL = (process.env.EXPO_PUBLIC_IOS_PROFILE_LINK_BASE_URL?.trim()
+  || 'https://backend.diningdealz.com/share/place').replace(/\/+$/, '');
 const diningDealzIOSAppStoreURL = process.env.EXPO_PUBLIC_IOS_APP_STORE_URL?.trim()
   || 'https://apps.apple.com/us/search?term=DiningDealz';
 const diningDealzAndroidStoreURL = process.env.EXPO_PUBLIC_ANDROID_APP_STORE_URL?.trim()
@@ -722,18 +723,21 @@ function uniquePlannerTitles(values: Array<string | undefined>) {
 }
 
 export function getPlannerContentTitles(context: PlannerPlaceContext): PlannerContentTitles {
+  const happyHourSchedules = [
+    ...context.schedules.filter((schedule) => schedule.kind === 'happy-hour'),
+    ...context.deals.flatMap((deal) => deal.happyHours),
+  ];
+
   return {
     dealTitles: uniquePlannerTitles(context.deals.map((deal) => deal.title)),
-    happyHourTitles: uniquePlannerTitles(context.schedules
-      .filter((schedule) => schedule.kind === 'happy-hour')
-      .map((schedule) => {
-        const title = schedule.dealTitle?.trim();
-        if (title) {
-          return title;
-        }
-        const fallback = schedule.label.trim();
-        return fallback && fallback.toLowerCase() !== 'happy hour' ? fallback : undefined;
-      })),
+    happyHourTitles: uniquePlannerTitles(happyHourSchedules.map((schedule) => {
+      const title = schedule.dealTitle?.trim();
+      if (title) {
+        return title;
+      }
+      const fallback = schedule.label.trim();
+      return fallback && fallback.toLowerCase() !== 'happy hour' ? fallback : undefined;
+    })),
   };
 }
 
@@ -764,9 +768,48 @@ export function getBusinessProfileLinks(context: Pick<PlannerPlaceContext, 'refe
   return {
     androidStore: diningDealzAndroidStoreURL,
     app: `diningdealz://place/${encodedSlug}`,
+    iosProfile: `${diningDealzIOSProfileLinkBaseURL}/${encodedSlug}/`,
     iosStore: diningDealzIOSAppStoreURL,
-    web: `${diningDealzWebsiteURL}/place/${encodedSlug}`,
   };
+}
+
+export function getPlannerShareCardDetails(context: PlannerPlaceContext, selection: RestaurantShareSelection) {
+  const lines: string[] = [];
+
+  if (selection.mode === 'my-time') {
+    const date = selection.date ? formatPlannerDateInput(selection.date) : '';
+    const start = selection.startTime ? formatPlannerTimeInput(selection.startTime) : '';
+    const end = selection.endTime ? formatPlannerTimeInput(selection.endTime) : '';
+    const timeRange = start && end ? `${start} - ${end}` : start || end;
+    if (date || timeRange) {
+      lines.push(`My time: ${[date, timeRange].filter(Boolean).join(' · ')}`);
+    }
+  }
+
+  const counts = getPlannerContentCounts(context);
+  const titles = getPlannerContentTitles(context);
+  const operatingHours = formatPlannerOperatingHours(context);
+  const selectedDeals = context.deals.filter((deal) => selection.selectedDealIds.includes(deal.id));
+
+  if (selection.includeHappyHours && counts.happyHourSpecials) {
+    lines.push(formatPlannerContentSummary('Happy Hours and Deals', counts.happyHourSpecials, 'special', titles.happyHourTitles));
+  }
+  if (selection.includeOperatingHours && operatingHours) {
+    lines.push(`Hours of operation: ${operatingHours}`);
+  }
+  if (selection.includeDealsAndMenu && selectedDeals.length) {
+    lines.push(formatPlannerContentSummary(
+      'Specials and Menu',
+      selectedDeals.length,
+      'deal',
+      uniquePlannerTitles(selectedDeals.map((deal) => deal.title)),
+    ));
+  }
+  if (selection.includeLocation && context.address) {
+    lines.push(context.address);
+  }
+
+  return lines;
 }
 
 export function buildMapUrl(context: Pick<PlannerPlaceContext, 'latitude' | 'longitude' | 'address' | 'name'>) {
@@ -779,60 +822,17 @@ export function buildMapUrl(context: Pick<PlannerPlaceContext, 'latitude' | 'lon
   return '';
 }
 
-export function buildShareText(context: PlannerPlaceContext, selection: RestaurantShareSelection) {
-  const lines = ['DiningDealz restaurant recommendation', context.name];
-
-  if (selection.mode === 'my-time') {
-    const date = selection.date ? formatPlannerDateInput(selection.date) : '';
-    const start = selection.startTime ? formatPlannerTimeInput(selection.startTime) : '';
-    const end = selection.endTime ? formatPlannerTimeInput(selection.endTime) : '';
-    const timeRange = start && end ? `${start} - ${end}` : start || end;
-    if (date || timeRange) {
-      lines.push(`My time: ${[date, timeRange].filter(Boolean).join(' · ')}`);
-    }
-  } else {
-    const selectedDeals = context.deals.filter((deal) => selection.selectedDealIds.includes(deal.id));
-    const counts = getPlannerContentCounts(context);
-    const operatingHours = formatPlannerOperatingHours(context);
-    const titles = getPlannerContentTitles(context);
-    if (selection.includeHappyHours) {
-      if (counts.happyHourSpecials) {
-        lines.push(formatPlannerContentSummary('Happy Hours and Deals', counts.happyHourSpecials, 'special', titles.happyHourTitles));
-      }
-    }
-    if (selection.includeOperatingHours) {
-      if (operatingHours) {
-        lines.push(`Hours of operation: ${operatingHours}`);
-      }
-    }
-    if (selection.includeDealsAndMenu && selectedDeals.length) {
-      lines.push(formatPlannerContentSummary(
-        'Specials and Menu',
-        selectedDeals.length,
-        'deal',
-        uniquePlannerTitles(selectedDeals.map((deal) => deal.title)),
-      ));
-    }
-  }
-
-  if (selection.includeLocation && context.address) {
-    lines.push(`Location: ${context.address}`);
-  }
-
-  const mapUrl = selection.includeLocation ? buildMapUrl(context) : '';
-  if (mapUrl) {
-    lines.push(`DiningDealz map: ${mapUrl}`);
-  }
-
+export function buildShareText(
+  context: PlannerPlaceContext,
+  _selection: RestaurantShareSelection,
+  options: { includeProfileLink?: boolean; profileLink?: string } = {},
+) {
+  const lines = [`Check out ${context.name} on DiningDealz`];
   const profileLinks = getBusinessProfileLinks(context);
-  if (profileLinks) {
-    lines.push(`Open in DiningDealz: ${profileLinks.app}`);
-    lines.push(`Business profile: ${profileLinks.web}`);
-    lines.push(`Download DiningDealz (iPhone): ${profileLinks.iosStore}`);
-    lines.push(`Download DiningDealz (Android): ${profileLinks.androidStore}`);
+  if (profileLinks && options.includeProfileLink !== false) {
+    lines.push(options.profileLink ?? profileLinks.app);
   }
 
-  lines.push('Shared from the DiningDealz app');
   return lines.filter(Boolean).join('\n');
 }
 

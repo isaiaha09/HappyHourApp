@@ -24,9 +24,12 @@ export function parseRecoveryDeepLink(value: string): RecoveryDeepLink {
   const pathSegments = parsedUrl.pathname.split('/').filter(Boolean);
   const isDiningDealzWebProfile = (route === 'diningdealz.com' || route === 'www.diningdealz.com')
     && (pathSegments[0]?.toLowerCase() === 'place' || pathSegments[0]?.toLowerCase() === 'places');
-  if (route === 'place' || route === 'places' || isDiningDealzWebProfile) {
+  const isDiningDealzSharedProfile = route === 'backend.diningdealz.com'
+    && pathSegments[0]?.toLowerCase() === 'share'
+    && (pathSegments[1]?.toLowerCase() === 'place' || pathSegments[1]?.toLowerCase() === 'places');
+  if (route === 'place' || route === 'places' || isDiningDealzWebProfile || isDiningDealzSharedProfile) {
     const slug = decodePathSegment(
-      (isDiningDealzWebProfile ? pathSegments[1] : pathSegments[0])
+      (isDiningDealzSharedProfile ? pathSegments[2] : isDiningDealzWebProfile ? pathSegments[1] : pathSegments[0])
         ?? parsedUrl.searchParams.get('slug')
         ?? '',
     ).trim();

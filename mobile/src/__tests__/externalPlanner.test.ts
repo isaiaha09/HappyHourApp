@@ -2,7 +2,6 @@ import {
   buildCalendarNotes,
   buildCalendarDraftFromParts,
   buildIcsContent,
-  buildMapUrl,
   buildShareText,
   createPlannerContextFromCurrentPlace,
   formatPlannerDateInput,
@@ -10,10 +9,12 @@ import {
   formatPlannerOperatingHours,
   formatPlannerTimeInput,
   getDefaultCalendarSelection,
+  getPlannerShareCardDetails,
   parsePlannerDateInput,
   parsePlannerTimeInput,
   validateCalendarDraft,
 } from '../externalPlanner';
+import type { RestaurantShareSelection } from '../externalPlanner';
 import type { CurrentHappyHourPlace } from '../types';
 
 const place: CurrentHappyHourPlace = {
@@ -79,9 +80,9 @@ describe('external planner domain', () => {
     expect(validateCalendarDraft({ date: '2026-08-27', endTime: '15:00', startTime: '15:00' })).toContain('same');
   });
 
-  it('includes the selected restaurant, map link, and readable details in sharing', () => {
+  it('keeps the share message short and puts selected details in the card', () => {
     const context = createPlannerContextFromCurrentPlace(place);
-    const text = buildShareText(context, {
+    const selection = {
       date: '2026-08-27',
       endTime: '18:00',
       includeDealsAndMenu: false,
@@ -89,19 +90,20 @@ describe('external planner domain', () => {
       includeLocation: true,
       includeOperatingHours: false,
       includePhotos: false,
-      mode: 'my-time',
+      mode: 'my-time' as const,
       selectedDealIds: [],
       startTime: '16:30',
-    });
+    };
+    const text = buildShareText(context, selection);
+    const cardDetails = getPlannerShareCardDetails(context, selection);
+    const profileLinks = getBusinessProfileLinks(context);
 
-    expect(text).toContain('Example Bar');
-    expect(text).toContain('DiningDealz restaurant recommendation');
-    expect(text).toContain('08-27-2026');
-    expect(text).toContain('4:30 PM - 6:00 PM');
-    expect(text).toContain(`DiningDealz map: ${buildMapUrl(context)}`);
-    expect(text).toContain(`Open in DiningDealz: ${getBusinessProfileLinks(context)?.app}`);
-    expect(text).toContain(`Business profile: ${getBusinessProfileLinks(context)?.web}`);
-    expect(text).toContain('Shared from the DiningDealz app');
+    expect(text).toBe(`Check out Example Bar on DiningDealz\n${profileLinks?.app}`);
+    expect(profileLinks?.iosProfile).toBe('https://backend.diningdealz.com/share/place/example-bar/');
+    expect(cardDetails).toContain('My time: 08-27-2026 · 4:30 PM - 6:00 PM');
+    expect(cardDetails).toContain('Happy Hours and Deals: 1 special — Afternoon Happy Hour');
+    expect(cardDetails).toContain('123 Main Street, Ventura');
+    expect(text).not.toContain('Afternoon Happy Hour');
   });
 
   it('shares deal counts while retaining operating-hour times', () => {
@@ -115,7 +117,7 @@ describe('external planner domain', () => {
       startTime: '11:30',
       weekdayLabel: 'MON-SUN',
     });
-    const text = buildShareText(context, {
+    const selection: RestaurantShareSelection = {
       includeDealsAndMenu: false,
       includeHappyHours: true,
       includeLocation: false,
@@ -123,19 +125,21 @@ describe('external planner domain', () => {
       includePhotos: false,
       mode: 'restaurant-details',
       selectedDealIds: [],
-    });
+    };
+    const text = buildShareText(context, selection);
+    const cardDetails = getPlannerShareCardDetails(context, selection);
     const notes = buildCalendarNotes(context);
 
     expect(formatPlannerOperatingHours(context)).toBe('MON-SUN: 11:30 AM - 2:00 PM');
-    expect(text).toContain('Happy Hours and Deals: 1 special');
-    expect(text).toContain('Hours of operation: MON-SUN: 11:30 AM - 2:00 PM');
-    expect(text).toContain('Happy Hours and Deals: 1 special — Afternoon Happy Hour');
-    expect(text).not.toContain('3:00 PM');
+    expect(cardDetails).toContain('Hours of operation: MON-SUN: 11:30 AM - 2:00 PM');
+    expect(text).toBe(`Check out Example Bar on DiningDealz\n${getBusinessProfileLinks(context)?.app}`);
+    expect(text).not.toContain('Hours of operation');
+    expect(text).not.toContain('Afternoon Happy Hour');
     expect(notes).toContain('Happy Hours and Deals: 1 special — Afternoon Happy Hour');
     expect(notes).toContain('Hours of operation: MON-SUN: 11:30 AM - 2:00 PM');
   });
 
-  it('includes available deal titles and store fallbacks in restaurant sharing', () => {
+  it('puts available deal titles in the card without adding extra links to the message', () => {
     const context = createPlannerContextFromCurrentPlace(place);
     context.deals.push({
       dealTypeLabel: 'Special',
@@ -147,7 +151,7 @@ describe('external planner domain', () => {
       terms: '',
       title: 'Lunch Special',
     });
-    const text = buildShareText(context, {
+    const selection: RestaurantShareSelection = {
       includeDealsAndMenu: true,
       includeHappyHours: true,
       includeLocation: false,
@@ -155,12 +159,14 @@ describe('external planner domain', () => {
       includePhotos: false,
       mode: 'restaurant-details',
       selectedDealIds: [44],
-    });
+    };
+    const text = buildShareText(context, selection);
+    const cardDetails = getPlannerShareCardDetails(context, selection);
 
-    expect(text).toContain('Happy Hours and Deals: 1 special — Afternoon Happy Hour');
-    expect(text).toContain('Specials and Menu: 1 deal — Lunch Special');
-    expect(text).toContain('Download DiningDealz (iPhone): https://apps.apple.com/us/search?term=DiningDealz');
-    expect(text).toContain('Download DiningDealz (Android): https://play.google.com/store/search?q=DiningDealz&c=apps');
+    expect(cardDetails).toContain('Happy Hours and Deals: 1 special — Afternoon Happy Hour');
+    expect(cardDetails).toContain('Specials and Menu: 1 deal — Lunch Special');
+    expect(text).not.toContain('https://');
+    expect(text).not.toContain('Download DiningDealz');
   });
 
   it('keeps share date and time fields in the display format while normalizing them for the domain', () => {
