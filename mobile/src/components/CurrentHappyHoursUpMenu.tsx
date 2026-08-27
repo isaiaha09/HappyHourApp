@@ -1,5 +1,5 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Dimensions, Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 
@@ -197,82 +197,50 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
   );
   const sheetTravel = Math.max(expandedSheetHeight - collapsedSheetHeight, 1);
   const panelProgress = useRef(new Animated.Value(expanded ? 1 : 0)).current;
-  const sheetHeight = useRef(new Animated.Value(expanded ? expandedSheetHeight : collapsedSheetHeight)).current;
+  const sheetDragY = useRef(new Animated.Value(0)).current;
   const sheetGestureWasActiveRef = useRef(false);
 
   useEffect(() => {
     panelProgress.stopAnimation();
-    sheetHeight.stopAnimation();
+    sheetDragY.stopAnimation();
+    sheetDragY.setValue(0);
 
-    if (expanded) {
-      Animated.timing(sheetHeight, {
-        duration: 260,
-        toValue: expandedSheetHeight,
-        useNativeDriver: false,
-      }).start();
-      Animated.timing(panelProgress, {
-        duration: 260,
-        toValue: 1,
-        useNativeDriver: true,
-      }).start();
-
-      return () => {
-        panelProgress.stopAnimation();
-        sheetHeight.stopAnimation();
-      };
-    }
-
-    Animated.timing(sheetHeight, {
-      duration: 220,
-      toValue: collapsedSheetHeight,
-      useNativeDriver: false,
-    }).start();
     Animated.timing(panelProgress, {
-      duration: 220,
-      toValue: 0,
+      duration: expanded ? 260 : 220,
+      toValue: expanded ? 1 : 0,
       useNativeDriver: true,
     }).start();
 
     return () => {
       panelProgress.stopAnimation();
-      sheetHeight.stopAnimation();
     };
-  }, [collapsedSheetHeight, expanded, expandedSheetHeight, panelProgress, sheetHeight]);
+  }, [expanded, panelProgress, sheetDragY]);
 
-  const handleSheetGestureEvent = useCallback((event: { nativeEvent: { translationY: number } }) => {
-    const { translationY } = event.nativeEvent;
+  const handleSheetGestureEvent = useMemo(() => Animated.event(
+    [{ nativeEvent: { translationY: sheetDragY } }],
+    { useNativeDriver: true },
+  ), [sheetDragY]);
 
-    const nextHeight = expanded
-      ? expandedSheetHeight - Math.max(translationY, 0)
-      : collapsedSheetHeight + Math.max(-translationY, 0);
-    const clampedHeight = Math.max(
-      collapsedSheetHeight,
-      Math.min(expandedSheetHeight, nextHeight),
-    );
-    const nextProgress = (clampedHeight - collapsedSheetHeight) / sheetTravel;
+  const progressForTranslationY = useCallback((translationY: number) => {
+    const nextProgress = expanded
+      ? 1 - Math.max(translationY, 0) / sheetTravel
+      : Math.max(-translationY, 0) / sheetTravel;
+    return Math.max(0, Math.min(1, nextProgress));
+  }, [expanded, sheetTravel]);
 
-    // Keep the panel mounted and resize it from the bottom while the finger is
-    // moving. This reveals the cards continuously instead of after the gesture.
-    sheetHeight.setValue(clampedHeight);
-    panelProgress.setValue(nextProgress);
-  }, [collapsedSheetHeight, expanded, expandedSheetHeight, panelProgress, sheetHeight, sheetTravel]);
-
-  const settleSheetDrag = useCallback(() => {
-    Animated.parallel([
-      Animated.spring(sheetHeight, {
-        damping: 20,
-        stiffness: 240,
-        toValue: expanded ? expandedSheetHeight : collapsedSheetHeight,
-        useNativeDriver: false,
-      }),
-      Animated.spring(panelProgress, {
-        damping: 20,
-        stiffness: 240,
-        toValue: expanded ? 1 : 0,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [collapsedSheetHeight, expanded, expandedSheetHeight, panelProgress, sheetHeight]);
+  const settleSheetDrag = useCallback((translationY: number) => {
+    panelProgress.stopAnimation();
+    panelProgress.setValue(progressForTranslationY(translationY));
+    sheetDragY.stopAnimation();
+    sheetDragY.setValue(0);
+    Animated.spring(panelProgress, {
+      damping: 24,
+      stiffness: 260,
+      mass: 0.9,
+      toValue: expanded ? 1 : 0,
+      useNativeDriver: true,
+    }).start();
+  }, [expanded, panelProgress, progressForTranslationY, sheetDragY]);
 
   const clearGestureActiveFlag = useCallback(() => {
     setTimeout(() => {
@@ -286,19 +254,19 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
     if (state === State.BEGAN) {
       sheetGestureWasActiveRef.current = false;
       panelProgress.stopAnimation();
-      sheetHeight.stopAnimation();
+      sheetDragY.stopAnimation();
+      sheetDragY.setValue(0);
       return;
     }
 
     if (state === State.ACTIVE) {
       sheetGestureWasActiveRef.current = true;
       panelProgress.stopAnimation();
-      sheetHeight.stopAnimation();
       return;
     }
 
     if (state === State.CANCELLED || state === State.FAILED) {
-      settleSheetDrag();
+      settleSheetDrag(translationY);
       clearGestureActiveFlag();
       return;
     }
@@ -312,15 +280,17 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
 
     if (shouldExpand || shouldCollapse) {
       panelProgress.stopAnimation();
-      sheetHeight.stopAnimation();
+      panelProgress.setValue(progressForTranslationY(translationY));
+      sheetDragY.stopAnimation();
+      sheetDragY.setValue(0);
       onToggle();
       clearGestureActiveFlag();
       return;
     }
 
-    settleSheetDrag();
+    settleSheetDrag(translationY);
     clearGestureActiveFlag();
-  }, [clearGestureActiveFlag, expanded, onToggle, panelProgress, settleSheetDrag, sheetHeight]);
+  }, [clearGestureActiveFlag, expanded, onToggle, panelProgress, progressForTranslationY, settleSheetDrag, sheetDragY]);
 
   const handleSheetTap = useCallback(() => {
     if (sheetGestureWasActiveRef.current) {
@@ -330,7 +300,29 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
     onToggle();
   }, [onToggle]);
 
-  const triggerOpacity = panelProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+  const livePanelProgress = Animated.add(
+    panelProgress,
+    Animated.multiply(sheetDragY, -1 / sheetTravel),
+  ).interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
+  const sheetOffsetY = livePanelProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [sheetTravel, 0],
+    extrapolate: 'clamp',
+  });
+  const triggerOpacity = livePanelProgress.interpolate({
+    inputRange: [0, 0.34, 0.5],
+    outputRange: [1, 0, 0],
+    extrapolate: 'clamp',
+  });
+  const expandedHeaderOpacity = livePanelProgress.interpolate({
+    inputRange: [0, 0.5, 0.68, 1],
+    outputRange: [0, 0, 1, 1],
+    extrapolate: 'clamp',
+  });
 
   return (
     <View
@@ -343,10 +335,11 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
           styles.currentHappyHoursSheetFrame,
           {
             bottom: 0,
-            height: sheetHeight,
+            height: expandedSheetHeight,
             left: 0,
             position: 'absolute',
             right: 0,
+            transform: [{ translateY: sheetOffsetY }],
           },
         ]}
       >
@@ -390,7 +383,7 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
 
                   <Animated.View
                     pointerEvents={expanded ? 'auto' : 'none'}
-                    style={{ left: 0, opacity: panelProgress, position: 'absolute', right: 0, top: 0 }}
+                    style={{ left: 0, opacity: expandedHeaderOpacity, position: 'absolute', right: 0, top: 0 }}
                   >
                     <View style={styles.currentHappyHoursSheetHeadingRow}>
                       <View style={styles.currentHappyHoursSheetHeadingCopy}>
@@ -422,8 +415,7 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
               style={[
                 styles.currentHappyHoursSheetContent,
                 {
-                  opacity: panelProgress,
-                  transform: [{ translateY: panelProgress.interpolate({ inputRange: [0, 1], outputRange: [28, 0] }) }],
+                  opacity: 1,
                 },
               ]}
               testID="current-happy-hours-menu"
