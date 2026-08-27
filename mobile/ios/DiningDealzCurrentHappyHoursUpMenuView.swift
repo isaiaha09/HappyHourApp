@@ -77,7 +77,7 @@ final class DiningDealzCurrentHappyHoursUpMenuView: UIView {
   }
 
   override var intrinsicContentSize: CGSize {
-    let collapsedSheetHeight = max(CGFloat(truncating: bottomOffset) + 52, 132)
+    let collapsedSheetHeight = max(CGFloat(truncating: bottomOffset) + 68, 148)
     let baseHeight: CGFloat = places.count > 0
       ? max(CGFloat(truncating: expandedSheetHeight), 520)
       : collapsedSheetHeight
@@ -93,7 +93,7 @@ final class DiningDealzCurrentHappyHoursUpMenuView: UIView {
       return true
     }
 
-    let collapsedSheetHeight = max(CGFloat(truncating: bottomOffset) + 52, 132)
+    let collapsedSheetHeight = max(CGFloat(truncating: bottomOffset) + 68, 148)
     return point.y >= bounds.height - collapsedSheetHeight
   }
 

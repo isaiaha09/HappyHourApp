@@ -209,7 +209,7 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
   let expandedSheetHeight: CGFloat
 
   private var collapsedSheetHeight: CGFloat {
-    max(bottomOffset + 52, 132)
+    max(bottomOffset + 68, 148)
   }
   @State private var sheetHorizontalOffset: CGFloat = 0
   @State private var sheetHeight: CGFloat = 0
@@ -266,27 +266,29 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
     if !places.isEmpty {
       Group {
         VStack(spacing: 0) {
-          sheetHandle
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
-            .simultaneousGesture(sheetGesture)
+          VStack(spacing: 0) {
+            sheetHandle
+              .frame(maxWidth: .infinity)
+              .contentShape(Rectangle())
+              .simultaneousGesture(sheetGesture)
 
-          ZStack(alignment: .topLeading) {
-            VStack(spacing: 0) {
+            ZStack(alignment: .topLeading) {
+              collapsedCountRow
+                .opacity(Double(1 - sheetRevealProgress))
+                .allowsHitTesting(sheetRevealProgress < 0.99)
+
               expandedHeader
+                .opacity(Double(sheetRevealProgress))
+                .allowsHitTesting(sheetRevealProgress > 0.01)
                 .simultaneousGesture(sheetGesture)
-              expandedList
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .frame(maxWidth: .infinity, minHeight: 56, alignment: .top)
+          }
+
+          expandedList
             .opacity(Double(sheetRevealProgress))
             .allowsHitTesting(sheetRevealProgress > 0.01)
-
-            collapsedCountRow
-              .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-              .opacity(Double(1 - sheetRevealProgress))
-              .allowsHitTesting(sheetRevealProgress < 0.99)
         }
-
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(theme.sheetBackground)
         .overlay(alignment: .top) {
@@ -318,9 +320,8 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
           }
         }
       }
+      }
     }
-  }
-  }
 
   private var sheetHandle: some View {
     Capsule(style: .continuous)

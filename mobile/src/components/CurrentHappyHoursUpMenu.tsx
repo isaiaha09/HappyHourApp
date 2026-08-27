@@ -190,7 +190,7 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
   const isDark = theme === 'dark';
   const dealCount = places.reduce((count, place) => count + place.happy_hours.length, 0);
   const dealCountLabel = `${dealCount} deal${dealCount === 1 ? '' : 's'} nearby`;
-  const collapsedSheetHeight = Math.max(bottomOffset + 52, 132);
+  const collapsedSheetHeight = Math.max(bottomOffset + 68, 148);
   const resolvedBottomInset = Math.max(bottomInset, 0);
   const expandedSheetHeight = Math.min(
     Math.max(Math.round(Dimensions.get('window').height * 0.82), 520),
@@ -413,7 +413,7 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
       style={[styles.currentHappyHoursLayer, { bottom: -resolvedBottomInset }]}
     >
       <Animated.View
-        pointerEvents={expanded ? 'auto' : 'none'}
+        pointerEvents="auto"
         style={[
           styles.currentHappyHoursSheetFrame,
           {
@@ -439,30 +439,52 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
               onGestureEvent={handleSheetGestureEvent}
               onHandlerStateChange={handleSheetGestureStateChange}
             >
-              <Animated.View style={[styles.currentHappyHoursSheetHeader, { opacity: panelProgress }]}>
+              <Animated.View style={styles.currentHappyHoursSheetHeader}>
                 <View style={styles.currentHappyHoursSheetHandle}>
                   <View style={[styles.currentHappyHoursSheetHandleBar, isDark ? styles.currentHappyHoursSheetHandleBarDark : null]} />
                 </View>
 
-                <View style={styles.currentHappyHoursSheetHeadingRow}>
-                  <View style={styles.currentHappyHoursSheetHeadingCopy}>
-                    <Text style={[styles.currentHappyHoursSheetTitle, isDark ? styles.currentHappyHoursSheetTitleDark : null]}>
-                      {currentHappyHoursTitle}
-                    </Text>
-                    <Text style={[styles.currentHappyHoursSheetMeta, isDark ? styles.currentHappyHoursSheetMetaDark : null]}>
-                      {dealCountLabel}
-                    </Text>
-                  </View>
-                  <Pressable
-                    accessibilityLabel="Close current happy hour deals"
-                    accessibilityRole="button"
-                    hitSlop={8}
-                    onPress={onToggle}
-                    style={[styles.currentHappyHoursSheetClose, isDark ? styles.currentHappyHoursSheetCloseDark : null]}
-                    testID="current-happy-hours-close"
+                <View style={{ minHeight: 56, position: 'relative' }}>
+                  <Animated.View pointerEvents={expanded ? 'none' : 'auto'} style={{ opacity: triggerOpacity }}>
+                    <Pressable
+                      accessibilityHint="Swipe up to browse deals. Swipe down on the expanded sheet to close it."
+                      accessibilityLabel={dealCountLabel + '. ' + (expanded ? 'Close list.' : 'Open list.')}
+                      onPress={handleSheetTap}
+                      style={styles.currentHappyHoursTriggerHeadingRow}
+                      testID="current-happy-hours-toggle"
+                    >
+                      <View style={styles.currentHappyHoursTriggerDot} />
+                      <Text style={[styles.currentHappyHoursTriggerTitle, isDark ? styles.currentHappyHoursTriggerTitleDark : null]}>
+                        {dealCountLabel}
+                      </Text>
+                    </Pressable>
+                  </Animated.View>
+
+                  <Animated.View
+                    pointerEvents={expanded ? 'auto' : 'none'}
+                    style={{ left: 0, opacity: panelProgress, position: 'absolute', right: 0, top: 0 }}
                   >
-                    <Ionicons color={isDark ? '#f6f7f3' : '#252525'} name="chevron-down" size={20} />
-                  </Pressable>
+                    <View style={styles.currentHappyHoursSheetHeadingRow}>
+                      <View style={styles.currentHappyHoursSheetHeadingCopy}>
+                        <Text style={[styles.currentHappyHoursSheetTitle, isDark ? styles.currentHappyHoursSheetTitleDark : null]}>
+                          {currentHappyHoursTitle}
+                        </Text>
+                        <Text style={[styles.currentHappyHoursSheetMeta, isDark ? styles.currentHappyHoursSheetMetaDark : null]}>
+                          {dealCountLabel}
+                        </Text>
+                      </View>
+                      <Pressable
+                        accessibilityLabel="Close current happy hour deals"
+                        accessibilityRole="button"
+                        hitSlop={8}
+                        onPress={onToggle}
+                        style={[styles.currentHappyHoursSheetClose, isDark ? styles.currentHappyHoursSheetCloseDark : null]}
+                        testID="current-happy-hours-close"
+                      >
+                        <Ionicons color={isDark ? '#f6f7f3' : '#252525'} name="chevron-down" size={20} />
+                      </Pressable>
+                    </View>
+                  </Animated.View>
                 </View>
               </Animated.View>
             </PanGestureHandler>
@@ -500,42 +522,6 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
           </Animated.View>
         </Animated.View>
 
-      <Animated.View
-        pointerEvents={expanded ? 'none' : 'auto'}
-        style={[
-          styles.currentHappyHoursTriggerFrame,
-          {
-            bottom: 0,
-            height: collapsedSheetHeight,
-            opacity: triggerOpacity,
-          },
-        ]}
-      >
-        <PanGestureHandler
-          activeOffsetY={[-10, 10]}
-          failOffsetX={[-20, 20]}
-          onGestureEvent={handleSheetGestureEvent}
-          onHandlerStateChange={handleSheetGestureStateChange}
-        >
-          <Pressable
-            accessibilityHint="Swipe up to browse deals. Swipe down on the expanded sheet to close it."
-            accessibilityLabel={`${dealCountLabel}. ${expanded ? 'Close list.' : 'Open list.'}`}
-            onPress={handleSheetTap}
-            style={[styles.currentHappyHoursTrigger, isDark ? styles.currentHappyHoursTriggerDark : styles.currentHappyHoursTriggerLight]}
-            testID="current-happy-hours-toggle"
-          >
-            <View style={styles.currentHappyHoursSheetHandle}>
-              <View style={[styles.currentHappyHoursSheetHandleBar, isDark ? styles.currentHappyHoursSheetHandleBarDark : null]} />
-            </View>
-            <View style={styles.currentHappyHoursTriggerHeadingRow}>
-              <View style={styles.currentHappyHoursTriggerDot} />
-              <Text style={[styles.currentHappyHoursTriggerTitle, isDark ? styles.currentHappyHoursTriggerTitleDark : null]}>
-                {dealCountLabel}
-              </Text>
-            </View>
-          </Pressable>
-        </PanGestureHandler>
-      </Animated.View>
     </View>
   );
 }
