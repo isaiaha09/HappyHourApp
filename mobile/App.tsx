@@ -4714,9 +4714,17 @@ function AppScreen() {
     pendingExternalPlannerActionRef.current = null;
     setShowExternalPlannerAccountPrompt(false);
 
+    const themedPendingAction: ExternalPlannerAction = {
+      ...pendingAction,
+      context: {
+        ...pendingAction.context,
+        theme: displayedDarkMapMode ? 'dark' : 'light',
+      },
+    };
+
     const resumeComposer = () => {
       requestAnimationFrame(() => {
-        openExternalPlannerAction(pendingAction);
+        openExternalPlannerAction(themedPendingAction);
       });
     };
 
@@ -4731,7 +4739,7 @@ function AppScreen() {
     }
 
     navigateScreen('browse', 'backward', undefined, resumeComposer);
-  }, [authenticatedSession?.auth_token, screenMode, showLoginSuccessTransition]);
+  }, [authenticatedSession?.auth_token, displayedDarkMapMode, screenMode, showLoginSuccessTransition]);
 
   function handleToggleVenueType(venueType: VenueFilterValue) {
     setSelectedVenueTypes((current) => {

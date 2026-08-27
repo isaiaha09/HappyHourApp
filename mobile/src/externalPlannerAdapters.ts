@@ -8,6 +8,7 @@ import type { ViewShotRef } from 'react-native-view-shot';
 import {
   buildIcsContent,
   buildShareText,
+  getBusinessProfileLinks,
   type CalendarEventDraft,
   type PlannerPlaceContext,
   type RestaurantShareSelection,
@@ -143,6 +144,7 @@ export async function openExternalShare(
   cardRef: RefObject<ViewShotRef | null>,
 ) {
   const message = buildShareText(context, selection);
+  const profileLinks = getBusinessProfileLinks(context);
   let cardUri: string | null = null;
 
   try {
@@ -155,11 +157,27 @@ export async function openExternalShare(
     // Text and the map link still provide a useful share if an image capture fails.
   }
 
+  const linkedCardSource = Platform.OS === 'ios' && cardUri && profileLinks
+    ? [{
+      item: {
+        default: { content: profileLinks.web, type: 'url' as const },
+      },
+      linkMetadata: {
+        image: cardUri,
+        originalUrl: profileLinks.web,
+        title: `${context.name} on DiningDealz`,
+        url: profileLinks.web,
+      },
+      placeholderItem: { content: profileLinks.web, type: 'url' as const },
+    }]
+    : undefined;
+
   await getShareModule().open({
+    activityItemSources: linkedCardSource,
     failOnCancel: false,
     message,
     title: `Share ${context.name}`,
-    type: cardUri ? 'image/png' : undefined,
-    urls: cardUri ? [cardUri] : undefined,
+    type: linkedCardSource ? undefined : cardUri ? 'image/png' : undefined,
+    urls: linkedCardSource ? undefined : cardUri ? [cardUri] : undefined,
   });
 }

@@ -1,10 +1,13 @@
 import {
+  buildCalendarNotes,
   buildCalendarDraftFromParts,
   buildIcsContent,
   buildMapUrl,
   buildShareText,
   createPlannerContextFromCurrentPlace,
   formatPlannerDateInput,
+  getBusinessProfileLinks,
+  formatPlannerOperatingHours,
   formatPlannerTimeInput,
   getDefaultCalendarSelection,
   parsePlannerDateInput,
@@ -96,7 +99,68 @@ describe('external planner domain', () => {
     expect(text).toContain('08-27-2026');
     expect(text).toContain('4:30 PM - 6:00 PM');
     expect(text).toContain(`DiningDealz map: ${buildMapUrl(context)}`);
+    expect(text).toContain(`Open in DiningDealz: ${getBusinessProfileLinks(context)?.app}`);
+    expect(text).toContain(`Business profile: ${getBusinessProfileLinks(context)?.web}`);
     expect(text).toContain('Shared from the DiningDealz app');
+  });
+
+  it('shares deal counts while retaining operating-hour times', () => {
+    const context = createPlannerContextFromCurrentPlace(place);
+    context.schedules.push({
+      allDay: false,
+      endTime: '14:00',
+      id: 'operating-hours:1',
+      kind: 'operating-hours',
+      label: 'Hours of operation',
+      startTime: '11:30',
+      weekdayLabel: 'MON-SUN',
+    });
+    const text = buildShareText(context, {
+      includeDealsAndMenu: false,
+      includeHappyHours: true,
+      includeLocation: false,
+      includeOperatingHours: true,
+      includePhotos: false,
+      mode: 'restaurant-details',
+      selectedDealIds: [],
+    });
+    const notes = buildCalendarNotes(context);
+
+    expect(formatPlannerOperatingHours(context)).toBe('MON-SUN: 11:30 AM - 2:00 PM');
+    expect(text).toContain('Happy Hours and Deals: 1 special');
+    expect(text).toContain('Hours of operation: MON-SUN: 11:30 AM - 2:00 PM');
+    expect(text).toContain('Happy Hours and Deals: 1 special — Afternoon Happy Hour');
+    expect(text).not.toContain('3:00 PM');
+    expect(notes).toContain('Happy Hours and Deals: 1 special — Afternoon Happy Hour');
+    expect(notes).toContain('Hours of operation: MON-SUN: 11:30 AM - 2:00 PM');
+  });
+
+  it('includes available deal titles and store fallbacks in restaurant sharing', () => {
+    const context = createPlannerContextFromCurrentPlace(place);
+    context.deals.push({
+      dealTypeLabel: 'Special',
+      description: 'A lunch offer',
+      happyHours: [],
+      id: 44,
+      menuText: 'Lunch offer',
+      priceText: '$8',
+      terms: '',
+      title: 'Lunch Special',
+    });
+    const text = buildShareText(context, {
+      includeDealsAndMenu: true,
+      includeHappyHours: true,
+      includeLocation: false,
+      includeOperatingHours: false,
+      includePhotos: false,
+      mode: 'restaurant-details',
+      selectedDealIds: [44],
+    });
+
+    expect(text).toContain('Happy Hours and Deals: 1 special — Afternoon Happy Hour');
+    expect(text).toContain('Specials and Menu: 1 deal — Lunch Special');
+    expect(text).toContain('Download DiningDealz (iPhone): https://apps.apple.com/us/search?term=DiningDealz');
+    expect(text).toContain('Download DiningDealz (Android): https://play.google.com/store/search?q=DiningDealz&c=apps');
   });
 
   it('keeps share date and time fields in the display format while normalizing them for the domain', () => {

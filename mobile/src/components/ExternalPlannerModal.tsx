@@ -22,11 +22,15 @@ import {
   buildCalendarNotes,
   buildShareText,
   formatDateLabel,
+  formatPlannerContentSummary,
   formatPlannerDateInput,
+  formatPlannerOperatingHours,
   formatPlannerTimeInput,
   formatTimeLabel,
   getDefaultCalendarSelection,
   getDefaultShareSelection,
+  getPlannerContentCounts,
+  getPlannerContentTitles,
   getPlannerSchedules,
   parsePlannerDateInput,
   parsePlannerTimeInput,
@@ -379,30 +383,36 @@ function CalendarComposer({ context, onClose, onSubmit, palette }: CalendarCompo
       <Text style={[styles.helperText, colorStyles.helperText]}>{date ? formatDateLabel(date) : 'Use the date you plan to visit.'}</Text>
 
       <View style={styles.timeRow}>
-        <Pressable
-          accessibilityLabel="Choose calendar start time"
-          accessibilityRole="button"
-          disabled={allDay}
-          onPress={() => setPickerKind('startTime')}
-          style={[styles.input, styles.nativePickerField, styles.timeInput, colorStyles.input, allDay ? styles.disabledPickerField : null]}
-        >
-          <Text style={[styles.nativePickerValue, colorStyles.nativePickerValue]}>
-            {startTime ? formatPlannerTimeInput(startTime) : 'Choose start'}
-          </Text>
-          <Ionicons color={palette.muted} name="time-outline" size={19} />
-        </Pressable>
-        <Pressable
-          accessibilityLabel="Choose calendar end time"
-          accessibilityRole="button"
-          disabled={allDay}
-          onPress={() => setPickerKind('endTime')}
-          style={[styles.input, styles.nativePickerField, styles.timeInput, colorStyles.input, allDay ? styles.disabledPickerField : null]}
-        >
-          <Text style={[styles.nativePickerValue, colorStyles.nativePickerValue]}>
-            {endTime ? formatPlannerTimeInput(endTime) : 'Choose end'}
-          </Text>
-          <Ionicons color={palette.muted} name="time-outline" size={19} />
-        </Pressable>
+        <View style={styles.timeField}>
+          <Text style={[styles.fieldLabel, colorStyles.fieldLabel]}>Start</Text>
+          <Pressable
+            accessibilityLabel="Choose calendar start time"
+            accessibilityRole="button"
+            disabled={allDay}
+            onPress={() => setPickerKind('startTime')}
+            style={[styles.input, styles.nativePickerField, styles.timeInput, colorStyles.input, allDay ? styles.disabledPickerField : null]}
+          >
+            <Text style={[styles.nativePickerValue, colorStyles.nativePickerValue]}>
+              {startTime ? formatPlannerTimeInput(startTime) : 'Choose start'}
+            </Text>
+            <Ionicons color={palette.muted} name="time-outline" size={19} />
+          </Pressable>
+        </View>
+        <View style={styles.timeField}>
+          <Text style={[styles.fieldLabel, colorStyles.fieldLabel]}>End</Text>
+          <Pressable
+            accessibilityLabel="Choose calendar end time"
+            accessibilityRole="button"
+            disabled={allDay}
+            onPress={() => setPickerKind('endTime')}
+            style={[styles.input, styles.nativePickerField, styles.timeInput, colorStyles.input, allDay ? styles.disabledPickerField : null]}
+          >
+            <Text style={[styles.nativePickerValue, colorStyles.nativePickerValue]}>
+              {endTime ? formatPlannerTimeInput(endTime) : 'Choose end'}
+            </Text>
+            <Ionicons color={palette.muted} name="time-outline" size={19} />
+          </Pressable>
+        </View>
       </View>
       {pickerKind ? (
         <View style={[styles.nativePickerPanel, colorStyles.dealSelectionRow]}>
@@ -610,34 +620,40 @@ function ShareComposer({ context, onClose, onSubmit, palette }: ShareComposerPro
             <Ionicons color={palette.muted} name="calendar-outline" size={19} />
           </Pressable>
           <View style={styles.timeRow}>
-            <Pressable
-              accessibilityLabel="Choose availability start time"
-              accessibilityRole="button"
-              onPress={() => {
-                Keyboard.dismiss();
-                setPickerKind('startTime');
-              }}
-              style={[styles.input, styles.nativePickerField, styles.timeInput, colorStyles.input]}
-            >
-              <Text style={[styles.nativePickerValue, colorStyles.nativePickerValue]}>
-                {selection.startTime ? formatPlannerTimeInput(selection.startTime) : 'Choose start'}
-              </Text>
-              <Ionicons color={palette.muted} name="time-outline" size={19} />
-            </Pressable>
-            <Pressable
-              accessibilityLabel="Choose availability end time"
-              accessibilityRole="button"
-              onPress={() => {
-                Keyboard.dismiss();
-                setPickerKind('endTime');
-              }}
-              style={[styles.input, styles.nativePickerField, styles.timeInput, colorStyles.input]}
-            >
-              <Text style={[styles.nativePickerValue, colorStyles.nativePickerValue]}>
-                {selection.endTime ? formatPlannerTimeInput(selection.endTime) : 'Choose end'}
-              </Text>
-              <Ionicons color={palette.muted} name="time-outline" size={19} />
-            </Pressable>
+            <View style={styles.timeField}>
+              <Text style={[styles.fieldLabel, colorStyles.fieldLabel]}>Start</Text>
+              <Pressable
+                accessibilityLabel="Choose availability start time"
+                accessibilityRole="button"
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setPickerKind('startTime');
+                }}
+                style={[styles.input, styles.nativePickerField, styles.timeInput, colorStyles.input]}
+              >
+                <Text style={[styles.nativePickerValue, colorStyles.nativePickerValue]}>
+                  {selection.startTime ? formatPlannerTimeInput(selection.startTime) : 'Choose start'}
+                </Text>
+                <Ionicons color={palette.muted} name="time-outline" size={19} />
+              </Pressable>
+            </View>
+            <View style={styles.timeField}>
+              <Text style={[styles.fieldLabel, colorStyles.fieldLabel]}>End</Text>
+              <Pressable
+                accessibilityLabel="Choose availability end time"
+                accessibilityRole="button"
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setPickerKind('endTime');
+                }}
+                style={[styles.input, styles.nativePickerField, styles.timeInput, colorStyles.input]}
+              >
+                <Text style={[styles.nativePickerValue, colorStyles.nativePickerValue]}>
+                  {selection.endTime ? formatPlannerTimeInput(selection.endTime) : 'Choose end'}
+                </Text>
+                <Ionicons color={palette.muted} name="time-outline" size={19} />
+              </Pressable>
+            </View>
           </View>
           {pickerKind ? (
             <View style={[styles.nativePickerPanel, colorStyles.dealSelectionRow]}>
@@ -666,9 +682,9 @@ function ShareComposer({ context, onClose, onSubmit, palette }: ShareComposerPro
       )}
 
       <Text style={[styles.sectionLabel, colorStyles.sectionLabel]}>Include</Text>
-      <ShareToggle label="Happy hours and specials" value={selection.includeHappyHours} onChange={(value) => updateSelection({ includeHappyHours: value })} palette={palette} />
+      <ShareToggle label="Happy Hours and Deals" value={selection.includeHappyHours} onChange={(value) => updateSelection({ includeHappyHours: value })} palette={palette} />
       <ShareToggle label="Hours of operation" value={selection.includeOperatingHours} onChange={(value) => updateSelection({ includeOperatingHours: value })} palette={palette} />
-      <ShareToggle label="Deals and menu text" value={selection.includeDealsAndMenu} onChange={(value) => updateSelection({ includeDealsAndMenu: value })} palette={palette} />
+      <ShareToggle label="Specials and Menu" value={selection.includeDealsAndMenu} onChange={(value) => updateSelection({ includeDealsAndMenu: value })} palette={palette} />
       <ShareToggle label="Location and map link" value={selection.includeLocation} onChange={(value) => updateSelection({ includeLocation: value })} palette={palette} />
       {context.imageUrls.length ? <ShareToggle label="Photo" value={selection.includePhotos} onChange={(value) => updateSelection({ includePhotos: value })} palette={palette} /> : null}
       {selection.includePhotos && context.imageUrls.length > 1 ? (
@@ -691,7 +707,7 @@ function ShareComposer({ context, onClose, onSubmit, palette }: ShareComposerPro
 
       {selection.mode === 'restaurant-details' && context.deals.length ? (
         <View style={styles.dealSelectionList}>
-          <Text style={[styles.fieldLabel, colorStyles.fieldLabel]}>Deals to include</Text>
+          <Text style={[styles.fieldLabel, colorStyles.fieldLabel]}>Specials and Menu to include</Text>
           {context.deals.map((deal) => (
             <Pressable key={deal.id} onPress={() => toggleDeal(deal.id)} style={[styles.dealSelectionRow, colorStyles.dealSelectionRow]}>
               <Ionicons color={selection.selectedDealIds.includes(deal.id) ? palette.accent : palette.muted} name={selection.selectedDealIds.includes(deal.id) ? 'checkbox' : 'square-outline'} size={22} />
@@ -736,6 +752,9 @@ function ShareCardPreview({ context, palette, selection }: { context: PlannerPla
   const photoUri = selection.includePhotos ? selection.selectedPhotoUri ?? context.imageUrls[0] : undefined;
   const [photoLoadFailed, setPhotoLoadFailed] = useState(false);
   const selectedDeals = context.deals.filter((deal) => selection.selectedDealIds.includes(deal.id));
+  const contentCounts = getPlannerContentCounts(context);
+  const contentTitles = getPlannerContentTitles(context);
+  const operatingHours = formatPlannerOperatingHours(context);
   const placeholderIcon = getCategoryIcon(context.venueTypeLabel);
 
   useEffect(() => {
@@ -762,9 +781,9 @@ function ShareCardPreview({ context, palette, selection }: { context: PlannerPla
       ) : (
         <Text numberOfLines={5} style={[styles.shareCardDetail, colorStyles.shareCardDetail]}>
           {[
-            selection.includeHappyHours ? 'Happy hours and specials' : '',
-            selection.includeOperatingHours ? 'Hours of operation' : '',
-            selection.includeDealsAndMenu ? selectedDeals.map((deal) => deal.title).join(', ') : '',
+            selection.includeHappyHours && contentCounts.happyHourSpecials ? formatPlannerContentSummary('Happy Hours and Deals', contentCounts.happyHourSpecials, 'special', contentTitles.happyHourTitles) : '',
+            selection.includeOperatingHours && operatingHours ? `Hours of operation: ${operatingHours}` : '',
+            selection.includeDealsAndMenu && selectedDeals.length ? formatPlannerContentSummary('Specials and Menu', selectedDeals.length, 'deal', selectedDeals.map((deal) => deal.title)) : '',
             selection.includeLocation ? context.address : '',
           ].filter(Boolean).join('\n')}
         </Text>

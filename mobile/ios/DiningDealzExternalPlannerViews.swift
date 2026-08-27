@@ -351,13 +351,28 @@ struct DiningDealzShareComposerView: View {
               DatePicker("Date", selection: $selectedDate, displayedComponents: .date)
                 .datePickerStyle(.compact)
                 .foregroundStyle(DiningDealzPlannerPalette.foreground(for: colorScheme))
-              HStack {
-                DatePicker("Start", selection: $selectedStartTime, displayedComponents: .hourAndMinute)
-                  .datePickerStyle(.compact)
-                  .foregroundStyle(DiningDealzPlannerPalette.foreground(for: colorScheme))
-                DatePicker("End", selection: $selectedEndTime, displayedComponents: .hourAndMinute)
-                  .datePickerStyle(.compact)
-                  .foregroundStyle(DiningDealzPlannerPalette.foreground(for: colorScheme))
+              HStack(alignment: .top, spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                  Text("Start")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(DiningDealzPlannerPalette.muted(for: colorScheme))
+                  DatePicker("Start", selection: $selectedStartTime, displayedComponents: .hourAndMinute)
+                    .labelsHidden()
+                    .datePickerStyle(.compact)
+                    .foregroundStyle(DiningDealzPlannerPalette.foreground(for: colorScheme))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                VStack(alignment: .leading, spacing: 4) {
+                  Text("End")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(DiningDealzPlannerPalette.muted(for: colorScheme))
+                  DatePicker("End", selection: $selectedEndTime, displayedComponents: .hourAndMinute)
+                    .labelsHidden()
+                    .datePickerStyle(.compact)
+                    .foregroundStyle(DiningDealzPlannerPalette.foreground(for: colorScheme))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
               }
             }
           } else {
@@ -369,9 +384,9 @@ struct DiningDealzShareComposerView: View {
           Text("Include")
             .font(.headline)
             .foregroundStyle(DiningDealzPlannerPalette.foreground(for: colorScheme))
-          Toggle("Happy hours and specials", isOn: $includeHappyHours).tint(DiningDealzPlannerPalette.accent)
+          Toggle("Happy Hours and Deals", isOn: $includeHappyHours).tint(DiningDealzPlannerPalette.accent)
           Toggle("Hours of operation", isOn: $includeOperatingHours).tint(DiningDealzPlannerPalette.accent)
-          Toggle("Deals and menu text", isOn: $includeDealsAndMenu).tint(DiningDealzPlannerPalette.accent)
+          Toggle("Specials and Menu", isOn: $includeDealsAndMenu).tint(DiningDealzPlannerPalette.accent)
           Toggle("Location and map link", isOn: $includeLocation).tint(DiningDealzPlannerPalette.accent)
           if !context.imageUrls.isEmpty {
             Toggle("Photo", isOn: $includePhotos).tint(DiningDealzPlannerPalette.accent)
@@ -415,7 +430,7 @@ struct DiningDealzShareComposerView: View {
           }
 
           if mode == "restaurant-details" && !context.deals.isEmpty {
-            Text("Deals to include")
+            Text("Specials and Menu to include")
               .font(.subheadline.weight(.bold))
               .foregroundStyle(DiningDealzPlannerPalette.foreground(for: colorScheme))
             ForEach(context.deals) { deal in
@@ -590,10 +605,24 @@ struct DiningDealzNativeShareCardView: View {
   }
 
   private var nativeShareCardDetails: String {
-    [
-      selection.includeHappyHours ? "Happy hours and specials" : nil,
-      selection.includeOperatingHours ? "Hours of operation" : nil,
-      selection.includeDealsAndMenu ? context.deals.filter { selection.selectedDealIds.contains($0.id) }.map(\.title).joined(separator: ", ") : nil,
+    let counts = diningDealzPlannerContentCounts(context)
+    let selectedDeals = context.deals.filter { selection.selectedDealIds.contains($0.id) }
+    let titles = diningDealzPlannerContentTitles(context)
+    let operatingHours = diningDealzPlannerOperatingHoursText(context)
+    return [
+      selection.includeHappyHours && counts.happyHourSpecials > 0 ? diningDealzPlannerContentSummary(
+        label: "Happy Hours and Deals",
+        count: counts.happyHourSpecials,
+        singular: "special",
+        titles: titles.happyHourTitles
+      ) : nil,
+      selection.includeOperatingHours && !operatingHours.isEmpty ? "Hours of operation: \(operatingHours)" : nil,
+      selection.includeDealsAndMenu && !selectedDeals.isEmpty ? diningDealzPlannerContentSummary(
+        label: "Specials and Menu",
+        count: selectedDeals.count,
+        singular: "deal",
+        titles: selectedDeals.compactMap { $0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0.title.trimmingCharacters(in: .whitespacesAndNewlines) }
+      ) : nil,
       selection.includeLocation ? context.address : nil,
     ].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n")
   }
@@ -746,18 +775,88 @@ private func diningDealzPlannerCategoryIcon(_ label: String) -> String {
 }
 
 private func diningDealzPlannerNotes(context: DiningDealzPlannerContext, schedule: DiningDealzPlannerSchedule?) -> String {
-  let scheduleNote = schedule.map { schedule in
-    let timeNote = schedule.allDay
-      ? "All day"
-      : diningDealzPlannerDisplayTime(schedule.startTime) + " - " + diningDealzPlannerDisplayTime(schedule.endTime)
-    return schedule.label + " · " + timeNote
-  }
+  let counts = diningDealzPlannerContentCounts(context)
+  let titles = diningDealzPlannerContentTitles(context)
+  let operatingHours = diningDealzPlannerOperatingHoursText(context)
   return [
     "DiningDealz",
-    scheduleNote,
+    counts.happyHourSpecials > 0 ? diningDealzPlannerContentSummary(
+      label: "Happy Hours and Deals",
+      count: counts.happyHourSpecials,
+      singular: "special",
+      titles: titles.happyHourTitles
+    ) : nil,
+    operatingHours.isEmpty ? nil : "Hours of operation: \(operatingHours)",
+    context.deals.isEmpty ? nil : diningDealzPlannerContentSummary(
+      label: "Specials and Menu",
+      count: context.deals.count,
+      singular: "deal",
+      titles: titles.dealTitles
+    ),
     context.address.isEmpty ? nil : "Location: \(context.address)",
     diningDealzPlannerMapURL(context),
   ].compactMap { $0 }.joined(separator: "\n")
+}
+
+private func diningDealzPlannerContentCounts(_ context: DiningDealzPlannerContext) -> (happyHourSpecials: Int, operatingHourSchedules: Int) {
+  let happyHourSchedules = context.schedules.filter { $0.kind == "happy-hour" }
+  let knownDealIDs = Set(happyHourSchedules.compactMap(\.dealId))
+  let schedulesWithoutDeal = happyHourSchedules.filter { $0.dealId == nil }.count
+  return (
+    happyHourSpecials: knownDealIDs.count + schedulesWithoutDeal,
+    operatingHourSchedules: context.schedules.filter { $0.kind == "operating-hours" }.count
+  )
+}
+
+private func diningDealzPlannerCountLabel(_ count: Int, singular: String) -> String {
+  "\(count) \(count == 1 ? singular : singular + "s")"
+}
+
+private func diningDealzPlannerContentSummary(label: String, count: Int, singular: String, titles: [String]) -> String {
+  let titleSuffix = titles.isEmpty ? "" : " — \(titles.joined(separator: ", "))"
+  return "\(label): \(diningDealzPlannerCountLabel(count, singular: singular))\(titleSuffix)"
+}
+
+private func diningDealzPlannerContentTitles(_ context: DiningDealzPlannerContext) -> (happyHourTitles: [String], dealTitles: [String]) {
+  func uniqueTitles(_ values: [String?]) -> [String] {
+    var seen = Set<String>()
+    return values.compactMap { value in
+      let title = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      guard !title.isEmpty, !seen.contains(title) else { return nil }
+      seen.insert(title)
+      return title
+    }
+  }
+
+  return (
+    happyHourTitles: uniqueTitles(context.schedules
+      .filter { $0.kind == "happy-hour" }
+      .map { schedule in
+        if let title = schedule.dealTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
+          return title
+        }
+        let fallback = schedule.label.trimmingCharacters(in: .whitespacesAndNewlines)
+        return fallback.isEmpty || fallback.lowercased() == "happy hour" ? nil : fallback
+      }),
+    dealTitles: uniqueTitles(context.deals.map { Optional($0.title) })
+  )
+}
+
+private func diningDealzPlannerOperatingHoursText(_ context: DiningDealzPlannerContext) -> String {
+  context.schedules
+    .filter { $0.kind == "operating-hours" }
+    .map { schedule in
+      let day = schedule.weekdayLabel.map { "\($0): " } ?? ""
+      if schedule.allDay {
+        return "\(day)Open 24 hours"
+      }
+      let start = diningDealzPlannerDisplayTime(schedule.startTime)
+      let end = diningDealzPlannerDisplayTime(schedule.endTime)
+      let range = [start, end].filter { !$0.isEmpty }.joined(separator: " - ")
+      return "\(day)\(range.isEmpty ? schedule.label : range)"
+    }
+    .filter { !$0.isEmpty }
+    .joined(separator: "; ")
 }
 
 private func diningDealzPlannerMapURL(_ context: DiningDealzPlannerContext) -> String? {

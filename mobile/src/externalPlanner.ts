@@ -80,6 +80,24 @@ export type PlannerPlaceContext = {
   deals: PlannerDeal[];
 };
 
+export type PlannerContentTitles = {
+  happyHourTitles: string[];
+  dealTitles: string[];
+};
+
+export type BusinessProfileLinks = {
+  app: string;
+  web: string;
+  iosStore: string;
+  androidStore: string;
+};
+
+const diningDealzWebsiteURL = 'https://www.diningdealz.com';
+const diningDealzIOSAppStoreURL = process.env.EXPO_PUBLIC_IOS_APP_STORE_URL?.trim()
+  || 'https://apps.apple.com/us/search?term=DiningDealz';
+const diningDealzAndroidStoreURL = process.env.EXPO_PUBLIC_ANDROID_APP_STORE_URL?.trim()
+  || 'https://play.google.com/store/search?q=DiningDealz&c=apps';
+
 type DateParts = {
   date: string;
   time: string;
@@ -656,13 +674,99 @@ export function createPlannerContextFromCurrentPlace(
 }
 
 export function buildCalendarNotes(context: PlannerPlaceContext, schedule?: PlannerSchedule) {
+  const counts = getPlannerContentCounts(context);
+  const operatingHours = formatPlannerOperatingHours(context);
+  const titles = getPlannerContentTitles(context);
   const lines = [
     'DiningDealz',
-    schedule?.label ? `${schedule.label} · ${formatTimeLabel(schedule.startTime)}${schedule.allDay ? '' : ` - ${formatTimeLabel(schedule.endTime)}`}` : '',
+    counts.happyHourSpecials ? formatPlannerContentSummary('Happy Hours and Deals', counts.happyHourSpecials, 'special', titles.happyHourTitles) : '',
+    operatingHours ? `Hours of operation: ${operatingHours}` : '',
+    context.deals.length ? formatPlannerContentSummary('Specials and Menu', context.deals.length, 'deal', titles.dealTitles) : '',
     context.address ? `Location: ${context.address}` : '',
     buildMapUrl(context) ? `Map: ${buildMapUrl(context)}` : '',
   ];
   return lines.filter(Boolean).join('\n');
+}
+
+export function getPlannerContentCounts(context: PlannerPlaceContext) {
+  const happyHourSchedules = context.schedules.filter((schedule) => schedule.kind === 'happy-hour');
+  const happyHourDealIds = new Set(happyHourSchedules.flatMap((schedule) => schedule.dealId == null ? [] : [schedule.dealId]));
+  const happyHourSchedulesWithoutDeal = happyHourSchedules.filter((schedule) => schedule.dealId == null).length;
+
+  return {
+    happyHourSpecials: happyHourDealIds.size + happyHourSchedulesWithoutDeal,
+    operatingHourSchedules: context.schedules.filter((schedule) => schedule.kind === 'operating-hours').length,
+  };
+}
+
+export function formatPlannerCount(count: number, singular: string, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+export function formatPlannerContentSummary(label: string, count: number, singular: string, titles: string[] = []) {
+  const titleSuffix = titles.length ? ` — ${titles.join(', ')}` : '';
+  return `${label}: ${formatPlannerCount(count, singular)}${titleSuffix}`;
+}
+
+function uniquePlannerTitles(values: Array<string | undefined>) {
+  const seen = new Set<string>();
+  return values
+    .map((value) => value?.trim() ?? '')
+    .filter((value) => {
+      if (!value || seen.has(value)) {
+        return false;
+      }
+      seen.add(value);
+      return true;
+    });
+}
+
+export function getPlannerContentTitles(context: PlannerPlaceContext): PlannerContentTitles {
+  return {
+    dealTitles: uniquePlannerTitles(context.deals.map((deal) => deal.title)),
+    happyHourTitles: uniquePlannerTitles(context.schedules
+      .filter((schedule) => schedule.kind === 'happy-hour')
+      .map((schedule) => {
+        const title = schedule.dealTitle?.trim();
+        if (title) {
+          return title;
+        }
+        const fallback = schedule.label.trim();
+        return fallback && fallback.toLowerCase() !== 'happy hour' ? fallback : undefined;
+      })),
+  };
+}
+
+export function formatPlannerOperatingHours(context: PlannerPlaceContext) {
+  return context.schedules
+    .filter((schedule) => schedule.kind === 'operating-hours')
+    .map((schedule) => {
+      const day = schedule.weekdayLabel ? `${schedule.weekdayLabel}: ` : '';
+      if (schedule.allDay) {
+        return `${day}Open 24 hours`;
+      }
+      const start = formatPlannerTimeInput(schedule.startTime);
+      const end = formatPlannerTimeInput(schedule.endTime);
+      const range = [start, end].filter(Boolean).join(' - ');
+      return `${day}${range || schedule.label}`;
+    })
+    .filter(Boolean)
+    .join('; ');
+}
+
+export function getBusinessProfileLinks(context: Pick<PlannerPlaceContext, 'reference'>): BusinessProfileLinks | null {
+  const slug = context.reference.slug.trim();
+  if (!slug) {
+    return null;
+  }
+
+  const encodedSlug = encodeURIComponent(slug);
+  return {
+    androidStore: diningDealzAndroidStoreURL,
+    app: `diningdealz://place/${encodedSlug}`,
+    iosStore: diningDealzIOSAppStoreURL,
+    web: `${diningDealzWebsiteURL}/place/${encodedSlug}`,
+  };
 }
 
 export function buildMapUrl(context: Pick<PlannerPlaceContext, 'latitude' | 'longitude' | 'address' | 'name'>) {
@@ -688,20 +792,26 @@ export function buildShareText(context: PlannerPlaceContext, selection: Restaura
     }
   } else {
     const selectedDeals = context.deals.filter((deal) => selection.selectedDealIds.includes(deal.id));
+    const counts = getPlannerContentCounts(context);
+    const operatingHours = formatPlannerOperatingHours(context);
+    const titles = getPlannerContentTitles(context);
     if (selection.includeHappyHours) {
-      const happyHours = context.schedules.filter((schedule) => schedule.kind === 'happy-hour');
-      if (happyHours.length) {
-        lines.push(`Happy hours: ${happyHours.map((schedule) => `${schedule.label} (${schedule.allDay ? 'All day' : `${formatPlannerTimeInput(schedule.startTime)} - ${formatPlannerTimeInput(schedule.endTime)}`})`).join('; ')}`);
+      if (counts.happyHourSpecials) {
+        lines.push(formatPlannerContentSummary('Happy Hours and Deals', counts.happyHourSpecials, 'special', titles.happyHourTitles));
       }
     }
     if (selection.includeOperatingHours) {
-      const operatingHours = context.schedules.filter((schedule) => schedule.kind === 'operating-hours');
-      if (operatingHours.length) {
-        lines.push(`Hours of operation: ${operatingHours.map((schedule) => `${schedule.weekdayLabel ?? ''} ${schedule.allDay ? 'Open 24 hours' : `${formatPlannerTimeInput(schedule.startTime)} - ${formatPlannerTimeInput(schedule.endTime)}`}`).join('; ')}`);
+      if (operatingHours) {
+        lines.push(`Hours of operation: ${operatingHours}`);
       }
     }
     if (selection.includeDealsAndMenu && selectedDeals.length) {
-      lines.push(`Deals and menu: ${selectedDeals.map((deal) => [deal.title, deal.priceText, deal.description].filter(Boolean).join(' — ')).join('; ')}`);
+      lines.push(formatPlannerContentSummary(
+        'Specials and Menu',
+        selectedDeals.length,
+        'deal',
+        uniquePlannerTitles(selectedDeals.map((deal) => deal.title)),
+      ));
     }
   }
 
@@ -712,6 +822,14 @@ export function buildShareText(context: PlannerPlaceContext, selection: Restaura
   const mapUrl = selection.includeLocation ? buildMapUrl(context) : '';
   if (mapUrl) {
     lines.push(`DiningDealz map: ${mapUrl}`);
+  }
+
+  const profileLinks = getBusinessProfileLinks(context);
+  if (profileLinks) {
+    lines.push(`Open in DiningDealz: ${profileLinks.app}`);
+    lines.push(`Business profile: ${profileLinks.web}`);
+    lines.push(`Download DiningDealz (iPhone): ${profileLinks.iosStore}`);
+    lines.push(`Download DiningDealz (Android): ${profileLinks.androidStore}`);
   }
 
   lines.push('Shared from the DiningDealz app');

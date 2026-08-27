@@ -21,8 +21,15 @@ export function parseRecoveryDeepLink(value: string): RecoveryDeepLink {
   }
 
   const route = parsedUrl.host.toLowerCase();
-  if (route === 'place' || route === 'places') {
-    const slug = decodePathSegment(parsedUrl.pathname.split('/').filter(Boolean)[0] ?? parsedUrl.searchParams.get('slug') ?? '').trim();
+  const pathSegments = parsedUrl.pathname.split('/').filter(Boolean);
+  const isDiningDealzWebProfile = (route === 'diningdealz.com' || route === 'www.diningdealz.com')
+    && (pathSegments[0]?.toLowerCase() === 'place' || pathSegments[0]?.toLowerCase() === 'places');
+  if (route === 'place' || route === 'places' || isDiningDealzWebProfile) {
+    const slug = decodePathSegment(
+      (isDiningDealzWebProfile ? pathSegments[1] : pathSegments[0])
+        ?? parsedUrl.searchParams.get('slug')
+        ?? '',
+    ).trim();
     return slug ? { kind: 'business-profile', slug } : null;
   }
 
