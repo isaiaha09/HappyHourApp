@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 
 import { venueFilters, type CityFilterValue, type VenueFilterValue, type WeekdayFilterValue } from '../../browseConfig';
 import { BrowseControls, type BrowseControlsProps } from '../BrowseControls';
@@ -95,6 +96,83 @@ describe('BrowseControls', () => {
     fireEvent(searchInput, 'pressIn');
 
     expect(onActivateSearch).toHaveBeenCalledTimes(1);
+
+    unmount();
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
+    jest.useRealTimers();
+  });
+
+  it('uses a light search surface when the map is in light mode', () => {
+    jest.useFakeTimers();
+    const { getByTestId, unmount } = render(<BrowseControls {...createProps({ overlay: true, isDarkMapMode: false })} />);
+
+    expect(StyleSheet.flatten(getByTestId('browse-search-shell').props.style)).toEqual(
+      expect.objectContaining({ backgroundColor: 'rgba(255, 255, 255, 0.94)' }),
+    );
+    expect(getByTestId('browse-search-input').props.placeholderTextColor).toBe('#68756b');
+
+    unmount();
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
+    jest.useRealTimers();
+  });
+
+  it('keeps the dark search surface when the map is in dark mode', () => {
+    jest.useFakeTimers();
+    const { getByTestId, unmount } = render(<BrowseControls {...createProps({ overlay: true, isDarkMapMode: true })} />);
+
+    expect(StyleSheet.flatten(getByTestId('browse-search-shell').props.style)).toEqual(
+      expect.objectContaining({ backgroundColor: 'rgba(24, 25, 31, 0.94)' }),
+    );
+    expect(getByTestId('browse-search-input').props.placeholderTextColor).toBe('#7f8597');
+
+    unmount();
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
+    jest.useRealTimers();
+  });
+
+  it('preserves light filter chip styling when the filter panel is expanded', () => {
+    jest.useFakeTimers();
+    const { getByTestId, unmount } = render(
+      <BrowseControls
+        {...createProps({
+          confirmedDealsOnly: true,
+          filtersExpanded: true,
+          isDarkMapMode: false,
+          overlay: true,
+        })}
+      />,
+    );
+
+    expect(StyleSheet.flatten(getByTestId('browse-city-filter-all').props.style)).toEqual(
+      expect.objectContaining({
+        backgroundColor: '#ff695c',
+        borderRadius: 999,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+      }),
+    );
+    expect(StyleSheet.flatten(getByTestId('browse-all-venue-types-filter').props.style)).toEqual(
+      expect.objectContaining({
+        backgroundColor: '#ff695c',
+        borderRadius: 999,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+      }),
+    );
+    expect(StyleSheet.flatten(getByTestId('browse-confirmed-deals-filter').props.style)).toEqual(
+      expect.objectContaining({
+        backgroundColor: '#ff695c',
+        borderRadius: 999,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+      }),
+    );
 
     unmount();
     act(() => {

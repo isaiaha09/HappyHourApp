@@ -110,10 +110,21 @@ export function BrowseControls({
   const landscapeControlsWidth = compactLandscapeControls
     ? Math.min(width - 32, overlay ? 560 : 620)
     : null;
-  const chipStyle = overlay ? styles.overlayChip : styles.filterChip;
-  const chipActiveStyle = overlay ? styles.overlayChipActive : styles.filterChipActive;
-  const chipTextStyle = overlay ? styles.overlayChipText : styles.filterChipText;
-  const chipTextActiveStyle = overlay ? styles.overlayChipTextActive : styles.filterChipTextActive;
+  const useLightMapControls = overlay && !isDarkMapMode;
+  const controlForegroundColor = useLightMapControls ? '#26352c' : '#f5f7fb';
+  const searchPlaceholderTextColor = useLightMapControls ? '#68756b' : '#7f8597';
+  const chipStyle = overlay
+    ? (useLightMapControls ? styles.overlayChipLight : styles.overlayChip)
+    : styles.filterChip;
+  const chipActiveStyle = overlay
+    ? (useLightMapControls ? styles.overlayChipActiveLight : styles.overlayChipActive)
+    : styles.filterChipActive;
+  const chipTextStyle = overlay
+    ? (useLightMapControls ? styles.overlayChipTextLight : styles.overlayChipText)
+    : styles.filterChipText;
+  const chipTextActiveStyle = overlay
+    ? (useLightMapControls ? styles.overlayChipTextActiveLight : styles.overlayChipTextActive)
+    : styles.filterChipTextActive;
   const normalizedSearchQuery = normalizeSearchText(searchQuery);
   const modeSwitchTranslateProgress = useRef(new Animated.Value(browseMode === 'map' ? 1 : 0)).current;
   const modeSwitchColorProgress = useRef(new Animated.Value(browseMode === 'map' ? 1 : 0)).current;
@@ -122,11 +133,11 @@ export function BrowseControls({
   const searchPanelLiftProgress = useRef(new Animated.Value(searchPanelLifted ? 1 : 0)).current;
   const listLabelColor = modeSwitchColorProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: ['#f5f7fb', '#7d8494'],
+    outputRange: useLightMapControls ? ['#26352c', '#738177'] : ['#f5f7fb', '#7d8494'],
   });
   const mapLabelColor = modeSwitchColorProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: ['#7d8494', '#f5f7fb'],
+    outputRange: useLightMapControls ? ['#738177', '#26352c'] : ['#7d8494', '#f5f7fb'],
   });
   const filtersPanelOpacity = filtersPanelProgress.interpolate({
     inputRange: [0, 0.12, 1],
@@ -142,23 +153,23 @@ export function BrowseControls({
   });
   const filtersToggleBackgroundColor = filtersPanelProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: ['#1f2026', '#ff695c'],
+    outputRange: [useLightMapControls ? '#edf2ed' : '#1f2026', '#ff695c'],
   });
   const filtersToggleBorderColor = filtersPanelProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: ['rgba(255, 255, 255, 0.08)', '#ff695c'],
+    outputRange: [useLightMapControls ? 'rgba(38, 53, 44, 0.16)' : 'rgba(255, 255, 255, 0.08)', '#ff695c'],
   });
   const filtersToggleTextColor = filtersPanelProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: ['#f5f7fb', '#ffffff'],
+    outputRange: [useLightMapControls ? '#26352c' : '#f5f7fb', '#ffffff'],
   });
   const mapThemeToggleBackgroundColor = mapThemeToggleProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: ['#1f2026', '#2b3445'],
+    outputRange: ['#edf2ed', '#2b3445'],
   });
   const mapThemeToggleBorderColor = mapThemeToggleProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: ['rgba(255, 255, 255, 0.08)', '#38506b'],
+    outputRange: ['rgba(38, 53, 44, 0.16)', '#38506b'],
   });
   const mapThemeToggleSunOpacity = mapThemeToggleProgress.interpolate({
     inputRange: [0, 0.45, 1],
@@ -208,6 +219,7 @@ export function BrowseControls({
     inputRange: [0, 1],
     outputRange: [-1, 1],
   });
+  const filtersToggleIconColor = useLightMapControls && !filtersExpanded ? '#26352c' : '#f5f7fb';
 
   useEffect(() => {
     Animated.timing(modeSwitchTranslateProgress, {
@@ -257,6 +269,7 @@ export function BrowseControls({
       onTouchStart={Keyboard.dismiss}
       style={[
         overlay ? styles.mapTopPanel : styles.browseHeaderCard,
+        useLightMapControls ? styles.mapTopPanelLight : null,
         compactLandscapeControls ? (overlay ? styles.mapTopPanelLandscape : styles.browseHeaderCardLandscape) : null,
         landscapeControlsWidth ? { width: landscapeControlsWidth } : null,
       ]}
@@ -267,20 +280,22 @@ export function BrowseControls({
             styles.searchInputShell,
             overlay ? styles.searchInputShellOverlay : null,
             overlay ? styles.searchInputShellCurtain : null,
+            useLightMapControls ? styles.searchInputShellOverlayLight : null,
             compactLandscapeControls ? styles.searchInputShellLandscape : null,
           ]}
+          testID="browse-search-shell"
         >
-          <View style={styles.searchInputIconBadge}>
-            <Ionicons color="#f5f7fb" name="search" size={18} />
+          <View style={[styles.searchInputIconBadge, useLightMapControls ? styles.searchInputIconBadgeLight : null]}>
+            <Ionicons color={controlForegroundColor} name="search" size={18} />
           </View>
           <TextInput
             accessibilityLabel="Browse search"
             keyboardAppearance={isDarkMapMode ? 'dark' : 'light'}
             onChangeText={onChangeSearchQuery}
             onPressIn={() => onActivateSearch?.()}
-            placeholderTextColor="#7f8597"
+            placeholderTextColor={searchPlaceholderTextColor}
             placeholder="Search restaurants, bars, cafes, etc."
-            style={styles.searchInput}
+            style={[styles.searchInput, useLightMapControls ? styles.searchInputLight : null]}
             testID="browse-search-input"
             value={searchQuery}
           />
@@ -313,6 +328,7 @@ export function BrowseControls({
                 style={[
                   styles.modeSwitcherTrack,
                   overlay ? styles.modeSwitcherTrackOverlay : null,
+                  useLightMapControls ? styles.modeSwitcherTrackOverlayLight : null,
                   { width: modeSwitchTrackWidth },
                 ]}
               >
@@ -346,8 +362,8 @@ export function BrowseControls({
                 </Pressable>
               </View>
             ) : (
-              <View style={styles.secondaryToolbarButton}>
-                <Text style={styles.secondaryToolbarButtonText}>Guest Map</Text>
+              <View style={[styles.secondaryToolbarButton, useLightMapControls ? styles.secondaryToolbarButtonLight : null]}>
+                <Text style={[styles.secondaryToolbarButtonText, useLightMapControls ? styles.secondaryToolbarButtonTextLight : null]}>Guest Map</Text>
               </View>
             )}
             {onToggleMapTheme ? (
@@ -370,6 +386,7 @@ export function BrowseControls({
                       styles.mapThemeToggleButtonText,
                       styles.mapThemeToggleButtonTextLayer,
                       {
+                        color: useLightMapControls ? '#3f5145' : '#d3d8e3',
                         opacity: mapThemeToggleSunOpacity,
                         transform: [{ scale: mapThemeToggleSunScale }, { rotate: mapThemeToggleSunRotate }],
                       },
@@ -383,6 +400,7 @@ export function BrowseControls({
                       styles.mapThemeToggleButtonTextActive,
                       styles.mapThemeToggleButtonTextLayer,
                       {
+                        color: useLightMapControls ? '#26352c' : '#f5f7fb',
                         opacity: mapThemeToggleMoonOpacity,
                         transform: [{ scale: mapThemeToggleMoonScale }, { rotate: mapThemeToggleMoonRotate }],
                       },
@@ -393,8 +411,8 @@ export function BrowseControls({
                 </Animated.View>
               </Pressable>
             ) : null}
-            <Pressable accessibilityLabel="Refresh places" onPress={onReload} style={styles.reloadButton}>
-              <Ionicons color="#f5f7fb" name="refresh" size={18} />
+            <Pressable accessibilityLabel="Refresh places" onPress={onReload} style={[styles.reloadButton, useLightMapControls ? styles.reloadButtonLight : null]}>
+              <Ionicons color={controlForegroundColor} name="refresh" size={18} />
             </Pressable>
             <Pressable
               accessibilityLabel={filtersExpanded ? 'Hide' : 'Show filters'}
@@ -420,21 +438,25 @@ export function BrowseControls({
                   {filtersExpanded ? 'Hide' : 'Filters'}
                 </Animated.Text>
                 <Animated.View style={styles.filtersToggleIconWrap}>
-                  <Ionicons color="#f5f7fb" name="options-outline" size={17} />
+                  <Ionicons color={filtersToggleIconColor} name="options-outline" size={17} />
                 </Animated.View>
               </Animated.View>
             </Pressable>
           </View>
           {onOpenDashboard ? (
-            <Pressable accessibilityLabel="Back to Dashboard" onPress={onOpenDashboard} style={styles.toolbarArrowButton}>
-              <Text style={styles.toolbarArrowButtonText}>→</Text>
+            <Pressable
+              accessibilityLabel="Back to Dashboard"
+              onPress={onOpenDashboard}
+              style={[styles.toolbarArrowButton, useLightMapControls ? styles.toolbarArrowButtonLight : null]}
+            >
+              <Text style={[styles.toolbarArrowButtonText, useLightMapControls ? styles.toolbarArrowButtonTextLight : null]}>→</Text>
             </Pressable>
           ) : null}
         </View>
 
         <View style={[styles.browseStatsRow, compactLandscapeControls ? styles.browseStatsRowLandscape : null]}>
-          <Text style={styles.browseStatsText}>{resultCount} {resultCount === 1 ? 'place' : 'places'}</Text>
-          <Text numberOfLines={1} style={styles.browseStatsSubtleText} testID="browse-summary-label">
+          <Text style={[styles.browseStatsText, useLightMapControls ? styles.browseStatsTextLight : null]}>{resultCount} {resultCount === 1 ? 'place' : 'places'}</Text>
+          <Text numberOfLines={1} style={[styles.browseStatsSubtleText, useLightMapControls ? styles.browseStatsSubtleTextLight : null]} testID="browse-summary-label">
             {getBrowseSummaryLabel(selectedCity, selectedVenueTypes, normalizedSearchQuery, {
               confirmedDealsOnly,
               favoriteBusinessesOnly,
@@ -450,6 +472,7 @@ export function BrowseControls({
           pointerEvents={filtersExpanded ? 'auto' : 'none'}
           style={[
             styles.filtersPanel,
+            useLightMapControls ? styles.filtersPanelLight : null,
             compactLandscapeControls ? styles.filtersPanelLandscape : null,
             {
               maxHeight: filtersPanelAnimatedMaxHeight,
@@ -468,8 +491,8 @@ export function BrowseControls({
               showsVerticalScrollIndicator
             >
             <View style={styles.browseSectionHeaderRow}>
-              <Text style={styles.browseSectionTitle}>City</Text>
-              <Text style={styles.browseSectionMeta}>Quick scope</Text>
+              <Text style={[styles.browseSectionTitle, useLightMapControls ? styles.browseSectionTitleLight : null]}>City</Text>
+              <Text style={[styles.browseSectionMeta, useLightMapControls ? styles.browseSectionMetaLight : null]}>Quick scope</Text>
             </View>
             <View style={styles.filterRow}>
               {cityFilters.map((filter) => {
@@ -499,6 +522,7 @@ export function BrowseControls({
               <Pressable
                 onPress={onSelectAllVenueTypes}
                 style={[chipStyle, selectedVenueTypes.length === venueFilters.length ? chipActiveStyle : null]}
+                testID="browse-all-venue-types-filter"
               >
                 <Text style={[chipTextStyle, selectedVenueTypes.length === venueFilters.length ? chipTextActiveStyle : null]}>All types</Text>
               </Pressable>
@@ -510,7 +534,11 @@ export function BrowseControls({
                   <Pressable
                     key={filter.value}
                     onPress={() => onToggleVenueType(filter.value)}
-                    style={[styles.venueFilterChip, isActive ? styles.venueFilterChipActive : null]}
+                    style={[
+                      styles.venueFilterChip,
+                      useLightMapControls ? styles.venueFilterChipLight : null,
+                      isActive ? (useLightMapControls ? styles.venueFilterChipActiveLight : styles.venueFilterChipActive) : null,
+                    ]}
                   >
                     <VenueMarkerVisual markerStyle={markerStyle} />
                     <Text style={[chipTextStyle, isActive ? chipTextActiveStyle : null]}>{filter.label}</Text>
@@ -520,8 +548,8 @@ export function BrowseControls({
             </ScrollView>
 
             <View style={styles.browseSectionHeaderRow}>
-              <Text style={styles.browseSectionTitle}>Trust and Deals</Text>
-              <Text style={styles.browseSectionMeta}>Tighten the Results</Text>
+              <Text style={[styles.browseSectionTitle, useLightMapControls ? styles.browseSectionTitleLight : null]}>Trust and Deals</Text>
+              <Text style={[styles.browseSectionMeta, useLightMapControls ? styles.browseSectionMetaLight : null]}>Tighten the Results</Text>
             </View>
             <View style={styles.filterRow}>
               <Pressable
@@ -555,8 +583,8 @@ export function BrowseControls({
             </View>
 
             <View style={styles.browseSectionHeaderRow}>
-              <Text style={styles.browseSectionTitle}>Hours of Operation</Text>
-              <Text style={styles.browseSectionMeta}>Sunday through Saturday</Text>
+              <Text style={[styles.browseSectionTitle, useLightMapControls ? styles.browseSectionTitleLight : null]}>Hours of Operation</Text>
+              <Text style={[styles.browseSectionMeta, useLightMapControls ? styles.browseSectionMetaLight : null]}>Sunday through Saturday</Text>
             </View>
             <View style={styles.filterRow}>
               {weekdayFilters.map((filter) => {
@@ -575,8 +603,8 @@ export function BrowseControls({
             </View>
 
             <View style={styles.browseSectionHeaderRow}>
-              <Text style={styles.browseSectionTitle}>Happy Hour Days</Text>
-              <Text style={styles.browseSectionMeta}>Separate from Business Hours</Text>
+              <Text style={[styles.browseSectionTitle, useLightMapControls ? styles.browseSectionTitleLight : null]}>Happy Hour Days</Text>
+              <Text style={[styles.browseSectionMeta, useLightMapControls ? styles.browseSectionMetaLight : null]}>Separate from Business Hours</Text>
             </View>
             <View style={styles.filterRow}>
               {weekdayFilters.map((filter) => {
@@ -610,6 +638,7 @@ export function BrowseControls({
                 styles.mapResultsChevronLine,
                 styles.mapResultsChevronLineLeft,
                 styles.searchCurtainChevronLine,
+                useLightMapControls ? styles.searchCurtainChevronLineLight : null,
                 {
                   transform: [
                     { translateY: searchPanelChevronArmOffset },
@@ -623,6 +652,7 @@ export function BrowseControls({
                 styles.mapResultsChevronLine,
                 styles.mapResultsChevronLineRight,
                 styles.searchCurtainChevronLine,
+                useLightMapControls ? styles.searchCurtainChevronLineLight : null,
                 {
                   transform: [
                     { translateY: searchPanelChevronArmOffset },

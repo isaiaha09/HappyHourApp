@@ -102,6 +102,12 @@ export const browseStyles = {
     shadowRadius: 24,
     elevation: 16,
   },
+  mapTopPanelLight: {
+    backgroundColor: 'rgba(248, 251, 247, 0.96)',
+    borderColor: 'rgba(38, 53, 44, 0.18)',
+    shadowColor: '#233329',
+    shadowOpacity: 0.14,
+  },
   mapTopPanelLandscape: {
     alignSelf: 'center',
     gap: 6,
@@ -141,6 +147,10 @@ export const browseStyles = {
     minHeight: 0,
     padding: 16,
   },
+  mapResultsCardLight: {
+    backgroundColor: 'rgba(248, 251, 247, 0.98)',
+    borderColor: 'rgba(38, 53, 44, 0.2)',
+  },
   mapResultsHeader: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -161,10 +171,16 @@ export const browseStyles = {
     fontSize: 18,
     fontWeight: '800',
   },
+  mapResultsTitleLight: {
+    color: '#26352c',
+  },
   mapResultsMeta: {
     color: theme.textMuted,
     fontSize: 12,
     fontWeight: '700',
+  },
+  mapResultsMetaLight: {
+    color: '#68756b',
   },
   mapResultsList: {
     gap: 10,
@@ -193,6 +209,9 @@ export const browseStyles = {
     fontSize: 13,
     fontWeight: '800',
   },
+  mapResultsMoreButtonTextLight: {
+    color: '#1f5f5b',
+  },
   mapResultsCollapseButton: {
     alignItems: 'center',
     backgroundColor: theme.bgElevated,
@@ -202,6 +221,10 @@ export const browseStyles = {
     height: 32,
     justifyContent: 'center',
     width: 32,
+  },
+  mapResultsCollapseButtonLight: {
+    backgroundColor: '#e8eee8',
+    borderColor: 'rgba(38, 53, 44, 0.16)',
   },
   mapResultsChevronIcon: {
     height: 14,
@@ -215,6 +238,9 @@ export const browseStyles = {
     position: 'absolute',
     top: 6,
     width: 8,
+  },
+  mapResultsChevronLineLight: {
+    backgroundColor: '#26352c',
   },
   mapResultsChevronLineLeft: {
     left: 0.5,
@@ -241,6 +267,10 @@ export const browseStyles = {
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
+  mapResultRowLight: {
+    backgroundColor: 'rgba(237, 242, 237, 0.96)',
+    borderColor: 'rgba(38, 53, 44, 0.14)',
+  },
   mapResultCopy: {
     flex: 1,
     gap: 4,
@@ -250,20 +280,32 @@ export const browseStyles = {
     fontSize: 15,
     fontWeight: '800',
   },
+  mapResultTitleLight: {
+    color: '#26352c',
+  },
   mapResultMeta: {
     color: theme.textSecondary,
     fontSize: 12,
     lineHeight: 17,
+  },
+  mapResultMetaLight: {
+    color: '#52645a',
   },
   mapResultAction: {
     color: theme.accentBlue,
     fontSize: 12,
     fontWeight: '800',
   },
+  mapResultActionLight: {
+    color: '#d94f48',
+  },
   mapResultEmptyText: {
     color: theme.textSecondary,
     fontSize: 13,
     lineHeight: 18,
+  },
+  mapResultEmptyTextLight: {
+    color: '#52645a',
   },
   mapPreviewHeader: {
     alignItems: 'flex-start',
@@ -726,6 +768,12 @@ export const browseStyles = {
   searchInputShellOverlay: {
     backgroundColor: 'rgba(24, 25, 31, 0.94)',
   },
+  searchInputShellOverlayLight: {
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    borderColor: 'rgba(38, 53, 44, 0.14)',
+    shadowColor: '#233329',
+    shadowOpacity: 0.12,
+  },
   searchInputShellCurtain: {
     minHeight: 54,
   },
@@ -746,6 +794,9 @@ export const browseStyles = {
   searchCurtainChevronLine: {
     backgroundColor: '#f5f7fb',
   },
+  searchCurtainChevronLineLight: {
+    backgroundColor: '#26352c',
+  },
   searchInputIconBadge: {
     alignItems: 'center',
     backgroundColor: '#2a2d36',
@@ -756,6 +807,10 @@ export const browseStyles = {
     justifyContent: 'center',
     width: 30,
   },
+  searchInputIconBadgeLight: {
+    backgroundColor: '#e9efe9',
+    borderColor: 'rgba(38, 53, 44, 0.12)',
+  },
   searchInput: {
     color: '#f5f7fb',
     flex: 1,
@@ -763,6 +818,9 @@ export const browseStyles = {
     fontWeight: '500',
     letterSpacing: 0,
     paddingVertical: 0,
+  },
+  searchInputLight: {
+    color: '#26352c',
   },
   searchClearButton: {
     alignItems: 'center',
@@ -834,12 +892,21 @@ export const browseStyles = {
     fontWeight: '600',
     textAlign: 'right',
   },
+  browseStatsTextLight: {
+    color: '#26352c',
+  },
+  browseStatsSubtleTextLight: {
+    color: '#68756b',
+  },
   filtersPanel: {
     borderTopColor: 'rgba(255, 255, 255, 0.08)',
     borderTopWidth: 1,
     gap: 12,
     marginTop: 6,
     minHeight: 0,
+  },
+  filtersPanelLight: {
+    borderTopColor: 'rgba(38, 53, 44, 0.14)',
   },
   filtersPanelLandscape: {
     gap: 8,
@@ -866,6 +933,12 @@ export const browseStyles = {
     fontSize: 12,
     fontWeight: '600',
   },
+  browseSectionTitleLight: {
+    color: '#3d4c42',
+  },
+  browseSectionMetaLight: {
+    color: '#68756b',
+  },
   browseSectionAction: {
     color: '#ff7a68',
     fontSize: 12,
@@ -881,6 +954,10 @@ export const browseStyles = {
     justifyContent: 'center',
     width: 44,
   },
+  reloadButtonLight: {
+    backgroundColor: '#edf2ed',
+    borderColor: 'rgba(38, 53, 44, 0.14)',
+  },
   secondaryToolbarButton: {
     backgroundColor: '#1f2026',
     borderColor: 'rgba(255, 255, 255, 0.08)',
@@ -889,10 +966,21 @@ export const browseStyles = {
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
+  mapResultsMoreButtonLight: {
+    backgroundColor: '#edf2ed',
+    borderColor: 'rgba(38, 53, 44, 0.16)',
+  },
+  secondaryToolbarButtonLight: {
+    backgroundColor: '#edf2ed',
+    borderColor: 'rgba(38, 53, 44, 0.14)',
+  },
   secondaryToolbarButtonText: {
     color: '#f5f7fb',
     fontSize: 13,
     fontWeight: '700',
+  },
+  secondaryToolbarButtonTextLight: {
+    color: '#26352c',
   },
   toolbarArrowButton: {
     alignItems: 'center',
@@ -904,10 +992,17 @@ export const browseStyles = {
     justifyContent: 'center',
     width: 44,
   },
+  toolbarArrowButtonLight: {
+    backgroundColor: '#edf2ed',
+    borderColor: 'rgba(38, 53, 44, 0.14)',
+  },
   toolbarArrowButtonText: {
     color: '#f5f7fb',
     fontSize: 22,
     fontWeight: '700',
+  },
+  toolbarArrowButtonTextLight: {
+    color: '#26352c',
   },
   reloadButtonText: {
     color: '#f4fffe',
@@ -978,6 +1073,10 @@ export const browseStyles = {
   },
   modeSwitcherTrackOverlay: {
     backgroundColor: 'rgba(22, 26, 34, 0.98)',
+  },
+  modeSwitcherTrackOverlayLight: {
+    backgroundColor: '#e8eee8',
+    borderColor: 'rgba(38, 53, 44, 0.16)',
   },
   modeLockBadge: {
     alignItems: 'center',
@@ -1052,13 +1151,43 @@ export const browseStyles = {
     backgroundColor: theme.accentSoft,
     borderColor: theme.borderStrong,
   },
+  overlayChipLight: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#edf2ed',
+    borderColor: 'rgba(38, 53, 44, 0.14)',
+    borderRadius: 999,
+    borderWidth: 1.5,
+    overflow: 'hidden',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  overlayChipActiveLight: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#ff695c',
+    borderColor: '#ff695c',
+    borderRadius: 999,
+    borderWidth: 1.5,
+    overflow: 'hidden',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
   overlayChipText: {
     color: theme.textPrimary,
     fontSize: 13,
     fontWeight: '600',
   },
+  overlayChipTextLight: {
+    color: '#26352c',
+    fontSize: 13,
+    fontWeight: '600',
+  },
   overlayChipTextActive: {
     color: theme.textPrimary,
+  },
+  overlayChipTextActiveLight: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '600',
   },
   venueFilterRow: {
     alignItems: 'center',
@@ -1081,6 +1210,14 @@ export const browseStyles = {
   venueFilterChipActive: {
     backgroundColor: theme.accentSoft,
     borderColor: theme.borderStrong,
+  },
+  venueFilterChipLight: {
+    backgroundColor: '#edf2ed',
+    borderColor: 'rgba(38, 53, 44, 0.14)',
+  },
+  venueFilterChipActiveLight: {
+    backgroundColor: '#ff695c',
+    borderColor: '#ff695c',
   },
   mapMarkerMotion: {
     alignItems: 'center',

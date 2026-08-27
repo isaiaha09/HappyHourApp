@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
-import { AppState, NativeModules } from 'react-native';
+import { AppState, NativeModules, StyleSheet } from 'react-native';
 
 import { getVenueMarkerStyle } from '../browseConfig';
 import type { CurrentHappyHourPlace, PlaceListItem, SignupResponse } from '../types';
@@ -1552,10 +1552,26 @@ describe('App browse map search', () => {
     expect(await screen.findByTestId('current-happy-hours-toggle')).toBeTruthy();
 
     fireEvent.press(screen.getByTestId('current-happy-hours-toggle'));
+    fireEvent.press(screen.getByLabelText('Switch to light map'));
     fireEvent.changeText(screen.getByTestId('browse-search-input'), 'ba');
 
     expect(await screen.findByText('Best matches')).toBeTruthy();
     expect(screen.getAllByText('Baskin-Robbins').length).toBeGreaterThanOrEqual(2);
+
+    expect(StyleSheet.flatten(screen.getByTestId('map-search-results-card').props.style)).toEqual(
+      expect.objectContaining({
+        backgroundColor: 'rgba(248, 251, 247, 0.98)',
+      }),
+    );
+    const resultRow = screen.getByTestId('map-search-result-baskin-robbins:1');
+    expect(StyleSheet.flatten(resultRow.props.style)).toEqual(
+      expect.objectContaining({
+        backgroundColor: 'rgba(237, 242, 237, 0.96)',
+      }),
+    );
+    expect(StyleSheet.flatten(within(resultRow).getByText('Baskin-Robbins').props.style)).toEqual(
+      expect.objectContaining({ color: '#26352c' }),
+    );
   });
 
   it('shows the same current happy hours menu on the authenticated map', async () => {

@@ -7880,6 +7880,7 @@ function AppScreen() {
       && incomingBrowseProfileScreen === 'profiles';
     const browseScreenAnimationStyle = options?.suppressScreenTransitionStyle || shouldShowProfileOverlay ? null : screenTransitionStyle;
     const browseSceneAnimationStyle = options?.suppressBrowseSceneTransitionStyle || shouldShowProfileOverlay ? null : browseSceneTransitionStyle;
+    const useLightMapOverlay = browseMode === 'map' && !displayedDarkMapMode;
 
     return (
       <View style={[styles.fullScreenRoot, shouldShowProfileOverlay ? styles.transitionClipRoot : null]}>
@@ -8048,7 +8049,7 @@ function AppScreen() {
                   overlay={browseMode === 'map'}
                   filtersExpanded={browseFiltersExpanded}
                   informalBusinessesOnly={informalBusinessesOnly}
-                  isDarkMapMode={darkMapMode}
+                  isDarkMapMode={displayedDarkMapMode}
                   listModeEnabled={!showsGuestBrowseControls}
                   onActivateSearch={() => setCurrentHappyHoursMenuExpanded(false)}
                   onChangeSearchQuery={handleChangeSearchQuery}
@@ -8158,22 +8159,30 @@ function AppScreen() {
                       </Animated.View>
                     ) : showMapResultsCard && !currentHappyHoursMenuExpanded ? (
                       <Animated.View style={{ opacity: mapResultsOpacity }}>
-                        <Animated.View style={[styles.mapResultsCard, { maxHeight: mapResultsCardAnimatedMaxHeight }]}>
+                        <Animated.View
+                          style={[
+                            styles.mapResultsCard,
+                            useLightMapOverlay ? styles.mapResultsCardLight : null,
+                            { maxHeight: mapResultsCardAnimatedMaxHeight },
+                          ]}
+                          testID="map-search-results-card"
+                        >
                           <View style={styles.mapResultsHeader}>
                             <View style={styles.mapResultsHeaderCopy}>
-                              <Text style={styles.mapResultsTitle}>Best matches</Text>
-                              <Text style={styles.mapResultsMeta}>Top {renderedMapSearchResults.length} of {renderedMapResultCount} in view</Text>
+                              <Text style={[styles.mapResultsTitle, useLightMapOverlay ? styles.mapResultsTitleLight : null]}>Best matches</Text>
+                              <Text style={[styles.mapResultsMeta, useLightMapOverlay ? styles.mapResultsMetaLight : null]}>Top {renderedMapSearchResults.length} of {renderedMapResultCount} in view</Text>
                             </View>
                             <View style={styles.mapResultsHeaderActions}>
                               <Pressable
                                 accessibilityLabel={mapResultsCollapsed ? 'Expand best matches' : 'Collapse best matches'}
                                 onPress={handleToggleMapResultsCollapsed}
-                                style={styles.mapResultsCollapseButton}
+                                style={[styles.mapResultsCollapseButton, useLightMapOverlay ? styles.mapResultsCollapseButtonLight : null]}
                               >
                                 <View style={styles.mapResultsChevronIcon}>
                                   <Animated.View
                                     style={[
                                       styles.mapResultsChevronLine,
+                                      useLightMapOverlay ? styles.mapResultsChevronLineLight : null,
                                       styles.mapResultsChevronLineLeft,
                                       {
                                         transform: [
@@ -8186,6 +8195,7 @@ function AppScreen() {
                                   <Animated.View
                                     style={[
                                       styles.mapResultsChevronLine,
+                                      useLightMapOverlay ? styles.mapResultsChevronLineLight : null,
                                       styles.mapResultsChevronLineRight,
                                       {
                                         transform: [
@@ -8239,28 +8249,33 @@ function AppScreen() {
                                         accessibilityRole="button"
                                         key={place.resultKey}
                                         onPress={() => handlePressMapSearchResult(place)}
-                                        style={styles.mapResultRow}
+                                        style={[styles.mapResultRow, useLightMapOverlay ? styles.mapResultRowLight : null]}
+                                        testID={`map-search-result-${place.resultKey}`}
                                       >
                                         <View style={styles.mapResultCopy}>
-                                          <Text numberOfLines={1} style={styles.mapResultTitle}>{place.name}</Text>
-                                          <Text numberOfLines={2} style={styles.mapResultMeta}>
+                                          <Text numberOfLines={1} style={[styles.mapResultTitle, useLightMapOverlay ? styles.mapResultTitleLight : null]}>{place.name}</Text>
+                                          <Text numberOfLines={2} style={[styles.mapResultMeta, useLightMapOverlay ? styles.mapResultMetaLight : null]}>
                                             {place.venue_type_label} • {place.fullAddress}{place.markerKey ? '' : ' • No map pin yet'}
                                           </Text>
                                         </View>
-                                        <Text style={styles.mapResultAction}>{actionLabel}</Text>
+                                        <Text style={[styles.mapResultAction, useLightMapOverlay ? styles.mapResultActionLight : null]}>{actionLabel}</Text>
                                       </Pressable>
                                     );
                                   })}
                                 </ScrollView>
                                 {renderedMapSearchResults.length < renderedMapResultCount ? (
-                                  <Pressable disabled={loadingMoreMapResults} onPress={handleShowMoreMapResults} style={styles.mapResultsMoreButton}>
+                                  <Pressable
+                                    disabled={loadingMoreMapResults}
+                                    onPress={handleShowMoreMapResults}
+                                    style={[styles.mapResultsMoreButton, useLightMapOverlay ? styles.mapResultsMoreButtonLight : null]}
+                                  >
                                     {loadingMoreMapResults ? (
                                       <View style={styles.mapResultsMoreButtonLoadingContent}>
-                                        <ActivityIndicator color="#1f5f5b" size="small" />
-                                        <Text style={styles.mapResultsMoreButtonText}>Loading...</Text>
+                                        <ActivityIndicator color={useLightMapOverlay ? '#1f5f5b' : '#58a6ff'} size="small" />
+                                        <Text style={[styles.mapResultsMoreButtonText, useLightMapOverlay ? styles.mapResultsMoreButtonTextLight : null]}>Loading...</Text>
                                       </View>
                                     ) : (
-                                      <Text style={styles.mapResultsMoreButtonText}>
+                                      <Text style={[styles.mapResultsMoreButtonText, useLightMapOverlay ? styles.mapResultsMoreButtonTextLight : null]}>
                                         Show next {Math.min(nextMapResultsIncrement, renderedMapResultCount - renderedMapSearchResults.length)}
                                       </Text>
                                     )}
@@ -8268,7 +8283,7 @@ function AppScreen() {
                                 ) : null}
                               </>
                             ) : (
-                              <Text style={styles.mapResultEmptyText}>No map matches found for that search yet.</Text>
+                              <Text style={[styles.mapResultEmptyText, useLightMapOverlay ? styles.mapResultEmptyTextLight : null]}>No map matches found for that search yet.</Text>
                             )}
                           </Animated.View>
                         </Animated.View>
