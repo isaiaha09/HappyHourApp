@@ -76,6 +76,7 @@ export type PlannerPlaceContext = {
   imageUrls: string[];
   timeZone: string;
   schedules: PlannerSchedule[];
+  theme?: 'dark' | 'light';
   deals: PlannerDeal[];
 };
 

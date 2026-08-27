@@ -4632,13 +4632,21 @@ function AppScreen() {
     dismissKeyboardForScreenTransition();
     setCurrentHappyHoursMenuExpanded(false);
 
+    const themedAction: ExternalPlannerAction = {
+      ...action,
+      context: {
+        ...action.context,
+        theme: displayedDarkMapMode ? 'dark' : 'light',
+      },
+    };
+
     if (!authenticatedSession?.auth_token) {
-      pendingExternalPlannerActionRef.current = action;
+      pendingExternalPlannerActionRef.current = themedAction;
       setShowExternalPlannerAccountPrompt(true);
       return;
     }
 
-    openExternalPlannerAction(action);
+    openExternalPlannerAction(themedAction);
   }
 
   function buildSelectedPlacePlannerAction(mode: ExternalPlannerAction['mode'], deal?: Deal): ExternalPlannerAction | null {
@@ -8526,6 +8534,7 @@ function AppScreen() {
                 onSharePlace={(place, window) => requestExternalPlannerAction(buildCurrentHappyHourPlannerAction('share', place, window))}
                 onToggle={handleToggleCurrentHappyHoursMenu}
                 places={currentHappyHourPlaces}
+                showFavoriteActions={authenticatedSession?.portal !== 'business'}
                 theme={displayedDarkMapMode ? 'dark' : 'light'}
                 userCoordinates={userCoordinates}
               />
@@ -8719,6 +8728,7 @@ function AppScreen() {
           setExternalPlannerError(null);
         }}
         onShareSubmit={handleExternalShareSubmit}
+        theme={displayedDarkMapMode ? 'dark' : 'light'}
         visible={externalPlannerAction !== null}
       />
       <Modal

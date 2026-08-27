@@ -155,6 +155,7 @@ export type CurrentHappyHoursUpMenuProps = {
   onFavoritePlace?: (place: { slug: string; locationId: number }) => void;
   onAddToCalendar?: (place: CurrentHappyHourPlace, window?: CurrentHappyHourWindow) => void;
   onSharePlace?: (place: CurrentHappyHourPlace, window?: CurrentHappyHourWindow) => void;
+  showFavoriteActions?: boolean;
   bottomOffset: number;
   bottomInset?: number;
   theme: 'dark' | 'light';
@@ -185,6 +186,7 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
   onFavoritePlace,
   onAddToCalendar,
   onSharePlace,
+  showFavoriteActions = true,
   bottomOffset,
   bottomInset = 0,
   theme,
@@ -441,6 +443,7 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
                     onShare={() => onSharePlace?.(place, place.happy_hours[0])}
                     onSelect={() => onSelectPlace({ locationId: place.location_id, slug: place.slug })}
                     place={place}
+                    showFavoriteAction={showFavoriteActions}
                     userCoordinates={userCoordinates}
                   />
                 ))}
@@ -460,10 +463,11 @@ type CurrentHappyHoursDealCardProps = {
   onShare: () => void;
   onSelect: () => void;
   place: CurrentHappyHourPlace;
+  showFavoriteAction: boolean;
   userCoordinates?: CurrentHappyHoursUserCoordinates | null;
 };
 
-function CurrentHappyHoursDealCard({ isDark, onAddToCalendar, onFavorite, onSelect, onShare, place, userCoordinates }: CurrentHappyHoursDealCardProps) {
+function CurrentHappyHoursDealCard({ isDark, onAddToCalendar, onFavorite, onSelect, onShare, place, showFavoriteAction, userCoordinates }: CurrentHappyHoursDealCardProps) {
   const imageUrl = getCardImageUrl(place);
   const [imageLoadFailed, setImageLoadFailed] = useState(false);
   const distanceLabel = getDistanceLabel(userCoordinates, place);
@@ -530,7 +534,7 @@ function CurrentHappyHoursDealCard({ isDark, onAddToCalendar, onFavorite, onSele
         accessibilityRole="button"
         hitSlop={8}
         onPress={onAddToCalendar}
-        style={styles.currentHappyHoursDealCalendar}
+        style={[styles.currentHappyHoursDealCalendar, !showFavoriteAction ? styles.currentHappyHoursDealCalendarWithoutFavorite : null]}
         testID={`current-happy-hours-calendar-${place.slug}:${place.location_id}`}
       >
         <Ionicons color="#1e211f" name="calendar-outline" size={16} />
@@ -541,22 +545,24 @@ function CurrentHappyHoursDealCard({ isDark, onAddToCalendar, onFavorite, onSele
         accessibilityRole="button"
         hitSlop={8}
         onPress={onShare}
-        style={styles.currentHappyHoursDealShare}
+        style={[styles.currentHappyHoursDealShare, !showFavoriteAction ? styles.currentHappyHoursDealShareWithoutFavorite : null]}
         testID={`current-happy-hours-share-${place.slug}:${place.location_id}`}
       >
         <Ionicons color="#1e211f" name="share-social-outline" size={16} />
       </Pressable>
 
-      <Pressable
-        accessibilityLabel={`Favorite ${place.name}`}
-        accessibilityRole="button"
-        hitSlop={8}
-        onPress={onFavorite}
-        style={styles.currentHappyHoursDealFavorite}
-        testID={`current-happy-hours-favorite-${place.slug}:${place.location_id}`}
-      >
-        <Ionicons color="#1e211f" name="heart-outline" size={17} />
-      </Pressable>
+      {showFavoriteAction ? (
+        <Pressable
+          accessibilityLabel={`Favorite ${place.name}`}
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={onFavorite}
+          style={styles.currentHappyHoursDealFavorite}
+          testID={`current-happy-hours-favorite-${place.slug}:${place.location_id}`}
+        >
+          <Ionicons color="#1e211f" name="heart-outline" size={17} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }

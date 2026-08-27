@@ -1,4 +1,5 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import {
   ActivityIndicator,
@@ -12,7 +13,6 @@ import {
   StyleSheet,
   Switch,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import ViewShot, { type ViewShotRef } from 'react-native-view-shot';
@@ -44,17 +44,153 @@ type ExternalPlannerModalProps = {
   onCalendarSubmit: (draft: CalendarEventDraft) => Promise<void> | void;
   onClose: () => void;
   onShareSubmit: (selection: RestaurantShareSelection, cardRef: RefObject<ViewShotRef | null>) => Promise<void> | void;
+  theme?: 'dark' | 'light';
   visible: boolean;
 };
 
-const palette = {
+type PlannerPalette = {
+  accent: string;
+  background: string;
+  border: string;
+  card: string;
+  divider: string;
+  input: string;
+  muted: string;
+  text: string;
+  backdrop: string;
+  error: string;
+  activeCard: string;
+  activeText: string;
+  shareCard: string;
+  shareCardBorder: string;
+  shareCardDetail: string;
+  shareCardMeta: string;
+  shareCardPlaceholder: string;
+  switchOffTrack: string;
+  switchOnTrack: string;
+  switchOffThumb: string;
+};
+
+const darkPalette: PlannerPalette = {
   accent: '#ff5b61',
+  activeCard: '#43292e',
+  activeText: '#ffb4b7',
   background: '#11161b',
+  backdrop: 'rgba(0, 0, 0, 0.58)',
   border: '#39434c',
   card: '#20272e',
+  divider: '#2c343b',
+  error: '#ff969b',
+  input: '#171d22',
   muted: '#a8b0b6',
+  shareCard: '#1a2222',
+  shareCardBorder: '#52625a',
+  shareCardDetail: '#e6ede8',
+  shareCardMeta: '#a8b9b0',
+  shareCardPlaceholder: '#27332e',
+  switchOffThumb: '#d5d9d6',
+  switchOffTrack: '#3c454c',
+  switchOnTrack: '#7a3138',
   text: '#f7f8f5',
 };
+
+const lightPalette: PlannerPalette = {
+  accent: '#f64f58',
+  activeCard: '#ffe1e2',
+  activeText: '#b42632',
+  background: '#f7f8f5',
+  backdrop: 'rgba(20, 28, 24, 0.28)',
+  border: '#cbd4ce',
+  card: '#ffffff',
+  divider: '#dce3de',
+  error: '#b32632',
+  input: '#ffffff',
+  muted: '#59645d',
+  shareCard: '#ffffff',
+  shareCardBorder: '#cbd4ce',
+  shareCardDetail: '#25302a',
+  shareCardMeta: '#59645d',
+  shareCardPlaceholder: '#e4eee7',
+  switchOffThumb: '#ffffff',
+  switchOffTrack: '#b8c2bb',
+  switchOnTrack: '#f7a1a5',
+  text: '#17201c',
+};
+
+// The base StyleSheet values keep the existing dark-mode layout stable. Every
+// rendered color-bearing style is layered with getPlannerColorStyles so the
+// active map theme wins at runtime.
+const palette = darkPalette;
+
+function getPlannerPalette(theme: 'dark' | 'light'): PlannerPalette {
+  return theme === 'light' ? lightPalette : darkPalette;
+}
+
+function getPlannerColorStyles(palette: PlannerPalette) {
+  return {
+    backdrop: { backgroundColor: palette.backdrop },
+    closeButton: { backgroundColor: palette.card, borderColor: palette.border },
+    dealSelectionRow: { backgroundColor: palette.card, borderColor: palette.border },
+    dealSelectionText: { color: palette.text },
+    disclaimer: { color: palette.muted },
+    errorText: { color: palette.error },
+    fieldLabel: { color: palette.muted },
+    helperText: { color: palette.muted },
+    input: { backgroundColor: palette.input, borderColor: palette.border, color: palette.text },
+    nativePickerValue: { color: palette.text },
+    modalCard: { backgroundColor: palette.background, borderColor: palette.border },
+    modalEyebrow: { color: palette.accent },
+    modalSubtitle: { color: palette.muted },
+    modalTitle: { color: palette.text },
+    optionRow: { borderBottomColor: palette.divider },
+    optionSubtitle: { color: palette.muted },
+    optionTitle: { color: palette.text },
+    photoSelectorItem: { borderColor: palette.border },
+    photoSelectorItemActive: { borderColor: palette.accent },
+    presetButton: { backgroundColor: palette.card, borderColor: palette.border },
+    presetButtonActive: { backgroundColor: palette.activeCard, borderColor: palette.accent },
+    presetMeta: { color: palette.muted },
+    presetTitle: { color: palette.text },
+    presetTitleActive: { color: palette.activeText },
+    primaryButton: { backgroundColor: palette.accent },
+    secondaryButton: { borderColor: palette.border },
+    secondaryButtonText: { color: palette.text },
+    sectionLabel: { color: palette.text },
+    segmentActive: { backgroundColor: palette.accent },
+    segmentText: { color: palette.muted },
+    segmentedControl: { backgroundColor: palette.card, borderColor: palette.border },
+    shareCard: { backgroundColor: palette.shareCard, borderColor: palette.shareCardBorder },
+    shareCardBrand: { color: palette.accent },
+    shareCardDetail: { color: palette.shareCardDetail },
+    shareCardMeta: { color: palette.shareCardMeta },
+    shareCardName: { color: palette.text },
+    shareCardPlaceholder: { backgroundColor: palette.shareCardPlaceholder },
+    shareTextPreview: { color: palette.muted },
+  };
+}
+
+function plannerDatePickerValue(value: string | undefined) {
+  const normalized = parsePlannerDateInput(value);
+  if (!normalized) {
+    return new Date();
+  }
+  const [year, month, day] = normalized.split('-').map(Number);
+  return new Date(year, month - 1, day, 12, 0, 0, 0);
+}
+
+function plannerTimePickerValue(value: string | undefined) {
+  const normalized = parsePlannerTimeInput(value ?? '');
+  const [hour, minute] = (normalized ?? '09:00').split(':').map(Number);
+  return new Date(2000, 0, 1, hour, minute, 0, 0);
+}
+
+function pickerDateToPlannerDate(value: Date) {
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+}
+
+function pickerTimeToPlannerTime(value: Date) {
+  return `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`;
+}
 
 export function ExternalPlannerModal({
   context,
@@ -63,34 +199,38 @@ export function ExternalPlannerModal({
   onCalendarSubmit,
   onClose,
   onShareSubmit,
+  theme,
   visible,
 }: ExternalPlannerModalProps) {
   if (!context) {
     return null;
   }
 
+  const palette = getPlannerPalette(theme ?? context.theme ?? 'dark');
+  const colorStyles = getPlannerColorStyles(palette);
+
   return (
     <Modal animationType="slide" onRequestClose={onClose} transparent visible={visible}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalRoot}>
-        <View style={styles.backdrop} />
-        <View style={styles.modalCard}>
+        <View style={[styles.backdrop, colorStyles.backdrop]} />
+        <View style={[styles.modalCard, colorStyles.modalCard]}>
           <View style={styles.modalHeader}>
             <View style={styles.modalTitleCopy}>
-              <Text style={styles.modalEyebrow}>DiningDealz</Text>
-              <Text style={styles.modalTitle}>{mode === 'calendar' ? 'Add to Calendar' : 'Share Restaurant'}</Text>
-              <Text numberOfLines={1} style={styles.modalSubtitle}>{context.name}</Text>
+              <Text style={[styles.modalEyebrow, colorStyles.modalEyebrow]}>DiningDealz</Text>
+              <Text style={[styles.modalTitle, colorStyles.modalTitle]}>{mode === 'calendar' ? 'Add to Calendar' : 'Share Restaurant'}</Text>
+              <Text numberOfLines={1} style={[styles.modalSubtitle, colorStyles.modalSubtitle]}>{context.name}</Text>
             </View>
-            <Pressable accessibilityLabel="Close" onPress={onClose} style={styles.closeButton}>
+            <Pressable accessibilityLabel="Close" onPress={onClose} style={[styles.closeButton, colorStyles.closeButton]}>
               <Ionicons color={palette.text} name="close" size={21} />
             </Pressable>
           </View>
 
-          {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+          {errorMessage ? <Text style={[styles.errorText, colorStyles.errorText]}>{errorMessage}</Text> : null}
 
           {mode === 'calendar' ? (
-            <CalendarComposer context={context} onClose={onClose} onSubmit={onCalendarSubmit} />
+            <CalendarComposer context={context} onClose={onClose} onSubmit={onCalendarSubmit} palette={palette} />
           ) : (
-            <ShareComposer context={context} onClose={onClose} onSubmit={onShareSubmit} />
+            <ShareComposer context={context} onClose={onClose} onSubmit={onShareSubmit} palette={palette} />
           )}
         </View>
       </KeyboardAvoidingView>
@@ -98,13 +238,17 @@ export function ExternalPlannerModal({
   );
 }
 
+type PlannerPickerKind = 'date' | 'startTime' | 'endTime';
+
 type CalendarComposerProps = {
   context: PlannerPlaceContext;
   onClose: () => void;
   onSubmit: (draft: CalendarEventDraft) => Promise<void> | void;
+  palette: PlannerPalette;
 };
 
-function CalendarComposer({ context, onClose, onSubmit }: CalendarComposerProps) {
+function CalendarComposer({ context, onClose, onSubmit, palette }: CalendarComposerProps) {
+  const colorStyles = getPlannerColorStyles(palette);
   const schedules = useMemo(() => getPlannerSchedules(context), [context]);
   const initialSelection = useMemo(() => getDefaultCalendarSelection(context), [context]);
   const [date, setDate] = useState(initialSelection.date);
@@ -113,6 +257,7 @@ function CalendarComposer({ context, onClose, onSubmit }: CalendarComposerProps)
   const [allDay, setAllDay] = useState(initialSelection.allDay);
   const [weeklyRepeat, setWeeklyRepeat] = useState(false);
   const [selectedScheduleId, setSelectedScheduleId] = useState(initialSelection.scheduleId ?? 'custom');
+  const [pickerKind, setPickerKind] = useState<PlannerPickerKind | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
 
@@ -122,6 +267,7 @@ function CalendarComposer({ context, onClose, onSubmit }: CalendarComposerProps)
     setEndTime(initialSelection.endTime);
     setAllDay(initialSelection.allDay);
     setSelectedScheduleId(initialSelection.scheduleId ?? 'custom');
+    setPickerKind(null);
     setWeeklyRepeat(false);
     setValidationMessage(null);
   }, [initialSelection]);
@@ -133,7 +279,27 @@ function CalendarComposer({ context, onClose, onSubmit }: CalendarComposerProps)
     setEndTime(selection.endTime);
     setAllDay(selection.allDay);
     setSelectedScheduleId(schedule.id);
+    setPickerKind(null);
     setValidationMessage(null);
+  }
+
+  function handlePickerChange(event: DateTimePickerEvent, nextDate?: Date) {
+    if (!nextDate || event.type === 'dismissed') {
+      setPickerKind(null);
+      return;
+    }
+
+    if (pickerKind === 'date') {
+      setDate(pickerDateToPlannerDate(nextDate));
+    } else if (pickerKind === 'startTime') {
+      setStartTime(pickerTimeToPlannerTime(nextDate));
+    } else if (pickerKind === 'endTime') {
+      setEndTime(pickerTimeToPlannerTime(nextDate));
+    }
+
+    if (Platform.OS !== 'ios') {
+      setPickerKind(null);
+    }
   }
 
   async function submit() {
@@ -170,91 +336,128 @@ function CalendarComposer({ context, onClose, onSubmit }: CalendarComposerProps)
 
   return (
     <ScrollView contentContainerStyle={styles.composerContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-      <Text style={styles.sectionLabel}>Choose a time</Text>
+      <Text style={[styles.sectionLabel, colorStyles.sectionLabel]}>Choose a time</Text>
       <View style={styles.presetList}>
         {schedules.map((schedule) => (
           <Pressable
             accessibilityRole="button"
             key={schedule.id}
             onPress={() => selectSchedule(schedule)}
-            style={[styles.presetButton, selectedScheduleId === schedule.id ? styles.presetButtonActive : null]}
+            style={[styles.presetButton, colorStyles.presetButton, selectedScheduleId === schedule.id ? [styles.presetButtonActive, colorStyles.presetButtonActive] : null]}
           >
-            <Text style={[styles.presetTitle, selectedScheduleId === schedule.id ? styles.presetTitleActive : null]}>{schedule.label}</Text>
-            <Text style={styles.presetMeta}>
+            <Text style={[styles.presetTitle, colorStyles.presetTitle, selectedScheduleId === schedule.id ? [styles.presetTitleActive, colorStyles.presetTitleActive] : null]}>{schedule.label}</Text>
+            <Text style={[styles.presetMeta, colorStyles.presetMeta]}>
               {[schedule.weekdayLabel, schedule.allDay ? 'All day' : `${formatTimeLabel(schedule.startTime)} - ${formatTimeLabel(schedule.endTime)}`].filter(Boolean).join(' · ')}
             </Text>
           </Pressable>
         ))}
-        <Pressable onPress={() => setSelectedScheduleId('custom')} style={[styles.presetButton, selectedScheduleId === 'custom' ? styles.presetButtonActive : null]}>
-          <Text style={[styles.presetTitle, selectedScheduleId === 'custom' ? styles.presetTitleActive : null]}>Custom time</Text>
-          <Text style={styles.presetMeta}>Enter your own availability</Text>
+        <Pressable
+          onPress={() => {
+            setSelectedScheduleId('custom');
+            setPickerKind(null);
+            setValidationMessage(null);
+          }}
+          style={[styles.presetButton, colorStyles.presetButton, selectedScheduleId === 'custom' ? [styles.presetButtonActive, colorStyles.presetButtonActive] : null]}
+        >
+          <Text style={[styles.presetTitle, colorStyles.presetTitle, selectedScheduleId === 'custom' ? [styles.presetTitleActive, colorStyles.presetTitleActive] : null]}>Custom time</Text>
+          <Text style={[styles.presetMeta, colorStyles.presetMeta]}>Enter your own availability</Text>
         </Pressable>
       </View>
 
-      <Text style={styles.sectionLabel}>Date</Text>
-      <TextInput
-        autoCapitalize="none"
-        autoCorrect={false}
-        keyboardType="numbers-and-punctuation"
-        onChangeText={setDate}
-        placeholder="YYYY-MM-DD"
-        placeholderTextColor={palette.muted}
-        style={styles.input}
-        value={date}
-      />
-      <Text style={styles.helperText}>{date ? formatDateLabel(date) : 'Use the date you plan to visit.'}</Text>
+      <Text style={[styles.sectionLabel, colorStyles.sectionLabel]}>Date</Text>
+      <Pressable
+        accessibilityLabel="Choose calendar date"
+        accessibilityRole="button"
+        onPress={() => setPickerKind('date')}
+        style={[styles.input, styles.nativePickerField, colorStyles.input]}
+      >
+        <Text style={[styles.nativePickerValue, colorStyles.nativePickerValue]}>
+          {date ? formatPlannerDateInput(date) : 'Choose date'}
+        </Text>
+        <Ionicons color={palette.muted} name="calendar-outline" size={19} />
+      </Pressable>
+      <Text style={[styles.helperText, colorStyles.helperText]}>{date ? formatDateLabel(date) : 'Use the date you plan to visit.'}</Text>
 
       <View style={styles.timeRow}>
-        <View style={styles.timeField}>
-          <Text style={styles.fieldLabel}>Start</Text>
-          <TextInput
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="numbers-and-punctuation"
-            onChangeText={setStartTime}
-            placeholder="15:00"
-            placeholderTextColor={palette.muted}
-            style={styles.input}
-            value={startTime}
-          />
-        </View>
-        <View style={styles.timeField}>
-          <Text style={styles.fieldLabel}>End</Text>
-          <TextInput
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="numbers-and-punctuation"
-            onChangeText={setEndTime}
-            placeholder="18:00"
-            placeholderTextColor={palette.muted}
-            style={styles.input}
-            value={endTime}
-          />
-        </View>
-      </View>
-
-      <View style={styles.optionRow}>
-        <View style={styles.optionCopy}>
-          <Text style={styles.optionTitle}>All-day event</Text>
-          <Text style={styles.optionSubtitle}>Use this for an all-day schedule.</Text>
-        </View>
-        <Switch onValueChange={setAllDay} thumbColor={allDay ? palette.accent : '#d5d9d6'} trackColor={{ false: '#3c454c', true: '#7a3138' }} value={allDay} />
-      </View>
-      <View style={styles.optionRow}>
-        <View style={styles.optionCopy}>
-          <Text style={styles.optionTitle}>Repeat weekly</Text>
-          <Text style={styles.optionSubtitle}>Off by default. You can edit it in your calendar.</Text>
-        </View>
-        <Switch onValueChange={setWeeklyRepeat} thumbColor={weeklyRepeat ? palette.accent : '#d5d9d6'} trackColor={{ false: '#3c454c', true: '#7a3138' }} value={weeklyRepeat} />
-      </View>
-
-      {validationMessage ? <Text style={styles.errorText}>{validationMessage}</Text> : null}
-      <Text style={styles.disclaimer}>DiningDealz opens your device calendar editor. We do not read your existing calendars.</Text>
-      <View style={styles.footerActions}>
-        <Pressable disabled={submitting} onPress={onClose} style={styles.secondaryButton}>
-          <Text style={styles.secondaryButtonText}>Cancel</Text>
+        <Pressable
+          accessibilityLabel="Choose calendar start time"
+          accessibilityRole="button"
+          disabled={allDay}
+          onPress={() => setPickerKind('startTime')}
+          style={[styles.input, styles.nativePickerField, styles.timeInput, colorStyles.input, allDay ? styles.disabledPickerField : null]}
+        >
+          <Text style={[styles.nativePickerValue, colorStyles.nativePickerValue]}>
+            {startTime ? formatPlannerTimeInput(startTime) : 'Choose start'}
+          </Text>
+          <Ionicons color={palette.muted} name="time-outline" size={19} />
         </Pressable>
-        <Pressable disabled={submitting} onPress={() => void submit()} style={styles.primaryButton}>
+        <Pressable
+          accessibilityLabel="Choose calendar end time"
+          accessibilityRole="button"
+          disabled={allDay}
+          onPress={() => setPickerKind('endTime')}
+          style={[styles.input, styles.nativePickerField, styles.timeInput, colorStyles.input, allDay ? styles.disabledPickerField : null]}
+        >
+          <Text style={[styles.nativePickerValue, colorStyles.nativePickerValue]}>
+            {endTime ? formatPlannerTimeInput(endTime) : 'Choose end'}
+          </Text>
+          <Ionicons color={palette.muted} name="time-outline" size={19} />
+        </Pressable>
+      </View>
+      {pickerKind ? (
+        <View style={[styles.nativePickerPanel, colorStyles.dealSelectionRow]}>
+          <DateTimePicker
+            accentColor={palette.accent}
+            display={Platform.OS === 'ios' ? (pickerKind === 'date' ? 'inline' : 'spinner') : 'default'}
+            is24Hour={Platform.OS === 'android' ? false : undefined}
+            locale={Platform.OS === 'ios' ? 'en_US' : undefined}
+            mode={pickerKind === 'date' ? 'date' : 'time'}
+            onChange={handlePickerChange}
+            themeVariant={Platform.OS === 'ios' ? (palette === lightPalette ? 'light' : 'dark') : undefined}
+            value={pickerKind === 'date'
+              ? plannerDatePickerValue(date)
+              : plannerTimePickerValue(pickerKind === 'startTime' ? startTime : endTime)}
+          />
+          {Platform.OS === 'ios' ? (
+            <Pressable onPress={() => setPickerKind(null)} style={[styles.pickerDoneButton, colorStyles.primaryButton]}>
+              <Text style={styles.primaryButtonText}>Done</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
+      <View style={[styles.optionRow, colorStyles.optionRow]}>
+        <View style={styles.optionCopy}>
+          <Text style={[styles.optionTitle, colorStyles.optionTitle]}>All-day event</Text>
+          <Text style={[styles.optionSubtitle, colorStyles.optionSubtitle]}>Use this for an all-day schedule.</Text>
+        </View>
+        <Switch
+          onValueChange={(value) => {
+            setAllDay(value);
+            if (value) {
+              setPickerKind(null);
+            }
+          }}
+          thumbColor={allDay ? palette.accent : palette.switchOffThumb}
+          trackColor={{ false: palette.switchOffTrack, true: palette.switchOnTrack }}
+          value={allDay}
+        />
+      </View>
+      <View style={[styles.optionRow, colorStyles.optionRow]}>
+        <View style={styles.optionCopy}>
+          <Text style={[styles.optionTitle, colorStyles.optionTitle]}>Repeat weekly</Text>
+          <Text style={[styles.optionSubtitle, colorStyles.optionSubtitle]}>Off by default. You can edit it in your calendar.</Text>
+        </View>
+        <Switch onValueChange={setWeeklyRepeat} thumbColor={weeklyRepeat ? palette.accent : palette.switchOffThumb} trackColor={{ false: palette.switchOffTrack, true: palette.switchOnTrack }} value={weeklyRepeat} />
+      </View>
+
+      {validationMessage ? <Text style={[styles.errorText, colorStyles.errorText]}>{validationMessage}</Text> : null}
+      <Text style={[styles.disclaimer, colorStyles.disclaimer]}>DiningDealz opens your device calendar editor. We do not read your existing calendars.</Text>
+      <View style={styles.footerActions}>
+        <Pressable disabled={submitting} onPress={onClose} style={[styles.secondaryButton, colorStyles.secondaryButton]}>
+          <Text style={[styles.secondaryButtonText, colorStyles.secondaryButtonText]}>Cancel</Text>
+        </Pressable>
+        <Pressable disabled={submitting} onPress={() => void submit()} style={[styles.primaryButton, colorStyles.primaryButton]}>
           {submitting ? <ActivityIndicator color="#ffffff" size="small" /> : <Text style={styles.primaryButtonText}>Open Calendar</Text>}
         </Pressable>
       </View>
@@ -266,9 +469,11 @@ type ShareComposerProps = {
   context: PlannerPlaceContext;
   onClose: () => void;
   onSubmit: (selection: RestaurantShareSelection, cardRef: RefObject<ViewShotRef | null>) => Promise<void> | void;
+  palette: PlannerPalette;
 };
 
-function ShareComposer({ context, onClose, onSubmit }: ShareComposerProps) {
+function ShareComposer({ context, onClose, onSubmit, palette }: ShareComposerProps) {
+  const colorStyles = getPlannerColorStyles(palette);
   const shareCardRef = useRef<ViewShotRef | null>(null);
   const schedules = useMemo(() => getPlannerSchedules(context), [context]);
   const firstSchedule = schedules[0];
@@ -279,9 +484,7 @@ function ShareComposer({ context, onClose, onSubmit }: ShareComposerProps) {
     endTime: defaultMyTime.endTime,
     startTime: defaultMyTime.startTime,
   }));
-  const [dateInput, setDateInput] = useState(() => formatPlannerDateInput(defaultMyTime.date));
-  const [startTimeInput, setStartTimeInput] = useState(() => formatPlannerTimeInput(defaultMyTime.startTime));
-  const [endTimeInput, setEndTimeInput] = useState(() => formatPlannerTimeInput(defaultMyTime.endTime));
+  const [pickerKind, setPickerKind] = useState<PlannerPickerKind | null>(null);
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -292,9 +495,7 @@ function ShareComposer({ context, onClose, onSubmit }: ShareComposerProps) {
       endTime: defaultMyTime.endTime,
       startTime: defaultMyTime.startTime,
     });
-    setDateInput(formatPlannerDateInput(defaultMyTime.date));
-    setStartTimeInput(formatPlannerTimeInput(defaultMyTime.startTime));
-    setEndTimeInput(formatPlannerTimeInput(defaultMyTime.endTime));
+    setPickerKind(null);
     setValidationMessage(null);
   }, [context, defaultMyTime]);
 
@@ -305,44 +506,22 @@ function ShareComposer({ context, onClose, onSubmit }: ShareComposerProps) {
     setValidationMessage(null);
   }
 
-  function updateDateInput(value: string) {
-    setDateInput(value);
-    updateSelection({ date: parsePlannerDateInput(value) ?? value });
-  }
-
-  function normalizeDateInput() {
-    const normalizedDate = parsePlannerDateInput(dateInput);
-    if (!normalizedDate) {
+  function handlePickerChange(event: DateTimePickerEvent, nextDate?: Date) {
+    if (!nextDate || event.type === 'dismissed') {
+      setPickerKind(null);
       return;
     }
-    setDateInput(formatPlannerDateInput(normalizedDate));
-    updateSelection({ date: normalizedDate });
-  }
 
-  function updateTimeInput(field: 'startTime' | 'endTime', value: string) {
-    const normalizedTime = parsePlannerTimeInput(value) ?? value;
-    if (field === 'startTime') {
-      setStartTimeInput(value);
-      updateSelection({ startTime: normalizedTime });
-    } else {
-      setEndTimeInput(value);
-      updateSelection({ endTime: normalizedTime });
+    if (pickerKind === 'date') {
+      updateSelection({ date: pickerDateToPlannerDate(nextDate) });
+    } else if (pickerKind === 'startTime') {
+      updateSelection({ startTime: pickerTimeToPlannerTime(nextDate) });
+    } else if (pickerKind === 'endTime') {
+      updateSelection({ endTime: pickerTimeToPlannerTime(nextDate) });
     }
-  }
 
-  function normalizeTimeInput(field: 'startTime' | 'endTime') {
-    const input = field === 'startTime' ? startTimeInput : endTimeInput;
-    const normalizedTime = parsePlannerTimeInput(input);
-    if (!normalizedTime) {
-      return;
-    }
-    const displayTime = formatPlannerTimeInput(normalizedTime);
-    if (field === 'startTime') {
-      setStartTimeInput(displayTime);
-      updateSelection({ startTime: normalizedTime });
-    } else {
-      setEndTimeInput(displayTime);
-      updateSelection({ endTime: normalizedTime });
+    if (Platform.OS !== 'ios') {
+      setPickerKind(null);
     }
   }
 
@@ -356,13 +535,10 @@ function ShareComposer({ context, onClose, onSubmit }: ShareComposerProps) {
   async function submit() {
     Keyboard.dismiss();
     if (selection.mode === 'my-time') {
-      const normalizedDate = parsePlannerDateInput(dateInput);
-      const normalizedStartTime = parsePlannerTimeInput(startTimeInput);
-      const normalizedEndTime = parsePlannerTimeInput(endTimeInput);
       const nextValidationMessage = validateCalendarDraft({
-        date: normalizedDate ?? dateInput,
-        endTime: normalizedEndTime ?? endTimeInput,
-        startTime: normalizedStartTime ?? startTimeInput,
+        date: selection.date ?? '',
+        endTime: selection.endTime ?? '',
+        startTime: selection.startTime ?? '',
       });
       if (nextValidationMessage) {
         setValidationMessage(nextValidationMessage);
@@ -371,14 +547,12 @@ function ShareComposer({ context, onClose, onSubmit }: ShareComposerProps) {
 
       const normalizedSelection: RestaurantShareSelection = {
         ...selection,
-        date: normalizedDate ?? selection.date,
-        endTime: normalizedEndTime ?? selection.endTime,
-        startTime: normalizedStartTime ?? selection.startTime,
+        date: selection.date,
+        endTime: selection.endTime,
+        startTime: selection.startTime,
       };
       setSelection(normalizedSelection);
-      setDateInput(formatPlannerDateInput(normalizedSelection.date));
-      setStartTimeInput(formatPlannerTimeInput(normalizedSelection.startTime));
-      setEndTimeInput(formatPlannerTimeInput(normalizedSelection.endTime));
+      setPickerKind(null);
       setSubmitting(true);
       setValidationMessage(null);
       try {
@@ -409,44 +583,104 @@ function ShareComposer({ context, onClose, onSubmit }: ShareComposerProps) {
 
   return (
     <ScrollView contentContainerStyle={styles.composerContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-      <View style={styles.segmentedControl}>
-        <Pressable onPress={() => updateSelection({ mode: 'my-time' })} style={[styles.segment, selection.mode === 'my-time' ? styles.segmentActive : null]}>
-          <Text style={[styles.segmentText, selection.mode === 'my-time' ? styles.segmentTextActive : null]}>Share my time</Text>
+      <View style={[styles.segmentedControl, colorStyles.segmentedControl]}>
+        <Pressable onPress={() => updateSelection({ mode: 'my-time' })} style={[styles.segment, selection.mode === 'my-time' ? [styles.segmentActive, colorStyles.segmentActive] : null]}>
+          <Text style={[styles.segmentText, colorStyles.segmentText, selection.mode === 'my-time' ? styles.segmentTextActive : null]}>Share my time</Text>
         </Pressable>
-        <Pressable onPress={() => updateSelection({ mode: 'restaurant-details' })} style={[styles.segment, selection.mode === 'restaurant-details' ? styles.segmentActive : null]}>
-          <Text style={[styles.segmentText, selection.mode === 'restaurant-details' ? styles.segmentTextActive : null]}>Restaurant details</Text>
+        <Pressable onPress={() => updateSelection({ mode: 'restaurant-details' })} style={[styles.segment, selection.mode === 'restaurant-details' ? [styles.segmentActive, colorStyles.segmentActive] : null]}>
+          <Text style={[styles.segmentText, colorStyles.segmentText, selection.mode === 'restaurant-details' ? styles.segmentTextActive : null]}>Restaurant details</Text>
         </Pressable>
       </View>
 
       {selection.mode === 'my-time' ? (
         <View style={styles.myTimeFields}>
-          <Text style={styles.sectionLabel}>Your availability</Text>
-          <TextInput autoCapitalize="none" autoCorrect={false} keyboardType="numbers-and-punctuation" onBlur={normalizeDateInput} onChangeText={updateDateInput} placeholder="MM-DD-YYYY" placeholderTextColor={palette.muted} style={styles.input} value={dateInput} />
+          <Text style={[styles.sectionLabel, colorStyles.sectionLabel]}>Your availability</Text>
+          <Pressable
+            accessibilityLabel="Choose availability date"
+            accessibilityRole="button"
+            onPress={() => {
+              Keyboard.dismiss();
+              setPickerKind('date');
+            }}
+            style={[styles.input, styles.nativePickerField, colorStyles.input]}
+          >
+            <Text style={[styles.nativePickerValue, colorStyles.nativePickerValue]}>
+              {selection.date ? formatPlannerDateInput(selection.date) : 'Choose date'}
+            </Text>
+            <Ionicons color={palette.muted} name="calendar-outline" size={19} />
+          </Pressable>
           <View style={styles.timeRow}>
-            <TextInput autoCapitalize="none" autoCorrect={false} keyboardType="default" onBlur={() => normalizeTimeInput('startTime')} onChangeText={(value) => updateTimeInput('startTime', value)} placeholder="Start 3:00 PM" placeholderTextColor={palette.muted} style={[styles.input, styles.timeInput]} value={startTimeInput} />
-            <TextInput autoCapitalize="none" autoCorrect={false} keyboardType="default" onBlur={() => normalizeTimeInput('endTime')} onChangeText={(value) => updateTimeInput('endTime', value)} placeholder="End 6:00 PM" placeholderTextColor={palette.muted} style={[styles.input, styles.timeInput]} value={endTimeInput} />
+            <Pressable
+              accessibilityLabel="Choose availability start time"
+              accessibilityRole="button"
+              onPress={() => {
+                Keyboard.dismiss();
+                setPickerKind('startTime');
+              }}
+              style={[styles.input, styles.nativePickerField, styles.timeInput, colorStyles.input]}
+            >
+              <Text style={[styles.nativePickerValue, colorStyles.nativePickerValue]}>
+                {selection.startTime ? formatPlannerTimeInput(selection.startTime) : 'Choose start'}
+              </Text>
+              <Ionicons color={palette.muted} name="time-outline" size={19} />
+            </Pressable>
+            <Pressable
+              accessibilityLabel="Choose availability end time"
+              accessibilityRole="button"
+              onPress={() => {
+                Keyboard.dismiss();
+                setPickerKind('endTime');
+              }}
+              style={[styles.input, styles.nativePickerField, styles.timeInput, colorStyles.input]}
+            >
+              <Text style={[styles.nativePickerValue, colorStyles.nativePickerValue]}>
+                {selection.endTime ? formatPlannerTimeInput(selection.endTime) : 'Choose end'}
+              </Text>
+              <Ionicons color={palette.muted} name="time-outline" size={19} />
+            </Pressable>
           </View>
+          {pickerKind ? (
+            <View style={[styles.nativePickerPanel, colorStyles.dealSelectionRow]}>
+              <DateTimePicker
+                accentColor={palette.accent}
+                display={Platform.OS === 'ios' ? (pickerKind === 'date' ? 'inline' : 'spinner') : 'default'}
+                is24Hour={Platform.OS === 'android' ? false : undefined}
+                locale={Platform.OS === 'ios' ? 'en_US' : undefined}
+                mode={pickerKind === 'date' ? 'date' : 'time'}
+                onChange={handlePickerChange}
+                themeVariant={Platform.OS === 'ios' ? (palette === lightPalette ? 'light' : 'dark') : undefined}
+                value={pickerKind === 'date'
+                  ? plannerDatePickerValue(selection.date)
+                  : plannerTimePickerValue(pickerKind === 'startTime' ? selection.startTime : selection.endTime)}
+              />
+              {Platform.OS === 'ios' ? (
+                <Pressable onPress={() => setPickerKind(null)} style={[styles.pickerDoneButton, colorStyles.primaryButton]}>
+                  <Text style={styles.primaryButtonText}>Done</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
         </View>
       ) : (
-        <Text style={styles.helperText}>Choose the sections your friend should receive. DiningDealz branding and the business name are always included.</Text>
+        <Text style={[styles.helperText, colorStyles.helperText]}>Choose the sections your friend should receive. DiningDealz branding and the business name are always included.</Text>
       )}
 
-      <Text style={styles.sectionLabel}>Include</Text>
-      <ShareToggle label="Happy hours and specials" value={selection.includeHappyHours} onChange={(value) => updateSelection({ includeHappyHours: value })} />
-      <ShareToggle label="Hours of operation" value={selection.includeOperatingHours} onChange={(value) => updateSelection({ includeOperatingHours: value })} />
-      <ShareToggle label="Deals and menu text" value={selection.includeDealsAndMenu} onChange={(value) => updateSelection({ includeDealsAndMenu: value })} />
-      <ShareToggle label="Location and map link" value={selection.includeLocation} onChange={(value) => updateSelection({ includeLocation: value })} />
-      {context.imageUrls.length ? <ShareToggle label="Photo" value={selection.includePhotos} onChange={(value) => updateSelection({ includePhotos: value })} /> : null}
+      <Text style={[styles.sectionLabel, colorStyles.sectionLabel]}>Include</Text>
+      <ShareToggle label="Happy hours and specials" value={selection.includeHappyHours} onChange={(value) => updateSelection({ includeHappyHours: value })} palette={palette} />
+      <ShareToggle label="Hours of operation" value={selection.includeOperatingHours} onChange={(value) => updateSelection({ includeOperatingHours: value })} palette={palette} />
+      <ShareToggle label="Deals and menu text" value={selection.includeDealsAndMenu} onChange={(value) => updateSelection({ includeDealsAndMenu: value })} palette={palette} />
+      <ShareToggle label="Location and map link" value={selection.includeLocation} onChange={(value) => updateSelection({ includeLocation: value })} palette={palette} />
+      {context.imageUrls.length ? <ShareToggle label="Photo" value={selection.includePhotos} onChange={(value) => updateSelection({ includePhotos: value })} palette={palette} /> : null}
       {selection.includePhotos && context.imageUrls.length > 1 ? (
         <View style={styles.photoSelectorSection}>
-          <Text style={styles.fieldLabel}>Photo to share</Text>
+          <Text style={[styles.fieldLabel, colorStyles.fieldLabel]}>Photo to share</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoSelector}>
             {context.imageUrls.map((imageUrl, index) => (
               <Pressable
                 accessibilityLabel={`Use photo ${index + 1}`}
                 key={imageUrl}
                 onPress={() => updateSelection({ selectedPhotoUri: imageUrl })}
-                style={[styles.photoSelectorItem, selection.selectedPhotoUri === imageUrl ? styles.photoSelectorItemActive : null]}
+                style={[styles.photoSelectorItem, colorStyles.photoSelectorItem, selection.selectedPhotoUri === imageUrl ? [styles.photoSelectorItemActive, colorStyles.photoSelectorItemActive] : null]}
               >
                 <Image resizeMode="cover" source={{ uri: imageUrl }} style={styles.photoSelectorImage} />
               </Pressable>
@@ -457,28 +691,28 @@ function ShareComposer({ context, onClose, onSubmit }: ShareComposerProps) {
 
       {selection.mode === 'restaurant-details' && context.deals.length ? (
         <View style={styles.dealSelectionList}>
-          <Text style={styles.fieldLabel}>Deals to include</Text>
+          <Text style={[styles.fieldLabel, colorStyles.fieldLabel]}>Deals to include</Text>
           {context.deals.map((deal) => (
-            <Pressable key={deal.id} onPress={() => toggleDeal(deal.id)} style={styles.dealSelectionRow}>
+            <Pressable key={deal.id} onPress={() => toggleDeal(deal.id)} style={[styles.dealSelectionRow, colorStyles.dealSelectionRow]}>
               <Ionicons color={selection.selectedDealIds.includes(deal.id) ? palette.accent : palette.muted} name={selection.selectedDealIds.includes(deal.id) ? 'checkbox' : 'square-outline'} size={22} />
-              <Text numberOfLines={2} style={styles.dealSelectionText}>{deal.title}</Text>
+              <Text numberOfLines={2} style={[styles.dealSelectionText, colorStyles.dealSelectionText]}>{deal.title}</Text>
             </Pressable>
           ))}
         </View>
       ) : null}
 
-      <Text style={styles.sectionLabel}>Preview</Text>
+      <Text style={[styles.sectionLabel, colorStyles.sectionLabel]}>Preview</Text>
       <ViewShot ref={shareCardRef} options={{ format: 'png', quality: 1, result: 'tmpfile' }} style={styles.shareCardCapture}>
-        <ShareCardPreview context={context} selection={selection} />
+        <ShareCardPreview context={context} selection={selection} palette={palette} />
       </ViewShot>
-      <Text style={styles.shareTextPreview}>{shareText}</Text>
-      {validationMessage ? <Text style={styles.errorText}>{validationMessage}</Text> : null}
-      <Text style={styles.disclaimer}>Your device opens the share sheet. DiningDealz never sends the message automatically.</Text>
+      <Text style={[styles.shareTextPreview, colorStyles.shareTextPreview]}>{shareText}</Text>
+      {validationMessage ? <Text style={[styles.errorText, colorStyles.errorText]}>{validationMessage}</Text> : null}
+      <Text style={[styles.disclaimer, colorStyles.disclaimer]}>Your device opens the share sheet. DiningDealz never sends the message automatically.</Text>
       <View style={styles.footerActions}>
-        <Pressable disabled={submitting} onPress={onClose} style={styles.secondaryButton}>
-          <Text style={styles.secondaryButtonText}>Cancel</Text>
+        <Pressable disabled={submitting} onPress={onClose} style={[styles.secondaryButton, colorStyles.secondaryButton]}>
+          <Text style={[styles.secondaryButtonText, colorStyles.secondaryButtonText]}>Cancel</Text>
         </Pressable>
-        <Pressable disabled={submitting} onPress={() => void submit()} style={styles.primaryButton}>
+        <Pressable disabled={submitting} onPress={() => void submit()} style={[styles.primaryButton, colorStyles.primaryButton]}>
           {submitting ? <ActivityIndicator color="#ffffff" size="small" /> : <Text style={styles.primaryButtonText}>Open Share Sheet</Text>}
         </Pressable>
       </View>
@@ -486,16 +720,19 @@ function ShareComposer({ context, onClose, onSubmit }: ShareComposerProps) {
   );
 }
 
-function ShareToggle({ label, onChange, value }: { label: string; onChange: (value: boolean) => void; value: boolean }) {
+function ShareToggle({ label, onChange, palette, value }: { label: string; onChange: (value: boolean) => void; palette: PlannerPalette; value: boolean }) {
+  const colorStyles = getPlannerColorStyles(palette);
+
   return (
-    <View style={styles.optionRow}>
-      <Text style={styles.optionTitle}>{label}</Text>
-      <Switch onValueChange={onChange} thumbColor={value ? palette.accent : '#d5d9d6'} trackColor={{ false: '#3c454c', true: '#7a3138' }} value={value} />
+    <View style={[styles.optionRow, colorStyles.optionRow]}>
+      <Text style={[styles.optionTitle, colorStyles.optionTitle]}>{label}</Text>
+      <Switch onValueChange={onChange} thumbColor={value ? palette.accent : palette.switchOffThumb} trackColor={{ false: palette.switchOffTrack, true: palette.switchOnTrack }} value={value} />
     </View>
   );
 }
 
-function ShareCardPreview({ context, selection }: { context: PlannerPlaceContext; selection: RestaurantShareSelection }) {
+function ShareCardPreview({ context, palette, selection }: { context: PlannerPlaceContext; palette: PlannerPalette; selection: RestaurantShareSelection }) {
+  const colorStyles = getPlannerColorStyles(palette);
   const photoUri = selection.includePhotos ? selection.selectedPhotoUri ?? context.imageUrls[0] : undefined;
   const [photoLoadFailed, setPhotoLoadFailed] = useState(false);
   const selectedDeals = context.deals.filter((deal) => selection.selectedDealIds.includes(deal.id));
@@ -506,24 +743,24 @@ function ShareCardPreview({ context, selection }: { context: PlannerPlaceContext
   }, [photoUri]);
 
   return (
-    <View style={styles.shareCard}>
+    <View style={[styles.shareCard, colorStyles.shareCard]}>
       <View style={styles.shareCardBrandRow}>
         <Image resizeMode="contain" source={require('../../assets/DiningDealz-Logo-Transparent.png')} style={styles.shareCardLogo} />
-        <Text style={styles.shareCardBrand}>DiningDealz</Text>
+        <Text style={[styles.shareCardBrand, colorStyles.shareCardBrand]}>DiningDealz</Text>
       </View>
       {photoUri && !photoLoadFailed ? (
         <Image onError={() => setPhotoLoadFailed(true)} resizeMode="cover" source={{ uri: photoUri }} style={styles.shareCardPhoto} />
       ) : (
-        <View style={styles.shareCardPlaceholder}>
-          <MaterialCommunityIcons color="#ff6970" name={placeholderIcon} size={44} />
+        <View style={[styles.shareCardPlaceholder, colorStyles.shareCardPlaceholder]}>
+          <MaterialCommunityIcons color={palette.accent} name={placeholderIcon} size={44} />
         </View>
       )}
-      <Text style={styles.shareCardName}>{context.name}</Text>
-      <Text style={styles.shareCardMeta}>{[context.cityLabel, context.venueTypeLabel].filter(Boolean).join(' · ')}</Text>
+      <Text style={[styles.shareCardName, colorStyles.shareCardName]}>{context.name}</Text>
+      <Text style={[styles.shareCardMeta, colorStyles.shareCardMeta]}>{[context.cityLabel, context.venueTypeLabel].filter(Boolean).join(' · ')}</Text>
       {selection.mode === 'my-time' ? (
-        <Text style={styles.shareCardDetail}>{[selection.date ? formatPlannerDateInput(selection.date) : '', selection.startTime && selection.endTime ? `${formatPlannerTimeInput(selection.startTime)} - ${formatPlannerTimeInput(selection.endTime)}` : ''].filter(Boolean).join('\n')}</Text>
+        <Text style={[styles.shareCardDetail, colorStyles.shareCardDetail]}>{[selection.date ? formatPlannerDateInput(selection.date) : '', selection.startTime && selection.endTime ? `${formatPlannerTimeInput(selection.startTime)} - ${formatPlannerTimeInput(selection.endTime)}` : ''].filter(Boolean).join('\n')}</Text>
       ) : (
-        <Text numberOfLines={5} style={styles.shareCardDetail}>
+        <Text numberOfLines={5} style={[styles.shareCardDetail, colorStyles.shareCardDetail]}>
           {[
             selection.includeHappyHours ? 'Happy hours and specials' : '',
             selection.includeOperatingHours ? 'Hours of operation' : '',
@@ -595,6 +832,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  disabledPickerField: {
+    opacity: 0.55,
+  },
   disclaimer: {
     color: palette.muted,
     fontSize: 12,
@@ -636,6 +876,24 @@ const styles = StyleSheet.create({
     minHeight: 46,
     paddingHorizontal: 12,
     paddingVertical: 10,
+  },
+  nativePickerField: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  nativePickerPanel: {
+    alignItems: 'stretch',
+    borderRadius: 12,
+    borderWidth: 1,
+    marginTop: 2,
+    overflow: 'hidden',
+    padding: 8,
+  },
+  nativePickerValue: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
   },
   modalCard: {
     backgroundColor: palette.background,
@@ -728,6 +986,13 @@ const styles = StyleSheet.create({
   },
   photoSelectorSection: {
     marginTop: 10,
+  },
+  pickerDoneButton: {
+    alignItems: 'center',
+    borderRadius: 10,
+    justifyContent: 'center',
+    marginTop: 8,
+    minHeight: 40,
   },
   presetButton: {
     backgroundColor: palette.card,

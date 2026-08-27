@@ -65,6 +65,10 @@
 	<string>DiningDealz uses Calendar only to add the restaurant visit you request.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>DiningDealz uses Calendar only to add the restaurant visit you request.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>DiningDealz does not access reminders. Calendar is used only to add the restaurant visit you request.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>DiningDealz does not access reminders. Calendar is used only to add the restaurant visit you request.</string>
 	<key>RCTNewArchEnabled</key>
 	<false/>
 	<key>UILaunchStoryboardName</key>

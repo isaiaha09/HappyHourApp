@@ -687,6 +687,9 @@ export const browseStyles = {
     top: 9,
     width: 28,
   },
+  currentHappyHoursDealCalendarWithoutFavorite: {
+    right: 44,
+  },
   currentHappyHoursDealShare: {
     alignItems: 'center',
     backgroundColor: '#ffffff',
@@ -697,6 +700,9 @@ export const browseStyles = {
     right: 44,
     top: 9,
     width: 28,
+  },
+  currentHappyHoursDealShareWithoutFavorite: {
+    right: 10,
   },
   currentHappyHoursDealBody: {
     alignItems: 'flex-start',

@@ -206,6 +206,7 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
   let onFavorite: (DiningDealzCurrentHappyHourPlace) -> Void
   let onAddToCalendar: (DiningDealzCurrentHappyHourPlace, DiningDealzCurrentHappyHourWindow?) -> Void
   let onShare: (DiningDealzCurrentHappyHourPlace, DiningDealzCurrentHappyHourWindow?) -> Void
+  let showFavoriteActions: Bool
   let userLatitude: Double?
   let userLongitude: Double?
   let expandedSheetHeight: CGFloat
@@ -228,6 +229,7 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
     userLatitude: Double? = nil,
     userLongitude: Double? = nil,
     expandedSheetHeight: CGFloat = 620,
+    showFavoriteActions: Bool = true,
     onSelect: @escaping (DiningDealzCurrentHappyHourPlace) -> Void,
     onFavorite: @escaping (DiningDealzCurrentHappyHourPlace) -> Void,
     onAddToCalendar: @escaping (DiningDealzCurrentHappyHourPlace, DiningDealzCurrentHappyHourWindow?) -> Void,
@@ -244,6 +246,7 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
     self.onFavorite = onFavorite
     self.onAddToCalendar = onAddToCalendar
     self.onShare = onShare
+    self.showFavoriteActions = showFavoriteActions
   }
 
   private var dealCount: Int {
@@ -417,6 +420,7 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
           DiningDealzCurrentHappyHoursUpMenuCard(
             place: place,
             theme: theme,
+            showFavoriteActions: showFavoriteActions,
             userLatitude: userLatitude,
             userLongitude: userLongitude,
             onFavorite: onFavorite,
@@ -483,6 +487,7 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
 private struct DiningDealzCurrentHappyHoursUpMenuCard: View {
   let place: DiningDealzCurrentHappyHourPlace
   let theme: DiningDealzCurrentHappyHoursTheme
+  let showFavoriteActions: Bool
   let userLatitude: Double?
   let userLongitude: Double?
   let onFavorite: (DiningDealzCurrentHappyHourPlace) -> Void
@@ -554,17 +559,19 @@ private struct DiningDealzCurrentHappyHoursUpMenuCard: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Share \(place.name)")
 
-        Button(action: {
-          onFavorite(place)
-        }) {
-          Image(systemName: "heart")
-            .font(.system(size: 14, weight: .bold))
-            .foregroundStyle(Color(red: 0.12, green: 0.14, blue: 0.13))
-            .frame(width: 28, height: 28)
-            .background(Color.white, in: Circle())
+        if showFavoriteActions {
+          Button(action: {
+            onFavorite(place)
+          }) {
+            Image(systemName: "heart")
+              .font(.system(size: 14, weight: .bold))
+              .foregroundStyle(Color(red: 0.12, green: 0.14, blue: 0.13))
+              .frame(width: 28, height: 28)
+              .background(Color.white, in: Circle())
+          }
+          .buttonStyle(.plain)
+          .accessibilityLabel("Favorite \(place.name)")
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Favorite \(place.name)")
       }
       .padding(.top, 9)
       .padding(.trailing, 10)

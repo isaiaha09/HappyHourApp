@@ -21,6 +21,8 @@
         "NSPhotoLibraryUsageDescription": "DiningDealz uses photos you choose to add business profile images or attach images to messages.",
         "NSCalendarsUsageDescription": "DiningDealz uses Calendar only to add the restaurant visit you request.",
         "NSCalendarsFullAccessUsageDescription": "DiningDealz uses Calendar only to add the restaurant visit you request.",
+        "NSRemindersUsageDescription": "DiningDealz does not access reminders. Calendar is used only to add the restaurant visit you request.",
+        "NSRemindersFullAccessUsageDescription": "DiningDealz does not access reminders. Calendar is used only to add the restaurant visit you request.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "requireFullScreen": true,
@@ -45,7 +47,8 @@
       [
         "expo-calendar",
         {
-          "calendarPermission": "DiningDealz uses Calendar only to add the restaurant visit you request."
+          "calendarPermission": "DiningDealz uses Calendar only to add the restaurant visit you request.",
+          "remindersPermission": "DiningDealz does not access reminders. Calendar is used only to add the restaurant visit you request."
         }
       ],
       [

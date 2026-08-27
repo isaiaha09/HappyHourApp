@@ -11,6 +11,7 @@ private final class DiningDealzCurrentHappyHoursUpMenuState: ObservableObject {
   @Published var userLatitude: Double?
   @Published var userLongitude: Double?
   @Published var expandedSheetHeight: CGFloat = 620
+  @Published var showFavoriteActions = true
 }
 
 @objc(DiningDealzCurrentHappyHoursUpMenuView)
@@ -20,6 +21,12 @@ final class DiningDealzCurrentHappyHoursUpMenuView: UIView {
   @objc var onFavoritePress: RCTDirectEventBlock?
   @objc var onCalendarPress: RCTDirectEventBlock?
   @objc var onSharePress: RCTDirectEventBlock?
+
+  @objc var showFavoriteActions = true {
+    didSet {
+      updateRootView()
+    }
+  }
 
   @objc var places: NSArray = [] {
     didSet {
@@ -168,6 +175,9 @@ final class DiningDealzCurrentHappyHoursUpMenuView: UIView {
     if state.expandedSheetHeight != nextExpandedSheetHeight {
       state.expandedSheetHeight = nextExpandedSheetHeight
     }
+    if state.showFavoriteActions != showFavoriteActions {
+      state.showFavoriteActions = showFavoriteActions
+    }
     invalidateIntrinsicContentSize()
   }
 
@@ -259,6 +269,7 @@ private struct DiningDealzCurrentHappyHoursUpMenuBridgeContent: View {
       userLatitude: state.userLatitude,
       userLongitude: state.userLongitude,
       expandedSheetHeight: state.expandedSheetHeight,
+      showFavoriteActions: state.showFavoriteActions,
       onSelect: onSelect,
       onFavorite: onFavorite,
       onAddToCalendar: onAddToCalendar,

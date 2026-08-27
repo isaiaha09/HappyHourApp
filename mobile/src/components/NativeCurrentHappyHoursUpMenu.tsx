@@ -21,6 +21,7 @@ type NativeCurrentHappyHoursUpMenuProps = {
   onPlaceSelect?: (event: NativeSyntheticEvent<{ locationId: number; slug: string }>) => void;
   onSharePress?: (event: NativeSyntheticEvent<{ locationId: number; slug: string; dealId?: number; happyHourWindow?: unknown }>) => void;
   places: CurrentHappyHourPlace[];
+  showFavoriteActions?: boolean;
   style?: StyleProp<ViewStyle>;
   theme: 'dark' | 'light';
   userLatitude?: number | null;
@@ -104,6 +105,7 @@ export function NativeIOSCurrentHappyHoursUpMenu({
   onSharePlace,
   onToggle,
   places,
+  showFavoriteActions = true,
   theme,
   userCoordinates,
 }: CurrentHappyHoursUpMenuProps) {
@@ -148,6 +150,7 @@ export function NativeIOSCurrentHappyHoursUpMenu({
         }
       } : undefined}
       places={places}
+      showFavoriteActions={showFavoriteActions}
       style={getNativeCurrentHappyHoursUpMenuStyle(bottomInset, expandedSheetHeight)}
       theme={theme}
       userLatitude={userCoordinates?.latitude ?? null}

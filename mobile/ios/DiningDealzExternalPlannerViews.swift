@@ -45,6 +45,7 @@ struct DiningDealzPlannerContext: Codable, Hashable {
   let timeZone: String
   let schedules: [DiningDealzPlannerSchedule]
   let deals: [DiningDealzPlannerDeal]
+  let theme: String?
 }
 
 struct DiningDealzNativeCalendarDraft: Codable, Hashable {
@@ -73,17 +74,59 @@ struct DiningDealzNativeShareSelection: Codable, Hashable {
 }
 
 private enum DiningDealzPlannerPalette {
-  static let background = Color(red: 0.065, green: 0.085, blue: 0.105)
-  static let card = Color(red: 0.12, green: 0.15, blue: 0.17)
-  static let border = Color(red: 0.24, green: 0.29, blue: 0.32)
-  static let muted = Color.white.opacity(0.68)
   static let accent = Color(red: 1.0, green: 0.34, blue: 0.38)
+
+  static func background(for colorScheme: ColorScheme) -> Color {
+    colorScheme == .dark
+      ? Color(red: 0.065, green: 0.085, blue: 0.105)
+      : Color(red: 0.965, green: 0.975, blue: 0.968)
+  }
+
+  static func card(for colorScheme: ColorScheme) -> Color {
+    colorScheme == .dark
+      ? Color(red: 0.12, green: 0.15, blue: 0.17)
+      : Color.white
+  }
+
+  static func border(for colorScheme: ColorScheme) -> Color {
+    colorScheme == .dark
+      ? Color(red: 0.24, green: 0.29, blue: 0.32)
+      : Color(red: 0.79, green: 0.83, blue: 0.80)
+  }
+
+  static func foreground(for colorScheme: ColorScheme) -> Color {
+    colorScheme == .dark
+      ? Color.white.opacity(0.96)
+      : Color(red: 0.10, green: 0.13, blue: 0.11)
+  }
+
+  static func muted(for colorScheme: ColorScheme) -> Color {
+    colorScheme == .dark
+      ? Color.white.opacity(0.68)
+      : Color(red: 0.34, green: 0.39, blue: 0.36)
+  }
+
+  static func placeholder(for colorScheme: ColorScheme) -> Color {
+    colorScheme == .dark
+      ? Color(red: 0.15, green: 0.20, blue: 0.18)
+      : Color(red: 0.89, green: 0.93, blue: 0.90)
+  }
+}
+
+private func diningDealzPlannerColorScheme(_ theme: String?) -> ColorScheme? {
+  switch theme?.lowercased() {
+  case "dark": return .dark
+  case "light": return .light
+  default: return nil
+  }
 }
 
 struct DiningDealzCalendarComposerView: View {
   let context: DiningDealzPlannerContext
   let onComplete: (DiningDealzNativeCalendarDraft) -> Void
   let onCancel: () -> Void
+
+  @Environment(\.colorScheme) private var colorScheme
 
   @State private var selectedDate: Date
   @State private var startDate: Date
@@ -118,7 +161,7 @@ struct DiningDealzCalendarComposerView: View {
         VStack(alignment: .leading, spacing: 16) {
           Text("Choose a time")
             .font(.headline)
-            .foregroundStyle(.white)
+            .foregroundStyle(DiningDealzPlannerPalette.foreground(for: colorScheme))
 
           if !context.schedules.isEmpty {
             ForEach(context.schedules) { schedule in
@@ -130,15 +173,15 @@ struct DiningDealzCalendarComposerView: View {
                     .font(.subheadline.weight(.bold))
                   Text(scheduleSummary(schedule))
                     .font(.caption)
-                    .foregroundStyle(DiningDealzPlannerPalette.muted)
+                    .foregroundStyle(DiningDealzPlannerPalette.muted(for: colorScheme))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(12)
-                .background(selectedScheduleID == schedule.id ? DiningDealzPlannerPalette.accent.opacity(0.22) : DiningDealzPlannerPalette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(selectedScheduleID == schedule.id ? DiningDealzPlannerPalette.accent : DiningDealzPlannerPalette.border, lineWidth: 1))
+                .background(selectedScheduleID == schedule.id ? DiningDealzPlannerPalette.accent.opacity(0.22) : DiningDealzPlannerPalette.card(for: colorScheme), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(selectedScheduleID == schedule.id ? DiningDealzPlannerPalette.accent : DiningDealzPlannerPalette.border(for: colorScheme), lineWidth: 1))
               }
               .buttonStyle(.plain)
-              .foregroundStyle(.white)
+              .foregroundStyle(DiningDealzPlannerPalette.foreground(for: colorScheme))
               .accessibilityLabel("Use " + schedule.label + ", " + scheduleSummary(schedule))
             }
           }
@@ -151,18 +194,18 @@ struct DiningDealzCalendarComposerView: View {
               .frame(maxWidth: .infinity, alignment: .leading)
           }
           .buttonStyle(.bordered)
-          .tint(selectedScheduleID == nil ? DiningDealzPlannerPalette.accent : DiningDealzPlannerPalette.border)
+          .tint(selectedScheduleID == nil ? DiningDealzPlannerPalette.accent : DiningDealzPlannerPalette.border(for: colorScheme))
 
           DatePicker("Date", selection: $selectedDate, displayedComponents: .date)
             .datePickerStyle(.compact)
-            .foregroundStyle(.white)
+            .foregroundStyle(DiningDealzPlannerPalette.foreground(for: colorScheme))
           DatePicker("Start", selection: $startDate, displayedComponents: .hourAndMinute)
             .datePickerStyle(.compact)
-            .foregroundStyle(.white)
+            .foregroundStyle(DiningDealzPlannerPalette.foreground(for: colorScheme))
             .disabled(allDay)
           DatePicker("End", selection: $endDate, displayedComponents: .hourAndMinute)
             .datePickerStyle(.compact)
-            .foregroundStyle(.white)
+            .foregroundStyle(DiningDealzPlannerPalette.foreground(for: colorScheme))
             .disabled(allDay)
 
           Toggle("All-day event", isOn: $allDay)
@@ -178,7 +221,7 @@ struct DiningDealzCalendarComposerView: View {
 
           Text("DiningDealz opens your device calendar editor. Existing calendar events are never read.")
             .font(.footnote)
-            .foregroundStyle(DiningDealzPlannerPalette.muted)
+            .foregroundStyle(DiningDealzPlannerPalette.muted(for: colorScheme))
 
           Button("Open Calendar") {
             submit()
@@ -189,7 +232,7 @@ struct DiningDealzCalendarComposerView: View {
         }
         .padding(20)
       }
-      .background(DiningDealzPlannerPalette.background)
+      .background(DiningDealzPlannerPalette.background(for: colorScheme))
       .navigationTitle("Add to Calendar")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
@@ -199,7 +242,8 @@ struct DiningDealzCalendarComposerView: View {
       }
     }
     .environment(\.timeZone, TimeZone(identifier: context.timeZone) ?? .autoupdatingCurrent)
-    .preferredColorScheme(.dark)
+    .environment(\.locale, Locale(identifier: "en_US"))
+    .preferredColorScheme(diningDealzPlannerColorScheme(context.theme))
   }
 
   private func select(_ schedule: DiningDealzPlannerSchedule) {
@@ -249,10 +293,12 @@ struct DiningDealzShareComposerView: View {
   let onComplete: (DiningDealzNativeShareSelection) -> Void
   let onCancel: () -> Void
 
+  @Environment(\.colorScheme) private var colorScheme
+
   @State private var mode = "restaurant-details"
-  @State private var date = diningDealzPlannerDisplayDate(diningDealzPlannerDateString(Date(), timeZone: TimeZone.autoupdatingCurrent.identifier))
-  @State private var startTime = ""
-  @State private var endTime = ""
+  @State private var selectedDate: Date
+  @State private var selectedStartTime: Date
+  @State private var selectedEndTime: Date
   @State private var includeHappyHours: Bool
   @State private var includeOperatingHours: Bool
   @State private var includeDealsAndMenu: Bool
@@ -278,11 +324,13 @@ struct DiningDealzShareComposerView: View {
     _includePhotos = State(initialValue: !context.imageUrls.isEmpty)
     _selectedDealIds = State(initialValue: Set(context.deals.map(\.id)))
     _selectedPhotoUri = State(initialValue: context.imageUrls.first)
-    _date = State(initialValue: diningDealzPlannerDisplayDate(diningDealzPlannerDateString(diningDealzPlannerDate(for: context.schedules.first, timeZone: context.timeZone), timeZone: context.timeZone)))
-    if let schedule = context.schedules.first {
-      _startTime = State(initialValue: diningDealzPlannerDisplayTime(schedule.startTime))
-      _endTime = State(initialValue: diningDealzPlannerDisplayTime(schedule.endTime))
-    }
+    let schedule = context.schedules.first
+    let initialDate = diningDealzPlannerDate(for: schedule, timeZone: context.timeZone)
+    let initialStart = diningDealzPlannerTime(on: initialDate, value: schedule?.startTime ?? "09:00", timeZone: context.timeZone)
+    let initialEnd = diningDealzPlannerTime(on: initialDate, value: schedule?.endTime ?? "10:00", nextDay: schedule.map { diningDealzPlannerIsOvernight(start: $0.startTime, end: $0.endTime) } ?? false, timeZone: context.timeZone)
+    _selectedDate = State(initialValue: initialDate)
+    _selectedStartTime = State(initialValue: initialStart)
+    _selectedEndTime = State(initialValue: initialEnd)
   }
 
   var body: some View {
@@ -296,32 +344,31 @@ struct DiningDealzShareComposerView: View {
           .pickerStyle(.segmented)
 
           if mode == "my-time" {
-            TextField("Date (MM-DD-YYYY)", text: $date)
-              .textFieldStyle(.roundedBorder)
-              .onSubmit {
-                date = diningDealzPlannerDisplayDate(date)
+            VStack(alignment: .leading, spacing: 10) {
+              Text("Your availability")
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(DiningDealzPlannerPalette.foreground(for: colorScheme))
+              DatePicker("Date", selection: $selectedDate, displayedComponents: .date)
+                .datePickerStyle(.compact)
+                .foregroundStyle(DiningDealzPlannerPalette.foreground(for: colorScheme))
+              HStack {
+                DatePicker("Start", selection: $selectedStartTime, displayedComponents: .hourAndMinute)
+                  .datePickerStyle(.compact)
+                  .foregroundStyle(DiningDealzPlannerPalette.foreground(for: colorScheme))
+                DatePicker("End", selection: $selectedEndTime, displayedComponents: .hourAndMinute)
+                  .datePickerStyle(.compact)
+                  .foregroundStyle(DiningDealzPlannerPalette.foreground(for: colorScheme))
               }
-            HStack {
-              TextField("Start (3:00 PM)", text: $startTime)
-                .textFieldStyle(.roundedBorder)
-                .onSubmit {
-                  startTime = diningDealzPlannerDisplayTime(startTime)
-                }
-              TextField("End (6:00 PM)", text: $endTime)
-                .textFieldStyle(.roundedBorder)
-                .onSubmit {
-                  endTime = diningDealzPlannerDisplayTime(endTime)
-                }
             }
           } else {
             Text("Choose the details your friend should receive. The business name and DiningDealz branding are always included.")
               .font(.footnote)
-              .foregroundStyle(DiningDealzPlannerPalette.muted)
+              .foregroundStyle(DiningDealzPlannerPalette.muted(for: colorScheme))
           }
 
           Text("Include")
             .font(.headline)
-            .foregroundStyle(.white)
+            .foregroundStyle(DiningDealzPlannerPalette.foreground(for: colorScheme))
           Toggle("Happy hours and specials", isOn: $includeHappyHours).tint(DiningDealzPlannerPalette.accent)
           Toggle("Hours of operation", isOn: $includeOperatingHours).tint(DiningDealzPlannerPalette.accent)
           Toggle("Deals and menu text", isOn: $includeDealsAndMenu).tint(DiningDealzPlannerPalette.accent)
@@ -333,7 +380,7 @@ struct DiningDealzShareComposerView: View {
             VStack(alignment: .leading, spacing: 8) {
               Text("Photo to share")
                 .font(.subheadline.weight(.bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(DiningDealzPlannerPalette.foreground(for: colorScheme))
               ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                   ForEach(context.imageUrls, id: \.self) { uri in
@@ -345,9 +392,9 @@ struct DiningDealzShareComposerView: View {
                           image.resizable().scaledToFill()
                         } else {
                           ZStack {
-                            Color(red: 0.15, green: 0.20, blue: 0.18)
+                            DiningDealzPlannerPalette.placeholder(for: colorScheme)
                             Image(systemName: diningDealzPlannerCategoryIcon(context.venueTypeLabel))
-                              .foregroundStyle(DiningDealzPlannerPalette.muted)
+                              .foregroundStyle(DiningDealzPlannerPalette.muted(for: colorScheme))
                           }
                         }
                       }
@@ -355,7 +402,7 @@ struct DiningDealzShareComposerView: View {
                       .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                       .overlay(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                          .stroke(selectedPhotoUri == uri ? DiningDealzPlannerPalette.accent : DiningDealzPlannerPalette.border, lineWidth: selectedPhotoUri == uri ? 2 : 1)
+                          .stroke(selectedPhotoUri == uri ? DiningDealzPlannerPalette.accent : DiningDealzPlannerPalette.border(for: colorScheme), lineWidth: selectedPhotoUri == uri ? 2 : 1)
                       )
                     }
                     .buttonStyle(.plain)
@@ -370,7 +417,7 @@ struct DiningDealzShareComposerView: View {
           if mode == "restaurant-details" && !context.deals.isEmpty {
             Text("Deals to include")
               .font(.subheadline.weight(.bold))
-              .foregroundStyle(.white)
+              .foregroundStyle(DiningDealzPlannerPalette.foreground(for: colorScheme))
             ForEach(context.deals) { deal in
               Button {
                 if selectedDealIds.contains(deal.id) {
@@ -383,7 +430,7 @@ struct DiningDealzShareComposerView: View {
                   .frame(maxWidth: .infinity, alignment: .leading)
               }
               .buttonStyle(.plain)
-              .foregroundStyle(selectedDealIds.contains(deal.id) ? DiningDealzPlannerPalette.accent : .white)
+              .foregroundStyle(selectedDealIds.contains(deal.id) ? DiningDealzPlannerPalette.accent : DiningDealzPlannerPalette.foreground(for: colorScheme))
             }
           }
 
@@ -397,7 +444,7 @@ struct DiningDealzShareComposerView: View {
           }
           Text("Your device opens the share sheet. DiningDealz never sends a message automatically.")
             .font(.footnote)
-            .foregroundStyle(DiningDealzPlannerPalette.muted)
+            .foregroundStyle(DiningDealzPlannerPalette.muted(for: colorScheme))
           Button("Open Share Sheet") {
             submit()
           }
@@ -407,7 +454,7 @@ struct DiningDealzShareComposerView: View {
         }
         .padding(20)
       }
-      .background(DiningDealzPlannerPalette.background)
+      .background(DiningDealzPlannerPalette.background(for: colorScheme))
       .navigationTitle("Share Restaurant")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
@@ -416,15 +463,21 @@ struct DiningDealzShareComposerView: View {
         }
       }
     }
-    .preferredColorScheme(.dark)
+    .environment(\.timeZone, TimeZone(identifier: context.timeZone) ?? .autoupdatingCurrent)
+    .environment(\.locale, Locale(identifier: "en_US"))
+    .preferredColorScheme(diningDealzPlannerColorScheme(context.theme))
   }
 
   private var nativeSelection: DiningDealzNativeShareSelection {
+    let date = diningDealzPlannerDateString(selectedDate, timeZone: context.timeZone)
+    let startTime = diningDealzPlanner24HourTime(from: selectedStartTime, timeZone: context.timeZone)
+    let endTime = diningDealzPlanner24HourTime(from: selectedEndTime, timeZone: context.timeZone)
+
     DiningDealzNativeShareSelection(
       mode: mode,
-      date: mode == "my-time" ? diningDealzPlannerISODate(from: date) : nil,
-      startTime: mode == "my-time" ? diningDealzPlanner24HourTime(from: startTime) : nil,
-      endTime: mode == "my-time" ? diningDealzPlanner24HourTime(from: endTime) : nil,
+      date: mode == "my-time" ? date : nil,
+      startTime: mode == "my-time" ? startTime : nil,
+      endTime: mode == "my-time" ? endTime : nil,
       includeHappyHours: includeHappyHours,
       includeOperatingHours: includeOperatingHours,
       includeDealsAndMenu: includeDealsAndMenu,
@@ -437,12 +490,8 @@ struct DiningDealzShareComposerView: View {
 
   private func submit() {
     if mode == "my-time" {
-      guard diningDealzPlannerISODate(from: date) != nil,
-            let normalizedStart = diningDealzPlanner24HourTime(from: startTime),
-            let normalizedEnd = diningDealzPlanner24HourTime(from: endTime) else {
-        validationMessage = "Enter a date, start time, and end time."
-        return
-      }
+      let normalizedStart = diningDealzPlanner24HourTime(from: selectedStartTime, timeZone: context.timeZone)
+      let normalizedEnd = diningDealzPlanner24HourTime(from: selectedEndTime, timeZone: context.timeZone)
       if normalizedStart == normalizedEnd {
         validationMessage = "Start and end times cannot be the same."
         return
@@ -460,6 +509,12 @@ struct DiningDealzNativeShareCardView: View {
   let context: DiningDealzPlannerContext
   let selection: DiningDealzNativeShareSelection
   let photoImage: Image?
+
+  @Environment(\.colorScheme) private var colorScheme
+
+  private var resolvedColorScheme: ColorScheme {
+    diningDealzPlannerColorScheme(context.theme) ?? colorScheme
+  }
 
   init(
     context: DiningDealzPlannerContext,
@@ -505,29 +560,29 @@ struct DiningDealzNativeShareCardView: View {
       }
       Text(context.name)
         .font(.title3.weight(.bold))
-        .foregroundStyle(.white)
+        .foregroundStyle(DiningDealzPlannerPalette.foreground(for: resolvedColorScheme))
       Text([context.cityLabel, context.venueTypeLabel].filter { !$0.isEmpty }.joined(separator: " · "))
         .font(.caption)
-        .foregroundStyle(DiningDealzPlannerPalette.muted)
+        .foregroundStyle(DiningDealzPlannerPalette.muted(for: resolvedColorScheme))
       if selection.mode == "my-time" {
         Text([selection.date.map(diningDealzPlannerDisplayDate), selection.startTime.map(diningDealzPlannerDisplayTime), selection.endTime.map(diningDealzPlannerDisplayTime)].compactMap { $0 }.joined(separator: " · "))
           .font(.subheadline.weight(.semibold))
-          .foregroundStyle(.white)
+          .foregroundStyle(DiningDealzPlannerPalette.foreground(for: resolvedColorScheme))
       } else {
         Text(nativeShareCardDetails)
           .font(.caption)
-          .foregroundStyle(.white.opacity(0.88))
+          .foregroundStyle(DiningDealzPlannerPalette.foreground(for: resolvedColorScheme).opacity(0.88))
           .lineLimit(5)
       }
     }
     .padding(14)
-    .background(DiningDealzPlannerPalette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(DiningDealzPlannerPalette.border, lineWidth: 1))
+    .background(DiningDealzPlannerPalette.card(for: resolvedColorScheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(DiningDealzPlannerPalette.border(for: resolvedColorScheme), lineWidth: 1))
   }
 
   private var placeholder: some View {
     ZStack {
-      Color(red: 0.15, green: 0.20, blue: 0.18)
+      DiningDealzPlannerPalette.placeholder(for: resolvedColorScheme)
       Image(systemName: diningDealzPlannerCategoryIcon(context.venueTypeLabel))
         .font(.system(size: 38, weight: .medium))
         .foregroundStyle(DiningDealzPlannerPalette.accent)
@@ -592,6 +647,15 @@ private func diningDealzPlannerDateString(_ date: Date, timeZone: String) -> Str
   formatter.timeZone = TimeZone(identifier: timeZone) ?? .autoupdatingCurrent
   formatter.dateFormat = "yyyy-MM-dd"
   return formatter.string(from: date)
+}
+
+private func diningDealzPlanner24HourTime(from date: Date, timeZone: String) -> String {
+  let calendar = diningDealzPlannerCalendar(timeZone: timeZone)
+  return String(
+    format: "%02d:%02d",
+    calendar.component(.hour, from: date),
+    calendar.component(.minute, from: date)
+  )
 }
 
 private func diningDealzPlannerDisplayDate(_ value: String) -> String {
