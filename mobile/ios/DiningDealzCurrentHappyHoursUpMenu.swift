@@ -628,7 +628,7 @@ private struct DiningDealzCurrentHappyHoursUpMenuCard: View {
           .padding(.vertical, 4)
           .background(Color.black.opacity(0.68), in: Capsule(style: .continuous))
           .padding(.top, 10)
-          .padding(.trailing, 46)
+          .padding(.trailing, 112)
           .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
       }
 

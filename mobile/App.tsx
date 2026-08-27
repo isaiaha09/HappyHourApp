@@ -4632,7 +4632,7 @@ function AppScreen() {
     dismissKeyboardForScreenTransition();
     setCurrentHappyHoursMenuExpanded(false);
 
-    if (!authenticatedSession?.auth_token || authenticatedSession.portal !== 'customer') {
+    if (!authenticatedSession?.auth_token) {
       pendingExternalPlannerActionRef.current = action;
       setShowExternalPlannerAccountPrompt(true);
       return;
@@ -4698,7 +4698,6 @@ function AppScreen() {
     if (
       !pendingAction
       || !authenticatedSession?.auth_token
-      || authenticatedSession.portal !== 'customer'
       || showLoginSuccessTransition
     ) {
       return;
@@ -4724,7 +4723,7 @@ function AppScreen() {
     }
 
     navigateScreen('browse', 'backward', undefined, resumeComposer);
-  }, [authenticatedSession?.auth_token, authenticatedSession?.portal, screenMode, showLoginSuccessTransition]);
+  }, [authenticatedSession?.auth_token, screenMode, showLoginSuccessTransition]);
 
   function handleToggleVenueType(venueType: VenueFilterValue) {
     setSelectedVenueTypes((current) => {
