@@ -320,6 +320,7 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
       }
     }
   }
+  }
 
   private var sheetHandle: some View {
     Capsule(style: .continuous)
