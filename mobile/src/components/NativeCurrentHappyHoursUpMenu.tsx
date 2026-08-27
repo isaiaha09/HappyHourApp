@@ -77,10 +77,10 @@ export function isNativeIOSCurrentHappyHoursUpMenuAvailable() {
 }
 
 function getNativeCurrentHappyHoursUpMenuStyle(bottomOffset: number, expanded: boolean, expandedSheetHeight: number): StyleProp<ViewStyle> {
-  const reservedHeight = expanded ? expandedSheetHeight : 132;
+  const reservedHeight = expanded ? expandedSheetHeight : Math.max(bottomOffset + 52, 132);
 
   return {
-    bottom: expanded ? 0 : Math.max(bottomOffset, 0),
+    bottom: 0,
     height: reservedHeight,
     left: 0,
     position: 'absolute',
@@ -110,7 +110,7 @@ export function NativeIOSCurrentHappyHoursUpMenu({
 
   return (
     <NativeCurrentHappyHoursUpMenuView
-      bottomOffset={0}
+      bottomOffset={bottomOffset}
       expanded={expanded}
       expandedSheetHeight={expandedSheetHeight}
       onFavoritePress={(event) => onFavoritePlace?.(event.nativeEvent)}

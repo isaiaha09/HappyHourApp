@@ -8243,19 +8243,6 @@ function AppScreen() {
                   </Animated.View>
                 </View>
 
-                {showMapBrowse ? (
-                  <CurrentHappyHoursUpMenu
-                    bottomOffset={mapOverlayBottomPadding}
-                    expanded={currentHappyHoursMenuExpanded}
-                    onFavoritePlace={handleToggleCurrentHappyHourFavorite}
-                    onSelectPlace={handleSelectPlace}
-                    onToggle={handleToggleCurrentHappyHoursMenu}
-                    places={currentHappyHourPlaces}
-                    theme={displayedDarkMapMode ? 'dark' : 'light'}
-                    userCoordinates={userCoordinates}
-                  />
-                ) : null}
-
                 {authenticatedSession && browseMode === 'map' ? (
                   <NativeIOSLiquidGlassHeaderButton
                     accessibilityLabel="Back to dashboard"
@@ -8316,6 +8303,18 @@ function AppScreen() {
                 ) : null}
               </View>
             </SafeAreaView>
+            {showMapBrowse ? (
+              <CurrentHappyHoursUpMenu
+                bottomOffset={mapOverlayBottomPadding}
+                expanded={currentHappyHoursMenuExpanded}
+                onFavoritePlace={handleToggleCurrentHappyHourFavorite}
+                onSelectPlace={handleSelectPlace}
+                onToggle={handleToggleCurrentHappyHoursMenu}
+                places={currentHappyHourPlaces}
+                theme={displayedDarkMapMode ? 'dark' : 'light'}
+                userCoordinates={userCoordinates}
+              />
+            ) : null}
             {options?.guestChrome ? (
               <GuestShellChrome
                 actionOpacity={options.guestChromeActionOpacity}

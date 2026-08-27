@@ -77,11 +77,11 @@ final class DiningDealzCurrentHappyHoursUpMenuView: UIView {
   }
 
   override var intrinsicContentSize: CGSize {
-    let safeBottomOffset = expanded ? 0 : max(CGFloat(truncating: bottomOffset), 0)
+    let collapsedSheetHeight = max(CGFloat(truncating: bottomOffset) + 52, 132)
     let baseHeight: CGFloat = expanded && places.count > 0
       ? max(CGFloat(truncating: expandedSheetHeight), 520)
-      : 132
-    return CGSize(width: UIView.noIntrinsicMetric, height: baseHeight + safeBottomOffset)
+      : collapsedSheetHeight
+    return CGSize(width: UIView.noIntrinsicMetric, height: baseHeight)
   }
 
   private func setupView() {
@@ -207,5 +207,6 @@ private struct DiningDealzCurrentHappyHoursUpMenuBridgeContent: View {
       onFavorite: onFavorite
     )
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+    .ignoresSafeArea(.container, edges: .bottom)
   }
 }

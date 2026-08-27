@@ -178,6 +178,7 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
   const isDark = theme === 'dark';
   const dealCount = places.reduce((count, place) => count + place.happy_hours.length, 0);
   const dealCountLabel = `${dealCount} deal${dealCount === 1 ? '' : 's'} nearby`;
+  const collapsedSheetHeight = Math.max(bottomOffset + 52, 132);
   const expandedSheetHeight = Math.min(
     Math.max(Math.round(Dimensions.get('window').height * 0.82), 520),
     640,
@@ -456,28 +457,31 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
         style={[
           styles.currentHappyHoursTriggerFrame,
           {
-            bottom: Math.max(bottomOffset, 8),
+            bottom: 0,
+            height: collapsedSheetHeight,
             opacity: triggerOpacity,
             transform: !expanded ? [{ translateY: sheetDragY }] : undefined,
           },
         ]}
       >
-        <View {...sheetPanResponder.panHandlers}>
-          <Pressable
-            accessibilityHint="Swipe up to browse deals. Swipe down on the expanded sheet to close it."
-            accessibilityLabel={`${dealCountLabel}. ${expanded ? 'Close list.' : 'Open list.'}`}
-            accessibilityRole="button"
-            onPress={onToggle}
-            style={[styles.currentHappyHoursTrigger, isDark ? styles.currentHappyHoursTriggerDark : styles.currentHappyHoursTriggerLight]}
-            testID="current-happy-hours-toggle"
-          >
-            <Ionicons color={isDark ? '#f6f7f3' : '#222222'} name={expanded ? 'chevron-down' : 'chevron-up'} size={18} />
+        <Pressable
+          {...sheetPanResponder.panHandlers}
+          accessibilityHint="Swipe up to browse deals. Swipe down on the expanded sheet to close it."
+          accessibilityLabel={`${dealCountLabel}. ${expanded ? 'Close list.' : 'Open list.'}`}
+          onPress={onToggle}
+          style={[styles.currentHappyHoursTrigger, isDark ? styles.currentHappyHoursTriggerDark : styles.currentHappyHoursTriggerLight]}
+          testID="current-happy-hours-toggle"
+        >
+          <View style={styles.currentHappyHoursSheetHandle}>
+            <View style={[styles.currentHappyHoursSheetHandleBar, isDark ? styles.currentHappyHoursSheetHandleBarDark : null]} />
+          </View>
+          <View style={styles.currentHappyHoursTriggerHeadingRow}>
             <View style={styles.currentHappyHoursTriggerDot} />
             <Text style={[styles.currentHappyHoursTriggerTitle, isDark ? styles.currentHappyHoursTriggerTitleDark : null]}>
               {dealCountLabel}
             </Text>
-          </Pressable>
-        </View>
+          </View>
+        </Pressable>
       </Animated.View>
     </View>
   );
@@ -508,6 +512,7 @@ function CurrentHappyHoursDealCard({ isDark, onFavorite, onSelect, place, userCo
         accessibilityLabel={getPlaceAccessibilityLabel(place, distanceLabel)}
         accessibilityRole="button"
         onPress={onSelect}
+        style={styles.currentHappyHoursDealCardContent}
         testID={`current-happy-hours-row-${place.slug}:${place.location_id}`}
       >
         <View style={styles.currentHappyHoursDealImageFrame}>

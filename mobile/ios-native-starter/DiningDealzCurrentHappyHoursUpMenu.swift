@@ -208,7 +208,9 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
   let userLongitude: Double?
   let expandedSheetHeight: CGFloat
 
-  private let collapsedSheetHeight: CGFloat = 132
+  private var collapsedSheetHeight: CGFloat {
+    max(bottomOffset + 52, 132)
+  }
   @State private var sheetDragOffset: CGFloat = 0
   @State private var sheetHorizontalOffset: CGFloat = 0
 
@@ -278,7 +280,6 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
       .frame(maxWidth: .infinity)
       .frame(height: isExpanded ? expandedSheetHeight : collapsedSheetHeight, alignment: .bottom)
       .offset(x: sheetHorizontalOffset, y: sheetDragOffset)
-      .padding(.bottom, isExpanded ? 0 : bottomOffset)
       .animation(.easeInOut(duration: 0.26), value: isExpanded)
     }
   }
@@ -293,13 +294,10 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
   }
 
   private var collapsedHeader: some View {
-    Button(action: toggleSheet) {
-      HStack(spacing: 10) {
-        Image(systemName: "chevron.up")
-          .font(.system(size: 17, weight: .bold))
-          .foregroundStyle(theme.foreground)
-          .accessibilityHidden(true)
+    VStack(spacing: 0) {
+      sheetHandle
 
+      HStack(spacing: 9) {
         Circle()
           .fill(theme.accent)
           .frame(width: 7, height: 7)
@@ -309,21 +307,22 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
           .font(.system(size: 14, weight: .bold))
           .foregroundStyle(theme.foreground)
       }
-      .padding(.horizontal, 14)
-      .frame(minHeight: 44)
-      .background(theme.sheetBackground, in: Capsule(style: .continuous))
-      .overlay(
-        Capsule(style: .continuous)
-          .stroke(theme.sheetBorder, lineWidth: 1)
-      )
-      .shadow(color: .black.opacity(theme == .dark ? 0.34 : 0.16), radius: 12, y: -3)
-      .contentShape(Capsule(style: .continuous))
+      .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+      .padding(.horizontal, 16)
     }
-    .buttonStyle(.plain)
-    .padding(.leading, 8)
-    .frame(maxWidth: .infinity, alignment: .leading)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    .background(theme.sheetBackground)
+    .clipShape(DiningDealzTopRoundedRectangle(cornerRadius: 24))
+    .overlay(
+      DiningDealzTopRoundedRectangle(cornerRadius: 24)
+        .stroke(theme.sheetBorder, lineWidth: 1)
+    )
+    .shadow(color: .black.opacity(theme == .dark ? 0.34 : 0.16), radius: 18, y: -5)
+    .contentShape(Rectangle())
+    .onTapGesture(perform: toggleSheet)
     .accessibilityLabel(triggerAccessibilityLabel)
     .accessibilityHint("Swipe up to browse deals. Swipe down on the expanded sheet to close it.")
+    .accessibilityAction(named: "Open current happy hour deals", toggleSheet)
     .simultaneousGesture(sheetGesture)
   }
 
@@ -484,6 +483,7 @@ private struct DiningDealzCurrentHappyHoursUpMenuCard: View {
           imageHeader
           dealBody
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
       }
       .buttonStyle(.plain)
       .frame(maxWidth: .infinity, alignment: .leading)
@@ -613,6 +613,7 @@ private struct DiningDealzCurrentHappyHoursUpMenuCard: View {
           .foregroundStyle(theme.foreground)
           .lineLimit(2)
           .padding(.bottom, 2)
+          .frame(maxWidth: .infinity, alignment: .leading)
       }
 
       HStack(alignment: .center) {
@@ -625,12 +626,13 @@ private struct DiningDealzCurrentHappyHoursUpMenuCard: View {
             RoundedRectangle(cornerRadius: 5, style: .continuous)
               .stroke(theme.accent, lineWidth: 1)
           )
-
       }
       .padding(.top, 8)
+      .frame(maxWidth: .infinity, alignment: .leading)
     }
     .padding(.horizontal, 13)
     .padding(.vertical, 12)
+    .frame(maxWidth: .infinity, alignment: .leading)
   }
 }
 
