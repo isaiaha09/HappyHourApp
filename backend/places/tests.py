@@ -515,6 +515,16 @@ class CurrentHappyHoursServiceTests(TestCase):
 			'all_day': all_day,
 		}
 
+	def _operating_hour(self, weekday, open_time='11:00', close_time='21:00', open_24_hours=False):
+		row = {
+			'weekday': weekday,
+			'open_time': open_time,
+			'close_time': close_time,
+		}
+		if open_24_hours:
+			row['open_24_hours'] = True
+		return row
+
 	def _deal(self, deal_id, title, happy_hours, *, is_active=True, starts_on=None, ends_on=None):
 		return {
 			'id': deal_id,
@@ -584,6 +594,55 @@ class CurrentHappyHoursServiceTests(TestCase):
 		self.assertEqual(
 			{window['title'] for place in result['places'] for window in place['happy_hours']},
 			{'All Day', 'Late Night'},
+		)
+
+	def test_excludes_current_deals_when_business_is_closed(self):
+		payload = self._payload([
+			self._deal(1, 'All Day Special', [self._window(Weekday.WEDNESDAY, '', '', all_day=True)]),
+		])
+		payload['locations'][0]['operating_hours'] = [
+			self._operating_hour(Weekday.WEDNESDAY, '16:30', '21:00'),
+		]
+
+		with patch('places.services.current_happy_hours.get_source_place_payloads', return_value=[payload]):
+			before_open = get_current_happy_hours_payload(
+				reference=datetime(2026, 8, 26, 16, 29, tzinfo=self.business_time_zone),
+			)
+			still_open = get_current_happy_hours_payload(
+				reference=datetime(2026, 8, 26, 20, 59, tzinfo=self.business_time_zone),
+			)
+			after_close = get_current_happy_hours_payload(
+				reference=datetime(2026, 8, 26, 21, 0, tzinfo=self.business_time_zone),
+			)
+
+		self.assertEqual(before_open['places'], [])
+		self.assertEqual(len(still_open['places']), 1)
+		self.assertEqual(after_close['places'], [])
+
+	def test_supports_overnight_and_open_24_hour_operating_schedules(self):
+		overnight_payload = self._payload([
+			self._deal(1, 'Late Night Special', [self._window(Weekday.WEDNESDAY, '22:00', '02:00')]),
+		], slug='overnight-place')
+		overnight_payload['locations'][0]['operating_hours'] = [
+			self._operating_hour(Weekday.WEDNESDAY, '16:30', '02:00'),
+		]
+		all_day_payload = self._payload([
+			self._deal(2, 'Open All Day', [self._window(Weekday.THURSDAY, '', '', all_day=True)]),
+		], slug='open-all-day-place')
+		all_day_payload['locations'][0]['operating_hours'] = [
+			self._operating_hour(Weekday.THURSDAY, open_24_hours=True),
+		]
+
+		reference = datetime(2026, 8, 27, 1, 30, tzinfo=self.business_time_zone)
+		with patch(
+			'places.services.current_happy_hours.get_source_place_payloads',
+			return_value=[overnight_payload, all_day_payload],
+		):
+			result = get_current_happy_hours_payload(reference=reference)
+
+		self.assertEqual(
+			{window['title'] for place in result['places'] for window in place['happy_hours']},
+			{'Late Night Special', 'Open All Day'},
 		)
 
 	def test_ignores_inactive_date_expired_and_malformed_windows(self):

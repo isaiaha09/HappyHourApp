@@ -68,6 +68,9 @@ def _localize_reference(reference: datetime | None) -> datetime:
 
 
 def _get_active_windows(location: dict[str, Any], now_local: datetime) -> list[dict[str, object]]:
+	if not _location_is_open(location, now_local):
+		return []
+
 	active: list[dict[str, object]] = []
 	for deal in location.get('deals') or []:
 		if not _is_truthy(deal.get('is_active')):
@@ -88,6 +91,43 @@ def _get_active_windows(location: dict[str, Any], now_local: datetime) -> list[d
 				'all_day': _is_truthy(window.get('all_day')),
 			})
 	return active
+
+
+def _location_is_open(location: dict[str, Any], now_local: datetime) -> bool:
+	"""Return whether a location is open now in the business time zone.
+
+	Some imported listings do not include operating hours. In that case the
+	availability is unknown, so preserve the previous behavior and let the
+	deal schedule decide. When usable hours are present, a deal is only current
+	while at least one operating-hours window is active.
+	"""
+	raw_operating_hours = location.get('operating_hours')
+	if not isinstance(raw_operating_hours, list) or not raw_operating_hours:
+		return True
+
+	return any(
+		isinstance(operating_window, dict)
+		and _operating_window_is_active(operating_window, now_local)
+		for operating_window in raw_operating_hours
+	)
+
+
+def _operating_window_is_active(window: dict[str, Any], now_local: datetime) -> bool:
+	weekday = _parse_weekday(window.get('weekday'))
+	if weekday is None:
+		return False
+
+	if _is_truthy(window.get('open_24_hours')):
+		return weekday == now_local.weekday()
+
+	bounds = (
+		_parse_time(window.get('open_time')),
+		_parse_time(window.get('close_time')),
+	)
+	if bounds[0] is None or bounds[1] is None:
+		return False
+
+	return _time_window_schedule_date(weekday, bounds[0], bounds[1], now_local) is not None
 
 
 def _parse_time(value: Any) -> time | None:
@@ -152,19 +192,32 @@ def _active_window_schedule_date(window: dict[str, Any], now_local: datetime) ->
 	if bounds is None:
 		return None
 
-	start_time, end_time = bounds
+	return _time_window_schedule_date(
+		window_weekday=weekday,
+		start_time=bounds[0],
+		end_time=bounds[1],
+		now_local=now_local,
+	)
+
+
+def _time_window_schedule_date(
+	window_weekday: int,
+	start_time: time,
+	end_time: time,
+	now_local: datetime,
+) -> date | None:
 	current_time = now_local.time().replace(tzinfo=None)
 	if start_time >= end_time:
 		if start_time == end_time:
 			return None
-		if weekday == now_local.weekday() and current_time >= start_time:
+		if window_weekday == now_local.weekday() and current_time >= start_time:
 			return now_local.date()
 		previous_weekday = (now_local.weekday() - 1) % 7
-		if weekday == previous_weekday and current_time < end_time:
+		if window_weekday == previous_weekday and current_time < end_time:
 			return now_local.date() - timedelta(days=1)
 		return None
 
-	if weekday == now_local.weekday() and start_time <= current_time < end_time:
+	if window_weekday == now_local.weekday() and start_time <= current_time < end_time:
 		return now_local.date()
 	return None
 
