@@ -62,6 +62,7 @@ describe('CurrentHappyHoursUpMenu', () => {
     );
 
     expect(screen.getByTestId('current-happy-hours-toggle')).toBeTruthy();
+    expect(screen.getByTestId('current-happy-hours-menu')).toBeTruthy();
     expect(screen.getByLabelText('1 deal nearby. Open list.')).toBeTruthy();
     fireEvent.press(screen.getByTestId('current-happy-hours-toggle'));
     expect(onToggle).toHaveBeenCalledTimes(1);

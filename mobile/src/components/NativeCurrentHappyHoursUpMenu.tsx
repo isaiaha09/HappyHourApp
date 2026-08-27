@@ -78,15 +78,13 @@ export function isNativeIOSCurrentHappyHoursUpMenuAvailable() {
 
 function getNativeCurrentHappyHoursUpMenuStyle(
   bottomInset: number,
-  bottomOffset: number,
-  expanded: boolean,
   expandedSheetHeight: number,
 ): StyleProp<ViewStyle> {
-  const reservedHeight = expanded ? expandedSheetHeight : Math.max(bottomOffset + 52, 132);
-
   return {
     bottom: -Math.max(bottomInset, 0),
-    height: reservedHeight,
+    // Keep the native host tall enough for the sheet to reveal its mounted
+    // content continuously during a drag from the collapsed position.
+    height: expandedSheetHeight,
     left: 0,
     position: 'absolute',
     right: 0,
@@ -123,7 +121,7 @@ export function NativeIOSCurrentHappyHoursUpMenu({
       onMenuToggle={() => onToggle()}
       onPlaceSelect={(event) => onSelectPlace(event.nativeEvent)}
       places={places}
-      style={getNativeCurrentHappyHoursUpMenuStyle(bottomInset, bottomOffset, expanded, expandedSheetHeight)}
+      style={getNativeCurrentHappyHoursUpMenuStyle(bottomInset, expandedSheetHeight)}
       theme={theme}
       userLatitude={userCoordinates?.latitude ?? null}
       userLongitude={userCoordinates?.longitude ?? null}

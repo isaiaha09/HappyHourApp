@@ -211,8 +211,8 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
   private var collapsedSheetHeight: CGFloat {
     max(bottomOffset + 52, 132)
   }
-  @State private var sheetDragOffset: CGFloat = 0
   @State private var sheetHorizontalOffset: CGFloat = 0
+  @State private var sheetHeight: CGFloat = 0
 
   init(
     places: [DiningDealzCurrentHappyHourPlace],
@@ -248,41 +248,76 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
     "\(dealCountLabel). \(isExpanded ? "Close list." : "Open list.")"
   }
 
+  private var targetSheetHeight: CGFloat {
+    isExpanded ? expandedSheetHeight : collapsedSheetHeight
+  }
+
+  private var resolvedSheetHeight: CGFloat {
+    sheetHeight > 0 ? sheetHeight : targetSheetHeight
+  }
+
+  private var sheetRevealProgress: CGFloat {
+    let travel = max(expandedSheetHeight - collapsedSheetHeight, 1)
+    return min(max((resolvedSheetHeight - collapsedSheetHeight) / travel, 0), 1)
+  }
+
   @ViewBuilder
   var body: some View {
     if !places.isEmpty {
       Group {
-        if isExpanded {
-          VStack(spacing: 0) {
-            sheetHandle
-              .frame(maxWidth: .infinity)
-              .contentShape(Rectangle())
-              .simultaneousGesture(sheetGesture)
-            expandedHeader
-            expandedList
-          }
-          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-          .background(theme.sheetBackground)
-          .overlay(alignment: .top) {
-            Rectangle()
-              .fill(theme.sheetBorder)
-              .frame(height: 1)
-          }
-          .clipShape(DiningDealzTopRoundedRectangle(cornerRadius: 24))
-          .overlay(
-            DiningDealzTopRoundedRectangle(cornerRadius: 24)
-              .stroke(theme.sheetBorder, lineWidth: 1)
-          )
-          .shadow(color: .black.opacity(theme == .dark ? 0.34 : 0.16), radius: 18, y: -5)
-          .transition(.move(edge: .bottom).combined(with: .opacity))
-        } else {
-          collapsedHeader
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        VStack(spacing: 0) {
+          sheetHandle
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .simultaneousGesture(sheetGesture)
+
+          ZStack(alignment: .topLeading) {
+            VStack(spacing: 0) {
+              expandedHeader
+                .simultaneousGesture(sheetGesture)
+              expandedList
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .opacity(Double(sheetRevealProgress))
+            .allowsHitTesting(sheetRevealProgress > 0.01)
+
+            collapsedCountRow
+              .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+              .opacity(Double(1 - sheetRevealProgress))
+              .allowsHitTesting(sheetRevealProgress < 0.99)
         }
+
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(theme.sheetBackground)
+        .overlay(alignment: .top) {
+          Rectangle()
+            .fill(theme.sheetBorder)
+            .frame(height: 1)
+        }
+        .clipShape(DiningDealzTopRoundedRectangle(cornerRadius: 24))
+        .overlay(
+          DiningDealzTopRoundedRectangle(cornerRadius: 24)
+            .stroke(theme.sheetBorder, lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(theme == .dark ? 0.34 : 0.16), radius: 18, y: -5)
+        .contentShape(Rectangle())
       }
       .frame(maxWidth: .infinity)
-      .frame(height: isExpanded ? expandedSheetHeight : collapsedSheetHeight, alignment: .bottom)
-      .offset(x: sheetHorizontalOffset, y: sheetDragOffset)
+      .frame(height: resolvedSheetHeight, alignment: .bottom)
+      .offset(x: sheetHorizontalOffset)
+      .onAppear {
+        if sheetHeight == 0 {
+          sheetHeight = targetSheetHeight
+        }
+      }
+      .onChange(of: isExpanded) { nextExpanded in
+        let nextHeight = nextExpanded ? expandedSheetHeight : collapsedSheetHeight
+        if abs(sheetHeight - nextHeight) > 0.5 {
+          withAnimation(.easeInOut(duration: 0.26)) {
+            sheetHeight = nextHeight
+          }
+        }
+      }
     }
   }
 
@@ -295,31 +330,19 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
       .accessibilityHidden(true)
   }
 
-  private var collapsedHeader: some View {
-    VStack(spacing: 0) {
-      sheetHandle
+  private var collapsedCountRow: some View {
+    HStack(spacing: 9) {
+      Circle()
+        .fill(theme.accent)
+        .frame(width: 7, height: 7)
+        .accessibilityHidden(true)
 
-      HStack(spacing: 9) {
-        Circle()
-          .fill(theme.accent)
-          .frame(width: 7, height: 7)
-          .accessibilityHidden(true)
-
-        Text(dealCountLabel)
-          .font(.system(size: 14, weight: .bold))
-          .foregroundStyle(theme.foreground)
-      }
-      .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-      .padding(.horizontal, 16)
+      Text(dealCountLabel)
+        .font(.system(size: 14, weight: .bold))
+        .foregroundStyle(theme.foreground)
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-    .background(theme.sheetBackground)
-    .clipShape(DiningDealzTopRoundedRectangle(cornerRadius: 24))
-    .overlay(
-      DiningDealzTopRoundedRectangle(cornerRadius: 24)
-        .stroke(theme.sheetBorder, lineWidth: 1)
-    )
-    .shadow(color: .black.opacity(theme == .dark ? 0.34 : 0.16), radius: 18, y: -5)
+    .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+    .padding(.horizontal, 16)
     .contentShape(Rectangle())
     .accessibilityLabel(triggerAccessibilityLabel)
     .accessibilityHint("Swipe up to browse deals. Swipe down on the expanded sheet to close it.")
@@ -387,13 +410,16 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
         withTransaction(transaction) {
           if isExpanded && abs(value.translation.width) > abs(value.translation.height) {
             sheetHorizontalOffset = max(min(value.translation.width, 180), -180)
-            sheetDragOffset = 0
-          } else if isExpanded {
-            sheetHorizontalOffset = 0
-            sheetDragOffset = max(value.translation.height, 0)
           } else {
             sheetHorizontalOffset = 0
-            sheetDragOffset = min(value.translation.height, 0)
+
+            let nextHeight = isExpanded
+              ? expandedSheetHeight - max(value.translation.height, 0)
+              : collapsedSheetHeight + max(-value.translation.height, 0)
+            sheetHeight = min(
+              max(nextHeight, collapsedSheetHeight),
+              expandedSheetHeight
+            )
           }
         }
       }
@@ -411,7 +437,7 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
           DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
             withAnimation(.easeInOut(duration: 0.26)) {
               sheetHorizontalOffset = 0
-              sheetDragOffset = 0
+              sheetHeight = collapsedSheetHeight
               isExpanded = false
             }
           }
@@ -425,25 +451,27 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
           && abs(value.translation.height) < 12
 
         if shouldExpand || shouldCollapse || shouldOpenOnTap {
+          let nextExpanded = !isExpanded
           withAnimation(.easeInOut(duration: 0.26)) {
-            isExpanded.toggle()
+            sheetHeight = nextExpanded ? expandedSheetHeight : collapsedSheetHeight
+            isExpanded = nextExpanded
             sheetHorizontalOffset = 0
-            sheetDragOffset = 0
           }
         } else {
           withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
+            sheetHeight = targetSheetHeight
             sheetHorizontalOffset = 0
-            sheetDragOffset = 0
           }
         }
       }
   }
 
   private func toggleSheet() {
+    let nextExpanded = !isExpanded
     withAnimation(.easeInOut(duration: 0.26)) {
+      sheetHeight = nextExpanded ? expandedSheetHeight : collapsedSheetHeight
       sheetHorizontalOffset = 0
-      sheetDragOffset = 0
-      isExpanded.toggle()
+      isExpanded = nextExpanded
     }
   }
 }

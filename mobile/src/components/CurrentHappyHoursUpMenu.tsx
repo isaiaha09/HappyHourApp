@@ -1,5 +1,5 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 
@@ -196,10 +196,9 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
     Math.max(Math.round(Dimensions.get('window').height * 0.82), 520),
     640,
   );
-  const [panelMounted, setPanelMounted] = useState(expanded);
+  const sheetTravel = Math.max(expandedSheetHeight - collapsedSheetHeight, 1);
   const panelProgress = useRef(new Animated.Value(expanded ? 1 : 0)).current;
-  const sheetHeight = useRef(new Animated.Value(expanded ? expandedSheetHeight : 0)).current;
-  const sheetDragY = useRef(new Animated.Value(0)).current;
+  const sheetHeight = useRef(new Animated.Value(expanded ? expandedSheetHeight : collapsedSheetHeight)).current;
   const sheetDragX = useRef(new Animated.Value(0)).current;
   const preserveHorizontalDismissalRef = useRef(false);
   const sheetGestureWasActiveRef = useRef(false);
@@ -207,12 +206,10 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
   useEffect(() => {
     panelProgress.stopAnimation();
     sheetHeight.stopAnimation();
-    sheetDragY.stopAnimation();
     sheetDragX.stopAnimation();
 
     if (expanded) {
       preserveHorizontalDismissalRef.current = false;
-      setPanelMounted(true);
       Animated.timing(sheetHeight, {
         duration: 260,
         toValue: expandedSheetHeight,
@@ -222,11 +219,6 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
         Animated.timing(panelProgress, {
           duration: 260,
           toValue: 1,
-          useNativeDriver: true,
-        }),
-        Animated.timing(sheetDragY, {
-          duration: 220,
-          toValue: 0,
           useNativeDriver: true,
         }),
         Animated.timing(sheetDragX, {
@@ -239,7 +231,6 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
       return () => {
         panelProgress.stopAnimation();
         sheetHeight.stopAnimation();
-        sheetDragY.stopAnimation();
         sheetDragX.stopAnimation();
       };
     }
@@ -247,16 +238,11 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
     const preserveHorizontalDismissal = preserveHorizontalDismissalRef.current;
     Animated.timing(sheetHeight, {
       duration: 220,
-      toValue: 0,
+      toValue: collapsedSheetHeight,
       useNativeDriver: false,
     }).start();
     Animated.parallel([
       Animated.timing(panelProgress, {
-        duration: 220,
-        toValue: 0,
-        useNativeDriver: true,
-      }),
-      Animated.timing(sheetDragY, {
         duration: 220,
         toValue: 0,
         useNativeDriver: true,
@@ -270,32 +256,55 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
       if (finished) {
         sheetDragX.setValue(0);
         preserveHorizontalDismissalRef.current = false;
-        setPanelMounted(false);
       }
     });
 
     return () => {
       panelProgress.stopAnimation();
       sheetHeight.stopAnimation();
-      sheetDragY.stopAnimation();
       sheetDragX.stopAnimation();
     };
-  }, [expanded, expandedSheetHeight, panelProgress, sheetDragX, sheetDragY, sheetHeight]);
+  }, [collapsedSheetHeight, expanded, expandedSheetHeight, panelProgress, sheetDragX, sheetHeight]);
 
-  const sheetGestureEvent = useMemo(
-    () => Animated.event(
-      [{ nativeEvent: { translationX: sheetDragX, translationY: sheetDragY } }],
-      { useNativeDriver: true },
-    ),
-    [sheetDragX, sheetDragY],
-  );
+  const handleSheetGestureEvent = useCallback((event: { nativeEvent: { translationX: number; translationY: number } }) => {
+    const { translationX, translationY } = event.nativeEvent;
+    const isHorizontalDismissal = expanded
+      && Math.abs(translationX) > Math.abs(translationY);
+
+    if (isHorizontalDismissal) {
+      sheetDragX.setValue(Math.max(Math.min(translationX, 180), -180));
+      return;
+    }
+
+    sheetDragX.setValue(0);
+
+    const nextHeight = expanded
+      ? expandedSheetHeight - Math.max(translationY, 0)
+      : collapsedSheetHeight + Math.max(-translationY, 0);
+    const clampedHeight = Math.max(
+      collapsedSheetHeight,
+      Math.min(expandedSheetHeight, nextHeight),
+    );
+    const nextProgress = (clampedHeight - collapsedSheetHeight) / sheetTravel;
+
+    // Keep the panel mounted and resize it from the bottom while the finger is
+    // moving. This reveals the cards continuously instead of after the gesture.
+    sheetHeight.setValue(clampedHeight);
+    panelProgress.setValue(nextProgress);
+  }, [collapsedSheetHeight, expanded, expandedSheetHeight, panelProgress, sheetDragX, sheetHeight, sheetTravel]);
 
   const settleSheetDrag = useCallback(() => {
     Animated.parallel([
-      Animated.spring(sheetDragY, {
+      Animated.spring(sheetHeight, {
         damping: 20,
         stiffness: 240,
-        toValue: 0,
+        toValue: expanded ? expandedSheetHeight : collapsedSheetHeight,
+        useNativeDriver: false,
+      }),
+      Animated.spring(panelProgress, {
+        damping: 20,
+        stiffness: 240,
+        toValue: expanded ? 1 : 0,
         useNativeDriver: true,
       }),
       Animated.spring(sheetDragX, {
@@ -305,7 +314,7 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
         useNativeDriver: true,
       }),
     ]).start();
-  }, [sheetDragX, sheetDragY]);
+  }, [collapsedSheetHeight, expanded, expandedSheetHeight, panelProgress, sheetDragX, sheetHeight]);
 
   const clearGestureActiveFlag = useCallback(() => {
     setTimeout(() => {
@@ -318,14 +327,16 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
 
     if (state === State.BEGAN) {
       sheetGestureWasActiveRef.current = false;
-      sheetDragY.stopAnimation();
+      panelProgress.stopAnimation();
+      sheetHeight.stopAnimation();
       sheetDragX.stopAnimation();
       return;
     }
 
     if (state === State.ACTIVE) {
       sheetGestureWasActiveRef.current = true;
-      sheetDragY.stopAnimation();
+      panelProgress.stopAnimation();
+      sheetHeight.stopAnimation();
       sheetDragX.stopAnimation();
       return;
     }
@@ -356,7 +367,6 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
       }).start(({ finished }) => {
         if (finished) {
           preserveHorizontalDismissalRef.current = true;
-          sheetDragY.setValue(0);
           onToggle();
         }
         clearGestureActiveFlag();
@@ -366,9 +376,9 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
 
     if (shouldExpand || shouldCollapse) {
       preserveHorizontalDismissalRef.current = false;
-      sheetDragY.stopAnimation();
+      panelProgress.stopAnimation();
+      sheetHeight.stopAnimation();
       sheetDragX.stopAnimation();
-      sheetDragY.setValue(0);
       sheetDragX.setValue(0);
       onToggle();
       clearGestureActiveFlag();
@@ -377,7 +387,7 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
 
     settleSheetDrag();
     clearGestureActiveFlag();
-  }, [clearGestureActiveFlag, expanded, onToggle, settleSheetDrag, sheetDragX, sheetDragY]);
+  }, [clearGestureActiveFlag, expanded, onToggle, panelProgress, settleSheetDrag, sheetDragX, sheetHeight]);
 
   const handleSheetTap = useCallback(() => {
     if (sheetGestureWasActiveRef.current) {
@@ -387,11 +397,6 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
     onToggle();
   }, [onToggle]);
 
-  const sheetVerticalDrag = sheetDragY.interpolate({
-    inputRange: expanded ? [0, 180] : [-180, 0],
-    outputRange: expanded ? [0, 180] : [-180, 0],
-    extrapolate: 'clamp',
-  });
   const sheetHorizontalDrag = expanded
     ? sheetDragX.interpolate({
       inputRange: [-180, 180],
@@ -400,7 +405,6 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
     })
     : 0;
 
-  const showExpandedSheet = expanded || panelMounted;
   const triggerOpacity = panelProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
 
   return (
@@ -408,35 +412,34 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
       pointerEvents="box-none"
       style={[styles.currentHappyHoursLayer, { bottom: -resolvedBottomInset }]}
     >
-      {showExpandedSheet ? (
-        <Animated.View
-          pointerEvents={expanded ? 'auto' : 'none'}
-          style={[
-            styles.currentHappyHoursSheetFrame,
-            {
-              bottom: 0,
-              height: sheetHeight,
-              left: 0,
-              position: 'absolute',
-              right: 0,
-            },
-          ]}
-        >
+      <Animated.View
+        pointerEvents={expanded ? 'auto' : 'none'}
+        style={[
+          styles.currentHappyHoursSheetFrame,
+          {
+            bottom: 0,
+            height: sheetHeight,
+            left: 0,
+            position: 'absolute',
+            right: 0,
+          },
+        ]}
+      >
           <Animated.View
             style={[
               styles.currentHappyHoursSheet,
               styles.currentHappyHoursSheetExpanded,
               isDark ? styles.currentHappyHoursSheetDark : styles.currentHappyHoursSheetLight,
-              { flex: 1, transform: [{ translateX: sheetHorizontalDrag }, { translateY: sheetVerticalDrag }] },
+              { flex: 1, transform: [{ translateX: sheetHorizontalDrag }] },
             ]}
           >
             <PanGestureHandler
               activeOffsetX={[-10, 10]}
               activeOffsetY={[-10, 10]}
-              onGestureEvent={sheetGestureEvent}
+              onGestureEvent={handleSheetGestureEvent}
               onHandlerStateChange={handleSheetGestureStateChange}
             >
-              <View style={styles.currentHappyHoursSheetHeader}>
+              <Animated.View style={[styles.currentHappyHoursSheetHeader, { opacity: panelProgress }]}>
                 <View style={styles.currentHappyHoursSheetHandle}>
                   <View style={[styles.currentHappyHoursSheetHandleBar, isDark ? styles.currentHappyHoursSheetHandleBarDark : null]} />
                 </View>
@@ -461,7 +464,7 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
                     <Ionicons color={isDark ? '#f6f7f3' : '#252525'} name="chevron-down" size={20} />
                   </Pressable>
                 </View>
-              </View>
+              </Animated.View>
             </PanGestureHandler>
 
             <Animated.View
@@ -496,7 +499,6 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
             </Animated.View>
           </Animated.View>
         </Animated.View>
-      ) : null}
 
       <Animated.View
         pointerEvents={expanded ? 'none' : 'auto'}
@@ -506,14 +508,13 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
             bottom: 0,
             height: collapsedSheetHeight,
             opacity: triggerOpacity,
-            transform: !expanded ? [{ translateY: sheetVerticalDrag }] : undefined,
           },
         ]}
       >
         <PanGestureHandler
           activeOffsetY={[-10, 10]}
           failOffsetX={[-20, 20]}
-          onGestureEvent={sheetGestureEvent}
+          onGestureEvent={handleSheetGestureEvent}
           onHandlerStateChange={handleSheetGestureStateChange}
         >
           <Pressable
