@@ -418,8 +418,11 @@ export const browseStyles = {
     borderColor: '#d7d7d2',
   },
   currentHappyHoursSheetExpanded: {
-    marginHorizontal: 8,
-    width: 'auto',
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    borderBottomWidth: 0,
+    marginHorizontal: 0,
+    width: '100%',
   },
   currentHappyHoursSheetHeader: {
     minHeight: 86,
@@ -513,7 +516,7 @@ export const browseStyles = {
     backgroundColor: '#f7f7f4',
     borderColor: '#d7d7d2',
   },
-  currentHappyHoursTriggerLiveDot: {
+  currentHappyHoursTriggerDot: {
     backgroundColor: '#ff5e59',
     borderRadius: 999,
     height: 7,
@@ -542,6 +545,7 @@ export const browseStyles = {
     borderRadius: 15,
     borderWidth: 1,
     overflow: 'hidden',
+    position: 'relative',
   },
   currentHappyHoursDealCardDark: {
     backgroundColor: '#20272e',
@@ -605,7 +609,7 @@ export const browseStyles = {
     right: 10,
     top: 10,
   },
-  currentHappyHoursDealAdd: {
+  currentHappyHoursDealFavorite: {
     alignItems: 'center',
     backgroundColor: '#ffffff',
     borderRadius: 999,
@@ -634,7 +638,6 @@ export const browseStyles = {
   currentHappyHoursDealFooter: {
     alignItems: 'center',
     flexDirection: 'row',
-    justifyContent: 'space-between',
     marginTop: 10,
   },
   currentHappyHoursDealTimeChip: {
@@ -648,22 +651,6 @@ export const browseStyles = {
     color: '#ff514c',
     fontSize: 11,
     fontWeight: '600',
-  },
-  currentHappyHoursDealLive: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 4,
-  },
-  currentHappyHoursDealLiveDot: {
-    backgroundColor: '#20ad6a',
-    borderRadius: 999,
-    height: 6,
-    width: 6,
-  },
-  currentHappyHoursDealLiveText: {
-    color: '#18965b',
-    fontSize: 12,
-    fontWeight: '700',
   },
   mapOfflineBanner: {
     alignItems: 'center',

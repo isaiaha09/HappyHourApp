@@ -4507,6 +4507,10 @@ function AppScreen() {
     setSelectedPlaceSlug(place.slug);
   }, []);
 
+  const handleToggleCurrentHappyHoursMenu = useCallback(() => {
+    setCurrentHappyHoursMenuExpanded((current) => !current);
+  }, []);
+
   function handleToggleVenueType(venueType: VenueFilterValue) {
     setSelectedVenueTypes((current) => {
       const next = current.includes(venueType)
@@ -4960,6 +4964,43 @@ function AppScreen() {
         slug: selectedPlace.slug,
         location_id: selectedLocationId,
         favorited: !selectedPlaceIsFavorited,
+        portal: authenticatedSession.portal,
+      });
+      setAuthenticatedSession(response);
+      setProfileMessage(response.detail ?? null);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setFavoriteSubmitting(false);
+    }
+  }
+
+  async function handleToggleCurrentHappyHourFavorite(place: { slug: string; locationId: number }) {
+    if (!authenticatedSession?.auth_token) {
+      setShowGuestFavoritePrompt(true);
+      return;
+    }
+
+    if (authenticatedSession.portal !== 'customer') {
+      setErrorMessage('Only customer accounts can favorite businesses.');
+      setProfileErrorMessage(null);
+      return;
+    }
+
+    const isFavorited = authenticatedSession.favorite_businesses?.some((business) => (
+      business.slug === place.slug
+      && (business.location_id == null || business.location_id === place.locationId)
+    )) ?? false;
+
+    setFavoriteSubmitting(true);
+    setErrorMessage(null);
+    setProfileErrorMessage(null);
+
+    try {
+      const response = await toggleFavoriteBusiness(apiBaseUrl, authenticatedSession.auth_token, {
+        slug: place.slug,
+        location_id: place.locationId,
+        favorited: !isFavorited,
         portal: authenticatedSession.portal,
       });
       setAuthenticatedSession(response);
@@ -8206,8 +8247,9 @@ function AppScreen() {
                   <CurrentHappyHoursUpMenu
                     bottomOffset={mapOverlayBottomPadding}
                     expanded={currentHappyHoursMenuExpanded}
+                    onFavoritePlace={handleToggleCurrentHappyHourFavorite}
                     onSelectPlace={handleSelectPlace}
-                    onToggle={() => setCurrentHappyHoursMenuExpanded((current) => !current)}
+                    onToggle={handleToggleCurrentHappyHoursMenu}
                     places={currentHappyHourPlaces}
                     theme={displayedDarkMapMode ? 'dark' : 'light'}
                     userCoordinates={userCoordinates}
@@ -8567,9 +8609,9 @@ function AppScreen() {
       >
         <View style={styles.guestFavoriteModalBackdrop}>
           <View style={styles.guestFavoriteModalCard}>
-            <Text style={styles.guestFavoriteModalTitle}>Create a free customer account to save favorites</Text>
+            <Text style={styles.guestFavoriteModalTitle}>Create a free customer account to favorite businesses</Text>
             <Text style={styles.guestFavoriteModalText}>
-              If you want to keep tabs on your favorite businesses and receive notifications later, create a free customer account first.
+              Favorite businesses and receive notifications when their happy hour deals are happening. Create a free customer account first.
             </Text>
             <View style={styles.guestFavoriteModalActions}>
               <Pressable onPress={handleDismissGuestFavoritePrompt} style={styles.guestFavoriteModalSecondaryButton}>

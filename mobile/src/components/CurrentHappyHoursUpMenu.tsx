@@ -1,9 +1,10 @@
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Dimensions, Image, PanResponder, Pressable, ScrollView, Text, View } from 'react-native';
 
 import type { CurrentHappyHourPlace, CurrentHappyHourWindow } from '../types';
 import { styles } from '../appStyles';
+import { getVenueMarkerStyle, type VenueFilterValue } from '../browseConfig';
 import {
   isNativeIOSCurrentHappyHoursUpMenuAvailable,
   NativeIOSCurrentHappyHoursUpMenu,
@@ -57,6 +58,38 @@ function getPlaceAccessibilityLabel(place: CurrentHappyHourPlace, distanceLabel:
 
 function getCardImageUrl(place: CurrentHappyHourPlace) {
   return (place.image_urls ?? []).find((imageUrl) => /^https?:\/\//i.test(imageUrl.trim())) ?? null;
+}
+
+function getVenueFilterValue(venueTypeLabel: string): VenueFilterValue {
+  const normalizedLabel = venueTypeLabel.trim().toLowerCase();
+
+  if (normalizedLabel.includes('restaurant')) {
+    return 'restaurant';
+  }
+  if (normalizedLabel.includes('bar')) {
+    return 'bar';
+  }
+  if (normalizedLabel.includes('fast')) {
+    return 'fast_food';
+  }
+  if (normalizedLabel.includes('mobile') || normalizedLabel.includes('vendor')) {
+    return 'mobile';
+  }
+  if (normalizedLabel.includes('cafe') || normalizedLabel.includes('coffee')) {
+    return 'cafe';
+  }
+  if (normalizedLabel.includes('shop') || normalizedLabel.includes('store')) {
+    return 'shop';
+  }
+  if (normalizedLabel.includes('attraction')) {
+    return 'attraction';
+  }
+
+  return 'other';
+}
+
+function getCategoryPlaceholderIcon(venueTypeLabel: string) {
+  return getVenueMarkerStyle(getVenueFilterValue(venueTypeLabel)).icon;
 }
 
 export type CurrentHappyHoursUserCoordinates = {
@@ -118,6 +151,7 @@ export type CurrentHappyHoursUpMenuProps = {
   expanded: boolean;
   onToggle: () => void;
   onSelectPlace: (place: { slug: string; locationId: number }) => void;
+  onFavoritePlace?: (place: { slug: string; locationId: number }) => void;
   bottomOffset: number;
   theme: 'dark' | 'light';
   userCoordinates?: CurrentHappyHoursUserCoordinates | null;
@@ -136,6 +170,7 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
   expanded,
   onToggle,
   onSelectPlace,
+  onFavoritePlace,
   bottomOffset,
   theme,
   userCoordinates,
@@ -264,6 +299,10 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
         sheetDragY.setValue(0);
       }
     },
+    onPanResponderGrant: () => {
+      sheetDragY.stopAnimation();
+      sheetDragX.stopAnimation();
+    },
     onPanResponderRelease: (_event, gestureState) => {
       const shouldExpand = !expanded && gestureState.dy <= -64;
       const shouldCollapse = expanded && gestureState.dy >= 64;
@@ -288,11 +327,6 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
       }
 
       if (shouldExpand || shouldCollapse) {
-        Animated.timing(sheetDragY, {
-          duration: 180,
-          toValue: 0,
-          useNativeDriver: true,
-        }).start();
         onToggle();
         return;
       }
@@ -405,6 +439,7 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
                   <CurrentHappyHoursDealCard
                     isDark={isDark}
                     key={`${place.slug}:${place.location_id}`}
+                    onFavorite={() => onFavoritePlace?.({ locationId: place.location_id, slug: place.slug })}
                     onSelect={() => onSelectPlace({ locationId: place.location_id, slug: place.slug })}
                     place={place}
                     userCoordinates={userCoordinates}
@@ -437,7 +472,7 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
             testID="current-happy-hours-toggle"
           >
             <Ionicons color={isDark ? '#f6f7f3' : '#222222'} name={expanded ? 'chevron-down' : 'chevron-up'} size={18} />
-            <View style={styles.currentHappyHoursTriggerLiveDot} />
+            <View style={styles.currentHappyHoursTriggerDot} />
             <Text style={[styles.currentHappyHoursTriggerTitle, isDark ? styles.currentHappyHoursTriggerTitleDark : null]}>
               {dealCountLabel}
             </Text>
@@ -450,66 +485,84 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
 
 type CurrentHappyHoursDealCardProps = {
   isDark: boolean;
+  onFavorite: () => void;
   onSelect: () => void;
   place: CurrentHappyHourPlace;
   userCoordinates?: CurrentHappyHoursUserCoordinates | null;
 };
 
-function CurrentHappyHoursDealCard({ isDark, onSelect, place, userCoordinates }: CurrentHappyHoursDealCardProps) {
+function CurrentHappyHoursDealCard({ isDark, onFavorite, onSelect, place, userCoordinates }: CurrentHappyHoursDealCardProps) {
   const imageUrl = getCardImageUrl(place);
+  const [imageLoadFailed, setImageLoadFailed] = useState(false);
   const distanceLabel = getDistanceLabel(userCoordinates, place);
 
+  useEffect(() => {
+    setImageLoadFailed(false);
+  }, [imageUrl]);
+
+  const shouldRenderImage = imageUrl !== null && !imageLoadFailed;
+
   return (
-    <Pressable
-      accessibilityLabel={getPlaceAccessibilityLabel(place, distanceLabel)}
-      accessibilityRole="button"
-      onPress={onSelect}
-      style={[styles.currentHappyHoursDealCard, isDark ? styles.currentHappyHoursDealCardDark : null]}
-      testID={`current-happy-hours-row-${place.slug}:${place.location_id}`}
-    >
-      <View style={styles.currentHappyHoursDealImageFrame}>
-        {imageUrl ? (
-          <Image resizeMode="cover" source={{ uri: imageUrl }} style={styles.currentHappyHoursDealImage} />
-        ) : (
-          <View style={[styles.currentHappyHoursDealImagePlaceholder, isDark ? styles.currentHappyHoursDealImagePlaceholderDark : null]}>
-            <Ionicons color={isDark ? '#f2f4f1' : '#68716a'} name="restaurant-outline" size={34} />
-          </View>
-        )}
-        <View style={styles.currentHappyHoursDealImageShade} />
-        <View style={styles.currentHappyHoursDealImageCopy}>
-          <Text numberOfLines={1} style={styles.currentHappyHoursDealName}>{place.name}</Text>
-          <Text numberOfLines={1} style={styles.currentHappyHoursDealMeta}>
-            {[place.city_label, place.venue_type_label].filter(Boolean).join(' • ')}
-          </Text>
-        </View>
-        {distanceLabel ? <Text style={styles.currentHappyHoursDealDistance}>{distanceLabel}</Text> : null}
-        <View style={styles.currentHappyHoursDealAdd}>
-          <Ionicons color="#1e211f" name="add" size={17} />
-        </View>
-      </View>
-
-      <View style={styles.currentHappyHoursDealBody}>
-        {place.happy_hours.map((window, index) => (
-          <View key={`${window.deal_id ?? window.title}:${window.weekday_label}:${index}`} style={styles.currentHappyHoursDealLineBlock}>
-            <Text numberOfLines={2} style={[styles.currentHappyHoursDealLine, isDark ? styles.currentHappyHoursDealLineDark : null]}>
-              {formatDealLine(window) || 'Happy Hour'}
+    <View style={[styles.currentHappyHoursDealCard, isDark ? styles.currentHappyHoursDealCardDark : null]}>
+      <Pressable
+        accessibilityLabel={getPlaceAccessibilityLabel(place, distanceLabel)}
+        accessibilityRole="button"
+        onPress={onSelect}
+        testID={`current-happy-hours-row-${place.slug}:${place.location_id}`}
+      >
+        <View style={styles.currentHappyHoursDealImageFrame}>
+          {shouldRenderImage ? (
+            <Image
+              onError={() => setImageLoadFailed(true)}
+              resizeMode="cover"
+              source={{ uri: imageUrl }}
+              style={styles.currentHappyHoursDealImage}
+            />
+          ) : (
+            <View style={[styles.currentHappyHoursDealImagePlaceholder, isDark ? styles.currentHappyHoursDealImagePlaceholderDark : null]}>
+              <MaterialCommunityIcons color={isDark ? '#f2f4f1' : '#68716a'} name={getCategoryPlaceholderIcon(place.venue_type_label)} size={34} />
+            </View>
+          )}
+          <View style={styles.currentHappyHoursDealImageShade} />
+          <View style={styles.currentHappyHoursDealImageCopy}>
+            <Text numberOfLines={1} style={styles.currentHappyHoursDealName}>{place.name}</Text>
+            <Text numberOfLines={1} style={styles.currentHappyHoursDealMeta}>
+              {[place.city_label, place.venue_type_label].filter(Boolean).join(' • ')}
             </Text>
           </View>
-        ))}
+          {distanceLabel ? <Text style={styles.currentHappyHoursDealDistance}>{distanceLabel}</Text> : null}
+        </View>
 
-        <View style={styles.currentHappyHoursDealFooter}>
-          <View style={styles.currentHappyHoursDealTimeChip}>
-            <Text style={styles.currentHappyHoursDealTimeText}>
-              {place.happy_hours.map(formatWindowDetails).join(' • ')}
-            </Text>
-          </View>
-          <View style={styles.currentHappyHoursDealLive}>
-            <View style={styles.currentHappyHoursDealLiveDot} />
-            <Text style={styles.currentHappyHoursDealLiveText}>Live</Text>
+        <View style={styles.currentHappyHoursDealBody}>
+          {place.happy_hours.map((window, index) => (
+            <View key={`${window.deal_id ?? window.title}:${window.weekday_label}:${index}`} style={styles.currentHappyHoursDealLineBlock}>
+              <Text numberOfLines={2} style={[styles.currentHappyHoursDealLine, isDark ? styles.currentHappyHoursDealLineDark : null]}>
+                {formatDealLine(window) || 'Happy Hour'}
+              </Text>
+            </View>
+          ))}
+
+          <View style={styles.currentHappyHoursDealFooter}>
+            <View style={styles.currentHappyHoursDealTimeChip}>
+              <Text style={styles.currentHappyHoursDealTimeText}>
+                {place.happy_hours.map(formatWindowDetails).join(' • ')}
+              </Text>
+            </View>
           </View>
         </View>
-      </View>
-    </Pressable>
+      </Pressable>
+
+      <Pressable
+        accessibilityLabel={`Favorite ${place.name}`}
+        accessibilityRole="button"
+        hitSlop={8}
+        onPress={onFavorite}
+        style={styles.currentHappyHoursDealFavorite}
+        testID={`current-happy-hours-favorite-${place.slug}:${place.location_id}`}
+      >
+        <Ionicons color="#1e211f" name="heart-outline" size={17} />
+      </Pressable>
+    </View>
   );
 }
 

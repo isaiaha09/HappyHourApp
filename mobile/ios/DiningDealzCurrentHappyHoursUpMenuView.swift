@@ -17,6 +17,7 @@ private final class DiningDealzCurrentHappyHoursUpMenuState: ObservableObject {
 final class DiningDealzCurrentHappyHoursUpMenuView: UIView {
   @objc var onMenuToggle: RCTDirectEventBlock?
   @objc var onPlaceSelect: RCTDirectEventBlock?
+  @objc var onFavoritePress: RCTDirectEventBlock?
 
   @objc var places: NSArray = [] {
     didSet {
@@ -76,7 +77,7 @@ final class DiningDealzCurrentHappyHoursUpMenuView: UIView {
   }
 
   override var intrinsicContentSize: CGSize {
-    let safeBottomOffset = max(CGFloat(truncating: bottomOffset), 0)
+    let safeBottomOffset = expanded ? 0 : max(CGFloat(truncating: bottomOffset), 0)
     let baseHeight: CGFloat = expanded && places.count > 0
       ? max(CGFloat(truncating: expandedSheetHeight), 520)
       : 132
@@ -95,6 +96,9 @@ final class DiningDealzCurrentHappyHoursUpMenuView: UIView {
       },
       onSelect: { [weak self] place in
         self?.handlePlaceSelect(place)
+      },
+      onFavorite: { [weak self] place in
+        self?.handleFavoritePress(place)
       }
     )
     let controller = UIHostingController(rootView: rootView)
@@ -168,12 +172,20 @@ final class DiningDealzCurrentHappyHoursUpMenuView: UIView {
       "slug": place.slug,
     ])
   }
+
+  private func handleFavoritePress(_ place: DiningDealzCurrentHappyHourPlace) {
+    onFavoritePress?([
+      "locationId": place.locationID,
+      "slug": place.slug,
+    ])
+  }
 }
 
 private struct DiningDealzCurrentHappyHoursUpMenuBridgeContent: View {
   @ObservedObject var state: DiningDealzCurrentHappyHoursUpMenuState
   let onToggle: (Bool) -> Void
   let onSelect: (DiningDealzCurrentHappyHourPlace) -> Void
+  let onFavorite: (DiningDealzCurrentHappyHourPlace) -> Void
 
   var body: some View {
     DiningDealzCurrentHappyHoursUpMenu(
@@ -191,7 +203,8 @@ private struct DiningDealzCurrentHappyHoursUpMenuBridgeContent: View {
       userLatitude: state.userLatitude,
       userLongitude: state.userLongitude,
       expandedSheetHeight: state.expandedSheetHeight,
-      onSelect: onSelect
+      onSelect: onSelect,
+      onFavorite: onFavorite
     )
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
   }

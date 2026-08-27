@@ -167,12 +167,33 @@ enum DiningDealzCurrentHappyHoursTheme: Equatable {
     }
   }
 
-  var liveDot: Color {
-    Color(red: 0.11, green: 0.68, blue: 0.39)
-  }
-
   var accent: Color {
     Color(red: 1.0, green: 0.32, blue: 0.29)
+  }
+}
+
+private struct DiningDealzTopRoundedRectangle: Shape {
+  let cornerRadius: CGFloat
+
+  func path(in rect: CGRect) -> Path {
+    let radius = min(cornerRadius, min(rect.width, rect.height) / 2)
+    var path = Path()
+
+    path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+    path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + radius))
+    path.addQuadCurve(
+      to: CGPoint(x: rect.minX + radius, y: rect.minY),
+      control: CGPoint(x: rect.minX, y: rect.minY)
+    )
+    path.addLine(to: CGPoint(x: rect.maxX - radius, y: rect.minY))
+    path.addQuadCurve(
+      to: CGPoint(x: rect.maxX, y: rect.minY + radius),
+      control: CGPoint(x: rect.maxX, y: rect.minY)
+    )
+    path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+    path.closeSubpath()
+
+    return path
   }
 }
 
@@ -182,6 +203,7 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
   let bottomOffset: CGFloat
   let theme: DiningDealzCurrentHappyHoursTheme
   let onSelect: (DiningDealzCurrentHappyHourPlace) -> Void
+  let onFavorite: (DiningDealzCurrentHappyHourPlace) -> Void
   let userLatitude: Double?
   let userLongitude: Double?
   let expandedSheetHeight: CGFloat
@@ -198,7 +220,8 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
     userLatitude: Double? = nil,
     userLongitude: Double? = nil,
     expandedSheetHeight: CGFloat = 620,
-    onSelect: @escaping (DiningDealzCurrentHappyHourPlace) -> Void
+    onSelect: @escaping (DiningDealzCurrentHappyHourPlace) -> Void,
+    onFavorite: @escaping (DiningDealzCurrentHappyHourPlace) -> Void
   ) {
     self.places = places
     self._isExpanded = isExpanded
@@ -208,6 +231,7 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
     self.userLongitude = userLongitude
     self.expandedSheetHeight = expandedSheetHeight
     self.onSelect = onSelect
+    self.onFavorite = onFavorite
   }
 
   private var dealCount: Int {
@@ -239,9 +263,9 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
               .fill(theme.sheetBorder)
               .frame(height: 1)
           }
-          .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+          .clipShape(DiningDealzTopRoundedRectangle(cornerRadius: 24))
           .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            DiningDealzTopRoundedRectangle(cornerRadius: 24)
               .stroke(theme.sheetBorder, lineWidth: 1)
           )
           .shadow(color: .black.opacity(theme == .dark ? 0.34 : 0.16), radius: 18, y: -5)
@@ -254,7 +278,7 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
       .frame(maxWidth: .infinity)
       .frame(height: isExpanded ? expandedSheetHeight : collapsedSheetHeight, alignment: .bottom)
       .offset(x: sheetHorizontalOffset, y: sheetDragOffset)
-      .padding(.bottom, bottomOffset)
+      .padding(.bottom, isExpanded ? 0 : bottomOffset)
       .animation(.easeInOut(duration: 0.26), value: isExpanded)
     }
   }
@@ -344,6 +368,7 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
             theme: theme,
             userLatitude: userLatitude,
             userLongitude: userLongitude,
+            onFavorite: onFavorite,
             onSelect: onSelect
           )
         }
@@ -422,6 +447,7 @@ private struct DiningDealzCurrentHappyHoursUpMenuCard: View {
   let theme: DiningDealzCurrentHappyHoursTheme
   let userLatitude: Double?
   let userLongitude: Double?
+  let onFavorite: (DiningDealzCurrentHappyHourPlace) -> Void
   let onSelect: (DiningDealzCurrentHappyHourPlace) -> Void
 
   private var secondaryLabel: String {
@@ -450,16 +476,32 @@ private struct DiningDealzCurrentHappyHoursUpMenuCard: View {
   }
 
   var body: some View {
-    Button(action: {
-      onSelect(place)
-    }) {
-      VStack(spacing: 0) {
-        imageHeader
-        dealBody
+    ZStack(alignment: .topTrailing) {
+      Button(action: {
+        onSelect(place)
+      }) {
+        VStack(spacing: 0) {
+          imageHeader
+          dealBody
+        }
       }
+      .buttonStyle(.plain)
+      .frame(maxWidth: .infinity, alignment: .leading)
+
+      Button(action: {
+        onFavorite(place)
+      }) {
+        Image(systemName: "heart")
+          .font(.system(size: 14, weight: .bold))
+          .foregroundStyle(Color(red: 0.12, green: 0.14, blue: 0.13))
+          .frame(width: 28, height: 28)
+          .background(Color.white, in: Circle())
+      }
+      .buttonStyle(.plain)
+      .padding(.top, 9)
+      .padding(.trailing, 10)
+      .accessibilityLabel("Favorite \(place.name)")
     }
-    .buttonStyle(.plain)
-    .frame(maxWidth: .infinity, alignment: .leading)
     .background(theme.cardBackground)
     .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
     .overlay(
@@ -523,15 +565,6 @@ private struct DiningDealzCurrentHappyHoursUpMenuCard: View {
           .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
       }
 
-      Image(systemName: "plus")
-        .font(.system(size: 14, weight: .bold))
-        .foregroundStyle(Color(red: 0.12, green: 0.14, blue: 0.13))
-        .frame(width: 28, height: 28)
-        .background(Color.white, in: Circle())
-        .padding(.top, 9)
-        .padding(.trailing, 10)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-        .accessibilityHidden(true)
     }
     .frame(maxWidth: .infinity)
     .frame(height: 132)
@@ -541,10 +574,35 @@ private struct DiningDealzCurrentHappyHoursUpMenuCard: View {
   private var imagePlaceholder: some View {
     ZStack {
       theme.imagePlaceholder
-      Image(systemName: "fork.knife")
+      Image(systemName: placeholderSystemImage)
         .font(.system(size: 30, weight: .medium))
         .foregroundStyle(theme.mutedForeground)
     }
+  }
+
+  private var placeholderSystemImage: String {
+    let normalizedLabel = place.venueTypeLabel.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+    if normalizedLabel.contains("cafe") || normalizedLabel.contains("coffee") {
+      return "cup.and.saucer.fill"
+    }
+    if normalizedLabel.contains("bar") || normalizedLabel.contains("wine") {
+      return "wineglass.fill"
+    }
+    if normalizedLabel.contains("fast") {
+      return "takeoutbag.and.cup.and.straw.fill"
+    }
+    if normalizedLabel.contains("mobile") || normalizedLabel.contains("vendor") {
+      return "bus.fill"
+    }
+    if normalizedLabel.contains("shop") || normalizedLabel.contains("store") {
+      return "storefront.fill"
+    }
+    if normalizedLabel.contains("attraction") {
+      return "star.fill"
+    }
+
+    return "fork.knife"
   }
 
   private var dealBody: some View {
@@ -568,16 +626,6 @@ private struct DiningDealzCurrentHappyHoursUpMenuCard: View {
               .stroke(theme.accent, lineWidth: 1)
           )
 
-        Spacer(minLength: 8)
-
-        HStack(spacing: 4) {
-          Circle()
-            .fill(theme.liveDot)
-            .frame(width: 6, height: 6)
-          Text("Live")
-            .font(.system(size: 12, weight: .bold))
-            .foregroundStyle(theme.liveDot)
-        }
       }
       .padding(.top, 8)
     }

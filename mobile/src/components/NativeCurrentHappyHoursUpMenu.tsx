@@ -15,6 +15,7 @@ type NativeCurrentHappyHoursUpMenuProps = {
   bottomOffset: number;
   expanded: boolean;
   expandedSheetHeight: number;
+  onFavoritePress?: (event: NativeSyntheticEvent<{ locationId: number; slug: string }>) => void;
   onMenuToggle?: (event: NativeSyntheticEvent<{ expanded: boolean }>) => void;
   onPlaceSelect?: (event: NativeSyntheticEvent<{ locationId: number; slug: string }>) => void;
   places: CurrentHappyHourPlace[];
@@ -92,6 +93,7 @@ export function NativeIOSCurrentHappyHoursUpMenu({
   bottomOffset,
   expanded,
   onSelectPlace,
+  onFavoritePlace,
   onToggle,
   places,
   theme,
@@ -111,6 +113,7 @@ export function NativeIOSCurrentHappyHoursUpMenu({
       bottomOffset={0}
       expanded={expanded}
       expandedSheetHeight={expandedSheetHeight}
+      onFavoritePress={(event) => onFavoritePlace?.(event.nativeEvent)}
       onMenuToggle={() => onToggle()}
       onPlaceSelect={(event) => onSelectPlace(event.nativeEvent)}
       places={places}

@@ -5,6 +5,7 @@ import type { CurrentHappyHourPlace } from '../types';
 
 jest.mock('@expo/vector-icons', () => ({
   Ionicons: () => null,
+  MaterialCommunityIcons: () => null,
 }));
 
 const place: CurrentHappyHourPlace = {
@@ -81,5 +82,26 @@ describe('CurrentHappyHoursUpMenu', () => {
     expect(screen.getByText('$5 wells Afternoon Happy Hour')).toBeTruthy();
     fireEvent.press(screen.getByTestId('current-happy-hours-row-example-bar:101'));
     expect(onSelectPlace).toHaveBeenCalledWith({ slug: 'example-bar', locationId: 101 });
+  });
+
+  it('routes the heart action to the account/favorite handler without selecting the row', () => {
+    const onFavoritePlace = jest.fn();
+    const onSelectPlace = jest.fn();
+
+    render(
+      <CurrentHappyHoursUpMenu
+        bottomOffset={96}
+        expanded
+        onFavoritePlace={onFavoritePlace}
+        onSelectPlace={onSelectPlace}
+        onToggle={jest.fn()}
+        places={[place]}
+        theme="dark"
+      />,
+    );
+
+    fireEvent.press(screen.getByTestId('current-happy-hours-favorite-example-bar:101'));
+    expect(onFavoritePlace).toHaveBeenCalledWith({ slug: 'example-bar', locationId: 101 });
+    expect(onSelectPlace).not.toHaveBeenCalled();
   });
 });
