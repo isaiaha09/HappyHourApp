@@ -3642,6 +3642,75 @@ function AppScreen() {
     );
   }
 
+  function renderMapExitButton(guestChrome = false) {
+    if (authenticatedSession && browseMode === 'map') {
+      return (
+        <NativeIOSLiquidGlassHeaderButton
+          accessibilityLabel="Back to dashboard"
+          fallback={(
+            <Pressable
+              accessibilityLabel="Back to dashboard"
+              onPress={handleBottomNavOpenProfile}
+              style={[
+                styles.floatingDashboardButton,
+                styles.floatingDashboardButtonMap,
+                styles.floatingMapNavActionButton,
+                { bottom: floatingDashboardButtonOffset, elevation: 90, right: 14, zIndex: 90 },
+              ]}
+            >
+              <Text style={styles.floatingMapNavActionArrow}>→</Text>
+            </Pressable>
+          )}
+          onPress={handleBottomNavOpenProfile}
+          style={{ bottom: floatingDashboardButtonOffset, elevation: 90, height: 54, position: 'absolute', right: 14, width: 54, zIndex: 90 }}
+          systemImage="arrow.right"
+          themeVariant={displayedDarkMapMode ? 'map-dark' : 'map-light'}
+          variant="icon"
+        />
+      );
+    }
+
+    if (guestMapOnlyMode && browseMode === 'map' && !guestChrome) {
+      return (
+        <NativeIOSLiquidGlassHeaderButton
+          accessibilityLabel="Exit guest map"
+          fallback={(
+            <Pressable
+              accessibilityLabel="Exit guest map"
+              onPress={handleExitGuestMap}
+              style={[
+                styles.floatingDashboardButton,
+                styles.floatingDashboardButtonMap,
+                styles.floatingGuestExitButton,
+                { bottom: floatingDashboardButtonOffset, elevation: 90, right: 14, zIndex: 90 },
+              ]}
+            >
+              <View style={{ alignItems: 'center', flexDirection: 'row', height: 28, justifyContent: 'center', width: 28 }}>
+                <View style={{ backgroundColor: '#17110c', borderRadius: 2, height: 22, transform: [{ skewY: '-12deg' }], width: 8 }} />
+                <View style={{ height: 24, marginLeft: 3, position: 'relative', width: 8 }}>
+                  <View style={{ backgroundColor: '#17110c', height: 3, position: 'absolute', right: 0, top: 0, width: 8 }} />
+                  <View style={{ backgroundColor: '#17110c', height: 18, position: 'absolute', right: 0, top: 3, width: 3 }} />
+                  <View style={{ backgroundColor: '#17110c', bottom: 0, height: 3, position: 'absolute', right: 0, width: 8 }} />
+                </View>
+                <View style={{ alignItems: 'center', flexDirection: 'row', marginLeft: 2 }}>
+                  <View style={{ backgroundColor: '#17110c', height: 4, width: 7 }} />
+                  <View style={{ borderBottomColor: 'transparent', borderBottomWidth: 5, borderLeftColor: '#17110c', borderLeftWidth: 8, borderTopColor: 'transparent', borderTopWidth: 5 }} />
+                </View>
+              </View>
+            </Pressable>
+          )}
+          onPress={handleExitGuestMap}
+          style={{ bottom: floatingDashboardButtonOffset, elevation: 90, height: 54, position: 'absolute', right: 14, width: 54, zIndex: 90 }}
+          systemImage="rectangle.portrait.and.arrow.right"
+          themeVariant={displayedDarkMapMode ? 'map-dark' : 'map-light'}
+          variant="icon"
+        />
+      );
+    }
+
+    return null;
+  }
+
   function navigateGuestBrowseTransition(nextScreen: 'splash' | 'browse', onComplete?: () => void) {
     if (screenMode === nextScreen) {
       onComplete?.();
@@ -8243,64 +8312,6 @@ function AppScreen() {
                   </Animated.View>
                 </View>
 
-                {authenticatedSession && browseMode === 'map' ? (
-                  <NativeIOSLiquidGlassHeaderButton
-                    accessibilityLabel="Back to dashboard"
-                    fallback={(
-                      <Pressable
-                        accessibilityLabel="Back to dashboard"
-                        onPress={handleBottomNavOpenProfile}
-                        style={[
-                          styles.floatingDashboardButton,
-                          styles.floatingDashboardButtonMap,
-                          styles.floatingMapNavActionButton,
-                          { bottom: floatingDashboardButtonOffset, right: 14 },
-                        ]}
-                      >
-                        <Text style={styles.floatingMapNavActionArrow}>→</Text>
-                      </Pressable>
-                    )}
-                    onPress={handleBottomNavOpenProfile}
-                    style={{ bottom: floatingDashboardButtonOffset, height: 54, position: 'absolute', right: 14, width: 54, zIndex: 40 }}
-                    systemImage="arrow.right"
-                    themeVariant={displayedDarkMapMode ? 'map-dark' : 'map-light'}
-                    variant="icon"
-                  />
-                ) : guestMapOnlyMode && browseMode === 'map' && !options?.guestChrome ? (
-                  <NativeIOSLiquidGlassHeaderButton
-                    accessibilityLabel="Exit guest map"
-                    fallback={(
-                      <Pressable
-                        accessibilityLabel="Exit guest map"
-                        onPress={handleExitGuestMap}
-                        style={[
-                          styles.floatingDashboardButton,
-                          styles.floatingDashboardButtonMap,
-                          styles.floatingGuestExitButton,
-                          { bottom: floatingDashboardButtonOffset, right: 14 },
-                        ]}
-                      >
-                        <View style={{ alignItems: 'center', flexDirection: 'row', height: 28, justifyContent: 'center', width: 28 }}>
-                          <View style={{ backgroundColor: '#17110c', borderRadius: 2, height: 22, transform: [{ skewY: '-12deg' }], width: 8 }} />
-                          <View style={{ height: 24, marginLeft: 3, position: 'relative', width: 8 }}>
-                            <View style={{ backgroundColor: '#17110c', height: 3, position: 'absolute', right: 0, top: 0, width: 8 }} />
-                            <View style={{ backgroundColor: '#17110c', height: 18, position: 'absolute', right: 0, top: 3, width: 3 }} />
-                            <View style={{ backgroundColor: '#17110c', bottom: 0, height: 3, position: 'absolute', right: 0, width: 8 }} />
-                          </View>
-                          <View style={{ alignItems: 'center', flexDirection: 'row', marginLeft: 2 }}>
-                            <View style={{ backgroundColor: '#17110c', height: 4, width: 7 }} />
-                            <View style={{ borderBottomColor: 'transparent', borderBottomWidth: 5, borderLeftColor: '#17110c', borderLeftWidth: 8, borderTopColor: 'transparent', borderTopWidth: 5 }} />
-                          </View>
-                        </View>
-                      </Pressable>
-                    )}
-                    onPress={handleExitGuestMap}
-                    style={{ bottom: floatingDashboardButtonOffset, height: 54, position: 'absolute', right: 14, width: 54, zIndex: 40 }}
-                    systemImage="rectangle.portrait.and.arrow.right"
-                    themeVariant={displayedDarkMapMode ? 'map-dark' : 'map-light'}
-                    variant="icon"
-                  />
-                ) : null}
               </View>
             </SafeAreaView>
             {showMapBrowse ? (
@@ -8316,6 +8327,7 @@ function AppScreen() {
                 userCoordinates={userCoordinates}
               />
             ) : null}
+            {renderMapExitButton(options?.guestChrome)}
             {options?.guestChrome ? (
               <GuestShellChrome
                 actionOpacity={options.guestChromeActionOpacity}

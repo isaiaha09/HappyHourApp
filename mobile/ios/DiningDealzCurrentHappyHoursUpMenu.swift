@@ -211,8 +211,8 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
   private var collapsedSheetHeight: CGFloat {
     max(bottomOffset + 68, 148)
   }
-  @State private var sheetHorizontalOffset: CGFloat = 0
   @State private var sheetHeight: CGFloat = 0
+  @GestureState private var verticalDragTranslation: CGFloat = 0
 
   init(
     places: [DiningDealzCurrentHappyHourPlace],
@@ -253,7 +253,16 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
   }
 
   private var resolvedSheetHeight: CGFloat {
-    sheetHeight > 0 ? sheetHeight : targetSheetHeight
+    let baseHeight = sheetHeight > 0 ? sheetHeight : targetSheetHeight
+    guard abs(verticalDragTranslation) > 0.001 else {
+      return baseHeight
+    }
+
+    let draggedHeight = isExpanded
+      ? baseHeight - max(verticalDragTranslation, 0)
+      : baseHeight + max(-verticalDragTranslation, 0)
+
+    return min(max(draggedHeight, collapsedSheetHeight), expandedSheetHeight)
   }
 
   private var sheetRevealProgress: CGFloat {
@@ -280,7 +289,6 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
               expandedHeader
                 .opacity(Double(sheetRevealProgress))
                 .allowsHitTesting(sheetRevealProgress > 0.01)
-                .simultaneousGesture(sheetGesture)
             }
             .frame(maxWidth: .infinity, minHeight: 56, alignment: .top)
           }
@@ -306,7 +314,6 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
       }
       .frame(maxWidth: .infinity)
       .frame(height: resolvedSheetHeight, alignment: .bottom)
-      .offset(x: sheetHorizontalOffset)
       .onAppear {
         if sheetHeight == 0 {
           sheetHeight = targetSheetHeight
@@ -345,6 +352,7 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
     }
     .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
     .padding(.horizontal, 16)
+    .offset(y: -6)
     .contentShape(Rectangle())
     .accessibilityLabel(triggerAccessibilityLabel)
     .accessibilityHint("Swipe up to browse deals. Swipe down on the expanded sheet to close it.")
@@ -365,6 +373,8 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
           .font(.system(size: 13, weight: .semibold))
           .foregroundStyle(theme.mutedForeground)
       }
+      .contentShape(Rectangle())
+      .simultaneousGesture(sheetGesture)
 
       Spacer(minLength: 0)
 
@@ -380,7 +390,6 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
     }
     .padding(.horizontal, 16)
     .padding(.bottom, 10)
-    .contentShape(Rectangle())
   }
 
   private var expandedList: some View {
@@ -406,48 +415,13 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
 
   private var sheetGesture: some Gesture {
     DragGesture(minimumDistance: 0)
-      .onChanged { value in
-        var transaction = Transaction()
-        transaction.animation = nil
-        withTransaction(transaction) {
-          if isExpanded && abs(value.translation.width) > abs(value.translation.height) {
-            sheetHorizontalOffset = max(min(value.translation.width, 180), -180)
-          } else {
-            sheetHorizontalOffset = 0
-
-            let nextHeight = isExpanded
-              ? expandedSheetHeight - max(value.translation.height, 0)
-              : collapsedSheetHeight + max(-value.translation.height, 0)
-            sheetHeight = min(
-              max(nextHeight, collapsedSheetHeight),
-              expandedSheetHeight
-            )
-          }
-        }
+      .updating($verticalDragTranslation) { value, state, _ in
+        state = value.translation.height
       }
       .onEnded { value in
-        let shouldDismissHorizontally = isExpanded
-          && abs(value.translation.width) >= 72
-          && abs(value.translation.width) > abs(value.translation.height)
-
-        if shouldDismissHorizontally {
-          let dismissDistance: CGFloat = 420
-          let direction: CGFloat = value.translation.width >= 0 ? 1 : -1
-          withAnimation(.easeOut(duration: 0.18)) {
-            sheetHorizontalOffset = direction * dismissDistance
-          }
-          DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-            withAnimation(.easeInOut(duration: 0.26)) {
-              sheetHorizontalOffset = 0
-              sheetHeight = collapsedSheetHeight
-              isExpanded = false
-            }
-          }
-          return
-        }
-
-        let shouldExpand = !isExpanded && value.translation.height <= -72
-        let shouldCollapse = isExpanded && value.translation.height >= 72
+        let isMostlyVertical = abs(value.translation.height) >= abs(value.translation.width)
+        let shouldExpand = isMostlyVertical && !isExpanded && value.translation.height <= -72
+        let shouldCollapse = isMostlyVertical && isExpanded && value.translation.height >= 72
         let shouldOpenOnTap = !isExpanded
           && abs(value.translation.width) < 12
           && abs(value.translation.height) < 12
@@ -457,12 +431,10 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
           withAnimation(.easeInOut(duration: 0.26)) {
             sheetHeight = nextExpanded ? expandedSheetHeight : collapsedSheetHeight
             isExpanded = nextExpanded
-            sheetHorizontalOffset = 0
           }
         } else {
           withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
             sheetHeight = targetSheetHeight
-            sheetHorizontalOffset = 0
           }
         }
       }
@@ -472,7 +444,6 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
     let nextExpanded = !isExpanded
     withAnimation(.easeInOut(duration: 0.26)) {
       sheetHeight = nextExpanded ? expandedSheetHeight : collapsedSheetHeight
-      sheetHorizontalOffset = 0
       isExpanded = nextExpanded
     }
   }
