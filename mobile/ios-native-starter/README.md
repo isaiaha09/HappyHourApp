@@ -38,12 +38,25 @@ npx expo prebuild --platform ios
 - `DiningDealzLiquidGlassHeaderButtonViewManager.m`
   ObjC export shim for RN prop/event exposure.
 
+- `DiningDealzCurrentHappyHoursUpMenu.swift`
+  Reusable SwiftUI models and the current happy-hours up-menu UI.
+
+- `DiningDealzCurrentHappyHoursUpMenuView.swift`
+  UIKit host that binds the SwiftUI menu to React Native data and events.
+
+- `DiningDealzCurrentHappyHoursUpMenuViewManager.swift`
+  React Native manager for the SwiftUI happy-hours menu.
+
+- `DiningDealzCurrentHappyHoursUpMenuViewManager.m`
+  ObjC export shim for the happy-hours menu props and events.
+
 ## Expected RN View Names
 
 These source files export the exact names already expected by the JS side:
 
 - `DiningDealzLiquidGlassBottomNavView`
 - `DiningDealzLiquidGlassHeaderButtonView`
+- `DiningDealzCurrentHappyHoursUpMenuView`
 
 ## Important Notes
 

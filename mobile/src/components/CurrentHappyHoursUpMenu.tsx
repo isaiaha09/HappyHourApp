@@ -3,6 +3,10 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import type { CurrentHappyHourPlace, CurrentHappyHourWindow } from '../types';
 import { styles } from '../appStyles';
+import {
+  isNativeIOSCurrentHappyHoursUpMenuAvailable,
+  NativeIOSCurrentHappyHoursUpMenu,
+} from './NativeCurrentHappyHoursUpMenu';
 
 function formatTime(value: string) {
   const match = value.trim().match(/^(\d{1,2}):(\d{2})/);
@@ -56,7 +60,7 @@ export type CurrentHappyHoursUpMenuProps = {
   theme: 'dark' | 'light';
 };
 
-export function CurrentHappyHoursUpMenu({
+export function ReactNativeCurrentHappyHoursUpMenu({
   places,
   expanded,
   onToggle,
@@ -148,4 +152,12 @@ export function CurrentHappyHoursUpMenu({
       </Pressable>
     </View>
   );
+}
+
+export function CurrentHappyHoursUpMenu(props: CurrentHappyHoursUpMenuProps) {
+  if (isNativeIOSCurrentHappyHoursUpMenuAvailable()) {
+    return <NativeIOSCurrentHappyHoursUpMenu {...props} />;
+  }
+
+  return <ReactNativeCurrentHappyHoursUpMenu {...props} />;
 }
