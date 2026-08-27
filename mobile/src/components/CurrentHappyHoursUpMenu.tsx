@@ -189,7 +189,7 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
   const isDark = theme === 'dark';
   const dealCount = places.reduce((count, place) => count + place.happy_hours.length, 0);
   const dealCountLabel = `${dealCount} deal${dealCount === 1 ? '' : 's'} nearby`;
-  const collapsedSheetHeight = Math.max(bottomOffset + 68, 148);
+  const collapsedSheetHeight = Math.max(bottomOffset + 52, 132);
   const resolvedBottomInset = Math.max(bottomInset, 0);
   const expandedSheetHeight = Math.min(
     Math.max(Math.round(Dimensions.get('window').height * 0.82), 520),

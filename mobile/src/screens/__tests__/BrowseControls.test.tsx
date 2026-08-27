@@ -84,4 +84,22 @@ describe('BrowseControls', () => {
     expect(onToggleFilters).toHaveBeenCalledTimes(1);
     expect(onClearSearchQuery).toHaveBeenCalledTimes(1);
   });
+
+  it('notifies the parent when the search field is activated', () => {
+    jest.useFakeTimers();
+    const onActivateSearch = jest.fn();
+
+    const { unmount } = render(<BrowseControls {...createProps({ onActivateSearch })} />);
+
+    const searchInput = screen.getByTestId('browse-search-input');
+    fireEvent(searchInput, 'pressIn');
+
+    expect(onActivateSearch).toHaveBeenCalledTimes(1);
+
+    unmount();
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
+    jest.useRealTimers();
+  });
 });

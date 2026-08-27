@@ -4664,6 +4664,7 @@ function AppScreen() {
   }
 
   function handleToggleBrowseFilters() {
+    setCurrentHappyHoursMenuExpanded(false);
     invalidateMapResultsCardTransitions();
     setBrowseFiltersExpanded((current) => !current);
   }
@@ -4684,6 +4685,7 @@ function AppScreen() {
     }
 
     stopMapMarkersTrackViewChanges();
+    setCurrentHappyHoursMenuExpanded(false);
     setSelectedMapPlaceKey(null);
     setSelectedMapSearchResultKey(null);
     setSelectedMapSearchPreviewPlace(null);
@@ -4693,6 +4695,7 @@ function AppScreen() {
   function handleClearSearchQuery() {
     animateNextLayout();
     stopMapMarkersTrackViewChanges();
+    setCurrentHappyHoursMenuExpanded(false);
     pendingImmediateMapPinsRefreshRef.current = true;
     invalidateMapResultsCardTransitions();
     clearAutoFitMapRegionTimer();
@@ -8047,6 +8050,7 @@ function AppScreen() {
                   informalBusinessesOnly={informalBusinessesOnly}
                   isDarkMapMode={darkMapMode}
                   listModeEnabled={!showsGuestBrowseControls}
+                  onActivateSearch={() => setCurrentHappyHoursMenuExpanded(false)}
                   onChangeSearchQuery={handleChangeSearchQuery}
                   onClearSearchQuery={handleClearSearchQuery}
                   onBrowseModeChange={handleBrowseModeChange}
@@ -8152,7 +8156,7 @@ function AppScreen() {
                           </View>
                         )}
                       </Animated.View>
-                    ) : showMapResultsCard && !currentHappyHoursMenuExpanded && currentHappyHourPlaces.length === 0 ? (
+                    ) : showMapResultsCard && !currentHappyHoursMenuExpanded ? (
                       <Animated.View style={{ opacity: mapResultsOpacity }}>
                         <Animated.View style={[styles.mapResultsCard, { maxHeight: mapResultsCardAnimatedMaxHeight }]}>
                           <View style={styles.mapResultsHeader}>

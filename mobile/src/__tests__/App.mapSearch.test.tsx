@@ -1539,6 +1539,25 @@ describe('App browse map search', () => {
     );
   });
 
+  it('shows map search results while current happy hours are available', async () => {
+    mockFetchCurrentHappyHourPlaces.mockResolvedValue({
+      observed_at: '2026-08-26T15:00:00-07:00',
+      places: [currentHappyHourPlace],
+    });
+
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+    expect(await screen.findByTestId('current-happy-hours-toggle')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('current-happy-hours-toggle'));
+    fireEvent.changeText(screen.getByTestId('browse-search-input'), 'ba');
+
+    expect(await screen.findByText('Best matches')).toBeTruthy();
+    expect(screen.getAllByText('Baskin-Robbins').length).toBeGreaterThanOrEqual(2);
+  });
+
   it('shows the same current happy hours menu on the authenticated map', async () => {
     mockFetchCurrentHappyHourPlaces.mockResolvedValue({
       observed_at: '2026-08-26T15:00:00-07:00',

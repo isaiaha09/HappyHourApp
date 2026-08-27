@@ -32,6 +32,7 @@ export type BrowseControlsProps = {
   informalBusinessesOnly: boolean;
   isDarkMapMode?: boolean;
   listModeEnabled?: boolean;
+  onActivateSearch?: () => void;
   onChangeSearchQuery: (value: string) => void;
   onClearSearchQuery: () => void;
   onBrowseModeChange: (mode: BrowseMode) => void;
@@ -69,6 +70,7 @@ export function BrowseControls({
   informalBusinessesOnly,
   isDarkMapMode = false,
   listModeEnabled = true,
+  onActivateSearch,
   onChangeSearchQuery,
   onClearSearchQuery,
   onBrowseModeChange,
@@ -275,6 +277,7 @@ export function BrowseControls({
             accessibilityLabel="Browse search"
             keyboardAppearance={isDarkMapMode ? 'dark' : 'light'}
             onChangeText={onChangeSearchQuery}
+            onPressIn={() => onActivateSearch?.()}
             placeholderTextColor="#7f8597"
             placeholder="Search restaurants, bars, cafes, etc."
             style={styles.searchInput}

@@ -209,7 +209,7 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
   let expandedSheetHeight: CGFloat
 
   private var collapsedSheetHeight: CGFloat {
-    max(bottomOffset + 68, 148)
+    max(bottomOffset + 52, 132)
   }
   private var sheetTravel: CGFloat {
     max(expandedSheetHeight - collapsedSheetHeight, 1)
