@@ -473,7 +473,7 @@ struct DiningDealzShareComposerView: View {
     let startTime = diningDealzPlanner24HourTime(from: selectedStartTime, timeZone: context.timeZone)
     let endTime = diningDealzPlanner24HourTime(from: selectedEndTime, timeZone: context.timeZone)
 
-    DiningDealzNativeShareSelection(
+    return DiningDealzNativeShareSelection(
       mode: mode,
       date: mode == "my-time" ? date : nil,
       startTime: mode == "my-time" ? startTime : nil,
