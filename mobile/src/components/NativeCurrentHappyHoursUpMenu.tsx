@@ -76,11 +76,16 @@ export function isNativeIOSCurrentHappyHoursUpMenuAvailable() {
   return hasNativeCurrentHappyHoursViewManager();
 }
 
-function getNativeCurrentHappyHoursUpMenuStyle(bottomOffset: number, expanded: boolean, expandedSheetHeight: number): StyleProp<ViewStyle> {
+function getNativeCurrentHappyHoursUpMenuStyle(
+  bottomInset: number,
+  bottomOffset: number,
+  expanded: boolean,
+  expandedSheetHeight: number,
+): StyleProp<ViewStyle> {
   const reservedHeight = expanded ? expandedSheetHeight : Math.max(bottomOffset + 52, 132);
 
   return {
-    bottom: 0,
+    bottom: -Math.max(bottomInset, 0),
     height: reservedHeight,
     left: 0,
     position: 'absolute',
@@ -91,6 +96,7 @@ function getNativeCurrentHappyHoursUpMenuStyle(bottomOffset: number, expanded: b
 
 export function NativeIOSCurrentHappyHoursUpMenu({
   bottomOffset,
+  bottomInset = 0,
   expanded,
   onSelectPlace,
   onFavoritePlace,
@@ -117,7 +123,7 @@ export function NativeIOSCurrentHappyHoursUpMenu({
       onMenuToggle={() => onToggle()}
       onPlaceSelect={(event) => onSelectPlace(event.nativeEvent)}
       places={places}
-      style={getNativeCurrentHappyHoursUpMenuStyle(bottomOffset, expanded, expandedSheetHeight)}
+      style={getNativeCurrentHappyHoursUpMenuStyle(bottomInset, bottomOffset, expanded, expandedSheetHeight)}
       theme={theme}
       userLatitude={userCoordinates?.latitude ?? null}
       userLongitude={userCoordinates?.longitude ?? null}

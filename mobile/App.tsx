@@ -8306,6 +8306,7 @@ function AppScreen() {
             {showMapBrowse ? (
               <CurrentHappyHoursUpMenu
                 bottomOffset={mapOverlayBottomPadding}
+                bottomInset={insets.bottom}
                 expanded={currentHappyHoursMenuExpanded}
                 onFavoritePlace={handleToggleCurrentHappyHourFavorite}
                 onSelectPlace={handleSelectPlace}
