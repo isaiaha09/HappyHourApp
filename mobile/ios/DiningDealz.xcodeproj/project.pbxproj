@@ -27,6 +27,11 @@
 		E6A1C00D3F5D99D000000001 /* DiningDealzCurrentHappyHoursUpMenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A1C00C3F5D99D000000001 /* DiningDealzCurrentHappyHoursUpMenuView.swift */; };
 		E6A1C00F3F5D99D000000001 /* DiningDealzCurrentHappyHoursUpMenuViewManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A1C00E3F5D99D000000001 /* DiningDealzCurrentHappyHoursUpMenuViewManager.swift */; };
 		E6A1C0113F5D99D000000001 /* DiningDealzCurrentHappyHoursUpMenuViewManager.m in Sources */ = {isa = PBXBuildFile; fileRef = E6A1C0103F5D99D000000001 /* DiningDealzCurrentHappyHoursUpMenuViewManager.m */; };
+		E6A1C0123F5D99D000000001 /* DiningDealzExternalPlannerViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A1C0133F5D99D000000001 /* DiningDealzExternalPlannerViews.swift */; };
+		E6A1C0143F5D99D000000001 /* DiningDealzExternalPlannerBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A1C0153F5D99D000000001 /* DiningDealzExternalPlannerBridge.swift */; };
+		E6A1C0163F5D99D000000001 /* DiningDealzExternalPlannerBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = E6A1C0173F5D99D000000001 /* DiningDealzExternalPlannerBridge.m */; };
+		E6A1C0183F5D99D000000001 /* EventKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E6A1C01A3F5D99D000000001 /* EventKit.framework */; };
+		E6A1C0193F5D99D000000001 /* EventKitUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E6A1C01B3F5D99D000000001 /* EventKitUI.framework */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
@@ -55,6 +60,11 @@
 		E6A1C00C3F5D99D000000001 /* DiningDealzCurrentHappyHoursUpMenuView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiningDealzCurrentHappyHoursUpMenuView.swift; sourceTree = "<group>"; };
 		E6A1C00E3F5D99D000000001 /* DiningDealzCurrentHappyHoursUpMenuViewManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiningDealzCurrentHappyHoursUpMenuViewManager.swift; sourceTree = "<group>"; };
 		E6A1C0103F5D99D000000001 /* DiningDealzCurrentHappyHoursUpMenuViewManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = DiningDealzCurrentHappyHoursUpMenuViewManager.m; sourceTree = "<group>"; };
+		E6A1C0133F5D99D000000001 /* DiningDealzExternalPlannerViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiningDealzExternalPlannerViews.swift; sourceTree = "<group>"; };
+		E6A1C0153F5D99D000000001 /* DiningDealzExternalPlannerBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiningDealzExternalPlannerBridge.swift; sourceTree = "<group>"; };
+		E6A1C0173F5D99D000000001 /* DiningDealzExternalPlannerBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = DiningDealzExternalPlannerBridge.m; sourceTree = "<group>"; };
+		E6A1C01A3F5D99D000000001 /* EventKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = EventKit.framework; path = System/Library/Frameworks/EventKit.framework; sourceTree = SDKROOT; };
+		E6A1C01B3F5D99D000000001 /* EventKitUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = EventKitUI.framework; path = System/Library/Frameworks/EventKitUI.framework; sourceTree = SDKROOT; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = DiningDealz/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* DiningDealz-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "DiningDealz-Bridging-Header.h"; path = "DiningDealz/DiningDealz-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -65,6 +75,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E6A1C0183F5D99D000000001 /* EventKit.framework in Frameworks */,
+				E6A1C0193F5D99D000000001 /* EventKitUI.framework in Frameworks */,
 				C0CFB7BC7F32716731521BEC /* libPods-DiningDealz.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -79,6 +91,9 @@
 				E6A1C00C3F5D99D000000001 /* DiningDealzCurrentHappyHoursUpMenuView.swift */,
 				E6A1C00E3F5D99D000000001 /* DiningDealzCurrentHappyHoursUpMenuViewManager.swift */,
 				E6A1C0103F5D99D000000001 /* DiningDealzCurrentHappyHoursUpMenuViewManager.m */,
+				E6A1C0133F5D99D000000001 /* DiningDealzExternalPlannerViews.swift */,
+				E6A1C0153F5D99D000000001 /* DiningDealzExternalPlannerBridge.swift */,
+				E6A1C0173F5D99D000000001 /* DiningDealzExternalPlannerBridge.m */,
 				40546DAF2FF5D99D000164D8 /* DiningDealzLiquidGlassBottomNavView.swift */,
 				40546DB02FF5D99D000164D8 /* DiningDealzLiquidGlassBottomNavViewManager.m */,
 				40546DB12FF5D99D000164D8 /* DiningDealzLiquidGlassBottomNavViewManager.swift */,
@@ -103,6 +118,8 @@
 		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				E6A1C01A3F5D99D000000001 /* EventKit.framework */,
+				E6A1C01B3F5D99D000000001 /* EventKitUI.framework */,
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
 				B725024709964B4B62A19279 /* libPods-DiningDealz.a */,
 			);
@@ -387,6 +404,9 @@
 				E6A1C00D3F5D99D000000001 /* DiningDealzCurrentHappyHoursUpMenuView.swift in Sources */,
 				E6A1C00F3F5D99D000000001 /* DiningDealzCurrentHappyHoursUpMenuViewManager.swift in Sources */,
 				E6A1C0113F5D99D000000001 /* DiningDealzCurrentHappyHoursUpMenuViewManager.m in Sources */,
+				E6A1C0123F5D99D000000001 /* DiningDealzExternalPlannerViews.swift in Sources */,
+				E6A1C0143F5D99D000000001 /* DiningDealzExternalPlannerBridge.swift in Sources */,
+				E6A1C0163F5D99D000000001 /* DiningDealzExternalPlannerBridge.m in Sources */,
 				D618DE88D4559DEB32EE00A2 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

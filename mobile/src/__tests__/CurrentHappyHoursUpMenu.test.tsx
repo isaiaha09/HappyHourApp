@@ -106,6 +106,30 @@ describe('CurrentHappyHoursUpMenu', () => {
     expect(onSelectPlace).not.toHaveBeenCalled();
   });
 
+  it('routes calendar and share actions with the selected current window', () => {
+    const onAddToCalendar = jest.fn();
+    const onSharePlace = jest.fn();
+
+    render(
+      <CurrentHappyHoursUpMenu
+        bottomOffset={96}
+        expanded
+        onAddToCalendar={onAddToCalendar}
+        onSelectPlace={jest.fn()}
+        onSharePlace={onSharePlace}
+        onToggle={jest.fn()}
+        places={[place]}
+        theme="dark"
+      />,
+    );
+
+    fireEvent.press(screen.getByTestId('current-happy-hours-calendar-example-bar:101'));
+    fireEvent.press(screen.getByTestId('current-happy-hours-share-example-bar:101'));
+
+    expect(onAddToCalendar).toHaveBeenCalledWith(place, place.happy_hours[0]);
+    expect(onSharePlace).toHaveBeenCalledWith(place, place.happy_hours[0]);
+  });
+
   it('shows both the total deal count and the number of businesses', () => {
     const threeDealPlace: CurrentHappyHourPlace = {
       ...place,

@@ -8,16 +8,18 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import type { CurrentHappyHourPlace } from '../types';
+import type { CurrentHappyHourPlace, CurrentHappyHourWindow } from '../types';
 import type { CurrentHappyHoursUpMenuProps } from './CurrentHappyHoursUpMenu';
 
 type NativeCurrentHappyHoursUpMenuProps = {
   bottomOffset: number;
   expanded: boolean;
   expandedSheetHeight: number;
+  onCalendarPress?: (event: NativeSyntheticEvent<{ locationId: number; slug: string; dealId?: number; happyHourWindow?: unknown }>) => void;
   onFavoritePress?: (event: NativeSyntheticEvent<{ locationId: number; slug: string }>) => void;
   onMenuToggle?: (event: NativeSyntheticEvent<{ expanded: boolean }>) => void;
   onPlaceSelect?: (event: NativeSyntheticEvent<{ locationId: number; slug: string }>) => void;
+  onSharePress?: (event: NativeSyntheticEvent<{ locationId: number; slug: string; dealId?: number; happyHourWindow?: unknown }>) => void;
   places: CurrentHappyHourPlace[];
   style?: StyleProp<ViewStyle>;
   theme: 'dark' | 'light';
@@ -98,6 +100,8 @@ export function NativeIOSCurrentHappyHoursUpMenu({
   expanded,
   onSelectPlace,
   onFavoritePlace,
+  onAddToCalendar,
+  onSharePlace,
   onToggle,
   places,
   theme,
@@ -112,14 +116,37 @@ export function NativeIOSCurrentHappyHoursUpMenu({
     640,
   );
 
+  const resolveNativePlace = (event: NativeSyntheticEvent<{ locationId: number; slug: string; dealId?: number; happyHourWindow?: unknown }>) => (
+    places.find((place) => place.slug === event.nativeEvent.slug && place.location_id === event.nativeEvent.locationId)
+  );
+
+  const resolveNativeWindow = (event: NativeSyntheticEvent<{ locationId: number; slug: string; dealId?: number; happyHourWindow?: unknown }>) => {
+    const nativeWindow = event.nativeEvent.happyHourWindow;
+    return nativeWindow && typeof nativeWindow === 'object'
+      ? nativeWindow as CurrentHappyHourWindow
+      : undefined;
+  };
+
   return (
     <NativeCurrentHappyHoursUpMenuView
       bottomOffset={bottomOffset}
       expanded={expanded}
       expandedSheetHeight={expandedSheetHeight}
+      onCalendarPress={onAddToCalendar ? (event) => {
+        const place = resolveNativePlace(event);
+        if (place) {
+          onAddToCalendar(place, resolveNativeWindow(event));
+        }
+      } : undefined}
       onFavoritePress={(event) => onFavoritePlace?.(event.nativeEvent)}
       onMenuToggle={() => onToggle()}
       onPlaceSelect={(event) => onSelectPlace(event.nativeEvent)}
+      onSharePress={onSharePlace ? (event) => {
+        const place = resolveNativePlace(event);
+        if (place) {
+          onSharePlace(place, resolveNativeWindow(event));
+        }
+      } : undefined}
       places={places}
       style={getNativeCurrentHappyHoursUpMenuStyle(bottomInset, expandedSheetHeight)}
       theme={theme}

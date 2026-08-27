@@ -18,6 +18,8 @@ final class DiningDealzCurrentHappyHoursUpMenuView: UIView {
   @objc var onMenuToggle: RCTDirectEventBlock?
   @objc var onPlaceSelect: RCTDirectEventBlock?
   @objc var onFavoritePress: RCTDirectEventBlock?
+  @objc var onCalendarPress: RCTDirectEventBlock?
+  @objc var onSharePress: RCTDirectEventBlock?
 
   @objc var places: NSArray = [] {
     didSet {
@@ -112,6 +114,12 @@ final class DiningDealzCurrentHappyHoursUpMenuView: UIView {
       },
       onFavorite: { [weak self] place in
         self?.handleFavoritePress(place)
+      },
+      onAddToCalendar: { [weak self] place, window in
+        self?.handleCalendarPress(place, window: window)
+      },
+      onShare: { [weak self] place, window in
+        self?.handleSharePress(place, window: window)
       }
     )
     let controller = UIHostingController(rootView: rootView)
@@ -192,6 +200,39 @@ final class DiningDealzCurrentHappyHoursUpMenuView: UIView {
       "slug": place.slug,
     ])
   }
+
+  private func handleCalendarPress(_ place: DiningDealzCurrentHappyHourPlace, window: DiningDealzCurrentHappyHourWindow?) {
+    onCalendarPress?(actionPayload(for: place, window: window))
+  }
+
+  private func handleSharePress(_ place: DiningDealzCurrentHappyHourPlace, window: DiningDealzCurrentHappyHourWindow?) {
+    onSharePress?(actionPayload(for: place, window: window))
+  }
+
+  private func actionPayload(for place: DiningDealzCurrentHappyHourPlace, window: DiningDealzCurrentHappyHourWindow?) -> [String: Any] {
+    var payload: [String: Any] = [
+      "locationId": place.locationID,
+      "slug": place.slug,
+    ]
+    if let dealID = window?.dealID {
+      payload["dealId"] = dealID
+    }
+    if let window {
+      var windowPayload: [String: Any] = [
+        "all_day": window.allDay,
+        "end_time": window.endTime,
+        "price_text": window.priceText,
+        "start_time": window.startTime,
+        "title": window.title,
+        "weekday_label": window.weekdayLabel,
+      ]
+      if let dealID = window.dealID {
+        windowPayload["deal_id"] = dealID
+      }
+      payload["happyHourWindow"] = windowPayload
+    }
+    return payload
+  }
 }
 
 private struct DiningDealzCurrentHappyHoursUpMenuBridgeContent: View {
@@ -199,6 +240,8 @@ private struct DiningDealzCurrentHappyHoursUpMenuBridgeContent: View {
   let onToggle: (Bool) -> Void
   let onSelect: (DiningDealzCurrentHappyHourPlace) -> Void
   let onFavorite: (DiningDealzCurrentHappyHourPlace) -> Void
+  let onAddToCalendar: (DiningDealzCurrentHappyHourPlace, DiningDealzCurrentHappyHourWindow?) -> Void
+  let onShare: (DiningDealzCurrentHappyHourPlace, DiningDealzCurrentHappyHourWindow?) -> Void
 
   var body: some View {
     DiningDealzCurrentHappyHoursUpMenu(
@@ -217,7 +260,9 @@ private struct DiningDealzCurrentHappyHoursUpMenuBridgeContent: View {
       userLongitude: state.userLongitude,
       expandedSheetHeight: state.expandedSheetHeight,
       onSelect: onSelect,
-      onFavorite: onFavorite
+      onFavorite: onFavorite,
+      onAddToCalendar: onAddToCalendar,
+      onShare: onShare
     )
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
     .ignoresSafeArea(.container, edges: .bottom)

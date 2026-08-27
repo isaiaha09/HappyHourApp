@@ -19,6 +19,8 @@
         "NSLocationAlwaysUsageDescription": "When you enable live location for an approved business, DiningDealz uses your location to keep that business pin updated while the app is closed.",
         "NSLocationWhenInUseUsageDescription": "DiningDealz uses your location to show nearby places and, when enabled for an approved business, update its live map location.",
         "NSPhotoLibraryUsageDescription": "DiningDealz uses photos you choose to add business profile images or attach images to messages.",
+        "NSCalendarsUsageDescription": "DiningDealz uses Calendar only to add the restaurant visit you request.",
+        "NSCalendarsFullAccessUsageDescription": "DiningDealz uses Calendar only to add the restaurant visit you request.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "requireFullScreen": true,
@@ -39,7 +41,20 @@
           "defaultChannel": "business-updates"
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "DiningDealz uses Calendar only to add the restaurant visit you request."
+        }
+      ],
+      [
+        "react-native-share",
+        {
+          "android": [],
+          "ios": []
+        }
+      ]
     ],
     "web": {
       "favicon": "./assets/DiningDealz-Icon.png"

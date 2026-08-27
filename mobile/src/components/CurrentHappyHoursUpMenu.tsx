@@ -153,6 +153,8 @@ export type CurrentHappyHoursUpMenuProps = {
   onToggle: () => void;
   onSelectPlace: (place: { slug: string; locationId: number }) => void;
   onFavoritePlace?: (place: { slug: string; locationId: number }) => void;
+  onAddToCalendar?: (place: CurrentHappyHourPlace, window?: CurrentHappyHourWindow) => void;
+  onSharePlace?: (place: CurrentHappyHourPlace, window?: CurrentHappyHourWindow) => void;
   bottomOffset: number;
   bottomInset?: number;
   theme: 'dark' | 'light';
@@ -181,6 +183,8 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
   onToggle,
   onSelectPlace,
   onFavoritePlace,
+  onAddToCalendar,
+  onSharePlace,
   bottomOffset,
   bottomInset = 0,
   theme,
@@ -433,6 +437,8 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
                     isDark={isDark}
                     key={`${place.slug}:${place.location_id}`}
                     onFavorite={() => onFavoritePlace?.({ locationId: place.location_id, slug: place.slug })}
+                    onAddToCalendar={() => onAddToCalendar?.(place, place.happy_hours[0])}
+                    onShare={() => onSharePlace?.(place, place.happy_hours[0])}
                     onSelect={() => onSelectPlace({ locationId: place.location_id, slug: place.slug })}
                     place={place}
                     userCoordinates={userCoordinates}
@@ -450,12 +456,14 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
 type CurrentHappyHoursDealCardProps = {
   isDark: boolean;
   onFavorite: () => void;
+  onAddToCalendar: () => void;
+  onShare: () => void;
   onSelect: () => void;
   place: CurrentHappyHourPlace;
   userCoordinates?: CurrentHappyHoursUserCoordinates | null;
 };
 
-function CurrentHappyHoursDealCard({ isDark, onFavorite, onSelect, place, userCoordinates }: CurrentHappyHoursDealCardProps) {
+function CurrentHappyHoursDealCard({ isDark, onAddToCalendar, onFavorite, onSelect, onShare, place, userCoordinates }: CurrentHappyHoursDealCardProps) {
   const imageUrl = getCardImageUrl(place);
   const [imageLoadFailed, setImageLoadFailed] = useState(false);
   const distanceLabel = getDistanceLabel(userCoordinates, place);
@@ -515,6 +523,28 @@ function CurrentHappyHoursDealCard({ isDark, onFavorite, onSelect, place, userCo
             </View>
           </View>
         </View>
+      </Pressable>
+
+      <Pressable
+        accessibilityLabel={`Add ${place.name} to Calendar`}
+        accessibilityRole="button"
+        hitSlop={8}
+        onPress={onAddToCalendar}
+        style={styles.currentHappyHoursDealCalendar}
+        testID={`current-happy-hours-calendar-${place.slug}:${place.location_id}`}
+      >
+        <Ionicons color="#1e211f" name="calendar-outline" size={16} />
+      </Pressable>
+
+      <Pressable
+        accessibilityLabel={`Share ${place.name}`}
+        accessibilityRole="button"
+        hitSlop={8}
+        onPress={onShare}
+        style={styles.currentHappyHoursDealShare}
+        testID={`current-happy-hours-share-${place.slug}:${place.location_id}`}
+      >
+        <Ionicons color="#1e211f" name="share-social-outline" size={16} />
       </Pressable>
 
       <Pressable

@@ -1,4 +1,4 @@
-import { memo, startTransition, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { memo, startTransition, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -28,6 +28,7 @@ import {
 import { GestureHandlerRootView, PanGestureHandler, State } from 'react-native-gesture-handler';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker, type Region } from 'react-native-maps';
+import type { ViewShotRef } from 'react-native-view-shot';
 
 import {
   beginTwoFactorSetup,
@@ -102,6 +103,7 @@ import { AccountSettingsScreen, BlockedDirectMessageCustomersScreen, BusinessPro
 import { BrowseControls } from './src/screens/BrowseControls';
 import { GuestShellChrome } from './src/components/GuestShellChrome';
 import { CurrentHappyHoursUpMenu } from './src/components/CurrentHappyHoursUpMenu';
+import { ExternalPlannerModal } from './src/components/ExternalPlannerModal';
 import { NativeIOSLiquidGlassBottomNav, NativeIOSLiquidGlassHeaderButton, isNativeIOSLiquidGlassBottomNavAvailable, isNativeIOSLiquidGlassHeaderButtonAvailable, isSupportedIOSLiquidGlassRuntime } from './src/components/NativeIOSLiquidGlass';
 import { PhotoLightbox } from './src/components/PhotoLightbox';
 import { VenueMarkerVisual } from './src/components/VenueMarkerVisual';
@@ -147,6 +149,20 @@ import {
   normalizeSearchText,
 } from './src/placeHelpers';
 import { clearPersistedPlaceCache, loadPersistedPlaceCache, persistPlaceCache } from './src/placeCache';
+import {
+  createPlannerContextFromCurrentPlace,
+  createPlannerContextFromPlace,
+  type CalendarEventDraft,
+  type PlannerPlaceContext,
+  type RestaurantShareSelection,
+} from './src/externalPlanner';
+import {
+  isNativeIOSExternalPlannerAvailable,
+  openExternalCalendarEvent,
+  openExternalShare,
+  presentNativeIOSCalendarComposer,
+  presentNativeIOSShareComposer,
+} from './src/externalPlannerAdapters';
 import type {
   BusinessAttachmentBuckets,
   BusinessAttachmentDraft,
@@ -157,6 +173,7 @@ import type {
   BusinessSignupRequest,
   CustomerSignupRequest,
   CurrentHappyHourPlace,
+  CurrentHappyHourWindow,
   Deal,
   EmailVerificationChallengeResponse,
   HappyHourWindow,
@@ -285,6 +302,11 @@ type MappedPlace = MapPreviewPlace & {
   markerLatitude: number;
   markerLongitude: number;
   markerKey: string;
+};
+
+type ExternalPlannerAction = {
+  context: PlannerPlaceContext;
+  mode: 'calendar' | 'share';
 };
 
 function extractNotificationPortal(data: unknown): AuthPortal | null {
@@ -724,6 +746,10 @@ function AppScreen() {
   const [networkRefreshPending, setNetworkRefreshPending] = useState(false);
   const [currentHappyHourPlaces, setCurrentHappyHourPlaces] = useState<CurrentHappyHourPlace[]>([]);
   const [currentHappyHoursMenuExpanded, setCurrentHappyHoursMenuExpanded] = useState(false);
+  const [externalPlannerAction, setExternalPlannerAction] = useState<ExternalPlannerAction | null>(null);
+  const [externalPlannerError, setExternalPlannerError] = useState<string | null>(null);
+  const [showExternalPlannerAccountPrompt, setShowExternalPlannerAccountPrompt] = useState(false);
+  const pendingExternalPlannerActionRef = useRef<ExternalPlannerAction | null>(null);
   const [showMapResultsCard, setShowMapResultsCard] = useState(false);
   const [mapResultsCollapsed, setMapResultsCollapsed] = useState(false);
   const [renderedMapSearchResults, setRenderedMapSearchResults] = useState<MapSearchResultPlace[]>([]);
@@ -3848,6 +3874,11 @@ function AppScreen() {
   }
 
   function startLogoutTransition(options?: { preserveBusinessTracking?: boolean }) {
+    pendingExternalPlannerActionRef.current = null;
+    setExternalPlannerAction(null);
+    setExternalPlannerError(null);
+    setShowExternalPlannerAccountPrompt(false);
+
     const preserveBusinessTracking = options?.preserveBusinessTracking ?? true;
     if (!authenticatedSession) {
       setGuestBrowseModeLocked(false);
@@ -4580,6 +4611,121 @@ function AppScreen() {
     setCurrentHappyHoursMenuExpanded((current) => !current);
   }, []);
 
+  function openExternalPlannerAction(action: ExternalPlannerAction) {
+    setExternalPlannerError(null);
+
+    if (Platform.OS === 'ios' && isNativeIOSExternalPlannerAvailable()) {
+      const openNativeComposer = action.mode === 'calendar'
+        ? presentNativeIOSCalendarComposer
+        : presentNativeIOSShareComposer;
+      void openNativeComposer(action.context).catch((error) => {
+        setExternalPlannerError(error instanceof Error ? error.message : 'Unable to open this feature right now.');
+        setExternalPlannerAction(action);
+      });
+      return;
+    }
+
+    setExternalPlannerAction(action);
+  }
+
+  function requestExternalPlannerAction(action: ExternalPlannerAction) {
+    dismissKeyboardForScreenTransition();
+    setCurrentHappyHoursMenuExpanded(false);
+
+    if (!authenticatedSession?.auth_token || authenticatedSession.portal !== 'customer') {
+      pendingExternalPlannerActionRef.current = action;
+      setShowExternalPlannerAccountPrompt(true);
+      return;
+    }
+
+    openExternalPlannerAction(action);
+  }
+
+  function buildSelectedPlacePlannerAction(mode: ExternalPlannerAction['mode'], deal?: Deal): ExternalPlannerAction | null {
+    if (!selectedPlace) {
+      return null;
+    }
+
+    const contextPlace = selectedPlaceLocation ?? selectedPlace;
+    const selectedSchedule = deal?.happy_hours[0];
+    return {
+      context: createPlannerContextFromPlace(contextPlace, deal, selectedSchedule),
+      mode,
+    };
+  }
+
+  function buildCurrentHappyHourPlannerAction(
+    mode: ExternalPlannerAction['mode'],
+    place: CurrentHappyHourPlace,
+    window?: CurrentHappyHourWindow,
+  ): ExternalPlannerAction {
+    return {
+      context: createPlannerContextFromCurrentPlace(place, window),
+      mode,
+    };
+  }
+
+  async function handleExternalCalendarSubmit(draft: CalendarEventDraft) {
+    try {
+      await openExternalCalendarEvent(draft);
+      setExternalPlannerAction(null);
+      setExternalPlannerError(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to open the calendar editor.';
+      setExternalPlannerError(message);
+      throw new Error(message);
+    }
+  }
+
+  async function handleExternalShareSubmit(selection: RestaurantShareSelection, cardRef: RefObject<ViewShotRef | null>) {
+    if (!externalPlannerAction) {
+      return;
+    }
+
+    try {
+      await openExternalShare(externalPlannerAction.context, selection, cardRef);
+      setExternalPlannerAction(null);
+      setExternalPlannerError(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to open the share sheet.';
+      setExternalPlannerError(message);
+      throw new Error(message);
+    }
+  }
+
+  useEffect(() => {
+    const pendingAction = pendingExternalPlannerActionRef.current;
+    if (
+      !pendingAction
+      || !authenticatedSession?.auth_token
+      || authenticatedSession.portal !== 'customer'
+      || showLoginSuccessTransition
+    ) {
+      return;
+    }
+
+    pendingExternalPlannerActionRef.current = null;
+    setShowExternalPlannerAccountPrompt(false);
+
+    const resumeComposer = () => {
+      requestAnimationFrame(() => {
+        openExternalPlannerAction(pendingAction);
+      });
+    };
+
+    if (screenMode === 'browse') {
+      resumeComposer();
+      return;
+    }
+
+    if (screenMode === 'profiles' || screenMode === 'customer-preferences' || screenMode === 'favorite-businesses' || screenMode === 'business-notifications' || screenMode === 'settings' || screenMode === 'support' || screenMode === 'terms-of-service' || screenMode === 'privacy-policy' || screenMode === 'direct-messages') {
+      navigateBrowseProfileTransition('browse', undefined, resumeComposer);
+      return;
+    }
+
+    navigateScreen('browse', 'backward', undefined, resumeComposer);
+  }, [authenticatedSession?.auth_token, authenticatedSession?.portal, screenMode, showLoginSuccessTransition]);
+
   function handleToggleVenueType(venueType: VenueFilterValue) {
     setSelectedVenueTypes((current) => {
       const next = current.includes(venueType)
@@ -5138,6 +5284,10 @@ function AppScreen() {
 
   function handleBackToLanding() {
     dismissKeyboardForScreenTransition();
+    pendingExternalPlannerActionRef.current = null;
+    setExternalPlannerAction(null);
+    setExternalPlannerError(null);
+    setShowExternalPlannerAccountPrompt(false);
     setShowGuestFavoritePrompt(false);
     setShowGuestFavoriteBusinessesFilterPrompt(false);
     setShowGuestBusinessClaimPrompt(false);
@@ -5225,6 +5375,21 @@ function AppScreen() {
     setShowGuestBottomNavPrompt(false);
   }
 
+  function handleDismissExternalPlannerAccountPrompt() {
+    setShowExternalPlannerAccountPrompt(false);
+    pendingExternalPlannerActionRef.current = null;
+  }
+
+  function handleCreateCustomerAccountForExternalPlanner() {
+    setShowExternalPlannerAccountPrompt(false);
+    handleOpenProfiles();
+  }
+
+  function handleLogInForExternalPlanner() {
+    setShowExternalPlannerAccountPrompt(false);
+    handleOpenAuthFromLanding('customer');
+  }
+
   function handleCreateCustomerAccountFromGuestBottomNav() {
     setShowGuestBottomNavPrompt(false);
     setSelectedPlaceSlug(null);
@@ -5267,6 +5432,12 @@ function AppScreen() {
 
   function handleBackFromProfiles() {
     dismissKeyboardForScreenTransition();
+    if (!authenticatedSession) {
+      pendingExternalPlannerActionRef.current = null;
+      setExternalPlannerAction(null);
+      setExternalPlannerError(null);
+      setShowExternalPlannerAccountPrompt(false);
+    }
     if (authenticatedSession) {
       navigateBrowseProfileTransition('browse');
       return;
@@ -7408,9 +7579,21 @@ function AppScreen() {
           isFavorited={selectedPlaceIsFavorited}
           liveLocationOverride={selectedPlaceLiveLocationOverride}
           onBack={handleBackToBrowse}
+          onAddToCalendar={(deal) => {
+            const action = buildSelectedPlacePlannerAction('calendar', deal);
+            if (action) {
+              requestExternalPlannerAction(action);
+            }
+          }}
           onClaimBusiness={handleOpenBusinessClaimFromPlaceDetail}
           onEditBusinessProfile={handleOpenBusinessProfileEditor}
           onOpenDirectMessages={openDirectMessagesScreen}
+          onSharePlace={(deal) => {
+            const action = buildSelectedPlacePlannerAction('share', deal);
+            if (action) {
+              requestExternalPlannerAction(action);
+            }
+          }}
           onRequireContentReportAccount={() => setShowGuestAccuracyPrompt(true)}
           onRequirePlaceAccuracyAccount={() => setShowGuestAccuracyPrompt(true)}
           onSelectLocation={setSelectedLocationId}
@@ -8338,8 +8521,10 @@ function AppScreen() {
                 bottomOffset={mapOverlayBottomPadding}
                 bottomInset={insets.bottom}
                 expanded={currentHappyHoursMenuExpanded}
+                onAddToCalendar={(place, window) => requestExternalPlannerAction(buildCurrentHappyHourPlannerAction('calendar', place, window))}
                 onFavoritePlace={handleToggleCurrentHappyHourFavorite}
                 onSelectPlace={handleSelectPlace}
+                onSharePlace={(place, window) => requestExternalPlannerAction(buildCurrentHappyHourPlannerAction('share', place, window))}
                 onToggle={handleToggleCurrentHappyHoursMenu}
                 places={currentHappyHourPlaces}
                 theme={displayedDarkMapMode ? 'dark' : 'light'}
@@ -8525,6 +8710,47 @@ function AppScreen() {
             : undefined,
         })
       ) : shouldRenderPersistentBottomNav ? renderBottomNav({ guest: true }) : null}
+      <ExternalPlannerModal
+        context={externalPlannerAction?.context ?? null}
+        errorMessage={externalPlannerError}
+        mode={externalPlannerAction?.mode ?? 'calendar'}
+        onCalendarSubmit={handleExternalCalendarSubmit}
+        onClose={() => {
+          setExternalPlannerAction(null);
+          setExternalPlannerError(null);
+        }}
+        onShareSubmit={handleExternalShareSubmit}
+        visible={externalPlannerAction !== null}
+      />
+      <Modal
+        animationType="fade"
+        onRequestClose={handleDismissExternalPlannerAccountPrompt}
+        transparent
+        visible={showExternalPlannerAccountPrompt}
+      >
+        <View style={styles.guestFavoriteModalBackdrop}>
+          <View style={styles.guestFavoriteModalCard}>
+            <Pressable accessibilityLabel="Close calendar and share account prompt" onPress={handleDismissExternalPlannerAccountPrompt} style={styles.guestBottomNavCloseButton}>
+              <Text style={styles.guestBottomNavCloseButtonText}>X</Text>
+            </Pressable>
+            <Text style={styles.guestFavoriteModalTitle}>Create a customer account to use Calendar and Share</Text>
+            <Text style={styles.guestFavoriteModalText}>
+              Create an account or log in before adding a restaurant visit to your device calendar or sharing it with a friend.
+            </Text>
+            <View style={styles.guestFavoriteModalActions}>
+              <Pressable onPress={handleDismissExternalPlannerAccountPrompt} style={styles.guestFavoriteModalSecondaryButton}>
+                <Text style={styles.guestFavoriteModalSecondaryText}>Cancel</Text>
+              </Pressable>
+              <Pressable onPress={handleLogInForExternalPlanner} style={styles.guestFavoriteModalSecondaryButton}>
+                <Text style={styles.guestFavoriteModalSecondaryText}>Log In</Text>
+              </Pressable>
+              <Pressable onPress={handleCreateCustomerAccountForExternalPlanner} style={styles.guestFavoriteModalPrimaryButton}>
+                <Text style={styles.guestFavoriteModalPrimaryText}>Create customer account</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
       <Modal
         animationType="none"
         onRequestClose={() => closeBottomMoreSheet()}

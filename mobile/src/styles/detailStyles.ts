@@ -517,6 +517,22 @@ export const detailStyles = {
     justifyContent: 'space-between',
     gap: 12,
   },
+  dealHeaderActions: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexShrink: 0,
+    gap: 6,
+  },
+  dealActionButton: {
+    alignItems: 'center',
+    backgroundColor: theme.bgElevated,
+    borderColor: theme.border,
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
+  },
   dealTitle: {
     color: theme.textPrimary,
     flex: 1,

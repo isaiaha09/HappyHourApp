@@ -204,6 +204,8 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
   let theme: DiningDealzCurrentHappyHoursTheme
   let onSelect: (DiningDealzCurrentHappyHourPlace) -> Void
   let onFavorite: (DiningDealzCurrentHappyHourPlace) -> Void
+  let onAddToCalendar: (DiningDealzCurrentHappyHourPlace, DiningDealzCurrentHappyHourWindow?) -> Void
+  let onShare: (DiningDealzCurrentHappyHourPlace, DiningDealzCurrentHappyHourWindow?) -> Void
   let userLatitude: Double?
   let userLongitude: Double?
   let expandedSheetHeight: CGFloat
@@ -227,7 +229,9 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
     userLongitude: Double? = nil,
     expandedSheetHeight: CGFloat = 620,
     onSelect: @escaping (DiningDealzCurrentHappyHourPlace) -> Void,
-    onFavorite: @escaping (DiningDealzCurrentHappyHourPlace) -> Void
+    onFavorite: @escaping (DiningDealzCurrentHappyHourPlace) -> Void,
+    onAddToCalendar: @escaping (DiningDealzCurrentHappyHourPlace, DiningDealzCurrentHappyHourWindow?) -> Void,
+    onShare: @escaping (DiningDealzCurrentHappyHourPlace, DiningDealzCurrentHappyHourWindow?) -> Void
   ) {
     self.places = places
     self._isExpanded = isExpanded
@@ -238,6 +242,8 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
     self.expandedSheetHeight = expandedSheetHeight
     self.onSelect = onSelect
     self.onFavorite = onFavorite
+    self.onAddToCalendar = onAddToCalendar
+    self.onShare = onShare
   }
 
   private var dealCount: Int {
@@ -414,7 +420,9 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
             userLatitude: userLatitude,
             userLongitude: userLongitude,
             onFavorite: onFavorite,
-            onSelect: onSelect
+            onSelect: onSelect,
+            onAddToCalendar: onAddToCalendar,
+            onShare: onShare
           )
         }
       }
@@ -479,6 +487,8 @@ private struct DiningDealzCurrentHappyHoursUpMenuCard: View {
   let userLongitude: Double?
   let onFavorite: (DiningDealzCurrentHappyHourPlace) -> Void
   let onSelect: (DiningDealzCurrentHappyHourPlace) -> Void
+  let onAddToCalendar: (DiningDealzCurrentHappyHourPlace, DiningDealzCurrentHappyHourWindow?) -> Void
+  let onShare: (DiningDealzCurrentHappyHourPlace, DiningDealzCurrentHappyHourWindow?) -> Void
 
   private var secondaryLabel: String {
     [place.cityLabel, place.venueTypeLabel]
@@ -519,19 +529,45 @@ private struct DiningDealzCurrentHappyHoursUpMenuCard: View {
       .buttonStyle(.plain)
       .frame(maxWidth: .infinity, alignment: .leading)
 
-      Button(action: {
-        onFavorite(place)
-      }) {
-        Image(systemName: "heart")
-          .font(.system(size: 14, weight: .bold))
-          .foregroundStyle(Color(red: 0.12, green: 0.14, blue: 0.13))
-          .frame(width: 28, height: 28)
-          .background(Color.white, in: Circle())
+      HStack(spacing: 6) {
+        Button(action: {
+          onAddToCalendar(place, place.happyHours.first)
+        }) {
+          Image(systemName: "calendar")
+            .font(.system(size: 13, weight: .bold))
+            .foregroundStyle(Color(red: 0.12, green: 0.14, blue: 0.13))
+            .frame(width: 28, height: 28)
+            .background(Color.white, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Add \(place.name) to Calendar")
+
+        Button(action: {
+          onShare(place, place.happyHours.first)
+        }) {
+          Image(systemName: "square.and.arrow.up")
+            .font(.system(size: 13, weight: .bold))
+            .foregroundStyle(Color(red: 0.12, green: 0.14, blue: 0.13))
+            .frame(width: 28, height: 28)
+            .background(Color.white, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Share \(place.name)")
+
+        Button(action: {
+          onFavorite(place)
+        }) {
+          Image(systemName: "heart")
+            .font(.system(size: 14, weight: .bold))
+            .foregroundStyle(Color(red: 0.12, green: 0.14, blue: 0.13))
+            .frame(width: 28, height: 28)
+            .background(Color.white, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Favorite \(place.name)")
       }
-      .buttonStyle(.plain)
       .padding(.top, 9)
       .padding(.trailing, 10)
-      .accessibilityLabel("Favorite \(place.name)")
     }
     .background(theme.cardBackground)
     .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))

@@ -151,6 +151,8 @@ export type PlaceDetailScreenProps = {
   canSubmitContentReport?: boolean;
   distanceLabel?: string | null;
   onOpenDirectMessages?: () => void;
+  onAddToCalendar?: (deal?: Deal) => void;
+  onSharePlace?: (deal?: Deal) => void;
   onEditBusinessProfile?: () => void;
   onClaimBusiness?: () => void;
   onRequirePlaceAccuracyAccount?: () => void;
@@ -187,6 +189,8 @@ export function PlaceDetailScreen({
   canSubmitPlaceAccuracyReport = true,
   distanceLabel = null,
   onOpenDirectMessages,
+  onAddToCalendar,
+  onSharePlace,
   onEditBusinessProfile,
   onClaimBusiness,
   onRequirePlaceAccuracyAccount,
@@ -478,6 +482,16 @@ export function PlaceDetailScreen({
           <View style={[styles.detailCard, isLandscape ? styles.detailCardLandscape : null]}>
             <View style={styles.detailHeaderRow}>
               <View style={styles.detailHeaderActions}>
+                {onAddToCalendar ? (
+                  <Pressable accessibilityLabel={`Add ${selectedPlace.name} to Calendar`} onPress={() => onAddToCalendar()} style={styles.contentReportButton}>
+                    <Ionicons color={theme.accentStrong} name="calendar-outline" size={22} />
+                  </Pressable>
+                ) : null}
+                {onSharePlace ? (
+                  <Pressable accessibilityLabel={`Share ${selectedPlace.name}`} onPress={() => onSharePlace()} style={styles.contentReportButton}>
+                    <Ionicons color={theme.accentStrong} name="share-social-outline" size={22} />
+                  </Pressable>
+                ) : null}
                 {showStarredBadge ? (
                   <View accessibilityLabel="Starred business" style={styles.starredBusinessBadge}>
                     <Text style={styles.starredBusinessBadgeIcon}>★</Text>
@@ -548,8 +562,28 @@ export function PlaceDetailScreen({
                   ) : null}
                   <View style={styles.dealHeaderRow}>
                     <Text style={styles.dealTitle}>{deal.title}</Text>
-                    <View style={styles.pill}>
-                      <Text style={styles.pillText}>{deal.deal_type_label}</Text>
+                    <View style={styles.dealHeaderActions}>
+                      {onAddToCalendar ? (
+                        <Pressable
+                          accessibilityLabel={`Add ${deal.title} to Calendar`}
+                          onPress={() => onAddToCalendar(deal)}
+                          style={styles.dealActionButton}
+                        >
+                          <Ionicons color={theme.accentStrong} name="calendar-outline" size={17} />
+                        </Pressable>
+                      ) : null}
+                      {onSharePlace ? (
+                        <Pressable
+                          accessibilityLabel={`Share ${deal.title}`}
+                          onPress={() => onSharePlace(deal)}
+                          style={styles.dealActionButton}
+                        >
+                          <Ionicons color={theme.accentStrong} name="share-social-outline" size={17} />
+                        </Pressable>
+                      ) : null}
+                      <View style={styles.pill}>
+                        <Text style={styles.pillText}>{deal.deal_type_label}</Text>
+                      </View>
                     </View>
                   </View>
                   {deal.attachment?.url && getAttachmentPreviewKind(deal.attachment.content_type, deal.attachment.name) === 'pdf' ? (
