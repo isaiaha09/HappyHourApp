@@ -188,7 +188,8 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
 }: CurrentHappyHoursUpMenuProps) {
   const isDark = theme === 'dark';
   const dealCount = places.reduce((count, place) => count + place.happy_hours.length, 0);
-  const dealCountLabel = `${dealCount} deal${dealCount === 1 ? '' : 's'} nearby`;
+  const businessCount = places.length;
+  const dealCountLabel = `${dealCount} deal${dealCount === 1 ? '' : 's'} · ${businessCount} business${businessCount === 1 ? '' : 'es'} nearby`;
   const collapsedSheetHeight = Math.max(bottomOffset + 52, 132);
   const resolvedBottomInset = Math.max(bottomInset, 0);
   const expandedSheetHeight = Math.min(

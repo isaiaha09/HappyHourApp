@@ -63,7 +63,7 @@ describe('CurrentHappyHoursUpMenu', () => {
 
     expect(screen.getByTestId('current-happy-hours-toggle')).toBeTruthy();
     expect(screen.getByTestId('current-happy-hours-menu')).toBeTruthy();
-    expect(screen.getByLabelText('1 deal nearby. Open list.')).toBeTruthy();
+    expect(screen.getByLabelText('1 deal · 1 business nearby. Open list.')).toBeTruthy();
     fireEvent.press(screen.getByTestId('current-happy-hours-toggle'));
     expect(onToggle).toHaveBeenCalledTimes(1);
 
@@ -104,5 +104,46 @@ describe('CurrentHappyHoursUpMenu', () => {
     fireEvent.press(screen.getByTestId('current-happy-hours-favorite-example-bar:101'));
     expect(onFavoritePlace).toHaveBeenCalledWith({ slug: 'example-bar', locationId: 101 });
     expect(onSelectPlace).not.toHaveBeenCalled();
+  });
+
+  it('shows both the total deal count and the number of businesses', () => {
+    const threeDealPlace: CurrentHappyHourPlace = {
+      ...place,
+      happy_hours: [
+        ...place.happy_hours,
+        {
+          deal_id: 202,
+          title: 'Late Night Special',
+          price_text: '$6 cocktails',
+          weekday_label: 'Wednesday',
+          start_time: '18:00',
+          end_time: '20:00',
+          all_day: false,
+        },
+        {
+          deal_id: 203,
+          title: 'Dessert Special',
+          price_text: '50% off dessert',
+          weekday_label: 'Wednesday',
+          start_time: '15:00',
+          end_time: '21:00',
+          all_day: false,
+        },
+      ],
+    };
+
+    render(
+      <CurrentHappyHoursUpMenu
+        bottomOffset={96}
+        expanded={false}
+        onSelectPlace={jest.fn()}
+        onToggle={jest.fn()}
+        places={[threeDealPlace]}
+        theme="dark"
+      />,
+    );
+
+    expect(screen.getAllByText('3 deals · 1 business nearby')).toHaveLength(2);
+    expect(screen.getByLabelText('3 deals · 1 business nearby. Open list.')).toBeTruthy();
   });
 });

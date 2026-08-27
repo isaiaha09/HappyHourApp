@@ -244,8 +244,12 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
     places.reduce(0) { $0 + $1.happyHours.count }
   }
 
+  private var businessCount: Int {
+    places.count
+  }
+
   private var dealCountLabel: String {
-    "\(dealCount) deal\(dealCount == 1 ? "" : "s") nearby"
+    "\(dealCount) deal\(dealCount == 1 ? "" : "s") · \(businessCount) business\(businessCount == 1 ? "" : "es") nearby"
   }
 
   private var triggerAccessibilityLabel: String {
