@@ -22,10 +22,14 @@ import {
   buildCalendarNotes,
   buildShareText,
   formatDateLabel,
+  formatPlannerDateInput,
+  formatPlannerTimeInput,
   formatTimeLabel,
   getDefaultCalendarSelection,
   getDefaultShareSelection,
   getPlannerSchedules,
+  parsePlannerDateInput,
+  parsePlannerTimeInput,
   type CalendarEventDraft,
   type PlannerPlaceContext,
   type PlannerSchedule,
@@ -275,6 +279,9 @@ function ShareComposer({ context, onClose, onSubmit }: ShareComposerProps) {
     endTime: defaultMyTime.endTime,
     startTime: defaultMyTime.startTime,
   }));
+  const [dateInput, setDateInput] = useState(() => formatPlannerDateInput(defaultMyTime.date));
+  const [startTimeInput, setStartTimeInput] = useState(() => formatPlannerTimeInput(defaultMyTime.startTime));
+  const [endTimeInput, setEndTimeInput] = useState(() => formatPlannerTimeInput(defaultMyTime.endTime));
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -285,6 +292,9 @@ function ShareComposer({ context, onClose, onSubmit }: ShareComposerProps) {
       endTime: defaultMyTime.endTime,
       startTime: defaultMyTime.startTime,
     });
+    setDateInput(formatPlannerDateInput(defaultMyTime.date));
+    setStartTimeInput(formatPlannerTimeInput(defaultMyTime.startTime));
+    setEndTimeInput(formatPlannerTimeInput(defaultMyTime.endTime));
     setValidationMessage(null);
   }, [context, defaultMyTime]);
 
@@ -293,6 +303,47 @@ function ShareComposer({ context, onClose, onSubmit }: ShareComposerProps) {
   function updateSelection(patch: Partial<RestaurantShareSelection>) {
     setSelection((current) => ({ ...current, ...patch }));
     setValidationMessage(null);
+  }
+
+  function updateDateInput(value: string) {
+    setDateInput(value);
+    updateSelection({ date: parsePlannerDateInput(value) ?? value });
+  }
+
+  function normalizeDateInput() {
+    const normalizedDate = parsePlannerDateInput(dateInput);
+    if (!normalizedDate) {
+      return;
+    }
+    setDateInput(formatPlannerDateInput(normalizedDate));
+    updateSelection({ date: normalizedDate });
+  }
+
+  function updateTimeInput(field: 'startTime' | 'endTime', value: string) {
+    const normalizedTime = parsePlannerTimeInput(value) ?? value;
+    if (field === 'startTime') {
+      setStartTimeInput(value);
+      updateSelection({ startTime: normalizedTime });
+    } else {
+      setEndTimeInput(value);
+      updateSelection({ endTime: normalizedTime });
+    }
+  }
+
+  function normalizeTimeInput(field: 'startTime' | 'endTime') {
+    const input = field === 'startTime' ? startTimeInput : endTimeInput;
+    const normalizedTime = parsePlannerTimeInput(input);
+    if (!normalizedTime) {
+      return;
+    }
+    const displayTime = formatPlannerTimeInput(normalizedTime);
+    if (field === 'startTime') {
+      setStartTimeInput(displayTime);
+      updateSelection({ startTime: normalizedTime });
+    } else {
+      setEndTimeInput(displayTime);
+      updateSelection({ endTime: normalizedTime });
+    }
   }
 
   function toggleDeal(dealId: number) {
@@ -305,15 +356,39 @@ function ShareComposer({ context, onClose, onSubmit }: ShareComposerProps) {
   async function submit() {
     Keyboard.dismiss();
     if (selection.mode === 'my-time') {
+      const normalizedDate = parsePlannerDateInput(dateInput);
+      const normalizedStartTime = parsePlannerTimeInput(startTimeInput);
+      const normalizedEndTime = parsePlannerTimeInput(endTimeInput);
       const nextValidationMessage = validateCalendarDraft({
-        date: selection.date ?? '',
-        endTime: selection.endTime,
-        startTime: selection.startTime,
+        date: normalizedDate ?? dateInput,
+        endTime: normalizedEndTime ?? endTimeInput,
+        startTime: normalizedStartTime ?? startTimeInput,
       });
       if (nextValidationMessage) {
         setValidationMessage(nextValidationMessage);
         return;
       }
+
+      const normalizedSelection: RestaurantShareSelection = {
+        ...selection,
+        date: normalizedDate ?? selection.date,
+        endTime: normalizedEndTime ?? selection.endTime,
+        startTime: normalizedStartTime ?? selection.startTime,
+      };
+      setSelection(normalizedSelection);
+      setDateInput(formatPlannerDateInput(normalizedSelection.date));
+      setStartTimeInput(formatPlannerTimeInput(normalizedSelection.startTime));
+      setEndTimeInput(formatPlannerTimeInput(normalizedSelection.endTime));
+      setSubmitting(true);
+      setValidationMessage(null);
+      try {
+        await onSubmit(normalizedSelection, shareCardRef);
+      } catch (error) {
+        setValidationMessage(error instanceof Error ? error.message : 'Unable to open the share sheet.');
+      } finally {
+        setSubmitting(false);
+      }
+      return;
     }
 
     if (!selection.includeLocation && !selection.includeHappyHours && !selection.includeOperatingHours && !selection.includeDealsAndMenu && !selection.includePhotos) {
@@ -346,10 +421,10 @@ function ShareComposer({ context, onClose, onSubmit }: ShareComposerProps) {
       {selection.mode === 'my-time' ? (
         <View style={styles.myTimeFields}>
           <Text style={styles.sectionLabel}>Your availability</Text>
-          <TextInput autoCapitalize="none" autoCorrect={false} keyboardType="numbers-and-punctuation" onChangeText={(date) => updateSelection({ date })} placeholder="YYYY-MM-DD" placeholderTextColor={palette.muted} style={styles.input} value={selection.date} />
+          <TextInput autoCapitalize="none" autoCorrect={false} keyboardType="numbers-and-punctuation" onBlur={normalizeDateInput} onChangeText={updateDateInput} placeholder="MM-DD-YYYY" placeholderTextColor={palette.muted} style={styles.input} value={dateInput} />
           <View style={styles.timeRow}>
-            <TextInput autoCapitalize="none" autoCorrect={false} keyboardType="numbers-and-punctuation" onChangeText={(startTime) => updateSelection({ startTime })} placeholder="Start 15:00" placeholderTextColor={palette.muted} style={[styles.input, styles.timeInput]} value={selection.startTime} />
-            <TextInput autoCapitalize="none" autoCorrect={false} keyboardType="numbers-and-punctuation" onChangeText={(endTime) => updateSelection({ endTime })} placeholder="End 18:00" placeholderTextColor={palette.muted} style={[styles.input, styles.timeInput]} value={selection.endTime} />
+            <TextInput autoCapitalize="none" autoCorrect={false} keyboardType="default" onBlur={() => normalizeTimeInput('startTime')} onChangeText={(value) => updateTimeInput('startTime', value)} placeholder="Start 3:00 PM" placeholderTextColor={palette.muted} style={[styles.input, styles.timeInput]} value={startTimeInput} />
+            <TextInput autoCapitalize="none" autoCorrect={false} keyboardType="default" onBlur={() => normalizeTimeInput('endTime')} onChangeText={(value) => updateTimeInput('endTime', value)} placeholder="End 6:00 PM" placeholderTextColor={palette.muted} style={[styles.input, styles.timeInput]} value={endTimeInput} />
           </View>
         </View>
       ) : (
@@ -446,7 +521,7 @@ function ShareCardPreview({ context, selection }: { context: PlannerPlaceContext
       <Text style={styles.shareCardName}>{context.name}</Text>
       <Text style={styles.shareCardMeta}>{[context.cityLabel, context.venueTypeLabel].filter(Boolean).join(' · ')}</Text>
       {selection.mode === 'my-time' ? (
-        <Text style={styles.shareCardDetail}>{[selection.date ? formatDateLabel(selection.date) : '', selection.startTime && selection.endTime ? `${formatTimeLabel(selection.startTime)} - ${formatTimeLabel(selection.endTime)}` : ''].filter(Boolean).join('\n')}</Text>
+        <Text style={styles.shareCardDetail}>{[selection.date ? formatPlannerDateInput(selection.date) : '', selection.startTime && selection.endTime ? `${formatPlannerTimeInput(selection.startTime)} - ${formatPlannerTimeInput(selection.endTime)}` : ''].filter(Boolean).join('\n')}</Text>
       ) : (
         <Text numberOfLines={5} style={styles.shareCardDetail}>
           {[

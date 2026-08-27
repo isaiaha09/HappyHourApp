@@ -210,12 +210,8 @@ final class DiningDealzExternalPlanner: NSObject {
     let presentSheet: @MainActor (UIImage?) -> Void = { [weak self] photo in
       guard let self else { return }
       let image = self.diningDealzRenderShareCard(context: context, selection: selection, photo: photo)
-      let mapURL = selection.includeLocation
-        ? diningDealzPlannerMapURL(context).flatMap(URL.init(string:))
-        : nil
       var items: [Any] = [message]
       if let image { items.append(image) }
-      if let mapURL { items.append(mapURL) }
 
       let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
       self.configurePopover(controller, source: presenter.view)
@@ -306,27 +302,49 @@ final class DiningDealzExternalPlanner: NSObject {
 }
 
 private func diningDealzShareText(context: DiningDealzPlannerContext, selection: DiningDealzNativeShareSelection) -> String {
-  var lines = ["\(context.name) · shared from DiningDealz"]
+  var lines = ["DiningDealz restaurant recommendation", context.name]
   if selection.mode == "my-time" {
-    let range = [selection.startTime, selection.endTime].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " - ")
-    lines.append([selection.date, range].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+    let date = selection.date.map(diningDealzShareDisplayDate) ?? ""
+    let start = selection.startTime.map(diningDealzShareDisplayTime) ?? ""
+    let end = selection.endTime.map(diningDealzShareDisplayTime) ?? ""
+    let range = [start, end].filter { !$0.isEmpty }.joined(separator: " - ")
+    let details = [date, range].filter { !$0.isEmpty }.joined(separator: " · ")
+    if !details.isEmpty { lines.append("My time: \(details)") }
   } else {
     if selection.includeHappyHours {
-      let hours = context.schedules.filter { $0.kind == "happy-hour" }.map { "\($0.label) (\($0.allDay ? "All day" : "\($0.startTime) - \($0.endTime)"))" }.joined(separator: "; ")
+      let hours = context.schedules.filter { $0.kind == "happy-hour" }.map { "\($0.label) (\($0.allDay ? "All day" : "\(diningDealzShareDisplayTime($0.startTime)) - \(diningDealzShareDisplayTime($0.endTime))"))" }.joined(separator: "; ")
       if !hours.isEmpty { lines.append("Happy hours: \(hours)") }
     }
     if selection.includeOperatingHours {
-      let hours = context.schedules.filter { $0.kind == "operating-hours" }.map { "\($0.weekdayLabel ?? "") \($0.allDay ? "Open 24 hours" : "\($0.startTime) - \($0.endTime)")" }.joined(separator: "; ")
-      if !hours.isEmpty { lines.append("Hours: \(hours)") }
+      let hours = context.schedules.filter { $0.kind == "operating-hours" }.map { "\($0.weekdayLabel ?? "") \($0.allDay ? "Open 24 hours" : "\(diningDealzShareDisplayTime($0.startTime)) - \(diningDealzShareDisplayTime($0.endTime))")" }.joined(separator: "; ")
+      if !hours.isEmpty { lines.append("Hours of operation: \(hours)") }
     }
     if selection.includeDealsAndMenu {
       let deals = context.deals.filter { selection.selectedDealIds.contains($0.id) }.map { [$0.title, $0.priceText, $0.description].filter { !$0.isEmpty }.joined(separator: " — ") }.joined(separator: "; ")
-      if !deals.isEmpty { lines.append("Deals: \(deals)") }
+      if !deals.isEmpty { lines.append("Deals and menu: \(deals)") }
     }
   }
   if selection.includeLocation && !context.address.isEmpty { lines.append("Location: \(context.address)") }
-  if selection.includeLocation, let mapURL = diningDealzPlannerMapURL(context) { lines.append(mapURL) }
+  if selection.includeLocation, let mapURL = diningDealzPlannerMapURL(context) { lines.append("DiningDealz map: \(mapURL)") }
+  lines.append("Shared from the DiningDealz app")
   return lines.filter { !$0.isEmpty }.joined(separator: "\n")
+}
+
+private func diningDealzShareDisplayDate(_ value: String) -> String {
+  let parts = value.split(separator: "-")
+  guard parts.count == 3 else { return value }
+  if parts[0].count == 4 {
+    return String(format: "%02d-%02d-%04d", Int(parts[1]) ?? 0, Int(parts[2]) ?? 0, Int(parts[0]) ?? 0)
+  }
+  return value
+}
+
+private func diningDealzShareDisplayTime(_ value: String) -> String {
+  let parts = value.split(separator: ":").compactMap { Int($0) }
+  guard let hour = parts.first, let minute = parts.dropFirst().first, (0...23).contains(hour), (0...59).contains(minute) else {
+    return value
+  }
+  return "\(hour % 12 == 0 ? 12 : hour % 12):\(String(format: "%02d", minute)) \(hour >= 12 ? "PM" : "AM")"
 }
 
 private func diningDealzPlannerMapURL(_ context: DiningDealzPlannerContext) -> String? {

@@ -86,6 +86,8 @@ type DateParts = {
 
 const timePattern = /^(\d{1,2}):([0-5]\d)(?::\d{2})?$/;
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+const plannerDateInputPattern = /^(\d{1,2})-(\d{1,2})-(\d{4})$/;
+const plannerTimeInputPattern = /^(\d{1,2}):([0-5]\d)\s*(AM|PM)$/i;
 
 function pad(value: number) {
   return String(value).padStart(2, '0');
@@ -138,6 +140,104 @@ export function formatDateLabel(value: string | undefined | null) {
     month: 'long',
     year: 'numeric',
   });
+}
+
+/**
+ * Formats the share composer date without changing the ISO date used by the
+ * calendar and native bridge layers.
+ */
+export function formatPlannerDateInput(value: string | undefined | null) {
+  const normalized = value?.trim() ?? '';
+  if (!normalized) {
+    return '';
+  }
+
+  if (datePattern.test(normalized) && isValidDateString(normalized)) {
+    const [year, month, day] = normalized.split('-');
+    return `${month}-${day}-${year}`;
+  }
+
+  const match = normalized.match(plannerDateInputPattern);
+  if (!match) {
+    return normalized;
+  }
+
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+  const year = Number(match[3]);
+  const isoDate = `${year}-${pad(month)}-${pad(day)}`;
+  return isValidDateString(isoDate) ? `${pad(month)}-${pad(day)}-${year}` : normalized;
+}
+
+/** Converts either the share display format or an ISO date to YYYY-MM-DD. */
+export function parsePlannerDateInput(value: string | undefined | null) {
+  const normalized = value?.trim() ?? '';
+  if (!normalized) {
+    return null;
+  }
+
+  if (datePattern.test(normalized)) {
+    return isValidDateString(normalized) ? normalized : null;
+  }
+
+  const match = normalized.match(plannerDateInputPattern);
+  if (!match) {
+    return null;
+  }
+
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+  const year = Number(match[3]);
+  const isoDate = `${year}-${pad(month)}-${pad(day)}`;
+  return isValidDateString(isoDate) ? isoDate : null;
+}
+
+function plannerTimeParts(value: string | undefined | null) {
+  const normalized = value?.trim() ?? '';
+  if (!normalized) {
+    return null;
+  }
+
+  const twelveHourMatch = normalized.match(plannerTimeInputPattern);
+  if (twelveHourMatch) {
+    const hour = Number(twelveHourMatch[1]);
+    const minute = Number(twelveHourMatch[2]);
+    if (hour < 1 || hour > 12) {
+      return null;
+    }
+    const isPm = twelveHourMatch[3].toUpperCase() === 'PM';
+    return { hour: (hour % 12) + (isPm ? 12 : 0), minute };
+  }
+
+  const twentyFourHourMatch = normalized.match(timePattern);
+  if (!twentyFourHourMatch) {
+    return null;
+  }
+
+  const hour = Number(twentyFourHourMatch[1]);
+  const minute = Number(twentyFourHourMatch[2]);
+  return hour >= 0 && hour <= 23 ? { hour, minute } : null;
+}
+
+/** Formats a time as h:mm AM/PM for the share composer and share card. */
+export function formatPlannerTimeInput(value: string | undefined | null) {
+  const normalized = value?.trim() ?? '';
+  if (!normalized) {
+    return '';
+  }
+
+  const parts = plannerTimeParts(normalized);
+  if (!parts) {
+    return normalized;
+  }
+
+  return `${parts.hour % 12 || 12}:${pad(parts.minute)} ${parts.hour >= 12 ? 'PM' : 'AM'}`;
+}
+
+/** Converts a share-composer time to the 24-hour value used by the domain. */
+export function parsePlannerTimeInput(value: string | undefined | null) {
+  const parts = plannerTimeParts(value);
+  return parts ? `${pad(parts.hour)}:${pad(parts.minute)}` : null;
 }
 
 export function isValidDateString(value: string) {
@@ -575,30 +675,32 @@ export function buildMapUrl(context: Pick<PlannerPlaceContext, 'latitude' | 'lon
 }
 
 export function buildShareText(context: PlannerPlaceContext, selection: RestaurantShareSelection) {
-  const lines = [`${context.name} · shared from DiningDealz`];
+  const lines = ['DiningDealz restaurant recommendation', context.name];
 
   if (selection.mode === 'my-time') {
-    const date = selection.date ? formatDateLabel(selection.date) : '';
-    const start = selection.startTime ? formatTimeLabel(selection.startTime) : '';
-    const end = selection.endTime ? formatTimeLabel(selection.endTime) : '';
+    const date = selection.date ? formatPlannerDateInput(selection.date) : '';
+    const start = selection.startTime ? formatPlannerTimeInput(selection.startTime) : '';
+    const end = selection.endTime ? formatPlannerTimeInput(selection.endTime) : '';
     const timeRange = start && end ? `${start} - ${end}` : start || end;
-    lines.push([date, timeRange].filter(Boolean).join(' · '));
+    if (date || timeRange) {
+      lines.push(`My time: ${[date, timeRange].filter(Boolean).join(' · ')}`);
+    }
   } else {
     const selectedDeals = context.deals.filter((deal) => selection.selectedDealIds.includes(deal.id));
     if (selection.includeHappyHours) {
       const happyHours = context.schedules.filter((schedule) => schedule.kind === 'happy-hour');
       if (happyHours.length) {
-        lines.push(`Happy hours: ${happyHours.map((schedule) => `${schedule.label} (${schedule.allDay ? 'All day' : `${formatTimeLabel(schedule.startTime)} - ${formatTimeLabel(schedule.endTime)}`})`).join('; ')}`);
+        lines.push(`Happy hours: ${happyHours.map((schedule) => `${schedule.label} (${schedule.allDay ? 'All day' : `${formatPlannerTimeInput(schedule.startTime)} - ${formatPlannerTimeInput(schedule.endTime)}`})`).join('; ')}`);
       }
     }
     if (selection.includeOperatingHours) {
       const operatingHours = context.schedules.filter((schedule) => schedule.kind === 'operating-hours');
       if (operatingHours.length) {
-        lines.push(`Hours: ${operatingHours.map((schedule) => `${schedule.weekdayLabel ?? ''} ${schedule.allDay ? 'Open 24 hours' : `${formatTimeLabel(schedule.startTime)} - ${formatTimeLabel(schedule.endTime)}`}`).join('; ')}`);
+        lines.push(`Hours of operation: ${operatingHours.map((schedule) => `${schedule.weekdayLabel ?? ''} ${schedule.allDay ? 'Open 24 hours' : `${formatPlannerTimeInput(schedule.startTime)} - ${formatPlannerTimeInput(schedule.endTime)}`}`).join('; ')}`);
       }
     }
     if (selection.includeDealsAndMenu && selectedDeals.length) {
-      lines.push(`Deals: ${selectedDeals.map((deal) => [deal.title, deal.priceText, deal.description].filter(Boolean).join(' — ')).join('; ')}`);
+      lines.push(`Deals and menu: ${selectedDeals.map((deal) => [deal.title, deal.priceText, deal.description].filter(Boolean).join(' — ')).join('; ')}`);
     }
   }
 
@@ -608,9 +710,10 @@ export function buildShareText(context: PlannerPlaceContext, selection: Restaura
 
   const mapUrl = selection.includeLocation ? buildMapUrl(context) : '';
   if (mapUrl) {
-    lines.push(mapUrl);
+    lines.push(`DiningDealz map: ${mapUrl}`);
   }
 
+  lines.push('Shared from the DiningDealz app');
   return lines.filter(Boolean).join('\n');
 }
 

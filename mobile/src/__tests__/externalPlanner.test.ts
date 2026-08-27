@@ -4,7 +4,11 @@ import {
   buildMapUrl,
   buildShareText,
   createPlannerContextFromCurrentPlace,
+  formatPlannerDateInput,
+  formatPlannerTimeInput,
   getDefaultCalendarSelection,
+  parsePlannerDateInput,
+  parsePlannerTimeInput,
   validateCalendarDraft,
 } from '../externalPlanner';
 import type { CurrentHappyHourPlace } from '../types';
@@ -88,9 +92,19 @@ describe('external planner domain', () => {
     });
 
     expect(text).toContain('Example Bar');
-    expect(text).toContain('August');
+    expect(text).toContain('DiningDealz restaurant recommendation');
+    expect(text).toContain('08-27-2026');
     expect(text).toContain('4:30 PM - 6:00 PM');
-    expect(text).toContain(buildMapUrl(context));
+    expect(text).toContain(`DiningDealz map: ${buildMapUrl(context)}`);
+    expect(text).toContain('Shared from the DiningDealz app');
+  });
+
+  it('keeps share date and time fields in the display format while normalizing them for the domain', () => {
+    expect(formatPlannerDateInput('2026-08-27')).toBe('08-27-2026');
+    expect(parsePlannerDateInput('08-27-2026')).toBe('2026-08-27');
+    expect(formatPlannerTimeInput('15:00')).toBe('3:00 PM');
+    expect(parsePlannerTimeInput('3:00 PM')).toBe('15:00');
+    expect(parsePlannerTimeInput('15:00')).toBe('15:00');
   });
 
   it('generates an external-calendar .ics fallback without reading calendars', () => {
@@ -113,4 +127,3 @@ describe('external planner domain', () => {
     expect(ics).toContain('END:VCALENDAR');
   });
 });
-

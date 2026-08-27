@@ -662,7 +662,7 @@ export const browseStyles = {
     paddingHorizontal: 8,
     paddingVertical: 4,
     position: 'absolute',
-    right: 112,
+    left: 10,
     top: 10,
   },
   currentHappyHoursDealFavorite: {

@@ -250,7 +250,7 @@ struct DiningDealzShareComposerView: View {
   let onCancel: () -> Void
 
   @State private var mode = "restaurant-details"
-  @State private var date = diningDealzPlannerDateString(Date(), timeZone: TimeZone.autoupdatingCurrent.identifier)
+  @State private var date = diningDealzPlannerDisplayDate(diningDealzPlannerDateString(Date(), timeZone: TimeZone.autoupdatingCurrent.identifier))
   @State private var startTime = ""
   @State private var endTime = ""
   @State private var includeHappyHours: Bool
@@ -278,10 +278,10 @@ struct DiningDealzShareComposerView: View {
     _includePhotos = State(initialValue: !context.imageUrls.isEmpty)
     _selectedDealIds = State(initialValue: Set(context.deals.map(\.id)))
     _selectedPhotoUri = State(initialValue: context.imageUrls.first)
-    _date = State(initialValue: diningDealzPlannerDateString(diningDealzPlannerDate(for: context.schedules.first, timeZone: context.timeZone), timeZone: context.timeZone))
+    _date = State(initialValue: diningDealzPlannerDisplayDate(diningDealzPlannerDateString(diningDealzPlannerDate(for: context.schedules.first, timeZone: context.timeZone), timeZone: context.timeZone)))
     if let schedule = context.schedules.first {
-      _startTime = State(initialValue: schedule.startTime)
-      _endTime = State(initialValue: schedule.endTime)
+      _startTime = State(initialValue: diningDealzPlannerDisplayTime(schedule.startTime))
+      _endTime = State(initialValue: diningDealzPlannerDisplayTime(schedule.endTime))
     }
   }
 
@@ -296,13 +296,22 @@ struct DiningDealzShareComposerView: View {
           .pickerStyle(.segmented)
 
           if mode == "my-time" {
-            TextField("Date (YYYY-MM-DD)", text: $date)
+            TextField("Date (MM-DD-YYYY)", text: $date)
               .textFieldStyle(.roundedBorder)
+              .onSubmit {
+                date = diningDealzPlannerDisplayDate(date)
+              }
             HStack {
-              TextField("Start (15:00)", text: $startTime)
+              TextField("Start (3:00 PM)", text: $startTime)
                 .textFieldStyle(.roundedBorder)
-              TextField("End (18:00)", text: $endTime)
+                .onSubmit {
+                  startTime = diningDealzPlannerDisplayTime(startTime)
+                }
+              TextField("End (6:00 PM)", text: $endTime)
                 .textFieldStyle(.roundedBorder)
+                .onSubmit {
+                  endTime = diningDealzPlannerDisplayTime(endTime)
+                }
             }
           } else {
             Text("Choose the details your friend should receive. The business name and DiningDealz branding are always included.")
@@ -413,9 +422,9 @@ struct DiningDealzShareComposerView: View {
   private var nativeSelection: DiningDealzNativeShareSelection {
     DiningDealzNativeShareSelection(
       mode: mode,
-      date: mode == "my-time" ? date : nil,
-      startTime: mode == "my-time" ? startTime : nil,
-      endTime: mode == "my-time" ? endTime : nil,
+      date: mode == "my-time" ? diningDealzPlannerISODate(from: date) : nil,
+      startTime: mode == "my-time" ? diningDealzPlanner24HourTime(from: startTime) : nil,
+      endTime: mode == "my-time" ? diningDealzPlanner24HourTime(from: endTime) : nil,
       includeHappyHours: includeHappyHours,
       includeOperatingHours: includeOperatingHours,
       includeDealsAndMenu: includeDealsAndMenu,
@@ -428,8 +437,14 @@ struct DiningDealzShareComposerView: View {
 
   private func submit() {
     if mode == "my-time" {
-      guard !date.isEmpty, !startTime.isEmpty, !endTime.isEmpty else {
+      guard diningDealzPlannerISODate(from: date) != nil,
+            let normalizedStart = diningDealzPlanner24HourTime(from: startTime),
+            let normalizedEnd = diningDealzPlanner24HourTime(from: endTime) else {
         validationMessage = "Enter a date, start time, and end time."
+        return
+      }
+      if normalizedStart == normalizedEnd {
+        validationMessage = "Start and end times cannot be the same."
         return
       }
     }
@@ -495,7 +510,7 @@ struct DiningDealzNativeShareCardView: View {
         .font(.caption)
         .foregroundStyle(DiningDealzPlannerPalette.muted)
       if selection.mode == "my-time" {
-        Text([selection.date, selection.startTime.map(diningDealzPlannerDisplayTime), selection.endTime.map(diningDealzPlannerDisplayTime)].compactMap { $0 }.joined(separator: " · "))
+        Text([selection.date.map(diningDealzPlannerDisplayDate), selection.startTime.map(diningDealzPlannerDisplayTime), selection.endTime.map(diningDealzPlannerDisplayTime)].compactMap { $0 }.joined(separator: " · "))
           .font(.subheadline.weight(.semibold))
           .foregroundStyle(.white)
       } else {
@@ -579,12 +594,81 @@ private func diningDealzPlannerDateString(_ date: Date, timeZone: String) -> Str
   return formatter.string(from: date)
 }
 
+private func diningDealzPlannerDisplayDate(_ value: String) -> String {
+  let parts = value.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: "-")
+  guard parts.count == 3 else { return value }
+  if parts[0].count == 4 {
+    return String(format: "%02d-%02d-%04d", Int(parts[1]) ?? 0, Int(parts[2]) ?? 0, Int(parts[0]) ?? 0)
+  }
+  guard parts[2].count == 4 else { return value }
+  return String(format: "%02d-%02d-%04d", Int(parts[0]) ?? 0, Int(parts[1]) ?? 0, Int(parts[2]) ?? 0)
+}
+
+private func diningDealzPlannerISODate(from value: String) -> String? {
+  let parts = value.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: "-")
+  guard parts.count == 3 else { return nil }
+
+  let year: Int
+  let month: Int
+  let day: Int
+  if parts[0].count == 4 {
+    year = Int(parts[0]) ?? 0
+    month = Int(parts[1]) ?? 0
+    day = Int(parts[2]) ?? 0
+  } else {
+    month = Int(parts[0]) ?? 0
+    day = Int(parts[1]) ?? 0
+    year = Int(parts[2]) ?? 0
+  }
+
+  guard year >= 1, (1...12).contains(month), (1...31).contains(day) else { return nil }
+  var calendar = Calendar(identifier: .gregorian)
+  calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .autoupdatingCurrent
+  let components = DateComponents(year: year, month: month, day: day)
+  guard let date = calendar.date(from: components),
+        calendar.component(.year, from: date) == year,
+        calendar.component(.month, from: date) == month,
+        calendar.component(.day, from: date) == day else {
+    return nil
+  }
+  return String(format: "%04d-%02d-%02d", year, month, day)
+}
+
+private func diningDealzPlanner24HourTime(from value: String) -> String? {
+  let normalizedValue = value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+  let attachedSuffix = normalizedValue.hasSuffix("AM") || normalizedValue.hasSuffix("PM")
+    ? String(normalizedValue.suffix(2))
+    : nil
+  let valueWithoutAttachedSuffix = attachedSuffix == nil
+    ? normalizedValue
+    : String(normalizedValue.dropLast(2)).trimmingCharacters(in: .whitespacesAndNewlines)
+  let tokens = valueWithoutAttachedSuffix.split { $0 == " " || $0 == "\t" }
+  guard let timeToken = tokens.first else { return nil }
+  let timeParts = timeToken.split(separator: ":")
+  guard timeParts.count >= 2,
+        let rawHour = Int(timeParts[0]),
+        let minute = Int(timeParts[1]),
+        (0...59).contains(minute) else {
+    return nil
+  }
+
+  let suffix = attachedSuffix ?? tokens.dropFirst().first.map { String($0).uppercased() }
+  let hour: Int
+  if suffix == "AM" || suffix == "PM" {
+    guard (1...12).contains(rawHour) else { return nil }
+    hour = (rawHour % 12) + (suffix == "PM" ? 12 : 0)
+  } else {
+    guard (0...23).contains(rawHour) else { return nil }
+    hour = rawHour
+  }
+  return String(format: "%02d:%02d", hour, minute)
+}
+
 private func diningDealzPlannerDisplayTime(_ value: String) -> String {
-  let parts = value.split(separator: ":").compactMap { Int($0) }
+  guard let normalized = diningDealzPlanner24HourTime(from: value) else { return value }
+  let parts = normalized.split(separator: ":").compactMap { Int($0) }
   guard let hour = parts.first, let minute = parts.dropFirst().first else { return value }
-  let formatter = DateFormatter()
-  formatter.dateFormat = "h:mm a"
-  return formatter.string(from: diningDealzPlannerTime(on: Date(), value: "\(hour):\(minute)", timeZone: TimeZone.autoupdatingCurrent.identifier))
+  return "\(hour % 12 == 0 ? 12 : hour % 12):\(String(format: "%02d", minute)) \(hour >= 12 ? "PM" : "AM")"
 }
 
 private func diningDealzPlannerCategoryIcon(_ label: String) -> String {
