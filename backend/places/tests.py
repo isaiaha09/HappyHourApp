@@ -545,6 +545,7 @@ class CurrentHappyHoursServiceTests(TestCase):
 				'address_line_2': '',
 				'latitude': 34.2,
 				'longitude': -119.2,
+				'image_urls': ['https://images.example.com/the-place.jpg'],
 				'deals': deals,
 			}],
 		}
@@ -561,6 +562,7 @@ class CurrentHappyHoursServiceTests(TestCase):
 		self.assertEqual(len(result['places']), 1)
 		self.assertEqual(result['places'][0]['happy_hours'][0]['title'], 'Afternoon Special')
 		self.assertEqual(result['places'][0]['location_id'], 10)
+		self.assertEqual(result['places'][0]['image_urls'], ['https://images.example.com/the-place.jpg'])
 
 		with patch('places.services.current_happy_hours.get_source_place_payloads', return_value=[payload]):
 			boundary_result = get_current_happy_hours_payload(reference=reference.replace(hour=18))

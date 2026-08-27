@@ -191,6 +191,11 @@ def _build_place_row(
 	if not slug or location_id is None:
 		return None
 
+	raw_image_urls = location.get('image_urls') or payload.get('image_urls') or []
+	if isinstance(raw_image_urls, str):
+		raw_image_urls = [raw_image_urls]
+	image_urls = [str(image_url).strip() for image_url in raw_image_urls if str(image_url).strip()]
+
 	return {
 		'slug': slug,
 		'location_id': location_id,
@@ -202,6 +207,7 @@ def _build_place_row(
 		'address_line_2': str(location.get('address_line_2') or payload.get('address_line_2') or '').strip(),
 		'latitude': _coerce_float(location.get('latitude', payload.get('latitude'))),
 		'longitude': _coerce_float(location.get('longitude', payload.get('longitude'))),
+		'image_urls': image_urls,
 		'happy_hours': active_windows,
 	}
 

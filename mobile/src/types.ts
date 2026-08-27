@@ -170,6 +170,7 @@ export type CurrentHappyHourPlace = {
   address_line_2: string;
   latitude: number | null;
   longitude: number | null;
+  image_urls: string[];
   happy_hours: CurrentHappyHourWindow[];
 };
 

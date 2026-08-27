@@ -1,4 +1,5 @@
 import {
+  Dimensions,
   Platform,
   UIManager,
   requireNativeComponent,
@@ -13,11 +14,14 @@ import type { CurrentHappyHoursUpMenuProps } from './CurrentHappyHoursUpMenu';
 type NativeCurrentHappyHoursUpMenuProps = {
   bottomOffset: number;
   expanded: boolean;
+  expandedSheetHeight: number;
   onMenuToggle?: (event: NativeSyntheticEvent<{ expanded: boolean }>) => void;
   onPlaceSelect?: (event: NativeSyntheticEvent<{ locationId: number; slug: string }>) => void;
   places: CurrentHappyHourPlace[];
   style?: StyleProp<ViewStyle>;
   theme: 'dark' | 'light';
+  userLatitude?: number | null;
+  userLongitude?: number | null;
 };
 
 const nativeCurrentHappyHoursUpMenuViewName = 'DiningDealzCurrentHappyHoursUpMenuView';
@@ -71,16 +75,16 @@ export function isNativeIOSCurrentHappyHoursUpMenuAvailable() {
   return hasNativeCurrentHappyHoursViewManager();
 }
 
-function getNativeCurrentHappyHoursUpMenuStyle(bottomOffset: number, expanded: boolean): StyleProp<ViewStyle> {
-  const reservedHeight = expanded ? 460 : 64;
+function getNativeCurrentHappyHoursUpMenuStyle(bottomOffset: number, expanded: boolean, expandedSheetHeight: number): StyleProp<ViewStyle> {
+  const reservedHeight = expanded ? expandedSheetHeight : 132;
 
   return {
-    bottom: Math.max(bottomOffset, 0),
+    bottom: expanded ? 0 : Math.max(bottomOffset, 0),
     height: reservedHeight,
     left: 0,
     position: 'absolute',
     right: 0,
-    zIndex: 81,
+    zIndex: 60,
   };
 }
 
@@ -91,20 +95,29 @@ export function NativeIOSCurrentHappyHoursUpMenu({
   onToggle,
   places,
   theme,
+  userCoordinates,
 }: CurrentHappyHoursUpMenuProps) {
   if (places.length === 0 || !isNativeIOSCurrentHappyHoursUpMenuAvailable()) {
     return null;
   }
 
+  const expandedSheetHeight = Math.min(
+    Math.max(Math.round(Dimensions.get('window').height * 0.82), 520),
+    640,
+  );
+
   return (
     <NativeCurrentHappyHoursUpMenuView
       bottomOffset={0}
       expanded={expanded}
+      expandedSheetHeight={expandedSheetHeight}
       onMenuToggle={() => onToggle()}
       onPlaceSelect={(event) => onSelectPlace(event.nativeEvent)}
       places={places}
-      style={getNativeCurrentHappyHoursUpMenuStyle(bottomOffset, expanded)}
+      style={getNativeCurrentHappyHoursUpMenuStyle(bottomOffset, expanded, expandedSheetHeight)}
       theme={theme}
+      userLatitude={userCoordinates?.latitude ?? null}
+      userLongitude={userCoordinates?.longitude ?? null}
     />
   );
 }

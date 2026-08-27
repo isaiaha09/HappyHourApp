@@ -8,6 +8,9 @@ private final class DiningDealzCurrentHappyHoursUpMenuState: ObservableObject {
   @Published var isExpanded = false
   @Published var bottomOffset: CGFloat = 0
   @Published var theme: DiningDealzCurrentHappyHoursTheme = .dark
+  @Published var userLatitude: Double?
+  @Published var userLongitude: Double?
+  @Published var expandedSheetHeight: CGFloat = 620
 }
 
 @objc(DiningDealzCurrentHappyHoursUpMenuView)
@@ -27,6 +30,13 @@ final class DiningDealzCurrentHappyHoursUpMenuView: UIView {
     }
   }
 
+  @objc var expandedSheetHeight: NSNumber = 620 {
+    didSet {
+      invalidateIntrinsicContentSize()
+      updateRootView()
+    }
+  }
+
   @objc var bottomOffset: NSNumber = 0 {
     didSet {
       invalidateIntrinsicContentSize()
@@ -35,6 +45,18 @@ final class DiningDealzCurrentHappyHoursUpMenuView: UIView {
   }
 
   @objc var theme: NSString = "dark" {
+    didSet {
+      updateRootView()
+    }
+  }
+
+  @objc var userLatitude: NSNumber? {
+    didSet {
+      updateRootView()
+    }
+  }
+
+  @objc var userLongitude: NSNumber? {
     didSet {
       updateRootView()
     }
@@ -55,7 +77,9 @@ final class DiningDealzCurrentHappyHoursUpMenuView: UIView {
 
   override var intrinsicContentSize: CGSize {
     let safeBottomOffset = max(CGFloat(truncating: bottomOffset), 0)
-    let baseHeight: CGFloat = expanded && places.count > 0 ? 460 : 64
+    let baseHeight: CGFloat = expanded && places.count > 0
+      ? max(CGFloat(truncating: expandedSheetHeight), 520)
+      : 132
     return CGSize(width: UIView.noIntrinsicMetric, height: baseHeight + safeBottomOffset)
   }
 
@@ -94,6 +118,9 @@ final class DiningDealzCurrentHappyHoursUpMenuView: UIView {
     let nextPlaces = decodePlaces(places)
     let nextBottomOffset = max(CGFloat(truncating: bottomOffset), 0)
     let nextTheme: DiningDealzCurrentHappyHoursTheme = (theme as String).lowercased() == "light" ? .light : .dark
+    let nextUserLatitude = userLatitude?.doubleValue
+    let nextUserLongitude = userLongitude?.doubleValue
+    let nextExpandedSheetHeight = max(CGFloat(truncating: expandedSheetHeight), 520)
 
     if state.places != nextPlaces {
       state.places = nextPlaces
@@ -106,6 +133,15 @@ final class DiningDealzCurrentHappyHoursUpMenuView: UIView {
     }
     if state.theme != nextTheme {
       state.theme = nextTheme
+    }
+    if state.userLatitude != nextUserLatitude {
+      state.userLatitude = nextUserLatitude
+    }
+    if state.userLongitude != nextUserLongitude {
+      state.userLongitude = nextUserLongitude
+    }
+    if state.expandedSheetHeight != nextExpandedSheetHeight {
+      state.expandedSheetHeight = nextExpandedSheetHeight
     }
     invalidateIntrinsicContentSize()
   }
@@ -152,6 +188,9 @@ private struct DiningDealzCurrentHappyHoursUpMenuBridgeContent: View {
       ),
       bottomOffset: state.bottomOffset,
       theme: state.theme,
+      userLatitude: state.userLatitude,
+      userLongitude: state.userLongitude,
+      expandedSheetHeight: state.expandedSheetHeight,
       onSelect: onSelect
     )
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)

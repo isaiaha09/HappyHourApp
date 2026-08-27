@@ -18,6 +18,7 @@ const place: CurrentHappyHourPlace = {
   address_line_2: '',
   latitude: 34.28,
   longitude: -119.29,
+  image_urls: [],
   happy_hours: [{
     deal_id: 201,
     title: 'Afternoon Happy Hour',
@@ -60,7 +61,7 @@ describe('CurrentHappyHoursUpMenu', () => {
     );
 
     expect(screen.getByTestId('current-happy-hours-toggle')).toBeTruthy();
-    expect(screen.getByLabelText('1 happy hour happening now. Open list.')).toBeTruthy();
+    expect(screen.getByLabelText('1 deal nearby. Open list.')).toBeTruthy();
     fireEvent.press(screen.getByTestId('current-happy-hours-toggle'));
     expect(onToggle).toHaveBeenCalledTimes(1);
 
@@ -76,7 +77,8 @@ describe('CurrentHappyHoursUpMenu', () => {
     );
 
     expect(screen.getByTestId('current-happy-hours-menu')).toBeTruthy();
-    expect(screen.getByText('Afternoon Happy Hour')).toBeTruthy();
+    expect(screen.getByText('Happy Hour Deals and Specials Happening Now')).toBeTruthy();
+    expect(screen.getByText('$5 wells Afternoon Happy Hour')).toBeTruthy();
     fireEvent.press(screen.getByTestId('current-happy-hours-row-example-bar:101'));
     expect(onSelectPlace).toHaveBeenCalledWith({ slug: 'example-bar', locationId: 101 });
   });

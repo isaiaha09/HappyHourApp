@@ -39,7 +39,7 @@ npx expo prebuild --platform ios
   ObjC export shim for RN prop/event exposure.
 
 - `DiningDealzCurrentHappyHoursUpMenu.swift`
-  Reusable SwiftUI models and the current happy-hours up-menu UI.
+  Reusable SwiftUI models and the current happy-hours bottom-sheet UI. It renders opaque cards with listing photos, distance, live status, and vertical swipe/scroll behavior.
 
 - `DiningDealzCurrentHappyHoursUpMenuView.swift`
   UIKit host that binds the SwiftUI menu to React Native data and events.
@@ -61,5 +61,5 @@ These source files export the exact names already expected by the JS side:
 ## Important Notes
 
 - These are starter files, not production-polished UI.
-- They are designed to satisfy the contract in `IOS_NATIVE_LIQUID_GLASS_CONTRACT.md`.
+- The happy-hours component intentionally does not use Liquid Glass or material blur.
 - The current React Native controls remain the fallback until these native views compile and register successfully on iOS.

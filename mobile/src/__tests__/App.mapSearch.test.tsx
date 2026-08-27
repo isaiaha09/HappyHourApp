@@ -449,6 +449,7 @@ const currentHappyHourPlace: CurrentHappyHourPlace = {
   address_line_2: samplePlace.address_line_2,
   latitude: samplePlace.latitude,
   longitude: samplePlace.longitude,
+  image_urls: [],
   happy_hours: [{
     deal_id: 11,
     title: 'Afternoon scoop special',
@@ -1523,7 +1524,7 @@ describe('App browse map search', () => {
     fireEvent.press(screen.getByTestId('current-happy-hours-toggle'));
 
     expect(screen.getByTestId('current-happy-hours-menu')).toBeTruthy();
-    expect(screen.getByText('Afternoon scoop special')).toBeTruthy();
+    expect(screen.getByText('$5 wells Afternoon scoop special')).toBeTruthy();
     fireEvent.press(screen.getByTestId('current-happy-hours-row-baskin-robbins:1'));
 
     await act(async () => {

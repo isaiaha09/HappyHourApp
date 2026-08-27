@@ -1474,6 +1474,7 @@ class CurrentHappyHourPlaceSerializer(serializers.Serializer):
 	address_line_2 = serializers.CharField(allow_blank=True)
 	latitude = serializers.FloatField(allow_null=True)
 	longitude = serializers.FloatField(allow_null=True)
+	image_urls = serializers.ListField(child=serializers.CharField(), required=False, default=list)
 	happy_hours = CurrentHappyHourWindowSerializer(many=True)
 
 

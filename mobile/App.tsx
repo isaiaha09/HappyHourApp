@@ -8042,7 +8042,7 @@ function AppScreen() {
                           </View>
                         )}
                       </Animated.View>
-                    ) : showMapResultsCard && !currentHappyHoursMenuExpanded ? (
+                    ) : showMapResultsCard && !currentHappyHoursMenuExpanded && currentHappyHourPlaces.length === 0 ? (
                       <Animated.View style={{ opacity: mapResultsOpacity }}>
                         <Animated.View style={[styles.mapResultsCard, { maxHeight: mapResultsCardAnimatedMaxHeight }]}>
                           <View style={styles.mapResultsHeader}>
@@ -8204,12 +8204,13 @@ function AppScreen() {
 
                 {showMapBrowse ? (
                   <CurrentHappyHoursUpMenu
-                    bottomOffset={mapOverlayBottomPadding + (showMapResultsCard && !currentHappyHoursMenuExpanded ? 96 : 0)}
+                    bottomOffset={mapOverlayBottomPadding}
                     expanded={currentHappyHoursMenuExpanded}
                     onSelectPlace={handleSelectPlace}
                     onToggle={() => setCurrentHappyHoursMenuExpanded((current) => !current)}
                     places={currentHappyHourPlaces}
                     theme={displayedDarkMapMode ? 'dark' : 'light'}
+                    userCoordinates={userCoordinates}
                   />
                 ) : null}
 

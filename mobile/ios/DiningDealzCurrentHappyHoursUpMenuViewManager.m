@@ -5,9 +5,12 @@
 
 RCT_EXPORT_VIEW_PROPERTY(bottomOffset, NSNumber)
 RCT_EXPORT_VIEW_PROPERTY(expanded, BOOL)
+RCT_EXPORT_VIEW_PROPERTY(expandedSheetHeight, NSNumber)
 RCT_EXPORT_VIEW_PROPERTY(onMenuToggle, RCTDirectEventBlock)
 RCT_EXPORT_VIEW_PROPERTY(onPlaceSelect, RCTDirectEventBlock)
 RCT_EXPORT_VIEW_PROPERTY(places, NSArray)
 RCT_EXPORT_VIEW_PROPERTY(theme, NSString)
+RCT_EXPORT_VIEW_PROPERTY(userLatitude, NSNumber)
+RCT_EXPORT_VIEW_PROPERTY(userLongitude, NSNumber)
 
 @end
