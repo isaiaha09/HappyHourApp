@@ -113,6 +113,15 @@ enum DiningDealzCurrentHappyHoursTheme: Equatable {
     }
   }
 
+  var panelFill: Color {
+    switch self {
+    case .dark:
+      return Color.black.opacity(0.68)
+    case .light:
+      return Color.white.opacity(0.88)
+    }
+  }
+
   var liveDot: Color {
     Color(red: 1.0, green: 0.43, blue: 0.18)
   }
@@ -124,6 +133,9 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
   let bottomOffset: CGFloat
   let theme: DiningDealzCurrentHappyHoursTheme
   let onSelect: (DiningDealzCurrentHappyHourPlace) -> Void
+
+  @State private var expandedMenuOffset: CGFloat = 0
+  @State private var isDismissingWithSwipe = false
 
   private var countLabel: String {
     "\(places.count) happy hour\(places.count == 1 ? "" : "s") happening now"
@@ -139,10 +151,14 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
       VStack(alignment: .leading, spacing: 8) {
         if isExpanded {
           expandedList
+            .offset(x: expandedMenuOffset)
+            .simultaneousGesture(horizontalDismissGesture)
         }
 
         Button(action: {
           withAnimation(.easeOut(duration: 0.2)) {
+            expandedMenuOffset = 0
+            isDismissingWithSwipe = false
             isExpanded.toggle()
           }
         }) {
@@ -166,16 +182,59 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
         }
         .buttonStyle(.plain)
         .foregroundColor(theme.foreground)
-        .background(.ultraThinMaterial, in: Capsule())
-        .overlay(Capsule().stroke(theme.border, lineWidth: 1))
+        .modifier(DiningDealzCurrentHappyHoursTriggerGlass(theme: theme))
         .accessibilityLabel(triggerAccessibilityLabel)
-        .accessibilityHint("Shows businesses offering happy hours at the current time.")
+        .accessibilityHint("Shows businesses offering happy hours at the current time. Swipe the open list left or right to clear the map view.")
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(.horizontal, 18)
       .padding(.bottom, bottomOffset)
       .animation(.easeOut(duration: 0.2), value: isExpanded)
+      .onChange(of: isExpanded) { expanded in
+        if !expanded && !isDismissingWithSwipe {
+          expandedMenuOffset = 0
+        }
+      }
     }
+  }
+
+  private var horizontalDismissGesture: some Gesture {
+    DragGesture(minimumDistance: 8)
+      .onChanged { value in
+        guard abs(value.translation.width) > abs(value.translation.height) else { return }
+        expandedMenuOffset = value.translation.width
+      }
+      .onEnded { value in
+        let isHorizontalSwipe = abs(value.translation.width) > abs(value.translation.height)
+        guard isHorizontalSwipe, abs(value.translation.width) >= 72 else {
+          withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+            expandedMenuOffset = 0
+          }
+          return
+        }
+
+        let direction: CGFloat = value.translation.width >= 0 ? 1 : -1
+        isDismissingWithSwipe = true
+        withAnimation(.easeIn(duration: 0.18)) {
+          expandedMenuOffset = direction * 480
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+          guard isExpanded else {
+            expandedMenuOffset = 0
+            isDismissingWithSwipe = false
+            return
+          }
+          withAnimation(.easeOut(duration: 0.2)) {
+            isExpanded = false
+          }
+
+          DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            expandedMenuOffset = 0
+            isDismissingWithSwipe = false
+          }
+        }
+      }
   }
 
   @ViewBuilder
@@ -202,6 +261,8 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
 
         Button(action: {
           withAnimation(.easeOut(duration: 0.2)) {
+            expandedMenuOffset = 0
+            isDismissingWithSwipe = false
             isExpanded = false
           }
         }) {
@@ -232,11 +293,7 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
     .padding(.top, 4)
     .padding(.bottom, 4)
     .frame(maxWidth: 380)
-    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-    .overlay(
-      RoundedRectangle(cornerRadius: 22, style: .continuous)
-        .stroke(theme.border, lineWidth: 1)
-    )
+    .modifier(DiningDealzCurrentHappyHoursPanelGlass(theme: theme))
     .transition(.move(edge: .bottom).combined(with: .opacity))
   }
 }
@@ -303,12 +360,62 @@ private struct DiningDealzCurrentHappyHoursUpMenuRow: View {
       .frame(maxWidth: .infinity, alignment: .leading)
     }
     .buttonStyle(.plain)
-    .background(theme.rowFill, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-    .overlay(
-      RoundedRectangle(cornerRadius: 16, style: .continuous)
-        .stroke(theme.border.opacity(0.52), lineWidth: 1)
-    )
+    .modifier(DiningDealzCurrentHappyHoursRowGlass(theme: theme))
     .accessibilityLabel(accessibilityLabel)
+  }
+}
+
+private struct DiningDealzCurrentHappyHoursTriggerGlass: ViewModifier {
+  let theme: DiningDealzCurrentHappyHoursTheme
+
+  @ViewBuilder
+  func body(content: Content) -> some View {
+    if #available(iOS 26.0, *) {
+      content.glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
+    } else {
+      content
+        .background(theme.panelFill, in: Capsule(style: .continuous))
+        .overlay(
+          Capsule(style: .continuous)
+            .stroke(theme.border, lineWidth: 1)
+        )
+    }
+  }
+}
+
+private struct DiningDealzCurrentHappyHoursPanelGlass: ViewModifier {
+  let theme: DiningDealzCurrentHappyHoursTheme
+
+  @ViewBuilder
+  func body(content: Content) -> some View {
+    if #available(iOS 26.0, *) {
+      content.glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    } else {
+      content
+        .background(theme.panelFill, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(
+          RoundedRectangle(cornerRadius: 22, style: .continuous)
+            .stroke(theme.border, lineWidth: 1)
+        )
+    }
+  }
+}
+
+private struct DiningDealzCurrentHappyHoursRowGlass: ViewModifier {
+  let theme: DiningDealzCurrentHappyHoursTheme
+
+  @ViewBuilder
+  func body(content: Content) -> some View {
+    if #available(iOS 26.0, *) {
+      content.glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    } else {
+      content
+        .background(theme.rowFill, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+          RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .stroke(theme.border.opacity(0.52), lineWidth: 1)
+        )
+    }
   }
 }
 

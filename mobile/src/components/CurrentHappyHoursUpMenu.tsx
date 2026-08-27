@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Dimensions, PanResponder, Pressable, ScrollView, Text, View } from 'react-native';
 
 import type { CurrentHappyHourPlace, CurrentHappyHourWindow } from '../types';
 import { styles } from '../appStyles';
@@ -60,7 +61,15 @@ export type CurrentHappyHoursUpMenuProps = {
   theme: 'dark' | 'light';
 };
 
-export function ReactNativeCurrentHappyHoursUpMenu({
+export function ReactNativeCurrentHappyHoursUpMenu(props: CurrentHappyHoursUpMenuProps) {
+  if (props.places.length === 0) {
+    return null;
+  }
+
+  return <ReactNativeCurrentHappyHoursUpMenuContent {...props} />;
+}
+
+function ReactNativeCurrentHappyHoursUpMenuContent({
   places,
   expanded,
   onToggle,
@@ -68,17 +77,130 @@ export function ReactNativeCurrentHappyHoursUpMenu({
   bottomOffset,
   theme,
 }: CurrentHappyHoursUpMenuProps) {
-  if (places.length === 0) {
-    return null;
-  }
-
   const isDark = theme === 'dark';
   const countLabel = `${places.length} happy hour${places.length === 1 ? '' : 's'} happening now`;
   const placeCountLabel = places.length === 1 ? '1 business' : `${places.length} businesses`;
+  const [panelMounted, setPanelMounted] = useState(expanded);
+  const panelProgress = useRef(new Animated.Value(expanded ? 1 : 0)).current;
+  const menuTranslateX = useRef(new Animated.Value(0)).current;
+  const swipeDismissedRef = useRef(false);
+
+  useEffect(() => {
+    panelProgress.stopAnimation();
+    menuTranslateX.stopAnimation();
+
+    if (expanded) {
+      swipeDismissedRef.current = false;
+      setPanelMounted(true);
+      Animated.parallel([
+        Animated.timing(panelProgress, {
+          duration: 220,
+          toValue: 1,
+          useNativeDriver: true,
+        }),
+        Animated.timing(menuTranslateX, {
+          duration: 220,
+          toValue: 0,
+          useNativeDriver: true,
+        }),
+      ]).start();
+      return () => {
+        panelProgress.stopAnimation();
+        menuTranslateX.stopAnimation();
+      };
+    }
+
+    const preserveSwipeOffset = swipeDismissedRef.current;
+    Animated.parallel([
+      Animated.timing(panelProgress, {
+        duration: 200,
+        toValue: 0,
+        useNativeDriver: true,
+      }),
+      ...(preserveSwipeOffset ? [] : [Animated.timing(menuTranslateX, {
+        duration: 200,
+        toValue: 0,
+        useNativeDriver: true,
+      })]),
+    ]).start(({ finished }) => {
+      if (!finished) {
+        return;
+      }
+
+      setPanelMounted(false);
+      menuTranslateX.setValue(0);
+      swipeDismissedRef.current = false;
+    });
+
+    return () => {
+      panelProgress.stopAnimation();
+      menuTranslateX.stopAnimation();
+    };
+  }, [expanded, menuTranslateX, panelProgress]);
+
+  const panResponder = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponder: (_event, gestureState) => (
+      expanded
+      && panelMounted
+      && Math.abs(gestureState.dx) > 12
+      && Math.abs(gestureState.dx) > Math.abs(gestureState.dy)
+    ),
+    onMoveShouldSetPanResponderCapture: (_event, gestureState) => (
+      expanded
+      && panelMounted
+      && Math.abs(gestureState.dx) > 12
+      && Math.abs(gestureState.dx) > Math.abs(gestureState.dy)
+    ),
+    onPanResponderMove: (_event, gestureState) => {
+      menuTranslateX.setValue(gestureState.dx);
+    },
+    onPanResponderRelease: (_event, gestureState) => {
+      const isHorizontalSwipe = Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+      if (!isHorizontalSwipe || Math.abs(gestureState.dx) < 72) {
+        Animated.spring(menuTranslateX, {
+          toValue: 0,
+          useNativeDriver: true,
+        }).start();
+        return;
+      }
+
+      swipeDismissedRef.current = true;
+      const direction = gestureState.dx >= 0 ? 1 : -1;
+      const dismissDistance = Math.max(Dimensions.get('window').width, 360);
+      Animated.timing(menuTranslateX, {
+        duration: 180,
+        toValue: direction * dismissDistance,
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished) {
+          onToggle();
+        }
+      });
+    },
+    onPanResponderTerminate: () => {
+      Animated.spring(menuTranslateX, {
+        toValue: 0,
+        useNativeDriver: true,
+      }).start();
+    },
+  }), [expanded, menuTranslateX, onToggle, panelMounted]);
+
+  const shouldRenderPanel = expanded || panelMounted;
 
   return (
     <View pointerEvents="box-none" style={[styles.currentHappyHoursLayer, { bottom: bottomOffset }]}>
-      {expanded ? (
+      {shouldRenderPanel ? (
+        <Animated.View
+          {...panResponder.panHandlers}
+          pointerEvents={expanded ? 'auto' : 'none'}
+          style={{
+            opacity: panelProgress,
+            transform: [
+              { translateX: menuTranslateX },
+              { translateY: panelProgress.interpolate({ inputRange: [0, 1], outputRange: [22, 0] }) },
+            ],
+          }}
+        >
         <View accessibilityViewIsModal={false} style={[styles.currentHappyHoursPanel, isDark ? null : styles.currentHappyHoursPanelLight]} testID="current-happy-hours-menu">
           <View style={styles.currentHappyHoursPanelHeader}>
             <View style={styles.currentHappyHoursPanelHeading}>
@@ -137,9 +259,11 @@ export function ReactNativeCurrentHappyHoursUpMenu({
             ))}
           </ScrollView>
         </View>
+        </Animated.View>
       ) : null}
 
       <Pressable
+        accessibilityHint="Swipe the open list left or right to clear the map view."
         accessibilityLabel={`${countLabel}. ${expanded ? 'Close list.' : 'Open list.'}`}
         accessibilityRole="button"
         onPress={onToggle}
