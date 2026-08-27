@@ -85,7 +85,9 @@ final class DiningDealzExternalPlanner: NSObject {
         context: context,
         onComplete: { [weak self] selection in
           hostingController?.dismiss(animated: true) {
-            self?.presentShareSheet(context: context, selection: selection, from: presenter, resolve: resolve, reject: reject)
+            DispatchQueue.main.async { @MainActor [weak self] in
+              self?.presentShareSheet(context: context, selection: selection, from: presenter, resolve: resolve, reject: reject)
+            }
           }
         },
         onCancel: {
@@ -196,6 +198,7 @@ final class DiningDealzExternalPlanner: NSObject {
     }
   }
 
+  @MainActor
   private func presentShareSheet(
     context: DiningDealzPlannerContext,
     selection: DiningDealzNativeShareSelection,
@@ -204,7 +207,7 @@ final class DiningDealzExternalPlanner: NSObject {
     reject: @escaping RCTPromiseRejectBlock
   ) {
     let message = diningDealzShareText(context: context, selection: selection)
-    let presentSheet: (UIImage?) -> Void = { [weak self] photo in
+    let presentSheet: @MainActor (UIImage?) -> Void = { [weak self] photo in
       guard let self else { return }
       let image = self.diningDealzRenderShareCard(context: context, selection: selection, photo: photo)
       let mapURL = selection.includeLocation
@@ -236,13 +239,13 @@ final class DiningDealzExternalPlanner: NSObject {
     }
 
     URLSession.shared.dataTask(with: url) { data, _, _ in
-      let image = data.flatMap(UIImage.init(data:))
-      DispatchQueue.main.async {
-        presentSheet(image)
+      Task { @MainActor in
+        presentSheet(data.flatMap(UIImage.init(data:)))
       }
     }.resume()
   }
 
+  @MainActor
   private func diningDealzRenderShareCard(
     context: DiningDealzPlannerContext,
     selection: DiningDealzNativeShareSelection,
