@@ -173,18 +173,20 @@ export async function openExternalShare(
       // Keep the preview provider from replacing the branded image with the
       // redirect endpoint's App Store metadata. The actual item remains the
       // universal link above, so the recipient still gets app-first routing.
-      placeholderItem: { content: profileLinks?.app ?? profileLink, type: 'url' as const },
+      placeholderItem: { content: profileLink, type: 'url' as const },
     }]
     : undefined;
-  const message = buildShareText(context, selection, {
-    includeProfileLink: !linkedCardSource,
-    profileLink,
-  });
+  const message = profileLink || !cardUri
+    ? buildShareText(context, selection, {
+      includeProfileLink: !linkedCardSource,
+      profileLink,
+    })
+    : undefined;
 
   await getShareModule().open({
     activityItemSources: linkedCardSource,
     failOnCancel: false,
-    message,
+    ...(message ? { message } : {}),
     title: `Share ${context.name}`,
     type: linkedCardSource ? undefined : cardUri ? 'image/png' : undefined,
     urls: linkedCardSource ? undefined : cardUri ? [cardUri] : undefined,

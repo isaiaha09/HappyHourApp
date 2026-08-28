@@ -11,6 +11,18 @@ class ShareLinkTests(TestCase):
 		self.assertEqual(response.status_code, 302)
 		self.assertEqual(response['Location'], 'https://apps.apple.com/us/app/diningdealz/id123')
 
+	@override_settings(PROFILE_IOS_APP_STORE_URL='')
+	def test_share_link_is_unavailable_until_the_app_store_url_is_configured(self):
+		response = self.client.get('/share/place/yard-house/')
+
+		self.assertEqual(response.status_code, 404)
+
+	@override_settings(PROFILE_IOS_APP_STORE_URL='https://apps.apple.com/us/search?term=DiningDealz')
+	def test_share_link_rejects_a_search_url_as_an_app_store_fallback(self):
+		response = self.client.get('/share/place/yard-house/')
+
+		self.assertEqual(response.status_code, 404)
+
 	@override_settings(
 		DININGDEALZ_IOS_TEAM_ID='TEAM123',
 		DININGDEALZ_IOS_BUNDLE_ID='com.example.diningdealz',

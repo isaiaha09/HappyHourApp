@@ -86,18 +86,56 @@ export type PlannerContentTitles = {
 };
 
 export type BusinessProfileLinks = {
-  app: string;
-  iosProfile: string;
-  iosStore: string;
-  androidStore: string;
+  app?: string;
+  iosProfile?: string;
+  iosStore?: string;
+  androidStore?: string;
 };
 
-const diningDealzIOSProfileLinkBaseURL = (process.env.EXPO_PUBLIC_IOS_PROFILE_LINK_BASE_URL?.trim()
-  || 'https://backend.diningdealz.com/share/place').replace(/\/+$/, '');
-const diningDealzIOSAppStoreURL = process.env.EXPO_PUBLIC_IOS_APP_STORE_URL?.trim()
-  || 'https://apps.apple.com/us/search?term=DiningDealz';
-const diningDealzAndroidStoreURL = process.env.EXPO_PUBLIC_ANDROID_APP_STORE_URL?.trim()
-  || 'https://play.google.com/store/search?q=DiningDealz&c=apps';
+const diningDealzDefaultIOSProfileLinkBaseURL = 'https://link.diningdealz.com/share/place';
+
+function getDiningDealzIOSProfileLinkBaseURL() {
+  const configured = process.env.EXPO_PUBLIC_IOS_PROFILE_LINK_BASE_URL?.trim();
+  if (!configured) {
+    return diningDealzDefaultIOSProfileLinkBaseURL;
+  }
+
+  try {
+    const parsed = new URL(configured);
+    if (parsed.protocol !== 'https:' || parsed.hostname.toLowerCase() !== 'link.diningdealz.com') {
+      return diningDealzDefaultIOSProfileLinkBaseURL;
+    }
+    return configured.replace(/\/+$/, '');
+  } catch {
+    return diningDealzDefaultIOSProfileLinkBaseURL;
+  }
+}
+
+function getDiningDealzIOSAppStoreURL() {
+  const configured = process.env.EXPO_PUBLIC_IOS_APP_STORE_URL?.trim();
+  if (!configured) {
+    return '';
+  }
+
+  try {
+    const parsed = new URL(configured);
+    const path = parsed.pathname.toLowerCase();
+    if (
+      parsed.protocol !== 'https:'
+      || parsed.hostname.toLowerCase() !== 'apps.apple.com'
+      || !path.includes('/app/')
+      || !/\/id\d+/.test(path)
+    ) {
+      return '';
+    }
+    return configured;
+  } catch {
+    return '';
+  }
+}
+
+const diningDealzIOSAppStoreURL = getDiningDealzIOSAppStoreURL();
+const diningDealzAndroidStoreURL = process.env.EXPO_PUBLIC_ANDROID_APP_STORE_URL?.trim() || '';
 
 type DateParts = {
   date: string;
@@ -760,16 +798,18 @@ export function formatPlannerOperatingHours(context: PlannerPlaceContext) {
 
 export function getBusinessProfileLinks(context: Pick<PlannerPlaceContext, 'reference'>): BusinessProfileLinks | null {
   const slug = context.reference.slug.trim();
-  if (!slug) {
+  if (!slug || (!diningDealzIOSAppStoreURL && !diningDealzAndroidStoreURL)) {
     return null;
   }
 
   const encodedSlug = encodeURIComponent(slug);
   return {
-    androidStore: diningDealzAndroidStoreURL,
-    app: `diningdealz://place/${encodedSlug}`,
-    iosProfile: `${diningDealzIOSProfileLinkBaseURL}/${encodedSlug}/`,
-    iosStore: diningDealzIOSAppStoreURL,
+    androidStore: diningDealzAndroidStoreURL || undefined,
+    app: diningDealzAndroidStoreURL ? `diningdealz://place/${encodedSlug}` : undefined,
+    iosProfile: diningDealzIOSAppStoreURL
+      ? `${getDiningDealzIOSProfileLinkBaseURL()}/${encodedSlug}/`
+      : undefined,
+    iosStore: diningDealzIOSAppStoreURL || undefined,
   };
 }
 
@@ -829,8 +869,9 @@ export function buildShareText(
 ) {
   const lines = [`Check out ${context.name} on DiningDealz`];
   const profileLinks = getBusinessProfileLinks(context);
-  if (profileLinks && options.includeProfileLink !== false) {
-    lines.push(options.profileLink ?? profileLinks.app);
+  const profileLink = options.profileLink ?? profileLinks?.iosProfile ?? profileLinks?.app;
+  if (profileLink && options.includeProfileLink !== false) {
+    lines.push(profileLink);
   }
 
   return lines.filter(Boolean).join('\n');

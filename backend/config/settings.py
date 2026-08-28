@@ -24,6 +24,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 ENV_VALUES = load_env_file(BASE_DIR)
 
+PROFILE_SHARE_HOST = get_env('PROFILE_SHARE_HOST', ENV_VALUES, 'link.diningdealz.com').strip().lower()
+
 
 def _is_truthy_env(name):
     value = str(get_env(name, ENV_VALUES, '')).strip().lower()
@@ -54,6 +56,7 @@ def _build_allowed_hosts(debug):
 
     render_hostname = get_env('RENDER_EXTERNAL_HOSTNAME', ENV_VALUES, '').strip()
     _append_unique(allowed_hosts, render_hostname)
+    _append_unique(allowed_hosts, PROFILE_SHARE_HOST)
     return allowed_hosts
 
 
@@ -745,7 +748,7 @@ DEFAULT_FROM_EMAIL = get_env('DEFAULT_FROM_EMAIL', ENV_VALUES, 'noreply@diningde
 SERVER_EMAIL = get_env('SERVER_EMAIL', ENV_VALUES, DEFAULT_FROM_EMAIL)
 
 PROFILE_APP_LINK_URL = get_env('PROFILE_APP_LINK_URL', ENV_VALUES, '')
-PROFILE_IOS_APP_STORE_URL = get_env('PROFILE_IOS_APP_STORE_URL', ENV_VALUES, 'https://apps.apple.com/us/search?term=DiningDealz')
+PROFILE_IOS_APP_STORE_URL = get_env('PROFILE_IOS_APP_STORE_URL', ENV_VALUES, '').strip()
 DININGDEALZ_IOS_TEAM_ID = get_env('DININGDEALZ_IOS_TEAM_ID', ENV_VALUES, 'V6MYG36LZ9')
 DININGDEALZ_IOS_BUNDLE_ID = get_env('DININGDEALZ_IOS_BUNDLE_ID', ENV_VALUES, 'com.ia09.diningdealz')
 PROFILE_USERNAME_RECOVERY_URL_BASE = get_env('PROFILE_USERNAME_RECOVERY_URL_BASE', ENV_VALUES, 'diningdealz://forgot-username')

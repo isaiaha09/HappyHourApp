@@ -14,11 +14,13 @@
     },
     "ios": {
       "associatedDomains": [
+        "applinks:link.diningdealz.com",
         "applinks:backend.diningdealz.com"
       ],
       "buildNumber": "78",
       "infoPlist": {
-        "DiningDealzProfileLinkBaseURL": "https://backend.diningdealz.com/share/place",
+        "DiningDealzProfileLinkBaseURL": "https://link.diningdealz.com/share/place",
+        "DiningDealzIOSAppStoreURL": "",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "When you enable live location for an approved business, DiningDealz uses your location to keep that business pin updated while the app is closed.",
         "NSLocationAlwaysUsageDescription": "When you enable live location for an approved business, DiningDealz uses your location to keep that business pin updated while the app is closed.",
         "NSLocationWhenInUseUsageDescription": "DiningDealz uses your location to show nearby places and, when enabled for an approved business, update its live map location.",

@@ -246,7 +246,7 @@ final class DiningDealzExternalPlanner: NSObject {
     let presentSheet: @MainActor (UIImage?) -> Void = { [weak self] photo in
       guard let self else { return }
       let image = self.diningDealzRenderShareCard(context: context, selection: selection, photo: photo)
-      var items: [Any] = [message]
+      var items: [Any] = []
       if let profileLinks = diningDealzShareProfileLinks(context),
          let profileURL = URL(string: profileLinks.app) {
         items.append(DiningDealzProfileLinkActivityItemSource(
@@ -256,6 +256,8 @@ final class DiningDealzExternalPlanner: NSObject {
         ))
       } else if let image {
         items.append(image)
+      } else {
+        items.append(message)
       }
 
       let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
@@ -356,16 +358,39 @@ private struct DiningDealzShareProfileLinks {
 }
 
 private func diningDealzIOSProfileLinkBaseURL() -> String {
+  let defaultBaseURL = "https://link.diningdealz.com/share/place"
   let configured = (Bundle.main.object(forInfoDictionaryKey: "DiningDealzProfileLinkBaseURL") as? String)?
     .trimmingCharacters(in: .whitespacesAndNewlines)
     .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-  if let configured, !configured.isEmpty {
+  if let configured,
+     !configured.isEmpty,
+     let url = URL(string: configured),
+     url.scheme?.lowercased() == "https",
+     url.host?.lowercased() == "link.diningdealz.com" {
     return configured
   }
-  return "https://backend.diningdealz.com/share/place"
+  return defaultBaseURL
+}
+
+private func diningDealzIOSAppStoreURL() -> String? {
+  guard let configured = Bundle.main.object(forInfoDictionaryKey: "DiningDealzIOSAppStoreURL") as? String else {
+    return nil
+  }
+  let value = configured.trimmingCharacters(in: .whitespacesAndNewlines)
+  guard
+    let url = URL(string: value),
+    url.scheme?.lowercased() == "https",
+    url.host?.lowercased() == "apps.apple.com",
+    url.path.lowercased().contains("/app/"),
+    url.path.range(of: "/id\\d+", options: .regularExpression) != nil
+  else {
+    return nil
+  }
+  return value
 }
 
 private func diningDealzShareProfileLinks(_ context: DiningDealzPlannerContext) -> DiningDealzShareProfileLinks? {
+  guard diningDealzIOSAppStoreURL() != nil else { return nil }
   let slug = context.reference.slug.trimmingCharacters(in: .whitespacesAndNewlines)
   guard !slug.isEmpty else { return nil }
   var allowedCharacters = CharacterSet.urlPathAllowed

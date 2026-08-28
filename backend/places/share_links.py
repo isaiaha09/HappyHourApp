@@ -1,10 +1,28 @@
 from django.conf import settings
-from django.http import HttpResponseRedirect, JsonResponse
+from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
+from urllib.parse import urlparse
+
+
+def _configured_ios_app_store_url():
+    value = str(getattr(settings, 'PROFILE_IOS_APP_STORE_URL', '') or '').strip()
+    parsed = urlparse(value)
+    path = parsed.path.lower()
+    if (
+        parsed.scheme != 'https'
+        or parsed.netloc.lower() != 'apps.apple.com'
+        or '/app/' not in path
+        or not any(part.startswith('id') and part[2:].isdigit() for part in path.split('/'))
+    ):
+        return ''
+    return value
 
 
 def share_place_redirect(_request, _slug):
-	"""Send non-installed iOS users to the App Store, never to the public website."""
-	return HttpResponseRedirect(settings.PROFILE_IOS_APP_STORE_URL)
+    """Send non-installed iOS users to the App Store, never to the public website."""
+    app_store_url = _configured_ios_app_store_url()
+    if not app_store_url:
+        return HttpResponse('DiningDealz profile links are not available yet.', status=404)
+    return HttpResponseRedirect(app_store_url)
 
 
 def apple_app_site_association(_request):

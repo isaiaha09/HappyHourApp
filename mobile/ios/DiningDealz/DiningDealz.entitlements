@@ -4,6 +4,7 @@
   <dict>
     <key>com.apple.developer.associated-domains</key>
     <array>
+      <string>applinks:link.diningdealz.com</string>
       <string>applinks:backend.diningdealz.com</string>
     </array>
     <key>aps-environment</key>

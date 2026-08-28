@@ -295,15 +295,18 @@ The mobile app handles the username reminder screen and the token-based password
 
 ## Mobile Business Profile Share Links
 
-Restaurant sharing uses `https://backend.diningdealz.com/share/place/<slug>/` as an iOS Universal Link. An installed DiningDealz app opens the business profile directly; otherwise the backend redirects to the iOS App Store. The route never renders or redirects to the public business website.
+Restaurant sharing is prepared to use `https://link.diningdealz.com/share/place/<slug>/` as an iOS Universal Link once the app has an App Store listing. An installed DiningDealz app opens the business profile directly; otherwise the link service redirects straight to the iOS App Store. The mobile share payload does not use the public DiningDealz website.
 
-The iOS build declares `applinks:backend.diningdealz.com`, and the backend serves the required association document at `/.well-known/apple-app-site-association`. Set these production values when the App Store listing has a stable URL:
+The iOS build declares `applinks:link.diningdealz.com` for new shares and retains `applinks:backend.diningdealz.com` only so older already-sent links can still open the app. The backend serves the required association document at `/.well-known/apple-app-site-association`. Point `link.diningdealz.com` at the backend Render service before enabling profile links. Set these production values on the backend when the App Store listing has a stable URL:
 
 - `PROFILE_IOS_APP_STORE_URL=https://apps.apple.com/us/app/<app-name>/id<app-id>`
+- `PROFILE_SHARE_HOST=link.diningdealz.com`
 - `DININGDEALZ_IOS_TEAM_ID=V6MYG36LZ9`
 - `DININGDEALZ_IOS_BUNDLE_ID=com.ia09.diningdealz`
 
-Until `PROFILE_IOS_APP_STORE_URL` is set, the fallback uses an App Store search for DiningDealz. The mobile build can use `EXPO_PUBLIC_IOS_PROFILE_LINK_BASE_URL` to point at a different HTTPS share-link host only when that host serves the matching AASA document.
+Until `PROFILE_IOS_APP_STORE_URL` is set, no profile URL is included in shares. The mobile build is pinned to `link.diningdealz.com`; changing that host requires updating the iOS associated-domain entitlement and the matching AASA document together.
+
+At the moment `PROFILE_IOS_APP_STORE_URL` is intentionally unset, so shares are image-only and contain no website or store link. When the app is published, set that value, point the `link.diningdealz.com` DNS record at the backend Render service, and rebuild/reinstall the iOS app. Universal Link entitlements are embedded in the signed app; an already-installed build will not recognize the new link host.
 
 ## Production Rate Limiting
 

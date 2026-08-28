@@ -98,8 +98,8 @@ describe('external planner domain', () => {
     const cardDetails = getPlannerShareCardDetails(context, selection);
     const profileLinks = getBusinessProfileLinks(context);
 
-    expect(text).toBe(`Check out Example Bar on DiningDealz\n${profileLinks?.app}`);
-    expect(profileLinks?.iosProfile).toBe('https://backend.diningdealz.com/share/place/example-bar/');
+    expect(text).toBe('Check out Example Bar on DiningDealz');
+    expect(profileLinks).toBeNull();
     expect(cardDetails).toContain('My time: 08-27-2026 · 4:30 PM - 6:00 PM');
     expect(cardDetails).toContain('Happy Hours and Deals: 1 special — Afternoon Happy Hour');
     expect(cardDetails).toContain('123 Main Street, Ventura');
@@ -132,7 +132,7 @@ describe('external planner domain', () => {
 
     expect(formatPlannerOperatingHours(context)).toBe('MON-SUN: 11:30 AM - 2:00 PM');
     expect(cardDetails).toContain('Hours of operation: MON-SUN: 11:30 AM - 2:00 PM');
-    expect(text).toBe(`Check out Example Bar on DiningDealz\n${getBusinessProfileLinks(context)?.app}`);
+    expect(text).toBe('Check out Example Bar on DiningDealz');
     expect(text).not.toContain('Hours of operation');
     expect(text).not.toContain('Afternoon Happy Hour');
     expect(notes).toContain('Happy Hours and Deals: 1 special — Afternoon Happy Hour');
