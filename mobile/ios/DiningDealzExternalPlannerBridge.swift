@@ -94,6 +94,9 @@ final class DiningDealzExternalPlanner: NSObject {
       )
       let controller = UIHostingController(rootView: rootView)
       hostingController = controller
+      if let theme = context.theme?.lowercased() {
+        controller.overrideUserInterfaceStyle = theme == "light" ? .light : .dark
+      }
       controller.modalPresentationStyle = .pageSheet
       presenter.present(controller, animated: true)
     }
@@ -134,6 +137,9 @@ final class DiningDealzExternalPlanner: NSObject {
       )
       let controller = UIHostingController(rootView: rootView)
       hostingController = controller
+      if let theme = context.theme?.lowercased() {
+        controller.overrideUserInterfaceStyle = theme == "light" ? .light : .dark
+      }
       controller.modalPresentationStyle = .pageSheet
       presenter.present(controller, animated: true)
     }

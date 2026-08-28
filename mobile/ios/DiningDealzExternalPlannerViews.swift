@@ -351,29 +351,12 @@ struct DiningDealzShareComposerView: View {
               DatePicker("Date", selection: $selectedDate, displayedComponents: .date)
                 .datePickerStyle(.compact)
                 .foregroundStyle(DiningDealzPlannerPalette.foreground(for: colorScheme))
-              HStack(alignment: .top, spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                  Text("Start")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(DiningDealzPlannerPalette.muted(for: colorScheme))
-                  DatePicker("Start", selection: $selectedStartTime, displayedComponents: .hourAndMinute)
-                    .labelsHidden()
-                    .datePickerStyle(.compact)
-                    .foregroundStyle(DiningDealzPlannerPalette.foreground(for: colorScheme))
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                VStack(alignment: .leading, spacing: 4) {
-                  Text("End")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(DiningDealzPlannerPalette.muted(for: colorScheme))
-                  DatePicker("End", selection: $selectedEndTime, displayedComponents: .hourAndMinute)
-                    .labelsHidden()
-                    .datePickerStyle(.compact)
-                    .foregroundStyle(DiningDealzPlannerPalette.foreground(for: colorScheme))
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-              }
+              DatePicker("Start", selection: $selectedStartTime, displayedComponents: .hourAndMinute)
+                .datePickerStyle(.compact)
+                .foregroundStyle(DiningDealzPlannerPalette.foreground(for: colorScheme))
+              DatePicker("End", selection: $selectedEndTime, displayedComponents: .hourAndMinute)
+                .datePickerStyle(.compact)
+                .foregroundStyle(DiningDealzPlannerPalette.foreground(for: colorScheme))
             }
           } else {
             Text("Choose the details your friend should receive. The business name and DiningDealz branding are always included.")

@@ -297,12 +297,50 @@ The mobile app handles the username reminder screen and the token-based password
 
 Restaurant sharing is prepared to use `https://link.diningdealz.com/share/place/<slug>/` as an iOS Universal Link once the app has an App Store listing. An installed DiningDealz app opens the business profile directly; otherwise the link service redirects straight to the iOS App Store. The mobile share payload does not use the public DiningDealz website.
 
-The iOS build declares `applinks:link.diningdealz.com` for new shares and retains `applinks:backend.diningdealz.com` only so older already-sent links can still open the app. The backend serves the required association document at `/.well-known/apple-app-site-association`. Point `link.diningdealz.com` at the backend Render service before enabling profile links. Set these production values on the backend when the App Store listing has a stable URL:
+The iOS build declares `applinks:link.diningdealz.com` for new shares and retains `applinks:backend.diningdealz.com` only so older already-sent links can still open the app. The backend serves the required association document at `/.well-known/apple-app-site-association`. Point `link.diningdealz.com` at the backend Render service before enabling profile links.
 
-- `PROFILE_IOS_APP_STORE_URL=https://apps.apple.com/us/app/<app-name>/id<app-id>`
-- `PROFILE_SHARE_HOST=link.diningdealz.com`
-- `DININGDEALZ_IOS_TEAM_ID=V6MYG36LZ9`
-- `DININGDEALZ_IOS_BUNDLE_ID=com.ia09.diningdealz`
+### Enable profile links after App Store publication
+
+Complete these steps in order:
+
+1. Create the public link host in Render and DNS.
+
+   - In the Render dashboard, open the backend web service, go to **Settings → Custom Domains**, and add `link.diningdealz.com`.
+   - Render will show the DNS target for the custom domain. At the DNS provider for `diningdealz.com`, create the `link` CNAME record using that target. Do not point it at the public website deployment.
+   - Wait for Render to verify the domain and issue HTTPS. The link host must serve the backend over HTTPS.
+
+2. Configure the backend environment variables in Render.
+
+   ```text
+   PROFILE_IOS_APP_STORE_URL=https://apps.apple.com/us/app/<app-name>/id<app-id>
+   PROFILE_SHARE_HOST=link.diningdealz.com
+   DININGDEALZ_IOS_TEAM_ID=V6MYG36LZ9
+   DININGDEALZ_IOS_BUNDLE_ID=com.ia09.diningdealz
+   ```
+
+   Use the real App Store app URL. Do not use an App Store search URL. Save the variables and redeploy the backend.
+
+3. Enable the link in the mobile production configuration.
+
+   - In `mobile/eas.json`, set `EXPO_PUBLIC_IOS_APP_STORE_URL` to the same real App Store URL.
+   - Keep `EXPO_PUBLIC_IOS_PROFILE_LINK_BASE_URL` set to `https://link.diningdealz.com/share/place`.
+   - In `mobile/app.json`, set `ios.infoPlist.DiningDealzIOSAppStoreURL` to the same URL.
+   - Keep the matching `DiningDealzIOSAppStoreURL` value synchronized in `mobile/ios/DiningDealz/Info.plist` and `mobile/ios/DiningDealz/Info-Debug.plist` if the checked-in native iOS project is being built directly.
+
+4. Build and reinstall the iOS app.
+
+   ```bash
+   cd mobile
+   eas build --platform ios --profile production
+   ```
+
+   Install the new build after deleting the older app from the device if necessary. Universal Link entitlements are embedded in the signed app, so changing Render or DNS cannot update an already-installed build.
+
+5. Verify the deployment before sharing.
+
+   - Open `https://link.diningdealz.com/.well-known/apple-app-site-association` and confirm it returns JSON containing `V6MYG36LZ9.com.ia09.diningdealz` and `/share/place/*`.
+   - Open `https://link.diningdealz.com/share/place/<slug>/` on a device without the app and confirm it redirects to the exact App Store app page.
+   - Open the same profile link on a device with the newly installed app and confirm DiningDealz opens the matching business profile.
 
 Until `PROFILE_IOS_APP_STORE_URL` is set, no profile URL is included in shares. The mobile build is pinned to `link.diningdealz.com`; changing that host requires updating the iOS associated-domain entitlement and the matching AASA document together.
 

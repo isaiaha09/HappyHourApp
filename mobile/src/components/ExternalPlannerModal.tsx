@@ -378,14 +378,14 @@ function CalendarComposer({ context, onClose, onSubmit, palette }: CalendarCompo
       <Text style={[styles.helperText, colorStyles.helperText]}>{date ? formatDateLabel(date) : 'Use the date you plan to visit.'}</Text>
 
       <View style={styles.timeRow}>
-        <View style={styles.timeField}>
-          <Text style={[styles.fieldLabel, colorStyles.fieldLabel]}>Start</Text>
+        <View style={styles.timeFieldRow}>
+          <Text style={[styles.fieldLabel, styles.timeFieldRowLabel, colorStyles.fieldLabel]}>Start</Text>
           <Pressable
             accessibilityLabel="Choose calendar start time"
             accessibilityRole="button"
             disabled={allDay}
             onPress={() => setPickerKind('startTime')}
-            style={[styles.input, styles.nativePickerField, styles.timeInput, colorStyles.input, allDay ? styles.disabledPickerField : null]}
+            style={[styles.input, styles.nativePickerField, styles.timeInputAligned, colorStyles.input, allDay ? styles.disabledPickerField : null]}
           >
             <Text style={[styles.nativePickerValue, colorStyles.nativePickerValue]}>
               {startTime ? formatPlannerTimeInput(startTime) : 'Choose start'}
@@ -393,14 +393,14 @@ function CalendarComposer({ context, onClose, onSubmit, palette }: CalendarCompo
             <Ionicons color={palette.muted} name="time-outline" size={19} />
           </Pressable>
         </View>
-        <View style={styles.timeField}>
-          <Text style={[styles.fieldLabel, colorStyles.fieldLabel]}>End</Text>
+        <View style={styles.timeFieldRow}>
+          <Text style={[styles.fieldLabel, styles.timeFieldRowLabel, colorStyles.fieldLabel]}>End</Text>
           <Pressable
             accessibilityLabel="Choose calendar end time"
             accessibilityRole="button"
             disabled={allDay}
             onPress={() => setPickerKind('endTime')}
-            style={[styles.input, styles.nativePickerField, styles.timeInput, colorStyles.input, allDay ? styles.disabledPickerField : null]}
+            style={[styles.input, styles.nativePickerField, styles.timeInputAligned, colorStyles.input, allDay ? styles.disabledPickerField : null]}
           >
             <Text style={[styles.nativePickerValue, colorStyles.nativePickerValue]}>
               {endTime ? formatPlannerTimeInput(endTime) : 'Choose end'}
@@ -613,8 +613,8 @@ function ShareComposer({ context, onClose, onSubmit, palette }: ShareComposerPro
             <Ionicons color={palette.muted} name="calendar-outline" size={19} />
           </Pressable>
           <View style={styles.timeRow}>
-            <View style={styles.timeField}>
-              <Text style={[styles.fieldLabel, colorStyles.fieldLabel]}>Start</Text>
+            <View style={styles.timeFieldRow}>
+              <Text style={[styles.fieldLabel, styles.timeFieldRowLabel, colorStyles.fieldLabel]}>Start</Text>
               <Pressable
                 accessibilityLabel="Choose availability start time"
                 accessibilityRole="button"
@@ -622,7 +622,7 @@ function ShareComposer({ context, onClose, onSubmit, palette }: ShareComposerPro
                   Keyboard.dismiss();
                   setPickerKind('startTime');
                 }}
-                style={[styles.input, styles.nativePickerField, styles.timeInput, colorStyles.input]}
+                style={[styles.input, styles.nativePickerField, styles.timeInputAligned, colorStyles.input]}
               >
                 <Text style={[styles.nativePickerValue, colorStyles.nativePickerValue]}>
                   {selection.startTime ? formatPlannerTimeInput(selection.startTime) : 'Choose start'}
@@ -630,8 +630,8 @@ function ShareComposer({ context, onClose, onSubmit, palette }: ShareComposerPro
                 <Ionicons color={palette.muted} name="time-outline" size={19} />
               </Pressable>
             </View>
-            <View style={styles.timeField}>
-              <Text style={[styles.fieldLabel, colorStyles.fieldLabel]}>End</Text>
+            <View style={styles.timeFieldRow}>
+              <Text style={[styles.fieldLabel, styles.timeFieldRowLabel, colorStyles.fieldLabel]}>End</Text>
               <Pressable
                 accessibilityLabel="Choose availability end time"
                 accessibilityRole="button"
@@ -639,7 +639,7 @@ function ShareComposer({ context, onClose, onSubmit, palette }: ShareComposerPro
                   Keyboard.dismiss();
                   setPickerKind('endTime');
                 }}
-                style={[styles.input, styles.nativePickerField, styles.timeInput, colorStyles.input]}
+                style={[styles.input, styles.nativePickerField, styles.timeInputAligned, colorStyles.input]}
               >
                 <Text style={[styles.nativePickerValue, colorStyles.nativePickerValue]}>
                   {selection.endTime ? formatPlannerTimeInput(selection.endTime) : 'Choose end'}
@@ -1141,15 +1141,23 @@ const styles = StyleSheet.create({
     height: 124,
     justifyContent: 'center',
   },
-  timeField: {
-    flex: 1,
+  timeFieldRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'space-between',
   },
-  timeInput: {
-    flex: 1,
+  timeFieldRowLabel: {
+    marginBottom: 0,
+    textTransform: 'none',
+  },
+  timeInputAligned: {
+    flex: 0,
+    minWidth: 150,
   },
   timeRow: {
-    flexDirection: 'row',
-    gap: 16,
+    flexDirection: 'column',
+    gap: 10,
     marginTop: 10,
   },
 });
