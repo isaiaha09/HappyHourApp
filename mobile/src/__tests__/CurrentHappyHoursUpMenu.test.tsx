@@ -1,5 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 
+import { getVenuePlaceholderColor } from '../browseConfig';
 import { CurrentHappyHoursUpMenu } from '../components/CurrentHappyHoursUpMenu';
 import type { CurrentHappyHourPlace } from '../types';
 
@@ -153,6 +155,94 @@ describe('CurrentHappyHoursUpMenu', () => {
 
     expect(onAddToCalendar).toHaveBeenCalledWith(place, place.happy_hours[0]);
     expect(onSharePlace).toHaveBeenCalledWith(place, place.happy_hours[0]);
+  });
+
+  it('uses each venue category color for no-photo headers', () => {
+    const venueTypeLabels = [
+      'Restaurant',
+      'Bar',
+      'Fast Food',
+      'Mobile Vendor',
+      'Cafe',
+      'Shop',
+      'Attraction',
+      'Other',
+      'Uncategorized',
+    ];
+    const places = venueTypeLabels.map((venueTypeLabel, index) => ({
+      ...place,
+      location_id: 300 + index,
+      slug: `no-photo-${index}`,
+      venue_type_label: venueTypeLabel,
+    }));
+
+    render(
+      <CurrentHappyHoursUpMenu
+        bottomOffset={96}
+        expanded
+        onSelectPlace={jest.fn()}
+        onToggle={jest.fn()}
+        places={places}
+        theme="dark"
+      />,
+    );
+
+    places.forEach((currentPlace) => {
+      const placeholder = screen.getByTestId(`current-happy-hours-placeholder-${currentPlace.slug}:${currentPlace.location_id}`);
+      expect(StyleSheet.flatten(placeholder.props.style)).toEqual(expect.objectContaining({
+        backgroundColor: getVenuePlaceholderColor(currentPlace.venue_type_label),
+      }));
+    });
+  });
+
+  it('keeps a valid image and falls back to its category color after an image error', () => {
+    const imagePlace: CurrentHappyHourPlace = {
+      ...place,
+      image_urls: ['https://example.com/example-bar.jpg'],
+    };
+
+    render(
+      <CurrentHappyHoursUpMenu
+        bottomOffset={96}
+        expanded
+        onSelectPlace={jest.fn()}
+        onToggle={jest.fn()}
+        places={[imagePlace]}
+        theme="light"
+      />,
+    );
+
+    const image = screen.getByTestId('current-happy-hours-image-example-bar:101');
+    expect(image.props.source).toEqual({ uri: 'https://example.com/example-bar.jpg' });
+    expect(screen.queryByTestId('current-happy-hours-placeholder-example-bar:101')).toBeNull();
+
+    fireEvent(image, 'error');
+
+    const placeholder = screen.getByTestId('current-happy-hours-placeholder-example-bar:101');
+    expect(StyleSheet.flatten(placeholder.props.style)).toEqual(expect.objectContaining({
+      backgroundColor: getVenuePlaceholderColor('Bar'),
+    }));
+  });
+
+  it('treats invalid image URLs as missing photos', () => {
+    const invalidImagePlace: CurrentHappyHourPlace = {
+      ...place,
+      image_urls: ['not-a-url'],
+    };
+
+    render(
+      <CurrentHappyHoursUpMenu
+        bottomOffset={96}
+        expanded
+        onSelectPlace={jest.fn()}
+        onToggle={jest.fn()}
+        places={[invalidImagePlace]}
+        theme="dark"
+      />,
+    );
+
+    expect(screen.queryByTestId('current-happy-hours-image-example-bar:101')).toBeNull();
+    expect(screen.getByTestId('current-happy-hours-placeholder-example-bar:101')).toBeTruthy();
   });
 
   it('shows both the total deal count and the number of businesses', () => {

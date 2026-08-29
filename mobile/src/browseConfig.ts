@@ -47,6 +47,8 @@ const venueMarkerStyles = {
   other: { icon: 'map-marker-outline', fill: '#ff8f70', stroke: '#c46247' },
 } as const;
 
+const venuePlaceholderWhiteBlend = 0.35;
+
 const starredVenueMarkerStyle = {
   icon: 'star',
   fill: '#ffffff',
@@ -61,6 +63,51 @@ export function getVenueMarkerStyle(venueType: string, isStarred = false) {
   }
 
   return venueMarkerStyles[venueType as keyof typeof venueMarkerStyles] ?? venueMarkerStyles.other;
+}
+
+export function getVenueFilterValueFromLabel(venueTypeLabel: string): VenueFilterValue {
+  const normalizedLabel = venueTypeLabel.trim().toLowerCase();
+
+  if (normalizedLabel.includes('restaurant')) {
+    return 'restaurant';
+  }
+  if (normalizedLabel.includes('bar')) {
+    return 'bar';
+  }
+  if (normalizedLabel.includes('fast')) {
+    return 'fast_food';
+  }
+  if (normalizedLabel.includes('mobile') || normalizedLabel.includes('vendor')) {
+    return 'mobile';
+  }
+  if (normalizedLabel.includes('cafe') || normalizedLabel.includes('coffee')) {
+    return 'cafe';
+  }
+  if (normalizedLabel.includes('shop') || normalizedLabel.includes('store')) {
+    return 'shop';
+  }
+  if (normalizedLabel.includes('attraction')) {
+    return 'attraction';
+  }
+
+  return 'other';
+}
+
+function blendHexColorWithWhite(hexColor: string, whiteBlend: number) {
+  const normalizedHexColor = hexColor.replace(/^#/, '');
+  const red = Number.parseInt(normalizedHexColor.slice(0, 2), 16);
+  const green = Number.parseInt(normalizedHexColor.slice(2, 4), 16);
+  const blue = Number.parseInt(normalizedHexColor.slice(4, 6), 16);
+  const colorChannels = [red, green, blue].map((channel) => Math.round(channel * (1 - whiteBlend) + 255 * whiteBlend));
+
+  return `#${colorChannels.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
+}
+
+export function getVenuePlaceholderColor(venueTypeLabel: string) {
+  const venueFilterValue = getVenueFilterValueFromLabel(venueTypeLabel);
+  const venueColor = getVenueMarkerStyle(venueFilterValue).fill;
+
+  return blendHexColorWithWhite(venueColor, venuePlaceholderWhiteBlend);
 }
 
 type BrowseSummaryOptions = {

@@ -5,7 +5,7 @@ import { PanGestureHandler, State } from 'react-native-gesture-handler';
 
 import type { CurrentHappyHourPlace, CurrentHappyHourWindow } from '../types';
 import { styles } from '../appStyles';
-import { getVenueMarkerStyle, type VenueFilterValue } from '../browseConfig';
+import { getVenueFilterValueFromLabel, getVenueMarkerStyle, getVenuePlaceholderColor } from '../browseConfig';
 import {
   isNativeIOSCurrentHappyHoursUpMenuAvailable,
   NativeIOSCurrentHappyHoursUpMenu,
@@ -61,36 +61,8 @@ function getCardImageUrl(place: CurrentHappyHourPlace) {
   return (place.image_urls ?? []).find((imageUrl) => /^https?:\/\//i.test(imageUrl.trim())) ?? null;
 }
 
-function getVenueFilterValue(venueTypeLabel: string): VenueFilterValue {
-  const normalizedLabel = venueTypeLabel.trim().toLowerCase();
-
-  if (normalizedLabel.includes('restaurant')) {
-    return 'restaurant';
-  }
-  if (normalizedLabel.includes('bar')) {
-    return 'bar';
-  }
-  if (normalizedLabel.includes('fast')) {
-    return 'fast_food';
-  }
-  if (normalizedLabel.includes('mobile') || normalizedLabel.includes('vendor')) {
-    return 'mobile';
-  }
-  if (normalizedLabel.includes('cafe') || normalizedLabel.includes('coffee')) {
-    return 'cafe';
-  }
-  if (normalizedLabel.includes('shop') || normalizedLabel.includes('store')) {
-    return 'shop';
-  }
-  if (normalizedLabel.includes('attraction')) {
-    return 'attraction';
-  }
-
-  return 'other';
-}
-
 function getCategoryPlaceholderIcon(venueTypeLabel: string) {
-  return getVenueMarkerStyle(getVenueFilterValue(venueTypeLabel)).icon;
+  return getVenueMarkerStyle(getVenueFilterValueFromLabel(venueTypeLabel)).icon;
 }
 
 export type CurrentHappyHoursUserCoordinates = {
@@ -471,6 +443,7 @@ function CurrentHappyHoursDealCard({ isDark, onAddToCalendar, onFavorite, onSele
   const imageUrl = getCardImageUrl(place);
   const [imageLoadFailed, setImageLoadFailed] = useState(false);
   const distanceLabel = getDistanceLabel(userCoordinates, place);
+  const placeholderColor = getVenuePlaceholderColor(place.venue_type_label);
 
   useEffect(() => {
     setImageLoadFailed(false);
@@ -487,16 +460,24 @@ function CurrentHappyHoursDealCard({ isDark, onAddToCalendar, onFavorite, onSele
         style={styles.currentHappyHoursDealCardContent}
         testID={`current-happy-hours-row-${place.slug}:${place.location_id}`}
       >
-        <View style={styles.currentHappyHoursDealImageFrame}>
+        <View style={[styles.currentHappyHoursDealImageFrame, { backgroundColor: placeholderColor }]}>
           {shouldRenderImage ? (
             <Image
               onError={() => setImageLoadFailed(true)}
               resizeMode="cover"
               source={{ uri: imageUrl }}
               style={styles.currentHappyHoursDealImage}
+              testID={`current-happy-hours-image-${place.slug}:${place.location_id}`}
             />
           ) : (
-            <View style={[styles.currentHappyHoursDealImagePlaceholder, isDark ? styles.currentHappyHoursDealImagePlaceholderDark : null]}>
+            <View
+              style={[
+                styles.currentHappyHoursDealImagePlaceholder,
+                isDark ? styles.currentHappyHoursDealImagePlaceholderDark : null,
+                { backgroundColor: placeholderColor },
+              ]}
+              testID={`current-happy-hours-placeholder-${place.slug}:${place.location_id}`}
+            >
               <MaterialCommunityIcons color={isDark ? '#f2f4f1' : '#68716a'} name={getCategoryPlaceholderIcon(place.venue_type_label)} size={34} />
             </View>
           )}

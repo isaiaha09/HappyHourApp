@@ -45,6 +45,7 @@ struct DiningDealzCurrentHappyHourPlace: Codable, Hashable, Identifiable {
   let latitude: Double?
   let longitude: Double?
   let imageURLs: [String]
+  let imagePlaceholderColorHex: String?
   let happyHours: [DiningDealzCurrentHappyHourWindow]
 
   var id: String { "\(slug):\(locationID)" }
@@ -61,6 +62,7 @@ struct DiningDealzCurrentHappyHourPlace: Codable, Hashable, Identifiable {
     case latitude
     case longitude
     case imageURLs = "image_urls"
+    case imagePlaceholderColorHex = "image_placeholder_color"
     case happyHours = "happy_hours"
   }
 
@@ -77,6 +79,7 @@ struct DiningDealzCurrentHappyHourPlace: Codable, Hashable, Identifiable {
     latitude = try container.decodeIfPresent(Double.self, forKey: .latitude)
     longitude = try container.decodeIfPresent(Double.self, forKey: .longitude)
     imageURLs = try container.decodeIfPresent([String].self, forKey: .imageURLs) ?? []
+    imagePlaceholderColorHex = try container.decodeIfPresent(String.self, forKey: .imagePlaceholderColorHex)
     happyHours = try container.decode([DiningDealzCurrentHappyHourWindow].self, forKey: .happyHours)
   }
 }
@@ -170,6 +173,23 @@ enum DiningDealzCurrentHappyHoursTheme: Equatable {
   var accent: Color {
     Color(red: 1.0, green: 0.32, blue: 0.29)
   }
+}
+
+private func diningDealzCurrentHappyHoursColor(from hex: String?) -> Color? {
+  guard let hex else {
+    return nil
+  }
+
+  let normalizedHex = hex.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "#", with: "")
+  guard normalizedHex.count == 6, let rgb = UInt64(normalizedHex, radix: 16) else {
+    return nil
+  }
+
+  return Color(
+    red: Double((rgb >> 16) & 0xff) / 255,
+    green: Double((rgb >> 8) & 0xff) / 255,
+    blue: Double(rgb & 0xff) / 255
+  )
 }
 
 private struct DiningDealzTopRoundedRectangle: Shape {
@@ -584,7 +604,7 @@ private struct DiningDealzCurrentHappyHoursUpMenuCard: View {
 
   private var imagePlaceholder: some View {
     ZStack {
-      theme.imagePlaceholder
+      diningDealzCurrentHappyHoursColor(from: place.imagePlaceholderColorHex) ?? theme.imagePlaceholder
       Image(systemName: placeholderSystemImage)
         .font(.system(size: 30, weight: .medium))
         .foregroundStyle(theme.mutedForeground)

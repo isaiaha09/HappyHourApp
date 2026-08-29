@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import {
   Dimensions,
   Platform,
@@ -9,6 +10,7 @@ import {
 } from 'react-native';
 
 import type { CurrentHappyHourPlace, CurrentHappyHourWindow } from '../types';
+import { getVenuePlaceholderColor } from '../browseConfig';
 import type { CurrentHappyHoursUpMenuProps } from './CurrentHappyHoursUpMenu';
 
 type NativeCurrentHappyHoursUpMenuProps = {
@@ -26,6 +28,10 @@ type NativeCurrentHappyHoursUpMenuProps = {
   theme: 'dark' | 'light';
   userLatitude?: number | null;
   userLongitude?: number | null;
+};
+
+type NativeCurrentHappyHourPlace = CurrentHappyHourPlace & {
+  image_placeholder_color: string;
 };
 
 const nativeCurrentHappyHoursUpMenuViewName = 'DiningDealzCurrentHappyHoursUpMenuView';
@@ -109,6 +115,14 @@ export function NativeIOSCurrentHappyHoursUpMenu({
   theme,
   userCoordinates,
 }: CurrentHappyHoursUpMenuProps) {
+  const nativePlaces = useMemo<NativeCurrentHappyHourPlace[]>(
+    () => places.map((place) => ({
+      ...place,
+      image_placeholder_color: getVenuePlaceholderColor(place.venue_type_label),
+    })),
+    [places],
+  );
+
   if (places.length === 0 || !isNativeIOSCurrentHappyHoursUpMenuAvailable()) {
     return null;
   }
@@ -117,7 +131,6 @@ export function NativeIOSCurrentHappyHoursUpMenu({
     Math.max(Math.round(Dimensions.get('window').height * 0.82), 520),
     640,
   );
-
   const resolveNativePlace = (event: NativeSyntheticEvent<{ locationId: number; slug: string; dealId?: number; happyHourWindow?: unknown }>) => (
     places.find((place) => place.slug === event.nativeEvent.slug && place.location_id === event.nativeEvent.locationId)
   );
@@ -149,7 +162,7 @@ export function NativeIOSCurrentHappyHoursUpMenu({
           onSharePlace(place, resolveNativeWindow(event));
         }
       } : undefined}
-      places={places}
+      places={nativePlaces}
       showFavoriteActions={showFavoriteActions}
       style={getNativeCurrentHappyHoursUpMenuStyle(bottomInset, expandedSheetHeight)}
       theme={theme}
