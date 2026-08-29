@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ComponentProps, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, type ComponentProps, type RefObject } from 'react';
 import {
   findNodeHandle,
   Keyboard,
@@ -57,21 +57,21 @@ export function useAutoScrollForm(): AutoScrollFormController {
     };
   }, []);
 
-  function handleFieldFocus(target?: number | null) {
+  const handleFieldFocus = useCallback((target?: number | null) => {
     focusedFieldTargetRef.current = target ?? null;
     if (!keyboardVisibleRef.current) {
       restoreScrollOffsetRef.current = currentScrollOffsetRef.current;
     }
-  }
+  }, []);
 
-  function handleScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
+  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     currentScrollOffsetRef.current = event.nativeEvent.contentOffset.y;
     if (!keyboardVisibleRef.current) {
       restoreScrollOffsetRef.current = currentScrollOffsetRef.current;
     }
-  }
+  }, []);
 
-  function scrollToTop() {
+  const scrollToTop = useCallback(() => {
     restoreScrollOffsetRef.current = 0;
     requestAnimationFrame(() => {
       scrollViewRef.current?.scrollTo({
@@ -79,7 +79,7 @@ export function useAutoScrollForm(): AutoScrollFormController {
         y: 0,
       });
     });
-  }
+  }, []);
 
   return {
     handleFieldFocus,

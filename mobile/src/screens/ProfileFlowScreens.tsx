@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as IntentLauncher from 'expo-intent-launcher';
 import * as Sharing from 'expo-sharing';
@@ -377,29 +377,52 @@ function KeyboardAwareFormScreen({ children }: { children: ReactNode }) {
   );
 }
 
-function useScrollToTopOnError(errorMessage: string | null, scrollToTop: () => void) {
+type SubmitErrorAutoScrollController = {
+  recordSubmitAttempt: () => void;
+  recordSubmitValidationError: () => void;
+};
+
+function useSubmitErrorAutoScroll(
+  errorMessage: string | null,
+  submitting: boolean,
+  scrollToTop: () => void,
+): SubmitErrorAutoScrollController {
+  const [submitAttempt, setSubmitAttempt] = useState(0);
+  const submitAttemptRef = useRef(0);
+  const handledSubmitAttemptRef = useRef(0);
+
+  const recordSubmitAttempt = useCallback(() => {
+    const nextAttempt = submitAttemptRef.current + 1;
+    submitAttemptRef.current = nextAttempt;
+    setSubmitAttempt(nextAttempt);
+  }, []);
+
+  const recordSubmitValidationError = useCallback(() => {
+    const nextAttempt = submitAttemptRef.current + 1;
+    submitAttemptRef.current = nextAttempt;
+    handledSubmitAttemptRef.current = nextAttempt;
+    setSubmitAttempt(nextAttempt);
+    scrollToTop();
+  }, [scrollToTop]);
+
   useEffect(() => {
-    if (!errorMessage) {
+    if (
+      !errorMessage
+      || submitting
+      || submitAttempt === 0
+      || handledSubmitAttemptRef.current === submitAttempt
+    ) {
       return;
     }
 
+    handledSubmitAttemptRef.current = submitAttempt;
     scrollToTop();
-  }, [errorMessage, scrollToTop]);
-}
+  }, [errorMessage, scrollToTop, submitting, submitAttempt]);
 
-function useScrollToTopAfterSubmitError(errorMessage: string | null, submitting: boolean, scrollToTop: () => void) {
-  const previousSubmittingRef = useRef(submitting);
-
-  useEffect(() => {
-    const wasSubmitting = previousSubmittingRef.current;
-    previousSubmittingRef.current = submitting;
-
-    if (!errorMessage || submitting || !wasSubmitting) {
-      return;
-    }
-
-    scrollToTop();
-  }, [errorMessage, scrollToTop, submitting]);
+  return {
+    recordSubmitAttempt,
+    recordSubmitValidationError,
+  };
 }
 
 type PasswordFieldProps = {
@@ -508,7 +531,7 @@ export function AuthPortalScreen({ authMessage, autoFocusIdentifier, errorMessag
   const [recoveryValue, setRecoveryValue] = useState('');
   const recoveryFade = useRef(new Animated.Value(0)).current;
   const recoveryTranslateY = useRef(new Animated.Value(-14)).current;
-  useScrollToTopOnError(errorMessage, scrollToTop);
+  const { recordSubmitAttempt } = useSubmitErrorAutoScroll(errorMessage, submitting, scrollToTop);
 
   function animateRecoveryPanel(toOpacity: number, toTranslateY: number, onComplete?: () => void) {
     recoveryFade.stopAnimation();
@@ -556,7 +579,7 @@ export function AuthPortalScreen({ authMessage, autoFocusIdentifier, errorMessag
   }
 
   function handleSubmitRecovery() {
-    scrollToTop();
+    recordSubmitAttempt();
     if (recoveryMode === 'username') {
       onForgotUsername(recoveryValue);
       return;
@@ -568,7 +591,7 @@ export function AuthPortalScreen({ authMessage, autoFocusIdentifier, errorMessag
   }
 
   function handleSubmitAuth() {
-    scrollToTop();
+    recordSubmitAttempt();
     void onSubmit();
   }
 
@@ -702,7 +725,12 @@ export function AuthPortalScreen({ authMessage, autoFocusIdentifier, errorMessag
 
 export function ForgotUsernameScreen({ email, errorMessage, isLandscape, message, onBack, onChangeEmail, onSubmit, submitting }: ForgotUsernameScreenProps) {
   const { handleFieldFocus, handleScroll, scrollToTop, scrollViewRef } = useAutoScrollForm();
-  useScrollToTopOnError(errorMessage, scrollToTop);
+  const { recordSubmitAttempt } = useSubmitErrorAutoScroll(errorMessage, submitting, scrollToTop);
+
+  function handleSubmitForgotUsername() {
+    recordSubmitAttempt();
+    void onSubmit();
+  }
 
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
@@ -752,7 +780,7 @@ export function ForgotUsernameScreen({ email, errorMessage, isLandscape, message
                 value={email}
               />
 
-              <Pressable disabled={submitting} onPress={onSubmit} style={[styles.linkButton, styles.onboardingPrimaryButton, submitting ? styles.linkButtonDisabled : null]}>
+              <Pressable disabled={submitting} onPress={handleSubmitForgotUsername} style={[styles.linkButton, styles.onboardingPrimaryButton, submitting ? styles.linkButtonDisabled : null]}>
                 <LoadingButtonLabel
                   color={theme.textDark}
                   label="Email my username"
@@ -770,7 +798,12 @@ export function ForgotUsernameScreen({ email, errorMessage, isLandscape, message
 
 export function ForgotPasswordScreen({ confirmPassword, errorMessage, isLandscape, message, newPassword, onBack, onChangeConfirmPassword, onChangeNewPassword, onSubmit, submitting }: ForgotPasswordScreenProps) {
   const { handleFieldFocus, handleScroll, scrollToTop, scrollViewRef } = useAutoScrollForm();
-  useScrollToTopOnError(errorMessage, scrollToTop);
+  const { recordSubmitAttempt } = useSubmitErrorAutoScroll(errorMessage, submitting, scrollToTop);
+
+  function handleSubmitForgotPassword() {
+    recordSubmitAttempt();
+    void onSubmit();
+  }
 
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
@@ -814,7 +847,7 @@ export function ForgotPasswordScreen({ confirmPassword, errorMessage, isLandscap
                 <PasswordField inputStyle={styles.onboardingInput} onBeforeAutoScroll={handleFieldFocus} onChangeText={onChangeConfirmPassword} scrollViewRef={scrollViewRef} value={confirmPassword} />
               </View>
 
-              <Pressable disabled={submitting} onPress={onSubmit} style={[styles.linkButton, styles.onboardingPrimaryButton, submitting ? styles.linkButtonDisabled : null]}>
+              <Pressable disabled={submitting} onPress={handleSubmitForgotPassword} style={[styles.linkButton, styles.onboardingPrimaryButton, submitting ? styles.linkButtonDisabled : null]}>
                 <LoadingButtonLabel
                   color={theme.textDark}
                   label="Update password"
@@ -832,10 +865,10 @@ export function ForgotPasswordScreen({ confirmPassword, errorMessage, isLandscap
 
 export function CreateProfileScreen({ errorMessage, form, isLandscape, message, onBack, onChangeField, onOpenBusinessClaim, onSubmit, submitting }: CreateProfileScreenProps) {
   const { handleFieldFocus, handleScroll, scrollToTop, scrollViewRef } = useAutoScrollForm();
-  useScrollToTopOnError(errorMessage, scrollToTop);
+  const { recordSubmitAttempt } = useSubmitErrorAutoScroll(errorMessage, submitting, scrollToTop);
 
   function handleSubmitCreateProfile() {
-    scrollToTop();
+    recordSubmitAttempt();
     void onSubmit();
   }
 
@@ -920,7 +953,7 @@ function formatVerificationCountdown(totalSeconds: number) {
 export function EmailVerificationScreen({ errorMessage, isLandscape, message, onBack, onChangeCode, onResend, onSubmit, pendingVerification, submitting, verificationCode }: EmailVerificationScreenProps) {
   const { handleFieldFocus, handleScroll, scrollToTop, scrollViewRef } = useAutoScrollForm();
   const [secondsRemaining, setSecondsRemaining] = useState(0);
-  useScrollToTopOnError(errorMessage, scrollToTop);
+  const { recordSubmitAttempt } = useSubmitErrorAutoScroll(errorMessage, submitting, scrollToTop);
 
   useEffect(() => {
     const verificationExpiresAt = pendingVerification?.verification_code_expires_at ?? '';
@@ -945,12 +978,12 @@ export function EmailVerificationScreen({ errorMessage, isLandscape, message, on
   }, [pendingVerification?.verification_code_expires_at]);
 
   function handleSubmitVerificationCode() {
-    scrollToTop();
+    recordSubmitAttempt();
     void onSubmit();
   }
 
   function handleResendVerificationCode() {
-    scrollToTop();
+    recordSubmitAttempt();
     void onResend();
   }
 
@@ -1096,7 +1129,7 @@ export function ContactSupportScreen({ errorMessage, initialMessage = '', initia
   const { handleFieldFocus, handleScroll, scrollToTop, scrollViewRef } = useAutoScrollForm();
   const [subject, setSubject] = useState(initialSubject);
   const [message, setMessage] = useState(initialMessage);
-  useScrollToTopOnError(errorMessage, scrollToTop);
+  const { recordSubmitAttempt } = useSubmitErrorAutoScroll(errorMessage, submitting, scrollToTop);
 
   useEffect(() => {
     setSubject(initialSubject);
@@ -1107,7 +1140,7 @@ export function ContactSupportScreen({ errorMessage, initialMessage = '', initia
   }, [initialMessage]);
 
   function handleSubmitSupport() {
-    scrollToTop();
+    recordSubmitAttempt();
     onSubmit(subject, message);
   }
 
@@ -1304,8 +1337,7 @@ export function TermsOfServiceScreen({ isLandscape, onBack }: Pick<LegalDocument
 }
 
 export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces, onBack, onChangeSearchQuery, onChooseInformalBusiness, onChooseManualBusiness, onSelectBusiness, results, searchQuery }: BusinessSearchScreenProps) {
-  const { handleFieldFocus, handleScroll, scrollToTop, scrollViewRef } = useAutoScrollForm();
-  useScrollToTopOnError(errorMessage, scrollToTop);
+  const { handleFieldFocus, handleScroll, scrollViewRef } = useAutoScrollForm();
 
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
@@ -1395,7 +1427,6 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
   const [attachmentPreviewLoading, setAttachmentPreviewLoading] = useState(false);
   const attachmentPreviewRequestIdRef = useRef(0);
   const { handleFieldFocus, handleScroll, scrollToTop, scrollViewRef } = useAutoScrollForm();
-  useScrollToTopAfterSubmitError(errorMessage, submitting, scrollToTop);
   const currentPhotoUrls = dedupeImageUrls(
     form.photo_references_text
       .split(/\r?\n/)
@@ -1430,6 +1461,7 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
     tiktok: getSocialProfileValidationMessage('tiktok', form.tiktok_profile),
     youtube: getSocialProfileValidationMessage('youtube', form.youtube_profile),
   };
+  const { recordSubmitAttempt, recordSubmitValidationError } = useSubmitErrorAutoScroll(errorMessage, submitting, scrollToTop);
 
   function handleSelectDropdownValue(field: 'business_city' | 'business_venue_type', value: string) {
     onChangeField(field, value);
@@ -1569,9 +1601,11 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
 
   function handleSubmitVerification() {
     if (Object.values(socialFieldErrors).some(Boolean)) {
+      recordSubmitValidationError();
       return;
     }
 
+    recordSubmitAttempt();
     onSubmit();
   }
 

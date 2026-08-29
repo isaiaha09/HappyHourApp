@@ -17,7 +17,7 @@
         "applinks:link.diningdealz.com",
         "applinks:backend.diningdealz.com"
       ],
-      "buildNumber": "78",
+      "buildNumber": "79",
       "infoPlist": {
         "DiningDealzProfileLinkBaseURL": "https://link.diningdealz.com/share/place",
         "DiningDealzIOSAppStoreURL": "",
