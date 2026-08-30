@@ -53,6 +53,9 @@ export function LoginForm({ compact = false, turnstileSiteKey }: LoginFormProps)
         <p className="text-sm leading-6 text-[#f6d6c5]">
           Business accounts can manage billing and account controls here. Customer accounts can sign in too.
         </p>
+        <p className="text-xs leading-6 text-[#f6d6c5]/80">
+          Sign-in credentials and security information are used to authenticate and protect your account. See the <a className="font-semibold text-[#ffd35a] hover:text-white" href="/privacy">Privacy Policy</a> and <a className="font-semibold text-[#ffd35a] hover:text-white" href="/terms">Terms of Service</a>.
+        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 rounded-full border border-white/10 bg-black/30 p-1">

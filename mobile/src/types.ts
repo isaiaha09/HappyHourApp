@@ -565,6 +565,7 @@ export type CustomerSignupRequest = {
   password: string;
   first_name: string;
   last_name: string;
+  terms_accepted: boolean;
 };
 
 export type BusinessVerificationDocuments = {
@@ -611,6 +612,7 @@ type SharedBusinessDetails = {
   photo_references: string[];
   photo_uploads?: BusinessAttachmentDraft[];
   verification_data_consent: boolean;
+  terms_accepted: boolean;
 };
 
 export type BusinessSignupRequest = CustomerSignupRequest & SharedBusinessDetails & {

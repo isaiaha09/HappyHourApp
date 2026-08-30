@@ -957,6 +957,8 @@ class BusinessAccount(User):
 class AccountProfile(models.Model):
 	user = models.OneToOneField(settings.AUTH_USER_MODEL, related_name='account_profile', on_delete=models.CASCADE)
 	deleted_at = models.DateTimeField(null=True, blank=True)
+	terms_accepted_at = models.DateTimeField(null=True, blank=True)
+	terms_accepted_version = models.CharField(max_length=40, blank=True)
 	preference_onboarding_completed = models.BooleanField(default=False)
 	preference_onboarding_skipped = models.BooleanField(default=False)
 	preferred_cities = models.JSONField(default=list, blank=True)

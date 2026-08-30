@@ -65,6 +65,9 @@ export function ContactForm({ turnstileSiteKey }: ContactFormProps) {
         <p className="dd-kicker">Contact Form</p>
         <h2 className="text-2xl font-semibold text-white">Send DiningDealz a message.</h2>
         <p className="text-sm leading-7 text-[#f6d6c5]">This opens your email app with the form contents prefilled, so you can review and send directly.</p>
+        <p className="text-xs leading-6 text-[#f6d6c5]/80">
+          Privacy notice: we use the information you enter to screen abuse, prepare your request, and respond if you send the email. Do not include passwords or unnecessary sensitive documents. Read the <a className="font-semibold text-[#ffd35a] hover:text-white" href="/privacy">Privacy Policy</a>.
+        </p>
       </div>
 
       <label className="space-y-2 text-sm text-[#ffe7d8]">

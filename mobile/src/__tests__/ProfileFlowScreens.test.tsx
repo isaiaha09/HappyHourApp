@@ -108,6 +108,7 @@ const emptyProfileForm: ProfileFormState = {
   verification_summary: '',
   supporting_details: '',
   verification_data_consent: false,
+  terms_accepted: false,
 };
 
 const emptyAttachments: BusinessAttachmentBuckets = {

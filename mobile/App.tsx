@@ -363,6 +363,7 @@ const initialProfileFormState: ProfileFormState = {
   verification_summary: '',
   supporting_details: '',
   verification_data_consent: false,
+  terms_accepted: false,
 };
 
 const initialBusinessAttachments: BusinessAttachmentBuckets = {
@@ -471,6 +472,7 @@ function buildSharedBusinessDetails(form: ProfileFormState) {
     hours_of_operation_entries: splitMultilineEntries(form.hours_of_operation_entries_text),
     photo_references: splitMultilineEntries(form.photo_references_text),
     verification_data_consent: form.verification_data_consent,
+    terms_accepted: form.terms_accepted,
   };
 }
 
@@ -547,6 +549,10 @@ function getBusinessSignupValidationMessage(form: ProfileFormState, mode: 'claim
     return 'Please review the business verification privacy notice and confirm your consent before submitting.';
   }
 
+  if (!form.terms_accepted) {
+    return 'Please review and agree to the DiningDealz Terms of Service before submitting.';
+  }
+
   if (missingFields.length) {
     return `Please complete: ${missingFields.join(', ')}.`;
   }
@@ -619,6 +625,7 @@ function resetBusinessVerificationFields(current: ProfileFormState): ProfileForm
     verification_summary: '',
     supporting_details: '',
     verification_data_consent: false,
+    terms_accepted: false,
   };
 }
 
@@ -6358,6 +6365,12 @@ function AppScreen() {
       return;
     }
 
+    if (!profileForm.terms_accepted) {
+      setProfileErrorMessage('Please review and agree to the DiningDealz Terms of Service before creating your account.');
+      setProfileMessage(null);
+      return;
+    }
+
     setProfileSubmitting(true);
     setProfileErrorMessage(null);
     setProfileMessage(null);
@@ -6369,6 +6382,7 @@ function AppScreen() {
         password: profileForm.password,
         first_name: profileForm.first_name,
         last_name: profileForm.last_name,
+        terms_accepted: profileForm.terms_accepted,
       };
       const response = await createCustomerProfile(apiBaseUrl, payload);
       setProfileForm(initialProfileFormState);

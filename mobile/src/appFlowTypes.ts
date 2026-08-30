@@ -34,6 +34,7 @@ export type ProfileFormState = {
   verification_summary: string;
   supporting_details: string;
   verification_data_consent: boolean;
+  terms_accepted: boolean;
 };
 
 export type LoginFormState = {

@@ -70,6 +70,7 @@ DICT_JSON_FIELD_NAMES = (
 )
 
 BUSINESS_VERIFICATION_CONSENT_VERSION = '2026-08-16'
+TERMS_OF_SERVICE_VERSION = '2026-08-30'
 
 
 def _normalize_social_profile_payload(raw_profiles=None, business_website_url='', social_media_links=None):
@@ -813,6 +814,7 @@ class CustomerSignupSerializer(serializers.Serializer):
 	password = serializers.CharField(min_length=8, write_only=True, style={'input_type': 'password'})
 	first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
 	last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+	terms_accepted = serializers.BooleanField(required=False, default=False, write_only=True)
 
 	def allows_rejected_business_reregistration(self):
 		return False
@@ -877,19 +879,26 @@ class CustomerSignupSerializer(serializers.Serializer):
 		raise serializers.ValidationError(errors)
 
 	def create_or_reuse_user(self, validated_data):
+		terms_accepted = bool(validated_data.pop('terms_accepted', False))
 		password = validated_data.pop('password')
 		existing_user = validated_data.pop('_signup_existing_user', None)
 		if existing_user is None:
 			user = User.objects.create_user(password=password, **validated_data)
 			user._signup_reused_existing_user = False
-			return user
+		else:
+			for field_name, value in validated_data.items():
+				setattr(existing_user, field_name, value)
+			existing_user.set_password(password)
+			existing_user.save(update_fields=['username', 'email', 'first_name', 'last_name', 'password'])
+			existing_user._signup_reused_existing_user = True
+			user = existing_user
 
-		for field_name, value in validated_data.items():
-			setattr(existing_user, field_name, value)
-		existing_user.set_password(password)
-		existing_user.save(update_fields=['username', 'email', 'first_name', 'last_name', 'password'])
-		existing_user._signup_reused_existing_user = True
-		return existing_user
+		if terms_accepted:
+			profile = get_or_create_account_profile(user)
+			profile.terms_accepted_at = timezone.now()
+			profile.terms_accepted_version = TERMS_OF_SERVICE_VERSION
+			profile.save(update_fields=['terms_accepted_at', 'terms_accepted_version', 'updated_at'])
+		return user
 
 	def create(self, validated_data):
 		user = self.create_or_reuse_user(validated_data)

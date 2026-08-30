@@ -4415,6 +4415,7 @@ class ProfileSignupApiTests(APITestCase):
 				'username': 'ventura_fan',
 				'email': 'fan@example.com',
 				'password': 'test-pass-123',
+				'terms_accepted': True,
 				'first_name': 'Ventura',
 				'last_name': 'Fan',
 			},
@@ -4432,6 +4433,8 @@ class ProfileSignupApiTests(APITestCase):
 		profile = AccountProfile.objects.get(user=user)
 		self.assertEqual(user.email, 'fan@example.com')
 		self.assertTrue(user.check_password('test-pass-123'))
+		self.assertIsNotNone(profile.terms_accepted_at)
+		self.assertEqual(profile.terms_accepted_version, '2026-08-30')
 		self.assertIsNotNone(profile.email_verification_sent_at)
 		self.assertTrue(profile.email_verification_code)
 		self.assertEqual(len(mail.outbox), 1)

@@ -31,6 +31,7 @@ import { dedupeImageUrls, formatPlaceAddress, getPlaceLocations, normalizeSearch
 import { SOCIAL_PLATFORM_LABELS, getSocialProfilePreview, getSocialProfileValidationMessage } from '../socialProfiles';
 import { theme } from '../styles/theme';
 import type { BusinessAttachmentBuckets, BusinessAttachmentDraft, BusinessAttachmentKind, EmailVerificationChallengeResponse, PlaceListItem, PlaceLocation, SignupResponse } from '../types';
+import { LEGAL_EFFECTIVE_DATE, privacyPolicySections, termsOfServiceSections } from '../legalContent';
 
 const SUPPORT_EMAIL = 'support@diningdealz.com';
 const PRIVACY_POLICY_URL = 'https://www.diningdealz.com/privacy';
@@ -928,6 +929,27 @@ export function CreateProfileScreen({ errorMessage, form, isLandscape, message, 
               <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} onChangeText={(value) => onChangeField('last_name', value)} scrollViewRef={scrollViewRef} style={[styles.profileInput, styles.onboardingInput]} value={form.last_name} />
             </View>
 
+            <View style={[styles.privacyNoticeCard, styles.onboardingInfoCard]}>
+              <Text style={[styles.privacyNoticeTitle, styles.onboardingInfoTitle]}>Account and privacy notice</Text>
+              <Text style={[styles.privacyNoticeText, styles.onboardingInfoText]}>We use your account details to create and secure your profile and to provide the features you request. Optional notifications and location access can be controlled in your device settings. The Service is not directed to children under 13. Do not submit passwords or unnecessary sensitive information.</Text>
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: form.terms_accepted }}
+                onPress={() => onChangeField('terms_accepted', !form.terms_accepted)}
+                style={styles.privacyConsentButton}
+              >
+                <View style={[styles.privacyConsentIndicator, form.terms_accepted ? styles.privacyConsentIndicatorActive : null]}>
+                  {form.terms_accepted ? <Text style={styles.privacyConsentIndicatorText}>X</Text> : null}
+                </View>
+                <Text style={[styles.privacyConsentText, styles.onboardingInfoText]}>
+                  I am at least 13 years old, agree to the{' '}
+                  <Text accessibilityRole="link" onPress={() => void Linking.openURL(TERMS_OF_SERVICE_URL)} style={styles.privacyNoticeLink}>Terms of Service</Text>
+                  {' '}and acknowledge the{' '}
+                  <Text accessibilityRole="link" onPress={() => void Linking.openURL(PRIVACY_POLICY_URL)} style={styles.privacyNoticeLink}>Privacy Policy</Text>.
+                </Text>
+              </Pressable>
+            </View>
+
             <Pressable onPress={handleSubmitCreateProfile} style={[styles.linkButton, styles.onboardingPrimaryButton, submitting ? styles.linkButtonDisabled : null]}>
               <LoadingButtonLabel color={theme.textDark} label="Create customer profile" loading={submitting} textStyle={[styles.linkButtonText, styles.onboardingPrimaryButtonText]} />
             </Pressable>
@@ -1238,6 +1260,7 @@ function LegalDocumentScreen({ eyebrow, intro, isLandscape, onBack, sections, ti
             <Text style={[styles.detailCity, styles.onboardingEyebrow]}>{eyebrow}</Text>
             <Text style={[styles.detailTitle, styles.onboardingHeading]}>{title}</Text>
             <Text style={[styles.profileIntroText, styles.onboardingBodyText]}>{intro}</Text>
+            <Text style={[styles.profileSupportText, styles.onboardingBodyText]}>Last updated: {LEGAL_EFFECTIVE_DATE}</Text>
 
             {sections.map((section) => (
               <View key={section.title} style={[styles.legalSectionCard, styles.onboardingInfoCard]}>
@@ -1259,36 +1282,7 @@ export function PrivacyPolicyScreen({ isLandscape, onBack }: Pick<LegalDocumentS
       intro="This Privacy Policy explains what information DiningDealz collects, how that information is used, when it may be shared, and what choices users have when using the DiningDealz app, website, and related services."
       isLandscape={isLandscape}
       onBack={onBack}
-      sections={[
-        {
-          title: 'Information you provide',
-          body: 'DiningDealz collects the information users submit directly, including account details such as username, email address, password, portal type, and profile edits. Business users may also submit claim and onboarding materials such as contact details, work information, verification summaries, social links, public business profile content, uploaded photos, and supporting documents. Business verification documents are used to confirm authority and regulatory eligibility; selected profile photos and links may be displayed on an approved public business profile. Users may also send support messages, content reports with selected reasons, optional details, and optional screenshot evidence, and direct messages, including business-sent direct message images. Customers and businesses can block the other participant from direct messaging.',
-        },
-        {
-          title: 'Information collected through use of the service',
-          body: 'DiningDealz creates and stores service data needed to run the platform, including authentication tokens, email verification status, password reset and two-factor authentication state, favorite businesses, business notification history, direct message threads and receipts, business claim status, feed impression and engagement records, sponsored campaign delivery metrics, and push-device registration details. If an approved mobile business enables live location features, DiningDealz also stores the business location updates sent from that account.',
-        },
-        {
-          title: 'Website, device, and technical information',
-          body: 'The website may process browser and request data needed to secure and operate the service. Web login and contact forms use Cloudflare Turnstile to reduce abuse. The web dashboard stores the signed-in session token in browser localStorage on that device. DiningDealz may also receive technical diagnostics, error reports, IP-related request information, and device or app identifiers from hosting, storage, security, and monitoring providers used to operate the platform.',
-        },
-        {
-          title: 'How DiningDealz uses information',
-          body: 'DiningDealz uses information to create and manage accounts, authenticate sign-ins, send verification and password-reset messages, verify business authority and applicable permits, provide business claim review and account support, operate direct messaging, deliver push notifications, power favorites and feed features, review content reports and abuse or misuse, maintain billing-related access where applicable, and improve the reliability and safety of the app and website.',
-        },
-        {
-          title: 'How information may be shared',
-          body: 'DiningDealz does not sell personal information as part of the standard product experience. Verification documents and optional content-report screenshots are stored in private media storage and may be accessed by authorized DiningDealz reviewers and service providers that securely host or process them for review. When automated image moderation is enabled, user-visible business profile photos, deal images, and business direct-message images are processed locally on the DiningDealz backend with the bundled NudeNet model for exposed-nudity screening before storage or display; those image bytes are not sent to a separate moderation API. An attached report screenshot is also transmitted to the configured DiningDealz support inbox for moderation review. Information may also be shared with service providers that help operate the platform, such as hosting, database, email delivery, bot-protection, error-monitoring, mapping, storage, and push-notification providers. Approved public business photos, links, and profile details may be displayed to app users. Information may also be disclosed when reasonably necessary to enforce the service rules, protect users or businesses, respond to legal requests, or address fraud, security, or safety issues.',
-        },
-        {
-          title: 'Retention, deletion, and direct-message records',
-          body: 'DiningDealz retains business verification documents, uploaded claim photos, profile links, and related consent records until the account is deleted. Content reports and moderation review records may be retained as needed to investigate abuse, enforce service rules, resolve disputes, and meet legal or security obligations. Images processed by the local automated moderation model remain subject to the app\'s ordinary storage and deletion rules and are not sent to a separate moderation provider. When a business account is deleted, DiningDealz removes its business-authored posts, sponsored campaigns, claim attachments, uploaded profile photos, verification references, optional report screenshots submitted by that account, and related business profile materials from managed storage and database-backed publication surfaces. The deleted business profile is suppressed from public map and detail results. Limited records may remain when required for legal obligations, fraud or security investigations, dispute resolution, moderation history, or the read-only direct-message history retained for another participant. Business direct-message images are designed to disappear from the conversation feed after about 24 hours and may be deleted from storage after they expire.',
-        },
-        {
-          title: 'Your choices and contact options',
-          body: 'Users can remove selected documents and photos before submitting a claim, update certain profile details from the product interface, block or unblock direct-message participants, manage direct-messaging settings where available, control device permissions such as notifications or business location access through the device or app settings, and request account deletion from inside the app. Account deletion removes managed business content and verification materials as described above. Users can also contact DiningDealz support for account, privacy, or policy questions.',
-        },
-      ]}
+      sections={privacyPolicySections}
       title="How DiningDealz collects and uses information."
     />
   );
@@ -1301,36 +1295,7 @@ export function TermsOfServiceScreen({ isLandscape, onBack }: Pick<LegalDocument
       intro="These Terms of Service and Agreements govern use of the DiningDealz app, website, and related services by customers, business users, and other visitors."
       isLandscape={isLandscape}
       onBack={onBack}
-      sections={[
-        {
-          title: 'Eligibility and account responsibility',
-          body: 'Users are responsible for the accuracy of the information they submit and for activity that occurs through their account credentials. Users must use DiningDealz only for lawful purposes and in a way that does not interfere with the service, other users, or participating businesses.',
-        },
-        {
-          title: 'Listings, offers, and business content',
-          body: 'DiningDealz displays business listings, deals, hours, profile information, notifications, and promotional content, but those details can change. DiningDealz does not guarantee uninterrupted availability, accuracy, or redemption of every listing, offer, or feature. Businesses remain responsible for the accuracy of the information they submit and for honoring the offers and public content they publish through the service.',
-        },
-        {
-          title: 'Direct messages, uploads, and user content',
-          body: 'Customers and businesses may use direct messaging only as allowed by the product rules in effect at the time of use. Business accounts may send approved direct-message images, and those images are intended to disappear from the message feed after about 24 hours. Users can report inappropriate business profiles, business posts, and direct messages for review, and business users can block customers from direct messaging. Users must not submit unlawful, abusive, infringing, deceptive, or harmful content. By submitting content through DiningDealz, users authorize DiningDealz to host, process, display, transmit, and moderate that content as needed to operate and protect the service.',
-        },
-        {
-          title: 'Business claims, verification, and location features',
-          body: 'Business users must submit accurate claim, contact, and verification information and may only claim or manage businesses they are authorized to represent. DiningDealz may review, request more information about, approve, reject, limit, or remove claims or related content. If a business uses mobile location features, the business is responsible for sending accurate location updates and for using those features only with proper permission and authority.',
-        },
-        {
-          title: 'Notifications, billing, and paid features',
-          body: 'DiningDealz may send account, support, verification, favorite-business, business-post, or direct-message related notifications. Some business features may be limited to approved or paid accounts. If paid offerings, billing portals, subscriptions, boosted content, or campaign tools are enabled, the pricing, renewal, cancellation, and feature-specific terms presented for that offering will control in addition to these Terms.',
-        },
-        {
-          title: 'Suspension, termination, and retained records',
-          body: 'DiningDealz may suspend, restrict, or terminate access when necessary to protect the service or enforce these Terms. Users may also delete their own accounts through supported product flows. Even after deletion or termination, DiningDealz may retain records reasonably necessary to preserve conversation history for the remaining participant, maintain business records, investigate misuse, enforce agreements, or comply with legal obligations.',
-        },
-        {
-          title: 'Disclaimers, liability limits, and changes',
-          body: 'DiningDealz is provided on an as-available basis to the extent permitted by law. To the fullest extent permitted by law, DiningDealz disclaims warranties not expressly made and is not responsible for indirect, incidental, or consequential losses arising from use of the service, participating businesses, third-party providers, or changing deal availability. DiningDealz may modify, suspend, or retire features or update these Terms as the platform evolves, and continued use after an update takes effect constitutes acceptance of the revised Terms to the extent permitted by law.',
-        },
-      ]}
+      sections={termsOfServiceSections}
       title="Rules for using DiningDealz services."
     />
   );
@@ -1692,6 +1657,7 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
                   See the full Privacy Policy on our website.
                 </Text>
               </Text>
+              <Text style={[styles.privacyNoticeText, styles.onboardingInfoText]}>Only upload documents you are authorized to provide. Do not upload Social Security numbers, passport or driver&apos;s-license numbers, payment-card numbers, or unrelated sensitive information. Redact it before uploading whenever possible.</Text>
               <Pressable
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked: form.verification_data_consent }}
@@ -1702,6 +1668,22 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
                   {form.verification_data_consent ? <Text style={styles.privacyConsentIndicatorText}>X</Text> : null}
                 </View>
                 <Text style={[styles.privacyConsentText, styles.onboardingInfoText]}>I understand and consent to the collection and use of these business verification materials.</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: form.terms_accepted }}
+                onPress={() => onChangeField('terms_accepted', !form.terms_accepted)}
+                style={styles.privacyConsentButton}
+              >
+                <View style={[styles.privacyConsentIndicator, form.terms_accepted ? styles.privacyConsentIndicatorActive : null]}>
+                  {form.terms_accepted ? <Text style={styles.privacyConsentIndicatorText}>X</Text> : null}
+                </View>
+                <Text style={[styles.privacyConsentText, styles.onboardingInfoText]}>
+                  I agree to the{' '}
+                  <Text accessibilityRole="link" onPress={() => void Linking.openURL(TERMS_OF_SERVICE_URL)} style={styles.privacyNoticeLink}>Terms of Service</Text>
+                  {' '}and acknowledge the{' '}
+                  <Text accessibilityRole="link" onPress={() => void Linking.openURL(PRIVACY_POLICY_URL)} style={styles.privacyNoticeLink}>Privacy Policy</Text>.
+                </Text>
               </Pressable>
             </View>
 
