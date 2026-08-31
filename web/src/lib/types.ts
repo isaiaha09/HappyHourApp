@@ -37,6 +37,5 @@ export type SignupResponse = {
 };
 
 export type StoredSession = {
-  authToken: string;
   portal: AccountPortal;
 };

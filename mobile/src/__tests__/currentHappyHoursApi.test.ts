@@ -16,7 +16,10 @@ describe('fetchCurrentHappyHourPlaces', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://localhost:8000/api/places/current-happy-hours/?city=ventura',
-      { headers: { Accept: 'application/json' } },
+      expect.objectContaining({
+        headers: { Accept: 'application/json' },
+        signal: expect.anything(),
+      }),
     );
   });
 });

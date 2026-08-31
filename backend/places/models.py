@@ -1575,9 +1575,10 @@ class FeedEngagement(models.Model):
 
 class ProfileAuthToken(models.Model):
 	user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='profile_auth_tokens', on_delete=models.CASCADE)
-	key = models.CharField(max_length=64, unique=True)
+	token_hash = models.CharField(max_length=64, unique=True, db_column='key')
 	created_at = models.DateTimeField(auto_now_add=True)
 	last_used_at = models.DateTimeField(auto_now=True)
+	expires_at = models.DateTimeField()
 
 	class Meta:
 		ordering = ['-last_used_at']
@@ -1587,7 +1588,33 @@ class ProfileAuthToken(models.Model):
 	def __str__(self):
 		return f'{self.user.username} token'
 
+	@property
+	def key(self):
+		"""Return the raw token only for the request that issued/authenticated it."""
+		return getattr(self, '_presented_key', '')
+
+	@staticmethod
+	def hash_key(value):
+		return hashlib.sha256(str(value).encode('utf-8')).hexdigest()
+
+	def set_presented_key(self, value):
+		presented_key = str(value or '').strip()
+		if not presented_key:
+			raise ValueError('A profile token value is required.')
+		self._presented_key = presented_key
+		self.token_hash = self.hash_key(presented_key)
+		return presented_key
+
+	def issue(self):
+		return self.set_presented_key(secrets.token_hex(32))
+
+	def is_expired(self, reference_time=None):
+		return not self.expires_at or self.expires_at <= (reference_time or timezone.now())
+
 	def save(self, *args, **kwargs):
-		if not self.key:
-			self.key = secrets.token_hex(32)
+		if not self.token_hash:
+			self.issue()
+		if not self.expires_at:
+			token_ttl = max(300, int(getattr(settings, 'PROFILE_AUTH_TOKEN_TTL_SECONDS', 30 * 24 * 60 * 60) or 30 * 24 * 60 * 60))
+			self.expires_at = timezone.now() + timedelta(seconds=token_ttl)
 		super().save(*args, **kwargs)

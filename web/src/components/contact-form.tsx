@@ -3,6 +3,7 @@
 import { FormEvent, useState, useTransition } from "react";
 
 import { TurnstileWidget } from "@/components/turnstile-widget";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 
 type ContactFormProps = {
   turnstileSiteKey: string;
@@ -29,7 +30,7 @@ export function ContactForm({ turnstileSiteKey }: ContactFormProps) {
 
     startTransition(async () => {
       try {
-        const response = await fetch("/api/contact", {
+        const response = await fetchWithTimeout("/api/contact", {
           method: "POST",
           headers: {
             Accept: "application/json",

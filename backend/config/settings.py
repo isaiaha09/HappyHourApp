@@ -39,10 +39,16 @@ IS_RENDER = _is_truthy_env('RENDER') or bool(get_env('RENDER_EXTERNAL_HOSTNAME',
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = get_env('DJANGO_SECRET_KEY', ENV_VALUES, 'django-insecure-change-me-in-production')
+DEFAULT_SECRET_KEY = 'django-insecure-change-me-in-production'
+SECRET_KEY = get_env('DJANGO_SECRET_KEY', ENV_VALUES, DEFAULT_SECRET_KEY)
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = get_bool_env('DJANGO_DEBUG', ENV_VALUES, not IS_RENDER)
+
+if IS_RENDER and SECRET_KEY == DEFAULT_SECRET_KEY:
+    raise RuntimeError('DJANGO_SECRET_KEY must be set to a unique value in production.')
+if IS_RENDER and DEBUG:
+    raise RuntimeError('DJANGO_DEBUG must be false in production.')
 
 
 def _append_unique(items, value):
@@ -92,7 +98,10 @@ USE_X_FORWARDED_HOST = True
 SECURE_SSL_REDIRECT = get_bool_env('DJANGO_SECURE_SSL_REDIRECT', ENV_VALUES, IS_RENDER)
 SESSION_COOKIE_SECURE = get_bool_env('DJANGO_SESSION_COOKIE_SECURE', ENV_VALUES, IS_RENDER)
 CSRF_COOKIE_SECURE = get_bool_env('DJANGO_CSRF_COOKIE_SECURE', ENV_VALUES, IS_RENDER)
-SECURE_HSTS_SECONDS = get_int_env('DJANGO_SECURE_HSTS_SECONDS', ENV_VALUES, 0)
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+X_FRAME_OPTIONS = 'DENY'
+SECURE_HSTS_SECONDS = get_int_env('DJANGO_SECURE_HSTS_SECONDS', ENV_VALUES, 31536000 if IS_RENDER else 0)
 SECURE_HSTS_INCLUDE_SUBDOMAINS = get_bool_env('DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS', ENV_VALUES, False)
 SECURE_HSTS_PRELOAD = get_bool_env('DJANGO_SECURE_HSTS_PRELOAD', ENV_VALUES, False)
 
@@ -483,6 +492,11 @@ if REDIS_URL:
 
 SOURCE_FETCH_CACHE_ALIAS = 'source_fetch'
 SOURCE_FETCH_CACHE_TIMEOUT = 43200
+SOURCE_FETCH_TIMEOUT_SECONDS = get_int_env('SOURCE_FETCH_TIMEOUT_SECONDS', ENV_VALUES, 20)
+SOURCE_FETCH_MAX_URL_LENGTH = get_int_env('SOURCE_FETCH_MAX_URL_LENGTH', ENV_VALUES, 2048)
+SOURCE_FETCH_MAX_HTML_BYTES = get_int_env('SOURCE_FETCH_MAX_HTML_BYTES', ENV_VALUES, 2 * 1024 * 1024)
+SOURCE_FETCH_MAX_BINARY_BYTES = get_int_env('SOURCE_FETCH_MAX_BINARY_BYTES', ENV_VALUES, 16 * 1024 * 1024)
+SOURCE_FETCH_MAX_REDIRECTS = get_int_env('SOURCE_FETCH_MAX_REDIRECTS', ENV_VALUES, 3)
 SOURCE_PLACE_PAYLOAD_CACHE_ALIAS = SOURCE_FETCH_CACHE_ALIAS
 SOURCE_PLACE_PAYLOAD_CACHE_TIMEOUT = 300
 ADMIN_OPERATIONS_CACHE_TIMEOUT = get_int_env('ADMIN_OPERATIONS_CACHE_TIMEOUT', ENV_VALUES, 30)
@@ -717,7 +731,7 @@ else:
 
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',
+        'rest_framework.permissions.IsAuthenticated',
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
@@ -731,6 +745,8 @@ REST_FRAMEWORK = {
         'profile_content_report': get_env('THROTTLE_PROFILE_CONTENT_REPORT', ENV_VALUES, '10/hour'),
         'profile_user_mutation': get_env('THROTTLE_PROFILE_USER_MUTATION', ENV_VALUES, '120/minute'),
         'direct_message_send': get_env('THROTTLE_DIRECT_MESSAGE_SEND', ENV_VALUES, '30/minute'),
+        'profile_two_factor': get_env('THROTTLE_PROFILE_TWO_FACTOR', ENV_VALUES, '10/minute'),
+        'internal_notification_processor': get_env('THROTTLE_INTERNAL_NOTIFICATION_PROCESSOR', ENV_VALUES, '10/minute'),
     },
 }
 
@@ -755,12 +771,19 @@ PROFILE_USERNAME_RECOVERY_URL_BASE = get_env('PROFILE_USERNAME_RECOVERY_URL_BASE
 PROFILE_EMAIL_VERIFICATION_CODE_TTL_SECONDS = get_int_env('PROFILE_EMAIL_VERIFICATION_CODE_TTL_SECONDS', ENV_VALUES, 60)
 PROFILE_PASSWORD_RESET_URL_BASE = get_env('PROFILE_PASSWORD_RESET_URL_BASE', ENV_VALUES, 'diningdealz://forgot-password')
 PROFILE_PASSWORD_RESET_TOKEN_TTL_SECONDS = get_int_env('PROFILE_PASSWORD_RESET_TOKEN_TTL_SECONDS', ENV_VALUES, 3600)
+PROFILE_AUTH_TOKEN_TTL_SECONDS = get_int_env('PROFILE_AUTH_TOKEN_TTL_SECONDS', ENV_VALUES, 30 * 24 * 60 * 60)
 PROFILE_TWO_FACTOR_ISSUER = get_env('PROFILE_TWO_FACTOR_ISSUER', ENV_VALUES, 'DiningDealz')
 PROFILE_BILLING_PORTAL_URL = get_env('PROFILE_BILLING_PORTAL_URL', ENV_VALUES, 'https://example.com/billing')
 EXPO_PUSH_NOTIFICATIONS_ENABLED = get_bool_env('EXPO_PUSH_NOTIFICATIONS_ENABLED', ENV_VALUES, True)
 EXPO_PUSH_API_URL = get_env('EXPO_PUSH_API_URL', ENV_VALUES, 'https://exp.host/--/api/v2/push/send')
+if IS_RENDER and EXPO_PUSH_NOTIFICATIONS_ENABLED:
+    parsed_push_api_url = urlparse(EXPO_PUSH_API_URL)
+    if parsed_push_api_url.scheme != 'https' or not parsed_push_api_url.netloc or parsed_push_api_url.username or parsed_push_api_url.password:
+        raise RuntimeError('EXPO_PUSH_API_URL must be a credential-free HTTPS URL in production.')
 EXPO_PUSH_TIMEOUT = get_int_env('EXPO_PUSH_TIMEOUT', ENV_VALUES, 10)
 HAPPY_HOUR_NOTIFICATION_SECRET = get_env('HAPPY_HOUR_NOTIFICATION_SECRET', ENV_VALUES, '').strip()
+if IS_RENDER and len(HAPPY_HOUR_NOTIFICATION_SECRET) < 32:
+    raise RuntimeError('HAPPY_HOUR_NOTIFICATION_SECRET must be set to a random value of at least 32 characters in production.')
 HAPPY_HOUR_NOTIFICATION_WINDOW_MINUTES = get_int_env('HAPPY_HOUR_NOTIFICATION_WINDOW_MINUTES', ENV_VALUES, 10)
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

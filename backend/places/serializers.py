@@ -191,6 +191,7 @@ def _create_claim_attachments(claim, request):
 		return
 	for request_field_name, attachment_kind in ATTACHMENT_FIELD_NAME_MAP.items():
 		for uploaded_file in request.FILES.getlist(request_field_name):
+			_validate_claim_attachment_size(uploaded_file, 'verification_documents')
 			_validate_pdf_upload_size(uploaded_file, 'verification_documents')
 			BusinessClaimAttachment.objects.create(
 				claim=claim,
@@ -286,6 +287,21 @@ def _validate_pdf_upload_size(uploaded_file, field_name):
 	if file_size not in (None, '') and int(file_size) > max_bytes:
 		max_megabytes = max_bytes / (1024 * 1024)
 		raise serializers.ValidationError({field_name: [f'PDF files must be {max_megabytes:g} MB or smaller.']})
+
+
+def _validate_claim_attachment_size(uploaded_file, field_name):
+	try:
+		max_bytes = max(
+			1,
+			int(getattr(settings, 'PDF_UPLOAD_MAX_BYTES', 10 * 1024 * 1024) or 10 * 1024 * 1024),
+			int(getattr(settings, 'IMAGE_MODERATION_MAX_UPLOAD_BYTES', 16 * 1024 * 1024) or 16 * 1024 * 1024),
+		)
+		file_size = getattr(uploaded_file, 'size', None)
+		if file_size not in (None, '') and int(file_size) > max_bytes:
+			max_megabytes = max_bytes / (1024 * 1024)
+			raise serializers.ValidationError({field_name: [f'Uploaded files must be {max_megabytes:g} MB or smaller.']})
+	except (TypeError, ValueError):
+		raise serializers.ValidationError({field_name: ['The uploaded file size could not be validated.']})
 
 
 def _save_uploaded_deal_attachment(request, claim, uploaded_file):

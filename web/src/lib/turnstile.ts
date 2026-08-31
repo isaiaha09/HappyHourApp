@@ -1,5 +1,7 @@
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
+
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 
 type TurnstileVerifyResponse = {
   success: boolean;
@@ -9,18 +11,27 @@ type TurnstileVerifyResponse = {
 const VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 const BACKEND_ENV_PATH = path.join(process.cwd(), "..", "backend", ".env");
 
+function readBackendEnvValues() {
+  try {
+    const envFile = readFileSync(BACKEND_ENV_PATH, "utf8");
+    return Object.fromEntries(
+      envFile.split(/\r?\n/).flatMap((line) => {
+        const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
+        if (!match) {
+          return [];
+        }
+        return [[match[1], match[2].replace(/^['"]|['"]$/g, "")]];
+      }),
+    ) as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+const BACKEND_ENV_VALUES = readBackendEnvValues();
+
 function readBackendEnvValue(name: string) {
-  if (!existsSync(BACKEND_ENV_PATH)) {
-    return "";
-  }
-
-  const envFile = readFileSync(BACKEND_ENV_PATH, "utf8");
-  const match = envFile.match(new RegExp(`^${name}=(.*)$`, "m"));
-  if (!match) {
-    return "";
-  }
-
-  return match[1].trim().replace(/^['\"]|['\"]$/g, "");
+  return BACKEND_ENV_VALUES[name] ?? "";
 }
 
 export function getTurnstileSiteKey() {
@@ -50,14 +61,19 @@ export async function verifyTurnstileToken(token: string, remoteIp?: string | nu
     payload.set("remoteip", remoteIp);
   }
 
-  const response = await fetch(VERIFY_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: payload.toString(),
-    cache: "no-store",
-  });
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(VERIFY_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: payload.toString(),
+      cache: "no-store",
+    });
+  } catch {
+    return { success: false, message: "Unable to verify the security check right now." };
+  }
 
   if (!response.ok) {
     return { success: false, message: "Unable to verify the security check right now." };

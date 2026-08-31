@@ -35,7 +35,7 @@ export function LoginForm({ compact = false, turnstileSiteKey }: LoginFormProps)
     startTransition(async () => {
       try {
         const response = await loginProfile(portal, identifier.trim(), password, turnstileToken);
-        saveSession({ authToken: response.auth_token, portal: response.portal });
+        saveSession({ portal: response.portal });
         router.push("/dashboard");
       } catch (error) {
         setErrorMessage(error instanceof Error ? error.message : "Unable to sign in.");

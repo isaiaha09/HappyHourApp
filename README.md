@@ -244,7 +244,9 @@ The backend already exposes a lightweight health endpoint for uptime checks:
 Recommended monitoring setup:
 
 - UptimeRobot: point it at the Render backend health URL, for example `https://your-render-service.onrender.com/api/health/`
-- UptimeRobot notification processor: add a second five-minute HTTP monitor after deploying the preference migration. Point it at `https://your-render-service.onrender.com/api/internal/process-due-happy-hour-notifications/<secret>/` and set the same randomly generated value as Render's `HAPPY_HOUR_NOTIFICATION_SECRET` environment variable.
+- Notification processor: the preferred configuration is a five-minute POST monitor for `https://your-render-service.onrender.com/api/internal/process-due-happy-hour-notifications/` with an `Authorization: Bearer <secret>` header. Generate a new random value of at least 32 characters, set it as Render's `HAPPY_HOUR_NOTIFICATION_SECRET` environment variable, and update the monitor at the same time. Do not put the secret in the URL.
+- Existing UptimeRobot HEAD monitors may keep using `https://your-render-service.onrender.com/api/internal/process-due-happy-hour-notifications/<secret>/`. That compatibility route accepts only an authenticated HEAD request, rejects query-string secrets, uses a constant-time comparison, and is rate-limited. URL secrets can still appear in provider or proxy access logs, so rotate the secret if the monitor URL was exposed; migrate to header-authenticated POST when the monitor plan allows it.
+- Apply migrations, including `0059_secure_profile_auth_tokens`, before serving traffic. It hashes existing profile tokens and adds their expiry timestamps; the web dashboard also requires users to sign in again because old localStorage tokens are discarded.
 - Set `HAPPY_HOUR_NOTIFICATION_WINDOW_MINUTES=10` unless a different stale-alert window is intentionally needed. The processor re-reads current deal data, sends eligible happy-hour pushes once, and skips occurrences older than the configured window.
 - All-day happy-hour windows use the matching location's operating-hours opening time as their notification start; legacy records with no operating-hours start fall back to their stored happy-hour start time.
 - Keep the notification processor monitor separate from `/api/health/`; the health endpoint stays read-only and diagnostic.
@@ -253,7 +255,7 @@ Recommended monitoring setup:
 
 ## HTTPS And HSTS
 
-The backend already supports HTTPS redirect and secure cookies on Render. HSTS is also env-driven now, but it defaults to off until the production domain is final.
+The backend already supports HTTPS redirect and secure cookies on Render. HSTS defaults to one year on Render and should only be disabled deliberately before the final HTTPS domain is confirmed.
 
 Recommended Render env vars after HTTPS is confirmed on the final production domain:
 

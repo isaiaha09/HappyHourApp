@@ -1,7 +1,7 @@
 import hashlib
 
 from rest_framework.settings import api_settings
-from rest_framework.throttling import SimpleRateThrottle
+from rest_framework.throttling import AnonRateThrottle, SimpleRateThrottle
 
 
 class ScopedRateThrottle(SimpleRateThrottle):
@@ -71,3 +71,11 @@ class UserMutationRateThrottle(ScopedRateThrottle):
 
 class DirectMessageSendRateThrottle(ScopedRateThrottle):
 	scope = 'direct_message_send'
+
+
+class TwoFactorRateThrottle(ScopedRateThrottle):
+	scope = 'profile_two_factor'
+
+
+class NotificationProcessorRateThrottle(AnonRateThrottle):
+	scope = 'internal_notification_processor'

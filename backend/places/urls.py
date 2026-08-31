@@ -63,7 +63,11 @@ urlpatterns = [
     path('profiles/reset-password/<str:token>/', PasswordResetView.as_view(), name='profile-password-reset'),
     path('profiles/me/', ProfileDashboardView.as_view(), name='profile-dashboard'),
     path('profiles/preferences/', CustomerPreferencesView.as_view(), name='profile-preferences'),
-    path('internal/process-due-happy-hour-notifications/<str:secret>/', ProcessDueHappyHourNotificationsView.as_view(), name='process-due-happy-hour-notifications'),
+    # Backward-compatible endpoint for an existing UptimeRobot HEAD monitor.
+    # This route intentionally supports HEAD only inside the view; new monitors
+    # should use the header-authenticated POST endpoint below.
+    path('internal/process-due-happy-hour-notifications/<str:secret>/', ProcessDueHappyHourNotificationsView.as_view(), name='process-due-happy-hour-notifications-legacy-head'),
+    path('internal/process-due-happy-hour-notifications/', ProcessDueHappyHourNotificationsView.as_view(), name='process-due-happy-hour-notifications'),
     path('profiles/push-devices/', PushDeviceRegistrationView.as_view(), name='profile-push-devices'),
     path('profiles/contact-support/', ContactSupportView.as_view(), name='profile-contact-support'),
     path('profiles/content-reports/', ContentReportView.as_view(), name='profile-content-reports'),

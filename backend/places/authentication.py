@@ -1,4 +1,5 @@
 from rest_framework import authentication, exceptions
+from django.utils import timezone
 
 from .models import ProfileAuthToken
 
@@ -17,10 +18,16 @@ class ProfileTokenAuthentication(authentication.BaseAuthentication):
 			token_key = str(request.headers.get('X-Profile-Token') or '').strip()
 		if not token_key:
 			return None
-
-		token = ProfileAuthToken.objects.select_related('user').filter(key=token_key).first()
-		if token is None:
+		if len(token_key) > 256:
 			raise exceptions.AuthenticationFailed('Invalid profile token.')
 
+		token = ProfileAuthToken.objects.select_related('user').filter(token_hash=ProfileAuthToken.hash_key(token_key)).first()
+		if token is None:
+			raise exceptions.AuthenticationFailed('Invalid profile token.')
+		if token.is_expired(timezone.now()):
+			token.delete()
+			raise exceptions.AuthenticationFailed('Profile token expired.')
+
+		token.set_presented_key(token_key)
 		token.save(update_fields=['last_used_at'])
 		return (token.user, token)

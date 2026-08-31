@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 
-import { fetchProfileDashboard } from "@/lib/api";
+import { fetchProfileDashboard, logoutProfile } from "@/lib/api";
 import { clearSession, readSession } from "@/lib/session";
 import type { SignupResponse } from "@/lib/types";
 
@@ -22,7 +22,7 @@ export function DashboardShell() {
       return;
     }
 
-    void fetchProfileDashboard(storedSession.authToken, storedSession.portal)
+    void fetchProfileDashboard(storedSession.portal)
       .then((response) => {
         setSession(response);
       })
@@ -37,6 +37,7 @@ export function DashboardShell() {
 
   function handleLogout() {
     startTransition(() => {
+      void logoutProfile();
       clearSession();
       router.push("/login");
       router.refresh();

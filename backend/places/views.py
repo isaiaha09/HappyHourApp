@@ -12,10 +12,11 @@ from django.http import FileResponse, Http404, HttpResponse
 from django.views import View
 from django.urls import reverse
 from django.utils.text import slugify
+from django.utils.html import escape
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework import generics, status
 from django.utils import timezone
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -76,7 +77,7 @@ from .services.image_moderation import ImageModerationRejected, ImageModerationU
 from .services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
 from .services.current_happy_hours import get_current_happy_hours_payload
 from .services.source_listings import get_deleted_business_snapshot_ids, get_disabled_live_location_slugs, get_live_location_display_fields, get_source_deal_payloads, get_source_place_payload, get_source_place_payloads, is_live_location_tracking_enabled_for_snapshot, load_source_records
-from .throttles import ContentReportRateThrottle, DirectMessageSendRateThrottle, EmailVerificationRateThrottle, EmailVerificationResendRateThrottle, LoginRateThrottle, PasswordRecoveryRateThrottle, SignupRateThrottle, SupportContactRateThrottle, UserMutationRateThrottle
+from .throttles import ContentReportRateThrottle, DirectMessageSendRateThrottle, EmailVerificationRateThrottle, EmailVerificationResendRateThrottle, LoginRateThrottle, NotificationProcessorRateThrottle, PasswordRecoveryRateThrottle, SignupRateThrottle, SupportContactRateThrottle, TwoFactorRateThrottle, UserMutationRateThrottle
 
 
 class SourcePlacePagination(PageNumberPagination):
@@ -109,7 +110,9 @@ class PrivateBusinessClaimAttachmentView(View):
 			raise Http404
 
 		response = FileResponse(file_handle, content_type=content_type)
-		response['Content-Disposition'] = f'attachment; filename="{original_filename}"'
+		safe_filename = ''.join(character for character in Path(str(original_filename or 'attachment')).name if character.isprintable() and character not in {'"', '\\'}) or 'attachment'
+		response['Content-Disposition'] = f'attachment; filename="{safe_filename}"'
+		response['X-Content-Type-Options'] = 'nosniff'
 		return response
 
 
@@ -319,6 +322,8 @@ def _build_direct_message_item_payload(message, request=None):
 
 
 class HealthCheckView(APIView):
+	permission_classes = [AllowAny]
+
 	def get(self, request):
 		dependencies = {
 			'database': self._check_database(),
@@ -372,6 +377,8 @@ class HealthCheckView(APIView):
 
 
 class DiscoveryEnrichmentStatusView(APIView):
+	permission_classes = [AllowAny]
+
 	def get(self, request):
 		limit = self._parse_limit(request.query_params.get('limit'))
 		records = list(load_source_records())
@@ -409,6 +416,7 @@ class DiscoveryEnrichmentStatusView(APIView):
 class PlaceListView(generics.GenericAPIView):
 	serializer_class = PlaceListSerializer
 	pagination_class = SourcePlacePagination
+	permission_classes = [AllowAny]
 
 	def get(self, request):
 		city = self.request.query_params.get('city')
@@ -442,7 +450,7 @@ class PlaceListView(generics.GenericAPIView):
 
 class CurrentHappyHoursView(generics.GenericAPIView):
 	serializer_class = CurrentHappyHoursResponseSerializer
-	permission_classes = []
+	permission_classes = [AllowAny]
 
 	def get(self, request):
 		city = str(request.query_params.get('city') or '').strip().lower()
@@ -457,7 +465,7 @@ class CurrentHappyHoursView(generics.GenericAPIView):
 class PlaceDetailView(generics.GenericAPIView):
 	serializer_class = PlaceDetailSerializer
 	authentication_classes = [ProfileTokenAuthentication]
-	permission_classes = []
+	permission_classes = [AllowAny]
 
 	def get(self, request, slug):
 		payload = get_source_place_payload(slug)
@@ -471,7 +479,7 @@ class PlaceDetailView(generics.GenericAPIView):
 
 class LiveLocationPlaceListView(generics.GenericAPIView):
 	serializer_class = LiveLocationPlaceSerializer
-	permission_classes = []
+	permission_classes = [AllowAny]
 
 	def get(self, request):
 		city = str(request.query_params.get('city') or '').strip().lower()
@@ -584,6 +592,7 @@ class LiveLocationPlaceListView(generics.GenericAPIView):
 
 class DealListView(generics.GenericAPIView):
 	serializer_class = DealSerializer
+	permission_classes = [AllowAny]
 
 	def get(self, request):
 		city = self.request.query_params.get('city')
@@ -602,6 +611,7 @@ class DealListView(generics.GenericAPIView):
 class HomeFeedView(generics.GenericAPIView):
 	serializer_class = FeedItemSerializer
 	pagination_class = HomeFeedPagination
+	permission_classes = [AllowAny]
 
 	def get(self, request):
 		page_number = self._parse_page_number(request.query_params.get('page'))
@@ -636,6 +646,7 @@ class HomeFeedView(generics.GenericAPIView):
 
 class FeedImpressionView(generics.GenericAPIView):
 	serializer_class = FeedImpressionWriteSerializer
+	permission_classes = [AllowAny]
 	throttle_classes = [UserMutationRateThrottle]
 
 	def post(self, request):
@@ -649,6 +660,7 @@ class FeedImpressionView(generics.GenericAPIView):
 
 class FeedEngagementView(generics.GenericAPIView):
 	serializer_class = FeedEngagementWriteSerializer
+	permission_classes = [AllowAny]
 	throttle_classes = [UserMutationRateThrottle]
 
 	def post(self, request):
@@ -660,6 +672,7 @@ class FeedEngagementView(generics.GenericAPIView):
 
 class CustomerSignupView(generics.GenericAPIView):
 	serializer_class = CustomerSignupSerializer
+	permission_classes = [AllowAny]
 	throttle_classes = [SignupRateThrottle]
 
 	def post(self, request):
@@ -671,6 +684,7 @@ class CustomerSignupView(generics.GenericAPIView):
 
 class LoginView(generics.GenericAPIView):
 	serializer_class = LoginSerializer
+	permission_classes = [AllowAny]
 	throttle_classes = [LoginRateThrottle]
 
 	def post(self, request):
@@ -691,6 +705,7 @@ class LoginView(generics.GenericAPIView):
 
 class UsernameReminderView(generics.GenericAPIView):
 	serializer_class = UsernameReminderSerializer
+	permission_classes = [AllowAny]
 	throttle_classes = [PasswordRecoveryRateThrottle]
 
 	def post(self, request):
@@ -704,6 +719,7 @@ class UsernameReminderView(generics.GenericAPIView):
 
 class PasswordResetRequestView(generics.GenericAPIView):
 	serializer_class = PasswordResetRequestSerializer
+	permission_classes = [AllowAny]
 	throttle_classes = [PasswordRecoveryRateThrottle]
 
 	def post(self, request):
@@ -727,7 +743,7 @@ class BusinessSignupView(generics.GenericAPIView):
 	serializer_class = ClaimedBusinessSignupSerializer
 	parser_classes = [MultiPartParser, FormParser, JSONParser]
 	authentication_classes = [ProfileTokenAuthentication]
-	permission_classes = []
+	permission_classes = [AllowAny]
 	throttle_classes = [SignupRateThrottle]
 
 	def post(self, request):
@@ -768,6 +784,7 @@ class BusinessSignupView(generics.GenericAPIView):
 class ManualBusinessSignupView(generics.GenericAPIView):
 	serializer_class = ManualBusinessSignupSerializer
 	parser_classes = [MultiPartParser, FormParser, JSONParser]
+	permission_classes = [AllowAny]
 	throttle_classes = [SignupRateThrottle]
 
 	def post(self, request):
@@ -800,6 +817,7 @@ class ManualBusinessSignupView(generics.GenericAPIView):
 class InformalBusinessSignupView(generics.GenericAPIView):
 	serializer_class = InformalBusinessSignupSerializer
 	parser_classes = [MultiPartParser, FormParser, JSONParser]
+	permission_classes = [AllowAny]
 	throttle_classes = [SignupRateThrottle]
 
 	def post(self, request):
@@ -831,6 +849,7 @@ class InformalBusinessSignupView(generics.GenericAPIView):
 
 class VerifyEmailCodeView(generics.GenericAPIView):
 	serializer_class = EmailVerificationCodeSerializer
+	permission_classes = [AllowAny]
 	throttle_classes = [EmailVerificationRateThrottle]
 
 	def post(self, request):
@@ -860,6 +879,7 @@ class VerifyEmailCodeView(generics.GenericAPIView):
 
 class ResendEmailVerificationCodeView(generics.GenericAPIView):
 	serializer_class = ResendEmailVerificationCodeSerializer
+	permission_classes = [AllowAny]
 	throttle_classes = [EmailVerificationResendRateThrottle]
 
 	def post(self, request):
@@ -1224,13 +1244,47 @@ class CustomerPreferencesView(APIView):
 
 class ProcessDueHappyHourNotificationsView(APIView):
 	authentication_classes = []
-	permission_classes = []
+	permission_classes = [AllowAny]
+	throttle_classes = [NotificationProcessorRateThrottle]
 
-	def get(self, request, secret):
+	def _is_authorized(self, request, path_secret=''):
 		expected_secret = str(getattr(settings, 'HAPPY_HOUR_NOTIFICATION_SECRET', '') or '').strip()
-		if not expected_secret or not secrets.compare_digest(str(secret or ''), expected_secret):
-			return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
-		return Response(process_due_happy_hour_notifications())
+		provided_secret = str(path_secret or '').strip()
+		if not provided_secret:
+			authorization = str(request.headers.get('Authorization') or '').strip()
+			if authorization.lower().startswith('bearer '):
+				provided_secret = authorization[7:].strip()
+			if not provided_secret:
+				provided_secret = str(request.headers.get('X-Happy-Hour-Notification-Secret') or '').strip()
+		return bool(expected_secret) and secrets.compare_digest(provided_secret, expected_secret)
+
+	def _process(self):
+		return process_due_happy_hour_notifications()
+
+	def _response(self, data=None, response_status=status.HTTP_200_OK):
+		response = Response(data, status=response_status)
+		# Do not let an intermediary cache a successful HEAD response and make
+		# the scheduled side effect appear to run when it did not.
+		response['Cache-Control'] = 'no-store'
+		return response
+
+	def post(self, request, secret=None):
+		# The secret-in-the-path compatibility route must never become a POST
+		# endpoint. POST is reserved for header-authenticated callers.
+		if secret is not None:
+			return self._response({'detail': 'Not found.'}, status.HTTP_404_NOT_FOUND)
+		if not self._is_authorized(request):
+			return self._response({'detail': 'Not found.'}, status.HTTP_404_NOT_FOUND)
+		return self._response(self._process())
+
+	def head(self, request, secret=None):
+		# UptimeRobot's existing monitor cannot send a custom authorization
+		# header. Keep its current HEAD URL working, but do not accept HEAD on
+		# the header-only route or secrets supplied in a query string.
+		if not secret or not self._is_authorized(request, path_secret=secret):
+			return self._response({'detail': 'Not found.'}, status.HTTP_404_NOT_FOUND)
+		self._process()
+		return self._response()
 
 
 class DirectMessageThreadsView(APIView):
@@ -1573,6 +1627,7 @@ class DirectMessageBlockDetailView(APIView):
 class PushDeviceRegistrationView(APIView):
 	authentication_classes = [ProfileTokenAuthentication]
 	permission_classes = [IsAuthenticated]
+	throttle_classes = [UserMutationRateThrottle]
 
 	def post(self, request):
 		serializer = PushDeviceRegistrationSerializer(data=request.data)
@@ -1719,6 +1774,7 @@ class ContactSupportView(generics.GenericAPIView):
 	serializer_class = ContactSupportSerializer
 	authentication_classes = [ProfileTokenAuthentication]
 	permission_classes = [IsAuthenticated]
+	throttle_classes = [SupportContactRateThrottle]
 
 	def post(self, request):
 		serializer = self.get_serializer(data=request.data)
@@ -1748,6 +1804,7 @@ class DeleteAccountView(generics.GenericAPIView):
 class ToggleTwoFactorView(APIView):
 	authentication_classes = [ProfileTokenAuthentication]
 	permission_classes = [IsAuthenticated]
+	throttle_classes = [TwoFactorRateThrottle]
 
 	def post(self, request):
 		profile = get_or_create_account_profile(request.user)
@@ -1770,6 +1827,7 @@ class ConfirmTwoFactorView(generics.GenericAPIView):
 	serializer_class = TwoFactorCodeSerializer
 	authentication_classes = [ProfileTokenAuthentication]
 	permission_classes = [IsAuthenticated]
+	throttle_classes = [TwoFactorRateThrottle]
 
 	def post(self, request):
 		serializer = self.get_serializer(data=request.data)
@@ -1788,6 +1846,7 @@ class DisableTwoFactorView(generics.GenericAPIView):
 	serializer_class = TwoFactorCodeSerializer
 	authentication_classes = [ProfileTokenAuthentication]
 	permission_classes = [IsAuthenticated]
+	throttle_classes = [TwoFactorRateThrottle]
 
 	def post(self, request):
 		serializer = self.get_serializer(data=request.data)
@@ -1804,7 +1863,7 @@ class DisableTwoFactorView(generics.GenericAPIView):
 
 class PasswordResetView(generics.GenericAPIView):
 	serializer_class = PasswordResetConfirmSerializer
-	permission_classes = []
+	permission_classes = [AllowAny]
 	authentication_classes = []
 
 	def get(self, request, token):
@@ -1840,6 +1899,9 @@ class PasswordResetView(generics.GenericAPIView):
 
 	def _build_html(self, title, message, token, error_message='', success=False, error=False):
 		status_color = '#8d2500' if error or error_message else '#5d4637'
+		title = escape(str(title or ''))
+		message = escape(str(message or ''))
+		error_message = escape(str(error_message or ''))
 		success_block = ''
 		form_block = ''
 		if token and not success and not error:

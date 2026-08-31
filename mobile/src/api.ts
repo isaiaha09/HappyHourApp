@@ -40,6 +40,7 @@ import type {
 
 const MISSING_DEVELOPMENT_API_BASE_URL_MESSAGE = 'This development build is missing a local LAN backend URL. Start Metro with npm run start:wifi:xcode.';
 const MISSING_PRODUCTION_API_BASE_URL_MESSAGE = 'This build is missing the live backend URL. Set EXPO_PUBLIC_API_BASE_URL for production builds.';
+const MAX_PAGINATED_API_PAGES = 100;
 const placeCacheTtlMs = 5 * 60 * 1000;
 
 type PlaceCacheEntry = {
@@ -94,7 +95,23 @@ export function normalizeApiBaseUrl(value: string) {
   }
 
   const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
-  return withProtocol.endsWith('/api') ? withProtocol : `${withProtocol}/api`;
+  let parsed: URL;
+  try {
+    parsed = new URL(withProtocol);
+  } catch {
+    throw new Error('The configured API base URL is invalid.');
+  }
+
+  if (!parsed.hostname || parsed.username || parsed.password || !['http:', 'https:'].includes(parsed.protocol)) {
+    throw new Error('The configured API base URL is invalid.');
+  }
+  if (!__DEV__ && parsed.protocol !== 'https:') {
+    throw new Error('The configured API base URL must use HTTPS in production.');
+  }
+
+  const pathname = parsed.pathname.replace(/\/+$/, '');
+  const apiPath = pathname === '/api' || pathname.endsWith('/api') ? pathname : `${pathname}/api`;
+  return `${parsed.origin}${apiPath || '/api'}`;
 }
 
 export function isMissingProductionApiBaseUrlError(error: unknown) {
@@ -416,8 +433,24 @@ export async function resendVerificationCode(baseUrl: string, payload: ResendEma
   return postJson<EmailVerificationChallengeResponse>(baseUrl, '/profiles/resend-verification-code/', payload);
 }
 
+const API_REQUEST_TIMEOUT_MS = 15_000;
+
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: init.signal ?? controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 async function fetchJson<T>(baseUrl: string, path: string): Promise<T> {
-  const response = await fetch(buildApiUrl(baseUrl, path), {
+  const response = await fetchWithTimeout(buildApiUrl(baseUrl, path), {
     headers: {
       Accept: 'application/json',
     },
@@ -431,7 +464,7 @@ async function fetchJson<T>(baseUrl: string, path: string): Promise<T> {
 }
 
 async function postJson<T>(baseUrl: string, path: string, payload: object): Promise<T> {
-  const response = await fetch(buildApiUrl(baseUrl, path), {
+  const response = await fetchWithTimeout(buildApiUrl(baseUrl, path), {
     method: 'POST',
     headers: {
       Accept: 'application/json',
@@ -452,7 +485,7 @@ async function postJson<T>(baseUrl: string, path: string, payload: object): Prom
 }
 
 async function postMultipartJson<T>(baseUrl: string, path: string, payload: FormData, authToken?: string): Promise<T> {
-  const response = await fetch(buildApiUrl(baseUrl, path), {
+  const response = await fetchWithTimeout(buildApiUrl(baseUrl, path), {
     method: 'POST',
     headers: {
       Accept: 'application/json',
@@ -473,7 +506,7 @@ async function postMultipartJson<T>(baseUrl: string, path: string, payload: Form
 }
 
 async function deleteAuthedJson<T>(baseUrl: string, path: string, authToken: string): Promise<T> {
-  const response = await fetch(buildApiUrl(baseUrl, path), {
+  const response = await fetchWithTimeout(buildApiUrl(baseUrl, path), {
     method: 'DELETE',
     headers: {
       Accept: 'application/json',
@@ -495,9 +528,18 @@ async function deleteAuthedJson<T>(baseUrl: string, path: string, authToken: str
 async function fetchAllPaginatedJson<T>(baseUrl: string, path: string): Promise<T[]> {
   const items: T[] = [];
   let nextUrl: string | null = buildApiUrl(baseUrl, path);
+  const normalizedBaseUrl = normalizeApiBaseUrl(baseUrl);
+  const apiBase = new URL(normalizedBaseUrl);
+  const apiPathPrefix = apiBase.pathname.replace(/\/+$/, '');
+  let pageCount = 0;
 
   while (nextUrl) {
-    const response = await fetch(nextUrl, {
+    if (pageCount >= MAX_PAGINATED_API_PAGES) {
+      throw new Error('The API returned too many pages of results.');
+    }
+    pageCount += 1;
+
+    const response = await fetchWithTimeout(nextUrl, {
       headers: {
         Accept: 'application/json',
       },
@@ -509,14 +551,33 @@ async function fetchAllPaginatedJson<T>(baseUrl: string, path: string): Promise<
 
     const payload = await response.json() as PaginatedResponse<T>;
     items.push(...payload.results);
-    nextUrl = payload.next;
+    if (!payload.next) {
+      nextUrl = null;
+      continue;
+    }
+
+    let parsedNext: URL;
+    try {
+      parsedNext = new URL(payload.next, nextUrl);
+    } catch {
+      throw new Error('The API returned an invalid pagination link.');
+    }
+
+    if (parsedNext.origin !== apiBase.origin
+      || parsedNext.username
+      || parsedNext.password
+      || (apiPathPrefix && parsedNext.pathname !== apiPathPrefix && !parsedNext.pathname.startsWith(`${apiPathPrefix}/`))) {
+      throw new Error('The API returned an invalid pagination link.');
+    }
+
+    nextUrl = parsedNext.toString();
   }
 
   return items;
 }
 
 async function fetchPagedJson<T>(baseUrl: string, path: string): Promise<PaginatedResponse<T>> {
-  const response = await fetch(buildApiUrl(baseUrl, path), {
+  const response = await fetchWithTimeout(buildApiUrl(baseUrl, path), {
     headers: {
       Accept: 'application/json',
     },
@@ -797,7 +858,7 @@ function isLocalDevelopmentApiBaseUrl(value: string) {
 }
 
 async function fetchAuthedJson<T>(baseUrl: string, path: string, authToken: string): Promise<T> {
-  const response = await fetch(buildApiUrl(baseUrl, path), {
+  const response = await fetchWithTimeout(buildApiUrl(baseUrl, path), {
     headers: {
       Accept: 'application/json',
       Authorization: `Token ${authToken}`,
@@ -816,7 +877,7 @@ async function fetchAuthedJson<T>(baseUrl: string, path: string, authToken: stri
 }
 
 async function postAuthedJson<T>(baseUrl: string, path: string, authToken: string, payload: object): Promise<T> {
-  const response = await fetch(buildApiUrl(baseUrl, path), {
+  const response = await fetchWithTimeout(buildApiUrl(baseUrl, path), {
     method: 'POST',
     headers: {
       Accept: 'application/json',
@@ -838,7 +899,7 @@ async function postAuthedJson<T>(baseUrl: string, path: string, authToken: strin
 }
 
 async function postAuthedMultipartJson<T>(baseUrl: string, path: string, authToken: string, payload: FormData): Promise<T> {
-  const response = await fetch(buildApiUrl(baseUrl, path), {
+  const response = await fetchWithTimeout(buildApiUrl(baseUrl, path), {
     method: 'POST',
     headers: {
       Accept: 'application/json',

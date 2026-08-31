@@ -377,10 +377,12 @@ def clear_content_report_screenshots(user):
 
 
 def get_or_create_profile_token(user):
-	token = user.profile_auth_tokens.order_by('-last_used_at').first()
-	if token is not None:
-		return token
-	return ProfileAuthToken.objects.create(user=user)
+	with transaction.atomic():
+		ProfileAuthToken.objects.filter(user=user).delete()
+		token = ProfileAuthToken(user=user)
+		token.issue()
+		token.save()
+	return token
 
 
 def infer_portal_for_user(user, requested_portal=''):
@@ -449,7 +451,7 @@ def build_account_response(user, portal, claim=None, token=None):
 		for approved_claim in approved_claims
 	]
 
-	remove_favorites_for_unavailable_businesses()
+	remove_favorites_for_unavailable_businesses(user=user)
 	favorite_businesses = [
 		{
 			'slug': favorite.listing_slug,
