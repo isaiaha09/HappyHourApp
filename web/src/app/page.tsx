@@ -28,14 +28,14 @@ export default function Home() {
   const turnstileSiteKey = getTurnstileSiteKey();
 
   return (
-    <main className="dd-site-shell relative overflow-hidden px-6 py-8 lg:px-10 lg:py-10">
+    <main className="dd-site-shell relative overflow-hidden px-4 py-8 text-center sm:px-6 lg:px-10 lg:py-10">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,rgba(255,185,0,0.12),transparent_28%),radial-gradient(circle_at_80%_12%,rgba(255,72,40,0.18),transparent_24%),radial-gradient(circle_at_50%_85%,rgba(255,255,255,0.06),transparent_22%)]" />
       <section className="relative flex min-h-[calc(100vh-4rem)] flex-col gap-10 lg:min-h-[calc(100vh-5rem)]">
           <header className="grid items-center gap-6 lg:grid-cols-[1fr_auto_1fr]">
-              <div className="flex items-center gap-5 text-left">
+              <div className="flex items-center justify-center gap-5 text-center lg:justify-start lg:text-left">
                 <Image src="/DiningDealz-Icon.png" alt="DiningDealz icon" width={76} height={76} className="rounded-[22px] shadow-[0_0_40px_rgba(255,72,30,0.45)]" priority />
                 <div>
-                  <p className="dd-kicker text-left text-xl sm:text-2xl lg:text-3xl">DiningDealz</p>
+                  <p className="dd-kicker text-center text-xl sm:text-2xl lg:text-left lg:text-3xl">DiningDealz</p>
                 </div>
               </div>
 
@@ -45,12 +45,12 @@ export default function Home() {
 
           </header>
 
-          <div className="mx-auto grid w-full max-w-8xl gap-0 lg:grid-cols-[1.2fr_1fr] lg:items-start">
-            <div className="space-y-8">
-              <Image src="/DiningDealz-Logo-Transparent.png" alt="DiningDealz logo" width={720} height={720} className="w-full max-w-[640px]" />
+          <div className="mx-auto grid w-full max-w-8xl justify-items-center gap-0 lg:grid-cols-[1.2fr_1fr] lg:items-start lg:justify-items-stretch">
+            <div className="flex w-full justify-center space-y-8 lg:justify-start">
+              <Image src="/DiningDealz-Logo-Transparent.png" alt="DiningDealz logo" width={720} height={720} className="mx-auto w-full max-w-[640px] lg:mx-0" priority />
             </div>
 
-            <div className="self-start lg:pt-15">
+            <div className="w-full self-start lg:pt-15">
               <LoginForm compact turnstileSiteKey={turnstileSiteKey} />
             </div>
           </div>
@@ -66,7 +66,7 @@ export default function Home() {
 
           <div className="grid gap-4 lg:grid-cols-3">
             {featureCards.map((card) => (
-              <article key={card.title} className="rounded-[30px] border border-white/10 bg-black/25 p-6 backdrop-blur-sm">
+              <article key={card.title} className="rounded-[30px] border border-white/10 bg-black/25 p-6 text-center backdrop-blur-sm lg:text-left">
                 <p className="dd-kicker">{card.title}</p>
                 <p className="mt-4 text-sm leading-7 text-[#ffe7d8]">{card.body}</p>
               </article>
