@@ -232,38 +232,6 @@ export const dashboardStyles = {
     fontWeight: '700',
     marginTop: 4,
   },
-  dashboardCampaignCard: {
-    gap: 10,
-    minWidth: 220,
-  },
-  dashboardCampaignHeaderRow: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    gap: 10,
-    justifyContent: 'space-between',
-  },
-  dashboardCampaignHeaderCopy: {
-    flex: 1,
-    gap: 4,
-  },
-  dashboardCampaignStatusBadge: {
-    backgroundColor: theme.warningSoft,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  dashboardCampaignStatusBadgeActive: {
-    backgroundColor: theme.successSoft,
-  },
-  dashboardCampaignStatusBadgeText: {
-    color: theme.warning,
-    fontSize: 11,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
-  dashboardCampaignStatusBadgeTextActive: {
-    color: theme.success,
-  },
   dashboardDetailLabel: {
     color: theme.textMuted,
     fontSize: 12,

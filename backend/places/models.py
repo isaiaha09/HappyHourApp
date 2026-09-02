@@ -980,6 +980,9 @@ class AccountProfile(models.Model):
 	two_factor_enabled = models.BooleanField(default=False)
 	two_factor_secret = models.CharField(max_length=64, blank=True)
 	two_factor_pending_secret = models.CharField(max_length=64, blank=True)
+	admin_two_factor_enabled = models.BooleanField(default=False)
+	admin_two_factor_secret = models.CharField(max_length=64, blank=True)
+	admin_two_factor_pending_secret = models.CharField(max_length=64, blank=True)
 	password_reset_token = models.CharField(max_length=64, blank=True)
 	password_reset_sent_at = models.DateTimeField(null=True, blank=True)
 	billing_portal_url = models.URLField(blank=True)
@@ -1094,6 +1097,39 @@ class AccountProfile(models.Model):
 		self.two_factor_secret = ''
 		self.two_factor_pending_secret = ''
 		self.save(update_fields=['two_factor_enabled', 'two_factor_secret', 'two_factor_pending_secret', 'updated_at'])
+
+	def begin_admin_two_factor_setup(self):
+		self.admin_two_factor_pending_secret = pyotp.random_base32()
+		self.save(update_fields=['admin_two_factor_pending_secret', 'updated_at'])
+		return self.admin_two_factor_pending_secret
+
+	def get_admin_two_factor_provisioning_uri(self, use_pending=False):
+		secret = self.admin_two_factor_pending_secret if use_pending else self.admin_two_factor_secret
+		if not secret:
+			return ''
+		issuer = str(getattr(settings, 'PROFILE_TWO_FACTOR_ISSUER', 'DiningDealz') or 'DiningDealz')
+		return pyotp.TOTP(secret).provisioning_uri(name=self.get_two_factor_account_name(), issuer_name=issuer)
+
+	def verify_admin_two_factor_code(self, code, use_pending=False):
+		secret = self.admin_two_factor_pending_secret if use_pending else self.admin_two_factor_secret
+		normalized = ''.join(character for character in str(code or '') if character.isdigit())
+		if not secret or len(normalized) != 6:
+			return False
+		return pyotp.TOTP(secret).verify(normalized, valid_window=1)
+
+	def enable_admin_two_factor(self):
+		if not self.admin_two_factor_pending_secret:
+			raise ValidationError('No pending admin authenticator setup was found.')
+		self.admin_two_factor_secret = self.admin_two_factor_pending_secret
+		self.admin_two_factor_pending_secret = ''
+		self.admin_two_factor_enabled = True
+		self.save(update_fields=['admin_two_factor_secret', 'admin_two_factor_pending_secret', 'admin_two_factor_enabled', 'updated_at'])
+
+	def disable_admin_two_factor(self):
+		self.admin_two_factor_enabled = False
+		self.admin_two_factor_secret = ''
+		self.admin_two_factor_pending_secret = ''
+		self.save(update_fields=['admin_two_factor_enabled', 'admin_two_factor_secret', 'admin_two_factor_pending_secret', 'updated_at'])
 
 	def issue_password_reset_token(self, force=False):
 		if force or not self.password_reset_token:

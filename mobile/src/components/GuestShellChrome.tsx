@@ -43,7 +43,7 @@ export function GuestShellChrome({
   themeVariant = 'default-dark',
 }: GuestShellChromeProps) {
   const insets = useSafeAreaInsets();
-  const [activeModal, setActiveModal] = useState<'home-feed' | 'sign-in' | null>(null);
+  const [activeModal, setActiveModal] = useState<'sign-in' | null>(null);
   const modalOpacity = useRef(new Animated.Value(0)).current;
   const touchTargetHitSlop = 12;
   const touchTargetPressRetentionOffset = 12;
@@ -75,7 +75,7 @@ export function GuestShellChrome({
     }
   }
 
-  function openModal(modal: 'home-feed' | 'sign-in') {
+  function openModal(modal: 'sign-in') {
     if (!interactive) {
       return;
     }
@@ -119,19 +119,6 @@ export function GuestShellChrome({
     onCreateAccount();
   }
 
-  const homeFeedFallback = (
-    <Pressable
-      accessibilityLabel="Open Home Feed"
-      accessibilityRole="button"
-      disabled={!interactive}
-      hitSlop={touchTargetHitSlop}
-      onPress={() => openModal('home-feed')}
-      pressRetentionOffset={touchTargetPressRetentionOffset}
-      style={styles.splashHeaderIconButton}
-    >
-      <Ionicons color="#f3f6fb" name="newspaper-outline" size={18} />
-    </Pressable>
-  );
   const signInFallback = (
     <Pressable
       accessibilityLabel="Sign in"
@@ -146,21 +133,7 @@ export function GuestShellChrome({
   );
   const headerControls = (
     <View style={[styles.dashboardHeaderRow, styles.splashHeaderRow]}>
-      {isNativeIOSLiquidGlassHeaderButtonAvailable() ? (
-        <NativeIOSLiquidGlassHeaderButton
-          accessibilityLabel="Open Home Feed"
-          fallback={homeFeedFallback}
-          onPress={() => {
-            if (interactive) {
-              openModal('home-feed');
-            }
-          }}
-          systemImage="newspaper.fill"
-          style={{ marginTop: 8 }}
-          themeVariant={themeVariant}
-          variant="icon"
-        />
-      ) : homeFeedFallback}
+      <View style={{ height: 40, width: 40 }} />
       <View pointerEvents="none" style={styles.splashHeaderCenterSlot} />
       {isNativeIOSLiquidGlassHeaderButtonAvailable() ? (
         <NativeIOSLiquidGlassHeaderButton
@@ -330,7 +303,7 @@ export function GuestShellChrome({
       {interactive && activeModal ? (
         <Animated.View pointerEvents="box-none" style={[styles.splashSignInOverlay, { opacity: modalOpacity }]}>
           <Pressable
-            accessibilityLabel={activeModal === 'home-feed' ? 'Close Home Feed message' : 'Close sign in menu'}
+            accessibilityLabel="Close sign in menu"
             hitSlop={touchTargetHitSlop}
             onPress={closeModal}
             pressRetentionOffset={touchTargetPressRetentionOffset}
@@ -341,7 +314,7 @@ export function GuestShellChrome({
               <View style={styles.splashSignInModalHeader}>
                 <View style={styles.splashSignInModalHeaderSpacer} />
                 <Pressable
-                  accessibilityLabel={activeModal === 'home-feed' ? 'Close Home Feed message' : 'Close sign in menu'}
+                  accessibilityLabel="Close sign in menu"
                   accessibilityRole="button"
                   hitSlop={touchTargetHitSlop}
                   onPress={closeModal}
@@ -351,43 +324,34 @@ export function GuestShellChrome({
                   <Text style={styles.splashSignInModalCloseButtonText}>X</Text>
                 </Pressable>
               </View>
-              {activeModal === 'home-feed' ? (
-                <>
-                  <Text style={styles.splashSignInModalTitle}>Coming Soon</Text>
-                  <Text style={styles.splashSignInModalText}>The DiningDealz Home Feed is on the way.</Text>
-                </>
-              ) : (
-                <>
-                  <Text style={styles.splashSignInModalTitle}>Choose your login screen</Text>
-                  <Text style={styles.splashSignInModalText}>Select where you want to sign in, or create a free account to get started.</Text>
-                  <View style={styles.splashSignInModalActions}>
-                    <Pressable
-                      hitSlop={touchTargetHitSlop}
-                      onPress={() => selectSignInPortal('customer')}
-                      pressRetentionOffset={touchTargetPressRetentionOffset}
-                      style={styles.splashSignInPrimaryButton}
-                    >
-                      <Text style={styles.splashSignInPrimaryButtonText}>Customer</Text>
-                    </Pressable>
-                    <Pressable
-                      hitSlop={touchTargetHitSlop}
-                      onPress={() => selectSignInPortal('business')}
-                      pressRetentionOffset={touchTargetPressRetentionOffset}
-                      style={styles.splashSignInSecondaryButton}
-                    >
-                      <Text style={styles.splashSignInSecondaryButtonText}>Business</Text>
-                    </Pressable>
-                    <Pressable
-                      hitSlop={touchTargetHitSlop}
-                      onPress={selectCreateAccount}
-                      pressRetentionOffset={touchTargetPressRetentionOffset}
-                      style={styles.splashSignInTertiaryButton}
-                    >
-                      <Text style={styles.splashSignInTertiaryButtonText}>Create Free Account</Text>
-                    </Pressable>
-                  </View>
-                </>
-              )}
+              <Text style={styles.splashSignInModalTitle}>Choose your login screen</Text>
+              <Text style={styles.splashSignInModalText}>Select where you want to sign in, or create a free account to get started.</Text>
+              <View style={styles.splashSignInModalActions}>
+                <Pressable
+                  hitSlop={touchTargetHitSlop}
+                  onPress={() => selectSignInPortal('customer')}
+                  pressRetentionOffset={touchTargetPressRetentionOffset}
+                  style={styles.splashSignInPrimaryButton}
+                >
+                  <Text style={styles.splashSignInPrimaryButtonText}>Customer</Text>
+                </Pressable>
+                <Pressable
+                  hitSlop={touchTargetHitSlop}
+                  onPress={() => selectSignInPortal('business')}
+                  pressRetentionOffset={touchTargetPressRetentionOffset}
+                  style={styles.splashSignInSecondaryButton}
+                >
+                  <Text style={styles.splashSignInSecondaryButtonText}>Business</Text>
+                </Pressable>
+                <Pressable
+                  hitSlop={touchTargetHitSlop}
+                  onPress={selectCreateAccount}
+                  pressRetentionOffset={touchTargetPressRetentionOffset}
+                  style={styles.splashSignInTertiaryButton}
+                >
+                  <Text style={styles.splashSignInTertiaryButtonText}>Create Free Account</Text>
+                </Pressable>
+              </View>
             </View>
           </View>
         </Animated.View>

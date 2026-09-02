@@ -11,7 +11,7 @@ const featureCards = [
   },
   {
     title: "Account Management",
-    body: "Manage your customer or business details on the mobile app. Manage your billing on the website if you have a business account.",
+    body: "Manage your customer or business details on the mobile app. Customer and business accounts are free in the current release.",
   },
   {
     title: "Community Focused",

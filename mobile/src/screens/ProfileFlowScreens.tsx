@@ -1202,7 +1202,7 @@ export function ContactSupportScreen({ errorMessage, initialMessage = '', initia
             <View style={[styles.dashboardSectionCard, styles.onboardingInfoCard]}>
               <Text style={[styles.dashboardSectionTitle, styles.onboardingInfoTitle]}>Direct email</Text>
               <Text style={[styles.dashboardDetailValue, styles.onboardingInfoTitle]}>{SUPPORT_EMAIL}</Text>
-              <Text style={[styles.dashboardSupportText, styles.onboardingInfoText]}>Best for account help, business onboarding, verification issues, billing questions, or general app support.</Text>
+              <Text style={[styles.dashboardSupportText, styles.onboardingInfoText]}>Best for account help, business onboarding, verification issues, or general app support.</Text>
             </View>
 
             <View style={styles.profileFormSection}>

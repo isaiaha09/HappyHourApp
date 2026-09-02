@@ -548,6 +548,49 @@ The local `backup_admin_data` command is an application-level export. It is usef
 
 The command writes by default to `%USERPROFILE%\DiningDealzBackups`, outside the repository. Keep these bundles in encrypted external storage and never commit them.
 
+The local fixture is deliberately safer than a raw database copy: it excludes `places.profileauthtoken` and redacts Django password hashes, account verification/recovery tokens, and authenticator secrets. The raw SQLite copy still contains all database data and must be treated as sensitive encrypted backup material.
+
+Removing files under `backend/backups/` or `backend/tmp-backups/` removes only those exported backup files from the repository working tree; it does not delete `ListingSnapshot` rows, discovery records, or any live production database data.
+
+## Admin Backend Security
+
+The custom admin URL is only a discovery-reduction measure. The backend now adds the following controls:
+
+- state-changing listing pulls and deleted-business restores show a confirmation page and mutate only on CSRF-protected `POST` requests
+- admin sessions have a one-hour absolute lifetime and a 30-minute idle timeout by default
+- admin login attempts are throttled by source address and address/username pair; configure `REDIS_URL` in production so the limiter is shared by all workers
+- each staff account can enable authenticator-based TOTP from the `My Admin Security` page inside the admin; after the password login succeeds, that account is sent to a separate MFA verification screen before any admin page is shown
+- staff and group privilege management is restricted to Django superusers; ordinary staff cannot grant `is_staff`, `is_superuser`, groups, or object permissions
+- `ADMIN_IP_ALLOWLIST` can restrict admin requests by CIDR. When the app is behind a reverse proxy, enforce the allowlist at the Render/edge layer because the application sees the proxy address unless trusted client-IP handling is configured
+- structured `ADMIN_SECURITY_EVENT` records are written to the `admin_security` logger for external collection; privilege changes, denied networks, MFA failures, and rate limits are marked as alerts
+
+Apply migrations as part of the deploy (`python manage.py migrate`) before using the new page. To enable MFA, sign in and open `My Admin Security` in the Administration section. Start enrollment, scan the displayed QR code with an authenticator app, and confirm with the current six-digit code. This is stored per admin account in `AccountProfile`; no MFA feature flag is required in Render.
+
+Configure these Render environment variables and run the check from the deployed service or an identically configured release shell:
+
+```text
+DJANGO_ENV=production
+ADMIN_LOGIN_MAX_ATTEMPTS=5
+ADMIN_LOGIN_WINDOW_SECONDS=300
+ADMIN_SESSION_AGE_SECONDS=3600
+ADMIN_SESSION_IDLE_TIMEOUT_SECONDS=1800
+REDIS_URL=<shared-production-redis-url>
+ADMIN_IP_ALLOWLIST=<trusted-cidr>,<optional-second-cidr>
+```
+
+```powershell
+python manage.py check_admin_security
+```
+
+The check warns when an active superuser has not enabled admin 2FA. If any profile API token or credential-bearing backup was exposed, revoke live profile tokens after confirming the production database target:
+
+```powershell
+python manage.py revoke_profile_auth_tokens --all
+python manage.py revoke_profile_auth_tokens --all --confirm
+```
+
+The first command is a dry run; the second deletes the selected token rows. The deleted backup files are removed from the current working tree, but they remain in existing Git history until a coordinated history rewrite is completed. Configure an external append-only log drain/SIEM for `ADMIN_SECURITY_EVENT` and alert on `"alert":true` or `event_type=admin_privilege_change`.
+
 ### Create A Production Backup On Windows
 
 Install the PostgreSQL client tools and confirm `pg_dump` is available:

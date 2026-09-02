@@ -10,6 +10,7 @@ requests==2.32.3
 beautifulsoup4==4.12.3
 pypdf==5.6.0
 Pillow==11.2.1
+qrcode==7.4.2
 nudenet==3.4.2
 pytesseract==0.3.13
 pyotp==2.9.0

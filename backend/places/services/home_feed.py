@@ -1,6 +1,7 @@
 from collections import Counter
 from datetime import timedelta
 
+from django.conf import settings
 from django.db.models import Count, Q
 from django.utils import timezone
 
@@ -46,6 +47,9 @@ def get_feed_queryset(*, city=None, content_types=None, reference_time=None):
 
 
 def get_ranked_campaigns(*, city=None, venue_type=None, reference_time=None):
+	if not settings.PAID_FEATURES_ENABLED:
+		return []
+
 	reference = reference_time or timezone.now()
 	window_start = reference - timedelta(days=7)
 	queryset = (

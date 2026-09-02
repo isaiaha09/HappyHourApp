@@ -109,7 +109,6 @@ import { PhotoLightbox } from './src/components/PhotoLightbox';
 import { VenueMarkerVisual } from './src/components/VenueMarkerVisual';
 import { DirectMessagesScreen } from './src/screens/DirectMessagesScreen';
 import { CustomerPreferencesScreen } from './src/screens/CustomerPreferencesScreen';
-import { HomeFeedScreen } from './src/screens/HomeFeedScreen';
 import { PlaceDetailScreen } from './src/screens/PlaceDetailScreen';
 import { SplashScreen } from './src/screens/SplashScreen';
 import { getMappedPlaceRenderKey, shouldSkipBrowseMapAutoFit } from './src/mapBrowseState';
@@ -250,14 +249,12 @@ const allCitiesInitialMapRegion: Region = {
   longitudeDelta: maxLongitudeDelta,
 };
 const multipleAreasBusinessCityValue = multipleAreasBusinessCityOption.value;
-type AppScreenMode = 'splash' | 'auth' | 'browse' | 'home-feed' | 'profiles' | 'customer-preferences' | 'favorite-businesses' | 'business-notifications' | 'business-profile-editor' | 'settings' | 'blocked-direct-message-customers' | 'support' | 'privacy-policy' | 'terms-of-service' | 'business-search' | 'business-claim' | 'manual-business-claim' | 'informal-business-claim' | 'forgot-username' | 'forgot-password' | 'email-verification' | 'business-claim-review-pending' | 'direct-messages';
+type AppScreenMode = 'splash' | 'auth' | 'browse' | 'profiles' | 'customer-preferences' | 'favorite-businesses' | 'business-notifications' | 'business-profile-editor' | 'settings' | 'blocked-direct-message-customers' | 'support' | 'privacy-policy' | 'terms-of-service' | 'business-search' | 'business-claim' | 'manual-business-claim' | 'informal-business-claim' | 'forgot-username' | 'forgot-password' | 'email-verification' | 'business-claim-review-pending' | 'direct-messages';
 type OnboardingTransitionDirection = 'forward' | 'backward';
 type TransitionAxis = 'x' | 'y';
 type ClaimReturnDestination = 'business-search' | 'browse-map' | 'profiles';
-type MainShellScreen = 'browse' | 'home-feed' | 'profiles' | 'business-profile-editor' | 'settings' | 'blocked-direct-message-customers' | 'support' | 'privacy-policy' | 'terms-of-service';
-type MainShellBottomNavItem = 'home' | 'map' | 'profile' | 'more';
+type MainShellBottomNavItem = 'map' | 'profile' | 'more';
 type ShellFadeScope = 'browse' | 'profile';
-type MainShellSwipeScreen = 'browse' | 'home-feed';
 type SettingsSubmittingAction = 'two-factor-begin' | 'two-factor-confirm' | 'two-factor-disable' | 'business-location' | 'direct-messaging' | 'direct-message-block' | 'delete-account' | null;
 type CustomerBusinessClaimNotice = {
   businessName: string;
@@ -281,7 +278,7 @@ type BusinessTrackingSession = {
 };
 
 type InteractiveBackSwipeConfig = {
-  kind: 'onboarding' | 'browse-profile' | 'guest-browse' | 'main-shell';
+  kind: 'onboarding' | 'browse-profile' | 'guest-browse';
   nextScreen: AppScreenMode;
   direction?: 'left';
 };
@@ -740,7 +737,6 @@ function AppScreen() {
   const [showGuestBusinessClaimPrompt, setShowGuestBusinessClaimPrompt] = useState(false);
   const [showGuestAccuracyPrompt, setShowGuestAccuracyPrompt] = useState(false);
   const [showGuestBottomNavPrompt, setShowGuestBottomNavPrompt] = useState(false);
-  const [showAuthenticatedHomeFeedPrompt, setShowAuthenticatedHomeFeedPrompt] = useState(false);
   const [showCustomerBusinessClaimPrompt, setShowCustomerBusinessClaimPrompt] = useState(false);
   const [customerBusinessClaimNotice, setCustomerBusinessClaimNotice] = useState<CustomerBusinessClaimNotice | null>(null);
   const [claimReturnDestination, setClaimReturnDestination] = useState<ClaimReturnDestination>('business-search');
@@ -819,8 +815,6 @@ function AppScreen() {
   const [incomingBrowseProfileTargetScreen, setIncomingBrowseProfileTargetScreen] = useState<AppScreenMode | null>(null);
   const [guestBrowseTransitionFrom, setGuestBrowseTransitionFrom] = useState<'splash' | 'browse' | null>(null);
   const [incomingGuestBrowseScreen, setIncomingGuestBrowseScreen] = useState<'splash' | 'browse' | null>(null);
-  const [mainShellTransitionFrom, setMainShellTransitionFrom] = useState<MainShellSwipeScreen | null>(null);
-  const [incomingMainShellScreen, setIncomingMainShellScreen] = useState<MainShellSwipeScreen | null>(null);
   const [showLoginSuccessTransition, setShowLoginSuccessTransition] = useState(false);
   const [showLogoutTransition, setShowLogoutTransition] = useState(false);
   const [authIntroPending, setAuthIntroPending] = useState(false);
@@ -999,8 +993,7 @@ function AppScreen() {
     && hasSettledInitialMapRegionRef.current
     && !selectedPlaceSlug
     && browseMode === 'map';
-  const showMainShellTransitionMap = mainShellTransitionFrom === 'browse' || incomingMainShellScreen === 'browse';
-  const showMapBrowse = (screenMode === 'browse' && (!selectedPlaceSlug || !authenticatedSession) && browseMode === 'map') || keepGuestMapVisibleDuringGuestOnboarding || keepGuestMapVisibleOnSplash || showGuestTransitionMap || showTransitionMapBrowse || showMainShellTransitionMap;
+  const showMapBrowse = (screenMode === 'browse' && (!selectedPlaceSlug || !authenticatedSession) && browseMode === 'map') || keepGuestMapVisibleDuringGuestOnboarding || keepGuestMapVisibleOnSplash || showGuestTransitionMap || showTransitionMapBrowse;
   const shouldTrackUserLocation = screenMode === 'browse' || selectedPlaceSlug !== null;
   const translucentStatusBar = (screenMode === 'browse' && !selectedPlaceSlug && browseMode === 'map')
     || (browseProfileTransitionFrom === 'profiles'
@@ -1962,26 +1955,6 @@ function AppScreen() {
     }).start();
   }
 
-  function fadeIntoMainShellScreen(nextScreen: MainShellScreen) {
-    const scope: ShellFadeScope = nextScreen === 'browse' || nextScreen === 'home-feed' ? 'browse' : 'profile';
-    const navigate = () => {
-      setScreenMode(nextScreen);
-      animateShellFade(scope);
-    };
-
-    dismissKeyboardForScreenTransition();
-    setProfileErrorMessage(null);
-    setProfileMessage(null);
-    setSelectedPlaceSlug(null);
-
-    if (bottomMoreSheetVisible) {
-      closeBottomMoreSheet(navigate);
-      return;
-    }
-
-    navigate();
-  }
-
   function clearAutoFitMapRegionTimer() {
     if (autoFitMapRegionTimeoutRef.current === null) {
       return;
@@ -2299,11 +2272,6 @@ function AppScreen() {
     && incomingGuestBrowseScreen !== null
     && guestBrowseTransitionFrom !== incomingGuestBrowseScreen;
   const guestToBrowseTransition = guestBrowseTransitionFrom === 'splash' && incomingGuestBrowseScreen === 'browse';
-  const usesMainShellSlideTransition = mainShellTransitionFrom !== null
-    && incomingMainShellScreen !== null
-    && mainShellTransitionFrom !== incomingMainShellScreen;
-  const homeToBrowseTransition = mainShellTransitionFrom === 'home-feed' && incomingMainShellScreen === 'browse';
-
   useEffect(() => {
     const pendingTransition = pendingOnboardingTransitionRef.current;
     if (!pendingTransition || incomingOnboardingScreen !== pendingTransition.targetScreen) {
@@ -2474,30 +2442,6 @@ function AppScreen() {
   const resolvedGuestBrowseNativeChromeOpacity = guestChromeFadeInActive
     ? guestChromeFadeInOpacity
     : guestBrowseNativeChromeOpacity;
-  const mainShellOutgoingStyle = {
-    transform: [
-      {
-        translateX: screenTransition.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0, homeToBrowseTransition ? -width : width],
-        }),
-      },
-    ],
-  };
-  const mainShellIncomingStyle = {
-    opacity: screenTransition.interpolate({
-      inputRange: [0, 0.12, 1],
-      outputRange: [0.96, 0.98, 1],
-    }),
-    transform: [
-      {
-        translateX: screenTransition.interpolate({
-          inputRange: [0, 1],
-          outputRange: [homeToBrowseTransition ? width : -width, 0],
-        }),
-      },
-    ],
-  };
   const splashReturnOutgoingStyle = {
     transform: [
       {
@@ -3107,8 +3051,6 @@ function AppScreen() {
       setIncomingBrowseProfileTargetScreen(null);
       setGuestBrowseTransitionFrom(null);
       setIncomingGuestBrowseScreen(null);
-      setMainShellTransitionFrom(null);
-      setIncomingMainShellScreen(null);
       setIncomingOnboardingScreen(null);
       setReturningToSplashScreen(null);
       onboardingNavigationInFlightRef.current = false;
@@ -3123,8 +3065,6 @@ function AppScreen() {
     setIncomingBrowseProfileTargetScreen(null);
     setGuestBrowseTransitionFrom(null);
     setIncomingGuestBrowseScreen(null);
-    setMainShellTransitionFrom(null);
-    setIncomingMainShellScreen(null);
     screenTransition.setValue(0);
     setReturningToSplashScreen(null);
     pendingOnboardingTransitionRef.current = { onComplete, targetScreen: nextScreen };
@@ -3258,9 +3198,7 @@ function AppScreen() {
         if (browseMode !== 'map' || selectedPlaceSlug) {
           return null;
         }
-        return authenticatedSession
-          ? { kind: 'main-shell', nextScreen: 'home-feed' }
-          : null;
+        return null;
       case 'auth':
         return { kind: 'onboarding', nextScreen: guestOnboardingOrigin === 'browse' ? 'browse' : 'splash' };
       case 'profiles':
@@ -3304,10 +3242,6 @@ function AppScreen() {
         return authenticatedSession
           ? { kind: 'onboarding', nextScreen: 'settings', direction: 'left' }
           : null;
-      case 'home-feed':
-        return authenticatedSession
-          ? { kind: 'main-shell', nextScreen: 'browse', direction: 'left' }
-          : null;
       default:
         return null;
     }
@@ -3328,8 +3262,6 @@ function AppScreen() {
       setIncomingBrowseProfileTargetScreen(null);
       setGuestBrowseTransitionFrom(null);
       setIncomingGuestBrowseScreen(null);
-      setMainShellTransitionFrom(null);
-      setIncomingMainShellScreen(null);
       interactiveBackSwipeRef.current = null;
       interactiveSwipeSettlingRef.current = false;
     });
@@ -3439,8 +3371,6 @@ function AppScreen() {
       setReturningToSplashScreen(null);
       setGuestBrowseTransitionFrom(null);
       setIncomingGuestBrowseScreen(null);
-      setMainShellTransitionFrom(null);
-      setIncomingMainShellScreen(null);
       setBrowseProfileTransitionFrom(targetScreen === 'browse' ? 'browse' : 'profiles');
       setIncomingBrowseProfileScreen(targetScreen === 'browse' ? 'profiles' : 'browse');
       setIncomingBrowseProfileTargetScreen(config.nextScreen);
@@ -3450,8 +3380,6 @@ function AppScreen() {
       setBrowseProfileTransitionFrom(null);
       setIncomingBrowseProfileScreen(null);
       setIncomingBrowseProfileTargetScreen(null);
-      setMainShellTransitionFrom(null);
-      setIncomingMainShellScreen(null);
       if (targetScreen === 'splash') {
         setGuestBrowseModeLocked(true);
         browseModeFadePendingRef.current = false;
@@ -3463,39 +3391,12 @@ function AppScreen() {
       }
       setGuestBrowseTransitionFrom(targetScreen === 'splash' ? 'splash' : 'browse');
       setIncomingGuestBrowseScreen(config.nextScreen === 'splash' ? 'splash' : 'browse');
-    } else if (config.kind === 'main-shell') {
-      setIncomingOnboardingScreen(null);
-      setReturningToSplashScreen(null);
-      setBrowseProfileTransitionFrom(null);
-      setIncomingBrowseProfileScreen(null);
-      setIncomingBrowseProfileTargetScreen(null);
-      setGuestBrowseTransitionFrom(null);
-      setIncomingGuestBrowseScreen(null);
-      if (config.nextScreen === 'browse') {
-        setBrowseFiltersExpanded(false);
-        setSelectedPlaceSlug(null);
-        setSelectedPlace(null);
-        setSelectedLocationId(null);
-        setSelectedMapPlaceKey(null);
-        setGuestBrowseModeLocked(false);
-        browseModeFadePendingRef.current = false;
-        pendingListRevealRef.current = false;
-        setListRevealEnabled(false);
-        browseModeTransition.stopAnimation();
-        browseModeTransition.setValue(1);
-        setConfirmedDealsOnly(true);
-        setBrowseMode('map');
-      }
-      setMainShellTransitionFrom(targetScreen === 'home-feed' ? 'home-feed' : 'browse');
-      setIncomingMainShellScreen(config.nextScreen === 'home-feed' ? 'home-feed' : 'browse');
     } else {
       setBrowseProfileTransitionFrom(null);
       setIncomingBrowseProfileScreen(null);
       setIncomingBrowseProfileTargetScreen(null);
       setGuestBrowseTransitionFrom(null);
       setIncomingGuestBrowseScreen(null);
-      setMainShellTransitionFrom(null);
-      setIncomingMainShellScreen(null);
       setReturningToSplashScreen(null);
       setOnboardingTransitionDirection(config.direction === 'left' ? 'forward' : 'backward');
       setOnboardingTransitionAxis('x');
@@ -3588,9 +3489,6 @@ function AppScreen() {
         } else if (kind === 'guest-browse') {
           setGuestBrowseTransitionFrom(null);
           setIncomingGuestBrowseScreen(null);
-        } else if (kind === 'main-shell') {
-          setMainShellTransitionFrom(null);
-          setIncomingMainShellScreen(null);
         } else {
           setIncomingOnboardingScreen(null);
           setReturningToSplashScreen(null);
@@ -5724,30 +5622,6 @@ function AppScreen() {
       return;
     }
 
-    if (screenMode === 'home-feed') {
-      const openMap = () => {
-        setBrowseFiltersExpanded(false);
-        clearSelectedPlaceRoute();
-        handleClearMapSelection();
-        setGuestBrowseModeLocked(false);
-        browseModeFadePendingRef.current = false;
-        pendingListRevealRef.current = false;
-        setListRevealEnabled(false);
-        browseModeTransition.stopAnimation();
-        browseModeTransition.setValue(1);
-        handleBrowseModeChange('map');
-        warmMapShellThen(() => fadeIntoMainShellScreen('browse'));
-      };
-
-      if (bottomMoreSheetVisible) {
-        closeBottomMoreSheet(openMap);
-        return;
-      }
-
-      openMap();
-      return;
-    }
-
     if (screenMode === 'browse') {
       if (bottomMoreSheetVisible) {
         closeBottomMoreSheet();
@@ -5775,20 +5649,6 @@ function AppScreen() {
     warmMapShellThen(() => navigateBrowseProfileTransition('browse'));
   }
 
-  function handleBottomNavOpenHomeFeed() {
-    if (!authenticatedSession) {
-      setShowGuestBottomNavPrompt(true);
-      return;
-    }
-
-    if (bottomMoreSheetVisible) {
-      closeBottomMoreSheet(() => setShowAuthenticatedHomeFeedPrompt(true));
-      return;
-    }
-
-    setShowAuthenticatedHomeFeedPrompt(true);
-  }
-
   function handleBottomNavOpenProfile() {
     if (!authenticatedSession) {
       setShowGuestBottomNavPrompt(true);
@@ -5810,11 +5670,6 @@ function AppScreen() {
 
     if (['customer-preferences', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'direct-messages'].includes(screenMode)) {
       navigateScreen('profiles', 'backward');
-      return;
-    }
-
-    if (screenMode === 'home-feed') {
-      navigateBrowseProfileTransition('profiles');
       return;
     }
 
@@ -5850,7 +5705,7 @@ function AppScreen() {
 
     clearSelectedPlaceRoute();
 
-    if (screenMode === 'browse' || screenMode === 'home-feed') {
+    if (screenMode === 'browse') {
       closeBottomMoreSheet(() => navigateBrowseProfileTransition('profiles', 'settings'));
       return;
     }
@@ -5866,7 +5721,7 @@ function AppScreen() {
 
     clearSelectedPlaceRoute();
 
-    if (screenMode === 'browse' || screenMode === 'home-feed') {
+    if (screenMode === 'browse') {
       closeBottomMoreSheet(() => {
         openFavoriteBusinesses((onComplete) => navigateBrowseProfileTransition('profiles', 'favorite-businesses', onComplete));
       });
@@ -5886,7 +5741,7 @@ function AppScreen() {
 
     clearSelectedPlaceRoute();
 
-    if (screenMode === 'browse' || screenMode === 'home-feed') {
+    if (screenMode === 'browse') {
       closeBottomMoreSheet(() => navigateBrowseProfileTransition('profiles', 'business-notifications'));
       return;
     }
@@ -5903,7 +5758,7 @@ function AppScreen() {
 
     clearSelectedPlaceRoute();
 
-    if (screenMode === 'browse' || screenMode === 'home-feed') {
+    if (screenMode === 'browse') {
       closeBottomMoreSheet(() => navigateBrowseProfileTransition('profiles', 'support'));
       return;
     }
@@ -5919,7 +5774,7 @@ function AppScreen() {
 
     clearSelectedPlaceRoute();
 
-    if (screenMode === 'browse' || screenMode === 'home-feed') {
+    if (screenMode === 'browse') {
       closeBottomMoreSheet(() => navigateBrowseProfileTransition('profiles', 'terms-of-service'));
       return;
     }
@@ -5935,7 +5790,7 @@ function AppScreen() {
 
     clearSelectedPlaceRoute();
 
-    if (screenMode === 'browse' || screenMode === 'home-feed') {
+    if (screenMode === 'browse') {
       closeBottomMoreSheet(() => navigateBrowseProfileTransition('profiles', 'privacy-policy'));
       return;
     }
@@ -6957,14 +6812,6 @@ function AppScreen() {
     startLogoutTransition();
   }
 
-  function handleOpenBilling() {
-    if (!authenticatedSession?.billing_portal_url) {
-      return;
-    }
-
-    void Linking.openURL(authenticatedSession.billing_portal_url);
-  }
-
   function handleOpenBusinessSearch() {
     dismissKeyboardForScreenTransition();
     claimPrefillRequestRef.current += 1;
@@ -7386,7 +7233,6 @@ function AppScreen() {
             loading={dashboardLoading}
             message={profileMessage}
             onBack={handleBackFromProfiles}
-            onOpenBilling={handleOpenBilling}
             onOpenApprovedBusiness={handleOpenFavoriteBusiness}
             onOpenBusinessProfileEditor={handleOpenBusinessProfileEditorFromDashboard}
             onOpenFavoriteBusiness={handleOpenFavoriteBusiness}
@@ -7441,33 +7287,11 @@ function AppScreen() {
     );
   }
 
-  function renderAuthenticatedHomeFeedScreen() {
-    return (
-      <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
-        <HomeFeedScreen
-          apiBaseUrl={apiBaseUrl}
-          headerContent={<View style={{ height: Math.max(insets.top + 10, 22) }} />}
-          headerHorizontalPadding={18}
-          refreshProgressViewOffset={Math.max(insets.top + 42, 64)}
-          footerContent={<View style={{ height: bottomNavHeight + 16 }} />}
-          isLandscape={isLandscape}
-          onSubmitContentReport={handleSubmitContentReport}
-          reloadToken={reloadCount}
-          searchQuery=""
-          selectedCity="all"
-          selectedVenueTypes={venueFilters.map((filter) => filter.value)}
-        />
-      </SafeAreaView>
-    );
-  }
-
   function renderBottomNavIcon(icon: MainShellBottomNavItem, active: boolean, options?: { guest?: boolean }) {
     const color = active ? '#fff8f1' : 'rgba(255, 248, 241, 0.68)';
     const guest = options?.guest ?? false;
 
     switch (icon) {
-      case 'home':
-        return <Ionicons color={color} name={active ? 'newspaper' : 'newspaper-outline'} size={20} />;
       case 'map':
         return <Ionicons color={color} name={guest ? 'person' : active ? 'map' : 'map-outline'} size={20} />;
       case 'profile':
@@ -7496,9 +7320,6 @@ function AppScreen() {
     }
 
     switch (item) {
-      case 'home':
-        handleBottomNavOpenHomeFeed();
-        break;
       case 'map':
         handleBottomNavOpenMap();
         break;
@@ -7520,9 +7341,7 @@ function AppScreen() {
       : 'default-dark';
     let activeItem: MainShellBottomNavItem = 'map';
     if (!options.guest) {
-      if (screenMode === 'home-feed') {
-        activeItem = 'home';
-      } else if (['settings', 'customer-preferences', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'favorite-businesses', 'business-notifications'].includes(screenMode)) {
+      if (['settings', 'customer-preferences', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'favorite-businesses', 'business-notifications'].includes(screenMode)) {
         activeItem = 'more';
       } else if (screenMode !== 'browse') {
         activeItem = 'profile';
@@ -7535,12 +7354,16 @@ function AppScreen() {
           <NativeIOSLiquidGlassBottomNav
             activeItem={activeItem}
             bottomInset={insets.bottom}
-            includeHomeItem={!options.guest}
-            labels={options.guest ? { map: 'Customer', profile: 'Sign Up', more: 'Business' } : { home: 'Feed' }}
+            includeHomeItem={false}
+            labels={options.guest ? { map: 'Customer', profile: 'Sign Up', more: 'Business' } : undefined}
             moreOpen={bottomMoreSheetVisible}
-            onSelect={handleBottomNavSelection}
+            onSelect={(item) => {
+              if (item !== 'home') {
+                handleBottomNavSelection(item);
+              }
+            }}
             style={{ width: '100%' }}
-            systemImages={options.guest ? { map: 'person.fill', profile: 'plus', more: 'briefcase' } : { home: 'newspaper' }}
+            systemImages={options.guest ? { map: 'person.fill', profile: 'plus', more: 'briefcase' } : undefined}
             themeVariant={bottomNavThemeVariant}
           />
         </View>
@@ -7551,14 +7374,6 @@ function AppScreen() {
       <View pointerEvents="box-none" style={styles.bottomNavOverlay}>
         <View style={[styles.bottomNavShell, { paddingBottom: Math.max(insets.bottom + 2, 4) }]}>
           <View pointerEvents="none" style={styles.bottomNavGlassHighlight} />
-          {!options.guest ? (
-            <Pressable accessibilityLabel="Open home feed" onPress={handleBottomNavOpenHomeFeed} style={styles.bottomNavItem}>
-              <View style={[styles.bottomNavItemIconWrap, activeItem === 'home' ? styles.bottomNavItemIconWrapActive : null]}>
-                {renderBottomNavIcon('home', activeItem === 'home')}
-              </View>
-              <Text style={[styles.bottomNavItemLabel, activeItem === 'home' ? styles.bottomNavItemLabelActive : null]}>Feed</Text>
-            </Pressable>
-          ) : null}
           <Pressable accessibilityLabel={options.guest ? 'Open customer sign in' : 'Open map'} onPress={() => handleBottomNavSelection('map')} style={styles.bottomNavItem}>
             <View style={[styles.bottomNavItemIconWrap, activeItem === 'map' ? styles.bottomNavItemIconWrapActive : null]}>
               {renderBottomNavIcon('map', activeItem === 'map', options)}
@@ -7799,13 +7614,11 @@ function AppScreen() {
         ? { opacity: 0, transform: [{ translateX: -width }] }
         : null;
     const profileLayerContent = renderProfilesScreen(undefined, incomingProfileScreen);
-    const browseLayerContent = (incomingBrowseScreen ?? screenMode) === 'home-feed'
-      ? renderAuthenticatedHomeFeedScreen()
-      : renderBrowseScreen({
-        suppressBrowseSceneTransitionStyle: true,
-        suppressScreenTransitionStyle: true,
-        suppressTransitionOverlay: true,
-      });
+    const browseLayerContent = renderBrowseScreen({
+      suppressBrowseSceneTransitionStyle: true,
+      suppressScreenTransitionStyle: true,
+      suppressTransitionOverlay: true,
+    });
     const interactiveSwipeTarget = showingProfile
       ? screenMode
       : screenMode === 'browse' && browseMode === 'map' && !selectedPlaceSlug
@@ -8600,7 +8413,6 @@ function AppScreen() {
     'terms-of-service',
     'direct-messages',
     'browse',
-    'home-feed',
   ];
   const shouldRenderPersistentBottomNav = !showLoginSuccessTransition && !showLogoutTransition && (
     authenticatedSession
@@ -8694,7 +8506,7 @@ function AppScreen() {
             {renderOnboardingScreen('auth')}
           </Animated.View>
         </View>
-      ) : authenticatedSession && !isRecoveryScreenTransition && (screenMode === 'direct-messages' || (!selectedPlaceSlug && (['profiles', 'customer-preferences', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'browse', 'home-feed'].includes(screenMode) || usesBrowseProfileSlideTransition || usesProfileStackSlideTransition))) ? (
+      ) : authenticatedSession && !isRecoveryScreenTransition && (screenMode === 'direct-messages' || (!selectedPlaceSlug && (['profiles', 'customer-preferences', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'browse'].includes(screenMode) || usesBrowseProfileSlideTransition || usesProfileStackSlideTransition))) ? (
         renderAuthenticatedMainShell()
       ) : !authenticatedSession && (screenMode === 'browse' || currentOnboardingScreen !== null || usesGuestBrowseSlideTransition || incomingOnboardingScreen !== null || returningToSplashScreen !== null) ? (
         renderGuestMainShell()
@@ -8863,27 +8675,6 @@ function AppScreen() {
               </Pressable>
               <Pressable onPress={handleCreateBusinessAccountFromGuestBottomNav} style={styles.guestFavoriteModalSecondaryButton}>
                 <Text style={styles.guestFavoriteModalSecondaryText}>Business</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-      <Modal
-        animationType="fade"
-        onRequestClose={() => setShowAuthenticatedHomeFeedPrompt(false)}
-        transparent
-        visible={showAuthenticatedHomeFeedPrompt}
-      >
-        <View style={styles.guestFavoriteModalBackdrop}>
-          <View style={styles.guestFavoriteModalCard}>
-            <Pressable accessibilityLabel="Close Home Feed message" onPress={() => setShowAuthenticatedHomeFeedPrompt(false)} style={styles.guestBottomNavCloseButton}>
-              <Text style={styles.guestBottomNavCloseButtonText}>X</Text>
-            </Pressable>
-            <Text style={styles.guestFavoriteModalTitle}>Coming Soon</Text>
-            <Text style={styles.guestFavoriteModalText}>The DiningDealz Home Feed is on the way.</Text>
-            <View style={styles.guestFavoriteModalActions}>
-              <Pressable onPress={() => setShowAuthenticatedHomeFeedPrompt(false)} style={styles.guestFavoriteModalPrimaryButton}>
-                <Text style={styles.guestFavoriteModalPrimaryText}>Close</Text>
               </Pressable>
             </View>
           </View>

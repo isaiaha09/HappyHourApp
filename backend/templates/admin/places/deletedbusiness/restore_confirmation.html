@@ -1,0 +1,15 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div style="margin:0 0 20px;padding:18px 20px;border:1px solid #8f6a26;border-radius:12px;background:rgba(143,106,38,.16);">
+  <h1 style="margin:0 0 10px;">Restore business?</h1>
+  <p style="margin:0;">This will restore <strong>{{ deleted_business.name }}</strong> to the catalog and recreate its matching discovery record when applicable.</p>
+</div>
+<form method="post" action="{{ action_url }}">
+  {% csrf_token %}
+  <div class="submit-row">
+    <input type="submit" value="Restore business" class="default">
+    <a href="{{ cancel_url }}" class="button cancel-link">Cancel</a>
+  </div>
+</form>
+{% endblock %}

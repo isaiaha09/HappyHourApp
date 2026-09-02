@@ -63,7 +63,7 @@ export function LoginForm({ compact = false, turnstileSiteKey }: LoginFormProps)
         <h2 className="text-2xl font-semibold text-white">Sign in to your DiningDealz dashboard</h2>
         <p className="text-sm leading-6 text-[#f6d6c5]">
           {LOGIN_CREDENTIALS_ENABLED
-            ? "Business accounts can manage billing and account controls here. Customer accounts can sign in too."
+            ? "Customer and business accounts can review account details and verification status here."
             : "Account sign-in is temporarily unavailable while we update the website."}
         </p>
       </div>

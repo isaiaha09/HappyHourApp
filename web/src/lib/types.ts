@@ -16,7 +16,6 @@ export type SignupResponse = {
   email_verified: boolean;
   email_verification_sent_at?: string | null;
   two_factor_enabled: boolean;
-  billing_portal_url?: string;
   approved_businesses?: Array<{
     id: number;
     name: string;

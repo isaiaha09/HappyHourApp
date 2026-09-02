@@ -261,6 +261,9 @@ def deactivate_account_for_retained_direct_messages(user):
 	profile.two_factor_enabled = False
 	profile.two_factor_secret = ''
 	profile.two_factor_pending_secret = ''
+	profile.admin_two_factor_enabled = False
+	profile.admin_two_factor_secret = ''
+	profile.admin_two_factor_pending_secret = ''
 	profile.password_reset_token = ''
 	profile.password_reset_sent_at = None
 	profile.preference_onboarding_completed = False
@@ -282,6 +285,9 @@ def deactivate_account_for_retained_direct_messages(user):
 		'two_factor_enabled',
 		'two_factor_secret',
 		'two_factor_pending_secret',
+		'admin_two_factor_enabled',
+		'admin_two_factor_secret',
+		'admin_two_factor_pending_secret',
 		'password_reset_token',
 		'password_reset_sent_at',
 		'preference_onboarding_completed',
@@ -484,7 +490,7 @@ def build_account_response(user, portal, claim=None, token=None):
 		for notification in FavoriteBusinessNotification.objects.filter(user=user).select_related('source_post')[:20]
 	]
 	push_notifications_enabled = FavoriteBusinessPushDevice.objects.filter(user=user, is_active=True).exists()
-	sponsored_campaigns = _build_sponsored_campaign_summaries(memberships)
+	sponsored_campaigns = _build_sponsored_campaign_summaries(memberships) if settings.PAID_FEATURES_ENABLED else []
 
 	business_contact = {}
 	if primary_claim is not None:
@@ -569,7 +575,7 @@ def build_account_response(user, portal, claim=None, token=None):
 		'email_verification_sent_at': profile.email_verification_sent_at,
 		'two_factor_enabled': profile.two_factor_enabled,
 		'two_factor_pending_setup': bool(profile.two_factor_pending_secret and not profile.two_factor_enabled),
-		'billing_portal_url': profile.billing_portal_url if profile_type == 'business' else '',
+		'billing_portal_url': profile.billing_portal_url if profile_type == 'business' and settings.PAID_FEATURES_ENABLED else '',
 		'approved_businesses': approved_businesses,
 		'sponsored_campaigns': sponsored_campaigns,
 		'favorite_businesses': favorite_businesses,

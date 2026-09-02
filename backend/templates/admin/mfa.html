@@ -1,0 +1,39 @@
+{% extends 'unfold/layouts/unauthenticated.html' %}
+
+{% load i18n unfold %}
+
+{% block extrastyle %}
+    {{ block.super }}
+    {{ form.media }}
+{% endblock %}
+
+{% block title %}
+    {{ title }} | {{ site_title }}
+{% endblock %}
+
+{% block content %}
+    {% include "unfold/helpers/unauthenticated_title.html" with title=site_title|default:_('Django site admin') subtitle=_('Additional verification required') %}
+
+    {% if form.errors or form.non_field_errors %}
+        <div class="flex flex-col gap-4 mb-8 *:mb-0">
+            {% include "unfold/helpers/messages/errornote.html" with errors=form.errors %}
+            {% include "unfold/helpers/messages/error.html" with errors=form.non_field_errors %}
+        </div>
+    {% endif %}
+
+    <p class="mb-6 text-sm text-base-500 dark:text-base-400">
+        Enter the six-digit code from your authenticator app to continue to the admin backend.
+    </p>
+
+    <form action="{{ request.path }}" method="post" id="admin-mfa-form">
+        {% csrf_token %}
+        {% include "unfold/helpers/field.html" with field=form.otp_code %}
+        <input type="hidden" name="next" value="{{ next }}">
+
+        <div class="flex flex-col gap-3 mt-6">
+            {% component "unfold/components/button.html" with submit=1 variant="primary" class="submit-row w-full" %}
+                {% translate 'Verify and continue' %} <span class="material-symbols-outlined relative right-0 transition-all group-hover:-right-1 text-sm">arrow_forward</span>
+            {% endcomponent %}
+        </div>
+    </form>
+{% endblock %}

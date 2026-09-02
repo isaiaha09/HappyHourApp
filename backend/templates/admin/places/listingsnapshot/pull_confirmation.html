@@ -1,0 +1,15 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div style="margin:0 0 20px;padding:18px 20px;border:1px solid #8f6a26;border-radius:12px;background:rgba(143,106,38,.16);">
+  <h1 style="margin:0 0 10px;">Pull business data?</h1>
+  <p style="margin:0;">This will fetch the official website, update the stored listing snapshot, and replace the matching discovery record for <strong>{{ snapshot.name }}</strong>.</p>
+</div>
+<form method="post" action="{{ action_url }}">
+  {% csrf_token %}
+  <div class="submit-row">
+    <input type="submit" value="Pull business data" class="default">
+    <a href="{{ cancel_url }}" class="button cancel-link">Cancel</a>
+  </div>
+</form>
+{% endblock %}

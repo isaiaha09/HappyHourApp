@@ -1,11 +1,16 @@
+import logging
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from django.conf import settings
+from django.contrib import messages
 from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db import connection
+from django.http import HttpResponseForbidden, HttpResponseRedirect
 from django.template.response import TemplateResponse
-from django.urls import path
+from django.urls import path, reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from unfold.sites import UnfoldAdminSite
 
 from .services.admin_operations import (
@@ -15,6 +20,16 @@ from .services.admin_operations import (
     get_content_report_queue_queryset,
     get_cached_analytics_data,
 )
+from .admin_security import (
+    AdminAuthenticationForm,
+    AdminMFACodeForm,
+    authenticate_admin_mfa,
+    build_admin_mfa_qr_data_uri,
+    emit_admin_security_event,
+    mark_admin_mfa_verified,
+    mark_admin_session_active,
+)
+from .services.account_profiles import get_or_create_account_profile
 from .services.render_storage import fetch_render_storage
 
 
@@ -22,6 +37,7 @@ class HappyHourAdminSite(UnfoldAdminSite):
     site_header = 'DiningDealz Administration'
     site_title = 'DiningDealz Admin'
     index_title = 'Operations Dashboard'
+    login_form = AdminAuthenticationForm
 
     section_groups = [
         {
@@ -85,8 +101,21 @@ class HappyHourAdminSite(UnfoldAdminSite):
         },
     ]
 
+    def login(self, request, extra_context=None):
+        response = super().login(request, extra_context=extra_context)
+        if getattr(request, '_admin_login_success', False) and hasattr(request, 'session'):
+            mark_admin_session_active(
+                request,
+                mfa_verified=not getattr(request, '_admin_login_requires_mfa', False),
+                start_session=True,
+                user=getattr(request, 'user', None),
+            )
+        return response
+
     def get_urls(self):
         operation_urls = [
+            path('mfa/', self.admin_view(self.mfa_view), name='mfa'),
+            path('security/', self.admin_view(self.security_view), name='security'),
             path('operations/claim-review/', self.admin_view(self.claim_review_queue_view), name='operations_review_queue'),
             path('operations/content-reports/', self.admin_view(self.content_report_queue_view), name='operations_report_queue'),
             path('operations/catalog-health/', self.admin_view(self.catalog_health_view), name='operations_catalog_health'),
@@ -95,6 +124,95 @@ class HappyHourAdminSite(UnfoldAdminSite):
             path('operations/storage/', self.admin_view(self.storage_view), name='operations_storage'),
         ]
         return operation_urls + super().get_urls()
+
+    def _safe_admin_next_url(self, request):
+        candidate = str(request.POST.get('next') or request.GET.get('next') or '').strip()
+        if not candidate:
+            return reverse('happyhour_admin:index')
+
+        parsed = urlsplit(candidate)
+        admin_path = str(settings.ADMIN_URL_PATH or 'admin').strip('/')
+        admin_prefix = f'/{admin_path}/'
+        if parsed.scheme or parsed.netloc or not parsed.path.startswith(admin_prefix):
+            return reverse('happyhour_admin:index')
+        if not url_has_allowed_host_and_scheme(
+            candidate,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure(),
+        ):
+            return reverse('happyhour_admin:index')
+        return candidate
+
+    def mfa_view(self, request):
+        profile = get_or_create_account_profile(request.user)
+        next_url = self._safe_admin_next_url(request)
+        if not profile.admin_two_factor_enabled:
+            mark_admin_mfa_verified(request, request.user)
+            return HttpResponseRedirect(next_url)
+        if not profile.admin_two_factor_secret:
+            emit_admin_security_event(request, 'admin_mfa_misconfigured', actor=request.user, log_level=logging.ERROR)
+            return HttpResponseForbidden('Admin two-factor authentication is enabled but not configured correctly.')
+
+        form = AdminMFACodeForm(request.POST or None)
+        if request.method == 'POST' and form.is_valid():
+            result = authenticate_admin_mfa(request, request.user, form.cleaned_data['otp_code'])
+            if result == 'success':
+                return HttpResponseRedirect(next_url)
+            if result == 'rate_limited':
+                form.add_error(None, 'Too many authenticator attempts. Try again later.')
+            else:
+                form.add_error('otp_code', 'The authenticator code is invalid or expired.')
+
+        context = {
+            **self.each_context(request),
+            'title': 'Admin verification',
+            'form': form,
+            'next': next_url,
+        }
+        return TemplateResponse(request, 'admin/mfa.html', context)
+
+    def security_view(self, request):
+        profile = get_or_create_account_profile(request.user)
+        form = AdminMFACodeForm(request.POST or None)
+        action = str(request.POST.get('action') or '').strip().lower() if request.method == 'POST' else ''
+
+        if action in {'begin', 'rotate'}:
+            if profile.admin_two_factor_enabled and action == 'begin':
+                messages.warning(request, 'Admin 2FA is already enabled. Use rotate to replace the authenticator.')
+            else:
+                profile.begin_admin_two_factor_setup()
+                emit_admin_security_event(request, 'admin_mfa_enrollment_started', actor=request.user)
+                messages.success(request, 'Scan the QR code with your authenticator app, then confirm it below.')
+        elif action == 'confirm':
+            if form.is_valid() and profile.admin_two_factor_pending_secret and profile.verify_admin_two_factor_code(form.cleaned_data['otp_code'], use_pending=True):
+                profile.enable_admin_two_factor()
+                mark_admin_mfa_verified(request, request.user)
+                emit_admin_security_event(request, 'admin_mfa_enabled', actor=request.user, log_level=logging.WARNING)
+                messages.success(request, 'Admin 2FA is now enabled for your account.')
+            elif request.method == 'POST':
+                emit_admin_security_event(request, 'admin_mfa_enrollment_failure', actor=request.user, log_level=logging.WARNING)
+                form.add_error('otp_code', 'The authenticator code is invalid or expired.')
+        elif action == 'disable':
+            if form.is_valid() and profile.admin_two_factor_enabled and profile.verify_admin_two_factor_code(form.cleaned_data['otp_code']):
+                profile.disable_admin_two_factor()
+                mark_admin_mfa_verified(request, request.user)
+                emit_admin_security_event(request, 'admin_mfa_disabled', actor=request.user, log_level=logging.WARNING)
+                messages.warning(request, 'Admin 2FA is disabled for your account.')
+            elif request.method == 'POST':
+                emit_admin_security_event(request, 'admin_mfa_failure', actor=request.user, log_level=logging.WARNING)
+                form.add_error('otp_code', 'The authenticator code is invalid or expired.')
+
+        profile.refresh_from_db()
+        pending_uri = profile.get_admin_two_factor_provisioning_uri(use_pending=True)
+        context = {
+            **self.each_context(request),
+            'title': 'Admin security',
+            'profile': profile,
+            'form': form,
+            'security_url': request.path,
+            'pending_qr_code': build_admin_mfa_qr_data_uri(pending_uri),
+        }
+        return TemplateResponse(request, 'admin/security.html', context)
 
     def claim_review_queue_view(self, request):
         context = {

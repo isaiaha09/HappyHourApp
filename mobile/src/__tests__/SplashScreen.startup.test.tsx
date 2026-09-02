@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, render, screen } from '@testing-library/react-native';
 
 jest.mock('../components/NativeIOSLiquidGlass', () => ({
   NativeIOSLiquidGlassBottomNav: () => null,
@@ -27,7 +27,7 @@ describe('SplashScreen startup flow', () => {
     jest.useRealTimers();
   });
 
-  it('waits for the logo asset, shows a closable Home Feed notice, and opens the guest map after the intro', () => {
+  it('waits for the logo asset and opens the guest map after the intro', () => {
     const onIntroComplete = jest.fn();
     const onCreateAccount = jest.fn();
     const onSelectPortal = jest.fn();
@@ -41,10 +41,9 @@ describe('SplashScreen startup flow', () => {
       />,
     );
 
-    fireEvent.press(screen.getByRole('button', { name: 'Open Home Feed' }));
-    expect(screen.getByText('Coming Soon')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Open Home Feed' })).toBeNull();
+    expect(screen.queryByText('Coming Soon')).toBeNull();
 
-    fireEvent.press(screen.getByRole('button', { name: 'Close Home Feed message' }));
     act(() => {
       jest.advanceTimersByTime(200);
     });
@@ -114,7 +113,7 @@ describe('SplashScreen startup flow', () => {
     expect(replayIntroComplete).not.toHaveBeenCalled();
   });
 
-  it('disables guest chrome interactions while the splash stays mounted under another screen', () => {
+  it('does not expose the removed Home Feed affordance while the splash stays mounted under another screen', () => {
     const view = render(
       <SplashScreen
         assetsReady
@@ -124,8 +123,8 @@ describe('SplashScreen startup flow', () => {
       />,
     );
 
-    fireEvent.press(screen.getByRole('button', { name: 'Open Home Feed' }));
-    expect(screen.getByText('Coming Soon')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Open Home Feed' })).toBeNull();
+    expect(screen.queryByText('Coming Soon')).toBeNull();
 
     view.rerender(
       <SplashScreen
@@ -139,7 +138,7 @@ describe('SplashScreen startup flow', () => {
 
     expect(screen.queryByText('Coming Soon')).toBeNull();
 
-    fireEvent.press(screen.getByRole('button', { name: 'Open Home Feed' }));
+    expect(screen.queryByRole('button', { name: 'Open Home Feed' })).toBeNull();
     expect(screen.queryByText('Coming Soon')).toBeNull();
   });
 });

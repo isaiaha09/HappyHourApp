@@ -33,3 +33,5 @@ staticfiles/
 
 pip-wheel-metadata/
 *.egg-info/
+
+backups/

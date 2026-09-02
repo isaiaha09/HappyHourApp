@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: "Read the DiningDealz terms governing customer, business, and website use of the service.",
 };
 
-const EFFECTIVE_DATE = "August 30, 2026";
+const EFFECTIVE_DATE = "September 2, 2026";
 const SUPPORT_EMAIL = "support@diningdealz.com";
 
 type TermsSectionData = {
@@ -21,7 +21,7 @@ const termsSections: readonly TermsSectionData[] = [
     title: "1. Agreement and changes",
     paragraphs: [
       "These Terms of Service and Agreements (\"Terms\") govern your access to and use of the DiningDealz mobile app, website, account dashboard, business tools, messaging features, and related services (together, the \"Service\"). DiningDealz is a discovery and communication platform for customers and businesses.",
-      "By accessing or using the Service, creating an account, or continuing to use the Service after an update becomes effective, you agree to these Terms and the Privacy Policy. If you do not agree, do not access or use the Service. If a separate written agreement, insertion order, checkout page, or feature-specific terms apply to a paid or business service, those terms control that transaction if they conflict with these Terms.",
+      "By accessing or using the Service, creating an account, or continuing to use the Service after an update becomes effective, you agree to these Terms and the Privacy Policy. If you do not agree, do not access or use the Service. The current DiningDealz release is free to use and does not offer paid content, subscriptions, purchases, checkout, billing portal access, or paid account features.",
       `The current version took effect on ${EFFECTIVE_DATE}. We may change these Terms as the Service or law changes. We will post the updated version and, for material changes, provide notice through the Service, by email, or by another method required by law before the change takes effect.`,
     ],
   },
@@ -42,9 +42,9 @@ const termsSections: readonly TermsSectionData[] = [
   {
     title: "4. Listings, deals, and merchant relationships",
     paragraphs: [
-      "DiningDealz may display business listings, locations, hours, deals, happy-hour information, public posts, notifications, and sponsored content from businesses, source data, and other providers. Information can be incomplete, delayed, changed, unavailable, or wrong. A map pin or live business location may be approximate and is not a guarantee that a business is open or present at that location.",
-      "DiningDealz is not the restaurant, bar, shop, vendor, or other merchant shown in a listing. Unless a separate checkout expressly says otherwise, DiningDealz does not sell food, drinks, alcohol, products, admissions, reservations, or other merchant services and is not a party to the transaction between you and a business. Confirm current prices, hours, restrictions, availability, age requirements, allergens, taxes, fees, and redemption rules directly with the business before relying on a listing or offer.",
-      "Businesses are solely responsible for the truthfulness, legality, availability, pricing, terms, redemption, licensing, taxes, age verification, health and safety, and fulfillment of their listings, offers, services, and public content. A listing, verification badge, or sponsored placement is not an endorsement, guarantee, or certification by DiningDealz.",
+      "DiningDealz may display business listings, locations, hours, deals, happy-hour information, public posts, and notifications from businesses, source data, and other providers. Information can be incomplete, delayed, changed, unavailable, or wrong. A map pin or live business location may be approximate and is not a guarantee that a business is open or present at that location.",
+      "DiningDealz is not the restaurant, bar, shop, vendor, or other merchant shown in a listing. DiningDealz does not sell food, drinks, alcohol, products, admissions, reservations, or other merchant services and is not a party to the transaction between you and a business. Confirm current prices, hours, restrictions, availability, age requirements, allergens, taxes, fees, and redemption rules directly with the business before relying on a listing or offer.",
+      "Businesses are solely responsible for the truthfulness, legality, availability, pricing, terms, redemption, licensing, taxes, age verification, health and safety, and fulfillment of their listings, offers, services, and public content. The current release does not offer paid content, subscriptions, purchases, or sponsored placements.",
     ],
   },
   {
@@ -91,16 +91,15 @@ const termsSections: readonly TermsSectionData[] = [
     ],
   },
   {
-    title: "10. Notifications, sponsored content, and paid features",
+    title: "10. Notifications and current release availability",
     paragraphs: [
       "DiningDealz may send transactional or account messages about verification, password resets, support, direct messages, account security, claims, and service changes. Push notifications about favorites, offers, business updates, or happy-hour activity are optional and can be controlled in the app or device settings.",
-      "If sponsored campaigns or promoted business content are enabled, they may be labeled as sponsored and may be measured using first-party impression, click, open, save, or share records. Sponsored placement does not mean DiningDealz endorses or guarantees the business or offer.",
-      "If DiningDealz offers a paid feature, the price, billing frequency, renewal, cancellation, refund, taxes, and payment provider will be shown in the applicable checkout page, billing portal, insertion order, or feature-specific terms. Those terms control the paid transaction. DiningDealz does not currently store payment-card numbers in the core account system. Do not treat a billing portal link as an offer unless it is an active, authorized checkout.",
+      "The current release has no paid content, subscriptions, purchases, checkout, billing portal, payment processing, or paid account features. Nothing in the Service is unlocked through payment. We will update these Terms before introducing a feature that changes this availability.",
     ],
   },
   {
     title: "11. Privacy and third-party services",
-    paragraphs: ["Our Privacy Policy explains how information is collected, used, shared, retained, and deleted. By using the Service, you acknowledge that the practices described there apply to you.", "The Service may link to or interoperate with third-party websites, app-store services, map components, calendars, social platforms, email apps, hosting/storage providers, notification providers, security services, monitoring tools, data sources, and payment providers. Those parties control their own services and terms. DiningDealz is not responsible for third-party content, availability, security, privacy practices, purchases, or disputes. Review third-party terms before using an external feature."],
+    paragraphs: ["Our Privacy Policy explains how information is collected, used, shared, retained, and deleted. By using the Service, you acknowledge that the practices described there apply to you.", "The Service may link to or interoperate with third-party websites, app-store services, map components, calendars, social platforms, email apps, hosting/storage providers, notification providers, security services, monitoring tools, and data sources. No payment provider or billing service is connected to the current release. Those parties control their own services and terms. DiningDealz is not responsible for third-party content, availability, security, privacy practices, or disputes. Review third-party terms before using an external feature."],
   },
   {
     title: "12. DiningDealz intellectual property",
@@ -129,7 +128,7 @@ const termsSections: readonly TermsSectionData[] = [
     title: "16. Limitation of liability",
     paragraphs: [
       "TO THE FULLEST EXTENT PERMITTED BY LAW, DININGDEALZ AND ITS OWNERS, AFFILIATES, OFFICERS, EMPLOYEES, CONTRACTORS, SERVICE PROVIDERS, AND LICENSORS WILL NOT BE LIABLE FOR INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES, OR FOR LOST PROFITS, REVENUE, DATA, GOODWILL, OR BUSINESS INTERRUPTION, ARISING FROM OR RELATED TO THE SERVICE OR THESE TERMS, EVEN IF ADVISED OF THE POSSIBILITY.",
-      "TO THE FULLEST EXTENT PERMITTED BY LAW, THE TOTAL LIABILITY OF DININGDEALZ AND THOSE PARTIES FOR ALL CLAIMS ARISING FROM OR RELATED TO THE SERVICE OR THESE TERMS WILL NOT EXCEED THE GREATER OF (A) THE AMOUNT YOU PAID TO DININGDEALZ FOR THE SERVICE IN THE 12 MONTHS BEFORE THE EVENT GIVING RISE TO THE CLAIM OR (B) US$100. This limit does not apply where prohibited by law and does not limit liability that cannot legally be limited.",
+      "TO THE FULLEST EXTENT PERMITTED BY LAW, THE TOTAL LIABILITY OF DININGDEALZ AND THOSE PARTIES FOR ALL CLAIMS ARISING FROM OR RELATED TO THE SERVICE OR THESE TERMS WILL NOT EXCEED US$100. This limit does not apply where prohibited by law and does not limit liability that cannot legally be limited.",
     ],
   },
   {

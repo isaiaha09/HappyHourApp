@@ -2,6 +2,7 @@ import ast
 from dataclasses import replace
 from datetime import timedelta
 import json
+import logging
 import re
 from urllib.parse import quote, urlparse
 
@@ -15,6 +16,7 @@ from django.db import transaction
 from django.db.models import Count, Exists, IntegerField, OuterRef, Prefetch, Q, Subquery, Value
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse
+from django.http import HttpResponseNotAllowed
 from django.http import HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
@@ -27,6 +29,7 @@ from unfold.decorators import action as unfold_action
 from unfold.enums import ActionVariant
 from unfold.forms import BaseDialogForm
 
+from .admin_security import emit_admin_security_event
 from .admin_site import happyhour_admin_site
 from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessDirectMessage, BusinessDirectMessageThread, BusinessMembership, BusinessPost, ContentReport, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, FavoriteBusinessNotification, FeedEngagement, FeedImpression, ListingSnapshot, SponsoredCampaign, Weekday
 from .services.account_profiles import remove_favorites_for_business_accounts, remove_favorites_for_listing_slugs
@@ -1106,6 +1109,105 @@ class StaffUserAdmin(UnfoldModelAdmin, UserAdmin):
 	list_filter = ('is_staff', 'is_superuser', 'is_active')
 	search_fields = ('username', 'first_name', 'last_name', 'email')
 
+	def has_module_permission(self, request):
+		return bool(getattr(request.user, 'is_staff', False))
+
+	def has_view_permission(self, request, obj=None):
+		return bool(getattr(request.user, 'is_staff', False))
+
+	def has_add_permission(self, request):
+		return bool(getattr(request.user, 'is_superuser', False))
+
+	def has_change_permission(self, request, obj=None):
+		return bool(getattr(request.user, 'is_superuser', False))
+
+	def has_delete_permission(self, request, obj=None):
+		return bool(getattr(request.user, 'is_superuser', False))
+
+	def get_queryset(self, request):
+		queryset = super().get_queryset(request).filter(is_staff=True)
+		if not getattr(request.user, 'is_superuser', False):
+			queryset = queryset.filter(is_superuser=False)
+		return queryset
+
+	def get_fieldsets(self, request, obj=None):
+		fieldsets = super().get_fieldsets(request, obj)
+		if getattr(request.user, 'is_superuser', False):
+			return fieldsets
+
+		protected_fields = {'is_staff', 'is_superuser', 'groups', 'user_permissions'}
+		filtered_fieldsets = []
+		for title, options in fieldsets:
+			filtered_fields = [field for field in options.get('fields', ()) if field not in protected_fields]
+			if filtered_fields:
+				filtered_options = {**options, 'fields': filtered_fields}
+				filtered_fieldsets.append((title, filtered_options))
+		return filtered_fieldsets
+
+	def get_form(self, request, obj=None, **kwargs):
+		form = super().get_form(request, obj, **kwargs)
+		if getattr(request.user, 'is_superuser', False):
+			return form
+		form.base_fields = {
+			field_name: field
+			for field_name, field in form.base_fields.items()
+			if field_name not in {'is_staff', 'is_superuser', 'groups', 'user_permissions'}
+		}
+		return form
+
+	def save_model(self, request, obj, form, change):
+		if not getattr(request.user, 'is_superuser', False):
+			if change:
+				previous = User.objects.only('is_staff', 'is_superuser').get(pk=obj.pk)
+				obj.is_staff = previous.is_staff
+				obj.is_superuser = previous.is_superuser
+			else:
+				obj.is_staff = False
+				obj.is_superuser = False
+
+		previous_values = None
+		if change:
+			previous_values = User.objects.only('is_staff', 'is_superuser').get(pk=obj.pk)
+		super().save_model(request, obj, form, change)
+		changed_fields = []
+		for field_name in ('is_staff', 'is_superuser'):
+			previous_value = getattr(previous_values, field_name, False) if previous_values is not None else False
+			if bool(getattr(obj, field_name, False)) != bool(previous_value):
+				changed_fields.append(field_name)
+		if changed_fields:
+			emit_admin_security_event(
+				request,
+				'admin_privilege_change',
+				actor=request.user,
+				log_level=logging.WARNING,
+				object_type='auth.user',
+				object_id=obj.pk,
+				changed_fields=changed_fields,
+			)
+
+	def save_related(self, request, form, formsets, change):
+		if not getattr(request.user, 'is_superuser', False):
+			return
+		obj = form.instance
+		previous_groups = set(obj.groups.values_list('pk', flat=True))
+		previous_permissions = set(obj.user_permissions.values_list('pk', flat=True))
+		super().save_related(request, form, formsets, change)
+		changed_fields = []
+		if previous_groups != set(obj.groups.values_list('pk', flat=True)):
+			changed_fields.append('groups')
+		if previous_permissions != set(obj.user_permissions.values_list('pk', flat=True)):
+			changed_fields.append('user_permissions')
+		if changed_fields:
+			emit_admin_security_event(
+				request,
+				'admin_privilege_change',
+				actor=request.user,
+				log_level=logging.WARNING,
+				object_type='auth.user',
+				object_id=obj.pk,
+				changed_fields=changed_fields,
+			)
+
 	def changelist_view(self, request, extra_context=None):
 		if not request.GET:
 			changelist_url = reverse('happyhour_admin:auth_user_changelist')
@@ -1114,7 +1216,51 @@ class StaffUserAdmin(UnfoldModelAdmin, UserAdmin):
 
 
 class StaffGroupAdmin(UnfoldModelAdmin, GroupAdmin):
-	pass
+	def has_module_permission(self, request):
+		return bool(getattr(request.user, 'is_superuser', False))
+
+	def has_view_permission(self, request, obj=None):
+		return bool(getattr(request.user, 'is_superuser', False))
+
+	def has_add_permission(self, request):
+		return bool(getattr(request.user, 'is_superuser', False))
+
+	def has_change_permission(self, request, obj=None):
+		return bool(getattr(request.user, 'is_superuser', False))
+
+	def has_delete_permission(self, request, obj=None):
+		return bool(getattr(request.user, 'is_superuser', False))
+
+	def save_model(self, request, obj, form, change):
+		if not getattr(request.user, 'is_superuser', False):
+			return
+		super().save_model(request, obj, form, change)
+		emit_admin_security_event(
+			request,
+			'admin_privilege_change',
+			actor=request.user,
+			log_level=logging.WARNING,
+			object_type='auth.group',
+			object_id=obj.pk,
+			changed_fields=['group'],
+		)
+
+	def save_related(self, request, form, formsets, change):
+		if not getattr(request.user, 'is_superuser', False):
+			return
+		obj = form.instance
+		previous_permissions = set(obj.permissions.values_list('pk', flat=True))
+		super().save_related(request, form, formsets, change)
+		if previous_permissions != set(obj.permissions.values_list('pk', flat=True)):
+			emit_admin_security_event(
+				request,
+				'admin_privilege_change',
+				actor=request.user,
+				log_level=logging.WARNING,
+				object_type='auth.group',
+				object_id=obj.pk,
+				changed_fields=['permissions'],
+			)
 
 
 class HardDeleteUserAdminMixin:
@@ -1563,6 +1709,8 @@ class ListingSnapshotAdmin(UnfoldModelAdmin):
 		}
 
 	def pull_business_data_view(self, request, object_id):
+		if request.method not in {'GET', 'POST'}:
+			return HttpResponseNotAllowed(['GET', 'POST'])
 		if not self.has_change_permission(request):
 			return HttpResponseRedirect(reverse('happyhour_admin:index'))
 
@@ -1574,6 +1722,16 @@ class ListingSnapshotAdmin(UnfoldModelAdmin):
 		if str(snapshot.source_name or '').strip().lower() not in LIVE_DISCOVERY_SOURCE_NAMES:
 			self.message_user(request, 'Live provider discovery refreshes are disabled. Use a verified official website source for this business.', level=messages.WARNING)
 			return HttpResponseRedirect(reverse('happyhour_admin:places_listingsnapshot_changelist'))
+
+		if request.method == 'GET':
+			context = {
+				**self.admin_site.each_context(request),
+				'title': f'Pull business data: {snapshot.name}',
+				'snapshot': snapshot,
+				'action_url': request.path,
+				'cancel_url': reverse('happyhour_admin:places_listingsnapshot_changelist'),
+			}
+			return TemplateResponse(request, 'admin/places/listingsnapshot/pull_confirmation.html', context)
 
 		existing_records = load_discovery_json_records()
 		candidate_records = [
@@ -1874,6 +2032,8 @@ class DeletedBusinessAdmin(UnfoldModelAdmin):
 		return message
 
 	def restore_business_view(self, request, object_id):
+		if request.method not in {'GET', 'POST'}:
+			return HttpResponseNotAllowed(['GET', 'POST'])
 		if not self.has_change_permission(request):
 			return HttpResponseRedirect(reverse('happyhour_admin:index'))
 
@@ -1881,6 +2041,16 @@ class DeletedBusinessAdmin(UnfoldModelAdmin):
 		if deleted_business is None:
 			self.message_user(request, 'Deleted business not found.', level=messages.ERROR)
 			return HttpResponseRedirect(reverse('happyhour_admin:places_deletedbusiness_changelist'))
+
+		if request.method == 'GET':
+			context = {
+				**self.admin_site.each_context(request),
+				'title': f'Restore business: {deleted_business.name}',
+				'deleted_business': deleted_business,
+				'action_url': request.path,
+				'cancel_url': reverse('happyhour_admin:places_deletedbusiness_changelist'),
+			}
+			return TemplateResponse(request, 'admin/places/deletedbusiness/restore_confirmation.html', context)
 
 		self._restore_deleted_business(deleted_business, request=request)
 		self.message_user(request, f'Restored {deleted_business.name}.', level=messages.SUCCESS)
@@ -2582,6 +2752,9 @@ class ReadOnlyAnalyticsAdmin(UnfoldModelAdmin):
 		return False
 
 	def has_change_permission(self, request, obj=None):
+		return False
+
+	def has_delete_permission(self, request, obj=None):
 		return False
 
 

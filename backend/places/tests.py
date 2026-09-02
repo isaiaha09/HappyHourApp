@@ -682,6 +682,7 @@ class CurrentHappyHoursServiceTests(TestCase):
 		mock_get_source_place_payloads.assert_called_once_with(city=City.VENTURA, resolve_missing_coordinates=True)
 
 
+@override_settings(PAID_FEATURES_ENABLED=True)
 class HomeFeedApiTests(APITestCase):
 	def setUp(self):
 		self.user = User.objects.create_user(username='feed-owner', email='feed@example.com', password='secret12345')
@@ -746,6 +747,13 @@ class HomeFeedApiTests(APITestCase):
 				position=index,
 			)
 
+		response = self.client.get(reverse('home-feed'), {'page_size': '6'})
+
+		self.assertEqual(response.status_code, 200)
+		self.assertFalse(any(item['item_type'] == 'sponsored' for item in response.json()['results']))
+
+	@override_settings(PAID_FEATURES_ENABLED=False)
+	def test_home_feed_hides_sponsored_posts_when_paid_features_are_disabled(self):
 		response = self.client.get(reverse('home-feed'), {'page_size': '6'})
 
 		self.assertEqual(response.status_code, 200)
@@ -5928,7 +5936,7 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertIn('seconds_remaining', resend_response.data)
 
 
-@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend', PAID_FEATURES_ENABLED=True)
 class ProfileDashboardApiTests(APITestCase):
 	def setUp(self):
 		super().setUp()
@@ -6121,6 +6129,42 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(public_payload['longitude'], -119.2914)
 		self.assertEqual(public_payload['address_line_1'], 'Approximate live location near Main Street')
 		self.assertEqual(public_payload['city_label'], 'Ventura')
+
+	@override_settings(PAID_FEATURES_ENABLED=False)
+	def test_profile_dashboard_hides_billing_and_campaign_data_when_paid_features_are_disabled(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Disabled Paid Surface',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='55 Main St',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			status=BusinessClaim.Status.APPROVED,
+		)
+		membership = BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+		post = BusinessPost.objects.create(
+			membership=membership,
+			listing_snapshot=snapshot,
+			content_type=BusinessPost.ContentType.SPECIAL,
+			status=BusinessPost.Status.PUBLISHED,
+			title='Disabled Campaign',
+			published_at=timezone.now(),
+		)
+		SponsoredCampaign.objects.create(
+			membership=membership,
+			post=post,
+			name='Disabled Campaign Boost',
+			status=SponsoredCampaign.Status.ACTIVE,
+			starts_at=timezone.now() - timedelta(days=1),
+		)
+
+		response = self.client.get(reverse('profile-dashboard'), {'portal': 'business'}, **self.auth_headers())
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data['billing_portal_url'], '')
+		self.assertEqual(response.data['sponsored_campaigns'], [])
 
 	def test_profile_dashboard_update_allows_approved_business_profile_edits(self):
 		snapshot = ListingSnapshot.objects.create(
@@ -9048,8 +9092,8 @@ class ListingSnapshotAdminTests(TestCase):
 		self.request_factory = RequestFactory()
 		self.admin_user = User.objects.create_superuser(username='snapshot_admin', email='snapshot_admin@example.com', password='test-pass-123')
 
-	def _build_request(self, path='/admin/'):
-		request = self.request_factory.get(path)
+	def _build_request(self, path='/admin/', method='get'):
+		request = getattr(self.request_factory, method)(path)
 		request.user = self.admin_user
 		setattr(request, 'session', {})
 		setattr(request, '_messages', FallbackStorage(request))
@@ -9823,7 +9867,7 @@ class ListingSnapshotAdminTests(TestCase):
 			)
 
 			with override_settings(DISCOVERY_JSON_PATH=json_path), patch.object(BusinessWebsiteImporter, 'enrich_place_record', return_value=place_record):
-				response = self.admin.pull_business_data_view(self._build_request(f'/admin/places/listingsnapshot/{snapshot.pk}/pull-business-data/'), str(snapshot.pk))
+				response = self.admin.pull_business_data_view(self._build_request(f'/admin/places/listingsnapshot/{snapshot.pk}/pull-business-data/', method='post'), str(snapshot.pk))
 
 				self.assertEqual(response.status_code, 302)
 				snapshot.refresh_from_db()
@@ -9840,7 +9884,7 @@ class ListingSnapshotAdminTests(TestCase):
 				deleted_business = DeletedBusiness.objects.get(external_id='verified-business:test-cronies')
 				self.assertEqual(deleted_business.name, 'Cronies Sports Grill')
 
-				response = self.deleted_admin.restore_business_view(self._build_request(f'/admin/places/deletedbusiness/{deleted_business.pk}/restore-business/'), str(deleted_business.pk))
+				response = self.deleted_admin.restore_business_view(self._build_request(f'/admin/places/deletedbusiness/{deleted_business.pk}/restore-business/', method='post'), str(deleted_business.pk))
 
 				self.assertEqual(response.status_code, 302)
 				self.assertFalse(DeletedBusiness.objects.filter(pk=deleted_business.pk).exists())

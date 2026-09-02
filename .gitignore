@@ -71,5 +71,10 @@ pnpm-debug.log*
 media/
 staticfiles/
 backend/.django_cache/
-backend/backups/production-*/
-backend/tmp-backups/production-*/
+# Backup bundles can contain user records, password hashes, and recovery material.
+# Keep all local/admin/production backup output outside version control.
+backend/backups/
+backend/tmp-backups/
+
+APP_STORE_PRIVACY_DATA_MAP.md
+APP_STORE_REVIEW_NOTES.md

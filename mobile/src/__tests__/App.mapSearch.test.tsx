@@ -24,6 +24,9 @@ const mockClearPersistedPlaceCache = jest.fn(async () => undefined);
 const mockLoginProfile = jest.fn();
 const mockLogoutProfile = jest.fn();
 const mockUpdateBusinessLocation = jest.fn();
+const mockUpdateBusinessLocationTrackingPreference = jest.fn();
+const mockEnsureBusinessBackgroundLocationTaskStarted = jest.fn<Promise<void>, [string, unknown]>(async () => undefined);
+const mockStopBusinessBackgroundLocationTask = jest.fn(async () => undefined);
 const mockRegisterPushDevice = jest.fn();
 let mockNotificationResponseListener: ((response: unknown) => void) | null = null;
 let mockMarkerRenderCount = 0;
@@ -72,7 +75,7 @@ jest.mock('../api', () => ({
   submitSupportRequest: jest.fn(),
   toggleFavoriteBusiness: jest.fn(),
   updateBusinessLocation: (...args: unknown[]) => mockUpdateBusinessLocation(...args),
-  updateBusinessLocationTrackingPreference: jest.fn(),
+  updateBusinessLocationTrackingPreference: (...args: unknown[]) => mockUpdateBusinessLocationTrackingPreference(...args),
   updateProfileDashboard: jest.fn(),
   updateProfileDashboardWithUploads: jest.fn(),
   verifyEmailCode: jest.fn(),
@@ -186,7 +189,7 @@ jest.mock('../screens/SplashScreen', () => ({
 }));
 
 jest.mock('../screens/DashboardScreen', () => ({
-  AccountSettingsScreen: ({ onChangeDeleteAccountPassword, onDeleteAccount, onLogout, onOpenCustomerPreferences }: { onChangeDeleteAccountPassword: (value: string) => void; onDeleteAccount: () => void; onLogout: () => void; onOpenCustomerPreferences?: () => void }) => {
+  AccountSettingsScreen: ({ onChangeDeleteAccountPassword, onDeleteAccount, onLogout, onOpenCustomerPreferences, onToggleBusinessLocationTracking, session }: { onChangeDeleteAccountPassword: (value: string) => void; onDeleteAccount: () => void; onLogout: () => void; onOpenCustomerPreferences?: () => void; onToggleBusinessLocationTracking?: (value: boolean) => void; session?: { portal?: string } }) => {
     const React = require('react');
     const { Pressable, Text, View } = require('react-native');
 
@@ -207,6 +210,16 @@ jest.mock('../screens/DashboardScreen', () => ({
         <Pressable accessibilityLabel="Log out" onPress={onLogout}>
           <Text>Log out</Text>
         </Pressable>
+        {session?.portal === 'business' && onToggleBusinessLocationTracking ? (
+          <>
+            <Pressable accessibilityLabel="Enable business location services" onPress={() => onToggleBusinessLocationTracking(true)}>
+              <Text>Enable business location services</Text>
+            </Pressable>
+            <Pressable accessibilityLabel="Disable business location services" onPress={() => onToggleBusinessLocationTracking(false)}>
+              <Text>Disable business location services</Text>
+            </Pressable>
+          </>
+        ) : null}
       </View>
     );
   },
@@ -255,10 +268,10 @@ jest.mock('../screens/PlaceDetailScreen', () => ({
 jest.mock('../businessLocationTracking', () => ({
   clearPersistedBusinessTrackingSession: jest.fn(async () => undefined),
   commitBusinessLocationReport: jest.fn(async () => undefined),
-  ensureBusinessBackgroundLocationTaskStarted: jest.fn(async () => undefined),
+  ensureBusinessBackgroundLocationTaskStarted: (apiBaseUrl: string, session: unknown) => mockEnsureBusinessBackgroundLocationTaskStarted(apiBaseUrl, session),
   loadPersistedBusinessTrackingSession: jest.fn(async () => null),
   reserveBusinessLocationReport: jest.fn(async () => true),
-  stopBusinessBackgroundLocationTask: jest.fn(async () => undefined),
+  stopBusinessBackgroundLocationTask: () => mockStopBusinessBackgroundLocationTask(),
 }));
 
 jest.mock('../placeCache', () => ({
@@ -402,6 +415,7 @@ const locationModule = jest.requireMock('../nativeLocation') as {
   getLastKnownPositionAsync: jest.Mock;
   getForegroundPermissionsAsync: jest.Mock;
   isBackgroundLocationAvailableAsync: jest.Mock;
+  requestBackgroundPermissionsAsync: jest.Mock;
   requestForegroundPermissionsAsync: jest.Mock;
   reverseGeocodeAsync: jest.Mock;
   watchPositionAsync: jest.Mock;
@@ -554,6 +568,9 @@ describe('App browse map search', () => {
     mockClearPlacesCache.mockClear();
     mockClearPersistedPlaceCache.mockClear();
     mockUpdateBusinessLocation.mockReset();
+    mockUpdateBusinessLocationTrackingPreference.mockReset();
+    mockEnsureBusinessBackgroundLocationTaskStarted.mockClear();
+    mockStopBusinessBackgroundLocationTask.mockClear();
     mockRegisterPushDevice.mockReset();
     mockRegisterForPushNotificationsAsync.mockReset();
     mockRegisterForPushNotificationsAsync.mockResolvedValue(null);
@@ -604,8 +621,155 @@ describe('App browse map search', () => {
     mockClearPersistedPlaceCache.mockReset();
     mockLoginProfile.mockReset();
     mockUpdateBusinessLocation.mockReset();
+    mockUpdateBusinessLocationTrackingPreference.mockReset();
+    mockEnsureBusinessBackgroundLocationTaskStarted.mockClear();
+    mockStopBusinessBackgroundLocationTask.mockClear();
     mockRegisterPushDevice.mockReset();
     mockRegisterForPushNotificationsAsync.mockReset();
+  });
+
+  it('uses foreground-only location for an authenticated customer session', async () => {
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    locationModule.getForegroundPermissionsAsync.mockClear();
+    locationModule.requestForegroundPermissionsAsync.mockClear();
+    locationModule.requestBackgroundPermissionsAsync.mockClear();
+    locationModule.getForegroundPermissionsAsync.mockResolvedValue({ canAskAgain: true, granted: false });
+    locationModule.requestForegroundPermissionsAsync.mockResolvedValue({ canAskAgain: false, granted: false });
+
+    fireEvent.press(screen.getByLabelText('Open customer login'));
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+    fireEvent.press(await screen.findByLabelText('Submit login'));
+
+    expect(await screen.findByText('Dashboard screen')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Open places'));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    fireEvent.press(screen.getByLabelText('Open map'));
+
+    await screen.findByTestId('mock-map-view');
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(locationModule.requestForegroundPermissionsAsync).toHaveBeenCalled();
+    expect(locationModule.requestBackgroundPermissionsAsync).not.toHaveBeenCalled();
+  });
+
+  it('requests Always permission and persists approved business tracking until it is disabled', async () => {
+    const businessSession = {
+      id: 9,
+      username: 'bizowner',
+      email: 'bizowner@example.com',
+      first_name: 'Biz',
+      last_name: 'Owner',
+      auth_token: 'business-token-123',
+      portal: 'business' as const,
+      profile_type: 'business' as const,
+      email_verified: true,
+      two_factor_enabled: false,
+      can_access_places: true,
+      approved_businesses: [{
+        id: samplePlace.id,
+        slug: samplePlace.slug,
+        name: samplePlace.name,
+        city: samplePlace.city,
+        city_label: samplePlace.city_label,
+        venue_type: samplePlace.venue_type,
+        venue_type_label: samplePlace.venue_type_label,
+        address_line_1: samplePlace.address_line_1,
+        website_url: samplePlace.website_url,
+      }],
+      business_location_tracking_available: true,
+      business_location_tracking_enabled: false,
+      requires_business_location_tracking: false,
+    };
+    const enabledBusinessSession = {
+      ...businessSession,
+      business_location_tracking_enabled: true,
+      requires_business_location_tracking: true,
+    };
+    const disabledBusinessSession = {
+      ...businessSession,
+      business_location_tracking_enabled: false,
+      requires_business_location_tracking: false,
+    };
+
+    mockLoginProfile.mockResolvedValue(businessSession);
+    mockUpdateBusinessLocationTrackingPreference
+      .mockResolvedValueOnce(enabledBusinessSession)
+      .mockResolvedValueOnce(disabledBusinessSession);
+    locationModule.getForegroundPermissionsAsync.mockResolvedValue({ canAskAgain: false, granted: true });
+    locationModule.requestForegroundPermissionsAsync.mockResolvedValue({ canAskAgain: false, granted: true });
+    locationModule.getBackgroundPermissionsAsync.mockResolvedValue({ canAskAgain: true, granted: false });
+    locationModule.requestBackgroundPermissionsAsync.mockResolvedValue({ status: 'authorizedAlways', canAskAgain: false, granted: true });
+
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+    fireEvent.press(screen.getByLabelText('Open business login'));
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+    fireEvent.press(await screen.findByLabelText('Submit login'));
+
+    expect(await screen.findByText('Dashboard screen')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Open settings'));
+    expect(await screen.findByText('Settings screen')).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('Enable business location services'));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(locationModule.requestBackgroundPermissionsAsync).toHaveBeenCalledTimes(1);
+    expect(mockUpdateBusinessLocationTrackingPreference).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api',
+      'business-token-123',
+      { enabled: true },
+    );
+    expect(mockEnsureBusinessBackgroundLocationTaskStarted).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api',
+      {
+        approvedBusinessSlugs: [samplePlace.slug],
+        authToken: 'business-token-123',
+      },
+    );
+
+    fireEvent.press(screen.getByLabelText('Disable business location services'));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(mockUpdateBusinessLocationTrackingPreference).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api',
+      'business-token-123',
+      { enabled: false },
+    );
+    expect(mockStopBusinessBackgroundLocationTask).toHaveBeenCalled();
   });
 
   it('registers push notifications for business sessions so direct-message pushes can be delivered', async () => {
@@ -1063,7 +1227,7 @@ describe('App browse map search', () => {
 
     expect(mockFetchPlaces).toHaveBeenCalled();
     expect(screen.getByTestId('browse-search-input')).toBeTruthy();
-    expect(screen.getByLabelText('Open Home Feed')).toBeTruthy();
+    expect(screen.queryByLabelText('Open Home Feed')).toBeNull();
     expect(screen.getByText('Customer')).toBeTruthy();
     expect(screen.getByText('Sign Up')).toBeTruthy();
     expect(screen.getByText('Business')).toBeTruthy();
@@ -1603,6 +1767,8 @@ describe('App browse map search', () => {
     fireEvent.press(screen.getByLabelText('Open map'));
 
     expect(await screen.findByTestId('current-happy-hours-toggle')).toBeTruthy();
+    expect(screen.queryByLabelText('Open home feed')).toBeNull();
+    expect(screen.queryByText('Feed')).toBeNull();
     fireEvent.press(screen.getByTestId('current-happy-hours-toggle'));
     expect(screen.getByTestId('current-happy-hours-menu')).toBeTruthy();
     expect(screen.getByText('Baskin-Robbins')).toBeTruthy();

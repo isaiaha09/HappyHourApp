@@ -12,6 +12,7 @@ from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 from unfold.dataclasses import SearchResult
 
+from places.admin_security import emit_admin_security_event
 from places.models import (
 	BusinessClaim,
 	BusinessDirectMessage,
@@ -616,6 +617,15 @@ def record_admin_audit_event(request, obj, message, action_flag=CHANGE):
 		action_flag=action_flag,
 		change_message=message,
 		single_object=True,
+	)
+	emit_admin_security_event(
+		request,
+		'admin_operation',
+		actor=request.user,
+		object_type=obj.__class__._meta.label,
+		object_id=str(obj.pk),
+		action_flag=action_flag,
+		message=str(message)[:500],
 	)
 
 

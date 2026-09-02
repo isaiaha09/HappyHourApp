@@ -1,6 +1,7 @@
 import json
 import shutil
 import sqlite3
+from io import StringIO
 from pathlib import Path
 
 from django.conf import settings
@@ -12,6 +13,23 @@ from django.utils import timezone
 
 from places.models import ListingSnapshot
 from places.services.importers.discovered_json_places import load_discovery_json_records, serialize_imported_place
+
+
+SENSITIVE_FIXTURE_REDACTIONS = {
+	'auth.user': {
+		'password': '!backup-redacted!',
+	},
+	'places.accountprofile': {
+		'email_verification_token': '',
+		'email_verification_code': '',
+		'two_factor_secret': '',
+		'two_factor_pending_secret': '',
+		'admin_two_factor_secret': '',
+		'admin_two_factor_pending_secret': '',
+		'password_reset_token': '',
+	},
+}
+EXCLUDED_SENSITIVE_FIXTURE_MODELS = ('places.profileauthtoken',)
 
 
 class Command(BaseCommand):
@@ -46,6 +64,7 @@ class Command(BaseCommand):
 		self.stdout.write('Writing portable database fixture...')
 		dumpdata_name = self._write_database_fixture(backup_dir)
 		manifest['database_fixture'] = dumpdata_name
+		manifest['database_fixture_security'] = getattr(self, '_fixture_security_summary', {})
 
 		self.stdout.write('Writing listing snapshot export...')
 		snapshot_export_name, snapshot_count = self._write_listing_snapshot_export(backup_dir)
@@ -94,13 +113,27 @@ class Command(BaseCommand):
 
 	def _write_database_fixture(self, backup_dir):
 		fixture_path = backup_dir / 'database-fixture.json'
-		with fixture_path.open('w', encoding='utf-8') as fixture_handle:
-			call_command(
-				'dumpdata',
-				exclude=['auth.permission', 'contenttypes', 'sessions'],
-				indent=2,
-				stdout=fixture_handle,
-			)
+		fixture_buffer = StringIO()
+		call_command(
+			'dumpdata',
+			exclude=['auth.permission', 'contenttypes', 'sessions', *EXCLUDED_SENSITIVE_FIXTURE_MODELS],
+			indent=2,
+			stdout=fixture_buffer,
+		)
+		fixture = json.loads(fixture_buffer.getvalue() or '[]')
+		redacted_fields = []
+		for record in fixture:
+			field_redactions = SENSITIVE_FIXTURE_REDACTIONS.get(record.get('model'), {})
+			for field_name, redacted_value in field_redactions.items():
+				if field_name in record.get('fields', {}):
+					record['fields'][field_name] = redacted_value
+					redacted_fields.append(f"{record.get('model')}.{field_name}")
+		fixture_path.write_text(json.dumps(fixture, indent=2, cls=DjangoJSONEncoder), encoding='utf-8')
+		self._fixture_security_summary = {
+			'excluded_models': list(EXCLUDED_SENSITIVE_FIXTURE_MODELS),
+			'redacted_field_count': len(redacted_fields),
+			'redacted_fields': sorted(set(redacted_fields)),
+		}
 		return fixture_path.name
 
 	def _write_listing_snapshot_export(self, backup_dir):

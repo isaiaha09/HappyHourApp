@@ -1,0 +1,86 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div style="max-width:760px;">
+  <h1>My Admin Security</h1>
+  <p>Manage authenticator-based two-factor authentication for your admin account.</p>
+
+  {% if profile.admin_two_factor_enabled %}
+    <div style="margin:20px 0;padding:18px 20px;border:1px solid #2f7d4a;border-radius:12px;background:rgba(47,125,74,.14);">
+      <strong>Two-factor authentication is enabled.</strong>
+      <p style="margin:8px 0 0;">After your password is accepted, the admin will ask for an authenticator code before showing any admin page.</p>
+    </div>
+
+    {% if profile.admin_two_factor_pending_secret %}
+      <div style="margin:20px 0;padding:18px 20px;border:1px solid #8f6a26;border-radius:12px;background:rgba(143,106,38,.16);">
+        <h2 style="margin:0 0 10px;">Replacement enrollment started</h2>
+        <p>Scan this QR code with your replacement authenticator app:</p>
+        {% if pending_qr_code %}
+          <div style="display:inline-block;padding:12px;background:#fff;border-radius:10px;"><img src="{{ pending_qr_code }}" alt="Admin authenticator enrollment QR code" width="240" height="240"></div>
+        {% else %}
+          <p>The enrollment QR code is temporarily unavailable. Try again before confirming.</p>
+        {% endif %}
+        <p>Your current authenticator remains active until this replacement is confirmed.</p>
+      </div>
+
+      <form method="post" action="{{ security_url }}" style="margin:24px 0;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="confirm">
+        {{ form.otp_code.errors }}
+        {{ form.otp_code }}
+        <div class="submit-row"><input type="submit" value="Confirm replacement authenticator" class="default"></div>
+      </form>
+    {% endif %}
+
+    <form method="post" action="{{ security_url }}" style="margin:24px 0;">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="disable">
+      <h2>Disable two-factor authentication</h2>
+      <p>Enter your current authenticator code to disable it.</p>
+      {{ form.otp_code.errors }}
+      {{ form.otp_code }}
+      <div class="submit-row"><input type="submit" value="Disable two-factor authentication"></div>
+    </form>
+
+    {% if not profile.admin_two_factor_pending_secret %}
+      <form method="post" action="{{ security_url }}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="rotate">
+        <h2>Replace authenticator</h2>
+        <p>Start a new enrollment while keeping the current authenticator active until confirmation.</p>
+        <div class="submit-row"><input type="submit" value="Start replacement enrollment" class="default"></div>
+      </form>
+    {% endif %}
+  {% elif profile.admin_two_factor_pending_secret %}
+    <div style="margin:20px 0;padding:18px 20px;border:1px solid #8f6a26;border-radius:12px;background:rgba(143,106,38,.16);">
+      <h2 style="margin:0 0 10px;">Enrollment started</h2>
+      <p>Scan this QR code with your authenticator app:</p>
+      {% if pending_qr_code %}
+        <div style="display:inline-block;padding:12px;background:#fff;border-radius:10px;"><img src="{{ pending_qr_code }}" alt="Admin authenticator enrollment QR code" width="240" height="240"></div>
+      {% else %}
+        <p>The enrollment QR code is temporarily unavailable. Try again before confirming.</p>
+      {% endif %}
+      <p>Confirm the setup with a current six-digit code.</p>
+    </div>
+
+    <form method="post" action="{{ security_url }}">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="confirm">
+      {{ form.otp_code.errors }}
+      {{ form.otp_code }}
+      <div class="submit-row"><input type="submit" value="Confirm and enable two-factor authentication" class="default"></div>
+    </form>
+  {% else %}
+    <div style="margin:20px 0;padding:18px 20px;border:1px solid #777;border-radius:12px;background:rgba(127,127,127,.12);">
+      <strong>Two-factor authentication is not enabled.</strong>
+      <p style="margin:8px 0 0;">Enable it now so a password alone cannot open your admin session.</p>
+    </div>
+
+    <form method="post" action="{{ security_url }}">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="begin">
+      <div class="submit-row"><input type="submit" value="Enable two-factor authentication" class="default"></div>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

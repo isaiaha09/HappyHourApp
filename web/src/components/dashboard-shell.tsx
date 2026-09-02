@@ -77,7 +77,7 @@ export function DashboardShell() {
               <h1 className="text-3xl font-semibold text-white">{fullName}</h1>
               <p className="mt-2 text-sm leading-6 text-[#f6d6c5]">
                 {session.profile_type === "business"
-                  ? "Manage your business account, billing, and claim status from the desktop dashboard."
+                  ? "Manage your business account, claim status, and verification details from the desktop dashboard."
                   : "Review your account details and verification status from the web dashboard."}
               </p>
             </div>
@@ -106,17 +106,11 @@ export function DashboardShell() {
           <p className="dd-kicker">Business Tools</p>
           <div className="mt-5 space-y-4 text-sm leading-6 text-[#f6d6c5]">
             <p>
-              The web dashboard is where business accounts can access billing and account-management tasks that do not need to live inside the mobile app.
+              The web dashboard is where business accounts can review claim status, verification details, and account-management tasks that do not need to live inside the mobile app.
             </p>
-            {session.billing_portal_url ? (
-              <a href={session.billing_portal_url} target="_blank" rel="noreferrer" className="dd-button-primary block text-center">
-                Open billing portal
-              </a>
-            ) : (
-              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-[#f8dfd2]">
-                Billing access will appear here for approved business accounts.
-              </div>
-            )}
+            <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-[#f8dfd2]">
+              Customer and business accounts are free in the current release. No paid account features or payment tools are available.
+            </div>
           </div>
         </div>
       </section>

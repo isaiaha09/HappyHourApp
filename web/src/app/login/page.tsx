@@ -27,15 +27,15 @@ export default function LoginPage() {
           </Link>
           <Image src="/DiningDealz-Logo.png" alt="DiningDealz logo" width={520} height={520} className="mx-auto w-full max-w-[440px] lg:mx-0" priority />
           <div className="mx-auto max-w-xl space-y-4 lg:mx-0">
-            <h1 className="text-4xl font-semibold leading-tight text-white sm:text-5xl">Desktop access for billing, account controls, and business tools.</h1>
+            <h1 className="text-4xl font-semibold leading-tight text-white sm:text-5xl">Desktop access for account controls and business tools.</h1>
             <p className="text-base leading-8 text-[#f6d6c5]">
-              The web dashboard complements the app and gives business accounts a larger workspace for billing and account-management actions.
+              The web dashboard complements the app and gives business accounts a larger workspace for account-management actions.
             </p>
           </div>
         </div>
 
         <div className="mx-auto grid w-full max-w-xl gap-4 sm:grid-cols-2 lg:mx-0 lg:max-w-none">
-          <FeaturePill title="Business billing" detail="Open your billing portal without leaving the desktop workflow." />
+          <FeaturePill title="Business tools" detail="Review account status, verification, and business-management details." />
           <FeaturePill title="Verification state" detail="Quickly check account status and email verification progress." />
         </div>
       </section>

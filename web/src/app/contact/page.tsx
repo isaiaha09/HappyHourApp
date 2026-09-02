@@ -6,7 +6,7 @@ import { getTurnstileSiteKey } from "@/lib/turnstile";
 
 export const metadata: Metadata = {
   title: "Contact Support",
-  description: "Contact DiningDealz for account help, business onboarding, billing questions, or partnership inquiries.",
+  description: "Contact DiningDealz for account help, business onboarding, verification questions, or partnership inquiries.",
 };
 
 export default function ContactPage() {
@@ -34,7 +34,7 @@ export default function ContactPage() {
             <a href="mailto:support@diningdealz.com" className="text-xl font-semibold text-[#ffd35a] hover:text-[#ffe7d8]">
               support@diningdealz.com
             </a>
-            <p className="text-sm leading-7 text-[#f6d6c5]">Best for account help, billing questions, business onboarding, or general support.</p>
+            <p className="text-sm leading-7 text-[#f6d6c5]">Best for account help, business onboarding, verification questions, or general support.</p>
           </div>
         </section>
 

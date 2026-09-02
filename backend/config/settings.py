@@ -32,7 +32,9 @@ def _is_truthy_env(name):
     return value in {'1', 'true', 'yes', 'on'}
 
 
+DEPLOYMENT_ENV = get_env('DJANGO_ENV', ENV_VALUES, '').strip().lower()
 IS_RENDER = _is_truthy_env('RENDER') or bool(get_env('RENDER_EXTERNAL_HOSTNAME', ENV_VALUES, '').strip())
+IS_PRODUCTION = IS_RENDER or DEPLOYMENT_ENV in {'prod', 'production'}
 
 
 # Quick-start development settings - unsuitable for production
@@ -43,11 +45,11 @@ DEFAULT_SECRET_KEY = 'django-insecure-change-me-in-production'
 SECRET_KEY = get_env('DJANGO_SECRET_KEY', ENV_VALUES, DEFAULT_SECRET_KEY)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = get_bool_env('DJANGO_DEBUG', ENV_VALUES, not IS_RENDER)
+DEBUG = get_bool_env('DJANGO_DEBUG', ENV_VALUES, not IS_PRODUCTION)
 
-if IS_RENDER and SECRET_KEY == DEFAULT_SECRET_KEY:
+if IS_PRODUCTION and SECRET_KEY == DEFAULT_SECRET_KEY:
     raise RuntimeError('DJANGO_SECRET_KEY must be set to a unique value in production.')
-if IS_RENDER and DEBUG:
+if IS_PRODUCTION and DEBUG:
     raise RuntimeError('DJANGO_DEBUG must be false in production.')
 
 
@@ -93,15 +95,28 @@ def _build_cors_allowed_origins(debug):
 ALLOWED_HOSTS = _build_allowed_hosts(DEBUG)
 CSRF_TRUSTED_ORIGINS = _build_csrf_trusted_origins()
 ADMIN_URL_PATH = get_env('ADMIN_URL_PATH', ENV_VALUES, 'admin').strip().strip('/') or 'admin'
+ADMIN_LOGIN_MAX_ATTEMPTS = get_int_env('ADMIN_LOGIN_MAX_ATTEMPTS', ENV_VALUES, 5)
+ADMIN_LOGIN_WINDOW_SECONDS = get_int_env('ADMIN_LOGIN_WINDOW_SECONDS', ENV_VALUES, 300)
+ADMIN_SESSION_AGE_SECONDS = get_int_env('ADMIN_SESSION_AGE_SECONDS', ENV_VALUES, 3600)
+ADMIN_SESSION_IDLE_TIMEOUT_SECONDS = get_int_env('ADMIN_SESSION_IDLE_TIMEOUT_SECONDS', ENV_VALUES, 1800)
+ADMIN_IP_ALLOWLIST = get_list_env('ADMIN_IP_ALLOWLIST', ENV_VALUES, '')
+ADMIN_SECURITY_LOG_LEVEL = get_env('ADMIN_SECURITY_LOG_LEVEL', ENV_VALUES, 'INFO').strip().upper() or 'INFO'
+if ADMIN_SECURITY_LOG_LEVEL not in {'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'}:
+    ADMIN_SECURITY_LOG_LEVEL = 'INFO'
+ADMIN_SECURITY_ALERT_EVENTS = get_list_env(
+    'ADMIN_SECURITY_ALERT_EVENTS',
+    ENV_VALUES,
+    'admin_privilege_change,admin_ip_denied,admin_mfa_failure,admin_mfa_enrollment_failure,admin_mfa_disabled,admin_mfa_misconfigured,admin_mfa_session_required,admin_login_rate_limited,profile_auth_tokens_revoked',
+)
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 USE_X_FORWARDED_HOST = True
-SECURE_SSL_REDIRECT = get_bool_env('DJANGO_SECURE_SSL_REDIRECT', ENV_VALUES, IS_RENDER)
-SESSION_COOKIE_SECURE = get_bool_env('DJANGO_SESSION_COOKIE_SECURE', ENV_VALUES, IS_RENDER)
-CSRF_COOKIE_SECURE = get_bool_env('DJANGO_CSRF_COOKIE_SECURE', ENV_VALUES, IS_RENDER)
+SECURE_SSL_REDIRECT = get_bool_env('DJANGO_SECURE_SSL_REDIRECT', ENV_VALUES, IS_PRODUCTION)
+SESSION_COOKIE_SECURE = get_bool_env('DJANGO_SESSION_COOKIE_SECURE', ENV_VALUES, IS_PRODUCTION)
+CSRF_COOKIE_SECURE = get_bool_env('DJANGO_CSRF_COOKIE_SECURE', ENV_VALUES, IS_PRODUCTION)
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
 X_FRAME_OPTIONS = 'DENY'
-SECURE_HSTS_SECONDS = get_int_env('DJANGO_SECURE_HSTS_SECONDS', ENV_VALUES, 31536000 if IS_RENDER else 0)
+SECURE_HSTS_SECONDS = get_int_env('DJANGO_SECURE_HSTS_SECONDS', ENV_VALUES, 31536000 if IS_PRODUCTION else 0)
 SECURE_HSTS_INCLUDE_SUBDOMAINS = get_bool_env('DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS', ENV_VALUES, False)
 SECURE_HSTS_PRELOAD = get_bool_env('DJANGO_SECURE_HSTS_PRELOAD', ENV_VALUES, False)
 
@@ -328,6 +343,11 @@ UNFOLD = {
                         'icon': 'group',
                         'link': reverse_lazy('happyhour_admin:auth_group_changelist'),
                     },
+                    {
+                        'title': 'My Admin Security',
+                        'icon': 'security',
+                        'link': reverse_lazy('happyhour_admin:security'),
+                    },
                 ],
             },
         ],
@@ -344,6 +364,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'places.admin_security.AdminSecurityMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -773,17 +794,37 @@ PROFILE_PASSWORD_RESET_URL_BASE = get_env('PROFILE_PASSWORD_RESET_URL_BASE', ENV
 PROFILE_PASSWORD_RESET_TOKEN_TTL_SECONDS = get_int_env('PROFILE_PASSWORD_RESET_TOKEN_TTL_SECONDS', ENV_VALUES, 3600)
 PROFILE_AUTH_TOKEN_TTL_SECONDS = get_int_env('PROFILE_AUTH_TOKEN_TTL_SECONDS', ENV_VALUES, 30 * 24 * 60 * 60)
 PROFILE_TWO_FACTOR_ISSUER = get_env('PROFILE_TWO_FACTOR_ISSUER', ENV_VALUES, 'DiningDealz')
+# Paid campaigns and billing are intentionally disabled for the current App Store release.
+# Keep the backend data model and admin tooling available for a future, policy-compliant release.
+PAID_FEATURES_ENABLED = get_bool_env('PAID_FEATURES_ENABLED', ENV_VALUES, False)
 PROFILE_BILLING_PORTAL_URL = get_env('PROFILE_BILLING_PORTAL_URL', ENV_VALUES, 'https://example.com/billing')
 EXPO_PUSH_NOTIFICATIONS_ENABLED = get_bool_env('EXPO_PUSH_NOTIFICATIONS_ENABLED', ENV_VALUES, True)
 EXPO_PUSH_API_URL = get_env('EXPO_PUSH_API_URL', ENV_VALUES, 'https://exp.host/--/api/v2/push/send')
-if IS_RENDER and EXPO_PUSH_NOTIFICATIONS_ENABLED:
+if IS_PRODUCTION and EXPO_PUSH_NOTIFICATIONS_ENABLED:
     parsed_push_api_url = urlparse(EXPO_PUSH_API_URL)
     if parsed_push_api_url.scheme != 'https' or not parsed_push_api_url.netloc or parsed_push_api_url.username or parsed_push_api_url.password:
         raise RuntimeError('EXPO_PUSH_API_URL must be a credential-free HTTPS URL in production.')
 EXPO_PUSH_TIMEOUT = get_int_env('EXPO_PUSH_TIMEOUT', ENV_VALUES, 10)
 HAPPY_HOUR_NOTIFICATION_SECRET = get_env('HAPPY_HOUR_NOTIFICATION_SECRET', ENV_VALUES, '').strip()
-if IS_RENDER and len(HAPPY_HOUR_NOTIFICATION_SECRET) < 32:
+if IS_PRODUCTION and len(HAPPY_HOUR_NOTIFICATION_SECRET) < 32:
     raise RuntimeError('HAPPY_HOUR_NOTIFICATION_SECRET must be set to a random value of at least 32 characters in production.')
 HAPPY_HOUR_NOTIFICATION_WINDOW_MINUTES = get_int_env('HAPPY_HOUR_NOTIFICATION_WINDOW_MINUTES', ENV_VALUES, 10)
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'admin_security': {
+            'handlers': ['console'],
+            'level': ADMIN_SECURITY_LOG_LEVEL,
+            'propagate': False,
+        },
+    },
+}
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

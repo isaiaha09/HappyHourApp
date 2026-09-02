@@ -20,7 +20,6 @@ export type DashboardScreenProps = {
   loading: boolean;
   message: string | null;
   onBack: () => void;
-  onOpenBilling: () => void;
   onOpenApprovedBusiness: (slug: string) => void;
   onOpenBusinessProfileEditor: () => void;
   onOpenFavoriteBusiness: (slug: string) => void;
@@ -86,8 +85,6 @@ const dismissKeyboardOnScrollProps = {
   onTouchStart: Keyboard.dismiss,
 } as const;
 
-const HOME_FEED_BOOSTS_ENABLED = false;
-
 function DashboardDetailRow({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.dashboardDetailItem}>
@@ -129,14 +126,6 @@ function DashboardMultilineField({
       <TextInput multiline onChangeText={onChangeText} style={[styles.profileInput, styles.dashboardMultilineInput]} textAlignVertical="top" value={value} />
     </View>
   );
-}
-
-function formatCampaignPrice(weeklyPriceCents: number) {
-  return `$${(weeklyPriceCents / 100).toFixed(0)}/week`;
-}
-
-function formatCampaignPercent(value: number) {
-  return `${value.toFixed(1)}%`;
 }
 
 function joinDraftEntries(values?: string[]) {
@@ -461,9 +450,8 @@ function SecuritySettingsSection({
   );
 }
 
-export function DashboardScreen({ errorMessage, isLandscape, loading, message, onBack, onOpenBilling, onOpenApprovedBusiness, onOpenBusinessProfileEditor, onOpenFavoriteBusiness, onOpenFavoriteBusinesses, onOpenBusinessNotifications, onOpenDirectMessages, onOpenPlaces, onOpenSettings, onRefresh, onResendVerification, onSaveProfileDetails, session, submitting }: DashboardScreenProps) {
+export function DashboardScreen({ errorMessage, isLandscape, loading, message, onBack, onOpenApprovedBusiness, onOpenBusinessProfileEditor, onOpenFavoriteBusiness, onOpenFavoriteBusinesses, onOpenBusinessNotifications, onOpenDirectMessages, onOpenPlaces, onOpenSettings, onRefresh, onResendVerification, onSaveProfileDetails, session, submitting }: DashboardScreenProps) {
   const approvedBusinesses = session.approved_businesses ?? [];
-  const sponsoredCampaigns = session.sponsored_campaigns ?? [];
   const favoriteBusinesses = session.favorite_businesses ?? [];
   const favoriteBusinessNotifications = session.favorite_business_notifications ?? [];
   const fullName = [session.first_name, session.last_name].filter(Boolean).join(' ');
@@ -675,67 +663,6 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
                     </View>
                   ) : null}
                 </View>
-
-                {HOME_FEED_BOOSTS_ENABLED ? (
-                  <View style={styles.dashboardSection}>
-                    <Text style={styles.dashboardSectionTitle}>Home feed boosts</Text>
-                    <Text style={styles.dashboardSupportText}>Boosted posts run on the weekly subscription MVP model. Each campaign tracks a 7-day delivery window so you can see impressions, clicks, and remaining quota without adding ad-manager complexity yet.</Text>
-                    {sponsoredCampaigns.length ? (
-                      <View style={styles.dashboardFieldGrid}>
-                        {sponsoredCampaigns.map((campaign) => (
-                          <View key={campaign.id} style={[styles.dashboardFavoriteBusinessCard, styles.dashboardCampaignCard]}>
-                            <View style={styles.dashboardCampaignHeaderRow}>
-                              <View style={styles.dashboardCampaignHeaderCopy}>
-                                <Text style={styles.dashboardDetailValue}>{campaign.name}</Text>
-                                <Text style={styles.dashboardSupportText}>{campaign.post.title} • {campaign.post.content_type_label}</Text>
-                              </View>
-                              <View style={[styles.dashboardCampaignStatusBadge, campaign.is_currently_active ? styles.dashboardCampaignStatusBadgeActive : null]}>
-                                <Text style={[styles.dashboardCampaignStatusBadgeText, campaign.is_currently_active ? styles.dashboardCampaignStatusBadgeTextActive : null]}>{campaign.is_currently_active ? 'Active' : campaign.status_label}</Text>
-                              </View>
-                            </View>
-                            <View style={styles.dashboardFieldGrid}>
-                              <View style={styles.dashboardDetailItem}>
-                                <Text style={styles.dashboardDetailLabel}>Price</Text>
-                                <Text style={styles.dashboardDetailValue}>{formatCampaignPrice(campaign.weekly_price_cents)}</Text>
-                              </View>
-                              <View style={styles.dashboardDetailItem}>
-                                <Text style={styles.dashboardDetailLabel}>Weekly quota</Text>
-                                <Text style={styles.dashboardDetailValue}>{campaign.weekly_impression_quota} impressions</Text>
-                              </View>
-                              <View style={styles.dashboardDetailItem}>
-                                <Text style={styles.dashboardDetailLabel}>Delivered</Text>
-                                <Text style={styles.dashboardDetailValue}>{campaign.impressions_last_7_days}</Text>
-                              </View>
-                              <View style={styles.dashboardDetailItem}>
-                                <Text style={styles.dashboardDetailLabel}>Remaining</Text>
-                                <Text style={styles.dashboardDetailValue}>{campaign.remaining_impressions ?? 'Unlimited'}</Text>
-                              </View>
-                              <View style={styles.dashboardDetailItem}>
-                                <Text style={styles.dashboardDetailLabel}>Clicks</Text>
-                                <Text style={styles.dashboardDetailValue}>{campaign.clicks_last_7_days}</Text>
-                              </View>
-                              <View style={styles.dashboardDetailItem}>
-                                <Text style={styles.dashboardDetailLabel}>CTR</Text>
-                                <Text style={styles.dashboardDetailValue}>{formatCampaignPercent(campaign.click_through_rate_percent)}</Text>
-                              </View>
-                            </View>
-                            <Text style={styles.dashboardSupportText}>{campaign.post.summary || 'This boosted post is eligible for fair rotation inside the home feed and is throttled by weekly quota.'}</Text>
-                          </View>
-                        ))}
-                      </View>
-                    ) : (
-                      <View style={[styles.dashboardFavoriteBusinessCard, styles.dashboardCampaignCard]}>
-                        <Text style={styles.dashboardDetailValue}>No boosted campaigns yet</Text>
-                        <Text style={styles.dashboardSupportText}>Launch with weekly boosted posts first. It is the simplest MVP: one flat weekly price, quota-backed delivery, and fair rotation in the home feed.</Text>
-                      </View>
-                    )}
-                    {session.billing_portal_url ? (
-                      <Pressable onPress={onOpenBilling} style={styles.linkButtonSecondaryWide}>
-                        <Text style={styles.linkButtonSecondaryText}>{sponsoredCampaigns.length ? 'Manage billing for boosts' : 'Open billing to start boosting posts'}</Text>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                ) : null}
 
                 <View style={styles.dashboardSection}>
                   <Text style={styles.dashboardSectionTitle}>Approved Business</Text>
@@ -1436,7 +1363,7 @@ export function AccountSettingsScreen({
             <View style={styles.settingsItemRow}>
               <View style={styles.settingsItemBody}>
                 <Text style={styles.dashboardSectionTitle}>Support</Text>
-                <Text style={styles.dashboardSupportText}>Open the dedicated support screen for account help, billing questions, business onboarding, or general issues.</Text>
+                <Text style={styles.dashboardSupportText}>Open the dedicated support screen for account help, business onboarding, verification issues, or general app support.</Text>
               </View>
               <View style={styles.settingsItemActions}>
                 <Pressable onPress={onOpenContactSupport} style={[styles.linkButtonSecondaryWide, styles.settingsInlineButton]}>
@@ -1535,7 +1462,7 @@ export function BlockedDirectMessageCustomersScreen({
         if (!mounted) {
           return;
         }
-        setMessageFeedCustomersError(error instanceof Error ? error.message : 'Unable to load customers with direct message feeds.');
+        setMessageFeedCustomersError(error instanceof Error ? error.message : 'Unable to load customers with existing direct message conversations.');
       } finally {
         if (mounted) {
           setMessageFeedCustomersLoading(false);
@@ -1633,7 +1560,7 @@ export function BlockedDirectMessageCustomersScreen({
               </View>
             ) : null}
 
-            <Text style={styles.dashboardSectionTitle}>Customers with existing message feeds</Text>
+              <Text style={styles.dashboardSectionTitle}>Customers with existing conversations</Text>
             <Text style={styles.dashboardSupportText}>Filter by keyword, then tap a customer to select or deselect that username for blocking.</Text>
             <TextInput
               autoCapitalize="none"
@@ -1689,7 +1616,7 @@ export function BlockedDirectMessageCustomersScreen({
                 </ScrollView>
               </View>
             ) : (
-              <Text style={styles.dashboardSupportText}>No matching customer accounts with existing message feeds.</Text>
+              <Text style={styles.dashboardSupportText}>No matching customer accounts with existing conversations.</Text>
             )}
 
             {blockedCustomerAccounts.length ? (
