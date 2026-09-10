@@ -11,6 +11,7 @@ const apiBaseUrlStorageKey = 'diningdealz.business-location.api-base-url';
 const lastReportedLocationStorageKey = 'diningdealz.business-location.last-rounded-key';
 const lastReportedAtStorageKey = 'diningdealz.business-location.last-reported-at';
 const trackingConfigVersionStorageKey = 'diningdealz.business-location.config-version';
+const trackingConfigVersion = '2';
 
 const secureStoreOptions: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
@@ -62,10 +63,20 @@ async function deleteSecureItem(key: string) {
 }
 
 export async function loadPersistedBusinessTrackingSession() {
-  const rawValue = await getSecureItem(trackingSessionStorageKey);
-  if (!rawValue) {
-    return null;
-  }
+	const [rawValue, persistedConfigVersion] = await Promise.all([
+		getSecureItem(trackingSessionStorageKey),
+		getSecureItem(trackingConfigVersionStorageKey),
+	]);
+	if (!rawValue) {
+		return null;
+	}
+
+	// Version 2 requires an explicit Settings opt-in. Discard any session that
+	// might have been saved by the former default-on behavior.
+	if (persistedConfigVersion !== trackingConfigVersion) {
+		await clearPersistedBusinessTrackingSession();
+		return null;
+	}
 
   try {
     const parsedValue = JSON.parse(rawValue) as PersistedBusinessTrackingSession;
@@ -84,8 +95,9 @@ export async function persistBusinessTrackingSession(
   apiBaseUrl: string,
   session: PersistedBusinessTrackingSession,
 ) {
-  await setSecureItem(trackingSessionStorageKey, JSON.stringify(session));
-  await setSecureItem(apiBaseUrlStorageKey, normalizeApiBaseUrl(apiBaseUrl));
+	await setSecureItem(trackingSessionStorageKey, JSON.stringify(session));
+	await setSecureItem(apiBaseUrlStorageKey, normalizeApiBaseUrl(apiBaseUrl));
+	await setSecureItem(trackingConfigVersionStorageKey, trackingConfigVersion);
 }
 
 export async function clearPersistedBusinessTrackingSession() {

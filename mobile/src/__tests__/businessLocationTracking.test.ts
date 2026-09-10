@@ -64,6 +64,16 @@ describe('business location tracking delivery', () => {
     });
   });
 
+  it('discards a session saved before the explicit opt-in tracking configuration', async () => {
+    mockSecureStoreValues.set(
+      'diningdealz.business-location.session',
+      JSON.stringify({ approvedBusinessSlugs: ['legacy-truck'], authToken: 'legacy-token' }),
+    );
+
+    await expect(loadPersistedBusinessTrackingSession()).resolves.toBeNull();
+    expect(mockSecureStoreValues.has('diningdealz.business-location.session')).toBe(false);
+  });
+
   it('allows a reconnect retry for a coordinate already reported successfully', async () => {
     await commitBusinessLocationReport(34.2789, -119.2914, Date.now());
 

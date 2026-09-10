@@ -5771,7 +5771,9 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertTrue(response.data['auth_token'])
 		self.assertEqual(response.data['approved_businesses'][0]['slug'], snapshot.listing_slug)
-		self.assertTrue(response.data['requires_business_location_tracking'])
+		self.assertTrue(response.data['business_location_tracking_available'])
+		self.assertFalse(response.data['business_location_tracking_enabled'])
+		self.assertFalse(response.data['requires_business_location_tracking'])
 
 	def test_login_requires_authenticator_code_when_two_factor_is_enabled(self):
 		user = User.objects.create_user(username='secure_customer', email='secure@example.com', password='test-pass-123')
@@ -6145,6 +6147,8 @@ class ProfileDashboardApiTests(APITestCase):
 			verification_summary='Approved mobile vendor.',
 			status=BusinessClaim.Status.APPROVED,
 		)
+		self.profile.business_location_tracking_enabled = True
+		self.profile.save(update_fields=['business_location_tracking_enabled', 'updated_at'])
 
 		dashboard_response = self.client.get(reverse('profile-dashboard'), {'portal': 'business'}, **self.auth_headers())
 
@@ -6545,6 +6549,8 @@ class ProfileDashboardApiTests(APITestCase):
 			status=BusinessClaim.Status.APPROVED,
 		)
 		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+		self.profile.business_location_tracking_enabled = True
+		self.profile.save(update_fields=['business_location_tracking_enabled', 'updated_at'])
 
 		response = self.client.get(reverse('profile-dashboard'), {'portal': 'business'}, **self.auth_headers())
 
@@ -7432,6 +7438,8 @@ class ProfileDashboardApiTests(APITestCase):
 			status=BusinessClaim.Status.APPROVED,
 		)
 		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+		self.profile.business_location_tracking_enabled = True
+		self.profile.save(update_fields=['business_location_tracking_enabled', 'updated_at'])
 
 		response = self.client.post(
 			reverse('profile-business-location'),

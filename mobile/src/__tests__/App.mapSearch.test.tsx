@@ -669,7 +669,7 @@ describe('App browse map search', () => {
     expect(locationModule.requestBackgroundPermissionsAsync).not.toHaveBeenCalled();
   });
 
-  it('requests Always permission and persists approved business tracking until it is disabled', async () => {
+  it('starts approved business tracking only after the business explicitly enables it', async () => {
     const businessSession = {
       id: 9,
       username: 'bizowner',
@@ -712,7 +712,7 @@ describe('App browse map search', () => {
     mockUpdateBusinessLocationTrackingPreference
       .mockResolvedValueOnce(enabledBusinessSession)
       .mockResolvedValueOnce(disabledBusinessSession);
-    locationModule.getForegroundPermissionsAsync.mockResolvedValue({ canAskAgain: false, granted: true });
+    locationModule.getForegroundPermissionsAsync.mockResolvedValue({ canAskAgain: true, granted: false });
     locationModule.requestForegroundPermissionsAsync.mockResolvedValue({ canAskAgain: false, granted: true });
     locationModule.getBackgroundPermissionsAsync.mockResolvedValue({ canAskAgain: true, granted: false });
     locationModule.requestBackgroundPermissionsAsync.mockResolvedValue({ status: 'authorizedAlways', canAskAgain: false, granted: true });
@@ -733,8 +733,20 @@ describe('App browse map search', () => {
     fireEvent.press(await screen.findByLabelText('Submit login'));
 
     expect(await screen.findByText('Dashboard screen')).toBeTruthy();
+    locationModule.requestForegroundPermissionsAsync.mockClear();
+    locationModule.requestBackgroundPermissionsAsync.mockClear();
+    mockEnsureBusinessBackgroundLocationTaskStarted.mockClear();
     fireEvent.press(screen.getByLabelText('Open settings'));
     expect(await screen.findByText('Settings screen')).toBeTruthy();
+
+    expect(locationModule.requestForegroundPermissionsAsync).not.toHaveBeenCalled();
+    expect(locationModule.requestBackgroundPermissionsAsync).not.toHaveBeenCalled();
+    expect(mockEnsureBusinessBackgroundLocationTaskStarted).not.toHaveBeenCalled();
+
+    locationModule.getForegroundPermissionsAsync.mockReset();
+    locationModule.getForegroundPermissionsAsync
+      .mockResolvedValueOnce({ canAskAgain: true, granted: false })
+      .mockResolvedValue({ canAskAgain: false, granted: true });
 
     fireEvent.press(screen.getByLabelText('Enable business location services'));
     await act(async () => {
@@ -743,7 +755,8 @@ describe('App browse map search', () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
     });
 
-    expect(locationModule.requestBackgroundPermissionsAsync).toHaveBeenCalledTimes(1);
+    expect(locationModule.requestForegroundPermissionsAsync).toHaveBeenCalled();
+    expect(locationModule.requestBackgroundPermissionsAsync).toHaveBeenCalled();
     expect(mockUpdateBusinessLocationTrackingPreference).toHaveBeenCalledWith(
       'http://127.0.0.1:8000/api',
       'business-token-123',

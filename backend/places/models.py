@@ -1024,7 +1024,9 @@ class AccountProfile(models.Model):
 	pending_email = models.EmailField(blank=True)
 	previous_verified_email = models.EmailField(blank=True)
 	email_change_requested_at = models.DateTimeField(null=True, blank=True)
-	business_location_tracking_enabled = models.BooleanField(default=True)
+	# Live business-pin tracking is an explicit opt-in. A mobile/service-area
+	# business must enable it from Settings before we request location access.
+	business_location_tracking_enabled = models.BooleanField(default=False)
 	two_factor_enabled = models.BooleanField(default=False)
 	two_factor_secret = models.CharField(max_length=64, blank=True)
 	two_factor_pending_secret = models.CharField(max_length=64, blank=True)
