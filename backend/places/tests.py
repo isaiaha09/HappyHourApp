@@ -4232,6 +4232,7 @@ class BusinessClaimTests(APITestCase):
 			original_filename='authority.pdf',
 			content_type='application/pdf',
 			file_size=9,
+			malware_scan_status=BusinessClaimAttachment.MalwareScanStatus.CLEAN,
 		)
 
 		membership = claim.approve(reviewed_by=self.reviewer, reviewer_notes='Verified through manual review.')
@@ -4283,6 +4284,7 @@ class BusinessClaimTests(APITestCase):
 			original_filename='authority.pdf',
 			content_type='application/pdf',
 			file_size=9,
+			malware_scan_status=BusinessClaimAttachment.MalwareScanStatus.CLEAN,
 		)
 
 		with self.assertRaises(ValidationError):
@@ -4347,6 +4349,7 @@ class BusinessClaimTests(APITestCase):
 				original_filename='resume.pdf',
 				content_type='application/pdf',
 				file_size=len(reused_bytes),
+				malware_scan_status=BusinessClaimAttachment.MalwareScanStatus.CLEAN,
 			)
 
 		verdict = claim.evaluate_verification()
@@ -10299,6 +10302,7 @@ class BusinessClaimAdminTests(TestCase):
 			original_filename='authority.pdf',
 			content_type='application/pdf',
 			file_size=14,
+			malware_scan_status=BusinessClaimAttachment.MalwareScanStatus.CLEAN,
 		)
 		BusinessClaimAttachment.objects.create(
 			claim=self.claim,
@@ -10307,6 +10311,7 @@ class BusinessClaimAdminTests(TestCase):
 			original_filename='social-proof.jpg',
 			content_type='image/jpeg',
 			file_size=12,
+			malware_scan_status=BusinessClaimAttachment.MalwareScanStatus.NOT_APPLICABLE,
 		)
 
 	def _build_request(self, path='/admin/places/businessclaim/'):

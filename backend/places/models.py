@@ -82,15 +82,34 @@ def _extract_text_from_pdf_bytes(file_bytes):
 	if not file_bytes.lstrip().startswith(b'%PDF'):
 		return _extract_printable_text_fallback(file_bytes)
 	try:
+		max_pages = max(1, int(getattr(settings, 'VERIFICATION_PDF_MAX_PAGES', 50) or 50))
+	except (TypeError, ValueError):
+		max_pages = 50
+	try:
+		max_text_bytes = max(1, int(getattr(settings, 'VERIFICATION_PDF_MAX_EXTRACTED_TEXT_BYTES', 1_000_000) or 1_000_000))
+	except (TypeError, ValueError):
+		max_text_bytes = 1_000_000
+	try:
 		reader = PdfReader(io.BytesIO(file_bytes))
 	except Exception:
 		return _extract_printable_text_fallback(file_bytes)
 	text_chunks = []
-	for page in reader.pages:
+	extracted_text_bytes = 0
+	for page_number, page in enumerate(reader.pages):
+		if page_number >= max_pages or extracted_text_bytes >= max_text_bytes:
+			break
 		try:
-			text_chunks.append(page.extract_text() or '')
+			page_text = page.extract_text() or ''
 		except Exception:
 			continue
+		if not page_text:
+			continue
+		remaining_bytes = max_text_bytes - extracted_text_bytes
+		page_text_bytes = page_text.encode('utf-8', errors='ignore')
+		if len(page_text_bytes) > remaining_bytes:
+			page_text = page_text_bytes[:remaining_bytes].decode('utf-8', errors='ignore')
+		text_chunks.append(page_text)
+		extracted_text_bytes += len(page_text.encode('utf-8', errors='ignore'))
 	return '\n'.join(chunk for chunk in text_chunks if chunk).strip()
 
 
@@ -511,6 +530,9 @@ class BusinessClaim(models.Model):
 
 		for attachment in attachments:
 			analysis = attachment.get_document_validation_analysis()
+			if analysis.get('scan_unavailable'):
+				flags.append('document_malware_scan_unavailable')
+				continue
 			analysis_by_kind.setdefault(attachment.attachment_kind, []).append(analysis)
 			digest = analysis.get('digest', '')
 			if digest:
@@ -847,12 +869,22 @@ class BusinessClaimAttachment(models.Model):
 		PROOF_OF_ADDRESS_CONTROL = 'proof_of_address_control', 'Proof of Address Control Attachment'
 		PROOF_OF_AUTHORITY = 'proof_of_authority', 'Proof of Authority Attachment'
 
+	class MalwareScanStatus(models.TextChoices):
+		LEGACY_UNSCANNED = 'legacy_unscanned', 'Legacy unscanned'
+		NOT_APPLICABLE = 'not_applicable', 'Not applicable'
+		CLEAN = 'clean', 'Clean'
+		PROVIDER_UNAVAILABLE = 'provider_unavailable', 'Provider unavailable'
+
 	claim = models.ForeignKey(BusinessClaim, related_name='attachments', on_delete=models.CASCADE)
 	attachment_kind = models.CharField(max_length=40, choices=AttachmentKind.choices)
 	file = models.FileField(upload_to=business_claim_attachment_upload_to, storage=get_private_media_storage)
 	original_filename = models.CharField(max_length=255)
 	content_type = models.CharField(max_length=120, blank=True)
 	file_size = models.PositiveIntegerField(default=0)
+	malware_scan_status = models.CharField(max_length=32, choices=MalwareScanStatus.choices, default=MalwareScanStatus.LEGACY_UNSCANNED)
+	malware_scan_attempted_at = models.DateTimeField(blank=True, null=True)
+	malware_scan_provider = models.CharField(max_length=40, blank=True)
+	malware_scan_reason = models.CharField(max_length=120, blank=True)
 	created_at = models.DateTimeField(auto_now_add=True)
 
 	class Meta:
@@ -863,6 +895,12 @@ class BusinessClaimAttachment(models.Model):
 	def __str__(self):
 		return f'{self.claim_id} {self.attachment_kind} {self.original_filename}'
 
+	def is_pdf_attachment(self):
+		return (
+			str(self.content_type or '').strip().lower() == 'application/pdf'
+			or str(self.original_filename or '').strip().lower().endswith('.pdf')
+		)
+
 	def read_file_bytes(self):
 		if not self.file or not self.file.name:
 			return b''
@@ -870,6 +908,15 @@ class BusinessClaimAttachment(models.Model):
 			return stored_file.read()
 
 	def get_document_validation_analysis(self):
+		if self.is_pdf_attachment() and self.malware_scan_status != self.MalwareScanStatus.CLEAN:
+			return {
+				'digest': '',
+				'expected_hits': [],
+				'suspicious_hits': [],
+				'document_text': '',
+				'scan_unavailable': True,
+			}
+
 		file_bytes = self.read_file_bytes()
 		document_text = _extract_attachment_validation_text(file_bytes, filename=self.original_filename, content_type=self.content_type)
 		fallback_text = '' if document_text else _extract_printable_text_fallback(file_bytes)
@@ -883,6 +930,7 @@ class BusinessClaimAttachment(models.Model):
 			'expected_hits': _keyword_hits(combined_text, expected_keywords),
 			'suspicious_hits': _keyword_hits(combined_text, DOCUMENT_KIND_SUSPICIOUS_KEYWORDS),
 			'document_text': document_text,
+			'scan_unavailable': False,
 		}
 
 

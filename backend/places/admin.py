@@ -2096,8 +2096,8 @@ class BusinessClaimAttachmentInline(UnfoldTabularInline):
 	model = BusinessClaimAttachment
 	extra = 0
 	can_delete = False
-	fields = ('attachment_kind', 'original_filename', 'file_preview', 'content_type', 'file_size_display', 'created_at')
-	readonly_fields = ('attachment_kind', 'original_filename', 'file_preview', 'content_type', 'file_size_display', 'created_at')
+	fields = ('attachment_kind', 'original_filename', 'file_preview', 'malware_scan_status_display', 'content_type', 'file_size_display', 'created_at')
+	readonly_fields = ('attachment_kind', 'original_filename', 'file_preview', 'malware_scan_status_display', 'content_type', 'file_size_display', 'created_at')
 	ordering = ('attachment_kind', 'created_at')
 	verbose_name = 'Submitted attachment'
 	verbose_name_plural = 'Submitted attachments'
@@ -2106,7 +2106,31 @@ class BusinessClaimAttachmentInline(UnfoldTabularInline):
 	def file_preview(self, obj):
 		if not obj.file:
 			return 'No file'
+		if obj.is_pdf_attachment() and obj.malware_scan_status != BusinessClaimAttachment.MalwareScanStatus.CLEAN:
+			if obj.malware_scan_status == BusinessClaimAttachment.MalwareScanStatus.LEGACY_UNSCANNED:
+				warning_text = 'This PDF predates Cloudmersive scanning.'
+			elif obj.malware_scan_status == BusinessClaimAttachment.MalwareScanStatus.PROVIDER_UNAVAILABLE:
+				warning_text = 'This PDF was accepted while Cloudmersive was unavailable.'
+			else:
+				warning_text = f"This PDF has scan status: {obj.get_malware_scan_status_display() or 'not recorded'}."
+			return format_html(
+				'<div style="min-width:280px;max-width:340px;padding:8px;border:1px solid #d97706;background:#fffbeb;">'
+				'<strong>Security scan warning:</strong> {}<br />'
+				'<a href="{}" target="_blank" rel="noopener">Open/download after manual review</a>'
+				'</div>',
+				warning_text,
+				obj.file.url,
+			)
 		return _format_admin_media_preview(obj.file.url, obj.original_filename or 'Open file', obj.content_type)
+
+	@admin.display(description='Security scan')
+	def malware_scan_status_display(self, obj):
+		if obj.malware_scan_status in {
+			BusinessClaimAttachment.MalwareScanStatus.LEGACY_UNSCANNED,
+			BusinessClaimAttachment.MalwareScanStatus.PROVIDER_UNAVAILABLE,
+		}:
+			return format_html('<strong style="color:#b45309;">{}</strong>', obj.get_malware_scan_status_display())
+		return obj.get_malware_scan_status_display()
 
 	@admin.display(description='File size')
 	def file_size_display(self, obj):
@@ -2150,13 +2174,13 @@ class BusinessClaimAdmin(UnfoldModelAdmin):
 	list_display = ('listing_snapshot', 'contact_name', 'claimant_email_display', 'status', 'review_sla_display', 'attempt_number_display', 'current_attempt_display', 'prior_rejection_count_display', 'verification_score_display', 'verification_blocker_count_display', 'verification_flags_display', 'submitted_at', 'reviewed_at')
 	list_filter = ('status', 'listing_snapshot__city', PriorRejectionFilter)
 	search_fields = ('listing_snapshot__name', 'listing_snapshot__listing_slug', 'listing_snapshot__external_id', 'contact_name', 'claimant__username', 'claimant__email', 'work_email', 'work_phone')
-	readonly_fields = ('verification_score', 'verification_flags_display', 'verification_blocker_count_display', 'review_sla_display', 'attempt_number_display', 'current_attempt_display', 'prior_rejection_count_display', 'attempt_history_display', 'submitted_at', 'reviewed_at', 'reviewed_by', 'created_at', 'updated_at')
+	readonly_fields = ('verification_score', 'verification_flags_display', 'verification_blocker_count_display', 'attachment_scan_status_display', 'review_sla_display', 'attempt_number_display', 'current_attempt_display', 'prior_rejection_count_display', 'attempt_history_display', 'submitted_at', 'reviewed_at', 'reviewed_by', 'created_at', 'updated_at')
 	autocomplete_fields = ('claimant', 'listing_snapshot', 'reviewed_by')
 	list_select_related = ('listing_snapshot', 'claimant', 'reviewed_by')
 	list_per_page = 25
 	fieldsets = (
 		('Review', {
-			'fields': ('status', 'pathway', 'listing_snapshot', 'claimant', 'verification_score', 'verification_blocker_count_display', 'verification_flags_display', 'review_sla_display'),
+			'fields': ('status', 'pathway', 'listing_snapshot', 'claimant', 'verification_score', 'verification_blocker_count_display', 'verification_flags_display', 'attachment_scan_status_display', 'review_sla_display'),
 			'classes': ('tab',),
 		}),
 		('Business contact', {
@@ -2188,6 +2212,22 @@ class BusinessClaimAdmin(UnfoldModelAdmin):
 			'classes': ('tab',),
 		}),
 	)
+
+	@admin.display(description='Attachment scan status')
+	def attachment_scan_status_display(self, obj):
+		statuses = set(obj.attachments.values_list('malware_scan_status', flat=True))
+		warnings = []
+		if BusinessClaimAttachment.MalwareScanStatus.LEGACY_UNSCANNED in statuses:
+			warnings.append('legacy PDFs have not been scanned')
+		if BusinessClaimAttachment.MalwareScanStatus.PROVIDER_UNAVAILABLE in statuses:
+			warnings.append('one or more PDFs were accepted while Cloudmersive was unavailable')
+		if warnings:
+			return format_html('<strong style="color:#b45309;">Manual security review required:</strong> {}.', '; '.join(warnings))
+		if statuses & {BusinessClaimAttachment.MalwareScanStatus.CLEAN}:
+			return 'Uploaded PDFs were scanned successfully; images were not sent to Cloudmersive.'
+		if statuses & {BusinessClaimAttachment.MalwareScanStatus.NOT_APPLICABLE}:
+			return 'Uploaded verification attachments were images; images were not sent to Cloudmersive.'
+		return 'No uploaded verification attachments.'
 
 	def get_queryset(self, request):
 		queryset = self.model._default_manager.get_queryset()

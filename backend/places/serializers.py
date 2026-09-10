@@ -24,6 +24,7 @@ from .services.business_profile_overrides import (
 	summarize_deal_overrides,
 	summarize_operating_hour_overrides,
 )
+from .services.cloudmersive_scanning import ScanStatus, scan_pdf_file
 from .services.content_moderation import get_content_moderation_error
 from .services.image_moderation import ImageModerationRejected, ImageModerationUnavailable, moderate_uploaded_image
 from .services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
@@ -63,6 +64,7 @@ LIST_JSON_FIELD_NAMES = (
 
 DEAL_ATTACHMENT_FIELD_PREFIX = 'deal_attachment_upload_'
 SUPPORTED_DEAL_ATTACHMENT_SUFFIXES = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.heic', '.heif', '.pdf'}
+SUPPORTED_CLAIM_IMAGE_SUFFIXES = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.heic', '.heif', '.tif', '.tiff'}
 
 DICT_JSON_FIELD_NAMES = (
 	'verification_documents',
@@ -186,21 +188,76 @@ def _normalize_url_identity(value):
 	return f'{netloc}{path}'
 
 
-def _create_claim_attachments(claim, request):
+def _prepare_claim_attachments(request):
 	if request is None:
-		return
+		return []
+	pending_attachments = []
 	for request_field_name, attachment_kind in ATTACHMENT_FIELD_NAME_MAP.items():
 		for uploaded_file in request.FILES.getlist(request_field_name):
 			_validate_claim_attachment_size(uploaded_file, 'verification_documents')
-			_validate_pdf_upload_size(uploaded_file, 'verification_documents')
-			BusinessClaimAttachment.objects.create(
-				claim=claim,
-				attachment_kind=attachment_kind,
-				file=uploaded_file,
-				original_filename=uploaded_file.name,
-				content_type=getattr(uploaded_file, 'content_type', '') or '',
-				file_size=getattr(uploaded_file, 'size', 0) or 0,
-			)
+			attachment_format = _validate_claim_attachment_format(uploaded_file)
+			if attachment_format == 'pdf':
+				_validate_pdf_upload_size(uploaded_file, 'verification_documents')
+			else:
+				_validate_claim_image_signature(uploaded_file)
+			pending_attachments.append({
+				'attachment_kind': attachment_kind,
+				'uploaded_file': uploaded_file,
+				'original_filename': str(getattr(uploaded_file, 'name', '') or ''),
+				'content_type': getattr(uploaded_file, 'content_type', '') or '',
+				'file_size': getattr(uploaded_file, 'size', 0) or 0,
+				'attachment_format': attachment_format,
+				'malware_scan_status': BusinessClaimAttachment.MalwareScanStatus.NOT_APPLICABLE,
+				'malware_scan_attempted_at': None,
+				'malware_scan_provider': '',
+				'malware_scan_reason': '',
+			})
+
+	for pending_attachment in pending_attachments:
+		if pending_attachment['attachment_format'] != 'pdf':
+			continue
+		scan_result = scan_pdf_file(pending_attachment['uploaded_file'])
+		pending_attachment['malware_scan_attempted_at'] = timezone.now()
+		pending_attachment['malware_scan_provider'] = 'cloudmersive'
+		if scan_result.status == ScanStatus.REJECTED:
+			raise serializers.ValidationError({'verification_documents': ['This verification PDF was rejected by the security scan. Upload a different PDF.']})
+		if scan_result.status == ScanStatus.UNAVAILABLE:
+			failure_mode = str(getattr(settings, 'CLOUDMERSIVE_VIRUS_SCAN_FAILURE_MODE', 'allow') or 'allow').strip().lower()
+			if failure_mode == 'block':
+				raise serializers.ValidationError({'verification_documents': ['Verification PDF scanning is temporarily unavailable. Please try again.']})
+			pending_attachment['malware_scan_status'] = BusinessClaimAttachment.MalwareScanStatus.PROVIDER_UNAVAILABLE
+			pending_attachment['malware_scan_reason'] = scan_result.reason[:120]
+		elif scan_result.status == ScanStatus.CLEAN:
+			pending_attachment['malware_scan_status'] = BusinessClaimAttachment.MalwareScanStatus.CLEAN
+		else:
+			raise serializers.ValidationError({'verification_documents': ['This verification PDF could not be validated by the security scan.']})
+
+	return pending_attachments
+
+
+def _create_claim_attachments(claim, request, pending_attachments=None):
+	if request is None:
+		return
+	pending_attachments = _prepare_claim_attachments(request) if pending_attachments is None else pending_attachments
+
+	for pending_attachment in pending_attachments:
+		uploaded_file = pending_attachment['uploaded_file']
+		try:
+			uploaded_file.seek(0)
+		except (OSError, ValueError):
+			pass
+		BusinessClaimAttachment.objects.create(
+			claim=claim,
+			attachment_kind=pending_attachment['attachment_kind'],
+			file=uploaded_file,
+			original_filename=pending_attachment['original_filename'],
+			content_type=pending_attachment['content_type'],
+			file_size=pending_attachment['file_size'],
+			malware_scan_status=pending_attachment['malware_scan_status'],
+			malware_scan_attempted_at=pending_attachment['malware_scan_attempted_at'],
+			malware_scan_provider=pending_attachment['malware_scan_provider'],
+			malware_scan_reason=pending_attachment['malware_scan_reason'],
+		)
 
 
 def _create_claim_profile_entries(claim, validated_data):
@@ -287,6 +344,42 @@ def _validate_pdf_upload_size(uploaded_file, field_name):
 	if file_size not in (None, '') and int(file_size) > max_bytes:
 		max_megabytes = max_bytes / (1024 * 1024)
 		raise serializers.ValidationError({field_name: [f'PDF files must be {max_megabytes:g} MB or smaller.']})
+
+
+def _validate_claim_attachment_format(uploaded_file):
+	content_type = str(getattr(uploaded_file, 'content_type', '') or '').strip().lower()
+	file_suffix = Path(getattr(uploaded_file, 'name', '') or '').suffix.lower()
+	if content_type == 'application/pdf' or file_suffix == '.pdf':
+		return 'pdf'
+	if content_type.startswith('image/') or file_suffix in SUPPORTED_CLAIM_IMAGE_SUFFIXES:
+		return 'image'
+	raise serializers.ValidationError({'verification_documents': ['Verification attachments must be a PDF or image file.']})
+
+
+def _validate_claim_image_signature(uploaded_file):
+	try:
+		uploaded_file.seek(0)
+		prefix = bytes(uploaded_file.read(32) or b'')
+	except (AttributeError, OSError, TypeError, ValueError):
+		raise serializers.ValidationError({'verification_documents': ['The uploaded image contents could not be verified.']})
+	finally:
+		try:
+			uploaded_file.seek(0)
+		except (OSError, ValueError):
+			pass
+
+	heif_brands = {b'heic', b'heif', b'heis', b'heix', b'hevc', b'hevx', b'mif1', b'msf1'}
+	valid_signature = (
+		prefix.startswith(b'\xff\xd8\xff')
+		or prefix.startswith(b'\x89PNG\r\n\x1a\n')
+		or prefix.startswith((b'GIF87a', b'GIF89a'))
+		or prefix.startswith(b'BM')
+		or (prefix.startswith(b'RIFF') and prefix[8:12] == b'WEBP')
+		or prefix.startswith((b'II*\x00', b'MM\x00*'))
+		or (len(prefix) >= 12 and prefix[4:8] == b'ftyp' and prefix[8:12] in heif_brands)
+	)
+	if not valid_signature:
+		raise serializers.ValidationError({'verification_documents': ['The uploaded image contents could not be verified.']})
 
 
 def _validate_claim_attachment_size(uploaded_file, field_name):
@@ -965,6 +1058,8 @@ class ClaimedBusinessSignupSerializer(CustomerSignupSerializer):
 		return attrs
 
 	def create(self, validated_data):
+		request = self.context.get('request')
+		pending_claim_attachments = _prepare_claim_attachments(request)
 		verification_data_consent_fields = _pop_verification_data_consent(validated_data)
 		listing_snapshot = validated_data.pop('listing_snapshot')
 		validated_data.pop('business_slug', None)
@@ -991,8 +1086,6 @@ class ClaimedBusinessSignupSerializer(CustomerSignupSerializer):
 			'verification_summary': 'Submitted through the claimed business verification flow.',
 			'supporting_details': validated_data.pop('supporting_details', ''),
 		}
-		request = self.context.get('request')
-
 		with transaction.atomic():
 			user = self.create_or_reuse_user(validated_data)
 			claim = BusinessClaim.objects.create(
@@ -1004,7 +1097,7 @@ class ClaimedBusinessSignupSerializer(CustomerSignupSerializer):
 			claim.deal_overrides = merge_uploaded_deal_attachments(request, claim, claim.deal_overrides or [])
 			claim.save(update_fields=['deal_overrides', 'updated_at'])
 			_create_claim_profile_entries(claim, claim_data)
-			_create_claim_attachments(claim, request)
+			_create_claim_attachments(claim, request, pending_claim_attachments)
 			_append_uploaded_profile_photos_to_claim(request, claim)
 			try:
 				claim.submit_for_review()
@@ -1076,6 +1169,8 @@ class EstablishedBusinessSignupSerializer(CustomerSignupSerializer):
 		return attrs
 
 	def create(self, validated_data):
+		request = self.context.get('request')
+		pending_claim_attachments = _prepare_claim_attachments(request)
 		verification_data_consent_fields = _pop_verification_data_consent(validated_data)
 		business_venue_type = validated_data.pop('business_venue_type')
 		serves_multiple_areas = validated_data.pop('serves_multiple_areas', False)
@@ -1113,7 +1208,6 @@ class EstablishedBusinessSignupSerializer(CustomerSignupSerializer):
 			'verification_summary': 'Submitted through the established business creation flow.',
 			'supporting_details': validated_data.pop('supporting_details', ''),
 		}
-		request = self.context.get('request')
 		with transaction.atomic():
 			user = self.create_or_reuse_user(validated_data)
 			claim = BusinessClaim.objects.create(
@@ -1125,7 +1219,7 @@ class EstablishedBusinessSignupSerializer(CustomerSignupSerializer):
 			claim.deal_overrides = merge_uploaded_deal_attachments(request, claim, claim.deal_overrides or [])
 			claim.save(update_fields=['deal_overrides', 'updated_at'])
 			_create_claim_profile_entries(claim, claim_data)
-			_create_claim_attachments(claim, request)
+			_create_claim_attachments(claim, request, pending_claim_attachments)
 			_append_uploaded_profile_photos_to_claim(request, claim)
 			try:
 				claim.submit_for_review()
@@ -1185,6 +1279,8 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 		return attrs
 
 	def create(self, validated_data):
+		request = self.context.get('request')
+		pending_claim_attachments = _prepare_claim_attachments(request)
 		verification_data_consent_fields = _pop_verification_data_consent(validated_data)
 		serves_multiple_areas = validated_data.pop('serves_multiple_areas', False)
 		social_media_links = validated_data.pop('social_media_links', [])
@@ -1207,7 +1303,6 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 			external_id=f'informal-{slugify(validated_data.get("username", "business"))}',
 		)
 
-		request = self.context.get('request')
 		with transaction.atomic():
 			user = self.create_or_reuse_user(validated_data)
 			claim = BusinessClaim.objects.create(
@@ -1243,7 +1338,7 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 					'photo_references': photo_references,
 				},
 			)
-			_create_claim_attachments(claim, request)
+			_create_claim_attachments(claim, request, pending_claim_attachments)
 			_append_uploaded_profile_photos_to_claim(request, claim)
 			try:
 				claim.submit_for_review()

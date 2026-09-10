@@ -233,6 +233,19 @@ The backend normalizes images, caches repeated results, rejects detections at or
 
 This local detector is automated coverage for explicit nudity, not a guarantee that every harmful image category will be recognized. Text filtering, reporting, blocking, and support review remain the fallback for threats, hate, violence, scams, and false negatives. There is no separate moderation-provider bill, although image inference uses the backend service's CPU and memory.
 
+## Cloudmersive Verification PDF Scanning
+
+Business-claim PDF attachments are scanned synchronously with Cloudmersive's Advanced Scan endpoint before they are written to private storage. The API key belongs only on the backend; never place it in the mobile app or commit it to the repository.
+
+Configure these Render environment variables on the backend service:
+
+- `CLOUDMERSIVE_VIRUS_SCAN_API_KEY=<your-cloudmersive-api-key>`
+- `CLOUDMERSIVE_VIRUS_SCAN_BASE_URL=https://api.cloudmersive.com`
+- `CLOUDMERSIVE_VIRUS_SCAN_TIMEOUT_SECONDS=15`
+- `CLOUDMERSIVE_VIRUS_SCAN_FAILURE_MODE=allow`
+
+The default failure mode accepts a PDF into private storage with a visible `Provider unavailable` status for mandatory staff review if Cloudmersive is unavailable. Set `CLOUDMERSIVE_VIRUS_SCAN_FAILURE_MODE=block` only if claim submission should fail closed during provider outages. Verification uploads default to the backend-only `3,500,000` byte limit; profile photos, deal attachments, and public media keep their existing limits.
+
 ## Monitoring
 
 The backend already exposes a lightweight health endpoint for uptime checks:
