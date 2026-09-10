@@ -291,11 +291,7 @@ def _validate_pdf_upload_size(uploaded_file, field_name):
 
 def _validate_claim_attachment_size(uploaded_file, field_name):
 	try:
-		max_bytes = max(
-			1,
-			int(getattr(settings, 'PDF_UPLOAD_MAX_BYTES', 10 * 1024 * 1024) or 10 * 1024 * 1024),
-			int(getattr(settings, 'IMAGE_MODERATION_MAX_UPLOAD_BYTES', 16 * 1024 * 1024) or 16 * 1024 * 1024),
-		)
+		max_bytes = max(1, int(getattr(settings, 'VERIFICATION_UPLOAD_MAX_BYTES', 3_500_000) or 3_500_000))
 		file_size = getattr(uploaded_file, 'size', None)
 		if file_size not in (None, '') and int(file_size) > max_bytes:
 			max_megabytes = max_bytes / (1024 * 1024)

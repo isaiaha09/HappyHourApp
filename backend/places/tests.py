@@ -32,7 +32,7 @@ import pyotp
 from .admin import BusinessAccountAdmin, BusinessClaimAdmin, ContentReportAdmin, CustomerAccountAdmin, DeletedBusinessAdmin, ListingSnapshotAdmin, ListingSnapshotAdminForm, SponsoredCampaignAdmin, _sync_listing_snapshot_from_imported_place
 from .admin_site import happyhour_admin_site
 from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, BusinessPost, City, ContentReport, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedEngagement, FeedImpression, ListingSnapshot, ProfileAuthToken, SponsoredCampaign, VenueType, Weekday
-from .serializers import _validate_uploaded_deal_attachment
+from .serializers import _validate_claim_attachment_size, _validate_uploaded_deal_attachment
 from .services.importers.base import BaseHtmlImporter
 from .services.importers.business_websites import BusinessWebsiteImporter
 from .services.importers.discovered_json_places import CuratedJsonPlacesImporter, DiscoveryJsonPlacesImporter, load_discovery_json_records, write_discovery_json_records
@@ -5540,6 +5540,54 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(response.status_code, 400)
 		self.assertIn('Small startups and vendors need at least one social link, website, or photo reference before submission.', str(response.data))
 
+	@override_settings(VERIFICATION_UPLOAD_MAX_BYTES=3_500_000)
+	def test_verification_attachment_accepts_file_at_dedicated_size_limit(self):
+		self.assertIsNone(
+			_validate_claim_attachment_size(
+				SimpleUploadedFile('limit-proof.pdf', b'0' * 3_500_000, content_type='application/pdf'),
+				'verification_documents',
+			)
+		)
+
+	@override_settings(VERIFICATION_UPLOAD_MAX_BYTES=3_500_000)
+	def test_manual_business_signup_rejects_oversized_verification_attachment_before_persistence(self):
+		filename = 'oversized-registration.pdf'
+		response = self.client.post(
+			reverse('manual-business-signup'),
+			{
+				'username': 'oversized_attachment_owner',
+				'email': 'oversized-attachment@example.com',
+				'password': 'test-pass-123',
+				'verification_data_consent': True,
+				'first_name': 'Oversized',
+				'last_name': 'Owner',
+				'business_name': 'Oversized Bistro',
+				'business_city': BusinessClaim.MULTIPLE_AREAS_VALUE,
+				'business_venue_type': VenueType.CAFE,
+				'business_website_url': 'https://example.com/oversized-bistro',
+				'contact_name': 'Oversized Owner',
+				'job_title': BusinessClaim.JobTitle.OWNER,
+				'work_email': 'owner@oversizedbistro.com',
+				'work_phone': '805-555-0198',
+				'employer_address': '',
+				'address_not_applicable': 'true',
+				'social_media_links': json.dumps(['https://instagram.com/oversizedbistro']),
+				'verification_documents': json.dumps({
+					'business_registration': ['Registration document attached'],
+				}),
+				'business_registration_attachments': [
+					SimpleUploadedFile(filename, b'0' * (3_500_000 + 1), content_type='application/pdf'),
+				],
+			},
+			format='multipart',
+		)
+
+		self.assertEqual(response.status_code, 400)
+		self.assertIn('verification_documents', response.data)
+		self.assertFalse(User.objects.filter(username='oversized_attachment_owner').exists())
+		self.assertFalse(BusinessClaim.objects.filter(claimant__username='oversized_attachment_owner').exists())
+		self.assertFalse(BusinessClaimAttachment.objects.filter(original_filename=filename).exists())
+
 	def test_manual_business_signup_accepts_multiple_social_and_verification_attachments(self):
 		with TemporaryDirectory() as temp_dir:
 			with override_settings(MEDIA_ROOT=Path(temp_dir)):
@@ -6322,6 +6370,7 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(response.data['business_contact']['operating_hours'][0]['open_24_hours'], True)
 		self.assertEqual(response.data['business_contact']['hours_of_operation_entries'], ['Friday: Open 24 hours'])
 
+	@override_settings(VERIFICATION_UPLOAD_MAX_BYTES=1)
 	def test_profile_dashboard_update_accepts_business_profile_photo_uploads(self):
 		snapshot = ListingSnapshot.objects.create(
 			name='Approved Spot',
@@ -6455,6 +6504,10 @@ class ProfileDashboardApiTests(APITestCase):
 			_validate_uploaded_deal_attachment(SimpleUploadedFile('large-flyer.pdf', b'0' * (4 * 1024 * 1024 + 1), content_type='application/pdf'))
 
 		self.assertIn('4 MB or smaller', str(error.exception))
+
+	@override_settings(PDF_UPLOAD_MAX_BYTES=4 * 1024 * 1024, VERIFICATION_UPLOAD_MAX_BYTES=1)
+	def test_pdf_deal_attachment_uses_existing_limit_instead_of_verification_limit(self):
+		_validate_uploaded_deal_attachment(SimpleUploadedFile('within-deal-limit.pdf', b'01', content_type='application/pdf'))
 
 	@patch('places.services.source_listings.load_source_records')
 	def test_profile_dashboard_returns_inherited_source_images_until_owner_overrides_gallery(self, mock_load_source_records):
