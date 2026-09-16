@@ -50,11 +50,11 @@
 		<false/>
 	</dict>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>When you enable live location for an approved business, DiningDealz uses your location to keep that business pin updated while the app is closed.</string>
+	<string>When an approved mobile business enables Business Location Services, DiningDealz uses location to keep that business's approximate public map pin updated while the app is in the background.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
-	<string>When you enable live location for an approved business, DiningDealz uses your location to keep that business pin updated while the app is closed.</string>
+	<string>When an approved mobile business enables Business Location Services, DiningDealz uses location to keep that business's approximate public map pin updated while the app is in the background.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>DiningDealz uses your location to show nearby places and, when enabled for an approved business, update its live map location.</string>
+	<string>DiningDealz uses your location to show nearby places and distance labels while you use the app.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>DiningDealz uses your photo library so you can add business photos and attach images to messages.</string>
 	<key>NSCalendarsUsageDescription</key>

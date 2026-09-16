@@ -10,6 +10,8 @@ final class DiningDealzLocation: RCTEventEmitter, CLLocationManagerDelegate {
   private var authorizationResolver: RCTPromiseResolveBlock?
   private var authorizationRejecter: RCTPromiseRejectBlock?
   private var requestingAlwaysAuthorization = false
+  private var locationUpdatesRunning = false
+  private var pendingLocationRetryWorkItem: DispatchWorkItem?
 
   override init() {
     super.init()
@@ -97,6 +99,9 @@ final class DiningDealzLocation: RCTEventEmitter, CLLocationManagerDelegate {
       return
     }
 
+    pendingLocationRetryWorkItem?.cancel()
+    pendingLocationRetryWorkItem = nil
+    locationUpdatesRunning = true
     locationManager.allowsBackgroundLocationUpdates = true
     locationManager.startUpdatingLocation()
     resolve(nil)
@@ -107,6 +112,9 @@ final class DiningDealzLocation: RCTEventEmitter, CLLocationManagerDelegate {
     _ resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
+    locationUpdatesRunning = false
+    pendingLocationRetryWorkItem?.cancel()
+    pendingLocationRetryWorkItem = nil
     locationManager.stopUpdatingLocation()
     resolve(nil)
   }
@@ -180,6 +188,8 @@ final class DiningDealzLocation: RCTEventEmitter, CLLocationManagerDelegate {
       return
     }
 
+    pendingLocationRetryWorkItem?.cancel()
+    pendingLocationRetryWorkItem = nil
     let payload = locationPayload(location)
     sendEvent(withName: "locationUpdate", body: payload)
 
@@ -195,11 +205,52 @@ final class DiningDealzLocation: RCTEventEmitter, CLLocationManagerDelegate {
   }
 
   func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+    if isTransientLocationUnknownError(error) {
+      // Core Location can report locationUnknown while it is still acquiring a
+      // fix. This is expected during startup, especially on an iPad running an
+      // iPhone-only app in compatibility mode. Keep the continuous watcher
+      // alive and retry one-shot requests only when no continuous updates are
+      // already running. A temporary lack of a fix must never become a login
+      // or dashboard error.
+      if !locationUpdatesRunning {
+        schedulePendingLocationRetry()
+      }
+      return
+    }
+
+    pendingLocationRetryWorkItem?.cancel()
+    pendingLocationRetryWorkItem = nil
     let rejecters = currentLocationResolvers
     currentLocationResolvers.removeAll()
     rejecters.forEach { pending in
       pending.reject("LOCATION_ERROR", error.localizedDescription, error)
     }
+  }
+
+  private func isTransientLocationUnknownError(_ error: Error) -> Bool {
+    guard let locationError = error as? CLError else {
+      return false
+    }
+
+    return locationError.code == .locationUnknown
+  }
+
+  private func schedulePendingLocationRetry() {
+    guard !currentLocationResolvers.isEmpty, pendingLocationRetryWorkItem == nil else {
+      return
+    }
+
+    let retryWorkItem = DispatchWorkItem { [weak self] in
+      guard let self, !self.currentLocationResolvers.isEmpty, !self.locationUpdatesRunning else {
+        return
+      }
+
+      self.pendingLocationRetryWorkItem = nil
+      self.locationManager.requestLocation()
+    }
+
+    pendingLocationRetryWorkItem = retryWorkItem
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: retryWorkItem)
   }
 
   private func requestAuthorization(

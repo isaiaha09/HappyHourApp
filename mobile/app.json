@@ -21,9 +21,12 @@
       "infoPlist": {
         "DiningDealzProfileLinkBaseURL": "https://link.diningdealz.com/share/place",
         "DiningDealzIOSAppStoreURL": "",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "When you enable live location for an approved business, DiningDealz uses your location to keep that business pin updated while the app is closed.",
-        "NSLocationAlwaysUsageDescription": "When you enable live location for an approved business, DiningDealz uses your location to keep that business pin updated while the app is closed.",
-        "NSLocationWhenInUseUsageDescription": "DiningDealz uses your location to show nearby places and, when enabled for an approved business, update its live map location.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "When an approved mobile business enables Business Location Services, DiningDealz uses location to keep that business's approximate public map pin updated while the app is in the background.",
+        "NSLocationAlwaysUsageDescription": "When an approved mobile business enables Business Location Services, DiningDealz uses location to keep that business's approximate public map pin updated while the app is in the background.",
+        "NSLocationWhenInUseUsageDescription": "DiningDealz uses your location to show nearby places and distance labels while you use the app.",
+        "UIBackgroundModes": [
+          "location"
+        ],
         "NSPhotoLibraryUsageDescription": "DiningDealz uses photos you choose to add business profile images or attach images to messages.",
         "NSCalendarsUsageDescription": "DiningDealz uses Calendar only to add the restaurant visit you request.",
         "NSCalendarsFullAccessUsageDescription": "DiningDealz uses Calendar only to add the restaurant visit you request.",

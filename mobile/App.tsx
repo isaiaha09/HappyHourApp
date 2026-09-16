@@ -1723,7 +1723,7 @@ function AppScreen() {
         updateLocalBusinessLocation(initialPosition.coords);
         void reportLocation(initialPosition.coords);
       } catch (error) {
-        if (!cancelled) {
+        if (!cancelled && !isTransientLocationUnknownError(error)) {
           setProfileErrorMessage(getErrorMessage(error));
         }
       }
@@ -9032,6 +9032,17 @@ function getErrorMessage(error: unknown) {
   }
 
   return 'Something went wrong while talking to the backend.';
+}
+
+function isTransientLocationUnknownError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const normalizedMessage = error.message.toLowerCase();
+  return normalizedMessage.includes('kclerrordomain error 0')
+    || normalizedMessage.includes('locationunknown')
+    || normalizedMessage.includes('location unknown');
 }
 
 function getDistanceAwayLabel(

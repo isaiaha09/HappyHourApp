@@ -230,13 +230,14 @@ jest.mock('../screens/DashboardScreen', () => ({
 
     return <Text>Favorite businesses screen</Text>;
   },
-  DashboardScreen: ({ onOpenFavoriteBusinesses, onOpenPlaces, onOpenSettings }: { onOpenFavoriteBusinesses: () => void; onOpenPlaces: () => void; onOpenSettings: () => void }) => {
+  DashboardScreen: ({ errorMessage, onOpenFavoriteBusinesses, onOpenPlaces, onOpenSettings }: { errorMessage?: string | null; onOpenFavoriteBusinesses: () => void; onOpenPlaces: () => void; onOpenSettings: () => void }) => {
     const React = require('react');
     const { Pressable, Text, View } = require('react-native');
 
     return (
       <View>
         <Text>Dashboard screen</Text>
+        {errorMessage ? <Text>{errorMessage}</Text> : null}
         <Pressable accessibilityLabel="Open favorite businesses" onPress={onOpenFavoriteBusinesses}>
           <Text>Open favorite businesses</Text>
         </Pressable>
@@ -783,6 +784,67 @@ describe('App browse map search', () => {
       { enabled: false },
     );
     expect(mockStopBusinessBackgroundLocationTask).toHaveBeenCalled();
+  });
+
+  it('does not show a transient Core Location unknown error after business login', async () => {
+    const businessSession = {
+      id: 9,
+      username: 'bizowner',
+      email: 'bizowner@example.com',
+      first_name: 'Biz',
+      last_name: 'Owner',
+      auth_token: 'business-token-123',
+      portal: 'business' as const,
+      profile_type: 'business' as const,
+      email_verified: true,
+      two_factor_enabled: false,
+      can_access_places: true,
+      approved_businesses: [{
+        id: samplePlace.id,
+        slug: samplePlace.slug,
+        name: samplePlace.name,
+        city: samplePlace.city,
+        city_label: samplePlace.city_label,
+        venue_type: samplePlace.venue_type,
+        venue_type_label: samplePlace.venue_type_label,
+        address_line_1: samplePlace.address_line_1,
+        website_url: samplePlace.website_url,
+      }],
+      business_location_tracking_available: true,
+      business_location_tracking_enabled: true,
+      requires_business_location_tracking: true,
+    };
+
+    mockLoginProfile.mockResolvedValue(businessSession);
+    locationModule.requestForegroundPermissionsAsync.mockResolvedValue({ canAskAgain: false, granted: true });
+    locationModule.getCurrentPositionAsync.mockRejectedValue(
+      new Error("The operation couldn't be completed. (kCLErrorDomain error 0.)"),
+    );
+
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+    fireEvent.press(screen.getByLabelText('Open business login'));
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+    fireEvent.press(await screen.findByLabelText('Submit login'));
+
+    expect(await screen.findByText('Dashboard screen')).toBeTruthy();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+
+    expect(locationModule.getCurrentPositionAsync).toHaveBeenCalled();
+    expect(screen.queryByText(/kCLErrorDomain error 0/i)).toBeNull();
   });
 
   it('registers push notifications for business sessions so direct-message pushes can be delivered', async () => {
