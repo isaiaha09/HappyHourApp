@@ -8,10 +8,6 @@ jest.mock('@expo/vector-icons', () => ({
   Ionicons: () => null,
 }));
 
-jest.mock('react-native-webview', () => ({
-  WebView: () => null,
-}));
-
 jest.mock('../components/NativeIOSLiquidGlass', () => ({
   NativeIOSLiquidGlassBackButton: ({ label, onPress }: { label: string; onPress: () => void }) => {
     const React = require('react');

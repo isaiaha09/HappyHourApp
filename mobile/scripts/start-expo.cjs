@@ -38,6 +38,10 @@ async function main() {
 
   process.env.REACT_NATIVE_PACKAGER_HOSTNAME = lanIp;
   process.env.EXPO_PUBLIC_API_BASE_URL = `http://${lanIp}:8000/api`;
+  // SDK 57 installs expo/fetch globally. Keep React Native's fetch for this
+  // app because the places response is large and expo/fetch can surface
+  // native cancellation errors while reading it in Expo Go.
+  process.env.EXPO_PUBLIC_USE_RN_FETCH = '1';
   process.env.EXPO_NO_DOTENV = '1';
 
   console.log(`Using LAN IP ${lanIp} (${cli.adapter}) for Expo Go and backend API traffic.`);

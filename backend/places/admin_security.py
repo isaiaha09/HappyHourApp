@@ -4,9 +4,11 @@ import hmac
 import ipaddress
 import json
 import logging
+import threading
 import time
 from io import BytesIO
 from urllib.parse import urlencode
+from uuid import uuid4
 
 from django import forms
 from django.conf import settings
@@ -24,6 +26,8 @@ security_logger = logging.getLogger('admin_security')
 ADMIN_LAST_ACTIVITY_SESSION_KEY = '_happyhour_admin_last_activity'
 ADMIN_SESSION_STARTED_SESSION_KEY = '_happyhour_admin_session_started'
 ADMIN_MFA_VERIFIED_SESSION_KEY = '_happyhour_admin_mfa_secret_digest'
+_LOCAL_ADMIN_ATTEMPTS = {}
+_LOCAL_ADMIN_ATTEMPTS_LOCK = threading.Lock()
 
 
 def emit_admin_security_event(request, event_type, actor=None, log_level=logging.INFO, **details):
@@ -126,14 +130,42 @@ def _admin_auth_cache_keys(prefix, request, username):
 	)
 
 
+def _read_local_admin_attempts(keys, now=None):
+	if not keys:
+		return 0
+	now = time.time() if now is None else now
+	with _LOCAL_ADMIN_ATTEMPTS_LOCK:
+		return max(
+			(
+				int(_LOCAL_ADMIN_ATTEMPTS[key][0])
+				for key in keys
+				if key in _LOCAL_ADMIN_ATTEMPTS and now < _LOCAL_ADMIN_ATTEMPTS[key][1]
+			),
+			default=0,
+		)
+
+
+def _store_local_admin_attempt(key, count, window_seconds):
+	with _LOCAL_ADMIN_ATTEMPTS_LOCK:
+		_LOCAL_ADMIN_ATTEMPTS[key] = (int(count), time.time() + window_seconds)
+
+
 def _read_admin_attempts(keys):
 	if not keys:
 		return 0
+	local_attempts = _read_local_admin_attempts(keys)
 	try:
-		return max(int(cache.get(key) or 0) for key in keys)
+		cached_attempts = [int(cache.get(key) or 0) for key in keys]
+		probe_key = f'admin-security-probe:{uuid4().hex}'
+		probe_value = uuid4().hex
+		cache.set(probe_key, probe_value, timeout=5)
+		if cache.get(probe_key) != probe_value:
+			raise RuntimeError('Admin security cache probe did not round-trip.')
+		cache.delete(probe_key)
+		return max([local_attempts, *(cached_attempts or [0])])
 	except Exception:
 		security_logger.exception('Could not read admin login rate-limit state.')
-		return 0
+		return local_attempts
 
 
 def _record_admin_attempts(keys, window_seconds):
@@ -141,23 +173,40 @@ def _record_admin_attempts(keys, window_seconds):
 		return 0
 	counts = []
 	for key in keys:
+		local_attempts = _read_local_admin_attempts([key])
 		try:
 			if cache.add(key, 1, timeout=window_seconds):
-				counts.append(1)
-				continue
-			try:
-				counts.append(int(cache.incr(key)))
-			except ValueError:
-				cache.set(key, 1, timeout=window_seconds)
-				counts.append(1)
+				cached_count = 1
+			else:
+				try:
+					cached_count = int(cache.incr(key))
+				except (TypeError, ValueError):
+					cache.set(key, 1, timeout=window_seconds)
+					cached_count = 1
+			count = max(cached_count, local_attempts + 1)
+			if count != cached_count:
+				cache.set(key, count, timeout=window_seconds)
+			_store_local_admin_attempt(key, count, window_seconds)
+			counts.append(count)
 		except Exception:
 			security_logger.exception('Could not update admin login rate-limit state.')
+			now = time.time()
+			with _LOCAL_ADMIN_ATTEMPTS_LOCK:
+				current_count, expires_at = _LOCAL_ADMIN_ATTEMPTS.get(key, (0, 0))
+				if now >= expires_at:
+					current_count = 0
+				fallback_count = current_count + 1
+				_LOCAL_ADMIN_ATTEMPTS[key] = (fallback_count, now + window_seconds)
+			counts.append(fallback_count)
 	return max(counts or [0])
 
 
 def _clear_admin_attempts(keys):
 	if not keys:
 		return
+	with _LOCAL_ADMIN_ATTEMPTS_LOCK:
+		for key in keys:
+			_LOCAL_ADMIN_ATTEMPTS.pop(key, None)
 	try:
 		for key in keys:
 			cache.delete(key)
@@ -209,8 +258,7 @@ def _get_admin_mfa_profile(user):
 
 
 def _admin_user_requires_mfa(user):
-	profile = _get_admin_mfa_profile(user)
-	return bool(profile and profile.admin_two_factor_enabled)
+	return bool(user and getattr(user, 'is_staff', False))
 
 
 class AdminMFACodeForm(forms.Form):
@@ -292,9 +340,9 @@ def mark_admin_mfa_verified(request, user=None):
 def admin_mfa_session_verified(request, user=None):
 	user = user or getattr(request, 'user', None)
 	if not _admin_user_requires_mfa(user):
-		return True
+		return False
 	profile = _get_admin_mfa_profile(user)
-	if not profile or not profile.admin_two_factor_secret:
+	if not profile or not profile.admin_two_factor_enabled or not profile.admin_two_factor_secret:
 		return False
 	return hmac.compare_digest(
 		str(request.session.get(ADMIN_MFA_VERIFIED_SESSION_KEY) or ''),
@@ -347,6 +395,17 @@ def _admin_route_matches(request, route):
 
 def _admin_mfa_path_matches(request):
 	return _admin_route_matches(request, 'mfa')
+
+
+def _admin_security_path_matches(request):
+	return _admin_route_matches(request, 'security')
+
+
+def _admin_security_enrollment_path_allowed(request, user):
+	if not _admin_security_path_matches(request):
+		return False
+	profile = _get_admin_mfa_profile(user)
+	return not bool(profile and profile.admin_two_factor_enabled)
 
 
 def _admin_logout_path_matches(request):
@@ -440,6 +499,7 @@ class AdminSecurityMiddleware:
 				and not admin_mfa_session_verified(request, user)
 				and not _admin_mfa_path_matches(request)
 				and not _admin_logout_path_matches(request)
+				and not _admin_security_enrollment_path_allowed(request, user)
 			):
 				emit_admin_security_event(request, 'admin_mfa_session_required', actor=user, log_level=logging.WARNING)
 				return _admin_mfa_redirect(request)

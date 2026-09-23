@@ -538,6 +538,7 @@ export type CustomerSignupRequest = {
   first_name: string;
   last_name: string;
   terms_accepted: boolean;
+  retry_token?: string;
 };
 
 export type BusinessVerificationDocuments = {

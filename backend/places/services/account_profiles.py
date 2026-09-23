@@ -4,6 +4,7 @@ import mimetypes
 from pathlib import Path
 
 from django.conf import settings
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Count, Q
 from django.core.mail import EmailMessage, send_mail
@@ -13,8 +14,8 @@ from django.utils.text import slugify
 from email.utils import formataddr, parseaddr
 from uuid import uuid4
 
-from places.models import AccountProfile, BusinessClaim, BusinessPost, ContentReport, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, HappyHourNotificationDelivery, ProfileAuthToken, SponsoredCampaign, VenueType
-from places.services.business_profile_overrides import build_deal_payloads, build_operating_hour_payloads
+from places.models import AccountProfile, BusinessClaim, BusinessClaimRetryGrant, BusinessPost, ContentReport, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, HappyHourNotificationDelivery, ProfileAuthToken, SponsoredCampaign, VenueType
+from places.services.business_profile_overrides import build_deal_payloads, build_operating_hour_payloads, sanitize_deal_overrides_for_output
 from places.services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
 
 
@@ -159,7 +160,7 @@ def remove_favorites_for_unavailable_businesses(user=None):
 		from places.services.source_listings import get_source_place_payloads
 
 		public_slugs = set()
-		for payload in get_source_place_payloads(resolve_missing_coordinates=False):
+		for payload in get_source_place_payloads(resolve_missing_coordinates=False, allow_network=False):
 			payload_slug = str(payload.get('slug') or '').strip()
 			if payload_slug:
 				public_slugs.add(payload_slug)
@@ -232,6 +233,7 @@ def deactivate_account_for_retained_direct_messages(user):
 	clear_content_report_screenshots(user)
 	remove_favorites_for_business_accounts([user.pk])
 	ProfileAuthToken.objects.filter(user=user).delete()
+	BusinessClaimRetryGrant.objects.filter(user=user).delete()
 	FavoriteBusiness.objects.filter(user=user).delete()
 	FavoriteBusinessNotification.objects.filter(user=user).delete()
 	HappyHourNotificationDelivery.objects.filter(user=user).delete()
@@ -265,7 +267,11 @@ def deactivate_account_for_retained_direct_messages(user):
 	profile.admin_two_factor_secret = ''
 	profile.admin_two_factor_pending_secret = ''
 	profile.password_reset_token = ''
+	profile.password_reset_selector = ''
+	profile.password_reset_token_digest = ''
 	profile.password_reset_sent_at = None
+	profile.business_claim_suspended = False
+	profile.business_claim_suspended_at = None
 	profile.preference_onboarding_completed = False
 	profile.preference_onboarding_skipped = False
 	profile.preferred_cities = []
@@ -289,7 +295,11 @@ def deactivate_account_for_retained_direct_messages(user):
 		'admin_two_factor_secret',
 		'admin_two_factor_pending_secret',
 		'password_reset_token',
+		'password_reset_selector',
+		'password_reset_token_digest',
 		'password_reset_sent_at',
+		'business_claim_suspended',
+		'business_claim_suspended_at',
 		'preference_onboarding_completed',
 		'preference_onboarding_skipped',
 		'preferred_cities',
@@ -322,7 +332,16 @@ def clear_business_account_content(user):
 
 def clear_business_claim_materials(user):
 	for claim in user.business_claims.all():
+		from places.services.media_storage import delete_storage_references
+
+		media_references = list(claim.photo_references or [])
+		for deal in claim.deal_overrides or []:
+			if isinstance(deal, dict) and isinstance(deal.get('attachment'), dict):
+				attachment = deal['attachment']
+				media_references.extend([attachment.get('url'), attachment.get('media_id')])
+		delete_storage_references(media_references, claim=claim)
 		claim.attachments.all().delete()
+		claim.managed_media.all().delete()
 		claim.profile_entries.all().delete()
 		claim.business_website_url = ''
 		claim.social_profiles = {}
@@ -384,6 +403,10 @@ def clear_content_report_screenshots(user):
 
 def get_or_create_profile_token(user):
 	with transaction.atomic():
+		profile = get_or_create_account_profile(user)
+		if profile.business_claim_suspended:
+			ProfileAuthToken.objects.filter(user=user).delete()
+			raise PermissionDenied('Profile access is unavailable.')
 		ProfileAuthToken.objects.filter(user=user).delete()
 		token = ProfileAuthToken(user=user)
 		token.issue()
@@ -392,11 +415,11 @@ def get_or_create_profile_token(user):
 
 
 def infer_portal_for_user(user, requested_portal=''):
+	if has_active_business_membership(user):
+		return 'business'
 	normalized = str(requested_portal or '').strip().lower()
 	if normalized in {'customer', 'business'}:
 		return normalized
-	if has_active_business_membership(user):
-		return 'business'
 	return 'customer'
 
 
@@ -497,12 +520,13 @@ def build_account_response(user, portal, claim=None, token=None):
 		current_place_payload = None
 		if primary_claim.listing_snapshot.listing_slug:
 			from places.services.source_listings import get_source_place_payload
-			current_place_payload = get_source_place_payload(primary_claim.listing_snapshot.listing_slug)
+			current_place_payload = get_source_place_payload(primary_claim.listing_snapshot.listing_slug, allow_network=False)
 		editable_photo_references = _get_editable_business_photo_references(primary_claim)
 		normalized_social_profiles = normalize_social_profiles(
 			primary_claim.social_profiles,
 			fallback_website_url=primary_claim.business_website_url,
 			fallback_social_links=primary_claim.social_media_links,
+			strict=False,
 		)
 		business_contact = {
 			'contact_name': primary_claim.contact_name,
@@ -510,10 +534,10 @@ def build_account_response(user, portal, claim=None, token=None):
 			'work_email': primary_claim.work_email,
 			'work_phone': primary_claim.work_phone,
 			'employer_address': primary_claim.employer_address,
-			'business_website_url': get_business_website_url(normalized_social_profiles, fallback=primary_claim.business_website_url),
+			'business_website_url': get_business_website_url(normalized_social_profiles, strict=False),
 			'social_profiles': normalized_social_profiles,
 			'social_media_links': build_social_media_links(normalized_social_profiles),
-			'deal_overrides': primary_claim.deal_overrides,
+			'deal_overrides': sanitize_deal_overrides_for_output(primary_claim.deal_overrides),
 			'operating_hour_overrides': primary_claim.operating_hour_overrides,
 			'deals': current_place_payload['deals'] if current_place_payload else build_deal_payloads(primary_claim.deal_overrides or [], primary_claim.listing_snapshot.listing_slug or f'claim-{primary_claim.pk}'),
 			'operating_hours': current_place_payload['operating_hours'] if current_place_payload else build_operating_hour_payloads(primary_claim.operating_hour_overrides or [], primary_claim.listing_snapshot.listing_slug or f'claim-{primary_claim.pk}'),
@@ -572,6 +596,8 @@ def build_account_response(user, portal, claim=None, token=None):
 		'claim_review_message': build_claim_review_message(hold_claim),
 		'business_name': active_membership.claim.listing_snapshot.name if active_membership else (primary_claim.listing_snapshot.name if primary_claim else ''),
 		'email_verified': profile.email_is_verified,
+		'business_claim_suspended': profile.business_claim_suspended,
+		'business_claim_suspended_at': profile.business_claim_suspended_at,
 		'email_verification_sent_at': profile.email_verification_sent_at,
 		'two_factor_enabled': profile.two_factor_enabled,
 		'two_factor_pending_setup': bool(profile.two_factor_pending_secret and not profile.two_factor_enabled),
@@ -673,18 +699,20 @@ def build_email_verification_challenge(user, portal, claim=None, force_resend=Fa
 
 
 def _get_editable_business_photo_references(claim):
+	from .source_listings import _claim_photo_urls
+
 	if claim.photo_gallery_overridden:
-		return list(claim.photo_references or [])
+		return _claim_photo_urls(claim)
 
 	from .source_listings import get_source_place_payload
 
-	payload = get_source_place_payload(claim.listing_snapshot.listing_slug)
+	payload = get_source_place_payload(claim.listing_snapshot.listing_slug, allow_network=False)
 	if not payload:
 		return list(claim.photo_references or [])
 
 	return list(dict.fromkeys([
 		*payload.get('image_urls', []),
-		*list(claim.photo_references or []),
+		*_claim_photo_urls(claim),
 	]))
 
 
@@ -1063,6 +1091,11 @@ def send_business_claim_rejected_email(user, claim):
 	summary_text = '\n'.join(f'- {line}' for line in submission_summary_lines)
 	additional_notes_html = f'<p><strong>Additional reviewer explanation:</strong> {escape(reviewer_notes)}</p>' if reviewer_notes else ''
 	additional_notes_text = f'Additional reviewer explanation: {reviewer_notes}\n\n' if reviewer_notes else ''
+	grant, retry_token = BusinessClaimRetryGrant.issue_for(user, claim)
+	retry_base = str(getattr(settings, 'PROFILE_BUSINESS_CLAIM_RETRY_URL_BASE', '') or '').rstrip('/')
+	retry_url = f'{retry_base}/{retry_token}/' if retry_base else ''
+	retry_link_html = f'<p><a href="{escape(retry_url)}">Authenticate and retry your business claim</a></p>' if retry_url else ''
+	retry_link_text = f'\n\nAuthenticate and retry your business claim: {retry_url}' if retry_url else ''
 	html_message = (
 		f'<p>Hi {escape(user.first_name or user.username)},</p>'
 		f'<p>Your business profile claim for <strong>{escape(business_name)}</strong> was rejected after review.</p>'
@@ -1073,6 +1106,7 @@ def send_business_claim_rejected_email(user, claim):
 		f'<ul>{reapply_html}</ul>'
 		'<p>The following submitted documents and text-field entries were part of the rejected review:</p>'
 		f'<ul>{summary_html}</ul>'
+		f'{retry_link_html}'
 	)
 	send_mail(
 		subject='Your DiningDealz business profile was rejected',
@@ -1086,12 +1120,46 @@ def send_business_claim_rejected_email(user, claim):
 			f'{reapply_text}\n\n'
 			'The following submitted documents and text-field entries were part of the rejected review:\n'
 			f'{summary_text}'
+			f'{retry_link_text}'
 		),
 		html_message=html_message,
 		from_email=_get_branded_from_email(),
 		recipient_list=[user.email],
 		fail_silently=False,
 	)
+
+
+def send_business_claim_retry_email(user, claim=None):
+	claim = claim or user.business_claims.filter(status=BusinessClaim.Status.REJECTED).order_by('-created_at', '-pk').first()
+	if claim is None:
+		return False
+	grant, retry_token = BusinessClaimRetryGrant.issue_for(user, claim)
+	retry_base = str(getattr(settings, 'PROFILE_BUSINESS_CLAIM_RETRY_URL_BASE', '') or '').rstrip('/')
+	retry_url = f'{retry_base}/{retry_token}/' if retry_base else ''
+	if not retry_url:
+		logger.warning('Business claim retry URL base is not configured for user_id=%s claim_id=%s', user.pk, claim.pk)
+		return False
+	business_name = claim.listing_snapshot.name
+	html_message = (
+		f'<p>Hi {escape(user.first_name or user.username)},</p>'
+		f'<p>Use the secure link below to authenticate as the owner of the account that submitted the rejected <strong>{escape(business_name)}</strong> claim.</p>'
+		f'<p><a href="{escape(retry_url)}">Authenticate and retry your business claim</a></p>'
+		'<p>This link expires shortly, can be used once, and does not restore business or customer access until a new claim is approved.</p>'
+	)
+	send_mail(
+		subject='Authenticate to retry your DiningDealz business claim',
+		message=(
+			f'Hi {user.first_name or user.username},\n\n'
+			f'Use this secure link to authenticate as the owner of the rejected {business_name} claim:\n'
+			f'{retry_url}\n\n'
+			'This link expires shortly, can be used once, and does not restore business or customer access until a new claim is approved.'
+		),
+		html_message=html_message,
+		from_email=_get_branded_from_email(),
+		recipient_list=[user.email],
+		fail_silently=False,
+	)
+	return True
 
 
 def send_username_reminder_email(user):
@@ -1124,8 +1192,7 @@ def send_username_reminder_email(user):
 
 def send_password_reset_email(user, profile):
 	token = profile.issue_password_reset_token(force=True)
-	profile.password_reset_sent_at = timezone.now()
-	profile.save(update_fields=['password_reset_token', 'password_reset_sent_at', 'updated_at'])
+	profile.save(update_fields=['password_reset_token', 'password_reset_selector', 'password_reset_token_digest', 'password_reset_sent_at', 'updated_at'])
 	reset_base = str(getattr(settings, 'PROFILE_PASSWORD_RESET_URL_BASE', '') or '').rstrip('/')
 	reset_url = f'{reset_base}/{token}/'
 	html_message = (

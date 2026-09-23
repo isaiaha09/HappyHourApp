@@ -8,7 +8,7 @@ export const splashStyles = {
     backgroundColor: 'transparent',
   },
   splashBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: '#080101',
   },
   splashHeaderBar: {
@@ -115,7 +115,7 @@ export const splashStyles = {
     width: 196,
   },
   splashLogoRevealMask: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: theme.bgApp,
   },
   splashSloganBlock: {
@@ -188,12 +188,12 @@ export const splashStyles = {
     textDecorationLine: 'underline',
   },
   splashSignInOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     zIndex: 40,
   },
   splashSignInModalBackdropPressable: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: theme.bgOverlay,
   },
   splashSignInModalCardWrap: {

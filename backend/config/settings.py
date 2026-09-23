@@ -32,8 +32,13 @@ def _is_truthy_env(name):
     return value in {'1', 'true', 'yes', 'on'}
 
 
-DEPLOYMENT_ENV = get_env('DJANGO_ENV', ENV_VALUES, '').strip().lower()
+_configured_deployment_env = get_env('DJANGO_ENV', ENV_VALUES, '').strip().lower()
 IS_RENDER = _is_truthy_env('RENDER') or bool(get_env('RENDER_EXTERNAL_HOSTNAME', ENV_VALUES, '').strip())
+if _configured_deployment_env and _configured_deployment_env not in {'development', 'dev', 'test', 'staging', 'production', 'prod'}:
+    raise RuntimeError('DJANGO_ENV must be one of development, test, staging, or production.')
+if IS_RENDER and _configured_deployment_env not in {'production', 'prod'}:
+    raise RuntimeError('Render deployments must explicitly set DJANGO_ENV=production.')
+DEPLOYMENT_ENV = _configured_deployment_env or 'development'
 IS_PRODUCTION = IS_RENDER or DEPLOYMENT_ENV in {'prod', 'production'}
 
 
@@ -84,16 +89,13 @@ def _build_cors_allowed_origins(debug):
     if debug:
         return []
 
-    return [
-        'http://127.0.0.1:3000',
-        'http://localhost:3000',
-        'http://127.0.0.1:8081',
-        'http://localhost:8081',
-    ]
+    return []
 
 
 ALLOWED_HOSTS = _build_allowed_hosts(DEBUG)
 CSRF_TRUSTED_ORIGINS = _build_csrf_trusted_origins()
+if IS_PRODUCTION and '*' in ALLOWED_HOSTS:
+    raise RuntimeError('DJANGO_ALLOWED_HOSTS must not contain * in production.')
 ADMIN_URL_PATH = get_env('ADMIN_URL_PATH', ENV_VALUES, 'admin').strip().strip('/') or 'admin'
 ADMIN_LOGIN_MAX_ATTEMPTS = get_int_env('ADMIN_LOGIN_MAX_ATTEMPTS', ENV_VALUES, 5)
 ADMIN_LOGIN_WINDOW_SECONDS = get_int_env('ADMIN_LOGIN_WINDOW_SECONDS', ENV_VALUES, 300)
@@ -479,6 +481,8 @@ def _build_discovery_json_path(base_dir, database_config):
 
 
 REDIS_URL = get_env('REDIS_URL', ENV_VALUES, '').strip()
+if IS_PRODUCTION and not REDIS_URL:
+    raise RuntimeError('REDIS_URL must be configured in production.')
 CACHE_KEY_PREFIX = get_env('CACHE_KEY_PREFIX', ENV_VALUES, 'happyhourapp')
 SOURCE_CACHE_KEY_PREFIX = get_env('SOURCE_CACHE_KEY_PREFIX', ENV_VALUES, f'{CACHE_KEY_PREFIX}-source')
 
@@ -499,6 +503,7 @@ if REDIS_URL:
         'LOCATION': REDIS_URL,
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'IGNORE_EXCEPTIONS': True,
         },
         'KEY_PREFIX': CACHE_KEY_PREFIX,
     }
@@ -507,6 +512,7 @@ if REDIS_URL:
         'LOCATION': REDIS_URL,
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'IGNORE_EXCEPTIONS': True,
         },
         'KEY_PREFIX': SOURCE_CACHE_KEY_PREFIX,
     }
@@ -582,7 +588,11 @@ IMAGE_MODERATION_PROVIDER = get_env(
 IMAGE_MODERATION_BLOCK_SCORE_PERCENT = get_int_env('IMAGE_MODERATION_BLOCK_SCORE_PERCENT', ENV_VALUES, 65)
 IMAGE_MODERATION_CACHE_ALIAS = get_env('IMAGE_MODERATION_CACHE_ALIAS', ENV_VALUES, 'default').strip() or 'default'
 IMAGE_MODERATION_CACHE_TIMEOUT = get_int_env('IMAGE_MODERATION_CACHE_TIMEOUT', ENV_VALUES, 86400)
-IMAGE_MODERATION_MAX_UPLOAD_BYTES = get_int_env('IMAGE_MODERATION_MAX_UPLOAD_BYTES', ENV_VALUES, 16 * 1024 * 1024)
+IMAGE_UPLOAD_MAX_BYTES = get_int_env('IMAGE_UPLOAD_MAX_BYTES', ENV_VALUES, 8 * 1024 * 1024)
+IMAGE_UPLOAD_MAX_PIXELS = get_int_env('IMAGE_UPLOAD_MAX_PIXELS', ENV_VALUES, 25_000_000)
+IMAGE_UPLOAD_MAX_AGGREGATE_BYTES = get_int_env('IMAGE_UPLOAD_MAX_AGGREGATE_BYTES', ENV_VALUES, 20 * 1024 * 1024)
+BUSINESS_PROFILE_MAX_PHOTOS = get_int_env('BUSINESS_PROFILE_MAX_PHOTOS', ENV_VALUES, 8)
+IMAGE_MODERATION_MAX_UPLOAD_BYTES = get_int_env('IMAGE_MODERATION_MAX_UPLOAD_BYTES', ENV_VALUES, IMAGE_UPLOAD_MAX_BYTES)
 IMAGE_MODERATION_FAIL_CLOSED = get_bool_env('IMAGE_MODERATION_FAIL_CLOSED', ENV_VALUES, IS_RENDER)
 PDF_UPLOAD_MAX_BYTES = get_int_env('PDF_UPLOAD_MAX_BYTES', ENV_VALUES, 10 * 1024 * 1024)
 VERIFICATION_UPLOAD_MAX_BYTES = get_int_env('VERIFICATION_UPLOAD_MAX_BYTES', ENV_VALUES, 3_500_000)
@@ -766,6 +776,15 @@ if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
 else:
     CORS_ALLOWED_ORIGINS = _build_cors_allowed_origins(DEBUG)
+    if any(origin.strip() == '*' for origin in CORS_ALLOWED_ORIGINS):
+        raise RuntimeError('CORS_ALLOWED_ORIGINS must not contain *.')
+    if IS_PRODUCTION:
+        invalid_cors_origins = [
+            origin for origin in CORS_ALLOWED_ORIGINS
+            if urlparse(str(origin).strip()).scheme != 'https' or not urlparse(str(origin).strip()).netloc
+        ]
+        if invalid_cors_origins:
+            raise RuntimeError('Production CORS_ALLOWED_ORIGINS must contain only valid HTTPS origins.')
 
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
@@ -802,18 +821,23 @@ DEFAULT_FROM_EMAIL = get_env('DEFAULT_FROM_EMAIL', ENV_VALUES, 'noreply@diningde
 SERVER_EMAIL = get_env('SERVER_EMAIL', ENV_VALUES, DEFAULT_FROM_EMAIL)
 
 PROFILE_APP_LINK_URL = get_env('PROFILE_APP_LINK_URL', ENV_VALUES, '')
+PUBLIC_API_BASE_URL = get_env('PUBLIC_API_BASE_URL', ENV_VALUES, '').strip().rstrip('/')
 PROFILE_IOS_APP_STORE_URL = get_env('PROFILE_IOS_APP_STORE_URL', ENV_VALUES, '').strip()
 DININGDEALZ_IOS_TEAM_ID = get_env('DININGDEALZ_IOS_TEAM_ID', ENV_VALUES, 'V6MYG36LZ9')
 DININGDEALZ_IOS_BUNDLE_ID = get_env('DININGDEALZ_IOS_BUNDLE_ID', ENV_VALUES, 'com.ia09.diningdealz')
 PROFILE_USERNAME_RECOVERY_URL_BASE = get_env('PROFILE_USERNAME_RECOVERY_URL_BASE', ENV_VALUES, 'diningdealz://forgot-username')
 PROFILE_EMAIL_VERIFICATION_CODE_TTL_SECONDS = get_int_env('PROFILE_EMAIL_VERIFICATION_CODE_TTL_SECONDS', ENV_VALUES, 60)
 PROFILE_PASSWORD_RESET_URL_BASE = get_env('PROFILE_PASSWORD_RESET_URL_BASE', ENV_VALUES, 'diningdealz://forgot-password')
+PROFILE_BUSINESS_CLAIM_RETRY_URL_BASE = get_env('PROFILE_BUSINESS_CLAIM_RETRY_URL_BASE', ENV_VALUES, 'diningdealz://business-claim-retry')
+BUSINESS_CLAIM_RETRY_TOKEN_TTL_SECONDS = get_int_env('BUSINESS_CLAIM_RETRY_TOKEN_TTL_SECONDS', ENV_VALUES, 900)
 PROFILE_PASSWORD_RESET_TOKEN_TTL_SECONDS = get_int_env('PROFILE_PASSWORD_RESET_TOKEN_TTL_SECONDS', ENV_VALUES, 3600)
 PROFILE_AUTH_TOKEN_TTL_SECONDS = get_int_env('PROFILE_AUTH_TOKEN_TTL_SECONDS', ENV_VALUES, 30 * 24 * 60 * 60)
 PROFILE_TWO_FACTOR_ISSUER = get_env('PROFILE_TWO_FACTOR_ISSUER', ENV_VALUES, 'DiningDealz')
 # Paid campaigns and billing are intentionally disabled for the current App Store release.
 # Keep the backend data model and admin tooling available for a future, policy-compliant release.
 PAID_FEATURES_ENABLED = get_bool_env('PAID_FEATURES_ENABLED', ENV_VALUES, False)
+HOME_FEED_ENABLED = get_bool_env('HOME_FEED_ENABLED', ENV_VALUES, False)
+FEED_IMPRESSION_TELEMETRY_ENABLED = get_bool_env('FEED_IMPRESSION_TELEMETRY_ENABLED', ENV_VALUES, False)
 PROFILE_BILLING_PORTAL_URL = get_env('PROFILE_BILLING_PORTAL_URL', ENV_VALUES, 'https://example.com/billing')
 EXPO_PUSH_NOTIFICATIONS_ENABLED = get_bool_env('EXPO_PUSH_NOTIFICATIONS_ENABLED', ENV_VALUES, True)
 EXPO_PUSH_API_URL = get_env('EXPO_PUSH_API_URL', ENV_VALUES, 'https://exp.host/--/api/v2/push/send')

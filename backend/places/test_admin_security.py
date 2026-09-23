@@ -1,3 +1,4 @@
+import hashlib
 import json
 import time
 from io import StringIO
@@ -31,8 +32,17 @@ class AdminWriteProtectionTests(TestCase):
 			email='admin-security-owner@example.com',
 			password='test-pass-123',
 		)
+		admin_mfa_secret = pyotp.random_base32()
+		AccountProfile.objects.create(
+			user=self.admin_user,
+			admin_two_factor_enabled=True,
+			admin_two_factor_secret=admin_mfa_secret,
+		)
 		self.client = Client(enforce_csrf_checks=True)
 		self.client.force_login(self.admin_user)
+		session = self.client.session
+		session[ADMIN_MFA_VERIFIED_SESSION_KEY] = hashlib.sha256(admin_mfa_secret.encode('utf-8')).hexdigest()
+		session.save()
 
 	def _csrf_token(self, response):
 		cookie = response.cookies.get('csrftoken')
@@ -44,6 +54,7 @@ class AdminWriteProtectionTests(TestCase):
 			name='Confirmation Bistro',
 			listing_slug='confirmation-bistro',
 			source_name='verified_businesses',
+			source_url='https://confirmation-bistro.example.com',
 		)
 		response = self.client.get(reverse('happyhour_admin:places_listingsnapshot_pull_one', args=[snapshot.pk]))
 
@@ -168,7 +179,7 @@ class AdminAuthenticationSecurityTests(TestCase):
 		self.assertNotContains(response, 'Authenticator code')
 		self.assertContains(response, 'Welcome back to')
 
-	def test_admin_without_two_factor_can_continue_after_password_login(self):
+	def test_admin_without_two_factor_is_sent_to_mfa_enrollment(self):
 		user = User.objects.create_user(
 			username='password-only-admin',
 			password='safe-admin-pass-123',
@@ -179,9 +190,14 @@ class AdminAuthenticationSecurityTests(TestCase):
 		password_response = self._login(client, user.username, 'safe-admin-pass-123')
 		self.assertEqual(password_response.status_code, 302)
 		self.assertEqual(password_response['Location'], reverse('happyhour_admin:index'))
-		self.assertEqual(client.get(reverse('happyhour_admin:index')).status_code, 200)
+		index_response = client.get(reverse('happyhour_admin:index'))
+		self.assertEqual(index_response.status_code, 302)
+		self.assertIn(reverse('happyhour_admin:mfa'), index_response['Location'])
+		enrollment_response = client.get(reverse('happyhour_admin:mfa'))
+		self.assertEqual(enrollment_response.status_code, 302)
+		self.assertIn(reverse('happyhour_admin:security'), enrollment_response['Location'])
 
-	def test_customer_two_factor_does_not_enable_admin_two_factor(self):
+	def test_customer_two_factor_does_not_satisfy_admin_mfa(self):
 		user = User.objects.create_user(
 			username='customer-mfa-only-admin',
 			password='safe-admin-pass-123',
@@ -194,7 +210,9 @@ class AdminAuthenticationSecurityTests(TestCase):
 
 		self.assertEqual(password_response.status_code, 302)
 		self.assertEqual(password_response['Location'], reverse('happyhour_admin:index'))
-		self.assertEqual(client.get(reverse('happyhour_admin:index')).status_code, 200)
+		index_response = client.get(reverse('happyhour_admin:index'))
+		self.assertEqual(index_response.status_code, 302)
+		self.assertIn(reverse('happyhour_admin:mfa'), index_response['Location'])
 
 	def test_admin_login_rate_limit_blocks_repeated_failures(self):
 		user = User.objects.create_user(

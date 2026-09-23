@@ -17,7 +17,7 @@ def _configured_ios_app_store_url():
     return value
 
 
-def share_place_redirect(_request, _slug):
+def share_place_redirect(_request, slug):
     """Send non-installed iOS users to the App Store, never to the public website."""
     app_store_url = _configured_ios_app_store_url()
     if not app_store_url:

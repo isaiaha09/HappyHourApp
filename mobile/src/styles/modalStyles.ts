@@ -436,7 +436,7 @@ export const modalStyles = {
     justifyContent: 'flex-end',
   },
   bottomSheetBackdropOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: theme.bgOverlay,
   },
   bottomSheetBackdropPressable: {
@@ -498,10 +498,6 @@ export const modalStyles = {
   },
   bottomSheetActionTextDestructive: {
     color: theme.danger,
-  },
-  attachmentPreviewWebView: {
-    backgroundColor: theme.bgApp,
-    flex: 1,
   },
 } as const;
 

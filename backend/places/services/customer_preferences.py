@@ -77,7 +77,7 @@ def get_preference_business_options(cities=None, only_with_deals=True):
 	selected_cities = set(cities or PREFERENCE_CITIES)
 	options = []
 	seen = set()
-	for payload in get_source_place_payloads(resolve_missing_coordinates=False):
+	for payload in get_source_place_payloads(resolve_missing_coordinates=False, allow_network=False):
 		listing_slug = str(payload.get('slug') or '').strip()
 		if not listing_slug:
 			continue
@@ -101,7 +101,7 @@ def get_preference_business_options(cities=None, only_with_deals=True):
 
 def resolve_business_location(listing_slug, location_id=None, payload=None):
 	listing_slug = str(listing_slug or '').strip()
-	payload = payload if payload is not None else get_source_place_payload(listing_slug)
+	payload = payload if payload is not None else get_source_place_payload(listing_slug, allow_network=False)
 	if payload is None:
 		raise ValueError('One of the selected businesses could not be found.')
 	location = _get_location_payload(payload, location_id)

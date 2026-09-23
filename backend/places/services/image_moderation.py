@@ -35,13 +35,13 @@ class ImageModerationUnavailable(ImageModerationError):
 
 
 def moderate_uploaded_image(uploaded_file, surface='user_image'):
+	raw_bytes = validate_uploaded_image(uploaded_file)
 	provider = str(getattr(settings, 'IMAGE_MODERATION_PROVIDER', 'disabled') or '').strip().lower()
 	if provider in {'', 'disabled', 'none', 'off'}:
 		return
 	if provider != 'local_nudenet':
 		raise ImageModerationUnavailable('Local automated image screening is not configured for this environment.')
 
-	raw_bytes = _read_uploaded_file(uploaded_file)
 	digest = hashlib.sha256(raw_bytes).hexdigest()
 	block_score = max(1, min(100, int(getattr(settings, 'IMAGE_MODERATION_BLOCK_SCORE_PERCENT', 65) or 65))) / 100
 	cache_key = f'image-moderation:{provider}:{block_score:.2f}:{digest}'
@@ -79,10 +79,13 @@ def moderate_uploaded_image(uploaded_file, surface='user_image'):
 
 
 def _read_uploaded_file(uploaded_file):
-	max_upload_bytes = max(1, int(getattr(settings, 'IMAGE_MODERATION_MAX_UPLOAD_BYTES', 16 * 1024 * 1024) or 16 * 1024 * 1024))
+	max_upload_bytes = max(1, int(getattr(settings, 'IMAGE_UPLOAD_MAX_BYTES', 8 * 1024 * 1024) or 8 * 1024 * 1024))
 	declared_size = getattr(uploaded_file, 'size', None)
-	if declared_size not in (None, '') and int(declared_size) > max_upload_bytes:
-		raise ImageModerationRejected('This image is too large to screen. Choose an image smaller than 16 MB.')
+	try:
+		if declared_size not in (None, '') and int(declared_size) > max_upload_bytes:
+			raise ImageModerationRejected('Images must be 8 MB or smaller.')
+	except (TypeError, ValueError):
+		raise ImageModerationRejected('The image size could not be validated.')
 
 	uploaded_file.seek(0)
 	try:
@@ -91,9 +94,26 @@ def _read_uploaded_file(uploaded_file):
 		uploaded_file.seek(0)
 
 	if len(raw_bytes) > max_upload_bytes:
-		raise ImageModerationRejected('This image is too large to screen. Choose an image smaller than 16 MB.')
+		raise ImageModerationRejected('Images must be 8 MB or smaller.')
 	if not raw_bytes:
 		raise ImageModerationRejected('The selected image is empty or unreadable.')
+	return raw_bytes
+
+
+def validate_uploaded_image(uploaded_file):
+	"""Validate byte size and decoded dimensions before storage or moderation."""
+	raw_bytes = _read_uploaded_file(uploaded_file)
+	max_pixels = max(1, int(getattr(settings, 'IMAGE_UPLOAD_MAX_PIXELS', 25_000_000) or 25_000_000))
+	try:
+		with Image.open(io.BytesIO(raw_bytes)) as image:
+			image.verify()
+		with Image.open(io.BytesIO(raw_bytes)) as image:
+			if int(image.width) * int(image.height) > max_pixels:
+				raise ImageModerationRejected('Images must contain 25 megapixels or fewer.')
+	except ImageModerationRejected:
+		raise
+	except Exception as error:
+		raise ImageModerationRejected('The selected image could not be read.') from error
 	return raw_bytes
 
 

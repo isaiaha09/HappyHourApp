@@ -2,6 +2,7 @@ export type RecoveryDeepLink =
   | { kind: 'forgot-password'; token: string }
   | { kind: 'forgot-username' }
   | { kind: 'business-profile'; slug: string }
+  | { kind: 'business-claim-retry'; token: string }
   | null;
 
 function decodePathSegment(value: string) {
@@ -43,6 +44,22 @@ export function parseRecoveryDeepLink(value: string): RecoveryDeepLink {
 
   if (route === 'forgot-username') {
     return { kind: 'forgot-username' };
+  }
+
+  if (route === 'business-claim-retry') {
+    const token = decodePathSegment(pathSegments[0] || parsedUrl.searchParams.get('token') || '').trim();
+    return token ? { kind: 'business-claim-retry', token } : null;
+  }
+
+  const isDiningDealzBusinessClaimRetry = (
+    route === 'www.diningdealz.com'
+    || route === 'diningdealz.com'
+    || route === 'backend.diningdealz.com'
+    || route === 'link.diningdealz.com'
+  ) && pathSegments[0]?.toLowerCase() === 'business-claim-retry';
+  if (isDiningDealzBusinessClaimRetry) {
+    const token = decodePathSegment(pathSegments[1] || parsedUrl.searchParams.get('token') || '').trim();
+    return token ? { kind: 'business-claim-retry', token } : null;
   }
 
   if (route !== 'forgot-password') {

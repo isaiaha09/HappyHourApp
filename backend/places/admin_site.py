@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 
 from django.conf import settings
 from django.contrib import messages
@@ -147,8 +147,7 @@ class HappyHourAdminSite(UnfoldAdminSite):
         profile = get_or_create_account_profile(request.user)
         next_url = self._safe_admin_next_url(request)
         if not profile.admin_two_factor_enabled:
-            mark_admin_mfa_verified(request, request.user)
-            return HttpResponseRedirect(next_url)
+            return HttpResponseRedirect(f'{reverse("happyhour_admin:security")}?next={urlencode({"next": next_url})}')
         if not profile.admin_two_factor_secret:
             emit_admin_security_event(request, 'admin_mfa_misconfigured', actor=request.user, log_level=logging.ERROR)
             return HttpResponseForbidden('Admin two-factor authentication is enabled but not configured correctly.')
@@ -193,14 +192,8 @@ class HappyHourAdminSite(UnfoldAdminSite):
                 emit_admin_security_event(request, 'admin_mfa_enrollment_failure', actor=request.user, log_level=logging.WARNING)
                 form.add_error('otp_code', 'The authenticator code is invalid or expired.')
         elif action == 'disable':
-            if form.is_valid() and profile.admin_two_factor_enabled and profile.verify_admin_two_factor_code(form.cleaned_data['otp_code']):
-                profile.disable_admin_two_factor()
-                mark_admin_mfa_verified(request, request.user)
-                emit_admin_security_event(request, 'admin_mfa_disabled', actor=request.user, log_level=logging.WARNING)
-                messages.warning(request, 'Admin 2FA is disabled for your account.')
-            elif request.method == 'POST':
-                emit_admin_security_event(request, 'admin_mfa_failure', actor=request.user, log_level=logging.WARNING)
-                form.add_error('otp_code', 'The authenticator code is invalid or expired.')
+            emit_admin_security_event(request, 'admin_mfa_disabled', actor=request.user, log_level=logging.WARNING, reason='mandatory_admin_mfa')
+            messages.error(request, 'Admin two-factor authentication is mandatory and cannot be disabled.')
 
         profile.refresh_from_db()
         pending_uri = profile.get_admin_two_factor_provisioning_uri(use_pending=True)

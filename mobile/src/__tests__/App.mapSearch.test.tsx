@@ -18,6 +18,7 @@ const mockFetchPlaceDetail = jest.fn();
 const mockFetchProfileDashboard = jest.fn();
 const mockFetchCustomerPreferences = jest.fn();
 const mockSaveCustomerPreferences = jest.fn();
+const mockCreateCustomerProfile = jest.fn();
 const mockDeleteProfileAccount = jest.fn();
 const mockClearPlacesCache = jest.fn();
 const mockClearPersistedPlaceCache = jest.fn(async () => undefined);
@@ -49,7 +50,7 @@ jest.mock('../api', () => ({
   clearPlacesCache: () => mockClearPlacesCache(),
   confirmTwoFactorSetup: jest.fn(),
   createBusinessProfile: jest.fn(),
-  createCustomerProfile: jest.fn(),
+  createCustomerProfile: (...args: unknown[]) => mockCreateCustomerProfile(...args),
   createInformalBusinessProfile: jest.fn(),
   createManualBusinessProfile: jest.fn(),
   deleteProfileAccount: (baseUrl: string, authToken: string, password: string) => mockDeleteProfileAccount(baseUrl, authToken, password),
@@ -311,20 +312,37 @@ jest.mock('../screens/ProfileFlowScreens', () => ({
   BusinessSearchScreen: () => null,
   BusinessVerificationScreen: () => null,
   ContactSupportScreen: () => null,
-  CreateProfileScreen: ({ onBack }: { onBack: () => void }) => {
+  CreateProfileScreen: ({ onBack, onChangeField, onSubmit }: { onBack: () => void; onChangeField: (field: string, value: unknown) => void; onSubmit: () => void }) => {
     const React = require('react');
     const { Pressable, Text, View } = require('react-native');
+
+    React.useEffect(() => {
+      onChangeField('username', 'newcustomer');
+      onChangeField('email', 'newcustomer@example.com');
+      onChangeField('confirm_email', 'newcustomer@example.com');
+      onChangeField('password', 'password123');
+      onChangeField('confirm_password', 'password123');
+      onChangeField('terms_accepted', true);
+    }, []);
 
     return (
       <View>
         <Text>Create profile screen</Text>
+        <Pressable accessibilityLabel="Submit profile" onPress={onSubmit}>
+          <Text>Submit profile</Text>
+        </Pressable>
         <Pressable accessibilityLabel="Back from profiles" onPress={onBack}>
           <Text>Back from profiles</Text>
         </Pressable>
       </View>
     );
   },
-  EmailVerificationScreen: () => null,
+  EmailVerificationScreen: () => {
+    const React = require('react');
+    const { Text } = require('react-native');
+
+    return <Text testID="email-verification-screen">Email verification screen</Text>;
+  },
   PrivacyPolicyScreen: () => null,
   TermsOfServiceScreen: () => null,
 }));
@@ -547,6 +565,7 @@ describe('App browse map search', () => {
     mockFetchCurrentHappyHourPlaces.mockResolvedValue({ observed_at: '2026-08-26T15:00:00-07:00', places: [] });
     mockFetchPlaceDetail.mockReset();
     mockFetchProfileDashboard.mockResolvedValue(null);
+    mockCreateCustomerProfile.mockReset();
     mockFetchCustomerPreferences.mockResolvedValue({
       id: 7,
       username: 'guestfan',
@@ -621,6 +640,7 @@ describe('App browse map search', () => {
     mockClearPlacesCache.mockReset();
     mockClearPersistedPlaceCache.mockReset();
     mockLoginProfile.mockReset();
+    mockCreateCustomerProfile.mockReset();
     mockUpdateBusinessLocation.mockReset();
     mockUpdateBusinessLocationTrackingPreference.mockReset();
     mockEnsureBusinessBackgroundLocationTaskStarted.mockClear();
@@ -668,6 +688,83 @@ describe('App browse map search', () => {
 
     expect(locationModule.requestForegroundPermissionsAsync).toHaveBeenCalled();
     expect(locationModule.requestBackgroundPermissionsAsync).not.toHaveBeenCalled();
+  });
+
+  it('keeps the email verification screen in front of the guest map', async () => {
+    mockLoginProfile.mockResolvedValue({
+      id: 7,
+      username: 'guestfan',
+      email: 'guestfan@example.com',
+      first_name: 'Guest',
+      last_name: 'Fan',
+      auth_token: '',
+      portal: 'customer',
+      profile_type: 'customer',
+      email_verified: false,
+      email_verification_required: true,
+      verification_code_expires_at: '2026-09-22T23:00:00Z',
+      two_factor_enabled: false,
+      can_access_places: false,
+    });
+
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    fireEvent.press(screen.getByLabelText('Open customer login'));
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+    fireEvent.press(await screen.findByLabelText('Submit login'));
+
+    expect(await screen.findByTestId('email-verification-screen')).toBeTruthy();
+    expect(screen.queryByTestId('mock-map-view')).toBeNull();
+    expect(screen.queryByLabelText('Open customer login')).toBeNull();
+    expect(screen.queryByLabelText('Create a free account')).toBeNull();
+  });
+
+  it('does not lose verification when signup is submitted during the profile entry transition', async () => {
+    mockCreateCustomerProfile.mockResolvedValue({
+      id: 8,
+      username: 'newcustomer',
+      email: 'newcustomer@example.com',
+      first_name: 'New',
+      last_name: 'Customer',
+      auth_token: '',
+      portal: 'customer',
+      profile_type: 'customer',
+      email_verified: false,
+      email_verification_required: true,
+      verification_code_expires_at: '2026-09-22T23:00:00Z',
+      two_factor_enabled: false,
+      can_access_places: false,
+    });
+
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    fireEvent.press(await screen.findByLabelText('Create a free account'));
+    expect(await screen.findByText('Create profile screen')).toBeTruthy();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    fireEvent.press(screen.getByLabelText('Submit profile'));
+
+    expect(await screen.findByTestId('email-verification-screen')).toBeTruthy();
+    expect(screen.queryByLabelText('Open customer login')).toBeNull();
+    expect(screen.queryByLabelText('Create a free account')).toBeNull();
   });
 
   it('starts approved business tracking only after the business explicitly enables it', async () => {

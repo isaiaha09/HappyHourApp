@@ -10,13 +10,14 @@ from places.services.source_listings import get_source_place_payloads
 BUSINESS_TIME_ZONE = ZoneInfo('America/Los_Angeles')
 
 
-def get_current_happy_hours_payload(*, reference: datetime | None = None, city: str | None = None) -> dict[str, object]:
+def get_current_happy_hours_payload(*, reference: datetime | None = None, city: str | None = None, allow_network=False) -> dict[str, object]:
 	"""Return the active happy-hour windows for the business's local time."""
 	now_local = _localize_reference(reference)
 	normalized_city = str(city or '').strip().lower()
 	payloads = get_source_place_payloads(
 		city=None if normalized_city in {'', 'all'} else normalized_city,
 		resolve_missing_coordinates=True,
+		allow_network=allow_network,
 	)
 
 	places_by_key: dict[tuple[str, int], dict[str, object]] = {}

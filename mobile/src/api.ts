@@ -42,6 +42,8 @@ const MISSING_DEVELOPMENT_API_BASE_URL_MESSAGE = 'This development build is miss
 const MISSING_PRODUCTION_API_BASE_URL_MESSAGE = 'This build is missing the live backend URL. Set EXPO_PUBLIC_API_BASE_URL for production builds.';
 const MAX_PAGINATED_API_PAGES = 100;
 const placeCacheTtlMs = 5 * 60 * 1000;
+const API_REQUEST_TIMEOUT_MS = 15_000;
+const PLACES_API_REQUEST_TIMEOUT_MS = 60_000;
 
 type PlaceCacheEntry = {
   expiresAt: number;
@@ -49,6 +51,7 @@ type PlaceCacheEntry = {
 };
 
 const placeCache = new Map<string, PlaceCacheEntry>();
+const inFlightPlaceRequests = new Map<string, Promise<PlaceListItem[]>>();
 
 const businessAttachmentFieldNames: Record<BusinessAttachmentKind, string> = {
   social_media: 'social_media_attachments',
@@ -141,24 +144,44 @@ export async function fetchPlaces(baseUrl: string, city: string, hasDeals?: bool
     return cachedEntry.places;
   }
 
-  const queryParams = new URLSearchParams();
-  queryParams.set('page_size', '500');
-
-  if (city !== 'all') {
-    queryParams.set('city', city);
+  const inFlightRequest = inFlightPlaceRequests.get(cacheKey);
+  if (inFlightRequest) {
+    return inFlightRequest;
   }
 
-  if (typeof hasDeals === 'boolean') {
-    queryParams.set('has_deals', hasDeals ? 'true' : 'false');
-  }
+  const request = (async () => {
+    const queryParams = new URLSearchParams();
+    queryParams.set('page_size', '500');
 
-  const query = queryParams.size ? `?${queryParams.toString()}` : '';
-  const nextPlaces = await fetchAllPaginatedJson<PlaceListItem>(baseUrl, `/places/${query}`);
-  placeCache.set(cacheKey, {
-    expiresAt: now + placeCacheTtlMs,
-    places: nextPlaces,
-  });
-  return nextPlaces;
+    if (city !== 'all') {
+      queryParams.set('city', city);
+    }
+
+    if (typeof hasDeals === 'boolean') {
+      queryParams.set('has_deals', hasDeals ? 'true' : 'false');
+    }
+
+    const query = queryParams.size ? `?${queryParams.toString()}` : '';
+    const nextPlaces = await fetchAllPaginatedJson<PlaceListItem>(
+      baseUrl,
+      `/places/${query}`,
+      PLACES_API_REQUEST_TIMEOUT_MS,
+    );
+    placeCache.set(cacheKey, {
+      expiresAt: Date.now() + placeCacheTtlMs,
+      places: nextPlaces,
+    });
+    return nextPlaces;
+  })();
+
+  inFlightPlaceRequests.set(cacheKey, request);
+  try {
+    return await request;
+  } finally {
+    if (inFlightPlaceRequests.get(cacheKey) === request) {
+      inFlightPlaceRequests.delete(cacheKey);
+    }
+  }
 }
 
 export async function fetchLiveLocationPlaces(baseUrl: string, city: string) {
@@ -433,11 +456,9 @@ export async function resendVerificationCode(baseUrl: string, payload: ResendEma
   return postJson<EmailVerificationChallengeResponse>(baseUrl, '/profiles/resend-verification-code/', payload);
 }
 
-const API_REQUEST_TIMEOUT_MS = 15_000;
-
-async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}) {
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = API_REQUEST_TIMEOUT_MS) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     return await fetch(input, {
@@ -525,7 +546,7 @@ async function deleteAuthedJson<T>(baseUrl: string, path: string, authToken: str
   return response.json() as Promise<T>;
 }
 
-async function fetchAllPaginatedJson<T>(baseUrl: string, path: string): Promise<T[]> {
+async function fetchAllPaginatedJson<T>(baseUrl: string, path: string, timeoutMs = API_REQUEST_TIMEOUT_MS): Promise<T[]> {
   const items: T[] = [];
   let nextUrl: string | null = buildApiUrl(baseUrl, path);
   const normalizedBaseUrl = normalizeApiBaseUrl(baseUrl);
@@ -539,11 +560,15 @@ async function fetchAllPaginatedJson<T>(baseUrl: string, path: string): Promise<
     }
     pageCount += 1;
 
-    const response = await fetchWithTimeout(nextUrl, {
-      headers: {
-        Accept: 'application/json',
+    const response = await fetchWithTimeout(
+      nextUrl,
+      {
+        headers: {
+          Accept: 'application/json',
+        },
       },
-    });
+      timeoutMs,
+    );
 
     if (!response.ok) {
       throw new Error(buildFriendlyApiFallbackMessage(path, response.status));

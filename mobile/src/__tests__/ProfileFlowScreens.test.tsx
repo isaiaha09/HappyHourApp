@@ -56,10 +56,6 @@ jest.mock('expo-sharing', () => ({
   shareAsync: jest.fn(),
 }));
 
-jest.mock('react-native-webview', () => ({
-  WebView: () => null,
-}));
-
 import {
   AuthPortalScreen,
   BusinessSearchScreen,

@@ -1,5 +1,6 @@
 from datetime import timedelta
 import hashlib
+import hmac
 import io
 from pathlib import Path
 from urllib.parse import urlparse
@@ -393,6 +394,13 @@ class BusinessClaim(models.Model):
 	verification_flags = models.JSONField(default=list, blank=True)
 	rejection_reason_codes = models.JSONField(default=list, blank=True)
 	reviewer_notes = models.TextField(blank=True)
+	retry_of = models.ForeignKey(
+		'self',
+		null=True,
+		blank=True,
+		related_name='retry_claims',
+		on_delete=models.SET_NULL,
+	)
 	submitted_at = models.DateTimeField(null=True, blank=True)
 	reviewed_at = models.DateTimeField(null=True, blank=True)
 	reviewed_by = models.ForeignKey(
@@ -532,6 +540,7 @@ class BusinessClaim(models.Model):
 			analysis = attachment.get_document_validation_analysis()
 			if analysis.get('scan_unavailable'):
 				flags.append('document_malware_scan_unavailable')
+				blockers.append('document_malware_scan_unavailable')
 				continue
 			analysis_by_kind.setdefault(attachment.attachment_kind, []).append(analysis)
 			digest = analysis.get('digest', '')
@@ -789,7 +798,9 @@ class BusinessClaim(models.Model):
 			},
 		)
 
-		from .services.account_profiles import send_business_claim_approved_email
+		from .services.account_profiles import get_or_create_account_profile, send_business_claim_approved_email
+
+		get_or_create_account_profile(self.claimant).restore_business_claim_access()
 
 		send_business_claim_approved_email(self.claimant, self)
 
@@ -809,7 +820,9 @@ class BusinessClaim(models.Model):
 		self.reviewer_notes = rejection_notes
 		self.save()
 
-		from .services.account_profiles import send_business_claim_rejected_email
+		from .services.account_profiles import get_or_create_account_profile, send_business_claim_rejected_email
+
+		get_or_create_account_profile(self.claimant).suspend_business_claim_access()
 
 		send_business_claim_rejected_email(self.claimant, self)
 
@@ -874,8 +887,10 @@ class BusinessClaimAttachment(models.Model):
 		NOT_APPLICABLE = 'not_applicable', 'Not applicable'
 		CLEAN = 'clean', 'Clean'
 		PROVIDER_UNAVAILABLE = 'provider_unavailable', 'Provider unavailable'
+		REJECTED = 'rejected', 'Rejected by scanner'
 
 	claim = models.ForeignKey(BusinessClaim, related_name='attachments', on_delete=models.CASCADE)
+	media_id = models.UUIDField(default=uuid4, unique=True, editable=False)
 	attachment_kind = models.CharField(max_length=40, choices=AttachmentKind.choices)
 	file = models.FileField(upload_to=business_claim_attachment_upload_to, storage=get_private_media_storage)
 	original_filename = models.CharField(max_length=255)
@@ -932,6 +947,28 @@ class BusinessClaimAttachment(models.Model):
 			'document_text': document_text,
 			'scan_unavailable': False,
 		}
+
+
+class ManagedMedia(models.Model):
+	"""Opaque, owner-scoped records for business-uploaded profile media."""
+	owner = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='managed_media', on_delete=models.CASCADE)
+	claim = models.ForeignKey(BusinessClaim, related_name='managed_media', on_delete=models.CASCADE)
+	media_id = models.UUIDField(default=uuid4, unique=True, editable=False)
+	storage_name = models.CharField(max_length=512, unique=True)
+	media_kind = models.CharField(max_length=40)
+	original_filename = models.CharField(max_length=255)
+	content_type = models.CharField(max_length=120, blank=True)
+	file_size = models.PositiveIntegerField(default=0)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ['-created_at', '-pk']
+		indexes = [
+			models.Index(fields=['owner', 'claim', 'media_kind'], name='places_media_owner_claim_idx'),
+		]
+
+	def __str__(self):
+		return f'{self.media_kind} {self.original_filename}'
 
 
 class BusinessMembership(models.Model):
@@ -1005,6 +1042,8 @@ class BusinessAccount(User):
 class AccountProfile(models.Model):
 	user = models.OneToOneField(settings.AUTH_USER_MODEL, related_name='account_profile', on_delete=models.CASCADE)
 	deleted_at = models.DateTimeField(null=True, blank=True)
+	business_claim_suspended = models.BooleanField(default=False)
+	business_claim_suspended_at = models.DateTimeField(null=True, blank=True)
 	terms_accepted_at = models.DateTimeField(null=True, blank=True)
 	terms_accepted_version = models.CharField(max_length=40, blank=True)
 	preference_onboarding_completed = models.BooleanField(default=False)
@@ -1034,6 +1073,8 @@ class AccountProfile(models.Model):
 	admin_two_factor_secret = models.CharField(max_length=64, blank=True)
 	admin_two_factor_pending_secret = models.CharField(max_length=64, blank=True)
 	password_reset_token = models.CharField(max_length=64, blank=True)
+	password_reset_selector = models.CharField(max_length=32, blank=True, db_index=True)
+	password_reset_token_digest = models.CharField(max_length=64, blank=True)
 	password_reset_sent_at = models.DateTimeField(null=True, blank=True)
 	billing_portal_url = models.URLField(blank=True)
 	created_at = models.DateTimeField(auto_now_add=True)
@@ -1181,18 +1222,41 @@ class AccountProfile(models.Model):
 		self.admin_two_factor_pending_secret = ''
 		self.save(update_fields=['admin_two_factor_enabled', 'admin_two_factor_secret', 'admin_two_factor_pending_secret', 'updated_at'])
 
+	def suspend_business_claim_access(self):
+		self.business_claim_suspended = True
+		self.business_claim_suspended_at = self.business_claim_suspended_at or timezone.now()
+		self.save(update_fields=['business_claim_suspended', 'business_claim_suspended_at', 'updated_at'])
+		ProfileAuthToken.objects.filter(user=self.user).delete()
+
+	def restore_business_claim_access(self):
+		if not self.business_claim_suspended and self.business_claim_suspended_at is None:
+			return
+		self.business_claim_suspended = False
+		self.business_claim_suspended_at = None
+		self.save(update_fields=['business_claim_suspended', 'business_claim_suspended_at', 'updated_at'])
+
 	def issue_password_reset_token(self, force=False):
-		if force or not self.password_reset_token:
-			self.password_reset_token = secrets.token_urlsafe(32)
-			self.password_reset_sent_at = timezone.now()
-		elif self.password_reset_sent_at is None:
-			self.password_reset_sent_at = timezone.now()
-		return self.password_reset_token
+		# The raw secret is intentionally never persisted, so every issuance must
+		# rotate the selector and digest rather than returning an unrecoverable
+		# empty token for an already-active reset request.
+		selector = secrets.token_urlsafe(12)[:32]
+		secret = secrets.token_urlsafe(32)
+		self.password_reset_selector = selector
+		self.password_reset_token_digest = hmac.new(
+			str(settings.SECRET_KEY).encode('utf-8'),
+			secret.encode('utf-8'),
+			hashlib.sha256,
+		).hexdigest()
+		self.password_reset_token = ''
+		self.password_reset_sent_at = timezone.now()
+		return f'{selector}.{secret}'
 
 	def clear_password_reset_token(self):
 		self.password_reset_token = ''
+		self.password_reset_selector = ''
+		self.password_reset_token_digest = ''
 		self.password_reset_sent_at = None
-		self.save(update_fields=['password_reset_token', 'password_reset_sent_at', 'updated_at'])
+		self.save(update_fields=['password_reset_token', 'password_reset_selector', 'password_reset_token_digest', 'password_reset_sent_at', 'updated_at'])
 
 	def get_password_reset_token_ttl_seconds(self):
 		return max(int(getattr(settings, 'PROFILE_PASSWORD_RESET_TOKEN_TTL_SECONDS', 3600) or 3600), 1)
@@ -1202,9 +1266,71 @@ class AccountProfile(models.Model):
 			return None
 		return self.password_reset_sent_at + timedelta(seconds=self.get_password_reset_token_ttl_seconds())
 
-	def password_reset_token_is_active(self):
+	def password_reset_token_is_active(self, presented_token=''):
 		expires_at = self.get_password_reset_token_expires_at()
-		return bool(self.password_reset_token) and expires_at is not None and timezone.now() < expires_at
+		if not presented_token or expires_at is None or timezone.now() >= expires_at:
+			return False
+		try:
+			selector, secret = str(presented_token).split('.', 1)
+		except ValueError:
+			return False
+		if not selector or not secret or not hmac.compare_digest(selector, self.password_reset_selector):
+			return False
+		presented_digest = hmac.new(
+			str(settings.SECRET_KEY).encode('utf-8'),
+			secret.encode('utf-8'),
+			hashlib.sha256,
+		).hexdigest()
+		return bool(self.password_reset_token_digest) and hmac.compare_digest(presented_digest, self.password_reset_token_digest)
+
+
+class BusinessClaimRetryGrant(models.Model):
+	user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='business_claim_retry_grants', on_delete=models.CASCADE)
+	rejected_claim = models.ForeignKey(BusinessClaim, related_name='retry_grants', on_delete=models.CASCADE)
+	token_selector = models.CharField(max_length=32, unique=True)
+	token_digest = models.CharField(max_length=64)
+	expires_at = models.DateTimeField()
+	used_at = models.DateTimeField(null=True, blank=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ['-created_at', '-pk']
+		indexes = [models.Index(fields=['user', 'expires_at'], name='places_retry_user_exp_idx')]
+
+	@staticmethod
+	def _digest(secret):
+		return hmac.new(
+			str(settings.SECRET_KEY).encode('utf-8'),
+			str(secret).encode('utf-8'),
+			hashlib.sha256,
+		).hexdigest()
+
+	@classmethod
+	def issue_for(cls, user, rejected_claim):
+		selector = secrets.token_urlsafe(12)[:32]
+		secret = secrets.token_urlsafe(32)
+		ttl = max(int(getattr(settings, 'BUSINESS_CLAIM_RETRY_TOKEN_TTL_SECONDS', 900) or 900), 60)
+		grant = cls.objects.create(
+			user=user,
+			rejected_claim=rejected_claim,
+			token_selector=selector,
+			token_digest=cls._digest(secret),
+			expires_at=timezone.now() + timedelta(seconds=ttl),
+		)
+		return grant, f'{selector}.{secret}'
+
+	def is_active(self, presented_token):
+		if self.used_at is not None or timezone.now() >= self.expires_at:
+			return False
+		try:
+			selector, secret = str(presented_token or '').split('.', 1)
+		except ValueError:
+			return False
+		return (
+			bool(selector and secret)
+			and hmac.compare_digest(selector, self.token_selector)
+			and hmac.compare_digest(self._digest(secret), self.token_digest)
+		)
 
 
 class BusinessDirectMessageThread(models.Model):
@@ -1307,6 +1433,7 @@ class ContentReport(models.Model):
 	recipient_email = models.EmailField(blank=True)
 	business_post = models.ForeignKey('BusinessPost', related_name='content_reports', null=True, blank=True, on_delete=models.SET_NULL)
 	direct_message = models.ForeignKey('BusinessDirectMessage', related_name='content_reports', null=True, blank=True, on_delete=models.SET_NULL)
+	media_id = models.UUIDField(default=uuid4, unique=True, editable=False)
 	screenshot = models.ImageField(blank=True, null=True, storage=get_private_media_storage, upload_to=content_report_screenshot_upload_to)
 	reason = models.CharField(max_length=40, choices=Reason.choices)
 	details = models.TextField(blank=True)

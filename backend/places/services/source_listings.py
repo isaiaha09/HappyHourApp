@@ -1,6 +1,7 @@
 import re
 from copy import deepcopy
 from hashlib import sha256
+from urllib.parse import urlparse
 
 from django.conf import settings
 from django.core.cache import caches
@@ -9,18 +10,30 @@ from django.utils.text import slugify
 
 from django.db.models import Q
 
-from places.models import AccountProfile, BusinessClaim, BusinessMembership, City, DealType, ListingSnapshot, VenueType, Weekday
+from places.models import AccountProfile, BusinessClaim, BusinessMembership, City, DealType, ListingSnapshot, ManagedMedia, VenueType, Weekday
 from places.services.business_profile_overrides import (
 	build_deal_payloads,
 	build_deal_weekdays,
 	build_operating_hour_payloads,
 	build_operating_weekdays,
+	sanitize_deal_overrides_for_output,
 )
 from places.services.importers.business_websites import BusinessWebsiteImporter
 from places.services.importers.discovered_json_places import CuratedJsonPlacesImporter, DiscoveryJsonPlacesImporter
 from places.services.importers.example_html import ExampleHtmlImporter
 from places.services.importers.types import ImportedPlace
+from places.services.media_storage import extract_managed_storage_name, managed_media_id_from_reference, managed_media_url
 from places.services.social_profiles import build_social_media_links, normalize_social_profiles
+
+
+SOURCE_RECORDS_CACHE_SCHEMA_VERSION = 2
+SOURCE_PAYLOAD_CACHE_SCHEMA_VERSION = 3
+
+
+def _safe_https_reference(value):
+	candidate = str(value or '').strip()
+	parsed = urlparse(candidate)
+	return candidate if parsed.scheme.lower() == 'https' and parsed.netloc else ''
 
 
 RUNTIME_IMPORTER_REGISTRY = {
@@ -46,12 +59,12 @@ def get_listing_importer(source_name=None):
 def _source_records_cache_key(source_name=None):
 	resolved_source_name = source_name or get_listing_source_name()
 	image_policy = int(bool(getattr(settings, 'BUSINESS_SOURCE_IMPORT_IMAGES', False)))
-	return f'source-records:{resolved_source_name}:images-{image_policy}'
+	return f'source-records:v{SOURCE_RECORDS_CACHE_SCHEMA_VERSION}:{resolved_source_name}:images-{image_policy}'
 
 
 def _source_place_payload_cache_version_key(source_name=None):
 	resolved_source_name = source_name or get_listing_source_name()
-	return f'source-place-payloads-version:{resolved_source_name}'
+	return f'source-place-payloads-version:v{SOURCE_PAYLOAD_CACHE_SCHEMA_VERSION}:{resolved_source_name}'
 
 
 def _get_source_place_payload_cache(source_name=None):
@@ -118,24 +131,73 @@ def _source_place_payload_cache_key(city=None, venue_type=None, source_name=None
 def _load_cache_only_source_records(source_name=None):
 	"""Return locally stored source data without fetching configured websites."""
 	resolved_source_name = source_name or get_listing_source_name()
-	if resolved_source_name in {'curated_json_places', 'discovery_json_places'}:
+	if resolved_source_name == 'business_websites':
+		return BusinessWebsiteImporter().load_configured_records()
+	if resolved_source_name == 'curated_json_places':
+		return _merge_business_source_records(
+			BusinessWebsiteImporter().load_configured_records()
+			+ DiscoveryJsonPlacesImporter().load_records()
+		)
+	if resolved_source_name == 'discovery_json_places':
 		return DiscoveryJsonPlacesImporter().load_records()
 	return []
+
+
+def _business_source_record_identity(record):
+	if not isinstance(record, ImportedPlace):
+		return None
+	if str(record.source_name or '').strip().lower() != BusinessWebsiteImporter.source_name:
+		return None
+	external_id = str(record.external_id or '').strip().lower()
+	if external_id:
+		return (BusinessWebsiteImporter.source_name, external_id)
+	source_url = str(record.source_url or '').strip().lower()
+	return (BusinessWebsiteImporter.source_name, source_url) if source_url else None
+
+
+def _merge_business_source_records(records, previous_records=None):
+	"""Keep configured businesses visible while live source data is refreshed."""
+	configured_records = BusinessWebsiteImporter().load_configured_records()
+	configured_by_identity = {
+		identity: record
+		for record in configured_records
+		if (identity := _business_source_record_identity(record)) is not None
+	}
+	merged_records = list(records or [])
+	seen_identities = {
+		identity
+		for record in merged_records
+		if (identity := _business_source_record_identity(record)) is not None
+	}
+
+	for record in list(previous_records or []):
+		identity = _business_source_record_identity(record)
+		if identity in configured_by_identity and identity not in seen_identities:
+			merged_records.append(record)
+			seen_identities.add(identity)
+
+	for identity, record in configured_by_identity.items():
+		if identity not in seen_identities:
+			merged_records.append(record)
+			seen_identities.add(identity)
+
+	return merged_records
 
 
 def load_source_records(source_name=None, force_refresh=False, cache_only=False):
 	cache = caches[getattr(settings, 'SOURCE_FETCH_CACHE_ALIAS', 'default')]
 	cache_key = _source_records_cache_key(source_name=source_name)
+	cached_records = cache.get(cache_key)
 	if force_refresh:
 		_bump_source_place_payload_cache_version(source_name=source_name)
-	if not force_refresh:
-		cached_records = cache.get(cache_key)
-		if cached_records is not None:
-			return cached_records
+	if not force_refresh and cached_records is not None:
+		return _merge_business_source_records(cached_records)
 	if cache_only:
 		return _load_cache_only_source_records(source_name=source_name)
 
 	records = get_listing_importer(source_name=source_name).load_records()
+	if (source_name or get_listing_source_name()) in {'business_websites', 'curated_json_places'}:
+		records = _merge_business_source_records(records, previous_records=cached_records)
 	cache_timeout = getattr(settings, 'SOURCE_FETCH_CACHE_TIMEOUT', 0)
 	if cache_timeout and cache_timeout > 0:
 		cache.set(cache_key, records, cache_timeout)
@@ -261,7 +323,7 @@ def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_
 	_apply_current_live_location_state(sorted_payloads)
 	sorted_payloads = _suppress_deleted_business_payloads(_suppress_disabled_live_location_payloads(sorted_payloads))
 	cache_timeout = _get_source_place_payload_cache_timeout()
-	if allow_network and cache_timeout and cache_timeout > 0:
+	if cache_timeout and cache_timeout > 0:
 		cache.set(cache_key, deepcopy(sorted_payloads), cache_timeout)
 	return sorted_payloads
 
@@ -429,6 +491,7 @@ def _get_listing_snapshot_override_payloads():
 			snapshot.social_profiles,
 			fallback_website_url=snapshot.website_url,
 			fallback_social_links=snapshot.social_media_links,
+			strict=False,
 		)
 		override_payload = {
 			'name': snapshot.name,
@@ -440,8 +503,12 @@ def _get_listing_snapshot_override_payloads():
 			'state': snapshot.state,
 			'postal_code': snapshot.postal_code,
 			'phone_number': snapshot.phone_number,
-			'website_url': snapshot.website_url,
-			'imported_image_urls': list(snapshot.imported_image_urls or []),
+			'website_url': _safe_https_reference(snapshot.website_url),
+			'imported_image_urls': [
+				reference
+				for reference in (_safe_https_reference(value) for value in list(snapshot.imported_image_urls or []))
+				if reference
+			],
 			'has_image_gallery_override': bool((snapshot.imported_image_urls or []) or (snapshot.suppressed_imported_image_urls or [])),
 			'social_profiles': normalized_social_profiles,
 			'social_media_links': build_social_media_links(normalized_social_profiles),
@@ -558,10 +625,10 @@ def _apply_snapshot_contact_override_to_location(location, override_payload):
 		if value not in (None, ''):
 			location[field_name] = value
 	if 'website_url' in override_payload:
-		location['website_url'] = override_payload.get('website_url', '')
+		location['website_url'] = _safe_https_reference(override_payload.get('website_url', ''))
 	imported_image_urls = list(override_payload.get('imported_image_urls') or [])
 	if override_payload.get('has_image_gallery_override'):
-		location['image_urls'] = imported_image_urls
+		location['image_urls'] = [reference for reference in (_safe_https_reference(value) for value in imported_image_urls) if reference]
 	for field_name in ('social_profiles', 'social_media_links'):
 		if field_name in override_payload:
 			location[field_name] = override_payload[field_name]
@@ -692,9 +759,9 @@ def get_source_place_payload(slug, source_name=None, allow_network=True):
 	return None
 
 
-def get_source_deal_payloads(city=None, deal_type=None, source_name=None):
+def get_source_deal_payloads(city=None, deal_type=None, source_name=None, allow_network=True):
 	payloads = []
-	for place_record in load_source_records(source_name=source_name):
+	for place_record in load_source_records(source_name=source_name, cache_only=not allow_network):
 		if not place_record.is_active:
 			continue
 		if city and place_record.city != city:
@@ -811,6 +878,7 @@ def _build_manual_admin_snapshot_payload(snapshot, resolve_missing_coordinates=T
 		snapshot.social_profiles,
 		fallback_website_url=snapshot.website_url,
 		fallback_social_links=snapshot.social_media_links,
+		strict=False,
 	)
 	place_record = ImportedPlace(
 		name=snapshot.name,
@@ -953,7 +1021,39 @@ def is_live_location_tracking_enabled_for_snapshot(snapshot):
 
 
 def _claim_photo_urls(claim):
-	return [reference for reference in list(claim.photo_references or []) if str(reference or '').strip().lower().startswith(('http://', 'https://'))]
+	if claim is None:
+		return []
+	if not claim.pk:
+		return [reference for reference in (_safe_https_reference(reference) for reference in list(claim.photo_references or [])) if reference]
+
+	managed_media_by_id = {}
+	managed_media_by_storage_name = {}
+	for media_id, storage_name in ManagedMedia.objects.filter(
+		claim=claim,
+		owner_id=claim.claimant_id,
+	).values_list('media_id', 'storage_name'):
+		managed_media_by_id[str(media_id)] = media_id
+		managed_media_by_storage_name[str(storage_name or '').strip()] = media_id
+
+	photo_urls = []
+	for reference in list(claim.photo_references or []):
+		managed_media_id = managed_media_id_from_reference(reference)
+		if managed_media_id is not None and str(managed_media_id) in managed_media_by_id:
+			photo_urls.append(managed_media_url(managed_media_by_id[str(managed_media_id)]))
+			continue
+
+		storage_name = extract_managed_storage_name(reference)
+		if storage_name:
+			managed_media_id = managed_media_by_storage_name.get(storage_name)
+			if managed_media_id is not None:
+				photo_urls.append(managed_media_url(managed_media_id))
+			continue
+
+		safe_reference = _safe_https_reference(reference)
+		if safe_reference:
+			photo_urls.append(safe_reference)
+
+	return list(dict.fromkeys(photo_urls))
 
 
 def _build_claim_override_payload(claim, public_address_overridden=False, public_postal_code_overridden=False):
@@ -961,6 +1061,7 @@ def _build_claim_override_payload(claim, public_address_overridden=False, public
 		claim.social_profiles,
 		fallback_website_url=claim.business_website_url,
 		fallback_social_links=claim.social_media_links,
+		strict=False,
 	)
 	return {
 		'is_informal': claim.pathway == BusinessClaim.Pathway.INFORMAL,
@@ -971,11 +1072,11 @@ def _build_claim_override_payload(claim, public_address_overridden=False, public
 		'public_postal_code_overridden': public_postal_code_overridden,
 		'social_profiles': normalized_social_profiles,
 		'social_media_links': build_social_media_links(normalized_social_profiles),
-		'deal_overrides': claim.deal_overrides,
+		'deal_overrides': sanitize_deal_overrides_for_output(claim.deal_overrides),
 		'operating_hour_overrides': claim.operating_hour_overrides,
 		'offer_entries': list(claim.offer_entries or []),
 		'hours_of_operation_entries': list(claim.hours_of_operation_entries or []),
-		'photo_references': list(claim.photo_references or []),
+		'photo_references': _claim_photo_urls(claim),
 		'photo_gallery_overridden': bool(claim.photo_gallery_overridden),
 		'supporting_details': str(claim.supporting_details or '').strip(),
 	}
@@ -990,7 +1091,7 @@ def _build_snapshot_place_payload(claim, resolve_missing_coordinates=True):
 	)
 	should_resolve_coordinates = resolve_missing_coordinates and not is_live_location_business
 	public_address_fields, public_address_overridden, public_postal_code_overridden = _resolve_claim_public_address_fields(claim, snapshot, is_live_location_business)
-	website_url = claim.business_website_url or snapshot.website_url
+	website_url = _safe_https_reference(claim.business_website_url) or _safe_https_reference(snapshot.website_url)
 	public_phone_number = str(claim.work_phone or '').strip() or snapshot.phone_number
 	place_record = ImportedPlace(
 		name=snapshot.name,
@@ -1360,8 +1461,8 @@ def _build_location_payload(place_record, resolve_missing_coordinates=True):
 		'latitude': latitude,
 		'longitude': longitude,
 		'phone_number': place_record.phone_number,
-		'website_url': place_record.website_url,
-		'image_urls': list(place_record.image_urls),
+		'website_url': _safe_https_reference(place_record.website_url),
+		'image_urls': [reference for reference in (_safe_https_reference(value) for value in list(place_record.image_urls)) if reference],
 		'operating_hours': [
 			{
 				'id': _stable_numeric_id(place_record.source_name, place_slug, 'operating-hours', operating_hour.weekday, operating_hour.open_time, operating_hour.close_time),

@@ -9,6 +9,8 @@ from urllib.parse import quote, urlparse
 from django import forms
 from django.contrib import admin, messages
 from django.contrib.admin.models import DELETION
+from django.contrib.admin.options import TO_FIELD_VAR
+from django.contrib.admin.utils import unquote
 from django.contrib.auth.admin import GroupAdmin, UserAdmin
 from django.contrib.auth.models import Group, User
 from django.core.exceptions import ValidationError
@@ -41,6 +43,10 @@ from .services.importers.business_websites import BusinessWebsiteImporter
 from .services.importers.types import ImportedPlace
 from .services.social_profiles import build_social_media_links, normalize_business_contact_channels, normalize_social_profile
 from .services.source_listings import get_source_place_payload, get_source_place_payloads, load_source_records
+from .services.cloudmersive_scanning import ScanStatus, scan_pdf_file
+
+
+logger = logging.getLogger(__name__)
 
 
 LIVE_DISCOVERY_SOURCE_NAMES = {'business_websites', 'verified_businesses'}
@@ -124,6 +130,11 @@ def _format_admin_media_preview(url, label='', content_type=''):
 	media_label = str(label or '').strip() or 'Submitted file'
 	if not media_url:
 		return 'No file'
+	parsed_media_url = urlparse(media_url)
+	if parsed_media_url.scheme and (parsed_media_url.scheme.lower() != 'https' or not parsed_media_url.netloc):
+		return format_html('<span title="This legacy media URL is not a safe HTTPS link.">{}</span>', media_label)
+	if parsed_media_url.scheme == '' and not media_url.startswith(('/managed-media/', '/private-media/')):
+		return format_html('<span title="This legacy media reference is not a safe link.">{}</span>', media_label)
 
 	if _is_admin_image_media(media_url, content_type):
 		return format_html(
@@ -733,12 +744,21 @@ class ListingSnapshotAdminForm(forms.ModelForm):
 			if profile:
 				normalized_social_profiles[platform] = profile
 
-		normalized_contact_channels = normalize_business_contact_channels(
-			website_url=cleaned_data.get('website_url', ''),
-			source_url=cleaned_data.get('source_url', ''),
-			social_profiles=normalized_social_profiles,
-			social_media_links=build_social_media_links(normalized_social_profiles),
-		)
+		try:
+			normalized_contact_channels = normalize_business_contact_channels(
+				website_url=cleaned_data.get('website_url', ''),
+				source_url=cleaned_data.get('source_url', ''),
+				social_profiles=normalized_social_profiles,
+				social_media_links=build_social_media_links(normalized_social_profiles),
+			)
+		except ValueError as error:
+			self.add_error('website_url', str(error))
+			normalized_contact_channels = {
+				'website_url': '',
+				'source_url': '',
+				'social_profiles': normalized_social_profiles,
+				'social_media_links': build_social_media_links(normalized_social_profiles),
+			}
 		if website_url_suppressed:
 			normalized_contact_channels['website_url'] = ''
 		cleaned_data['website_url'] = normalized_contact_channels['website_url']
@@ -1264,14 +1284,61 @@ class StaffGroupAdmin(UnfoldModelAdmin, GroupAdmin):
 
 
 class HardDeleteUserAdminMixin:
+	def _get_deletion_reason(self, request):
+		reason = str(request.POST.get('deletion_reason') or '').strip()
+		if len(reason) < 10:
+			self.message_user(request, 'A written deletion reason of at least 10 characters is required.', level=messages.ERROR)
+			return ''
+		return reason[:2000]
+
+	def _delete_view(self, request, object_id, extra_context=None):
+		if request.method == 'POST':
+			to_field = request.POST.get(TO_FIELD_VAR, request.GET.get(TO_FIELD_VAR))
+			if not to_field or self.to_field_allowed(request, to_field):
+				obj = self.get_object(request, unquote(object_id), to_field)
+				if obj is not None and self.has_delete_permission(request, obj):
+					_, _, perms_needed, protected = self.get_deleted_objects([obj], request)
+					if not perms_needed and not protected and not self._get_deletion_reason(request):
+						return HttpResponseRedirect(request.get_full_path())
+		return super()._delete_view(request, object_id, extra_context)
+
+	def response_action(self, request, queryset):
+		try:
+			action_index = int(request.POST.get('index', 0))
+		except (TypeError, ValueError):
+			action_index = 0
+		action_names = request.POST.getlist('action')
+		selected_action = action_names[action_index] if 0 <= action_index < len(action_names) else ''
+		if (
+			selected_action == 'delete_selected'
+			and request.POST.get('post')
+			and not self._get_deletion_reason(request)
+		):
+			request.POST = request.POST.copy()
+			request.POST.pop('post', None)
+			request.POST.setlist('action', [selected_action])
+		return super().response_action(request, queryset)
+
 	def delete_model(self, request, obj):
-		remove_favorites_for_business_accounts([obj.pk])
-		User.objects.filter(pk=obj.pk).delete()
+		reason = self._get_deletion_reason(request)
+		if not reason:
+			return
+		with transaction.atomic():
+			remove_favorites_for_business_accounts([obj.pk])
+			record_admin_audit_event(request, obj, 'Permanently deleted account.', action_flag=DELETION, metadata={'deletion_reason': reason, 'scope': 'single'})
+			User.objects.filter(pk=obj.pk).delete()
 
 	def delete_queryset(self, request, queryset):
+		reason = self._get_deletion_reason(request)
+		if not reason:
+			return
 		user_ids = list(queryset.values_list('pk', flat=True))
-		remove_favorites_for_business_accounts(user_ids)
-		User.objects.filter(pk__in=user_ids).delete()
+		accounts = list(queryset)
+		with transaction.atomic():
+			remove_favorites_for_business_accounts(user_ids)
+			for obj in accounts:
+				record_admin_audit_event(request, obj, 'Permanently deleted account.', action_flag=DELETION, metadata={'deletion_reason': reason, 'scope': 'bulk', 'bulk_target_count': len(user_ids)})
+			User.objects.filter(pk__in=user_ids).delete()
 
 
 happyhour_admin_site.register(User, StaffUserAdmin)
@@ -1509,6 +1576,9 @@ class BusinessAccountAdmin(HardDeleteUserAdminMixin, UnfoldModelAdmin, UserAdmin
 		website_url = payload.get('website_url') or ''
 		if not website_url:
 			return 'No public website'
+		parsed_website_url = urlparse(str(website_url))
+		if parsed_website_url.scheme.lower() != 'https' or not parsed_website_url.netloc:
+			return format_html('<span title="This legacy website URL is not a safe HTTPS link.">{}</span>', website_url)
 		return format_html('<a href="{}" target="_blank" rel="noopener">{}</a>', website_url, website_url)
 
 	@admin.display(description='Public deals')
@@ -1668,7 +1738,10 @@ class ListingSnapshotAdmin(UnfoldModelAdmin):
 
 	@admin.display(description='Current app images')
 	def current_public_images_preview(self, obj):
-		image_urls = list(getattr(obj, 'imported_image_urls', []) or [])[:3]
+		image_urls = [
+			image_url for image_url in (str(value or '').strip() for value in list(getattr(obj, 'imported_image_urls', []) or []))
+			if urlparse(image_url).scheme.lower() == 'https' and urlparse(image_url).netloc
+		][:3]
 		if not image_urls:
 			return 'No imported images'
 		return format_html(
@@ -1722,6 +1795,11 @@ class ListingSnapshotAdmin(UnfoldModelAdmin):
 		if str(snapshot.source_name or '').strip().lower() not in LIVE_DISCOVERY_SOURCE_NAMES:
 			self.message_user(request, 'Live provider discovery refreshes are disabled. Use a verified official website source for this business.', level=messages.WARNING)
 			return HttpResponseRedirect(reverse('happyhour_admin:places_listingsnapshot_changelist'))
+		canonical_source_url = _preferred_snapshot_enrichment_source_url(snapshot)
+		parsed_canonical_source_url = urlparse(canonical_source_url)
+		if parsed_canonical_source_url.scheme.lower() != 'https' or not parsed_canonical_source_url.netloc:
+			self.message_user(request, 'This business does not have a staff-approved HTTPS source URL for refresh.', level=messages.WARNING)
+			return HttpResponseRedirect(reverse('happyhour_admin:places_listingsnapshot_changelist'))
 
 		if request.method == 'GET':
 			context = {
@@ -1773,6 +1851,10 @@ class ListingSnapshotAdmin(UnfoldModelAdmin):
 		place_record = _apply_snapshot_enrichment_url_override(snapshot, place_record)
 		place_record = replace(
 			place_record,
+			# The onboarding website is claim text, not an importer authority. Use
+			# only the canonical staff-approved source for this refresh.
+			website_url=canonical_source_url,
+			source_url=canonical_source_url,
 			source_name=snapshot.source_name,
 			external_id=snapshot.external_id,
 			image_urls=[],
@@ -1798,13 +1880,17 @@ class ListingSnapshotAdmin(UnfoldModelAdmin):
 		payload = payload or {}
 		public_profile_slug = str(snapshot.listing_slug or '').strip()
 		api_url = request.build_absolute_uri(reverse('place-detail', args=[public_profile_slug])) if public_profile_slug else ''
+		raw_website_url = payload.get('website_url') or ('' if snapshot.website_url_suppressed else snapshot.website_url)
+		parsed_website_url = urlparse(str(raw_website_url or ''))
+		safe_website_url = raw_website_url if parsed_website_url.scheme.lower() == 'https' and parsed_website_url.netloc else ''
 		context = {
 			**self.admin_site.each_context(request),
 			'title': f'Public app preview: {snapshot.name}',
 			'snapshot': snapshot,
 			'payload': payload,
 			'api_url': api_url,
-			'website_url': payload.get('website_url') or ('' if snapshot.website_url_suppressed else snapshot.website_url),
+			'website_url': safe_website_url,
+			'raw_website_url': raw_website_url,
 			'mobile_deep_link': f'diningdealz://place/{quote(public_profile_slug, safe="")}' if public_profile_slug else '',
 			'change_url': reverse('happyhour_admin:places_listingsnapshot_change', args=[snapshot.pk]),
 		}
@@ -2087,8 +2173,11 @@ class BusinessClaimProfileEntryInline(UnfoldTabularInline):
 			return '-'
 		if obj.entry_kind == BusinessClaim.ProfileEntryKind.PHOTO_REFERENCE:
 			return _format_admin_media_preview(value, 'Submitted photo reference', 'image/jpeg')
-		if value.lower().startswith(('http://', 'https://')):
+		parsed_value = urlparse(value)
+		if parsed_value.scheme.lower() == 'https' and parsed_value.netloc:
 			return format_html('<a href="{}" target="_blank" rel="noopener">{}</a>', value, value)
+		if parsed_value.scheme:
+			return format_html('<span title="This legacy link is not a safe HTTPS URL.">{}</span>', value)
 		return value
 
 
@@ -2106,6 +2195,7 @@ class BusinessClaimAttachmentInline(UnfoldTabularInline):
 	def file_preview(self, obj):
 		if not obj.file:
 			return 'No file'
+		media_url = reverse('private-business-claim-attachment', kwargs={'media_id': obj.media_id})
 		if obj.is_pdf_attachment() and obj.malware_scan_status != BusinessClaimAttachment.MalwareScanStatus.CLEAN:
 			if obj.malware_scan_status == BusinessClaimAttachment.MalwareScanStatus.LEGACY_UNSCANNED:
 				warning_text = 'This PDF predates Cloudmersive scanning.'
@@ -2115,13 +2205,12 @@ class BusinessClaimAttachmentInline(UnfoldTabularInline):
 				warning_text = f"This PDF has scan status: {obj.get_malware_scan_status_display() or 'not recorded'}."
 			return format_html(
 				'<div style="min-width:280px;max-width:340px;padding:8px;border:1px solid #d97706;background:#fffbeb;">'
-				'<strong>Security scan warning:</strong> {}<br />'
-				'<a href="{}" target="_blank" rel="noopener">Open/download after manual review</a>'
+				'<strong>Security scan quarantine:</strong> {}<br />'
+				'<span>Preview and download are blocked until a staff-triggered rescan returns clean.</span>'
 				'</div>',
 				warning_text,
-				obj.file.url,
 			)
-		return _format_admin_media_preview(obj.file.url, obj.original_filename or 'Open file', obj.content_type)
+		return _format_admin_media_preview(media_url, obj.original_filename or 'Open file', obj.content_type)
 
 	@admin.display(description='Security scan')
 	def malware_scan_status_display(self, obj):
@@ -2138,7 +2227,7 @@ class BusinessClaimAttachmentInline(UnfoldTabularInline):
 
 
 @admin.register(BusinessClaim, site=happyhour_admin_site)
-class BusinessClaimAdmin(UnfoldModelAdmin):
+class BusinessClaimAdmin(HardDeleteUserAdminMixin, UnfoldModelAdmin):
 	approve_override_confirmation_template = 'admin/places/businessclaim/approve_override_confirmation.html'
 	delete_confirmation_template = 'admin/places/businessclaim/delete_confirmation.html'
 	delete_selected_confirmation_template = 'admin/places/businessclaim/delete_selected_confirmation.html'
@@ -2168,7 +2257,7 @@ class BusinessClaimAdmin(UnfoldModelAdmin):
 
 	change_list_template = 'admin/places/businessclaim/change_list.html'
 	form = BusinessClaimAdminForm
-	actions = ['mark_under_review', 'approve_selected_claims', 'reject_selected_claims']
+	actions = ['mark_under_review', 'approve_selected_claims', 'reject_selected_claims', 'rescan_verification_pdfs']
 	actions_row = ('mark_under_review_row', 'approve_row', 'reject_row', 'request_information_row')
 	inlines = (BusinessClaimProfileEntryInline, BusinessClaimAttachmentInline)
 	list_display = ('listing_snapshot', 'contact_name', 'claimant_email_display', 'status', 'review_sla_display', 'attempt_number_display', 'current_attempt_display', 'prior_rejection_count_display', 'verification_score_display', 'verification_blocker_count_display', 'verification_flags_display', 'submitted_at', 'reviewed_at')
@@ -2221,6 +2310,8 @@ class BusinessClaimAdmin(UnfoldModelAdmin):
 			warnings.append('legacy PDFs have not been scanned')
 		if BusinessClaimAttachment.MalwareScanStatus.PROVIDER_UNAVAILABLE in statuses:
 			warnings.append('one or more PDFs were accepted while Cloudmersive was unavailable')
+		if BusinessClaimAttachment.MalwareScanStatus.REJECTED in statuses:
+			warnings.append('one or more PDFs were rejected by the malware scanner')
 		if warnings:
 			return format_html('<strong style="color:#b45309;">Manual security review required:</strong> {}.', '; '.join(warnings))
 		if statuses & {BusinessClaimAttachment.MalwareScanStatus.CLEAN}:
@@ -2489,6 +2580,55 @@ class BusinessClaimAdmin(UnfoldModelAdmin):
 				self.message_user(request, f'Could not reject {claim}: {error}', level='ERROR')
 		self.message_user(request, f'{rejected} claim(s) rejected.')
 
+	@admin.action(description='Rescan quarantined verification PDFs')
+	def rescan_verification_pdfs(self, request, queryset):
+		attachments = BusinessClaimAttachment.objects.filter(
+			claim__in=queryset,
+		).select_related('claim')
+		clean_count = 0
+		blocked_count = 0
+		unavailable_count = 0
+		for attachment in attachments:
+			if not attachment.is_pdf_attachment() or not attachment.file:
+				continue
+			result_status = ScanStatus.UNAVAILABLE
+			result_reason = 'rescan_exception'
+			try:
+				attachment.file.open('rb')
+				result = scan_pdf_file(attachment.file)
+				result_status = result.status
+				result_reason = str(result.reason or '')[:120]
+			except Exception:
+				logger.exception('Verification PDF rescan failed for attachment_id=%s', attachment.pk)
+			finally:
+				try:
+					attachment.file.close()
+				except (OSError, ValueError):
+					pass
+			attachment.malware_scan_attempted_at = timezone.now()
+			attachment.malware_scan_provider = 'cloudmersive'
+			attachment.malware_scan_reason = result_reason
+			if result_status == ScanStatus.CLEAN:
+				attachment.malware_scan_status = BusinessClaimAttachment.MalwareScanStatus.CLEAN
+				attachment.malware_scan_reason = ''
+				clean_count += 1
+			elif result_status == ScanStatus.REJECTED:
+				attachment.malware_scan_status = BusinessClaimAttachment.MalwareScanStatus.REJECTED
+				blocked_count += 1
+			else:
+				attachment.malware_scan_status = BusinessClaimAttachment.MalwareScanStatus.PROVIDER_UNAVAILABLE
+				unavailable_count += 1
+			attachment.save(update_fields=['malware_scan_status', 'malware_scan_attempted_at', 'malware_scan_provider', 'malware_scan_reason'])
+			claim = attachment.claim
+			claim.refresh_verification_state(save=True)
+			record_admin_audit_event(
+				request,
+				claim,
+				'Rescanned verification PDFs.',
+				metadata={'clean': clean_count, 'blocked': blocked_count, 'unavailable': unavailable_count},
+			)
+		self.message_user(request, f'Rescanned PDFs: {clean_count} clean, {blocked_count} blocked, {unavailable_count} unavailable.')
+
 	def save_model(self, request, obj, form, change):
 		obj.refresh_verification_state(save=False)
 		previous_status = None
@@ -2510,9 +2650,18 @@ class BusinessClaimAdmin(UnfoldModelAdmin):
 		super().save_model(request, obj, form, change)
 
 	def delete_model(self, request, obj):
+		reason = self._get_deletion_reason(request)
+		if not reason:
+			return
 		with transaction.atomic():
-			record_admin_audit_event(request, obj, 'Deleted business claim and its submitted review data.', action_flag=DELETION)
 			orphaned_claimant_ids = _collect_orphaned_claimant_ids_for_deleted_claims(self.model.objects.filter(pk=obj.pk))
+			record_admin_audit_event(
+				request,
+				obj,
+				'Deleted business claim and its submitted review data.',
+				action_flag=DELETION,
+				metadata={'deletion_reason': reason, 'scope': 'single', 'orphaned_claimant_count': len(orphaned_claimant_ids)},
+			)
 			if orphaned_claimant_ids:
 				remove_favorites_for_business_accounts(orphaned_claimant_ids)
 			super().delete_model(request, obj)
@@ -2520,10 +2669,20 @@ class BusinessClaimAdmin(UnfoldModelAdmin):
 				User.objects.filter(pk__in=orphaned_claimant_ids).delete()
 
 	def delete_queryset(self, request, queryset):
+		reason = self._get_deletion_reason(request)
+		if not reason:
+			return
+		orphaned_claimant_ids = _collect_orphaned_claimant_ids_for_deleted_claims(queryset)
+		claims = list(queryset)
 		with transaction.atomic():
-			for claim in queryset:
-				record_admin_audit_event(request, claim, 'Deleted business claim and its submitted review data.', action_flag=DELETION)
-			orphaned_claimant_ids = _collect_orphaned_claimant_ids_for_deleted_claims(queryset)
+			for claim in claims:
+				record_admin_audit_event(
+					request,
+					claim,
+					'Deleted business claim and its submitted review data.',
+					action_flag=DELETION,
+					metadata={'deletion_reason': reason, 'scope': 'bulk', 'bulk_target_count': len(claims), 'orphaned_claimant_count': len(orphaned_claimant_ids)},
+				)
 			if orphaned_claimant_ids:
 				remove_favorites_for_business_accounts(orphaned_claimant_ids)
 			super().delete_queryset(request, queryset)

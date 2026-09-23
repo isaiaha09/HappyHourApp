@@ -17,10 +17,6 @@ jest.mock('react-native-maps', () => {
   };
 });
 
-jest.mock('react-native-webview', () => ({
-  WebView: () => null,
-}));
-
 jest.mock('@expo/vector-icons', () => ({
   Ionicons: ({ name }: { name: string }) => {
     const React = require('react');

@@ -8,7 +8,7 @@ export const appShellStyles = {
     backgroundColor: theme.bgApp,
   },
   startupImagePreloadLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     opacity: 0,
     pointerEvents: 'none',
     zIndex: -1,
@@ -36,7 +36,7 @@ export const appShellStyles = {
     backgroundColor: theme.bgApp,
   },
   screenTransitionLayerAbsolute: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: theme.bgApp,
   },
   bottomNavLoginTransitionLayer: {
@@ -426,7 +426,7 @@ export const appShellStyles = {
     paddingHorizontal: 20,
   },
   guestShellChrome: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 80,
   },
   keyboardAvoidingFill: {

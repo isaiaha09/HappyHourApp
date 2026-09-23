@@ -1,5 +1,4 @@
 import { memo, startTransition, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -23,6 +22,7 @@ import {
   UIManager,
   unstable_batchedUpdates,
   useWindowDimensions,
+  StatusBar as NativeStatusBar,
   View,
 } from 'react-native';
 import { GestureHandlerRootView, PanGestureHandler, State } from 'react-native-gesture-handler';
@@ -256,6 +256,11 @@ type ClaimReturnDestination = 'business-search' | 'browse-map' | 'profiles';
 type MainShellBottomNavItem = 'map' | 'profile' | 'more';
 type ShellFadeScope = 'browse' | 'profile';
 type SettingsSubmittingAction = 'two-factor-begin' | 'two-factor-confirm' | 'two-factor-disable' | 'business-location' | 'direct-messaging' | 'direct-message-block' | 'delete-account' | null;
+type DeferredOnboardingNavigation = {
+  direction: OnboardingTransitionDirection;
+  nextScreen: AppScreenMode;
+  transitionOverride?: { axis: TransitionAxis; incomingOffset: number };
+};
 type CustomerBusinessClaimNotice = {
   businessName: string;
   locationLabel: string;
@@ -776,6 +781,7 @@ function AppScreen() {
   const [profileForm, setProfileForm] = useState<ProfileFormState>(initialProfileFormState);
   const [businessAttachments, setBusinessAttachments] = useState<BusinessAttachmentBuckets>(initialBusinessAttachments);
   const [businessPhotoUploads, setBusinessPhotoUploads] = useState<BusinessAttachmentDraft[]>([]);
+  const [businessClaimRetryToken, setBusinessClaimRetryToken] = useState<string | null>(null);
   const [profileSubmitting, setProfileSubmitting] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [profileErrorMessage, setProfileErrorMessage] = useState<string | null>(null);
@@ -809,6 +815,7 @@ function AppScreen() {
   const [selectedClaimLocationId, setSelectedClaimLocationId] = useState<number | null>(null);
   const [logoutTransitionSession, setLogoutTransitionSession] = useState<SignupResponse | null>(null);
   const [incomingOnboardingScreen, setIncomingOnboardingScreen] = useState<AppScreenMode | null>(null);
+  const [deferredOnboardingNavigation, setDeferredOnboardingNavigation] = useState<DeferredOnboardingNavigation | null>(null);
   const [returningToSplashScreen, setReturningToSplashScreen] = useState<AppScreenMode | null>(null);
   const [browseProfileTransitionFrom, setBrowseProfileTransitionFrom] = useState<'profiles' | 'browse' | null>(null);
   const [incomingBrowseProfileScreen, setIncomingBrowseProfileScreen] = useState<'profiles' | 'browse' | null>(null);
@@ -981,19 +988,28 @@ function AppScreen() {
     && incomingGuestBrowseScreen === 'browse'
     && !selectedPlaceSlug
     && browseMode === 'map';
+  const emailVerificationTransitionActive = screenMode === 'email-verification'
+    || incomingOnboardingScreen === 'email-verification';
   const keepGuestMapVisibleDuringGuestOnboarding = !authenticatedSession
     && guestOnboardingOrigin === 'browse'
     && screenMode !== 'browse'
     && screenMode !== 'splash'
     && !selectedPlaceSlug
-    && browseMode === 'map';
+    && browseMode === 'map'
+    && !emailVerificationTransitionActive;
   const keepGuestMapVisibleOnSplash = !authenticatedSession
     && screenMode === 'splash'
     && guestBrowseModeLocked
     && hasSettledInitialMapRegionRef.current
     && !selectedPlaceSlug
     && browseMode === 'map';
-  const showMapBrowse = (screenMode === 'browse' && (!selectedPlaceSlug || !authenticatedSession) && browseMode === 'map') || keepGuestMapVisibleDuringGuestOnboarding || keepGuestMapVisibleOnSplash || showGuestTransitionMap || showTransitionMapBrowse;
+  const showMapBrowse = !emailVerificationTransitionActive && (
+    (screenMode === 'browse' && (!selectedPlaceSlug || !authenticatedSession) && browseMode === 'map')
+    || keepGuestMapVisibleDuringGuestOnboarding
+    || keepGuestMapVisibleOnSplash
+    || showGuestTransitionMap
+    || showTransitionMapBrowse
+  );
   const shouldTrackUserLocation = screenMode === 'browse' || selectedPlaceSlug !== null;
   const translucentStatusBar = (screenMode === 'browse' && !selectedPlaceSlug && browseMode === 'map')
     || (browseProfileTransitionFrom === 'profiles'
@@ -2302,6 +2318,20 @@ function AppScreen() {
     });
   }, [incomingOnboardingScreen, onboardingTransitionDuration, screenTransition]);
 
+  useEffect(() => {
+    if (!deferredOnboardingNavigation || onboardingNavigationInFlightRef.current) {
+      return;
+    }
+
+    const nextNavigation = deferredOnboardingNavigation;
+    setDeferredOnboardingNavigation(null);
+    navigateScreen(
+      nextNavigation.nextScreen,
+      nextNavigation.direction,
+      nextNavigation.transitionOverride,
+    );
+  }, [deferredOnboardingNavigation, incomingOnboardingScreen, screenMode]);
+
   const onboardingSlideOffset = onboardingIncomingOffset || (onboardingTransitionDirection === 'forward' ? width : -width);
   const incomingScreenTransitionStyle = {
     opacity: onboardingTransitionAxis === 'y'
@@ -2648,6 +2678,24 @@ function AppScreen() {
       return;
     }
 
+    if (recoveryLink?.kind === 'business-claim-retry') {
+      dismissKeyboardForScreenTransition();
+      setAuthenticatedSession(null);
+      setAuthPortal('business');
+      setBusinessClaimRetryToken(recoveryLink.token);
+      setProfileForm(initialProfileFormState);
+      setBusinessAttachments(initialBusinessAttachments);
+      setBusinessPhotoUploads([]);
+      setSelectedClaimPlace(null);
+      setSelectedClaimLocationId(null);
+      setBusinessSearchQuery('');
+      setClaimReturnDestination('business-search');
+      setProfileErrorMessage(null);
+      setProfileMessage('Secure retry link loaded. Use the original account username and email when you resubmit the business claim.');
+      navigateScreen('business-search', 'forward');
+      return;
+    }
+
     const route = `${parsedUrl.host}${parsedUrl.pathname}`.replace(/^\/+|\/+$/g, '').toLowerCase();
     if (route !== 'email-verification') {
       return;
@@ -2927,6 +2975,9 @@ function AppScreen() {
     onComplete?: () => void,
   ) {
     const currentScreen = screenMode;
+    if (nextScreen !== 'email-verification') {
+      setDeferredOnboardingNavigation(null);
+    }
     if (currentScreen === 'email-verification' && nextScreen !== 'email-verification') {
       setOutgoingEmailVerificationSnapshot({
         pendingVerification: pendingEmailVerification,
@@ -2952,6 +3003,13 @@ function AppScreen() {
 
     const willAnimateOnboardingTransition = shouldAnimateSplashReturn || shouldAnimateGuestReturnToBrowse || shouldAnimateOnboarding;
     if (willAnimateOnboardingTransition && onboardingNavigationInFlightRef.current) {
+      if (nextScreen === 'email-verification') {
+        setDeferredOnboardingNavigation({
+          direction,
+          nextScreen,
+          transitionOverride,
+        });
+      }
       return;
     }
 
@@ -6287,11 +6345,13 @@ function AppScreen() {
         address_not_applicable: false,
         verification_documents: buildVerificationDocuments(),
         supporting_details: profileForm.supporting_details,
+        retry_token: businessClaimRetryToken ?? undefined,
       };
       const response = await createBusinessProfile(apiBaseUrl, payload, authenticatedSession?.auth_token);
       setProfileForm(initialProfileFormState);
       setBusinessAttachments(initialBusinessAttachments);
       setBusinessPhotoUploads([]);
+      setBusinessClaimRetryToken(null);
       setSelectedClaimPlace(null);
       setSelectedClaimLocationId(null);
       setClaimReturnDestination('business-search');
@@ -6344,11 +6404,13 @@ function AppScreen() {
         address_not_applicable: servesMultipleAreas ? true : profileForm.address_not_applicable,
         verification_documents: buildVerificationDocuments(),
         supporting_details: profileForm.supporting_details,
+        retry_token: businessClaimRetryToken ?? undefined,
       };
       const response = await createManualBusinessProfile(apiBaseUrl, payload);
       setProfileForm(initialProfileFormState);
       setBusinessAttachments(initialBusinessAttachments);
       setBusinessPhotoUploads([]);
+      setBusinessClaimRetryToken(null);
       setSelectedClaimPlace(null);
       setSelectedClaimLocationId(null);
       handleBusinessSignupResponse(response);
@@ -6386,11 +6448,13 @@ function AppScreen() {
         business_venue_type: profileForm.business_venue_type,
         employer_address: profileForm.employer_address.trim(),
         supporting_details: profileForm.supporting_details,
+        retry_token: businessClaimRetryToken ?? undefined,
       };
       const response = await createInformalBusinessProfile(apiBaseUrl, payload);
       setProfileForm(initialProfileFormState);
       setBusinessAttachments(initialBusinessAttachments);
       setBusinessPhotoUploads([]);
+      setBusinessClaimRetryToken(null);
       setSelectedClaimPlace(null);
       setSelectedClaimLocationId(null);
       handleBusinessSignupResponse(response);
@@ -6817,6 +6881,8 @@ function AppScreen() {
     claimPrefillRequestRef.current += 1;
     claimPrefillLoadedKeyRef.current = '';
     setProfileErrorMessage(null);
+    setBusinessClaimRetryToken(null);
+    setProfileMessage(null);
     setBusinessSearchQuery('');
     setSelectedClaimLocationId(null);
     setClaimReturnDestination('business-search');
@@ -6826,6 +6892,8 @@ function AppScreen() {
   function handleBackToCreateProfile() {
     dismissKeyboardForScreenTransition();
     setProfileErrorMessage(null);
+    setBusinessClaimRetryToken(null);
+    setProfileMessage(null);
     navigateScreen('profiles', 'backward');
   }
 
@@ -7479,6 +7547,7 @@ function AppScreen() {
     const guestChromeInteractive = persistentOverlayScreen === null && incomingOnboardingScreen === null && returningToSplashScreen === null;
     const showingBrowse = screenMode === 'browse'
       || (guestOnboardingOrigin === 'browse' && currentOnboardingScreen !== null && returningToSplashScreen === null);
+    const hideGuestBrowseUnderlay = emailVerificationTransitionActive;
     const showingBrowseUnderSplash = keepGuestMapVisibleOnSplash && !browseTransitionActive && overlayScreen === null && incomingOnboardingScreen === null;
     const splashLayerStyle = returningToSplashScreen
       ? splashReturnIncomingStyle
@@ -7535,26 +7604,28 @@ function AppScreen() {
               : 'default-dark',
           ) : null}
         </Animated.View>
-        <Animated.View
-          pointerEvents={showingBrowse && !browseTransitionActive && !selectedPlaceSlug ? 'auto' : 'none'}
-          style={[
-            styles.screenTransitionLayerAbsolute,
-            !browseTransitionActive && (showingBrowse || showingBrowseUnderSplash) && shellFadeScope === 'browse' ? browseSceneTransitionStyle : null,
-            browseLayerStyle,
-          ]}
-        >
-          {renderBrowseScreen({
-            guestChrome: true,
-            guestChromeActionOpacity: nativeGuestChrome ? resolvedGuestBrowseNativeChromeOpacity : 1,
-            guestChromeInteractive: guestChromeInteractive && !selectedPlaceSlug,
-            guestChromeHeaderOpacity: nativeGuestChrome ? resolvedGuestBrowseNativeChromeOpacity : 1,
-            guestChromeLogoOpacity: nativeGuestChrome && guestToBrowseTransition ? 0 : guestBrowseHeaderLogoOpacity,
-            suppressBrowseSceneTransitionStyle: true,
-            suppressScreenTransitionStyle: true,
-            suppressTransitionOverlay: true,
-          })}
-        </Animated.View>
-        {!browseTransitionActive && (showingBrowse || showingBrowseUnderSplash) && shellFadeScope === 'browse' ? (
+        {!hideGuestBrowseUnderlay ? (
+          <Animated.View
+            pointerEvents={showingBrowse && !browseTransitionActive && !selectedPlaceSlug ? 'auto' : 'none'}
+            style={[
+              styles.screenTransitionLayerAbsolute,
+              !browseTransitionActive && (showingBrowse || showingBrowseUnderSplash) && shellFadeScope === 'browse' ? browseSceneTransitionStyle : null,
+              browseLayerStyle,
+            ]}
+          >
+            {renderBrowseScreen({
+              guestChrome: true,
+              guestChromeActionOpacity: nativeGuestChrome ? resolvedGuestBrowseNativeChromeOpacity : 1,
+              guestChromeInteractive: guestChromeInteractive && !selectedPlaceSlug,
+              guestChromeHeaderOpacity: nativeGuestChrome ? resolvedGuestBrowseNativeChromeOpacity : 1,
+              guestChromeLogoOpacity: nativeGuestChrome && guestToBrowseTransition ? 0 : guestBrowseHeaderLogoOpacity,
+              suppressBrowseSceneTransitionStyle: true,
+              suppressScreenTransitionStyle: true,
+              suppressTransitionOverlay: true,
+            })}
+          </Animated.View>
+        ) : null}
+        {!hideGuestBrowseUnderlay && !browseTransitionActive && (showingBrowse || showingBrowseUnderSplash) && shellFadeScope === 'browse' ? (
           <Animated.View pointerEvents="none" style={[styles.screenTransitionLayerAbsolute, browseShellFadeMaskStyle]} />
         ) : null}
         {persistentOverlayScreen ? (
@@ -7579,7 +7650,7 @@ function AppScreen() {
             {renderSelectedPlaceDetailScreen()}
           </Animated.View>
         ) : null}
-        {showingBrowse && browseMode === 'map' && !selectedPlaceSlug ? renderMapSwipeEdgeShield() : null}
+        {!hideGuestBrowseUnderlay && showingBrowse && browseMode === 'map' && !selectedPlaceSlug ? renderMapSwipeEdgeShield() : null}
       </View>
     ));
   }
@@ -7793,6 +7864,7 @@ function AppScreen() {
               errorMessage={profileErrorMessage}
               isLandscape={isLandscape}
               loadingPlaces={profilePlacesLoading}
+              message={profileMessage}
               onBack={handleBackToCreateProfile}
               onChangeSearchQuery={setBusinessSearchQuery}
               onChooseInformalBusiness={handleOpenInformalBusinessClaim}
@@ -8463,7 +8535,11 @@ function AppScreen() {
 
   return (
     <>
-      <StatusBar backgroundColor="transparent" style={statusBarStyle} translucent={translucentStatusBar} />
+      <NativeStatusBar
+        barStyle={statusBarStyle === 'light' ? 'light-content' : 'dark-content'}
+        backgroundColor="transparent"
+        translucent={translucentStatusBar}
+      />
       {!startupImagesReady ? (
         <View pointerEvents="none" style={styles.startupImagePreloadLayer}>
           {startupImageSources.map((source, index) => (
@@ -9028,6 +9104,9 @@ function getAnimatedMapMarkerStyle(
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) {
+    if (error.name === 'AbortError' || error.message.trim().toLowerCase() === 'aborted') {
+      return 'The business catalog is taking longer than expected. Please try again shortly.';
+    }
     return error.message;
   }
 

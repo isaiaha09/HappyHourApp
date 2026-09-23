@@ -16,9 +16,11 @@ def empty_social_profiles():
 	return {}
 
 
-def normalize_social_profiles(value=None, fallback_website_url='', fallback_social_links=None):
+def normalize_social_profiles(value=None, fallback_website_url='', fallback_social_links=None, strict=True):
 	normalized_profiles = {}
 	source_value = value if isinstance(value, dict) else {}
+	if len(list(fallback_social_links or [])) > 10:
+		raise ValueError('You may provide at most 10 social links.')
 
 	for platform in SOCIAL_PROFILE_PLATFORMS:
 		platform_value = source_value.get(platform)
@@ -26,6 +28,8 @@ def normalize_social_profiles(value=None, fallback_website_url='', fallback_soci
 			raw_value = str(platform_value.get('url') or platform_value.get('username') or '').strip()
 		else:
 			raw_value = str(platform_value or '').strip()
+		if len(raw_value) > 4000:
+			raise ValueError('Social profile values must be 4,000 characters or fewer.')
 
 		if platform == 'website' and not raw_value:
 			raw_value = str(fallback_website_url or '').strip()
@@ -33,18 +37,35 @@ def normalize_social_profiles(value=None, fallback_website_url='', fallback_soci
 		if not raw_value:
 			continue
 
-		profile = normalize_social_profile(platform, raw_value)
+		try:
+			profile = normalize_social_profile(platform, raw_value)
+		except ValueError:
+			if strict:
+				raise
+			continue
 		if profile:
 			normalized_profiles[platform] = profile
 
 	for raw_link in list(fallback_social_links or []):
 		candidate_link = str(raw_link or '').strip()
+		if len(candidate_link) > 4000:
+			raise ValueError('Social links must be 4,000 characters or fewer.')
 		if not candidate_link:
 			continue
-		platform = infer_social_platform(candidate_link)
+		try:
+			platform = infer_social_platform(candidate_link)
+		except ValueError:
+			if strict:
+				raise
+			continue
 		if platform is None or platform in normalized_profiles:
 			continue
-		profile = normalize_social_profile(platform, candidate_link)
+		try:
+			profile = normalize_social_profile(platform, candidate_link)
+		except ValueError:
+			if strict:
+				raise
+			continue
 		if profile:
 			normalized_profiles[platform] = profile
 
@@ -102,8 +123,8 @@ def build_social_media_links(profiles):
 	]
 
 
-def get_business_website_url(profiles, fallback=''):
-	normalized_profiles = normalize_social_profiles(profiles, fallback_website_url=fallback)
+def get_business_website_url(profiles, fallback='', strict=True):
+	normalized_profiles = normalize_social_profiles(profiles, fallback_website_url=fallback, strict=strict)
 	website_profile = normalized_profiles.get('website') or {}
 	return str(website_profile.get('url') or '').strip()
 
@@ -161,6 +182,8 @@ def _normalize_absolute_url(value):
 	raw_value = str(value or '').strip()
 	if not raw_value:
 		return ''
+	if '://' in raw_value and not raw_value.lower().startswith('https://'):
+		raise ValueError('Only HTTPS links are allowed.')
 	if '://' not in raw_value:
 		raw_value = f'https://{raw_value.lstrip("/")}'
 	return raw_value

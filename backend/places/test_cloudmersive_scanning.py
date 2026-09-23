@@ -1,3 +1,4 @@
+import base64
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -201,7 +202,11 @@ class ClaimAttachmentScanBoundaryTests(TestCase):
 
 	@patch('places.serializers.scan_pdf_file')
 	def test_images_skip_cloudmersive_and_non_media_claim_files_are_rejected(self, mock_scan):
-		image = SimpleUploadedFile('storefront.png', b'\x89PNG\r\n\x1a\nvalid', content_type='image/png')
+		image = SimpleUploadedFile(
+			'storefront.png',
+			base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='),
+			content_type='image/png',
+		)
 		pending = _prepare_claim_attachments(request_with_claim_files(image))
 		self.assertEqual(pending[0]['malware_scan_status'], BusinessClaimAttachment.MalwareScanStatus.NOT_APPLICABLE)
 		mock_scan.assert_not_called()
@@ -271,6 +276,6 @@ class ClaimAttachmentAdminSafetyTests(TestCase):
 
 		preview = str(inline.file_preview(attachment))
 
-		self.assertIn('Security scan warning', preview)
-		self.assertIn('Open/download after manual review', preview)
+		self.assertIn('Security scan quarantine', preview)
+		self.assertIn('Preview and download are blocked until a staff-triggered rescan returns clean.', preview)
 		self.assertNotIn('<iframe', preview)

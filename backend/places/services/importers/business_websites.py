@@ -135,10 +135,115 @@ class BusinessWebsiteImporter(BaseHtmlImporter):
 					'error': str(exc),
 				}
 				self.load_errors.append(error)
-				logger.warning('Skipping business source %s (%s): %s', error['name'], error['source_url'], error['error'])
+				logger.warning(
+					'Live refresh failed for business source %s (%s): %s; the catalog will retain fallback data.',
+					error['name'],
+					error['source_url'],
+					error['error'],
+				)
 				if self.strict_errors:
 					raise
 		return records
+
+	def load_configured_records(self):
+		"""Build a no-network catalog fallback from trusted source configuration.
+
+		The public catalog must remain available when a third-party website is
+		down.  This fallback deliberately uses only the metadata and inline text
+		already configured by staff; it never fetches a source URL.
+		"""
+		records = []
+		for source in self.business_sources:
+			if not source.get('enabled', True):
+				continue
+			try:
+				records.append(self._build_configured_record(source))
+			except Exception as exc:
+				logger.warning(
+					'Unable to build configured fallback for business source %s (%s): %s',
+					source.get('name') or source.get('source_url', 'unknown source'),
+					source.get('source_url', ''),
+					exc,
+				)
+		return records
+
+	def _build_configured_record(self, source):
+		configured_source = dict(source)
+		configured_source['name'] = (
+			self._normalize_whitespace(str(configured_source.get('name') or ''))
+			or self._normalize_whitespace(str(configured_source.get('profile_name') or ''))
+			or 'Business Listing'
+		)
+		configured_source.setdefault('city', City.VENTURA)
+		configured_source.setdefault('venue_type', VenueType.OTHER)
+		configured_source.setdefault('source_url', '')
+		configured_source.setdefault('website_url', configured_source.get('source_url', ''))
+
+		static_documents = self._build_static_source_documents(configured_source)
+		identity_document = self._first_document_for_role(static_documents, 'identity')
+		identity_soup = identity_document['soup'] if identity_document else BeautifulSoup('', 'html.parser')
+		identity = self._extract_identity(configured_source, identity_soup)
+		operating_hours = self._extract_operating_hours(configured_source, static_documents)
+		operating_hours_lookup = self._operating_hours_lookup(operating_hours)
+		deal_documents = self._documents_for_role(static_documents, 'deals')
+		deals = self._extract_deals(
+			configured_source,
+			[document['soup'] for document in deal_documents],
+			[document['url'] for document in deal_documents],
+			operating_hours=operating_hours_lookup,
+		)
+		source_url = configured_source.get('source_url', '')
+		external_id = configured_source.get('external_id') or self._default_external_id(
+			source_url or '|'.join([
+				configured_source['name'],
+				str(configured_source.get('city') or ''),
+				str(configured_source.get('address_line_1') or ''),
+			])
+		)
+
+		return ImportedPlace(
+			name=identity['name'] or configured_source['name'],
+			profile_name=configured_source.get('profile_name', identity['name'] or configured_source['name']),
+			profile_slug=configured_source.get('profile_slug', ''),
+			city=identity['city'],
+			venue_type=identity['venue_type'],
+			address_line_1=identity['address_line_1'],
+			address_line_2=identity['address_line_2'],
+			neighborhood=identity['neighborhood'],
+			state=identity['state'],
+			postal_code=identity['postal_code'],
+			latitude=configured_source.get('latitude'),
+			longitude=configured_source.get('longitude'),
+			geocode_query=configured_source.get('geocode_query', ''),
+			phone_number=identity['phone_number'],
+			website_url=identity['website_url'],
+			image_urls=[],
+			is_active=configured_source.get('is_active', True),
+			external_id=external_id,
+			source_name=self.source_name,
+			source_url=source_url,
+			deals=deals,
+			operating_hours=operating_hours,
+		)
+
+	def _build_static_source_documents(self, source):
+		documents = []
+		for index, document in enumerate(self._configured_source_documents(source)):
+			if not isinstance(document, dict):
+				continue
+			text = document.get('text')
+			html = document.get('html')
+			if text is None and html is None:
+				continue
+			if text is not None:
+				html = self._document_text_to_html(text)
+			documents.append({
+				'key': document.get('key') or f'fallback-{index}',
+				'url': self._normalize_whitespace(document.get('url', '') or source.get('source_url', '')),
+				'roles': self._normalize_document_roles(document.get('roles')),
+				'soup': BeautifulSoup(html or '', 'html.parser'),
+			})
+		return documents
 
 	def parse_html(self, html):
 		raise NotImplementedError('BusinessWebsiteImporter parses multiple live business pages, not a single HTML document.')
@@ -358,7 +463,7 @@ class BusinessWebsiteImporter(BaseHtmlImporter):
 	def _normalized_http_url(self, value):
 		candidate = self._normalize_whitespace(str(value or ''))
 		parsed = urlparse(candidate)
-		if parsed.scheme not in {'http', 'https'} or not parsed.netloc:
+		if parsed.scheme != 'https' or not parsed.netloc:
 			return ''
 		return candidate
 
@@ -656,7 +761,7 @@ class BusinessWebsiteImporter(BaseHtmlImporter):
 
 	def _is_likely_preview_image(self, candidate_url):
 		parsed = urlparse(candidate_url)
-		if parsed.scheme not in {'http', 'https'} or not parsed.netloc:
+		if parsed.scheme != 'https' or not parsed.netloc:
 			return False
 		value = candidate_url.lower()
 		if any(token in value for token in ['logo', 'icon', 'sprite', 'favicon', 'avatar']):

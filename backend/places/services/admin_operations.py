@@ -599,7 +599,7 @@ def get_audit_timeline(limit=50):
 	return sorted(events, key=lambda event: (event['action_time'],), reverse=True)[:limit]
 
 
-def record_admin_audit_event(request, obj, message, action_flag=CHANGE):
+def record_admin_audit_event(request, obj, message, action_flag=CHANGE, metadata=None):
 	if not getattr(request.user, 'is_authenticated', False) or not getattr(request.user, 'pk', None):
 		return
 	content_type = ContentType.objects.get_for_model(obj, for_concrete_model=False)
@@ -610,6 +610,7 @@ def record_admin_audit_event(request, obj, message, action_flag=CHANGE):
 		object_repr=str(obj),
 		event_type='admin_operation',
 		message=message,
+		metadata=metadata or {},
 	)
 	LogEntry.objects.log_actions(
 		user_id=request.user.pk,

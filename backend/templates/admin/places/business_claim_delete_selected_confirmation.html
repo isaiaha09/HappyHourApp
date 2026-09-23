@@ -1,0 +1,106 @@
+{% extends "admin/base_site.html" %}
+{% load i18n l10n admin_urls static unfold %}
+
+{% block extrahead %}
+    {{ block.super }}
+    {{ media }}
+    <script src="{% static 'admin/js/cancel.js' %}" async></script>
+    <style>
+      .business-claim-delete-warning {
+        margin: 0 0 20px;
+        padding: 16px 18px;
+        border: 1px solid #8f3a3a;
+        border-radius: 12px;
+        background: rgba(143, 58, 58, 0.14);
+      }
+
+      .business-claim-delete-warning h2 { margin: 0 0 8px; }
+      .business-claim-delete-warning p { margin: 0 0 12px; }
+
+      .business-claim-delete-warning__list {
+        max-height: 260px;
+        overflow-y: auto;
+        padding: 12px 14px;
+        border-radius: 10px;
+        background: rgba(0, 0, 0, 0.18);
+      }
+
+      .business-claim-delete-warning__list ul { margin: 0; padding-left: 18px; }
+      .business-claim-delete-warning__list li + li { margin-top: 8px; }
+
+      .account-delete-reason { padding: 16px 0; }
+      .account-delete-reason label { display: block; font-weight: 600; }
+      .account-delete-reason p { margin: 6px 0; font-size: 0.875rem; opacity: 0.8; }
+      .account-delete-reason textarea {
+        display: block;
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 100%;
+        min-height: 100px;
+        margin-top: 8px;
+        padding: 10px;
+        border: 1px solid #6b7280;
+        border-radius: 8px;
+        background: transparent;
+        color: inherit;
+      }
+    </style>
+{% endblock %}
+
+{% block bodyclass %}{{ block.super }} app-{{ opts.app_label }} model-{{ opts.model_name }} delete-confirmation delete-selected-confirmation{% endblock %}
+
+{% block content %}
+    {% if perms_lacking %}
+        <p class="font-semibold p-4 text-font-important-light dark:text-font-important-dark">
+            {% blocktranslate %}Deleting the selected {{ objects_name }} would result in deleting related objects, but your account doesn't have permission to delete the following types of objects:{% endblocktranslate %}
+        </p>
+        <div class="border-t border-base-200 p-4 dark:border-base-800">
+            <ul class="leading-relaxed dark:border-base-800">{% for obj in perms_lacking %}<li>{{ obj }}</li>{% endfor %}</ul>
+        </div>
+    {% elif protected %}
+        <div class="border border-base-200 rounded-default shadow-xs dark:border-base-800">
+            <p class="font-semibold p-4 text-font-important-light dark:text-font-important-dark">
+                {% blocktranslate %}Deleting the selected {{ objects_name }} would require deleting the following protected related objects:{% endblocktranslate %}
+            </p>
+            <div class="border-t border-base-200 p-4 dark:border-base-800">
+                <ul class="leading-relaxed dark:border-base-800">{% for obj in protected %}<li>{{ obj }}</li>{% endfor %}</ul>
+            </div>
+        </div>
+    {% else %}
+        <div class="business-claim-delete-warning">
+            <h2>Are you sure you want to delete these business claims?</h2>
+            <p>Review the selected claims below before permanently deleting them.</p>
+            <div class="business-claim-delete-warning__list">
+                <ul>
+                    {% for claim in queryset %}
+                        <li>
+                            <strong>{{ claim.listing_snapshot.name }}</strong>
+                            {% if claim.claimant and claim.claimant.email %}from {{ claim.claimant.email }}{% endif %}
+                            for {{ claim.contact_name }}{% if claim.get_status_display %} ({{ claim.get_status_display }}){% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+
+        <div class="border border-base-200 rounded-default shadow-xs dark:border-base-800">
+            <p class="font-semibold p-4 text-font-important-light dark:text-font-important-dark">
+                {% blocktranslate %}Are you sure you want to delete the selected {{ objects_name }}? All of the following objects and their related items will be deleted:{% endblocktranslate %}
+            </p>
+            {% include "admin/includes/object_delete_summary.html" %}
+            <div class="border-t border-base-200 p-4 dark:border-base-800">
+                <h2 class="font-semibold mb-2 text-font-important-light dark:text-font-important-dark">{% translate "Objects" %}</h2>
+                {% for deletable_object in deletable_objects %}<ul class="leading-relaxed">{{ deletable_object|unordered_list }}</ul>{% endfor %}
+            </div>
+            <form method="post" class="border-t border-base-200 px-4 py-3 dark:border-base-800">
+                {% csrf_token %}
+                {% if "_dataset" in request.POST %}<input type="hidden" name="_dataset" value="{{ request.POST|index:"_dataset" }}">{% endif %}
+                {% for obj in queryset %}<input type="hidden" name="{{ action_checkbox_name }}" value="{{ obj.pk|unlocalize }}">{% endfor %}
+                <input type="hidden" name="action" value="delete_selected">
+                <input type="hidden" name="post" value="yes">
+                {% include "admin/places/includes/account_deletion_reason.html" %}
+                <div class="flex items-center">{% include "unfold/helpers/delete_submit_line.html" %}</div>
+            </form>
+        </div>
+    {% endif %}
+{% endblock %}

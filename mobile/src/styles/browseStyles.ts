@@ -56,7 +56,7 @@ export const browseStyles = {
     position: 'relative',
   },
   browseContentFill: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   appTitle: {
     color: theme.textPrimary,
@@ -70,16 +70,16 @@ export const browseStyles = {
     flex: 1,
   },
   mapModeContentLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   mapThemeTransitionLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   mapBackground: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   mapOverlayLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     gap: 12,
     justifyContent: 'flex-start',
     paddingHorizontal: 18,

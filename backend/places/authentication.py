@@ -24,6 +24,10 @@ class ProfileTokenAuthentication(authentication.BaseAuthentication):
 		token = ProfileAuthToken.objects.select_related('user').filter(token_hash=ProfileAuthToken.hash_key(token_key)).first()
 		if token is None:
 			raise exceptions.AuthenticationFailed('Invalid profile token.')
+		profile = getattr(token.user, 'account_profile', None)
+		if profile is not None and profile.business_claim_suspended:
+			ProfileAuthToken.objects.filter(user=token.user).delete()
+			raise exceptions.AuthenticationFailed('Profile access is unavailable.')
 		if token.is_expired(timezone.now()):
 			token.delete()
 			raise exceptions.AuthenticationFailed('Profile token expired.')

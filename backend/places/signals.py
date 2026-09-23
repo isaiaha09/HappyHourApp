@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.db.models.signals import post_delete, post_save, pre_delete, pre_save
 from django.dispatch import receiver
 
-from .models import AccountProfile, BusinessClaim, BusinessClaimAttachment, BusinessDirectMessage, BusinessMembership, ContentReport, ListingSnapshot, SponsoredCampaign
+from .models import AccountProfile, BusinessClaim, BusinessClaimAttachment, BusinessDirectMessage, BusinessMembership, ContentReport, ListingSnapshot, ManagedMedia, SponsoredCampaign
 from .services.admin_operations import invalidate_admin_operations_cache
 from .services.account_profiles import remove_favorites_for_business_accounts
 from .services.media_storage import delete_removed_storage_references, delete_storage_names, delete_storage_references
@@ -50,18 +50,18 @@ def cleanup_removed_business_claim_photo_references(sender, instance, created, *
 	previous_references = getattr(instance, '_previous_photo_references', None)
 	if previous_references is None:
 		return
-	delete_removed_storage_references(previous_references, instance.photo_references or [])
+	delete_removed_storage_references(previous_references, instance.photo_references or [], claim=instance)
 	delattr(instance, '_previous_photo_references')
 	previous_deal_attachment_references = getattr(instance, '_previous_deal_attachment_references', None)
 	if previous_deal_attachment_references is not None:
-		delete_removed_storage_references(previous_deal_attachment_references, _get_deal_attachment_references(instance.deal_overrides))
+		delete_removed_storage_references(previous_deal_attachment_references, _get_deal_attachment_references(instance.deal_overrides), claim=instance)
 		delattr(instance, '_previous_deal_attachment_references')
 
 
 @receiver(post_delete, sender=BusinessClaim)
 def cleanup_deleted_business_claim_photo_references(sender, instance, **kwargs):
-	delete_storage_references(instance.photo_references or [])
-	delete_storage_references(_get_deal_attachment_references(instance.deal_overrides))
+	delete_storage_references(instance.photo_references or [], claim=instance)
+	delete_storage_references(_get_deal_attachment_references(instance.deal_overrides), claim=instance)
 
 
 @receiver(post_save, sender=ListingSnapshot)
@@ -144,6 +144,14 @@ def cleanup_deleted_direct_message_image(sender, instance, **kwargs):
 		instance.image.storage.delete(file_name)
 
 
+@receiver(post_delete, sender=ManagedMedia)
+def cleanup_deleted_managed_media(sender, instance, **kwargs):
+	file_name = str(getattr(instance, 'storage_name', '') or '').strip()
+	if file_name:
+		from django.core.files.storage import default_storage
+		default_storage.delete(file_name)
+
+
 @receiver(post_delete, sender=ContentReport)
 def cleanup_deleted_content_report_screenshot(sender, instance, **kwargs):
 	invalidate_admin_operations_cache()
@@ -173,6 +181,9 @@ def _get_deal_attachment_references(deal_overrides):
 		if not isinstance(deal, dict):
 			continue
 		attachment = deal.get('attachment')
-		if isinstance(attachment, dict) and attachment.get('url'):
-			references.append(attachment['url'])
+		if isinstance(attachment, dict):
+			if attachment.get('url'):
+				references.append(attachment['url'])
+			elif attachment.get('media_id'):
+				references.append(f"media:{attachment['media_id']}")
 	return references

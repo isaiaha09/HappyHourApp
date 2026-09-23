@@ -8,13 +8,12 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.core.files.storage import default_storage
 from django.db import transaction
 from django.utils import timezone
 from django.utils.text import slugify
 from rest_framework import serializers
 
-from .models import BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessPost, City, ContentReport, FeedEngagement, FeedImpression, ListingSnapshot, SponsoredCampaign, VenueType, business_claim_storage_prefix
+from .models import BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessClaimRetryGrant, BusinessPost, City, ContentReport, FeedEngagement, FeedImpression, ListingSnapshot, ManagedMedia, SponsoredCampaign, VenueType, business_claim_storage_prefix
 from .services.account_profiles import build_account_response, get_approved_business_claims, get_or_create_account_profile, has_active_business_membership, send_business_claim_submission_support_email_safely
 from .services.business_profile_overrides import (
 	build_deal_payloads,
@@ -26,7 +25,8 @@ from .services.business_profile_overrides import (
 )
 from .services.cloudmersive_scanning import ScanStatus, scan_pdf_file
 from .services.content_moderation import get_content_moderation_error
-from .services.image_moderation import ImageModerationRejected, ImageModerationUnavailable, moderate_uploaded_image
+from .services.image_moderation import ImageModerationRejected, ImageModerationUnavailable, moderate_uploaded_image, validate_uploaded_image
+from .services.media_storage import extract_managed_storage_name, managed_media_id_from_reference, save_managed_media
 from .services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
 
 
@@ -73,9 +73,52 @@ DICT_JSON_FIELD_NAMES = (
 
 BUSINESS_VERIFICATION_CONSENT_VERSION = '2026-08-16'
 TERMS_OF_SERVICE_VERSION = '2026-08-30'
+GENERIC_AUTH_FAILURE_MESSAGE = 'Unable to sign in with those credentials.'
+MAX_STRUCTURED_JSON_BYTES = 1_000_000
+MAX_STRUCTURED_JSON_DEPTH = 5
+MAX_STRUCTURED_TEXT_LENGTH = 4_000
+MAX_SOCIAL_LINKS = 10
+MAX_DEALS = 20
+MAX_OPERATING_HOUR_WINDOWS = 14
+MAX_PROFILE_PHOTOS = 8
+
+
+def _validate_structured_value(value, field_name, depth=0):
+	if depth > MAX_STRUCTURED_JSON_DEPTH:
+		raise serializers.ValidationError({field_name: [f'{field_name} may be nested no deeper than {MAX_STRUCTURED_JSON_DEPTH} levels.']})
+	if isinstance(value, str) and len(value) > MAX_STRUCTURED_TEXT_LENGTH:
+		raise serializers.ValidationError({field_name: [f'Text values in {field_name} must be {MAX_STRUCTURED_TEXT_LENGTH} characters or fewer.']})
+	if isinstance(value, dict):
+		for key, child in value.items():
+			_validate_structured_value(child, field_name, depth + 1)
+	elif isinstance(value, list):
+		for child in value:
+			_validate_structured_value(child, field_name, depth + 1)
+	try:
+		encoded = json.dumps(value, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+	except (TypeError, ValueError):
+		raise serializers.ValidationError({field_name: [f'{field_name} must contain JSON-compatible values.']})
+	if len(encoded) > MAX_STRUCTURED_JSON_BYTES:
+		raise serializers.ValidationError({field_name: ['Structured profile data must be 1 MB or smaller.']})
+
+
+def _validate_profile_list_limits(value, field_name, max_count):
+	if value is None:
+		return
+	if len(value) > max_count:
+		raise serializers.ValidationError({field_name: [f'{field_name} may contain at most {max_count} entries.']})
+
+
+def _validate_https_reference_list(value, field_name):
+	for reference in value or []:
+		parsed = urlparse(str(reference or '').strip())
+		if parsed.scheme and parsed.scheme.lower() != 'https':
+			raise serializers.ValidationError({field_name: ['Only HTTPS links are allowed.']})
 
 
 def _normalize_social_profile_payload(raw_profiles=None, business_website_url='', social_media_links=None):
+	_validate_structured_value(raw_profiles or {}, 'social_profiles')
+	_validate_profile_list_limits(list(social_media_links or []), 'social_media_links', MAX_SOCIAL_LINKS)
 	try:
 		normalized_social_profiles = normalize_social_profiles(
 			raw_profiles,
@@ -93,6 +136,10 @@ def _normalize_social_profile_payload(raw_profiles=None, business_website_url=''
 
 
 def _normalize_business_profile_override_payload(raw_deal_overrides=None, raw_operating_hour_overrides=None):
+	_validate_structured_value(raw_deal_overrides or [], 'deal_overrides')
+	_validate_structured_value(raw_operating_hour_overrides or [], 'operating_hour_overrides')
+	_validate_profile_list_limits(list(raw_deal_overrides or []), 'deal_overrides', MAX_DEALS)
+	_validate_profile_list_limits(list(raw_operating_hour_overrides or []), 'operating_hour_overrides', MAX_OPERATING_HOUR_WINDOWS)
 	try:
 		normalized_deal_overrides = normalize_deal_overrides(raw_deal_overrides)
 	except ValueError as error:
@@ -140,6 +187,9 @@ def build_signup_request_data(data):
 			stripped = value.strip()
 			normalized[key] = json.loads(stripped) if stripped else {}
 
+	for key in (*LIST_JSON_FIELD_NAMES, *DICT_JSON_FIELD_NAMES):
+		if key in normalized:
+			_validate_structured_value(normalized[key], key)
 	return normalized
 
 
@@ -158,10 +208,63 @@ def _normalize_document_map(value):
 		return {key: [] for key in BUSINESS_DOCUMENT_KEYS}
 	if not isinstance(value, dict):
 		raise serializers.ValidationError('Verification documents must be grouped by document type.')
+	_validate_structured_value(value, 'verification_documents')
 	return {
 		key: _normalize_string_list(value.get(key, []))
 		for key in BUSINESS_DOCUMENT_KEYS
 	}
+
+
+def _validate_claim_media_ownership(claim, deal_overrides=None, photo_references=None):
+	media_ids = set()
+	for reference in photo_references or []:
+		if extract_managed_storage_name(reference):
+			raise serializers.ValidationError({'photo_references': ['Raw storage URLs are not accepted for managed media.']})
+		media_id = managed_media_id_from_reference(reference)
+		if media_id is not None:
+			media_ids.add(media_id)
+	for deal in deal_overrides or []:
+		attachment = deal.get('attachment') if isinstance(deal, dict) else None
+		if not isinstance(attachment, dict):
+			continue
+		if extract_managed_storage_name(attachment.get('url')):
+			raise serializers.ValidationError({'deal_overrides': ['Raw storage URLs are not accepted for managed media.']})
+		media_id = attachment.get('media_id') or attachment.get('url')
+		parsed_media_id = managed_media_id_from_reference(media_id)
+		if parsed_media_id is not None:
+			media_ids.add(parsed_media_id)
+	if media_ids and ManagedMedia.objects.filter(
+		media_id__in=media_ids,
+		owner_id=claim.claimant_id,
+		claim_id=claim.pk,
+	).count() != len(media_ids):
+		raise serializers.ValidationError({'media': ['One or more managed media items do not belong to this business profile.']})
+
+
+def _get_valid_business_retry_grant(user, token):
+	if user is None or not token:
+		return None
+	grant = (
+		BusinessClaimRetryGrant.objects
+		.select_related('rejected_claim')
+		.filter(user=user, rejected_claim__claimant=user, rejected_claim__status=BusinessClaim.Status.REJECTED)
+		.order_by('-created_at', '-pk')
+		.first()
+	)
+	profile = get_or_create_account_profile(user)
+	if grant is None or profile is None or not profile.email_is_verified or not profile.business_claim_suspended or not grant.is_active(token):
+		return None
+	return grant
+
+
+def _consume_business_retry_grant(user, grant, token):
+	if grant is None:
+		return
+	locked_grant = BusinessClaimRetryGrant.objects.select_for_update().select_related('rejected_claim').get(pk=grant.pk)
+	if locked_grant.user_id != user.pk or not locked_grant.is_active(token):
+		raise serializers.ValidationError({'retry_token': ['This business claim retry link is invalid or expired.']})
+	locked_grant.used_at = timezone.now()
+	locked_grant.save(update_fields=['used_at'])
 
 
 def _require_verification_data_consent(attrs):
@@ -188,9 +291,26 @@ def _normalize_url_identity(value):
 	return f'{netloc}{path}'
 
 
+def _validate_request_image_aggregate(request):
+	if request is None:
+		return
+	max_aggregate_bytes = max(1, int(getattr(settings, 'IMAGE_UPLOAD_MAX_AGGREGATE_BYTES', 20 * 1024 * 1024) or 20 * 1024 * 1024))
+	image_bytes = 0
+	for uploaded_files in request.FILES.lists():
+		for uploaded_file in uploaded_files[1]:
+			content_type = str(getattr(uploaded_file, 'content_type', '') or '').strip().lower()
+			file_suffix = Path(getattr(uploaded_file, 'name', '') or '').suffix.lower()
+			if not (content_type.startswith('image/') or file_suffix in SUPPORTED_CLAIM_IMAGE_SUFFIXES):
+				continue
+			image_bytes += int(getattr(uploaded_file, 'size', 0) or 0)
+			if image_bytes > max_aggregate_bytes:
+				raise serializers.ValidationError({'uploads': ['The combined image upload size must be 20 MB or smaller.']})
+
+
 def _prepare_claim_attachments(request):
 	if request is None:
 		return []
+	_validate_request_image_aggregate(request)
 	pending_attachments = []
 	for request_field_name, attachment_kind in ATTACHMENT_FIELD_NAME_MAP.items():
 		for uploaded_file in request.FILES.getlist(request_field_name):
@@ -358,28 +478,9 @@ def _validate_claim_attachment_format(uploaded_file):
 
 def _validate_claim_image_signature(uploaded_file):
 	try:
-		uploaded_file.seek(0)
-		prefix = bytes(uploaded_file.read(32) or b'')
-	except (AttributeError, OSError, TypeError, ValueError):
-		raise serializers.ValidationError({'verification_documents': ['The uploaded image contents could not be verified.']})
-	finally:
-		try:
-			uploaded_file.seek(0)
-		except (OSError, ValueError):
-			pass
-
-	heif_brands = {b'heic', b'heif', b'heis', b'heix', b'hevc', b'hevx', b'mif1', b'msf1'}
-	valid_signature = (
-		prefix.startswith(b'\xff\xd8\xff')
-		or prefix.startswith(b'\x89PNG\r\n\x1a\n')
-		or prefix.startswith((b'GIF87a', b'GIF89a'))
-		or prefix.startswith(b'BM')
-		or (prefix.startswith(b'RIFF') and prefix[8:12] == b'WEBP')
-		or prefix.startswith((b'II*\x00', b'MM\x00*'))
-		or (len(prefix) >= 12 and prefix[4:8] == b'ftyp' and prefix[8:12] in heif_brands)
-	)
-	if not valid_signature:
-		raise serializers.ValidationError({'verification_documents': ['The uploaded image contents could not be verified.']})
+		validate_uploaded_image(uploaded_file)
+	except ImageModerationRejected as error:
+		raise serializers.ValidationError({'verification_documents': [str(error)]})
 
 
 def _validate_claim_attachment_size(uploaded_file, field_name):
@@ -401,12 +502,13 @@ def _save_uploaded_deal_attachment(request, claim, uploaded_file):
 
 	filename_root = Path(getattr(uploaded_file, 'name', '') or 'deal-attachment').stem or 'deal-attachment'
 	safe_name = slugify(filename_root) or 'deal-attachment'
-	saved_name = default_storage.save(
-		f'{business_claim_storage_prefix(claim)}/deal-attachments/{uuid4().hex}-{safe_name}{file_suffix}',
-		uploaded_file,
+	storage_name = (
+		f'{business_claim_storage_prefix(claim)}/deal-attachments/{uuid4().hex}-{safe_name}{file_suffix}'
 	)
+	media, media_url = save_managed_media(claim, uploaded_file, storage_name, 'deal_attachment', request=request)
 	attachment_payload = {
-		'url': request.build_absolute_uri(default_storage.url(saved_name)),
+		'url': media_url,
+		'media_id': str(media.media_id),
 		'name': getattr(uploaded_file, 'name', '') or f'{safe_name}{file_suffix}',
 	}
 	if content_type:
@@ -421,8 +523,17 @@ def _append_uploaded_profile_photos_to_claim(request, claim):
 	if request is None or claim is None or getattr(claim, '_profile_photo_uploads_saved', False):
 		return
 
+	uploaded_files = request.FILES.getlist('profile_photo_uploads')
+	max_photos = max(1, int(getattr(settings, 'BUSINESS_PROFILE_MAX_PHOTOS', 8) or 8))
+	max_aggregate_bytes = max(1, int(getattr(settings, 'IMAGE_UPLOAD_MAX_AGGREGATE_BYTES', 20 * 1024 * 1024) or 20 * 1024 * 1024))
+	if len(list(claim.photo_references or [])) + len(uploaded_files) > max_photos:
+		raise serializers.ValidationError({'photo_uploads': [f'Business profiles can contain at most {max_photos} photos.']})
+	declared_total = sum(int(getattr(uploaded_file, 'size', 0) or 0) for uploaded_file in uploaded_files)
+	if declared_total > max_aggregate_bytes:
+		raise serializers.ValidationError({'photo_uploads': ['The combined photo upload size must be 20 MB or smaller.']})
+
 	uploaded_photo_urls = []
-	for uploaded_file in request.FILES.getlist('profile_photo_uploads'):
+	for uploaded_file in uploaded_files:
 		content_type = str(getattr(uploaded_file, 'content_type', '') or '').strip().lower()
 		file_suffix = Path(getattr(uploaded_file, 'name', '') or '').suffix.lower()
 		if content_type == 'application/pdf' or file_suffix == '.pdf' or not (content_type.startswith('image/') or file_suffix in SUPPORTED_DEAL_ATTACHMENT_SUFFIXES):
@@ -438,11 +549,11 @@ def _append_uploaded_profile_photos_to_claim(request, claim):
 
 		filename_root = Path(getattr(uploaded_file, 'name', '') or 'business-photo').stem or 'business-photo'
 		safe_name = slugify(filename_root) or 'business-photo'
-		saved_name = default_storage.save(
-			f'{business_claim_storage_prefix(claim)}/profile-photos/{uuid4().hex}-{safe_name}{file_suffix}',
-			uploaded_file,
+		storage_name = (
+			f'{business_claim_storage_prefix(claim)}/profile-photos/{uuid4().hex}-{safe_name}{file_suffix}'
 		)
-		uploaded_photo_urls.append(request.build_absolute_uri(default_storage.url(saved_name)))
+		media, media_url = save_managed_media(claim, uploaded_file, storage_name, 'profile_photo', request=request)
+		uploaded_photo_urls.append(media_url)
 
 	if not uploaded_photo_urls:
 		return
@@ -523,10 +634,10 @@ class ProfileDashboardUpdateSerializer(serializers.Serializer):
 	social_profiles = serializers.JSONField(required=False)
 	deal_overrides = serializers.JSONField(required=False)
 	operating_hour_overrides = serializers.JSONField(required=False)
-	social_media_links_text = serializers.CharField(required=False, allow_blank=True)
-	offer_entries_text = serializers.CharField(required=False, allow_blank=True)
-	hours_of_operation_entries_text = serializers.CharField(required=False, allow_blank=True)
-	photo_references_text = serializers.CharField(required=False, allow_blank=True)
+	social_media_links_text = serializers.CharField(max_length=4000, required=False, allow_blank=True)
+	offer_entries_text = serializers.CharField(max_length=4000, required=False, allow_blank=True)
+	hours_of_operation_entries_text = serializers.CharField(max_length=4000, required=False, allow_blank=True)
+	photo_references_text = serializers.CharField(max_length=4000, required=False, allow_blank=True)
 	supporting_details = serializers.CharField(max_length=4000, required=False, allow_blank=True)
 	direct_messaging_enabled = serializers.BooleanField(required=False)
 
@@ -575,6 +686,9 @@ class ProfileDashboardUpdateSerializer(serializers.Serializer):
 
 	def validate(self, attrs):
 		attrs = super().validate(attrs)
+		for field_name in ('social_profiles', 'deal_overrides', 'operating_hour_overrides'):
+			if field_name in attrs:
+				_validate_structured_value(attrs[field_name], field_name)
 		if any(field_name in attrs for field_name in ('social_profiles', 'social_media_links_text', 'business_website_url')):
 			legacy_social_links = _normalize_string_list(attrs.get('social_media_links_text', '')) if 'social_media_links_text' in attrs else []
 			normalized_social_profiles, normalized_website_url, normalized_social_links = _normalize_social_profile_payload(
@@ -597,6 +711,12 @@ class ProfileDashboardUpdateSerializer(serializers.Serializer):
 			)
 			attrs['offer_entries_text'] = '\n'.join(normalized_offer_entries)
 			attrs['hours_of_operation_entries_text'] = '\n'.join(normalized_hour_entries)
+		if 'social_media_links_text' in attrs:
+			_validate_profile_list_limits(_normalize_string_list(attrs['social_media_links_text']), 'social_media_links', MAX_SOCIAL_LINKS)
+		if 'photo_references_text' in attrs:
+			photo_references = _normalize_string_list(attrs['photo_references_text'])
+			_validate_profile_list_limits(photo_references, 'photo_references', MAX_PROFILE_PHOTOS)
+			_validate_https_reference_list(photo_references, 'photo_references')
 		return attrs
 
 
@@ -639,8 +759,11 @@ class ContentReportSerializer(serializers.Serializer):
 		return value.strip()
 
 	def validate_screenshot(self, value):
-		if value is not None and value.size > 10 * 1024 * 1024:
-			raise serializers.ValidationError('Screenshots must be 10 MB or smaller.')
+		if value is not None:
+			try:
+				moderate_uploaded_image(value, surface='content_report_screenshot')
+			except (ImageModerationRejected, ImageModerationUnavailable) as error:
+				raise serializers.ValidationError(str(error))
 		return value
 
 
@@ -805,24 +928,26 @@ class LoginSerializer(serializers.Serializer):
 		identifier = attrs['identifier'].strip()
 		user = User.objects.filter(username__iexact=identifier).first()
 		if user is None:
-			raise serializers.ValidationError('No account matches that username.')
+			raise serializers.ValidationError(GENERIC_AUTH_FAILURE_MESSAGE)
 
 		authenticated_user = authenticate(username=user.username, password=attrs['password'])
 		if authenticated_user is None:
-			raise serializers.ValidationError('Incorrect password.')
+			raise serializers.ValidationError(GENERIC_AUTH_FAILURE_MESSAGE)
+
+		profile = get_or_create_account_profile(authenticated_user)
+		if profile.business_claim_suspended:
+			raise serializers.ValidationError(GENERIC_AUTH_FAILURE_MESSAGE)
 
 		if attrs['portal'] == 'customer' and has_active_business_membership(authenticated_user):
-			raise serializers.ValidationError('Business accounts must sign in through the business account portal.')
+			raise serializers.ValidationError(GENERIC_AUTH_FAILURE_MESSAGE)
 
 		if attrs['portal'] == 'business':
 			if has_active_business_membership(authenticated_user) or get_approved_business_claims(authenticated_user):
 				pass
 			elif authenticated_user.business_claims.exists() or authenticated_user.business_memberships.exists():
-				raise serializers.ValidationError('Your business claim must be approved by an admin before you can sign in to the business portal.')
+				raise serializers.ValidationError(GENERIC_AUTH_FAILURE_MESSAGE)
 			else:
-				raise serializers.ValidationError('That account does not have an approved business profile yet.')
-
-		profile = get_or_create_account_profile(authenticated_user)
+				raise serializers.ValidationError(GENERIC_AUTH_FAILURE_MESSAGE)
 		if not profile.email_is_verified:
 			attrs['user'] = authenticated_user
 			attrs['email_verification_required'] = True
@@ -882,6 +1007,13 @@ class PasswordResetRequestSerializer(serializers.Serializer):
 		return value.strip()
 
 
+class BusinessClaimRetryRequestSerializer(serializers.Serializer):
+	identifier = serializers.CharField(max_length=150)
+
+	def validate_identifier(self, value):
+		return value.strip()
+
+
 class PasswordResetConfirmSerializer(serializers.Serializer):
 	token = serializers.CharField(max_length=128)
 	new_password = serializers.CharField(min_length=8, write_only=True, style={'input_type': 'password'})
@@ -889,8 +1021,12 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 	def validate(self, attrs):
 		from .models import AccountProfile
 
-		profile = AccountProfile.objects.select_related('user').filter(password_reset_token=attrs['token']).first()
-		if profile is None or not profile.password_reset_token_is_active():
+		try:
+			selector = str(attrs['token']).split('.', 1)[0]
+		except (AttributeError, IndexError):
+			selector = ''
+		profile = AccountProfile.objects.select_related('user').filter(password_reset_selector=selector).first()
+		if profile is None or not profile.password_reset_token_is_active(attrs['token']):
 			raise serializers.ValidationError({'token': ['That password reset link is invalid or expired.']})
 
 		try:
@@ -920,6 +1056,7 @@ class CustomerSignupSerializer(serializers.Serializer):
 	first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
 	last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
 	terms_accepted = serializers.BooleanField(required=False, default=False, write_only=True)
+	retry_token = serializers.CharField(max_length=128, required=False, allow_blank=True, write_only=True)
 
 	def allows_rejected_business_reregistration(self):
 		return False
@@ -955,6 +1092,19 @@ class CustomerSignupSerializer(serializers.Serializer):
 
 	def validate(self, attrs):
 		attrs = super().validate(attrs)
+		for field_name in ('social_profiles', 'deal_overrides', 'operating_hour_overrides', 'verification_documents'):
+			if field_name in attrs:
+				_validate_structured_value(attrs[field_name], field_name)
+		for field_name, max_count in (
+			('social_media_links', MAX_SOCIAL_LINKS),
+			('offer_entries', MAX_DEALS),
+			('hours_of_operation_entries', MAX_OPERATING_HOUR_WINDOWS),
+			('photo_references', MAX_PROFILE_PHOTOS),
+		):
+			if field_name in attrs:
+				_validate_profile_list_limits(attrs[field_name], field_name, max_count)
+		if 'photo_references' in attrs:
+			_validate_https_reference_list(attrs['photo_references'], 'photo_references')
 		existing_username_user = self._get_existing_user_by_username(attrs.get('username'))
 		existing_email_user = self._get_existing_user_by_email(attrs.get('email'))
 
@@ -966,13 +1116,25 @@ class CustomerSignupSerializer(serializers.Serializer):
 
 		existing_user = existing_username_user or existing_email_user
 		if existing_user is None:
+			if attrs.get('retry_token'):
+				raise serializers.ValidationError({'retry_token': ['This business claim retry link is invalid or expired.']})
 			return attrs
 
-		if self._can_upgrade_authenticated_existing_user(existing_user):
+		retry_token = str(attrs.get('retry_token') or '').strip()
+		if retry_token:
+			if not self.allows_rejected_business_reregistration():
+				raise serializers.ValidationError({'retry_token': ['This link can only be used to retry a rejected business claim.']})
+			if existing_username_user is None or existing_email_user is None or existing_username_user.pk != existing_email_user.pk or existing_user.username.casefold() != str(attrs.get('username') or '').casefold() or existing_user.email.casefold() != str(attrs.get('email') or '').casefold():
+				raise serializers.ValidationError({'retry_token': ['Authenticate with the original account owner before retrying this business claim.']})
+			grant = _get_valid_business_retry_grant(existing_user, retry_token)
+			if grant is None:
+				raise serializers.ValidationError({'retry_token': ['This business claim retry link is invalid or expired.']})
+			attrs['_retry_grant'] = grant
+			attrs['_retry_token'] = retry_token
 			attrs['_signup_existing_user'] = existing_user
 			return attrs
 
-		if self._can_reuse_existing_business_user(existing_user):
+		if self._can_upgrade_authenticated_existing_user(existing_user):
 			attrs['_signup_existing_user'] = existing_user
 			return attrs
 
@@ -985,6 +1147,9 @@ class CustomerSignupSerializer(serializers.Serializer):
 
 	def create_or_reuse_user(self, validated_data):
 		terms_accepted = bool(validated_data.pop('terms_accepted', False))
+		validated_data.pop('retry_token', None)
+		retry_grant = validated_data.pop('_retry_grant', None)
+		retry_token = validated_data.pop('_retry_token', '')
 		password = validated_data.pop('password')
 		existing_user = validated_data.pop('_signup_existing_user', None)
 		if existing_user is None:
@@ -997,6 +1162,10 @@ class CustomerSignupSerializer(serializers.Serializer):
 			existing_user.save(update_fields=['username', 'email', 'first_name', 'last_name', 'password'])
 			existing_user._signup_reused_existing_user = True
 			user = existing_user
+
+		user._business_claim_retry_grant = retry_grant
+		user._business_claim_retry_token = retry_token
+		user._business_claim_retry_of = getattr(retry_grant, 'rejected_claim', None)
 
 		if terms_accepted:
 			profile = get_or_create_account_profile(user)
@@ -1054,6 +1223,7 @@ class ClaimedBusinessSignupSerializer(CustomerSignupSerializer):
 			attrs['offer_entries'] = _normalize_string_list(attrs.get('offer_entries', []))
 			attrs['hours_of_operation_entries'] = _normalize_string_list(attrs.get('hours_of_operation_entries', []))
 		attrs['photo_references'] = _normalize_string_list(attrs.get('photo_references', []))
+		_validate_https_reference_list(attrs['photo_references'], 'photo_references')
 		attrs['verification_documents'] = _normalize_document_map(attrs.get('verification_documents', {}))
 		return attrs
 
@@ -1063,8 +1233,7 @@ class ClaimedBusinessSignupSerializer(CustomerSignupSerializer):
 		verification_data_consent_fields = _pop_verification_data_consent(validated_data)
 		listing_snapshot = validated_data.pop('listing_snapshot')
 		validated_data.pop('business_slug', None)
-		listing_snapshot.website_url = validated_data.pop('business_website_url', '') or listing_snapshot.website_url
-		listing_snapshot.save(update_fields=['website_url', 'updated_at'])
+		business_website_url = validated_data.pop('business_website_url', '')
 		claim_data = {
 			'pathway': BusinessClaim.Pathway.CLAIMED,
 			'contact_name': validated_data.pop('contact_name'),
@@ -1073,7 +1242,7 @@ class ClaimedBusinessSignupSerializer(CustomerSignupSerializer):
 			'work_phone': validated_data.pop('work_phone'),
 			'employer_address': validated_data.pop('employer_address'),
 			'address_not_applicable': validated_data.pop('address_not_applicable', False),
-			'business_website_url': listing_snapshot.website_url,
+			'business_website_url': business_website_url,
 			'social_profiles': validated_data.pop('social_profiles', {}),
 			'social_media_links': validated_data.pop('social_media_links', []),
 			'deal_overrides': validated_data.pop('deal_overrides', None),
@@ -1092,8 +1261,10 @@ class ClaimedBusinessSignupSerializer(CustomerSignupSerializer):
 				claimant=user,
 				listing_snapshot=listing_snapshot,
 				status=BusinessClaim.Status.DRAFT,
+				retry_of=getattr(user, '_business_claim_retry_of', None),
 				**claim_data,
 			)
+			_validate_claim_media_ownership(claim, claim.deal_overrides, claim.photo_references)
 			claim.deal_overrides = merge_uploaded_deal_attachments(request, claim, claim.deal_overrides or [])
 			claim.save(update_fields=['deal_overrides', 'updated_at'])
 			_create_claim_profile_entries(claim, claim_data)
@@ -1103,6 +1274,7 @@ class ClaimedBusinessSignupSerializer(CustomerSignupSerializer):
 				claim.submit_for_review()
 			except DjangoValidationError as error:
 				raise serializers.ValidationError(list(error.messages))
+			_consume_business_retry_grant(user, getattr(user, '_business_claim_retry_grant', None), getattr(user, '_business_claim_retry_token', ''))
 			send_business_claim_submission_support_email_safely(claim)
 			user._created_business_claim = claim
 			return user
@@ -1165,6 +1337,7 @@ class EstablishedBusinessSignupSerializer(CustomerSignupSerializer):
 			attrs['offer_entries'] = _normalize_string_list(attrs.get('offer_entries', []))
 			attrs['hours_of_operation_entries'] = _normalize_string_list(attrs.get('hours_of_operation_entries', []))
 		attrs['photo_references'] = _normalize_string_list(attrs.get('photo_references', []))
+		_validate_https_reference_list(attrs['photo_references'], 'photo_references')
 		attrs['verification_documents'] = _normalize_document_map(attrs.get('verification_documents', {}))
 		return attrs
 
@@ -1214,8 +1387,10 @@ class EstablishedBusinessSignupSerializer(CustomerSignupSerializer):
 				claimant=user,
 				listing_snapshot=listing_snapshot,
 				status=BusinessClaim.Status.DRAFT,
+				retry_of=getattr(user, '_business_claim_retry_of', None),
 				**claim_data,
 			)
+			_validate_claim_media_ownership(claim, claim.deal_overrides, claim.photo_references)
 			claim.deal_overrides = merge_uploaded_deal_attachments(request, claim, claim.deal_overrides or [])
 			claim.save(update_fields=['deal_overrides', 'updated_at'])
 			_create_claim_profile_entries(claim, claim_data)
@@ -1225,6 +1400,7 @@ class EstablishedBusinessSignupSerializer(CustomerSignupSerializer):
 				claim.submit_for_review()
 			except DjangoValidationError as error:
 				raise serializers.ValidationError(list(error.messages))
+			_consume_business_retry_grant(user, getattr(user, '_business_claim_retry_grant', None), getattr(user, '_business_claim_retry_token', ''))
 			send_business_claim_submission_support_email_safely(claim)
 			user._created_business_claim = claim
 			return user
@@ -1276,6 +1452,7 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 			attrs['offer_entries'] = _normalize_string_list(attrs.get('offer_entries', []))
 			attrs['hours_of_operation_entries'] = _normalize_string_list(attrs.get('hours_of_operation_entries', []))
 		attrs['photo_references'] = _normalize_string_list(attrs.get('photo_references', []))
+		_validate_https_reference_list(attrs['photo_references'], 'photo_references')
 		return attrs
 
 	def create(self, validated_data):
@@ -1310,6 +1487,7 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 				listing_snapshot=listing_snapshot,
 				pathway=BusinessClaim.Pathway.INFORMAL,
 				status=BusinessClaim.Status.DRAFT,
+				retry_of=getattr(user, '_business_claim_retry_of', None),
 				contact_name=' '.join(part for part in [user.first_name, user.last_name] if part).strip() or user.username,
 				work_email=user.email,
 				employer_address=employer_address,
@@ -1327,6 +1505,7 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 				verification_summary='Submitted through the small startup and vendor flow.',
 				supporting_details=supporting_details,
 			)
+			_validate_claim_media_ownership(claim, claim.deal_overrides, claim.photo_references)
 			claim.deal_overrides = merge_uploaded_deal_attachments(request, claim, claim.deal_overrides or [])
 			claim.save(update_fields=['deal_overrides', 'updated_at'])
 			_create_claim_profile_entries(
@@ -1344,6 +1523,7 @@ class InformalBusinessSignupSerializer(CustomerSignupSerializer):
 				claim.submit_for_review()
 			except DjangoValidationError as error:
 				raise serializers.ValidationError(list(error.messages))
+			_consume_business_retry_grant(user, getattr(user, '_business_claim_retry_grant', None), getattr(user, '_business_claim_retry_token', ''))
 			send_business_claim_submission_support_email_safely(claim)
 			user._created_business_claim = claim
 			return user

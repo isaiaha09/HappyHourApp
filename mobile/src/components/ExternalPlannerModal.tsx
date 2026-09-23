@@ -793,7 +793,7 @@ function getCategoryIcon(label: string): 'cup' | 'silverware-fork-knife' | 'glas
 const styles = StyleSheet.create({
   backdrop: {
     backgroundColor: 'rgba(0, 0, 0, 0.58)',
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   closeButton: {
     alignItems: 'center',

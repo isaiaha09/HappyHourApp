@@ -5,13 +5,8 @@
     "version": "1.0.0",
     "scheme": "diningdealz",
     "orientation": "portrait",
-    "newArchEnabled": false,
     "icon": "./assets/DiningDealz-Icon.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "resizeMode": "contain",
-      "backgroundColor": "#080101"
-    },
     "ios": {
       "associatedDomains": [
         "applinks:link.diningdealz.com",
@@ -66,7 +61,12 @@
           "android": [],
           "ios": []
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker",
+      "expo-build-properties",
+      "expo-font",
+      "expo-sharing",
+      "expo-status-bar"
     ],
     "web": {
       "favicon": "./assets/DiningDealz-Icon.png"

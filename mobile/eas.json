@@ -6,16 +6,23 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_USE_RN_FETCH": "1"
+      }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_USE_RN_FETCH": "1"
+      }
     },
     "production": {
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://backend.diningdealz.com",
-        "EXPO_PUBLIC_IOS_PROFILE_LINK_BASE_URL": "https://link.diningdealz.com/share/place"
+        "EXPO_PUBLIC_IOS_PROFILE_LINK_BASE_URL": "https://link.diningdealz.com/share/place",
+        "EXPO_PUBLIC_USE_RN_FETCH": "1"
       }
     }
   },

@@ -30,6 +30,7 @@ from .authentication import ProfileTokenAuthentication
 from .serializers import (
 	BusinessLocationTrackingPreferenceSerializer,
 	BusinessLocationUpdateSerializer,
+	BusinessClaimRetryRequestSerializer,
 	ClaimedBusinessSignupSerializer,
 	ContactSupportSerializer,
 	ContentReportSerializer,
@@ -66,14 +67,15 @@ from .serializers import (
 	build_signup_request_data,
 	sync_listing_snapshot_from_place_payload,
 )
-from .services.account_profiles import build_account_response, build_email_verification_challenge, deactivate_account_for_retained_direct_messages, get_approved_business_claims, get_business_access_hold_claim, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, is_deleted_account, send_business_claim_received_email, send_content_report_support_email_safely, send_password_reset_email, send_support_contact_email, send_username_reminder_email, send_verification_email
-from .models import BusinessClaimAttachment, BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, BusinessPost, ContentReport, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedImpression, ListingSnapshot, ProfileAuthToken, VenueType, business_claim_storage_prefix
+from .services.account_profiles import build_account_response, build_email_verification_challenge, deactivate_account_for_retained_direct_messages, get_approved_business_claims, get_business_access_hold_claim, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, is_deleted_account, send_business_claim_received_email, send_business_claim_retry_email, send_content_report_support_email_safely, send_password_reset_email, send_support_contact_email, send_username_reminder_email, send_verification_email
+from .models import BusinessClaim, BusinessClaimAttachment, BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, BusinessPost, ContentReport, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedImpression, ListingSnapshot, ManagedMedia, ProfileAuthToken, VenueType, business_claim_storage_prefix
 from .services.favorite_notifications import create_notifications_for_business_profile_update, should_send_direct_message_notification
 from .services.customer_preferences import get_preference_business_options, resolve_business_location, save_customer_preferences
 from .services.happy_hour_notifications import process_due_happy_hour_notifications
 from .services.direct_message_push import send_push_notifications_for_direct_message
 from .services.home_feed import get_feed_interval, get_feed_queryset, get_organic_page_size, get_ranked_campaigns, get_requested_feed_page_size, mix_feed_items, record_campaign_served
 from .services.image_moderation import ImageModerationRejected, ImageModerationUnavailable, moderate_uploaded_image
+from .services.media_storage import save_managed_media
 from .services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
 from .services.current_happy_hours import get_current_happy_hours_payload
 from .services.source_listings import get_deleted_business_snapshot_ids, get_disabled_live_location_slugs, get_live_location_display_fields, get_source_deal_payloads, get_source_place_payload, get_source_place_payloads, is_live_location_tracking_enabled_for_snapshot, load_source_records
@@ -86,18 +88,39 @@ class SourcePlacePagination(PageNumberPagination):
 	max_page_size = 500
 
 
+class ManagedMediaView(View):
+	def get(self, request, media_id):
+		media = ManagedMedia.objects.select_related('claim').filter(
+			media_id=media_id,
+			claim__membership__is_active=True,
+		).first()
+		if media is None:
+			raise Http404
+		try:
+			file_handle = default_storage.open(media.storage_name, 'rb')
+		except (FileNotFoundError, OSError):
+			raise Http404
+		response = FileResponse(file_handle, content_type=media.content_type or 'application/octet-stream')
+		safe_filename = ''.join(character for character in Path(media.original_filename or 'media').name if character.isprintable() and character not in {'"', '\\'}) or 'media'
+		response['Content-Disposition'] = f'inline; filename="{safe_filename}"'
+		response['X-Content-Type-Options'] = 'nosniff'
+		return response
+
+
 class PrivateBusinessClaimAttachmentView(View):
-	def get(self, request, name):
+	def get(self, request, media_id):
 		if not getattr(request.user, 'is_authenticated', False) or not getattr(request.user, 'is_staff', False):
 			raise Http404
 
-		attachment = BusinessClaimAttachment.objects.filter(file=name).first()
+		attachment = BusinessClaimAttachment.objects.filter(media_id=media_id).first()
 		if attachment is not None and attachment.file:
+			if attachment.is_pdf_attachment() and attachment.malware_scan_status != BusinessClaimAttachment.MalwareScanStatus.CLEAN:
+				raise Http404
 			file_field = attachment.file
 			content_type = attachment.content_type or 'application/octet-stream'
 			original_filename = attachment.original_filename
 		else:
-			report = ContentReport.objects.filter(screenshot=name).first()
+			report = ContentReport.objects.filter(media_id=media_id).first()
 			if report is None or not report.screenshot:
 				raise Http404
 			file_field = report.screenshot
@@ -126,8 +149,16 @@ SUPPORTED_PROFILE_PHOTO_SUFFIXES = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.
 
 
 def _save_uploaded_profile_photo_urls(request, claim):
+	uploaded_files = request.FILES.getlist('profile_photo_uploads')
+	max_photos = max(1, int(getattr(settings, 'BUSINESS_PROFILE_MAX_PHOTOS', 8) or 8))
+	max_aggregate_bytes = max(1, int(getattr(settings, 'IMAGE_UPLOAD_MAX_AGGREGATE_BYTES', 20 * 1024 * 1024) or 20 * 1024 * 1024))
+	if len(list(claim.photo_references or [])) + len(uploaded_files) > max_photos:
+		raise ValueError(f'Business profiles can contain at most {max_photos} photos.')
+	if sum(int(getattr(uploaded_file, 'size', 0) or 0) for uploaded_file in uploaded_files) > max_aggregate_bytes:
+		raise ValueError('The combined photo upload size must be 20 MB or smaller.')
+
 	photo_urls = []
-	for uploaded_file in request.FILES.getlist('profile_photo_uploads'):
+	for uploaded_file in uploaded_files:
 		content_type = str(getattr(uploaded_file, 'content_type', '') or '').strip().lower()
 		file_suffix = Path(getattr(uploaded_file, 'name', '') or '').suffix.lower()
 		if not (content_type.startswith('image/') or file_suffix in SUPPORTED_PROFILE_PHOTO_SUFFIXES):
@@ -136,11 +167,11 @@ def _save_uploaded_profile_photo_urls(request, claim):
 
 		filename_root = Path(getattr(uploaded_file, 'name', '') or 'business-photo').stem or 'business-photo'
 		safe_name = slugify(filename_root) or 'business-photo'
-		saved_name = default_storage.save(
-			f'{business_claim_storage_prefix(claim)}/profile-photos/{uuid4().hex}-{safe_name}{file_suffix}',
-			uploaded_file,
+		storage_name = (
+			f'{business_claim_storage_prefix(claim)}/profile-photos/{uuid4().hex}-{safe_name}{file_suffix}'
 		)
-		photo_urls.append(request.build_absolute_uri(default_storage.url(saved_name)))
+		media, media_url = save_managed_media(claim, uploaded_file, storage_name, 'profile_photo', request=request)
+		photo_urls.append(media_url)
 
 	return photo_urls
 
@@ -381,7 +412,7 @@ class DiscoveryEnrichmentStatusView(APIView):
 
 	def get(self, request):
 		limit = self._parse_limit(request.query_params.get('limit'))
-		records = list(load_source_records())
+		records = list(load_source_records(cache_only=True))
 		discovery_records = [record for record in records if record.source_name != 'business_websites']
 		discovery_with_deals = [record for record in discovery_records if any(deal.is_active for deal in record.deals)]
 		discovery_without_deals = [record for record in discovery_records if not any(deal.is_active for deal in record.deals)]
@@ -427,6 +458,7 @@ class PlaceListView(generics.GenericAPIView):
 			venue_type=venue_type,
 			has_deals=has_deals,
 			resolve_missing_coordinates=True,
+			allow_network=False,
 		)
 
 		page = self.paginate_queryset(payloads)
@@ -468,7 +500,7 @@ class PlaceDetailView(generics.GenericAPIView):
 	permission_classes = [AllowAny]
 
 	def get(self, request, slug):
-		payload = get_source_place_payload(slug)
+		payload = get_source_place_payload(slug, allow_network=False)
 		if payload is None:
 			raise Http404('Place not found.')
 		_apply_direct_message_access(payload, user=request.user)
@@ -597,7 +629,7 @@ class DealListView(generics.GenericAPIView):
 	def get(self, request):
 		city = self.request.query_params.get('city')
 		deal_type = self.request.query_params.get('deal_type')
-		payloads = get_source_deal_payloads(city=city, deal_type=deal_type)
+		payloads = get_source_deal_payloads(city=city, deal_type=deal_type, allow_network=False)
 
 		page = self.paginate_queryset(payloads)
 		if page is not None:
@@ -614,6 +646,8 @@ class HomeFeedView(generics.GenericAPIView):
 	permission_classes = [AllowAny]
 
 	def get(self, request):
+		if not getattr(settings, 'HOME_FEED_ENABLED', False):
+			raise Http404
 		page_number = self._parse_page_number(request.query_params.get('page'))
 		requested_page_size = get_requested_feed_page_size(request.query_params.get('page_size'))
 		interval = get_feed_interval(page_number)
@@ -650,6 +684,8 @@ class FeedImpressionView(generics.GenericAPIView):
 	throttle_classes = [UserMutationRateThrottle]
 
 	def post(self, request):
+		if not getattr(settings, 'FEED_IMPRESSION_TELEMETRY_ENABLED', False):
+			raise Http404
 		serializer = self.get_serializer(data=request.data)
 		serializer.is_valid(raise_exception=True)
 		impression = serializer.save()
@@ -664,6 +700,8 @@ class FeedEngagementView(generics.GenericAPIView):
 	throttle_classes = [UserMutationRateThrottle]
 
 	def post(self, request):
+		if not getattr(settings, 'FEED_IMPRESSION_TELEMETRY_ENABLED', False):
+			raise Http404
 		serializer = self.get_serializer(data=request.data)
 		serializer.is_valid(raise_exception=True)
 		engagement = serializer.save()
@@ -739,6 +777,29 @@ class PasswordResetRequestView(generics.GenericAPIView):
 		return user
 
 
+class BusinessClaimRetryRequestView(generics.GenericAPIView):
+	serializer_class = BusinessClaimRetryRequestSerializer
+	permission_classes = [AllowAny]
+	throttle_classes = [PasswordRecoveryRateThrottle]
+
+	def post(self, request):
+		serializer = self.get_serializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		identifier = serializer.validated_data['identifier']
+		user = User.objects.filter(username__iexact=identifier).first()
+		if user is None:
+			user = User.objects.filter(email__iexact=identifier.lower()).first()
+		if user is not None and user.email:
+			profile = get_or_create_account_profile(user)
+			claim = user.business_claims.filter(status=BusinessClaim.Status.REJECTED).order_by('-created_at', '-pk').first()
+			if profile.email_is_verified and profile.business_claim_suspended and claim is not None:
+				try:
+					send_business_claim_retry_email(user, claim)
+				except Exception:
+					logger.exception('Business claim retry email failed for user_id=%s claim_id=%s', user.pk, claim.pk)
+		return Response({'detail': 'If that account is eligible, an authenticated business-claim retry link has been sent.'})
+
+
 class BusinessSignupView(generics.GenericAPIView):
 	serializer_class = ClaimedBusinessSignupSerializer
 	parser_classes = [MultiPartParser, FormParser, JSONParser]
@@ -749,7 +810,7 @@ class BusinessSignupView(generics.GenericAPIView):
 	def post(self, request):
 		payload = build_signup_request_data(request.data)
 		business_slug = payload.get('business_slug')
-		place_payload = get_source_place_payload(business_slug)
+		place_payload = get_source_place_payload(business_slug, allow_network=False)
 		if place_payload is None:
 			return Response({'business_slug': ['Business listing not found.']}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -853,19 +914,23 @@ class VerifyEmailCodeView(generics.GenericAPIView):
 	throttle_classes = [EmailVerificationRateThrottle]
 
 	def post(self, request):
+		generic_failure = {'detail': 'Unable to verify that request.'}
 		serializer = self.get_serializer(data=request.data)
 		serializer.is_valid(raise_exception=True)
 		user = User.objects.filter(username__iexact=serializer.validated_data['username']).first()
 		if user is None:
-			return Response({'detail': 'No account matches that username.'}, status=status.HTTP_404_NOT_FOUND)
+			return Response(generic_failure, status=status.HTTP_400_BAD_REQUEST)
 
 		profile = get_or_create_account_profile(user)
 		if profile.email_is_verified:
-			return Response({'detail': 'That email is already verified.'}, status=status.HTTP_400_BAD_REQUEST)
+			return Response(generic_failure, status=status.HTTP_400_BAD_REQUEST)
 		if not profile.verify_email_verification_code(serializer.validated_data['code']):
-			return Response({'detail': 'The email verification code is invalid or expired.'}, status=status.HTTP_400_BAD_REQUEST)
+			return Response(generic_failure, status=status.HTTP_400_BAD_REQUEST)
 
 		profile.mark_email_verified()
+		if profile.business_claim_suspended:
+			ProfileAuthToken.objects.filter(user=user).delete()
+			return Response(generic_failure, status=status.HTTP_400_BAD_REQUEST)
 		portal = infer_portal_for_user(user, serializer.validated_data.get('portal'))
 		hold_claim = get_business_access_hold_claim(user, portal)
 		if hold_claim is not None:
@@ -883,22 +948,20 @@ class ResendEmailVerificationCodeView(generics.GenericAPIView):
 	throttle_classes = [EmailVerificationResendRateThrottle]
 
 	def post(self, request):
+		generic_failure = {'detail': 'If that account is eligible, a new verification message will be sent.'}
 		serializer = self.get_serializer(data=request.data)
 		serializer.is_valid(raise_exception=True)
 		user = User.objects.filter(username__iexact=serializer.validated_data['username']).first()
 		if user is None:
-			return Response({'detail': 'No account matches that username.'}, status=status.HTTP_404_NOT_FOUND)
+			return Response(generic_failure)
 
 		profile = get_or_create_account_profile(user)
-		if profile.email_is_verified:
-			return Response({'detail': 'That email is already verified.'}, status=status.HTTP_400_BAD_REQUEST)
+		if profile.email_is_verified or profile.business_claim_suspended:
+			return Response(generic_failure)
 
 		seconds_remaining = profile.get_email_verification_seconds_remaining()
 		if seconds_remaining > 0:
-			return Response({
-				'detail': 'Wait for the current verification code to expire before requesting a new one.',
-				'seconds_remaining': seconds_remaining,
-			}, status=status.HTTP_400_BAD_REQUEST)
+			return Response(generic_failure)
 
 		portal = infer_portal_for_user(user, serializer.validated_data.get('portal'))
 		return Response(build_email_verification_challenge(user, portal, force_resend=True))
@@ -964,6 +1027,12 @@ class ProfileDashboardView(APIView):
 
 			claim = membership.claim
 			snapshot = claim.listing_snapshot
+			from .serializers import _validate_claim_media_ownership
+			_validate_claim_media_ownership(
+				claim,
+				serializer.validated_data.get('deal_overrides', claim.deal_overrides or []),
+				_normalize_string_list(serializer.validated_data.get('photo_references_text', claim.photo_references or [])),
+			)
 			changed_business_fields = set()
 			try:
 				uploaded_photo_urls = _save_uploaded_profile_photo_urls(request, claim)
@@ -1001,7 +1070,9 @@ class ProfileDashboardView(APIView):
 				submitted_profiles = normalize_social_profiles(
 					serializer.validated_data.get('social_profiles', claim.social_profiles or {}),
 					fallback_website_url=serializer.validated_data.get('business_website_url', claim.business_website_url or ''),
-					fallback_social_links=serializer.validated_data.get('social_media_links_text', claim.social_media_links or []),
+					fallback_social_links=_normalize_string_list(
+						serializer.validated_data.get('social_media_links_text', claim.social_media_links or [])
+					),
 				)
 				social_profiles_changed = current_profiles != submitted_profiles
 				website_changed = get_business_website_url(current_profiles, fallback=claim.business_website_url) != get_business_website_url(
@@ -1171,7 +1242,7 @@ class FavoriteBusinessView(APIView):
 		portal = infer_portal_for_user(request.user, serializer.validated_data.get('portal'))
 		if portal != 'customer':
 			return Response({'detail': 'Only customer accounts can favorite businesses.'}, status=status.HTTP_403_FORBIDDEN)
-		place_payload = get_source_place_payload(serializer.validated_data['slug'])
+		place_payload = get_source_place_payload(serializer.validated_data['slug'], allow_network=False)
 		if place_payload is None:
 			return Response({'detail': 'That business could not be found.'}, status=status.HTTP_404_NOT_FOUND)
 		try:
@@ -1303,6 +1374,8 @@ class DirectMessageThreadsView(APIView):
 		return Response({'threads': serializer.data})
 
 	def post(self, request):
+		if len(request.FILES.getlist('image')) > 1:
+			return Response({'image': ['Only one direct-message image may be uploaded.']}, status=status.HTTP_400_BAD_REQUEST)
 		serializer = DirectMessageSendSerializer(data=request.data)
 		serializer.is_valid(raise_exception=True)
 		portal = infer_portal_for_user(request.user, serializer.validated_data.get('portal'))
@@ -1688,6 +1761,11 @@ class ContentReportView(generics.GenericAPIView):
 	parser_classes = [MultiPartParser, FormParser, JSONParser]
 
 	def post(self, request):
+		if len(request.FILES.getlist('screenshot')) > 1:
+			return Response(
+				{'screenshot': ['Only one report screenshot may be uploaded.']},
+				status=status.HTTP_400_BAD_REQUEST,
+			)
 		serializer = self.get_serializer(data=request.data)
 		serializer.is_valid(raise_exception=True)
 		validated_data = serializer.validated_data
@@ -1707,7 +1785,7 @@ class ContentReportView(generics.GenericAPIView):
 			listing_slug = validated_data.get('listing_slug', '')
 			if not listing_slug:
 				return Response({'listing_slug': ['A business profile report requires a listing slug.']}, status=status.HTTP_400_BAD_REQUEST)
-			place_payload = get_source_place_payload(listing_slug)
+			place_payload = get_source_place_payload(listing_slug, allow_network=False)
 			listing_snapshot = ListingSnapshot.objects.filter(listing_slug=listing_slug).first() if place_payload is None else None
 			if place_payload is None and listing_snapshot is None:
 				return Response({'detail': 'That business profile could not be found.'}, status=status.HTTP_404_NOT_FOUND)
@@ -1868,8 +1946,9 @@ class PasswordResetView(generics.GenericAPIView):
 
 	def get(self, request, token):
 		from .models import AccountProfile
-		profile = AccountProfile.objects.select_related('user').filter(password_reset_token=token).first()
-		if profile is None or not profile.password_reset_token_is_active():
+		selector = str(token or '').split('.', 1)[0]
+		profile = AccountProfile.objects.select_related('user').filter(password_reset_selector=selector).first()
+		if profile is None or not profile.password_reset_token_is_active(token):
 			return HttpResponse(self._build_html(title='Password reset link is invalid or expired.', message='', token='', error=True), status=404)
 		return HttpResponse(self._build_html(title='Reset your password', message='Enter a new password for your account.', token=token))
 

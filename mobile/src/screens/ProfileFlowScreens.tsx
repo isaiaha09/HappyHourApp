@@ -19,7 +19,6 @@ import {
   View,
 } from 'react-native';
 import { Linking } from 'react-native';
-import { WebView } from 'react-native-webview';
 
 import { styles } from '../appStyles';
 import type { AuthPortal, LoginFormState, ProfileFormState } from '../appFlowTypes';
@@ -32,6 +31,7 @@ import { SOCIAL_PLATFORM_LABELS, getSocialProfilePreview, getSocialProfileValida
 import { theme } from '../styles/theme';
 import type { BusinessAttachmentBuckets, BusinessAttachmentDraft, BusinessAttachmentKind, EmailVerificationChallengeResponse, PlaceListItem, PlaceLocation, SignupResponse } from '../types';
 import { LEGAL_EFFECTIVE_DATE, privacyPolicySections, termsOfServiceSections } from '../legalContent';
+import { openPdfInNativeViewer } from '../utils/nativePdfViewer';
 
 const SUPPORT_EMAIL = 'support@diningdealz.com';
 const PRIVACY_POLICY_URL = 'https://www.diningdealz.com/privacy';
@@ -83,8 +83,7 @@ type CompactDropdownProps = {
 };
 
 type AttachmentPreviewState =
-  | { kind: 'image'; name: string; uri: string }
-  | { kind: 'pdf'; name: string; html: string };
+  | { kind: 'image'; name: string; uri: string };
 
 function LoadingButtonLabel({ color, label, loading, textStyle }: { color: string; label: string; loading: boolean; textStyle: any }) {
   return (
@@ -117,112 +116,6 @@ function getAttachmentPreviewKind(mimeType: string | null, fileName: string) {
     return 'pdf' as const;
   }
   return null;
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function buildPdfPreviewHtml(base64Document: string, fileName: string) {
-  const safeName = escapeHtml(fileName || 'Document preview');
-  return `
-    <!DOCTYPE html>
-    <html lang="en">
-      <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-        <title>${safeName}</title>
-        <style>
-          body {
-            margin: 0;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #f3e7d8;
-            color: #402214;
-          }
-          #status {
-            padding: 16px;
-            text-align: center;
-            font-size: 14px;
-            color: #7d614f;
-          }
-          #pages {
-            padding: 12px;
-          }
-          .page {
-            margin: 0 auto 14px;
-            width: fit-content;
-            box-shadow: 0 8px 24px rgba(45, 34, 26, 0.14);
-            background: white;
-          }
-          canvas {
-            display: block;
-            max-width: 100%;
-            height: auto;
-          }
-        </style>
-      </head>
-      <body>
-        <div id="status">Loading PDF preview...</div>
-        <div id="pages"></div>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-        <script>
-          const status = document.getElementById('status');
-          const pages = document.getElementById('pages');
-          const base64 = '${base64Document}';
-
-          function base64ToUint8Array(input) {
-            const binary = atob(input);
-            const length = binary.length;
-            const bytes = new Uint8Array(length);
-            for (let index = 0; index < length; index += 1) {
-              bytes[index] = binary.charCodeAt(index);
-            }
-            return bytes;
-          }
-
-          async function renderPdf() {
-            try {
-              pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-              const pdf = await pdfjsLib.getDocument({ data: base64ToUint8Array(base64) }).promise;
-              status.textContent = 'Rendering pages...';
-              for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-                const page = await pdf.getPage(pageNumber);
-                const baseViewport = page.getViewport({ scale: 1 });
-                const availableWidth = Math.max(window.innerWidth - 24, 1);
-                const availableHeight = Math.max(window.innerHeight - 24, 1);
-                const fitScale = Math.min(availableWidth / baseViewport.width, availableHeight / baseViewport.height);
-                const scale = Math.max(Math.min(fitScale, 1), 0.35);
-                const viewport = page.getViewport({ scale });
-                const canvas = document.createElement('canvas');
-                const context = canvas.getContext('2d');
-                const wrapper = document.createElement('div');
-                wrapper.className = 'page';
-                const deviceScale = window.devicePixelRatio || 1;
-                canvas.width = Math.floor(viewport.width * deviceScale);
-                canvas.height = Math.floor(viewport.height * deviceScale);
-                canvas.style.width = viewport.width + 'px';
-                canvas.style.height = viewport.height + 'px';
-                context.scale(deviceScale, deviceScale);
-                wrapper.appendChild(canvas);
-                pages.appendChild(wrapper);
-                await page.render({ canvasContext: context, viewport }).promise;
-              }
-              status.remove();
-            } catch (error) {
-              status.textContent = 'Unable to preview this PDF in-app.';
-            }
-          }
-
-          renderPdf();
-        </script>
-      </body>
-    </html>
-  `;
 }
 
 export type AuthPortalScreenProps = {
@@ -279,10 +172,11 @@ export type CreateProfileScreenProps = {
 };
 
 export type BusinessSearchScreenProps = {
-  errorMessage: string | null;
-  isLandscape: boolean;
-  loadingPlaces: boolean;
-  onBack: () => void;
+	errorMessage: string | null;
+	isLandscape: boolean;
+	loadingPlaces: boolean;
+	message?: string | null;
+	onBack: () => void;
   onChangeSearchQuery: (value: string) => void;
   onChooseInformalBusiness: () => void;
   onChooseManualBusiness: () => void;
@@ -1301,7 +1195,7 @@ export function TermsOfServiceScreen({ isLandscape, onBack }: Pick<LegalDocument
   );
 }
 
-export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces, onBack, onChangeSearchQuery, onChooseInformalBusiness, onChooseManualBusiness, onSelectBusiness, results, searchQuery }: BusinessSearchScreenProps) {
+export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces, message, onBack, onChangeSearchQuery, onChooseInformalBusiness, onChooseManualBusiness, onSelectBusiness, results, searchQuery }: BusinessSearchScreenProps) {
   const { handleFieldFocus, handleScroll, scrollViewRef } = useAutoScrollForm();
 
   return (
@@ -1324,11 +1218,17 @@ export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces,
             <Text style={[styles.detailCity, styles.onboardingEyebrow]}>Claim a Business</Text>
             <Text style={[styles.detailTitle, styles.onboardingHeading]}>Search your business</Text>
 
-            {errorMessage ? (
-              <View style={styles.errorBanner}>
-                <Text style={styles.errorText}>{errorMessage}</Text>
-              </View>
-            ) : null}
+			{errorMessage ? (
+				<View style={styles.errorBanner}>
+					<Text style={styles.errorText}>{errorMessage}</Text>
+				</View>
+			) : null}
+
+			{message ? (
+				<View style={styles.profileSuccessBanner}>
+					<Text style={styles.profileSuccessText}>{message}</Text>
+				</View>
+			) : null}
 
             <AutoScrollTextInput onBeforeAutoScroll={handleFieldFocus} placeholder="Search by business name" placeholderTextColor={onboardingPlaceholderTextColor} onChangeText={onChangeSearchQuery} scrollViewRef={scrollViewRef} style={[styles.profileInput, styles.onboardingInput]} value={searchQuery} />
 
@@ -1492,23 +1392,17 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
       attachmentPreviewRequestIdRef.current = requestId;
       setAttachmentPreviewLoading(true);
       setAttachmentPreview(null);
-      try {
-        const base64Document = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
-        if (attachmentPreviewRequestIdRef.current !== requestId) {
-          return;
-        }
-        setAttachmentPreview({
-          kind: 'pdf',
-          name: attachmentName,
-          html: buildPdfPreviewHtml(base64Document, attachmentName),
-        });
-        return;
-      } catch {
-        if (attachmentPreviewRequestIdRef.current !== requestId) {
-          return;
-        }
-        await openAttachmentExternally(uri, mimeType, attachmentName);
-        return;
+		try {
+			await openPdfInNativeViewer(uri, attachmentName);
+			if (attachmentPreviewRequestIdRef.current !== requestId) {
+				return;
+			}
+		} catch {
+			if (attachmentPreviewRequestIdRef.current !== requestId) {
+				return;
+			}
+			Alert.alert('Unable to open file', 'This PDF could not be opened in the native document viewer.');
+			return;
       } finally {
         if (attachmentPreviewRequestIdRef.current === requestId) {
           setAttachmentPreviewLoading(false);
@@ -1623,8 +1517,6 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
                 </View>
               ) : attachmentPreview?.kind === 'image' ? (
                 <Image resizeMode="contain" source={{ uri: attachmentPreview.uri }} style={styles.attachmentPreviewImage} />
-              ) : attachmentPreview?.kind === 'pdf' ? (
-                <WebView originWhitelist={["*"]} source={{ html: attachmentPreview.html }} style={styles.attachmentPreviewWebView} />
               ) : null}
             </View>
           </View>

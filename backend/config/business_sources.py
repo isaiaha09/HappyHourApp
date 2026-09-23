@@ -39,6 +39,8 @@ BUSINESS_SOURCE_PAGES = [
 			'address_line_1': '494 E. Main Street',
 			'phone_number': '(805) 628-3312',
 			'postal_code': '93001',
+			'latitude': 34.2806,
+			'longitude': -119.293,
 			'geocode_query': 'Finneys Ventura, CA',
 			'website_url': 'https://www.finneyscrafthouse.com/ventura/',
 		},
@@ -65,6 +67,8 @@ BUSINESS_SOURCE_PAGES = [
 			'address_line_1': '580 Ventura Blvd',
 			'phone_number': '(805) 702-0010',
 			'postal_code': '93010',
+			'latitude': 34.2165,
+			'longitude': -119.067,
 			'geocode_query': 'Finneys Camarillo, CA',
 			'website_url': 'https://www.finneyscrafthouse.com/camarillo/',
 		},
@@ -229,10 +233,10 @@ BUSINESS_SOURCE_PAGES = [
 		'name': 'Rumfish y Vino',
 		'city': 'ventura',
 		'venue_type': 'restaurant',
-		'source_url': 'http://www.rumfishyvinoventura.com/',
+		'source_url': 'https://www.rumfishyvinoventura.com/',
 		'source_documents': [
 			{
-				'url': 'http://www.rumfishyvinoventura.com/',
+				'url': 'https://www.rumfishyvinoventura.com/',
 				'roles': ['identity', 'images'],
 			},
 			{
@@ -250,7 +254,7 @@ BUSINESS_SOURCE_PAGES = [
 		'phone_number': '(805) 667-9288',
 		'postal_code': '93001',
 		'geocode_query': 'Rumfish y Vino, Ventura, CA',
-		'website_url': 'http://www.rumfishyvinoventura.com/',
+		'website_url': 'https://www.rumfishyvinoventura.com/',
 	},
 	{
 		'name': 'Rocks & Drams',

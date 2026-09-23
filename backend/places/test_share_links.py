@@ -11,6 +11,15 @@ class ShareLinkTests(TestCase):
 		self.assertEqual(response.status_code, 302)
 		self.assertEqual(response['Location'], 'https://apps.apple.com/us/app/diningdealz/id123')
 
+	@override_settings(
+		PROFILE_IOS_APP_STORE_URL='https://apps.apple.com/us/app/diningdealz/id123',
+	)
+	def test_legacy_plural_share_link_redirects_to_the_ios_app_store(self):
+		response = self.client.get('/share/places/yard-house/')
+
+		self.assertEqual(response.status_code, 302)
+		self.assertEqual(response['Location'], 'https://apps.apple.com/us/app/diningdealz/id123')
+
 	@override_settings(PROFILE_IOS_APP_STORE_URL='')
 	def test_share_link_is_unavailable_until_the_app_store_url_is_configured(self):
 		response = self.client.get('/share/place/yard-house/')

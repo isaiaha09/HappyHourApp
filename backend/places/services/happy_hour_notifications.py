@@ -81,7 +81,7 @@ def _happy_hour_start_time(happy_hour, location, weekday):
 def _due_occurrences(now_local, window_minutes):
 	occurrences = []
 	window_seconds = max(int(window_minutes), 1) * 60
-	for payload in get_source_place_payloads(resolve_missing_coordinates=False):
+	for payload in get_source_place_payloads(resolve_missing_coordinates=False, allow_network=False):
 		listing_slug = str(payload.get('slug') or '').strip()
 		if not listing_slug:
 			continue

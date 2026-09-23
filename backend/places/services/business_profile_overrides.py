@@ -4,10 +4,32 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from places.models import DealType, Weekday
+from places.services.media_storage import (
+    extract_managed_storage_name,
+    managed_media_id_from_reference,
+    managed_media_url,
+)
 
 
 TIME_24_HOUR_PATTERN = re.compile(r'^(?P<hour>\d{1,2}):(?P<minute>\d{2})$')
 TIME_12_HOUR_PATTERN = re.compile(r'^(?P<hour>\d{1,2})(?::(?P<minute>\d{2}))?\s*(?P<suffix>am|pm)$', re.IGNORECASE)
+MAX_PROFILE_JSON_DEPTH = 5
+MAX_PROFILE_TEXT_LENGTH = 4_000
+MAX_DEAL_COUNT = 20
+MAX_OPERATING_HOUR_COUNT = 14
+
+
+def _validate_profile_json_shape(value, field_name, depth=0):
+	if depth > MAX_PROFILE_JSON_DEPTH:
+		raise ValueError(f'{field_name} may be nested no deeper than {MAX_PROFILE_JSON_DEPTH} levels.')
+	if isinstance(value, str) and len(value) > MAX_PROFILE_TEXT_LENGTH:
+		raise ValueError(f'Text values in {field_name} must be {MAX_PROFILE_TEXT_LENGTH} characters or fewer.')
+	if isinstance(value, dict):
+		for child in value.values():
+			_validate_profile_json_shape(child, field_name, depth + 1)
+	elif isinstance(value, list):
+		for child in value:
+			_validate_profile_json_shape(child, field_name, depth + 1)
 
 
 def _stable_numeric_id(*parts):
@@ -82,6 +104,9 @@ def normalize_operating_hour_overrides(raw_overrides):
         return []
     if not isinstance(raw_overrides, list):
         raise ValueError('Operating hour overrides must be a list.')
+    if len(raw_overrides) > MAX_OPERATING_HOUR_COUNT:
+        raise ValueError(f'Operating hour overrides may contain at most {MAX_OPERATING_HOUR_COUNT} windows.')
+    _validate_profile_json_shape(raw_overrides, 'Operating hour overrides')
 
     normalized_rows = []
     for index, row in enumerate(raw_overrides):
@@ -118,6 +143,9 @@ def normalize_deal_overrides(raw_overrides):
         return []
     if not isinstance(raw_overrides, list):
         raise ValueError('Deal overrides must be a list.')
+    if len(raw_overrides) > MAX_DEAL_COUNT:
+        raise ValueError(f'Deal overrides may contain at most {MAX_DEAL_COUNT} deals.')
+    _validate_profile_json_shape(raw_overrides, 'Deal overrides')
 
     normalized_deals = []
     for index, row in enumerate(raw_overrides):
@@ -244,7 +272,7 @@ def build_deal_payloads(overrides, namespace):
             'custom_deal_type_label': deal.get('custom_deal_type_label') or '',
             'price_text': deal['price_text'],
             'terms': deal['terms'],
-            'attachment': deal.get('attachment'),
+            'attachment': _safe_deal_attachment_for_output(deal.get('attachment')),
             'is_active': True,
             'starts_on': None,
             'ends_on': None,
@@ -263,6 +291,67 @@ def build_deal_payloads(overrides, namespace):
     return payloads
 
 
+def _safe_deal_attachment_for_output(value):
+    """Keep legacy attachments inert unless they resolve to a safe reference."""
+    if not isinstance(value, dict):
+        return None
+
+    raw_media_id = str(value.get('media_id') or '').strip()
+    parsed_media_id = managed_media_id_from_reference(f'media:{raw_media_id}') if raw_media_id else None
+    media_id = str(parsed_media_id) if parsed_media_id is not None else ''
+
+    raw_url = str(value.get('url') or '').strip()
+    parsed_url = urlparse(raw_url)
+    safe_url = ''
+    if (
+        raw_url
+        and parsed_url.scheme.lower() == 'https'
+        and bool(parsed_url.netloc)
+        and not extract_managed_storage_name(raw_url)
+    ):
+        safe_url = raw_url
+    elif media_id:
+        safe_url = managed_media_url(media_id)
+
+    attachment = {}
+    name = str(value.get('name') or '').strip()
+    if name:
+        attachment['name'] = name
+    if safe_url:
+        attachment['url'] = safe_url
+    if media_id:
+        attachment['media_id'] = media_id
+    content_type = str(value.get('content_type') or value.get('mime_type') or '').strip().lower()
+    if content_type:
+        attachment['content_type'] = content_type
+    raw_file_size = value.get('file_size', value.get('size'))
+    if raw_file_size not in (None, ''):
+        try:
+            file_size = int(raw_file_size)
+        except (TypeError, ValueError):
+            file_size = None
+        if file_size is not None and file_size >= 0:
+            attachment['file_size'] = file_size
+    return attachment or None
+
+
+def sanitize_deal_overrides_for_output(overrides):
+    """Return editor-shaped deal data without exposing raw managed-storage URLs."""
+    sanitized_overrides = []
+    for value in overrides or []:
+        if not isinstance(value, dict):
+            continue
+        deal = dict(value)
+        if 'attachment' in deal:
+            attachment = _safe_deal_attachment_for_output(deal.get('attachment'))
+            if attachment is None:
+                deal.pop('attachment', None)
+            else:
+                deal['attachment'] = attachment
+        sanitized_overrides.append(deal)
+    return sanitized_overrides
+
+
 def _normalize_deal_attachment(value):
     if value in (None, ''):
         return None
@@ -270,8 +359,22 @@ def _normalize_deal_attachment(value):
         raise ValueError('Deal attachments must be objects.')
 
     url = str(value.get('url') or '').strip()
-    if not url:
+    media_id = str(value.get('media_id') or '').strip()
+    if not url and not media_id:
         return None
+    if urlparse(url).scheme and urlparse(url).scheme.lower() != 'https':
+        raise ValueError('Only HTTPS attachment links are allowed.')
+    if url and extract_managed_storage_name(url):
+        raise ValueError('Raw storage URLs are not accepted for managed attachments. Use the opaque media id.')
+    if not media_id and url:
+        managed_id = managed_media_id_from_reference(url)
+        if managed_id is not None:
+            media_id = str(managed_id)
+    if media_id:
+        parsed_media_id = managed_media_id_from_reference(f'media:{media_id}')
+        if parsed_media_id is None:
+            raise ValueError('Deal attachment media id is invalid.')
+        media_id = str(parsed_media_id)
 
     name = str(value.get('name') or '').strip()
     if not name:
@@ -290,9 +393,12 @@ def _normalize_deal_attachment(value):
             raise ValueError('Deal attachment size must be zero or greater.')
 
     normalized_attachment = {
-        'url': url,
         'name': name,
     }
+    if url:
+        normalized_attachment['url'] = url
+    if media_id:
+        normalized_attachment['media_id'] = media_id
     if content_type:
         normalized_attachment['content_type'] = content_type
     if file_size is not None:

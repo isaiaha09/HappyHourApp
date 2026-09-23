@@ -1,10 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import * as FileSystem from 'expo-file-system/legacy';
-import { ActivityIndicator, Image, Keyboard, Linking, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Keyboard, Linking, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
-import { WebView } from 'react-native-webview';
 
 import { styles } from '../appStyles';
 import { ContentReportModal } from '../components/ContentReportModal';
@@ -15,10 +13,10 @@ import { buildGoogleReviewsUrl, dedupeImageUrls, formatLastKnownLocationLabel, f
 import { getSocialProfilesForDisplay } from '../socialProfiles';
 import { theme } from '../styles/theme';
 import type { ContentReportReason, ContentReportRequest, ContentReportScreenshotDraft, Deal, HappyHourWindow, OperatingHourWindow, PlaceDetail, PlaceLocationDetail } from '../types';
+import { openPdfInNativeViewer } from '../utils/nativePdfViewer';
 
 type AttachmentPreviewState =
-  | { kind: 'image'; name: string; uri: string }
-  | { kind: 'pdf'; name: string; html: string };
+  | { kind: 'image'; name: string; uri: string };
 
 function getAttachmentPreviewKind(mimeType: string | null | undefined, fileName: string) {
   const normalizedMimeType = String(mimeType || '').trim().toLowerCase();
@@ -31,112 +29,6 @@ function getAttachmentPreviewKind(mimeType: string | null | undefined, fileName:
     return 'pdf' as const;
   }
   return null;
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function buildPdfPreviewHtml(base64Document: string, fileName: string) {
-  const safeName = escapeHtml(fileName || 'Document preview');
-  return `
-    <!DOCTYPE html>
-    <html lang="en">
-      <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-        <title>${safeName}</title>
-        <style>
-          body {
-            margin: 0;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #f3e7d8;
-            color: #402214;
-          }
-          #status {
-            padding: 16px;
-            text-align: center;
-            font-size: 14px;
-            color: #7d614f;
-          }
-          #pages {
-            padding: 12px;
-          }
-          .page {
-            margin: 0 auto 14px;
-            width: fit-content;
-            box-shadow: 0 8px 24px rgba(45, 34, 26, 0.14);
-            background: white;
-          }
-          canvas {
-            display: block;
-            max-width: 100%;
-            height: auto;
-          }
-        </style>
-      </head>
-      <body>
-        <div id="status">Loading PDF preview...</div>
-        <div id="pages"></div>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-        <script>
-          const status = document.getElementById('status');
-          const pages = document.getElementById('pages');
-          const base64 = '${base64Document}';
-
-          function base64ToUint8Array(input) {
-            const binary = atob(input);
-            const length = binary.length;
-            const bytes = new Uint8Array(length);
-            for (let index = 0; index < length; index += 1) {
-              bytes[index] = binary.charCodeAt(index);
-            }
-            return bytes;
-          }
-
-          async function renderPdf() {
-            try {
-              pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-              const pdf = await pdfjsLib.getDocument({ data: base64ToUint8Array(base64) }).promise;
-              status.textContent = 'Rendering pages...';
-              for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-                const page = await pdf.getPage(pageNumber);
-                const baseViewport = page.getViewport({ scale: 1 });
-                const availableWidth = Math.max(window.innerWidth - 24, 1);
-                const availableHeight = Math.max(window.innerHeight - 24, 1);
-                const fitScale = Math.min(availableWidth / baseViewport.width, availableHeight / baseViewport.height);
-                const scale = Math.max(Math.min(fitScale, 1), 0.35);
-                const viewport = page.getViewport({ scale });
-                const canvas = document.createElement('canvas');
-                const context = canvas.getContext('2d');
-                const wrapper = document.createElement('div');
-                wrapper.className = 'page';
-                const deviceScale = window.devicePixelRatio || 1;
-                canvas.width = Math.floor(viewport.width * deviceScale);
-                canvas.height = Math.floor(viewport.height * deviceScale);
-                canvas.style.width = viewport.width + 'px';
-                canvas.style.height = viewport.height + 'px';
-                context.scale(deviceScale, deviceScale);
-                wrapper.appendChild(canvas);
-                pages.appendChild(wrapper);
-                await page.render({ canvasContext: context, viewport }).promise;
-              }
-              status.remove();
-            } catch (error) {
-              status.textContent = 'Unable to preview this PDF in-app.';
-            }
-          }
-
-          renderPdf();
-        </script>
-      </body>
-    </html>
-  `;
 }
 
 const dismissKeyboardOnScrollProps = {
@@ -403,18 +295,9 @@ export function PlaceDetailScreen({
       setAttachmentPreviewLoading(true);
       setAttachmentPreview(null);
       try {
-        const localUri = uri.startsWith('file://')
-          ? uri
-          : (await FileSystem.downloadAsync(uri, `${FileSystem.cacheDirectory ?? ''}deal-preview-${Date.now()}.pdf`)).uri;
-        const base64Document = await FileSystem.readAsStringAsync(localUri, { encoding: 'base64' });
-        if (attachmentPreviewRequestIdRef.current !== requestId) {
-          return;
-        }
-        setAttachmentPreview({
-          kind: 'pdf',
-          name: attachmentName,
-          html: buildPdfPreviewHtml(base64Document, attachmentName),
-        });
+        await openPdfInNativeViewer(uri, attachmentName);
+      } catch {
+        Alert.alert('Unable to open file', 'This PDF could not be opened in the device document viewer.');
       } finally {
         if (attachmentPreviewRequestIdRef.current === requestId) {
           setAttachmentPreviewLoading(false);
@@ -889,8 +772,6 @@ export function PlaceDetailScreen({
               <View style={styles.attachmentLightboxImageStage}>
                 <Image resizeMode="contain" source={{ uri: attachmentPreview.uri }} style={styles.photoLightboxImage} />
               </View>
-            ) : attachmentPreview?.kind === 'pdf' ? (
-              <WebView originWhitelist={["*"]} source={{ html: attachmentPreview.html }} style={styles.attachmentPreviewWebView} />
             ) : null}
           </View>
         </View>

@@ -1,8 +1,10 @@
+import hashlib
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from io import BytesIO, StringIO
+from types import SimpleNamespace
 from unittest.mock import MagicMock, call, patch
 from zoneinfo import ZoneInfo
 
@@ -19,6 +21,7 @@ from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.core.exceptions import ValidationError
+from django.http import QueryDict
 from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -30,8 +33,9 @@ from PIL import Image
 import pyotp
 
 from .admin import BusinessAccountAdmin, BusinessClaimAdmin, ContentReportAdmin, CustomerAccountAdmin, DeletedBusinessAdmin, ListingSnapshotAdmin, ListingSnapshotAdminForm, SponsoredCampaignAdmin, _sync_listing_snapshot_from_imported_place
+from .admin_security import ADMIN_MFA_VERIFIED_SESSION_KEY
 from .admin_site import happyhour_admin_site
-from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, BusinessPost, City, ContentReport, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedEngagement, FeedImpression, ListingSnapshot, ProfileAuthToken, SponsoredCampaign, VenueType, Weekday
+from .models import AccountProfile, AdminAuditEvent, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, BusinessPost, City, ContentReport, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedEngagement, FeedImpression, ListingSnapshot, ManagedMedia, ProfileAuthToken, SponsoredCampaign, VenueType, Weekday
 from .serializers import _validate_claim_attachment_size, _validate_uploaded_deal_attachment
 from .services.importers.base import BaseHtmlImporter
 from .services.importers.business_websites import BusinessWebsiteImporter
@@ -40,6 +44,7 @@ from .services.deleted_businesses import filter_deleted_business_records
 from .services.demo_home_feed import DEMO_HOME_FEED_SOURCE_NAME, get_demo_home_feed_business_specs
 from .services.favorite_notifications import create_notifications_for_business_profile_update
 from .services.image_moderation import ImageModerationRejected, ImageModerationUnavailable, moderate_uploaded_image
+from .services.cloudmersive_scanning import ScanStatus
 from .services.importers.types import ImportedDeal, ImportedHappyHour, ImportedOperatingHour, ImportedPlace
 from .services.admin_operations import _get_catalog_health_payload_map, command_search, dashboard_callback, get_catalog_health, get_operations_dashboard_data
 from .services.current_happy_hours import get_current_happy_hours_payload
@@ -48,6 +53,26 @@ from .services.source_listings import _build_deal_identity_key, _build_place_pay
 
 
 User = get_user_model()
+
+VALID_TEST_PNG_BYTES = (
+	b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89'
+	b'\x00\x00\x00\x0cIDATx\x9cc``\x60\x00\x00\x00\x04\x00\x01\xf6\x178U\x00\x00\x00\x00IEND\xaeB`\x82'
+)
+
+
+def authenticate_test_admin(client, user):
+	admin_mfa_secret = pyotp.random_base32()
+	AccountProfile.objects.update_or_create(
+		user=user,
+		defaults={
+			'admin_two_factor_enabled': True,
+			'admin_two_factor_secret': admin_mfa_secret,
+		},
+	)
+	client.force_login(user)
+	session = client.session
+	session[ADMIN_MFA_VERIFIED_SESSION_KEY] = hashlib.sha256(admin_mfa_secret.encode('utf-8')).hexdigest()
+	session.save()
 
 
 class StubResponse:
@@ -261,7 +286,13 @@ class PlaceApiTests(APITestCase):
 			response = self.client.get(reverse('place-list'), {'has_deals': 'true'})
 
 		self.assertEqual(response.status_code, 200)
-		mock_get_source_place_payloads.assert_called_once_with(city=None, venue_type=None, has_deals=True, resolve_missing_coordinates=True)
+		mock_get_source_place_payloads.assert_called_once_with(
+			city=None,
+			venue_type=None,
+			has_deals=True,
+			resolve_missing_coordinates=True,
+			allow_network=False,
+		)
 
 	def test_place_list_endpoint_allows_large_page_size(self):
 		payloads = [
@@ -337,7 +368,7 @@ class PlaceApiTests(APITestCase):
 
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response.json()['slug'], self.place_payload['slug'])
-		mock_get_source_place_payload.assert_called_once_with(location_slug)
+		mock_get_source_place_payload.assert_called_once_with(location_slug, allow_network=False)
 
 	def test_live_location_places_endpoint_returns_tracked_mobile_businesses(self):
 		ListingSnapshot.objects.create(
@@ -679,10 +710,18 @@ class CurrentHappyHoursServiceTests(TestCase):
 			{window['title'] for window in result['places'][0]['happy_hours']},
 			{'First Deal', 'Second Deal'},
 		)
-		mock_get_source_place_payloads.assert_called_once_with(city=City.VENTURA, resolve_missing_coordinates=True)
+		mock_get_source_place_payloads.assert_called_once_with(
+			city=City.VENTURA,
+			resolve_missing_coordinates=True,
+			allow_network=False,
+		)
 
 
-@override_settings(PAID_FEATURES_ENABLED=True)
+@override_settings(
+	PAID_FEATURES_ENABLED=True,
+	HOME_FEED_ENABLED=True,
+	FEED_IMPRESSION_TELEMETRY_ENABLED=True,
+)
 class HomeFeedApiTests(APITestCase):
 	def setUp(self):
 		self.user = User.objects.create_user(username='feed-owner', email='feed@example.com', password='secret12345')
@@ -796,6 +835,23 @@ class HomeFeedApiTests(APITestCase):
 		self.assertEqual(response.status_code, 201)
 		self.assertEqual(FeedEngagement.objects.count(), 1)
 		self.assertEqual(FeedEngagement.objects.first().event_type, FeedEngagement.EventType.CLICK)
+
+
+class PrelaunchFeedSurfaceTests(APITestCase):
+	def test_home_feed_is_disabled_until_launch(self):
+		response = self.client.get(reverse('home-feed'))
+
+		self.assertEqual(response.status_code, 404)
+
+	def test_feed_impression_telemetry_is_disabled_until_launch(self):
+		response = self.client.post(reverse('feed-impressions'), {}, format='json')
+
+		self.assertEqual(response.status_code, 404)
+
+	def test_feed_engagement_telemetry_is_disabled_until_launch(self):
+		response = self.client.post(reverse('feed-engagements'), {}, format='json')
+
+		self.assertEqual(response.status_code, 404)
 
 
 class SeedPhase2CommandTests(APITestCase):
@@ -1532,6 +1588,39 @@ class BusinessWebsiteImporterTests(TestCase):
 		self.assertEqual(records, [])
 		self.assertEqual(len(importer.load_errors), 1)
 		self.assertEqual(importer.load_errors[0]['name'], 'Broken Source')
+
+	def test_configured_fallback_builds_business_without_network(self):
+		class BrokenSession:
+			def get(self, url, headers=None, timeout=None):
+				raise AssertionError('configured fallback must not fetch a website')
+
+		importer = BusinessWebsiteImporter(
+			session=BrokenSession(),
+			business_sources=[
+				{
+					'name': "Finney's Crafthouse",
+					'city': City.VENTURA,
+					'venue_type': VenueType.BAR,
+					'source_url': 'https://www.finneyscrafthouse.com/ventura/',
+					'address_line_1': '494 E. Main Street',
+					'phone_number': '(805) 628-3312',
+					'source_documents': [
+						{
+							'text': 'Monday - Friday: 11:00am - 9:00pm.',
+							'roles': ['hours'],
+						},
+					],
+				},
+			],
+		)
+
+		records = importer.load_configured_records()
+
+		self.assertEqual(len(records), 1)
+		self.assertEqual(records[0].name, "Finney's Crafthouse")
+		self.assertEqual(records[0].address_line_1, '494 E. Main Street')
+		self.assertEqual(records[0].phone_number, '(805) 628-3312')
+		self.assertEqual(len(records[0].operating_hours), 5)
 
 	def test_default_external_id_stays_unique_for_long_same_prefix_values(self):
 		importer = BusinessWebsiteImporter(business_sources=[])
@@ -4121,6 +4210,33 @@ class SourceFetchCacheTests(TestCase):
 		self.assertEqual(refreshed_records, ['record-2'])
 		self.assertEqual(DummySourceImporter.call_count, 2)
 
+	def test_force_refresh_retains_previous_business_source_record_when_refresh_omits_it(self):
+		previous_record = ImportedPlace(
+			name='Previously Available Place',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='1 Main Street',
+			external_id='previously-available-place',
+			source_name='business_websites',
+			source_url='https://example.com/previously-available-place',
+		)
+
+		class DummyBusinessImporter:
+			source_name = 'business_websites'
+			responses = [[previous_record], []]
+
+			def load_records(self_inner):
+				return DummyBusinessImporter.responses.pop(0)
+
+		with (
+			patch.dict('places.services.source_listings.RUNTIME_IMPORTER_REGISTRY', {'business_websites': DummyBusinessImporter}, clear=False),
+			patch.object(BusinessWebsiteImporter, 'load_configured_records', return_value=[previous_record]),
+		):
+			load_source_records(source_name='business_websites', force_refresh=True)
+			refreshed_records = load_source_records(source_name='business_websites', force_refresh=True)
+
+		self.assertEqual([record.external_id for record in refreshed_records], ['previously-available-place'])
+
 	def test_get_source_place_payloads_reuses_cached_payloads_until_source_refresh(self):
 		class DummyPayloadImporter:
 			source_name = 'dummy_payload_source'
@@ -4160,7 +4276,7 @@ class SourceFetchCacheTests(TestCase):
 
 	def test_cached_claimed_mobile_payload_overlays_latest_coordinates_without_source_rebuild(self):
 		user = User.objects.create_user(username='cached_mobile_owner', email='cached-mobile@example.com', password='test-pass-123')
-		AccountProfile.objects.create(user=user)
+		AccountProfile.objects.create(user=user, business_location_tracking_enabled=True)
 		snapshot = ListingSnapshot.objects.create(
 			name='Cache Truck',
 			city=City.VENTURA,
@@ -4395,6 +4511,15 @@ class BusinessClaimTests(APITestCase):
 
 
 class ProfileSignupApiTests(APITestCase):
+	def setUp(self):
+		super().setUp()
+		self.pdf_scan_patcher = patch(
+			'places.serializers.scan_pdf_file',
+			return_value=SimpleNamespace(status=ScanStatus.CLEAN, reason=''),
+		)
+		self.pdf_scan_patcher.start()
+		self.addCleanup(self.pdf_scan_patcher.stop)
+
 	@override_settings(REST_FRAMEWORK={'DEFAULT_THROTTLE_RATES': {'profile_login': '2/minute'}})
 	def test_login_is_rate_limited_after_repeated_attempts(self):
 		caches['default'].clear()
@@ -4771,8 +4896,8 @@ class ProfileSignupApiTests(APITestCase):
 						}),
 						'proof_of_authority_attachments': [SimpleUploadedFile('manager-proof.pdf', b'proof', content_type='application/pdf')],
 						'profile_photo_uploads': [
-							SimpleUploadedFile('front.jpg', b'front-photo', content_type='image/jpeg'),
-							SimpleUploadedFile('inside.png', b'inside-photo', content_type='image/png'),
+							SimpleUploadedFile('front.png', VALID_TEST_PNG_BYTES, content_type='image/png'),
+							SimpleUploadedFile('inside.png', VALID_TEST_PNG_BYTES, content_type='image/png'),
 						],
 						'supporting_details': 'Available to provide payroll and licensing records upon request.',
 					},
@@ -4783,10 +4908,7 @@ class ProfileSignupApiTests(APITestCase):
 		claim = BusinessClaim.objects.get(claimant__username='photo_claim_owner')
 		self.assertEqual(len(claim.photo_references), 2)
 		self.assertTrue(claim.photo_gallery_overridden)
-		self.assertTrue(all(
-			f'/businesses/{claim.listing_snapshot_id}-finneys-crafthouse/claims/{claim.id}/profile-photos/' in photo_url
-			for photo_url in claim.photo_references
-		))
+		self.assertTrue(all('/managed-media/' in photo_url for photo_url in claim.photo_references))
 		self.assertEqual(
 			claim.get_profile_entry_values(BusinessClaim.ProfileEntryKind.PHOTO_REFERENCE),
 			claim.photo_references,
@@ -4809,7 +4931,7 @@ class ProfileSignupApiTests(APITestCase):
 						'business_city': BusinessClaim.MULTIPLE_AREAS_VALUE,
 						'business_venue_type': VenueType.OTHER,
 						'profile_photo_uploads': [
-							SimpleUploadedFile('booth.jpg', b'photo-only', content_type='image/jpeg'),
+							SimpleUploadedFile('booth.png', VALID_TEST_PNG_BYTES, content_type='image/png'),
 						],
 						'supporting_details': 'Weekend market snack booth.',
 					},
@@ -4885,7 +5007,7 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(claim.deal_overrides[0]['attachment']['name'], 'happy-hour-flyer.pdf')
 		self.assertEqual(claim.deal_overrides[0]['attachment']['content_type'], 'application/pdf')
 		self.assertIn(
-			f'/businesses/{claim.listing_snapshot_id}-finneys-crafthouse/claims/{claim.id}/deal-attachments/',
+			'/managed-media/',
 			claim.deal_overrides[0]['attachment']['url'],
 		)
 
@@ -5071,7 +5193,7 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(login_response.status_code, 400)
 		self.assertEqual(
 			login_response.data['non_field_errors'][0],
-			'Your business claim must be approved by an admin before you can sign in to the business portal.',
+			'Unable to sign in with those credentials.',
 		)
 
 	@patch('places.views.get_source_place_payload')
@@ -5177,7 +5299,7 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(claim.listing_snapshot.address_line_1, 'Approximate live location')
 
 	@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
-	def test_manual_business_signup_reuses_rejected_account_with_same_email(self):
+	def test_manual_business_signup_cannot_reuse_rejected_account_without_retry_grant(self):
 		rejected_user = User.objects.create_user(
 			username='old_bistro_owner',
 			email='retry@example.com',
@@ -5193,7 +5315,7 @@ class ProfileSignupApiTests(APITestCase):
 			address_line_1='10 Main St',
 			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
 		)
-		BusinessClaim.objects.create(
+		rejected_claim = BusinessClaim.objects.create(
 			claimant=rejected_user,
 			listing_snapshot=rejected_snapshot,
 			pathway=BusinessClaim.Pathway.ESTABLISHED,
@@ -5207,6 +5329,7 @@ class ProfileSignupApiTests(APITestCase):
 			verification_summary='Rejected attempt.',
 			rejection_reason_codes=[BusinessClaim.RejectionReason.ADDRESS_INVALID],
 		)
+		AccountProfile.objects.get(user=rejected_user).suspend_business_claim_access()
 
 		response = self.client.post(
 			reverse('manual-business-signup'),
@@ -5239,17 +5362,13 @@ class ProfileSignupApiTests(APITestCase):
 			format='multipart',
 		)
 
-		self.assertEqual(response.status_code, 201)
+		self.assertEqual(response.status_code, 400)
 		rejected_user.refresh_from_db()
-		self.assertEqual(rejected_user.username, 'retry_bistro_owner')
-		self.assertTrue(rejected_user.check_password('new-pass-123'))
-		self.assertEqual(BusinessClaim.objects.filter(claimant=rejected_user).count(), 2)
-		latest_claim = BusinessClaim.objects.filter(claimant=rejected_user).order_by('-created_at').first()
-		self.assertEqual(latest_claim.status, BusinessClaim.Status.SUBMITTED)
-		self.assertEqual(response.data['claim_status'], BusinessClaim.Status.SUBMITTED)
-		self.assertTrue(response.data['claim_review_pending'])
-		self.assertFalse(response.data.get('email_verification_required', False))
-		self.assertIn('has received your business profile creation claim', response.data['detail'])
+		self.assertEqual(rejected_user.username, 'old_bistro_owner')
+		self.assertTrue(rejected_user.check_password('old-pass-123'))
+		self.assertEqual(BusinessClaim.objects.filter(claimant=rejected_user).count(), 1)
+		self.assertEqual(response.data['email'][0], 'That email is already in use.')
+		self.assertTrue(rejected_claim.claimant.account_profile.business_claim_suspended)
 
 	@patch('places.views.get_source_place_payload')
 	def test_claimed_business_signup_reuses_authenticated_customer_account(self, mock_get_source_place_payload):
@@ -5322,7 +5441,7 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(BusinessClaim.objects.filter(claimant=user).count(), 1)
 
 	@patch('places.views.get_source_place_payload')
-	def test_claimed_business_signup_allows_new_attempt_after_rejection_for_same_user(self, mock_get_source_place_payload):
+	def test_claimed_business_signup_cannot_retry_rejected_account_without_retry_grant(self, mock_get_source_place_payload):
 		mock_get_source_place_payload.return_value = {
 			'id': 402,
 			'name': 'Finney\'s Crafthouse',
@@ -5361,6 +5480,7 @@ class ProfileSignupApiTests(APITestCase):
 			verification_summary='Rejected claimed-business attempt.',
 			rejection_reason_codes=[BusinessClaim.RejectionReason.PROOF_OF_AUTHORITY_INVALID],
 		)
+		AccountProfile.objects.get(user=rejected_user).suspend_business_claim_access()
 
 		response = self.client.post(
 			reverse('business-signup'),
@@ -5392,10 +5512,10 @@ class ProfileSignupApiTests(APITestCase):
 			format='multipart',
 		)
 
-		self.assertEqual(response.status_code, 201)
-		self.assertEqual(BusinessClaim.objects.filter(claimant=rejected_user, listing_snapshot=snapshot).count(), 2)
-		latest_claim = BusinessClaim.objects.filter(claimant=rejected_user, listing_snapshot=snapshot).order_by('-created_at').first()
-		self.assertEqual(latest_claim.status, BusinessClaim.Status.SUBMITTED)
+		self.assertEqual(response.status_code, 400)
+		self.assertEqual(BusinessClaim.objects.filter(claimant=rejected_user, listing_snapshot=snapshot).count(), 1)
+		self.assertIn('That username is already in use.', response.data['username'])
+		self.assertTrue(AccountProfile.objects.get(user=rejected_user).business_claim_suspended)
 
 	def test_informal_business_signup_creates_informal_claim(self):
 		response = self.client.post(
@@ -5507,7 +5627,7 @@ class ProfileSignupApiTests(APITestCase):
 						'offer_entries': json.dumps(['2 tacos for $5']),
 						'hours_of_operation_entries': json.dumps(['Fri-Sun 6pm-11pm']),
 						'profile_photo_uploads': [
-							SimpleUploadedFile('cart.jpg', b'cart-photo', content_type='image/jpeg'),
+							SimpleUploadedFile('cart.png', VALID_TEST_PNG_BYTES, content_type='image/png'),
 						],
 						'supporting_details': 'I operate this snack stand at weekend events and night markets.',
 					},
@@ -5687,7 +5807,7 @@ class ProfileSignupApiTests(APITestCase):
 						}),
 						'proof_of_authority_attachments': [SimpleUploadedFile('owner-proof.pdf', b'owner-proof', content_type='application/pdf')],
 						'profile_photo_uploads': [
-							SimpleUploadedFile('patio.jpg', b'patio-photo', content_type='image/jpeg'),
+							SimpleUploadedFile('patio.png', VALID_TEST_PNG_BYTES, content_type='image/png'),
 						],
 						'supporting_details': 'Happy to provide incorporation documents during review.',
 					},
@@ -5735,7 +5855,7 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(response.status_code, 400)
 		self.assertEqual(
 			response.data['non_field_errors'][0],
-			'Your business claim must be approved by an admin before you can sign in to the business portal.',
+			'Unable to sign in with those credentials.',
 		)
 
 	def test_business_portal_login_allows_approved_claim_without_membership(self):
@@ -5885,7 +6005,7 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(response.status_code, 400)
 		self.assertEqual(
 			response.data['non_field_errors'][0],
-			'Business accounts must sign in through the business account portal.',
+			'Unable to sign in with those credentials.',
 		)
 
 	def test_login_rejects_email_identifier(self):
@@ -5902,7 +6022,7 @@ class ProfileSignupApiTests(APITestCase):
 		)
 
 		self.assertEqual(response.status_code, 400)
-		self.assertEqual(response.data['non_field_errors'][0], 'No account matches that username.')
+		self.assertEqual(response.data['non_field_errors'][0], 'Unable to sign in with those credentials.')
 
 	def test_login_returns_email_verification_challenge_for_unverified_account(self):
 		user = User.objects.create_user(
@@ -5985,8 +6105,8 @@ class ProfileSignupApiTests(APITestCase):
 			format='json',
 		)
 
-		self.assertEqual(resend_response.status_code, 400)
-		self.assertIn('seconds_remaining', resend_response.data)
+		self.assertEqual(resend_response.status_code, 200)
+		self.assertEqual(resend_response.data['detail'], 'If that account is eligible, a new verification message will be sent.')
 
 
 @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend', PAID_FEATURES_ENABLED=True)
@@ -6411,7 +6531,7 @@ class ProfileDashboardApiTests(APITestCase):
 						'contact_name': 'Dash Board',
 						'work_email': 'owner@approvedspot.com',
 						'photo_references_text': 'https://cdn.example.com/approvedspot/front.jpg',
-						'profile_photo_uploads': [SimpleUploadedFile('dining-room.png', b'fake-image-bytes', content_type='image/png')],
+						'profile_photo_uploads': [SimpleUploadedFile('dining-room.png', VALID_TEST_PNG_BYTES, content_type='image/png')],
 					},
 					format='multipart',
 					**self.auth_headers(),
@@ -6422,11 +6542,11 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(len(claim.photo_references), 2)
 		self.assertEqual(claim.photo_references[0], 'https://cdn.example.com/approvedspot/front.jpg')
 		self.assertIn(
-			f'/businesses/{claim.listing_snapshot_id}-approved-spot-ventura/claims/{claim.id}/profile-photos/',
+			'/managed-media/',
 			claim.photo_references[1],
 		)
 		self.assertTrue(claim.photo_gallery_overridden)
-		self.assertIn(claim.photo_references[1], response.data['business_contact']['photo_references'])
+		self.assertTrue(any('/managed-media/' in photo_url for photo_url in response.data['business_contact']['photo_references']))
 
 	def test_profile_dashboard_update_accepts_per_deal_attachment_uploads(self):
 		snapshot = ListingSnapshot.objects.create(
@@ -6488,7 +6608,7 @@ class ProfileDashboardApiTests(APITestCase):
 							'terms': 'Weekdays only',
 							'happy_hours': [{'weekday': Weekday.FRIDAY, 'start_time': '16:00', 'end_time': '19:00', 'all_day': False}],
 						}]),
-						'deal_attachment_upload_0': SimpleUploadedFile('new-flyer.png', b'fake-image-bytes', content_type='image/png'),
+						'deal_attachment_upload_0': SimpleUploadedFile('new-flyer.png', VALID_TEST_PNG_BYTES, content_type='image/png'),
 					},
 					format='multipart',
 					**self.auth_headers(),
@@ -6499,7 +6619,7 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(claim.deal_overrides[0]['attachment']['name'], 'new-flyer.png')
 		self.assertEqual(claim.deal_overrides[0]['attachment']['content_type'], 'image/png')
 		self.assertIn(
-			f'/businesses/{claim.listing_snapshot_id}-approved-spot/claims/{claim.id}/deal-attachments/',
+			'/managed-media/',
 			claim.deal_overrides[0]['attachment']['url'],
 		)
 		self.assertEqual(response.data['business_contact']['deal_overrides'][0]['attachment']['name'], 'new-flyer.png')
@@ -6606,6 +6726,8 @@ class ProfileDashboardApiTests(APITestCase):
 			status=BusinessClaim.Status.APPROVED,
 		)
 		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+		self.profile.business_location_tracking_enabled = True
+		self.profile.save(update_fields=['business_location_tracking_enabled', 'updated_at'])
 
 		response = self.client.get(reverse('profile-dashboard'), {'portal': 'business'}, **self.auth_headers())
 
@@ -7584,14 +7706,16 @@ class ProfileDashboardApiTests(APITestCase):
 
 		self.assertEqual(request_response.status_code, 200)
 		self.profile.refresh_from_db()
-		self.assertTrue(self.profile.password_reset_token)
+		self.assertTrue(self.profile.password_reset_selector)
+		self.assertTrue(self.profile.password_reset_token_digest)
+		self.assertEqual(self.profile.password_reset_token, '')
 		self.assertEqual(len(mail.outbox), 1)
-		self.assertIn(self.profile.password_reset_token, mail.outbox[0].body)
-		self.assertIn(f'diningdealz://forgot-password/{self.profile.password_reset_token}/', mail.outbox[0].body)
+		reset_token = mail.outbox[0].body.split('diningdealz://forgot-password/', 1)[1].split('/', 1)[0]
+		self.assertTrue(reset_token.startswith(f'{self.profile.password_reset_selector}.'))
 		self.assertNotIn('127.0.0.1', mail.outbox[0].body)
 
 		confirm_response = self.client.post(
-			reverse('profile-password-reset', kwargs={'token': self.profile.password_reset_token}),
+			reverse('profile-password-reset', kwargs={'token': reset_token}),
 			{'new_password': 'new-test-pass-123'},
 		)
 
@@ -7600,14 +7724,16 @@ class ProfileDashboardApiTests(APITestCase):
 		self.profile.refresh_from_db()
 		self.assertTrue(self.user.check_password('new-test-pass-123'))
 		self.assertEqual(self.profile.password_reset_token, '')
+		self.assertEqual(self.profile.password_reset_selector, '')
+		self.assertEqual(self.profile.password_reset_token_digest, '')
 		self.assertEqual(self.user.profile_auth_tokens.count(), 0)
 
 	def test_password_reset_confirm_returns_json_for_mobile(self):
-		self.profile.issue_password_reset_token(force=True)
-		self.profile.save(update_fields=['password_reset_token', 'password_reset_sent_at', 'updated_at'])
+		reset_token = self.profile.issue_password_reset_token(force=True)
+		self.profile.save(update_fields=['password_reset_token', 'password_reset_selector', 'password_reset_token_digest', 'password_reset_sent_at', 'updated_at'])
 
 		response = self.client.post(
-			reverse('profile-password-reset', kwargs={'token': self.profile.password_reset_token}),
+			reverse('profile-password-reset', kwargs={'token': reset_token}),
 			{'new_password': 'mobile-test-pass-123'},
 			format='json',
 		)
@@ -7619,13 +7745,13 @@ class ProfileDashboardApiTests(APITestCase):
 
 	@override_settings(PROFILE_PASSWORD_RESET_TOKEN_TTL_SECONDS=60)
 	def test_password_reset_rejects_expired_token(self):
-		self.profile.issue_password_reset_token(force=True)
+		reset_token = self.profile.issue_password_reset_token(force=True)
 		self.profile.password_reset_sent_at = timezone.now() - timezone.timedelta(seconds=61)
-		self.profile.save(update_fields=['password_reset_token', 'password_reset_sent_at', 'updated_at'])
+		self.profile.save(update_fields=['password_reset_token', 'password_reset_selector', 'password_reset_token_digest', 'password_reset_sent_at', 'updated_at'])
 
-		page_response = self.client.get(reverse('profile-password-reset', kwargs={'token': self.profile.password_reset_token}))
+		page_response = self.client.get(reverse('profile-password-reset', kwargs={'token': reset_token}))
 		json_response = self.client.post(
-			reverse('profile-password-reset', kwargs={'token': self.profile.password_reset_token}),
+			reverse('profile-password-reset', kwargs={'token': reset_token}),
 			{'new_password': 'expired-test-pass-123'},
 			format='json',
 		)
@@ -7753,9 +7879,12 @@ class ProfileDashboardApiTests(APITestCase):
 			original_filename='private-proof.pdf',
 			content_type='application/pdf',
 			file_size=13,
+			malware_scan_status=BusinessClaimAttachment.MalwareScanStatus.CLEAN,
 		)
 
-		self.assertTrue(attachment.file.url.startswith('/private-media/'))
+		private_url = reverse('private-business-claim-attachment', kwargs={'media_id': attachment.media_id})
+		self.assertTrue(private_url.startswith('/private-media/'))
+		self.assertEqual(self.client.get(private_url).status_code, 404)
 		self.assertEqual(self.client.get(attachment.file.url).status_code, 404)
 		self.assertEqual(self.client.get(f'{settings.MEDIA_URL}{attachment.file.name}').status_code, 404)
 
@@ -7764,8 +7893,8 @@ class ProfileDashboardApiTests(APITestCase):
 			email='private-media-admin@example.com',
 			password='admin-pass-123',
 		)
-		self.client.force_login(admin_user)
-		private_response = self.client.get(attachment.file.url)
+		authenticate_test_admin(self.client, admin_user)
+		private_response = self.client.get(private_url)
 		self.assertEqual(private_response.status_code, 200)
 		self.assertEqual(b''.join(private_response.streaming_content), b'private proof')
 
@@ -8643,6 +8772,7 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(blocked_send_response.status_code, 403)
 		self.assertEqual(blocked_send_response.data['detail'], 'This conversation is now read-only because the customer account was deleted.')
 
+	@override_settings(HOME_FEED_ENABLED=True)
 	def test_delete_business_account_preserves_customer_thread_as_read_only(self):
 		business_user = User.objects.create_user(username='deleted_business_owner', email='deleted_business_owner@example.com', password='test-pass-123')
 		business_token = ProfileAuthToken.objects.create(user=business_user)
@@ -8841,6 +8971,7 @@ class AccountProxyTests(APITestCase):
 		super().setUp()
 		caches[getattr(settings, 'SOURCE_FETCH_CACHE_ALIAS', 'default')].clear()
 		self.admin_user = User.objects.create_superuser(username='account_proxy_admin', email='account_proxy_admin@example.com', password='test-pass-123')
+		authenticate_test_admin(self.client, self.admin_user)
 
 	def tearDown(self):
 		caches[getattr(settings, 'SOURCE_FETCH_CACHE_ALIAS', 'default')].clear()
@@ -8990,6 +9121,24 @@ class AccountProxyTests(APITestCase):
 		self.assertContains(response, 'account-delete-warning__list')
 		self.assertContains(response, customer.username)
 		self.assertContains(response, customer.email)
+		self.assertContains(response, 'name="deletion_reason"')
+		self.assertContains(response, 'minlength="10"')
+		self.assertNotContains(response, 'DOMContentLoaded')
+
+	def test_customer_account_invalid_delete_does_not_delete_or_report_success(self):
+		customer = User.objects.create_user(username='invalid_delete_customer', email='invalid_delete_customer@example.com', password='test-pass-123')
+
+		response = self.client.post(
+			reverse('happyhour_admin:places_customeraccount_delete', args=[customer.pk]),
+			{'post': 'yes', 'deletion_reason': 'too short'},
+			follow=True,
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertTrue(User.objects.filter(pk=customer.pk).exists())
+		self.assertContains(response, 'A written deletion reason of at least 10 characters is required.')
+		self.assertNotContains(response, 'deleted successfully')
+		self.assertFalse(LogEntry.objects.filter(object_id=str(customer.pk)).exists())
 
 	def test_customer_account_bulk_delete_confirmation_lists_selected_accounts(self):
 		first_customer = User.objects.create_user(username='bulk_customer_one', email='bulk_customer_one@example.com', password='test-pass-123')
@@ -9013,12 +9162,79 @@ class AccountProxyTests(APITestCase):
 		self.assertContains(response, second_customer.username)
 		self.assertContains(response, first_customer.email)
 		self.assertContains(response, second_customer.email)
+		self.assertContains(response, 'name="deletion_reason"')
+		self.assertContains(response, 'minlength="10"')
+
+	def test_customer_account_invalid_bulk_delete_does_not_delete_or_report_success(self):
+		first_customer = User.objects.create_user(username='invalid_bulk_customer_one', email='invalid_bulk_customer_one@example.com', password='test-pass-123')
+		second_customer = User.objects.create_user(username='invalid_bulk_customer_two', email='invalid_bulk_customer_two@example.com', password='test-pass-123')
+		request_data = QueryDict('', mutable=True)
+		request_data.appendlist('action', 'delete_selected')
+		request_data.appendlist('action', 'invalid_action')
+		request_data.appendlist(helpers.ACTION_CHECKBOX_NAME, str(first_customer.pk))
+		request_data.appendlist(helpers.ACTION_CHECKBOX_NAME, str(second_customer.pk))
+		request_data['index'] = '0'
+		request_data['post'] = 'yes'
+		request_data['deletion_reason'] = 'too short'
+
+		response = self.client.post(
+			reverse('happyhour_admin:places_customeraccount_changelist'),
+			request_data,
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertTrue(User.objects.filter(pk=first_customer.pk).exists())
+		self.assertTrue(User.objects.filter(pk=second_customer.pk).exists())
+		self.assertContains(response, 'A written deletion reason of at least 10 characters is required.')
+		self.assertContains(response, 'name="deletion_reason"')
+		self.assertNotContains(response, 'Successfully deleted')
+
+	def test_customer_account_valid_bulk_delete_records_reason_and_deletes_accounts(self):
+		first_customer = User.objects.create_user(username='valid_bulk_customer_one', email='valid_bulk_customer_one@example.com', password='test-pass-123')
+		second_customer = User.objects.create_user(username='valid_bulk_customer_two', email='valid_bulk_customer_two@example.com', password='test-pass-123')
+		confirmation_data = {
+			'action': 'delete_selected',
+			helpers.ACTION_CHECKBOX_NAME: [str(first_customer.pk), str(second_customer.pk)],
+			'index': '0',
+		}
+
+		confirmation_response = self.client.post(
+			reverse('happyhour_admin:places_customeraccount_changelist'),
+			confirmation_data,
+		)
+		self.assertEqual(confirmation_response.status_code, 200)
+
+		reason = 'Bulk deletion approved after an account review.'
+		response = self.client.post(
+			reverse('happyhour_admin:places_customeraccount_changelist'),
+			{
+				'action': 'delete_selected',
+				helpers.ACTION_CHECKBOX_NAME: [str(first_customer.pk), str(second_customer.pk)],
+				'post': 'yes',
+				'deletion_reason': reason,
+			},
+			follow=True,
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertFalse(User.objects.filter(pk=first_customer.pk).exists())
+		self.assertFalse(User.objects.filter(pk=second_customer.pk).exists())
+		self.assertContains(response, 'Successfully deleted')
+		audit_event = AdminAuditEvent.objects.filter(message='Permanently deleted account.').order_by('-pk').first()
+		self.assertIsNotNone(audit_event)
+		self.assertEqual(audit_event.metadata['deletion_reason'], reason)
+		self.assertEqual(audit_event.metadata['scope'], 'bulk')
 
 	def test_customer_account_admin_delete_model_hard_deletes_user(self):
 		customer = User.objects.create_user(username='hard_delete_customer', email='hard_delete_customer@example.com', password='test-pass-123')
 		admin_instance = CustomerAccountAdmin(CustomerAccount, AdminSite())
-		request = RequestFactory().post('/admin/places/customeraccount/')
+		request = RequestFactory().post(
+			'/admin/places/customeraccount/',
+			{'deletion_reason': 'Customer account deletion requested for security testing.'},
+		)
 		request.user = self.admin_user
+		setattr(request, 'session', {})
+		setattr(request, '_messages', FallbackStorage(request))
 
 		admin_instance.delete_model(request, CustomerAccount.objects.get(pk=customer.pk))
 
@@ -9053,6 +9269,8 @@ class AccountProxyTests(APITestCase):
 		self.assertContains(response, approved_user.username)
 		self.assertContains(response, approved_user.email)
 		self.assertContains(response, snapshot.name)
+		self.assertContains(response, 'name="deletion_reason"')
+		self.assertContains(response, 'minlength="10"')
 
 	def test_business_account_bulk_delete_confirmation_lists_selected_accounts(self):
 		first_user = User.objects.create_user(username='bulk_business_one', email='bulk_business_one@example.com', password='test-pass-123')
@@ -9108,6 +9326,8 @@ class AccountProxyTests(APITestCase):
 		self.assertContains(response, second_user.username)
 		self.assertContains(response, first_snapshot.name)
 		self.assertContains(response, second_snapshot.name)
+		self.assertContains(response, 'name="deletion_reason"')
+		self.assertContains(response, 'minlength="10"')
 
 	def test_business_account_admin_delete_model_hard_deletes_user(self):
 		user = User.objects.create_user(username='hard_delete_business', email='hard_delete_business@example.com', password='test-pass-123')
@@ -9139,8 +9359,13 @@ class AccountProxyTests(APITestCase):
 			address_line_1=snapshot.address_line_1,
 		)
 		admin_instance = BusinessAccountAdmin(BusinessAccount, AdminSite())
-		request = RequestFactory().post('/admin/places/businessaccount/')
+		request = RequestFactory().post(
+			'/admin/places/businessaccount/',
+			{'deletion_reason': 'Business account deletion requested for security testing.'},
+		)
 		request.user = self.admin_user
+		setattr(request, 'session', {})
+		setattr(request, '_messages', FallbackStorage(request))
 
 		admin_instance.delete_model(request, BusinessAccount.objects.get(pk=user.pk))
 
@@ -9155,6 +9380,7 @@ class ListingSnapshotAdminTests(TestCase):
 		self.deleted_admin = DeletedBusinessAdmin(DeletedBusiness, self.site)
 		self.request_factory = RequestFactory()
 		self.admin_user = User.objects.create_superuser(username='snapshot_admin', email='snapshot_admin@example.com', password='test-pass-123')
+		authenticate_test_admin(self.client, self.admin_user)
 
 	def _build_request(self, path='/admin/', method='get'):
 		request = getattr(self.request_factory, method)(path)
@@ -10270,6 +10496,16 @@ class BusinessClaimAdminTests(TestCase):
 		self.site = AdminSite()
 		self.admin = BusinessClaimAdmin(BusinessClaim, self.site)
 		self.admin_user = User.objects.create_superuser(username='claim_admin', email='claim_admin@example.com', password='test-pass-123')
+		self.admin_mfa_secret = pyotp.random_base32()
+		AccountProfile.objects.create(
+			user=self.admin_user,
+			admin_two_factor_enabled=True,
+			admin_two_factor_secret=self.admin_mfa_secret,
+		)
+		self.client.force_login(self.admin_user)
+		session = self.client.session
+		session[ADMIN_MFA_VERIFIED_SESSION_KEY] = hashlib.sha256(self.admin_mfa_secret.encode('utf-8')).hexdigest()
+		session.save()
 		self.claimant = User.objects.create_user(username='claim_owner', email='owner@example.com', password='test-pass-123')
 		self.snapshot = ListingSnapshot.objects.create(
 			name='Claimed Place',
@@ -10323,7 +10559,7 @@ class BusinessClaimAdminTests(TestCase):
 		)
 
 	def _build_request(self, path='/admin/places/businessclaim/'):
-		request = RequestFactory().post(path)
+		request = RequestFactory().post(path, {'deletion_reason': 'Business claim deletion requested for security testing.'})
 		request.user = self.admin_user
 		setattr(request, 'session', {})
 		setattr(request, '_messages', FallbackStorage(request))
@@ -10626,6 +10862,23 @@ class BusinessClaimAdminTests(TestCase):
 		self.assertContains(response, self.snapshot.name)
 		self.assertContains(response, self.claim.contact_name)
 		self.assertContains(response, self.claim.claimant.email)
+		self.assertContains(response, 'name="deletion_reason"')
+		self.assertContains(response, 'minlength="10"')
+
+	def test_invalid_business_claim_delete_does_not_delete_or_report_success(self):
+		response = self.client.post(
+			reverse('happyhour_admin:places_businessclaim_delete', args=[self.claim.pk]),
+			{'post': 'yes', 'deletion_reason': 'too short'},
+			follow=True,
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertTrue(BusinessClaim.objects.filter(pk=self.claim.pk).exists())
+		self.assertTrue(User.objects.filter(pk=self.claimant.pk).exists())
+		self.assertContains(response, 'A written deletion reason of at least 10 characters is required.')
+		self.assertNotContains(response, 'deleted successfully')
+		self.assertFalse(LogEntry.objects.filter(object_id=str(self.claim.pk)).exists())
+		self.assertFalse(LogEntry.objects.filter(object_id=str(self.claim.pk)).exists())
 
 	def test_approve_selected_claims_shows_force_approval_warning_for_blocked_claims(self):
 		self.claim.refresh_verification_state(save=True)
@@ -10703,6 +10956,8 @@ class BusinessClaimAdminTests(TestCase):
 		self.assertContains(response, other_snapshot.name)
 		self.assertContains(response, self.claim.claimant.email)
 		self.assertContains(response, other_claim.claimant.email)
+		self.assertContains(response, 'name="deletion_reason"')
+		self.assertContains(response, 'minlength="10"')
 
 	def test_delete_model_removes_orphaned_claimant_account(self):
 		claimant_id = self.claimant.pk
@@ -10725,6 +10980,10 @@ class BusinessClaimAdminTests(TestCase):
 		self.assertFalse(BusinessClaim.objects.filter(pk=claim_id).exists())
 		self.assertFalse(User.objects.filter(pk=claimant_id).exists())
 		self.assertFalse(FavoriteBusiness.objects.filter(user=customer, listing_slug=self.snapshot.listing_slug).exists())
+		audit_event = AdminAuditEvent.objects.filter(message='Deleted business claim and its submitted review data.').order_by('-pk').first()
+		self.assertIsNotNone(audit_event)
+		self.assertEqual(audit_event.metadata['deletion_reason'], 'Business claim deletion requested for security testing.')
+		self.assertEqual(audit_event.metadata['scope'], 'single')
 
 	def test_delete_model_keeps_claimant_with_other_claims(self):
 		other_snapshot = ListingSnapshot.objects.create(
@@ -11155,6 +11414,7 @@ class MediaStorageCleanupTests(TestCase):
 				photo_name = default_storage.save('business-profile-photos/cleanup/front.jpg', ContentFile(b'front-photo'))
 				photo_path = Path(default_storage.path(photo_name))
 				claim = self.create_claim(photo_references=[f'http://testserver/media/{photo_name}'], photo_gallery_overridden=True)
+				ManagedMedia.objects.create(owner=self.claimant, claim=claim, storage_name=photo_name, media_kind='profile_photo', original_filename='front.jpg')
 				attachment = BusinessClaimAttachment.objects.create(
 					claim=claim,
 					attachment_kind=BusinessClaimAttachment.AttachmentKind.PROOF_OF_AUTHORITY,
@@ -11179,6 +11439,7 @@ class MediaStorageCleanupTests(TestCase):
 				photo_name = default_storage.save('business-profile-photos/cleanup/remove-me.jpg', ContentFile(b'remove-me'))
 				photo_path = Path(default_storage.path(photo_name))
 				claim = self.create_claim(photo_references=[f'http://testserver/media/{photo_name}'], photo_gallery_overridden=True)
+				ManagedMedia.objects.create(owner=self.claimant, claim=claim, storage_name=photo_name, media_kind='profile_photo', original_filename='remove-me.jpg')
 
 				self.assertTrue(photo_path.exists())
 
@@ -11186,6 +11447,42 @@ class MediaStorageCleanupTests(TestCase):
 				claim.save(update_fields=['photo_references', 'updated_at'])
 
 				self.assertFalse(photo_path.exists())
+
+	def test_claim_cleanup_does_not_delete_media_owned_by_another_claim(self):
+		with TemporaryDirectory() as temp_dir:
+			with override_settings(**self._filesystem_storage_settings(temp_dir)):
+				photo_name = default_storage.save('business-profile-photos/cleanup/other-claim.jpg', ContentFile(b'other-claim-photo'))
+				photo_path = Path(default_storage.path(photo_name))
+				foreign_snapshot = ListingSnapshot.objects.create(
+					name='Foreign Media Cleanup Bistro',
+					city=City.VENTURA,
+					venue_type=VenueType.RESTAURANT,
+					address_line_1='456 Main St',
+				)
+				attacker_snapshot = ListingSnapshot.objects.create(
+					name='Attacker Media Cleanup Bistro',
+					city=City.VENTURA,
+					venue_type=VenueType.RESTAURANT,
+					address_line_1='789 Main St',
+				)
+				foreign_claim = self.create_claim(listing_snapshot=foreign_snapshot)
+				managed_media = ManagedMedia.objects.create(
+					owner=self.claimant,
+					claim=foreign_claim,
+					storage_name=photo_name,
+					media_kind='profile_photo',
+					original_filename='other-claim.jpg',
+				)
+				attacker_claim = self.create_claim(
+					listing_snapshot=attacker_snapshot,
+					photo_references=[f'http://testserver/media/{photo_name}'],
+					photo_gallery_overridden=True,
+				)
+
+				attacker_claim.delete()
+
+				self.assertTrue(photo_path.exists())
+				self.assertTrue(ManagedMedia.objects.filter(pk=managed_media.pk).exists())
 
 	@override_settings(MEDIA_PUBLIC_BASE_URL='https://project.supabase.co/storage/v1/object/public/business-media')
 	@patch('places.services.media_storage.default_storage.delete')
@@ -11196,6 +11493,7 @@ class MediaStorageCleanupTests(TestCase):
 			],
 			photo_gallery_overridden=True,
 		)
+		ManagedMedia.objects.create(owner=self.claimant, claim=claim, storage_name='business-profile-photos/47/old-photo.jpg', media_kind='profile_photo', original_filename='old-photo.jpg')
 
 		claim.photo_references = []
 		claim.save(update_fields=['photo_references', 'updated_at'])
@@ -11220,6 +11518,7 @@ class MediaStorageCleanupTests(TestCase):
 class HappyHourAdminSiteTests(TestCase):
 	def setUp(self):
 		self.admin_user = User.objects.create_superuser(username='site_admin', email='site_admin@example.com', password='test-pass-123')
+		authenticate_test_admin(self.client, self.admin_user)
 
 	def test_admin_index_shows_database_storage_in_header(self):
 		self.client.force_login(self.admin_user)
@@ -11304,7 +11603,7 @@ class RenderStorageTests(TestCase):
 		self.assertTrue(result['available'])
 		self.assertEqual(result['usage_bytes'], int(87.6 * 1024 * 1024))
 		self.assertEqual(result['capacity_bytes'], 1024 ** 3)
-		self.assertAlmostEqual(result['usage_percent'], 8.5546875)
+		self.assertAlmostEqual(result['usage_percent'], 8.5546875, places=6)
 		self.assertEqual(mock_get.call_count, 2)
 		self.assertEqual(mock_get.call_args_list[0].kwargs['headers']['Authorization'], 'Bearer test-render-key')
 		self.assertEqual(mock_get.call_args_list[0].kwargs['params']['resource'], 'dpg-test')
@@ -11314,6 +11613,7 @@ class AdminOperationsTests(TestCase):
 	def setUp(self):
 		self.request_factory = RequestFactory()
 		self.admin_user = User.objects.create_superuser(username='operations_admin', email='operations-admin@example.com', password='test-pass-123')
+		authenticate_test_admin(self.client, self.admin_user)
 		self.claimant = User.objects.create_user(username='operations_claimant', email='operations-claimant@example.com', password='test-pass-123')
 		self.snapshot = ListingSnapshot.objects.create(
 			name='Operations Restaurant',
