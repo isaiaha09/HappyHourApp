@@ -9140,6 +9140,37 @@ class AccountProxyTests(APITestCase):
 		self.assertNotContains(response, 'deleted successfully')
 		self.assertFalse(LogEntry.objects.filter(object_id=str(customer.pk)).exists())
 
+	def test_customer_account_delete_cascades_read_only_account_data_with_audited_reason(self):
+		customer = User.objects.create_user(username='cascade_delete_customer', email='cascade_delete_customer@example.com', password='test-pass-123')
+		FavoriteBusiness.objects.create(
+			user=customer,
+			listing_slug='cascade-delete-favorite',
+			name='Cascade Delete Favorite',
+		)
+		FavoriteBusinessNotification.objects.create(
+			user=customer,
+			listing_slug='cascade-delete-favorite',
+			business_name='Cascade Delete Favorite',
+			event_type=FavoriteBusinessNotification.EventType.SPECIAL,
+			title='A saved business update',
+		)
+		self.client.force_login(self.admin_user)
+		reason = 'Customer requested permanent account removal.'
+
+		response = self.client.post(
+			reverse('happyhour_admin:places_customeraccount_delete', args=[customer.pk]),
+			{'post': 'yes', 'deletion_reason': reason},
+			follow=True,
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertFalse(User.objects.filter(pk=customer.pk).exists())
+		self.assertFalse(FavoriteBusiness.objects.filter(user_id=customer.pk).exists())
+		self.assertFalse(FavoriteBusinessNotification.objects.filter(user_id=customer.pk).exists())
+		audit_event = AdminAuditEvent.objects.filter(message='Permanently deleted account.').order_by('-pk').first()
+		self.assertIsNotNone(audit_event)
+		self.assertEqual(audit_event.metadata['deletion_reason'], reason)
+
 	def test_customer_account_bulk_delete_confirmation_lists_selected_accounts(self):
 		first_customer = User.objects.create_user(username='bulk_customer_one', email='bulk_customer_one@example.com', password='test-pass-123')
 		second_customer = User.objects.create_user(username='bulk_customer_two', email='bulk_customer_two@example.com', password='test-pass-123')

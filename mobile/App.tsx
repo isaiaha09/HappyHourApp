@@ -250,6 +250,13 @@ const allCitiesInitialMapRegion: Region = {
 };
 const multipleAreasBusinessCityValue = multipleAreasBusinessCityOption.value;
 type AppScreenMode = 'splash' | 'auth' | 'browse' | 'profiles' | 'customer-preferences' | 'favorite-businesses' | 'business-notifications' | 'business-profile-editor' | 'settings' | 'blocked-direct-message-customers' | 'support' | 'privacy-policy' | 'terms-of-service' | 'business-search' | 'business-claim' | 'manual-business-claim' | 'informal-business-claim' | 'forgot-username' | 'forgot-password' | 'email-verification' | 'business-claim-review-pending' | 'direct-messages';
+const standaloneGuestBusinessFlowScreens = new Set<AppScreenMode>([
+  'business-search',
+  'business-claim',
+  'manual-business-claim',
+  'informal-business-claim',
+  'business-claim-review-pending',
+]);
 type OnboardingTransitionDirection = 'forward' | 'backward';
 type TransitionAxis = 'x' | 'y';
 type ClaimReturnDestination = 'business-search' | 'browse-map' | 'profiles';
@@ -988,7 +995,13 @@ function AppScreen() {
     && incomingGuestBrowseScreen === 'browse'
     && !selectedPlaceSlug
     && browseMode === 'map';
-  const emailVerificationTransitionActive = screenMode === 'email-verification'
+  const emailVerificationChallengeActive = !authenticatedSession && pendingEmailVerification !== null;
+  const shouldAnimateEmailVerificationEntry = emailVerificationChallengeActive
+    && screenMode !== 'email-verification'
+    && incomingOnboardingScreen === 'email-verification'
+    && onboardingNavigationInFlightRef.current;
+  const emailVerificationTransitionActive = emailVerificationChallengeActive
+    || screenMode === 'email-verification'
     || incomingOnboardingScreen === 'email-verification';
   const keepGuestMapVisibleDuringGuestOnboarding = !authenticatedSession
     && guestOnboardingOrigin === 'browse'
@@ -2294,19 +2307,20 @@ function AppScreen() {
       return;
     }
 
-    pendingOnboardingTransitionRef.current = null;
     onboardingTransitionFrameRef.current = null;
     Animated.timing(screenTransition, {
       duration: onboardingTransitionDuration,
       toValue: 1,
       useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (!finished) {
-        onboardingNavigationInFlightRef.current = false;
-        pendingTransition.onComplete?.();
+    }).start(() => {
+      // Another route may intentionally stop this animation. Only settle the
+      // screen if this transition still owns navigation; otherwise its
+      // replacement route is responsible for committing its own state.
+      if (pendingOnboardingTransitionRef.current !== pendingTransition) {
         return;
       }
 
+      pendingOnboardingTransitionRef.current = null;
       unstable_batchedUpdates(() => {
         setIncomingOnboardingScreen(null);
         setScreenMode(pendingTransition.targetScreen);
@@ -2769,6 +2783,20 @@ function AppScreen() {
     Keyboard.dismiss();
   }
 
+  function invalidatePendingOnboardingTransition() {
+    pendingOnboardingTransitionRef.current = null;
+    onboardingNavigationInFlightRef.current = false;
+  }
+
+  function invalidateInteractiveBackSwipe() {
+    interactiveBackSwipeRef.current = null;
+    interactiveSwipeSettlingRef.current = false;
+    if (interactiveSwipeCleanupFrameRef.current !== null) {
+      cancelAnimationFrame(interactiveSwipeCleanupFrameRef.current);
+      interactiveSwipeCleanupFrameRef.current = null;
+    }
+  }
+
   function prepareProfilesScreenCommit() {
     setSelectedPlaceSlug(null);
     setProfileEntryOffset(0);
@@ -3016,6 +3044,8 @@ function AppScreen() {
     setOnboardingTransitionDirection(direction);
     setOnboardingTransitionAxis(transitionOverride?.axis ?? 'x');
     setOnboardingIncomingOffset(transitionOverride?.incomingOffset ?? (direction === 'forward' ? width : -width));
+    invalidatePendingOnboardingTransition();
+    invalidateInteractiveBackSwipe();
     screenTransition.stopAnimation();
 
     if (onboardingTransitionFrameRef.current !== null) {
@@ -3143,6 +3173,8 @@ function AppScreen() {
     }
 
     reversingOnboardingEntryRef.current = true;
+    invalidatePendingOnboardingTransition();
+    invalidateInteractiveBackSwipe();
 
     const finishReverse = () => {
       unstable_batchedUpdates(() => {
@@ -3195,6 +3227,8 @@ function AppScreen() {
       onboardingTransitionFrameRef.current = null;
     }
 
+    invalidatePendingOnboardingTransition();
+    invalidateInteractiveBackSwipe();
     screenTransition.stopAnimation();
     profileSceneTransition.stopAnimation();
     browseSceneTransition.stopAnimation();
@@ -3381,6 +3415,8 @@ function AppScreen() {
         setProfileMessage(null);
         break;
       case 'email-verification':
+        setPendingEmailVerification(null);
+        setShouldOpenCustomerPreferencesAfterVerification(false);
         setProfileErrorMessage(null);
         setProfileMessage(null);
         setEmailVerificationCode('');
@@ -3405,13 +3441,10 @@ function AppScreen() {
   }
 
   function beginInteractiveBackSwipe(targetScreen: AppScreenMode, config: InteractiveBackSwipeConfig) {
+    invalidatePendingOnboardingTransition();
+    invalidateInteractiveBackSwipe();
     screenTransition.stopAnimation();
     interactiveSwipeSettlingRef.current = false;
-
-    if (interactiveSwipeCleanupFrameRef.current !== null) {
-      cancelAnimationFrame(interactiveSwipeCleanupFrameRef.current);
-      interactiveSwipeCleanupFrameRef.current = null;
-    }
 
     if (onboardingTransitionFrameRef.current !== null) {
       cancelAnimationFrame(onboardingTransitionFrameRef.current);
@@ -3527,6 +3560,10 @@ function AppScreen() {
       toValue: shouldComplete ? 1 : 0,
       useNativeDriver: true,
     }).start(({ finished }) => {
+      if (interactiveBackSwipeRef.current !== activeSwipe) {
+        return;
+      }
+
       if (!finished) {
         resetInteractiveBackSwipePreview();
         return;
@@ -3714,6 +3751,8 @@ function AppScreen() {
       onboardingTransitionFrameRef.current = null;
     }
 
+    invalidatePendingOnboardingTransition();
+    invalidateInteractiveBackSwipe();
     screenTransition.stopAnimation();
     profileSceneTransition.stopAnimation();
     browseSceneTransition.stopAnimation();
@@ -3793,6 +3832,8 @@ function AppScreen() {
       onboardingTransitionFrameRef.current = null;
     }
 
+    invalidatePendingOnboardingTransition();
+    invalidateInteractiveBackSwipe();
     screenTransition.stopAnimation();
     setIncomingOnboardingScreen(null);
     setShowLoginSuccessTransition(true);
@@ -3862,6 +3903,8 @@ function AppScreen() {
       onboardingTransitionFrameRef.current = null;
     }
 
+    invalidatePendingOnboardingTransition();
+    invalidateInteractiveBackSwipe();
     screenTransition.stopAnimation();
     bottomMoreSheetProgress.stopAnimation();
     bottomMoreSheetProgress.setValue(0);
@@ -6899,6 +6942,8 @@ function AppScreen() {
 
   function handleBackFromEmailVerification() {
     dismissKeyboardForScreenTransition();
+    setPendingEmailVerification(null);
+    setShouldOpenCustomerPreferencesAfterVerification(false);
     setProfileErrorMessage(null);
     setProfileMessage(null);
     setEmailVerificationCode('');
@@ -7548,6 +7593,12 @@ function AppScreen() {
     const showingBrowse = screenMode === 'browse'
       || (guestOnboardingOrigin === 'browse' && currentOnboardingScreen !== null && returningToSplashScreen === null);
     const hideGuestBrowseUnderlay = emailVerificationTransitionActive;
+    const guestBrowseUnderlayInteractive = showingBrowse
+      && !browseTransitionActive
+      && !selectedPlaceSlug
+      && persistentOverlayScreen === null
+      && incomingOnboardingScreen === null
+      && returningToSplashScreen === null;
     const showingBrowseUnderSplash = keepGuestMapVisibleOnSplash && !browseTransitionActive && overlayScreen === null && incomingOnboardingScreen === null;
     const splashLayerStyle = returningToSplashScreen
       ? splashReturnIncomingStyle
@@ -7572,12 +7623,16 @@ function AppScreen() {
         : incomingOnboardingScreen && currentOverlayScreen
           ? (onboardingTransitionAxis === 'x' ? currentHorizontalOnboardingTransitionStyle : currentOnboardingTransitionStyle)
           : null;
-    const interactiveSwipeTarget = currentOverlayScreen
-      ?? (screenMode === 'splash'
-        ? 'splash'
-        : showingBrowse && browseMode === 'map' && !selectedPlaceSlug
-          ? 'browse'
-          : null);
+    const activeInteractiveSwipeTarget = interactiveBackSwipeRef.current?.targetScreen ?? null;
+    const interactiveSwipeTarget = activeInteractiveSwipeTarget
+      ?? (incomingOnboardingScreen || returningToSplashScreen
+        ? null
+        : currentOverlayScreen
+          ?? (screenMode === 'splash'
+            ? 'splash'
+            : guestBrowseUnderlayInteractive && browseMode === 'map'
+              ? 'browse'
+              : null));
 
     return wrapScreenWithInteractiveBackSwipe(interactiveSwipeTarget, (
       <View style={[
@@ -7606,7 +7661,7 @@ function AppScreen() {
         </Animated.View>
         {!hideGuestBrowseUnderlay ? (
           <Animated.View
-            pointerEvents={showingBrowse && !browseTransitionActive && !selectedPlaceSlug ? 'auto' : 'none'}
+            pointerEvents={guestBrowseUnderlayInteractive ? 'auto' : 'none'}
             style={[
               styles.screenTransitionLayerAbsolute,
               !browseTransitionActive && (showingBrowse || showingBrowseUnderSplash) && shellFadeScope === 'browse' ? browseSceneTransitionStyle : null,
@@ -7641,7 +7696,11 @@ function AppScreen() {
           </Animated.View>
         ) : null}
         {incomingOnboardingScreen && currentOverlayScreen && onboardingScreenKeys.has(incomingOnboardingScreen) && incomingOnboardingScreen !== 'splash' ? (
-          <Animated.View testID="incoming-onboarding-screen" style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, incomingScreenTransitionStyle]}>
+          <Animated.View
+            pointerEvents="none"
+            testID="incoming-onboarding-screen"
+            style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, incomingScreenTransitionStyle]}
+          >
             {renderOnboardingScreen(incomingOnboardingScreen)}
           </Animated.View>
         ) : null}
@@ -7650,7 +7709,7 @@ function AppScreen() {
             {renderSelectedPlaceDetailScreen()}
           </Animated.View>
         ) : null}
-        {!hideGuestBrowseUnderlay && showingBrowse && browseMode === 'map' && !selectedPlaceSlug ? renderMapSwipeEdgeShield() : null}
+        {!hideGuestBrowseUnderlay && guestBrowseUnderlayInteractive && browseMode === 'map' ? renderMapSwipeEdgeShield() : null}
       </View>
     ));
   }
@@ -8533,6 +8592,39 @@ function AppScreen() {
     );
   }
 
+  function renderOnboardingTransitionScreen() {
+    if (!currentOnboardingScreen) {
+      return null;
+    }
+
+    return wrapScreenWithInteractiveBackSwipe(currentOnboardingScreen, (
+      <View style={styles.onboardingTransitionRoot}>
+        <Animated.View
+          key={`onboarding-current-${currentOnboardingScreen}-${incomingOnboardingScreen ? 'transitioning' : 'settled'}`}
+          pointerEvents={incomingOnboardingScreen ? 'none' : 'auto'}
+          style={[
+            incomingOnboardingScreen ? styles.screenTransitionLayerAbsolute : styles.screenTransitionLayer,
+            currentOnboardingScreen === 'profiles' && !incomingOnboardingScreen ? profileSceneTransitionStyle : null,
+            incomingOnboardingScreen && onboardingTransitionAxis === 'x' ? currentHorizontalOnboardingTransitionStyle : null,
+            authIntroStyle,
+            currentOnboardingTransitionStyle,
+          ]}
+        >
+          {renderOnboardingScreen(currentOnboardingScreen)}
+        </Animated.View>
+        {incomingOnboardingScreen ? (
+          <Animated.View
+            key={`onboarding-incoming-${incomingOnboardingScreen}`}
+            pointerEvents="none"
+            style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, incomingScreenTransitionStyle]}
+          >
+            {renderOnboardingScreen(incomingOnboardingScreen)}
+          </Animated.View>
+        ) : null}
+      </View>
+    ));
+  }
+
   return (
     <>
       <NativeStatusBar
@@ -8554,7 +8646,34 @@ function AppScreen() {
           ))}
         </View>
       ) : null}
-      {showNoInternetScreen && !hasCachedMapPlaces ? (
+      {emailVerificationChallengeActive ? (
+        shouldAnimateEmailVerificationEntry ? (
+          <View style={styles.onboardingTransitionRoot}>
+            <Animated.View
+              key={`email-verification-outgoing-${screenMode}`}
+              pointerEvents="none"
+              style={[
+                styles.screenTransitionLayerAbsolute,
+                currentHorizontalOnboardingTransitionStyle,
+                currentOnboardingTransitionStyle,
+                authIntroStyle,
+              ]}
+            >
+              {currentOnboardingScreen ? renderOnboardingScreen(currentOnboardingScreen) : null}
+            </Animated.View>
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, incomingScreenTransitionStyle]}
+            >
+              {renderOnboardingScreen('email-verification')}
+            </Animated.View>
+          </View>
+        ) : (
+          <View style={styles.onboardingTransitionRoot}>
+            {renderOnboardingScreen('email-verification')}
+          </View>
+        )
+      ) : showNoInternetScreen && !hasCachedMapPlaces ? (
         renderConnectivityGateScreen()
       ) : showLoginSuccessTransition ? (
         <View style={styles.onboardingTransitionRoot}>
@@ -8584,6 +8703,8 @@ function AppScreen() {
         </View>
       ) : authenticatedSession && !isRecoveryScreenTransition && (screenMode === 'direct-messages' || (!selectedPlaceSlug && (['profiles', 'customer-preferences', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'browse'].includes(screenMode) || usesBrowseProfileSlideTransition || usesProfileStackSlideTransition))) ? (
         renderAuthenticatedMainShell()
+      ) : !authenticatedSession && standaloneGuestBusinessFlowScreens.has(screenMode) ? (
+        renderOnboardingTransitionScreen()
       ) : !authenticatedSession && (screenMode === 'browse' || currentOnboardingScreen !== null || usesGuestBrowseSlideTransition || incomingOnboardingScreen !== null || returningToSplashScreen !== null) ? (
         renderGuestMainShell()
       ) : selectedPlaceSlug ? (
@@ -8593,28 +8714,7 @@ function AppScreen() {
           </Animated.View>
         </View>
       ) : usesOnboardingSlideTransition && currentOnboardingScreen ? (
-        wrapScreenWithInteractiveBackSwipe(currentOnboardingScreen, (
-          <View style={styles.onboardingTransitionRoot}>
-            <Animated.View
-              key={`onboarding-current-${currentOnboardingScreen}-${incomingOnboardingScreen ? 'transitioning' : 'settled'}`}
-              pointerEvents={incomingOnboardingScreen ? 'none' : 'auto'}
-              style={[
-                incomingOnboardingScreen ? styles.screenTransitionLayerAbsolute : styles.screenTransitionLayer,
-                currentOnboardingScreen === 'profiles' && !incomingOnboardingScreen ? profileSceneTransitionStyle : null,
-                incomingOnboardingScreen && onboardingTransitionAxis === 'x' ? currentHorizontalOnboardingTransitionStyle : null,
-                authIntroStyle,
-                currentOnboardingTransitionStyle,
-              ]}
-            >
-              {renderOnboardingScreen(currentOnboardingScreen)}
-            </Animated.View>
-            {incomingOnboardingScreen ? (
-              <Animated.View key={`onboarding-incoming-${incomingOnboardingScreen}`} style={[styles.screenTransitionLayerAbsolute, styles.incomingOnboardingOverlay, incomingScreenTransitionStyle]}>
-                {renderOnboardingScreen(incomingOnboardingScreen)}
-              </Animated.View>
-            ) : null}
-          </View>
-        ))
+        renderOnboardingTransitionScreen()
       ) : (
         renderBrowseScreen()
       )}

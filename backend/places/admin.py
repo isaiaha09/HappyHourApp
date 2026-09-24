@@ -1284,6 +1284,15 @@ class StaffGroupAdmin(UnfoldModelAdmin, GroupAdmin):
 
 
 class HardDeleteUserAdminMixin:
+	def get_deleted_objects(self, objs, request):
+		deleted_objects, model_count, perms_needed, protected = super().get_deleted_objects(objs, request)
+		if self.model in (CustomerAccount, BusinessAccount):
+			# These read-only records are account-owned children. Their direct admin
+			# deletion stays disabled, but account removal is a reason-audited cascade.
+			for model in (FavoriteBusiness, FavoriteBusinessNotification, BusinessDirectMessageThread, BusinessDirectMessage):
+				perms_needed.discard(model._meta.verbose_name)
+		return deleted_objects, model_count, perms_needed, protected
+
 	def _get_deletion_reason(self, request):
 		reason = str(request.POST.get('deletion_reason') or '').strip()
 		if len(reason) < 10:

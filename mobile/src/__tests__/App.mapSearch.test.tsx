@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
-import { AppState, NativeModules, StyleSheet } from 'react-native';
+import { AppState, Dimensions, NativeModules, StyleSheet } from 'react-native';
 
 import { getVenueMarkerStyle } from '../browseConfig';
 import type { CurrentHappyHourPlace, PlaceListItem, SignupResponse } from '../types';
@@ -309,10 +309,22 @@ jest.mock('../screens/ProfileFlowScreens', () => ({
     );
   },
   BusinessClaimReviewPendingScreen: () => null,
-  BusinessSearchScreen: () => null,
+  BusinessSearchScreen: ({ onBack }: { onBack: () => void }) => {
+    const React = require('react');
+    const { Pressable, Text, View } = require('react-native');
+
+    return (
+      <View>
+        <Text testID="business-search-screen">Business search screen</Text>
+        <Pressable accessibilityLabel="Back from business search" onPress={onBack}>
+          <Text>Back from business search</Text>
+        </Pressable>
+      </View>
+    );
+  },
   BusinessVerificationScreen: () => null,
   ContactSupportScreen: () => null,
-  CreateProfileScreen: ({ onBack, onChangeField, onSubmit }: { onBack: () => void; onChangeField: (field: string, value: unknown) => void; onSubmit: () => void }) => {
+  CreateProfileScreen: ({ onBack, onChangeField, onOpenBusinessClaim, onSubmit }: { onBack: () => void; onChangeField: (field: string, value: unknown) => void; onOpenBusinessClaim: () => void; onSubmit: () => void }) => {
     const React = require('react');
     const { Pressable, Text, View } = require('react-native');
 
@@ -333,6 +345,9 @@ jest.mock('../screens/ProfileFlowScreens', () => ({
         </Pressable>
         <Pressable accessibilityLabel="Back from profiles" onPress={onBack}>
           <Text>Back from profiles</Text>
+        </Pressable>
+        <Pressable accessibilityLabel="Claim a Business" onPress={onOpenBusinessClaim}>
+          <Text>Claim a Business</Text>
         </Pressable>
       </View>
     );
@@ -2037,7 +2052,7 @@ describe('App browse map search', () => {
     expect(screen.getByText('Create profile screen')).toBeTruthy();
 
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 25));
+      await new Promise((resolve) => setTimeout(resolve, 550));
     });
 
     const swipeHandler = screen.getAllByTestId('mock-pan-gesture-handler').find((handler) => handler.props.enabled);
@@ -2045,7 +2060,15 @@ describe('App browse map search', () => {
 
     act(() => {
       swipeHandler?.props.onGestureEvent({ nativeEvent: { translationX: 240 } });
-      swipeHandler?.props.onHandlerStateChange({
+    });
+
+    // The drag sets an incoming route and causes a render. The pan handler must
+    // remain enabled and retain its target until the release event is handled.
+    const activeSwipeHandler = screen.getAllByTestId('mock-pan-gesture-handler').find((handler) => handler.props.enabled);
+    expect(activeSwipeHandler).toBeDefined();
+
+    act(() => {
+      activeSwipeHandler?.props.onHandlerStateChange({
         nativeEvent: {
           oldState: 4,
           state: 5,
@@ -2063,6 +2086,133 @@ describe('App browse map search', () => {
     expect(screen.getByText('Customer')).toBeTruthy();
     expect(screen.getByText('Sign Up')).toBeTruthy();
     expect(screen.getByText('Business')).toBeTruthy();
+  });
+
+  it('settles the business flow and keeps its navigation responsive if an entry animation is interrupted', async () => {
+    const startAnimatingNodeMock = NativeModules.NativeAnimatedModule.startAnimatingNode as jest.Mock;
+    const originalStartAnimatingNode = startAnimatingNodeMock.getMockImplementation();
+    const pendingAnimationCallbacks: Array<(result: { finished: boolean }) => void> = [];
+
+    render(<App />);
+
+    try {
+      await screen.findByTestId('complete-splash-intro');
+      fireEvent.press(screen.getByTestId('complete-splash-intro'));
+
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      });
+
+      fireEvent.press(screen.getByLabelText('Create a free account'));
+      expect(await screen.findByText('Create profile screen')).toBeTruthy();
+      expect(screen.getByTestId('mock-map-view')).toBeTruthy();
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 360));
+      });
+
+      const profileSwipeHandler = screen.getAllByTestId('mock-pan-gesture-handler').find((handler) => handler.props.enabled);
+      expect(profileSwipeHandler?.props.hitSlop).toBeUndefined();
+
+      startAnimatingNodeMock.mockImplementation((...args: unknown[]) => {
+        pendingAnimationCallbacks.push(args[3] as (result: { finished: boolean }) => void);
+      });
+
+      fireEvent.press(screen.getByLabelText('Claim a Business'));
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      });
+
+      expect(pendingAnimationCallbacks.length).toBeGreaterThan(0);
+      act(() => {
+        pendingAnimationCallbacks.splice(0).forEach((callback) => callback({ finished: false }));
+      });
+
+      expect(await screen.findByTestId('business-search-screen')).toBeTruthy();
+      expect(screen.queryByTestId('mock-map-view')).toBeNull();
+      fireEvent.press(screen.getByLabelText('Back from business search'));
+      expect(await screen.findByText('Create profile screen')).toBeTruthy();
+    } finally {
+      if (originalStartAnimatingNode) {
+        startAnimatingNodeMock.mockImplementation(originalStartAnimatingNode);
+      } else {
+        startAnimatingNodeMock.mockReset();
+      }
+    }
+  });
+
+  it('keeps full-screen back-swipe navigation on the standalone business-search screen', async () => {
+    const startAnimatingNodeMock = NativeModules.NativeAnimatedModule.startAnimatingNode as jest.Mock;
+    const originalStartAnimatingNode = startAnimatingNodeMock.getMockImplementation();
+    const pendingAnimationCallbacks: Array<(result: { finished: boolean }) => void> = [];
+
+    render(<App />);
+
+    try {
+      await screen.findByTestId('complete-splash-intro');
+      fireEvent.press(screen.getByTestId('complete-splash-intro'));
+
+      await act(async () => {
+        await Promise.resolve();
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      });
+
+      fireEvent.press(screen.getByLabelText('Create a free account'));
+      expect(await screen.findByText('Create profile screen')).toBeTruthy();
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 360));
+      });
+
+      startAnimatingNodeMock.mockImplementation((...args: unknown[]) => {
+        pendingAnimationCallbacks.push(args[3] as (result: { finished: boolean }) => void);
+      });
+
+      fireEvent.press(screen.getByLabelText('Claim a Business'));
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      });
+      expect(pendingAnimationCallbacks.length).toBeGreaterThan(0);
+      act(() => {
+        pendingAnimationCallbacks.splice(0).forEach((callback) => callback({ finished: true }));
+      });
+
+      expect(await screen.findByTestId('business-search-screen')).toBeTruthy();
+      expect(screen.queryByTestId('mock-map-view')).toBeNull();
+      const swipeHandler = screen.getAllByTestId('mock-pan-gesture-handler').find((handler) => handler.props.enabled);
+      expect(swipeHandler).toBeDefined();
+      expect(swipeHandler?.props.hitSlop).toBeUndefined();
+
+      const swipeDistance = Dimensions.get('window').width * 0.5;
+      act(() => {
+        swipeHandler?.props.onGestureEvent({ nativeEvent: { translationX: swipeDistance } });
+        swipeHandler?.props.onHandlerStateChange({
+          nativeEvent: {
+            oldState: 4,
+            state: 5,
+            translationX: swipeDistance,
+            velocityX: 0,
+          },
+        });
+      });
+
+      expect(pendingAnimationCallbacks.length).toBeGreaterThan(0);
+      act(() => {
+        pendingAnimationCallbacks.splice(0).forEach((callback) => callback({ finished: true }));
+      });
+
+      expect(screen.getByText('Create profile screen')).toBeTruthy();
+      expect(screen.getByTestId('mock-map-view')).toBeTruthy();
+    } finally {
+      if (originalStartAnimatingNode) {
+        startAnimatingNodeMock.mockImplementation(originalStartAnimatingNode);
+      } else {
+        startAnimatingNodeMock.mockReset();
+      }
+    }
   });
 
   it('renders map pins only after the splash-to-map fade completes', async () => {
