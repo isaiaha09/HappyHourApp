@@ -17,14 +17,16 @@ export function ContactForm({ turnstileSiteKey }: ContactFormProps) {
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [turnstileResetKey, setTurnstileResetKey] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     setErrorMessage(null);
+    setSuccessMessage(null);
     if (!turnstileToken) {
-      setErrorMessage("Complete the security check before opening the email draft.");
+      setErrorMessage("Complete the security check before sending your message.");
       return;
     }
 
@@ -50,10 +52,14 @@ export function ContactForm({ turnstileSiteKey }: ContactFormProps) {
           throw new Error(errorPayload?.detail || `Request failed with status ${response.status}.`);
         }
 
-        const payload = (await response.json()) as { mailtoUrl: string };
-        window.location.href = payload.mailtoUrl;
+        const payload = (await response.json().catch(() => null)) as { detail?: string } | null;
+        setSuccessMessage(payload?.detail || "Your message has been sent to DiningDealz support.");
+        setName("");
+        setEmail("");
+        setSubject("");
+        setMessage("");
       } catch (error) {
-        setErrorMessage(error instanceof Error ? error.message : "Unable to prepare the email draft.");
+        setErrorMessage(error instanceof Error ? error.message : "Unable to send your message right now. Please try again.");
       } finally {
         setTurnstileResetKey((currentValue) => currentValue + 1);
       }
@@ -65,9 +71,9 @@ export function ContactForm({ turnstileSiteKey }: ContactFormProps) {
       <div className="space-y-2">
         <p className="dd-kicker">Contact Form</p>
         <h2 className="text-2xl font-semibold text-white">Send DiningDealz a message.</h2>
-        <p className="text-sm leading-7 text-[#f6d6c5]">This opens your email app with the form contents prefilled, so you can review and send directly.</p>
+        <p className="text-sm leading-7 text-[#f6d6c5]">Submit this form to send your message directly to the DiningDealz support team.</p>
         <p className="text-xs leading-6 text-[#f6d6c5]/80">
-          Privacy notice: we use the information you enter to screen abuse, prepare your request, and respond if you send the email. Do not include passwords or unnecessary sensitive documents. Read the <a className="font-semibold text-[#ffd35a] hover:text-white" href="/privacy">Privacy Policy</a>.
+          Privacy notice: we use the information you enter to screen abuse and respond to your request. If your email matches an account, the support message may include its username and business details. Do not include passwords or unnecessary sensitive documents. Read the <a className="font-semibold text-[#ffd35a] hover:text-white" href="/privacy">Privacy Policy</a>.
         </p>
       </div>
 
@@ -99,10 +105,11 @@ export function ContactForm({ turnstileSiteKey }: ContactFormProps) {
 
       <TurnstileWidget siteKey={turnstileSiteKey} onTokenChange={setTurnstileToken} resetKey={turnstileResetKey} />
 
-      {errorMessage ? <p className="rounded-2xl border border-[#ff6a5f]/40 bg-[#401010]/80 px-4 py-3 text-sm text-[#ffd1cb]">{errorMessage}</p> : null}
+      {errorMessage ? <p role="alert" className="rounded-2xl border border-[#ff6a5f]/40 bg-[#401010]/80 px-4 py-3 text-sm text-[#ffd1cb]">{errorMessage}</p> : null}
+      {successMessage ? <p role="status" className="rounded-2xl border border-[#7fd7a2]/40 bg-[#173423]/80 px-4 py-3 text-sm text-[#d4ffe2]">{successMessage}</p> : null}
 
       <button type="submit" className="dd-button-primary w-full sm:w-fit" disabled={isPending || !turnstileToken || !turnstileSiteKey}>
-        {isPending ? "Preparing..." : "Open Email Draft"}
+        {isPending ? "Submitting..." : "Submit"}
       </button>
     </form>
   );

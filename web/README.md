@@ -27,7 +27,7 @@ NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
 NEXT_PUBLIC_SITE_URL=https://www.diningdealz.com
 ```
 
-`CLOUDFLARE_TURNSTILE_SITE_KEY` is used by the browser widget. `CLOUDFLARE_TURNSTILE_SECRET_KEY` is used only by the Next.js server routes that verify each token before login or contact form submission is allowed.
+`CLOUDFLARE_TURNSTILE_SITE_KEY` is used by the browser widget. `CLOUDFLARE_TURNSTILE_SECRET_KEY` is used by the Next.js server route for login and by the Django API for website contact submissions. Configure the secret on both the web and backend deployments; Django uses its configured mail backend to send submitted messages to `WEBSITE_CONTACT_EMAIL` (defaults to `support@diningdealz.com`).
 `NEXT_PUBLIC_SITE_URL` is the canonical public origin used for metadata, Open Graph links, structured data, the sitemap, and robots.txt. Set it to the exact production or preview origin for each deployment.
 
 Optional Sentry variables for the Vercel deployment:

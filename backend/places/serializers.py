@@ -619,6 +619,35 @@ class ContactSupportSerializer(serializers.Serializer):
 		return normalized
 
 
+class WebsiteContactSerializer(serializers.Serializer):
+	name = serializers.CharField(max_length=160)
+	email = serializers.EmailField(max_length=254)
+	subject = serializers.CharField(max_length=160)
+	message = serializers.CharField(max_length=4000)
+	turnstile_token = serializers.CharField(max_length=4096)
+
+	def validate_name(self, value):
+		normalized = value.strip()
+		if not normalized or '\r' in normalized or '\n' in normalized:
+			raise serializers.ValidationError('Enter a valid name.')
+		return normalized
+
+	def validate_email(self, value):
+		return value.strip()
+
+	def validate_subject(self, value):
+		normalized = value.strip()
+		if not normalized or '\r' in normalized or '\n' in normalized:
+			raise serializers.ValidationError('Enter a valid subject.')
+		return normalized
+
+	def validate_message(self, value):
+		normalized = value.strip()
+		if not normalized:
+			raise serializers.ValidationError('Enter a message for support.')
+		return normalized
+
+
 class ContentReportSerializer(serializers.Serializer):
 	target_type = serializers.ChoiceField(choices=ContentReport.TargetType.values)
 	listing_slug = serializers.SlugField(max_length=170, required=False, allow_blank=True)

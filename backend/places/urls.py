@@ -42,6 +42,7 @@ from .views import (
     ToggleTwoFactorView,
     UsernameReminderView,
     VerifyEmailCodeView,
+    WebsiteContactView,
 )
 
 
@@ -70,6 +71,7 @@ urlpatterns = [
     path('internal/process-due-happy-hour-notifications/', ProcessDueHappyHourNotificationsView.as_view(), name='process-due-happy-hour-notifications'),
     path('profiles/push-devices/', PushDeviceRegistrationView.as_view(), name='profile-push-devices'),
     path('profiles/contact-support/', ContactSupportView.as_view(), name='profile-contact-support'),
+    path('profiles/website-contact/', WebsiteContactView.as_view(), name='website-contact'),
     path('profiles/content-reports/', ContentReportView.as_view(), name='profile-content-reports'),
     path('profiles/delete-account/', DeleteAccountView.as_view(), name='profile-delete-account'),
     path('profiles/direct-messages/', DirectMessageThreadsView.as_view(), name='profile-direct-messages'),

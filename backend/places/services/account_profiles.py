@@ -3,9 +3,10 @@ import logging
 import mimetypes
 from pathlib import Path
 
+from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Prefetch, Q
 from django.core.mail import EmailMessage, send_mail
 from django.utils.html import escape
 from django.utils import timezone
@@ -13,7 +14,7 @@ from django.utils.text import slugify
 from email.utils import formataddr, parseaddr
 from uuid import uuid4
 
-from places.models import AccountProfile, BusinessClaim, BusinessPost, ContentReport, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, HappyHourNotificationDelivery, ProfileAuthToken, SponsoredCampaign, VenueType
+from places.models import AccountProfile, BusinessClaim, BusinessMembership, BusinessPost, ContentReport, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, HappyHourNotificationDelivery, ProfileAuthToken, SponsoredCampaign, VenueType
 from places.services.business_profile_overrides import build_deal_payloads, build_operating_hour_payloads
 from places.services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
 
@@ -1185,6 +1186,82 @@ def send_support_contact_email(user, message, portal=None, subject=''):
 		recipient_list=[_get_support_contact_email()],
 		fail_silently=False,
 	)
+
+
+def _get_website_contact_account_details(email):
+	user_model = get_user_model()
+	claims = BusinessClaim.objects.select_related('listing_snapshot').order_by('-created_at')
+	active_memberships = (
+		BusinessMembership.objects
+		.filter(is_active=True)
+		.select_related('claim__listing_snapshot')
+		.order_by('claim__listing_snapshot__name', 'pk')
+	)
+	users = list(
+		user_model.objects
+		.filter(
+			email__iexact=str(email or '').strip(),
+			is_staff=False,
+			is_superuser=False,
+			account_profile__deleted_at__isnull=True,
+		)
+		.order_by('pk')
+		.prefetch_related(
+			Prefetch('business_claims', queryset=claims),
+			Prefetch('business_memberships', queryset=active_memberships, to_attr='active_contact_business_memberships'),
+		)
+	)
+
+	account_details = []
+	for user in users:
+		memberships = user.active_contact_business_memberships
+		user_claims = list(user.business_claims.all())
+		primary_claim = memberships[0].claim if memberships else (user_claims[0] if user_claims else None)
+		is_business_account = bool(memberships or user_claims)
+		details = [
+			f'Account type: {"Business" if is_business_account else "Customer"}',
+			f'Username: {user.username}',
+		]
+		if primary_claim is not None:
+			snapshot = primary_claim.listing_snapshot
+			details.append(f'Business name: {snapshot.name}')
+			business_type = snapshot.get_venue_type_display() if snapshot.venue_type else ''
+			if business_type:
+				details.append(f'Business type: {business_type}')
+		account_details.append(details)
+
+	if not account_details:
+		return []
+	if len(account_details) == 1:
+		return ['Account information:', *account_details[0]]
+
+	lines = ['Matching accounts:']
+	for index, details in enumerate(account_details, start=1):
+		lines.extend([f'Account {index}:', *details, ''])
+	return lines[:-1]
+
+
+def send_website_contact_email(name, email, subject, message):
+	normalized_subject = str(subject or '').strip() or 'Website contact request'
+	recipient = str(getattr(settings, 'WEBSITE_CONTACT_EMAIL', '') or '').strip() or _get_support_contact_email()
+	body_lines = [
+		'New DiningDealz website contact request',
+		'',
+		f'Subject: {normalized_subject}',
+		f'Name: {str(name or "").strip()}',
+		f'Email: {str(email or "").strip()}',
+	]
+	account_details = _get_website_contact_account_details(email)
+	if account_details:
+		body_lines.extend(['', *account_details])
+	body_lines.extend(['', 'Message:', str(message or '').strip()])
+	EmailMessage(
+		subject=f'DiningDealz website contact: {normalized_subject}',
+		body='\n'.join(body_lines),
+		from_email=_get_branded_from_email(),
+		to=[recipient],
+		reply_to=[str(email or '').strip()],
+	).send(fail_silently=False)
 
 
 def _default_billing_portal_url(user):
