@@ -61,6 +61,7 @@ import {
   sendDirectMessage,
   sendDirectMessageImage,
   requestPasswordReset,
+  requestBusinessClaimRetryCode,
   requestUsernameReminder,
   resendVerificationCode,
   resendVerificationEmail,
@@ -73,6 +74,7 @@ import {
   updateBusinessLocationTrackingPreference,
   updateBusinessLocation,
   verifyEmailCode,
+  verifyBusinessClaimRetryCode,
 } from './src/api';
 import * as Location from './src/nativeLocation';
 import {
@@ -122,6 +124,7 @@ import {
 } from './src/pushNotifications';
 import {
   AuthPortalScreen,
+  BusinessClaimRetryScreen,
   BusinessClaimReviewPendingScreen,
   BusinessSearchScreen,
   BusinessVerificationScreen,
@@ -249,14 +252,16 @@ const allCitiesInitialMapRegion: Region = {
   longitudeDelta: maxLongitudeDelta,
 };
 const multipleAreasBusinessCityValue = multipleAreasBusinessCityOption.value;
-type AppScreenMode = 'splash' | 'auth' | 'browse' | 'profiles' | 'customer-preferences' | 'favorite-businesses' | 'business-notifications' | 'business-profile-editor' | 'settings' | 'blocked-direct-message-customers' | 'support' | 'privacy-policy' | 'terms-of-service' | 'business-search' | 'business-claim' | 'manual-business-claim' | 'informal-business-claim' | 'forgot-username' | 'forgot-password' | 'email-verification' | 'business-claim-review-pending' | 'direct-messages';
+type AppScreenMode = 'splash' | 'auth' | 'browse' | 'profiles' | 'customer-preferences' | 'favorite-businesses' | 'business-notifications' | 'business-profile-editor' | 'settings' | 'blocked-direct-message-customers' | 'support' | 'privacy-policy' | 'terms-of-service' | 'business-search' | 'business-claim' | 'manual-business-claim' | 'informal-business-claim' | 'forgot-username' | 'forgot-password' | 'business-claim-retry' | 'email-verification' | 'business-claim-review-pending' | 'direct-messages';
 const standaloneGuestBusinessFlowScreens = new Set<AppScreenMode>([
   'business-search',
   'business-claim',
   'manual-business-claim',
   'informal-business-claim',
   'business-claim-review-pending',
+  'business-claim-retry',
 ]);
+type BusinessClaimRetryReturnScreen = 'business-search' | 'business-claim';
 type OnboardingTransitionDirection = 'forward' | 'backward';
 type TransitionAxis = 'x' | 'y';
 type ClaimReturnDestination = 'business-search' | 'browse-map' | 'profiles';
@@ -789,6 +794,10 @@ function AppScreen() {
   const [businessAttachments, setBusinessAttachments] = useState<BusinessAttachmentBuckets>(initialBusinessAttachments);
   const [businessPhotoUploads, setBusinessPhotoUploads] = useState<BusinessAttachmentDraft[]>([]);
   const [businessClaimRetryToken, setBusinessClaimRetryToken] = useState<string | null>(null);
+  const [businessClaimRetryReturnScreen, setBusinessClaimRetryReturnScreen] = useState<BusinessClaimRetryReturnScreen>('business-search');
+  const [businessClaimRetryEmail, setBusinessClaimRetryEmail] = useState('');
+  const [businessClaimRetryVerificationCode, setBusinessClaimRetryVerificationCode] = useState('');
+  const [businessClaimRetryCodeRequested, setBusinessClaimRetryCodeRequested] = useState(false);
   const [profileSubmitting, setProfileSubmitting] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [profileErrorMessage, setProfileErrorMessage] = useState<string | null>(null);
@@ -2282,8 +2291,8 @@ function AppScreen() {
     };
   }, [apiBaseUrl]);
   const availableClaimPlaces = consolidatePlacesBySlug(availableProfilePlaces);
-  const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'customer-preferences', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'direct-messages', 'business-search', 'business-claim', 'manual-business-claim', 'informal-business-claim', 'forgot-username', 'forgot-password', 'email-verification', 'business-claim-review-pending']);
-  const recoveryScreenKeys = new Set<AppScreenMode>(['forgot-username', 'forgot-password']);
+  const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'customer-preferences', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'direct-messages', 'business-search', 'business-claim', 'manual-business-claim', 'informal-business-claim', 'forgot-username', 'forgot-password', 'business-claim-retry', 'email-verification', 'business-claim-review-pending']);
+  const recoveryScreenKeys = new Set<AppScreenMode>(['forgot-username', 'forgot-password', 'business-claim-retry']);
   const isRecoveryScreenTransition = recoveryScreenKeys.has(screenMode)
     || (incomingOnboardingScreen !== null && recoveryScreenKeys.has(incomingOnboardingScreen));
   const profileStackTransitionScreens = new Set<AppScreenMode>(['profiles', 'customer-preferences', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'direct-messages']);
@@ -3308,6 +3317,8 @@ function AppScreen() {
       case 'manual-business-claim':
       case 'informal-business-claim':
         return { kind: 'onboarding', nextScreen: 'business-search' };
+      case 'business-claim-retry':
+        return { kind: 'onboarding', nextScreen: businessClaimRetryReturnScreen };
       case 'forgot-username':
       case 'forgot-password':
         return { kind: 'onboarding', nextScreen: 'auth' };
@@ -3400,6 +3411,12 @@ function AppScreen() {
       case 'informal-business-claim':
       case 'direct-messages':
         setProfileErrorMessage(null);
+        break;
+      case 'business-claim-retry':
+        setProfileErrorMessage(null);
+        setProfileMessage(null);
+        setBusinessClaimRetryCodeRequested(false);
+        setBusinessClaimRetryVerificationCode('');
         break;
       case 'forgot-username':
       case 'forgot-password':
@@ -6273,6 +6290,87 @@ function AppScreen() {
     }
   }
 
+  function handleOpenBusinessClaimRetry() {
+    const returnScreen: BusinessClaimRetryReturnScreen = screenMode === 'business-claim' ? 'business-claim' : 'business-search';
+    dismissKeyboardForScreenTransition();
+    setBusinessClaimRetryReturnScreen(returnScreen);
+    setBusinessClaimRetryEmail(profileForm.email.trim());
+    setBusinessClaimRetryVerificationCode('');
+    setBusinessClaimRetryCodeRequested(false);
+    setProfileErrorMessage(null);
+    setProfileMessage(null);
+    navigateScreen('business-claim-retry', 'forward');
+  }
+
+  async function handleRequestBusinessClaimRetryCode() {
+    const email = businessClaimRetryEmail.trim();
+    if (!email) {
+      setProfileErrorMessage('Enter the email used for the rejected business claim.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setProfileErrorMessage('Enter a valid email address.');
+      return;
+    }
+
+    setProfileSubmitting(true);
+    setProfileErrorMessage(null);
+    setProfileMessage(null);
+    try {
+      const response = await requestBusinessClaimRetryCode(apiBaseUrl, email);
+      setBusinessClaimRetryCodeRequested(true);
+      setBusinessClaimRetryVerificationCode('');
+      setProfileMessage(response.detail);
+    } catch (error) {
+      setProfileErrorMessage(getErrorMessage(error));
+    } finally {
+      setProfileSubmitting(false);
+    }
+  }
+
+  async function handleVerifyBusinessClaimRetryCode() {
+    if (!businessClaimRetryCodeRequested) {
+      setProfileErrorMessage('Request a verification code first.');
+      return;
+    }
+    if (businessClaimRetryVerificationCode.trim().length !== 6) {
+      setProfileErrorMessage('Enter the 6-digit verification code.');
+      return;
+    }
+
+    setProfileSubmitting(true);
+    setProfileErrorMessage(null);
+    setProfileMessage(null);
+    try {
+      const response = await verifyBusinessClaimRetryCode(
+        apiBaseUrl,
+        businessClaimRetryEmail.trim(),
+        businessClaimRetryVerificationCode.trim(),
+      );
+      setBusinessClaimRetryToken(response.retry_token);
+      const verifiedEmail = businessClaimRetryEmail.trim();
+      setProfileForm((current) => ({ ...current, email: verifiedEmail, confirm_email: verifiedEmail }));
+      setBusinessClaimRetryCodeRequested(false);
+      setBusinessClaimRetryVerificationCode('');
+      setProfileMessage('Email verified. You can choose a new username and resubmit with this email. Your account remains suspended until approval.');
+      dismissKeyboardForScreenTransition();
+      navigateScreen(businessClaimRetryReturnScreen, 'backward');
+    } catch (error) {
+      setProfileErrorMessage(getErrorMessage(error));
+    } finally {
+      setProfileSubmitting(false);
+    }
+  }
+
+  function handleBackFromBusinessClaimRetry() {
+    dismissKeyboardForScreenTransition();
+    setBusinessClaimRetryCodeRequested(false);
+    setBusinessClaimRetryVerificationCode('');
+    setProfileErrorMessage(null);
+    setProfileMessage(null);
+    navigateScreen(businessClaimRetryReturnScreen, 'backward');
+  }
+
   async function handleSubmitPasswordReset() {
     if (!passwordResetToken) {
       setProfileErrorMessage('This password reset link is invalid or expired. Request a new one.');
@@ -7859,6 +7957,25 @@ function AppScreen() {
             />
           </SafeAreaView>
         );
+      case 'business-claim-retry':
+        return (
+          <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
+            <BusinessClaimRetryScreen
+              codeRequested={businessClaimRetryCodeRequested}
+              errorMessage={profileErrorMessage}
+              email={businessClaimRetryEmail}
+              isLandscape={isLandscape}
+              message={profileMessage}
+              onBack={handleBackFromBusinessClaimRetry}
+              onChangeCode={setBusinessClaimRetryVerificationCode}
+              onChangeEmail={setBusinessClaimRetryEmail}
+              onRequestCode={() => void handleRequestBusinessClaimRetryCode()}
+              onVerifyCode={() => void handleVerifyBusinessClaimRetryCode()}
+              submitting={profileSubmitting}
+              verificationCode={businessClaimRetryVerificationCode}
+            />
+          </SafeAreaView>
+        );
       case 'profiles':
         return renderProfilesScreen(profileSessionOverride, 'profiles');
       case 'customer-preferences':
@@ -7928,6 +8045,7 @@ function AppScreen() {
               onChangeSearchQuery={setBusinessSearchQuery}
               onChooseInformalBusiness={handleOpenInformalBusinessClaim}
               onChooseManualBusiness={handleOpenManualBusinessClaim}
+              onRetryRejectedClaim={handleOpenBusinessClaimRetry}
               onSelectBusiness={handleSelectClaimBusiness}
               results={businessSearchResults}
               searchQuery={businessSearchQuery}
@@ -7951,6 +8069,7 @@ function AppScreen() {
               onRemoveCurrentPhoto={handleRemoveCurrentBusinessPhoto}
               onRemoveAttachment={handleRemoveBusinessAttachment}
               onRemovePhotoUpload={handleRemoveBusinessPhotoUpload}
+              onRetryRejectedClaim={handleOpenBusinessClaimRetry}
               onToggleAddressNotApplicable={(value) => handleChangeProfileToggle('address_not_applicable', value)}
               onSubmit={handleSubmitClaimedBusinessProfile}
               photoUploads={businessPhotoUploads}

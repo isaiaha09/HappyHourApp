@@ -58,6 +58,7 @@ jest.mock('expo-sharing', () => ({
 
 import {
   AuthPortalScreen,
+  BusinessClaimRetryScreen,
   BusinessSearchScreen,
   BusinessVerificationScreen,
   CreateProfileScreen,
@@ -423,5 +424,37 @@ describe('submission-scoped onboarding error scrolling', () => {
     );
 
     expect(mockScrollToTop).not.toHaveBeenCalled();
+  });
+
+  it('offers the rejected-claim retry request and code verification actions', () => {
+    const onRequestCode = jest.fn();
+    const onVerifyCode = jest.fn();
+    const props = {
+      codeRequested: false,
+      errorMessage: null,
+      email: 'claim-owner@example.com',
+      isLandscape: false,
+      message: null,
+      onBack: jest.fn(),
+      onChangeCode: jest.fn(),
+      onChangeEmail: jest.fn(),
+      onRequestCode,
+      onVerifyCode,
+      submitting: false,
+      verificationCode: '',
+    };
+    const { rerender } = render(<BusinessClaimRetryScreen {...props} />);
+
+    expect(screen.getByText('Email used for the rejected claim')).toBeTruthy();
+    expect(screen.getByPlaceholderText('Email address')).toBeTruthy();
+    expect(screen.getByText(/no username or rejection-email link is needed/i)).toBeTruthy();
+    expect(screen.getByText(/choose a new username/i)).toBeTruthy();
+    fireEvent.press(screen.getByText('Email me a verification code'));
+    expect(onRequestCode).toHaveBeenCalledTimes(1);
+
+    rerender(<BusinessClaimRetryScreen {...props} codeRequested verificationCode="123456" />);
+    expect(screen.getByText('6-digit verification code')).toBeTruthy();
+    fireEvent.press(screen.getByText('Verify email and continue'));
+    expect(onVerifyCode).toHaveBeenCalledTimes(1);
   });
 });

@@ -178,8 +178,9 @@ export type BusinessSearchScreenProps = {
 	message?: string | null;
 	onBack: () => void;
   onChangeSearchQuery: (value: string) => void;
-  onChooseInformalBusiness: () => void;
-  onChooseManualBusiness: () => void;
+	onChooseInformalBusiness: () => void;
+	onChooseManualBusiness: () => void;
+	onRetryRejectedClaim?: () => void;
   onSelectBusiness: (place: PlaceListItem, locationId: number) => void;
   results: PlaceListItem[];
   searchQuery: string;
@@ -199,6 +200,7 @@ export type BusinessVerificationScreenProps = {
   onRemoveCurrentPhoto: (photoUrl: string) => void;
   onRemoveAttachment: (kind: BusinessAttachmentKind, attachmentId: string) => void;
   onRemovePhotoUpload: (attachmentId: string) => void;
+	onRetryRejectedClaim?: () => void;
   onToggleAddressNotApplicable: (value: boolean) => void;
   onSubmit: () => void;
   photoUploads: BusinessAttachmentDraft[];
@@ -238,6 +240,21 @@ export type BusinessClaimReviewPendingScreenProps = {
   message: string | null;
   onBack: () => void;
   session: SignupResponse | null;
+};
+
+export type BusinessClaimRetryScreenProps = {
+  codeRequested: boolean;
+  errorMessage: string | null;
+  email: string;
+  isLandscape: boolean;
+  message: string | null;
+  onBack: () => void;
+  onChangeCode: (value: string) => void;
+  onChangeEmail: (value: string) => void;
+  onRequestCode: () => void;
+  onVerifyCode: () => void;
+  submitting: boolean;
+  verificationCode: string;
 };
 
 export type ContactSupportScreenProps = {
@@ -1195,7 +1212,7 @@ export function TermsOfServiceScreen({ isLandscape, onBack }: Pick<LegalDocument
   );
 }
 
-export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces, message, onBack, onChangeSearchQuery, onChooseInformalBusiness, onChooseManualBusiness, onSelectBusiness, results, searchQuery }: BusinessSearchScreenProps) {
+export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces, message, onBack, onChangeSearchQuery, onChooseInformalBusiness, onChooseManualBusiness, onRetryRejectedClaim, onSelectBusiness, results, searchQuery }: BusinessSearchScreenProps) {
   const { handleFieldFocus, handleScroll, scrollViewRef } = useAutoScrollForm();
 
   return (
@@ -1273,6 +1290,12 @@ export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces,
             <Pressable onPress={onChooseInformalBusiness} style={styles.authLinkButton}>
               <Text style={styles.authLinkText}>For Small Startups & Vendors, create your profile here.</Text>
             </Pressable>
+
+            {onRetryRejectedClaim ? (
+              <Pressable onPress={onRetryRejectedClaim} style={styles.authLinkButton}>
+                <Text style={styles.authLinkText}>Already had a business claim rejected? Verify your email to try again.</Text>
+              </Pressable>
+            ) : null}
           </View>
         </ScrollView>
       </KeyboardAwareFormScreen>
@@ -1280,7 +1303,7 @@ export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces,
   );
 }
 
-export function BusinessVerificationScreen({ attachments, errorMessage, form, isLandscape, lockAccountIdentityFields = false, mode, onAddAttachments, onAddPhotoUploads, onBack, onChangeField, onRemoveAttachment, onRemoveCurrentPhoto, onRemovePhotoUpload, onToggleAddressNotApplicable, onSubmit, photoUploads, selectedLocation, selectedPlace, submitting }: BusinessVerificationScreenProps) {
+export function BusinessVerificationScreen({ attachments, errorMessage, form, isLandscape, lockAccountIdentityFields = false, mode, onAddAttachments, onAddPhotoUploads, onBack, onChangeField, onRemoveAttachment, onRemoveCurrentPhoto, onRemovePhotoUpload, onRetryRejectedClaim, onToggleAddressNotApplicable, onSubmit, photoUploads, selectedLocation, selectedPlace, submitting }: BusinessVerificationScreenProps) {
   const isClaimed = mode === 'claimed';
   const isEstablished = mode === 'manual';
   const isInformal = mode === 'informal';
@@ -1540,6 +1563,12 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
             <Text style={[styles.detailCity, styles.onboardingEyebrow]}>Verification</Text>
             <Text style={[styles.detailTitle, styles.onboardingHeading]}>{verificationTitle}</Text>
             <Text style={[styles.profileIntroText, styles.onboardingBodyText]}>{verificationIntro}</Text>
+
+            {isClaimed && onRetryRejectedClaim ? (
+              <Pressable onPress={onRetryRejectedClaim} style={styles.authLinkButton}>
+                <Text style={styles.authLinkText}>Already had a claim rejected? Verify your email to retry this account.</Text>
+              </Pressable>
+            ) : null}
 
             <View style={[styles.privacyNoticeCard, styles.onboardingInfoCard]}>
               <Text style={[styles.privacyNoticeTitle, styles.onboardingInfoTitle]}>Business verification privacy</Text>
@@ -1854,6 +1883,114 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
             <Pressable onPress={() => void handleSubmitVerification()} style={[styles.linkButton, styles.onboardingPrimaryButton, submitting ? styles.linkButtonDisabled : null]}>
               <LoadingButtonLabel color={theme.textDark} label={submitLabel} loading={submitting} textStyle={[styles.linkButtonText, styles.onboardingPrimaryButtonText]} />
             </Pressable>
+
+          </View>
+        </ScrollView>
+      </KeyboardAwareFormScreen>
+    </View>
+  );
+}
+
+export function BusinessClaimRetryScreen({ codeRequested, email, errorMessage, isLandscape, message, onBack, onChangeCode, onChangeEmail, onRequestCode, onVerifyCode, submitting, verificationCode }: BusinessClaimRetryScreenProps) {
+  const { handleFieldFocus, handleScroll, scrollToTop, scrollViewRef } = useAutoScrollForm();
+  const { recordSubmitAttempt } = useSubmitErrorAutoScroll(errorMessage, submitting, scrollToTop);
+
+  function handleSubmit() {
+    recordSubmitAttempt();
+    if (codeRequested) {
+      onVerifyCode();
+    } else {
+      onRequestCode();
+    }
+  }
+
+  return (
+    <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
+      <KeyboardAwareFormScreen>
+        <ScrollView
+          contentContainerStyle={[styles.profileScrollContent, styles.createProfileScrollContent]}
+          {...dismissKeyboardOnScrollProps}
+          keyboardShouldPersistTaps="always"
+          onScroll={handleScroll}
+          ref={scrollViewRef}
+          scrollEventThrottle={16}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
+            <OnboardingBackButton label="Back to claim" onPress={onBack} />
+          </View>
+
+          <View style={[styles.profileCard, styles.onboardingCard]}>
+            <Text style={[styles.detailCity, styles.onboardingEyebrow]}>Business claim retry</Text>
+            <Text style={[styles.detailTitle, styles.onboardingHeading]}>{codeRequested ? 'Verify your account email' : 'Request a fresh verification code'}</Text>
+            <Text style={[styles.profileIntroText, styles.onboardingBodyText]}>
+              Enter only the email used for the rejected claim—no username or rejection-email link is needed. If that account is eligible, we will send a one-time code to its already-verified email. After verification, you can choose a new username when you resubmit. Your account stays suspended until approval.
+            </Text>
+
+            {message ? (
+              <View style={styles.profileSuccessBanner}>
+                <Text style={styles.profileSuccessText}>{message}</Text>
+              </View>
+            ) : null}
+
+            {errorMessage ? (
+              <View style={styles.errorBanner}>
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.profileFormSection}>
+              <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>Email used for the rejected claim</Text>
+              <AutoScrollTextInput
+                autoCapitalize="none"
+                autoComplete="email"
+                autoCorrect={false}
+                keyboardType="email-address"
+                onBeforeAutoScroll={handleFieldFocus}
+                onChangeText={onChangeEmail}
+                placeholder="Email address"
+                placeholderTextColor={onboardingPlaceholderTextColor}
+                scrollViewRef={scrollViewRef}
+                style={[styles.profileInput, styles.onboardingInput]}
+                value={email}
+              />
+
+              {codeRequested ? (
+                <>
+                  <Text style={[styles.profileSupportText, styles.onboardingBodyText]}>If the account is eligible, a code was sent to its verified email address.</Text>
+                  <Text style={[styles.profileFieldLabel, styles.onboardingLabel]}>6-digit verification code</Text>
+                  <AutoScrollTextInput
+                    autoCapitalize="none"
+                    autoComplete="one-time-code"
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    onBeforeAutoScroll={handleFieldFocus}
+                    onChangeText={(value) => onChangeCode(value.replace(/[^0-9]/g, ''))}
+                    placeholder="000000"
+                    placeholderTextColor={onboardingPlaceholderTextColor}
+                    scrollViewRef={scrollViewRef}
+                    style={[styles.profileInput, styles.verificationCodeInput, styles.onboardingInput]}
+                    textContentType="oneTimeCode"
+                    value={verificationCode}
+                  />
+                </>
+              ) : null}
+            </View>
+
+            <Pressable disabled={submitting} onPress={handleSubmit} style={[styles.linkButton, styles.onboardingPrimaryButton, submitting ? styles.linkButtonDisabled : null]}>
+              <LoadingButtonLabel
+                color={theme.textDark}
+                label={codeRequested ? 'Verify email and continue' : 'Email me a verification code'}
+                loading={submitting}
+                textStyle={[styles.linkButtonText, styles.onboardingPrimaryButtonText]}
+              />
+            </Pressable>
+
+            {codeRequested ? (
+              <Pressable disabled={submitting} onPress={onRequestCode} style={[styles.linkButtonSecondaryWide, styles.onboardingSecondaryButton, submitting ? styles.linkButtonDisabled : null]}>
+                <Text style={[styles.linkButtonSecondaryText, styles.onboardingSecondaryButtonText]}>Send another code</Text>
+              </Pressable>
+            ) : null}
           </View>
         </ScrollView>
       </KeyboardAwareFormScreen>

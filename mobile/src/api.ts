@@ -408,6 +408,14 @@ export async function requestPasswordReset(baseUrl: string, identifier: string) 
   return postJson<{ detail: string }>(baseUrl, '/profiles/password-reset-request/', { identifier });
 }
 
+export async function requestBusinessClaimRetryCode(baseUrl: string, email: string) {
+  return postJson<{ detail: string }>(baseUrl, '/profiles/business-claim-retry-request/', { email });
+}
+
+export async function verifyBusinessClaimRetryCode(baseUrl: string, email: string, code: string) {
+  return postJson<{ detail: string; retry_token: string }>(baseUrl, '/profiles/business-claim-retry-verify/', { email, code });
+}
+
 export async function confirmPasswordReset(baseUrl: string, token: string, newPassword: string) {
   return postJson<{ detail: string }>(baseUrl, `/profiles/reset-password/${encodeURIComponent(token)}/`, { new_password: newPassword });
 }
