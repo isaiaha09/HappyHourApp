@@ -33,6 +33,7 @@ from unfold.forms import BaseDialogForm
 
 from .admin_security import emit_admin_security_event
 from .admin_site import happyhour_admin_site
+from .models import ManagedMedia
 from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessDirectMessage, BusinessDirectMessageThread, BusinessMembership, BusinessPost, ContentReport, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, FavoriteBusinessNotification, FeedEngagement, FeedImpression, ListingSnapshot, SponsoredCampaign, Weekday
 from .services.account_profiles import remove_favorites_for_business_accounts, remove_favorites_for_listing_slugs
 from .services.admin_operations import get_catalog_health, get_listing_snapshot_health_issues, get_review_sla_delta, record_admin_audit_event
@@ -41,6 +42,7 @@ from .services.importers.discovered_json_places import load_discovery_json_recor
 from .services.deleted_businesses import imported_place_from_deleted_business, purge_deleted_business_data, store_deleted_business
 from .services.importers.business_websites import BusinessWebsiteImporter
 from .services.importers.types import ImportedPlace
+from .services.media_storage import managed_media_id_from_reference
 from .services.social_profiles import build_social_media_links, normalize_business_contact_channels, normalize_social_profile
 from .services.source_listings import get_source_place_payload, get_source_place_payloads, load_source_records
 from .services.cloudmersive_scanning import ScanStatus, scan_pdf_file
@@ -118,7 +120,7 @@ def _admin_media_path_from_url(value):
 
 
 def _is_admin_image_media(value, content_type=''):
-	return str(content_type or '').lower().startswith('image/') or _admin_media_path_from_url(value).endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.heic', '.heif'))
+	return str(content_type or '').lower().startswith('image/') or _admin_media_path_from_url(value).endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.heic', '.heif', '.tif', '.tiff'))
 
 
 def _is_admin_pdf_media(value, content_type=''):
@@ -133,7 +135,7 @@ def _format_admin_media_preview(url, label='', content_type=''):
 	parsed_media_url = urlparse(media_url)
 	if parsed_media_url.scheme and (parsed_media_url.scheme.lower() != 'https' or not parsed_media_url.netloc):
 		return format_html('<span title="This legacy media URL is not a safe HTTPS link.">{}</span>', media_label)
-	if parsed_media_url.scheme == '' and not media_url.startswith(('/managed-media/', '/private-media/')):
+	if parsed_media_url.scheme == '' and not media_url.startswith(('/managed-media/', '/private-media/', '/private-business-profile-media/')):
 		return format_html('<span title="This legacy media reference is not a safe link.">{}</span>', media_label)
 
 	if _is_admin_image_media(media_url, content_type):
@@ -153,11 +155,9 @@ def _format_admin_media_preview(url, label='', content_type=''):
 	if _is_admin_pdf_media(media_url, content_type):
 		return format_html(
 			'<div class="admin-media-preview" style="min-width:280px;max-width:340px;">'
-			'<iframe src="{}" title="{}" style="display:block;width:280px;height:180px;border:1px solid #c7c7c7;background:#fff;"></iframe>'
-			'<div style="margin-top:6px;line-height:1.35;"><a href="{}" target="_blank" rel="noopener">Open/download {}</a></div>'
+			'<div style="line-height:1.35;">PDF document</div>'
+			'<div style="margin-top:6px;line-height:1.35;"><a class="button" href="{}" target="_blank" rel="noopener">View PDF: {}</a></div>'
 			'</div>',
-			media_url,
-			media_label,
 			media_url,
 			media_label,
 		)
@@ -2181,6 +2181,18 @@ class BusinessClaimProfileEntryInline(UnfoldTabularInline):
 		if not value:
 			return '-'
 		if obj.entry_kind == BusinessClaim.ProfileEntryKind.PHOTO_REFERENCE:
+			media_id = managed_media_id_from_reference(value)
+			if media_id is not None:
+				media = ManagedMedia.objects.filter(
+					media_id=media_id,
+					claim_id=obj.claim_id,
+					owner_id=obj.claim.claimant_id,
+					media_kind='profile_photo',
+				).first()
+				if media is None:
+					return format_html('<span title="The submitted managed image is unavailable.">Image unavailable</span>')
+				media_url = f"{reverse('private-business-profile-media', kwargs={'media_id': media.media_id})}?preview=1"
+				return _format_admin_media_preview(media_url, 'Submitted photo reference', media.content_type)
 			return _format_admin_media_preview(value, 'Submitted photo reference', 'image/jpeg')
 		parsed_value = urlparse(value)
 		if parsed_value.scheme.lower() == 'https' and parsed_value.netloc:
@@ -2204,7 +2216,7 @@ class BusinessClaimAttachmentInline(UnfoldTabularInline):
 	def file_preview(self, obj):
 		if not obj.file:
 			return 'No file'
-		media_url = reverse('private-business-claim-attachment', kwargs={'media_id': obj.media_id})
+		media_url = f"{reverse('private-business-claim-attachment', kwargs={'media_id': obj.media_id})}?preview=1"
 		if obj.is_pdf_attachment() and obj.malware_scan_status != BusinessClaimAttachment.MalwareScanStatus.CLEAN:
 			if obj.malware_scan_status == BusinessClaimAttachment.MalwareScanStatus.LEGACY_UNSCANNED:
 				warning_text = 'This PDF predates Cloudmersive scanning.'
@@ -2339,15 +2351,14 @@ class BusinessClaimAdmin(HardDeleteUserAdminMixin, UnfoldModelAdmin):
 			requested_statuses = [value.strip() for value in request.GET.get('status__in', '').split(',') if value.strip()]
 			queryset = queryset.filter(status__in=requested_statuses)
 		elif not explicit_status_filter and 'has_prior_rejections' not in request.GET:
-			# Keep the operational queue focused while retaining earlier rejected
-			# attempts for the same claimant so the attempt history remains useful.
-			reviewable_claimants = BusinessClaim.objects.filter(
-				status__in=(BusinessClaim.Status.SUBMITTED, BusinessClaim.Status.UNDER_REVIEW, BusinessClaim.Status.NEEDS_INFO),
-			).values('claimant_id')
-			queryset = queryset.filter(
-				Q(status__in=(BusinessClaim.Status.SUBMITTED, BusinessClaim.Status.UNDER_REVIEW, BusinessClaim.Status.NEEDS_INFO))
-				| Q(status=BusinessClaim.Status.REJECTED, claimant_id__in=Subquery(reviewable_claimants))
-			)
+			# Rejections remain visible as auditable claim records even when no
+			# later attempt is pending review for the same account.
+			queryset = queryset.filter(status__in=(
+				BusinessClaim.Status.SUBMITTED,
+				BusinessClaim.Status.UNDER_REVIEW,
+				BusinessClaim.Status.NEEDS_INFO,
+				BusinessClaim.Status.REJECTED,
+			))
 		same_email_attempts = BusinessClaim.objects.filter(
 			claimant__email=OuterRef('claimant__email'),
 		).order_by('-created_at', '-pk')

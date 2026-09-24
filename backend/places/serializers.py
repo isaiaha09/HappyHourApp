@@ -252,7 +252,17 @@ def _get_valid_business_retry_grant(user, token):
 		.first()
 	)
 	profile = get_or_create_account_profile(user)
-	if grant is None or profile is None or not profile.email_is_verified or not profile.business_claim_suspended or not grant.is_active(token):
+	latest_claim = user.business_claims.order_by('-created_at', '-pk').first()
+	if (
+		grant is None
+		or profile is None
+		or not profile.email_is_verified
+		or not profile.business_claim_suspended
+		or latest_claim is None
+		or latest_claim.pk != grant.rejected_claim_id
+		or latest_claim.status != BusinessClaim.Status.REJECTED
+		or not grant.is_active(token)
+	):
 		return None
 	return grant
 
@@ -1008,10 +1018,24 @@ class PasswordResetRequestSerializer(serializers.Serializer):
 
 
 class BusinessClaimRetryRequestSerializer(serializers.Serializer):
-	identifier = serializers.CharField(max_length=150)
+	email = serializers.EmailField()
 
-	def validate_identifier(self, value):
-		return value.strip()
+	def validate_email(self, value):
+		return value.strip().lower()
+
+
+class BusinessClaimRetryCodeVerifySerializer(serializers.Serializer):
+	email = serializers.EmailField()
+	code = serializers.CharField(max_length=6, min_length=6)
+
+	def validate_email(self, value):
+		return value.strip().lower()
+
+	def validate_code(self, value):
+		normalized = ''.join(character for character in str(value or '') if character.isdigit())
+		if len(normalized) != 6:
+			raise serializers.ValidationError('Enter the 6-digit verification code.')
+		return normalized
 
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
@@ -1108,6 +1132,22 @@ class CustomerSignupSerializer(serializers.Serializer):
 		existing_username_user = self._get_existing_user_by_username(attrs.get('username'))
 		existing_email_user = self._get_existing_user_by_email(attrs.get('email'))
 
+		retry_token = str(attrs.get('retry_token') or '').strip()
+		if retry_token:
+			if not self.allows_rejected_business_reregistration():
+				raise serializers.ValidationError({'retry_token': ['This link can only be used to retry a rejected business claim.']})
+			if existing_email_user is None or existing_email_user.email.casefold() != str(attrs.get('email') or '').casefold():
+				raise serializers.ValidationError({'retry_token': ['Authenticate with the original account owner before retrying this business claim.']})
+			grant = _get_valid_business_retry_grant(existing_email_user, retry_token)
+			if grant is None:
+				raise serializers.ValidationError({'retry_token': ['This business claim retry link is invalid or expired.']})
+			if existing_username_user is not None and existing_username_user.pk != existing_email_user.pk:
+				raise serializers.ValidationError({'username': ['That username is already in use.']})
+			attrs['_retry_grant'] = grant
+			attrs['_retry_token'] = retry_token
+			attrs['_signup_existing_user'] = existing_email_user
+			return attrs
+
 		if existing_username_user and existing_email_user and existing_username_user.pk != existing_email_user.pk:
 			raise serializers.ValidationError({
 				'username': ['That username is already in use.'],
@@ -1116,22 +1156,6 @@ class CustomerSignupSerializer(serializers.Serializer):
 
 		existing_user = existing_username_user or existing_email_user
 		if existing_user is None:
-			if attrs.get('retry_token'):
-				raise serializers.ValidationError({'retry_token': ['This business claim retry link is invalid or expired.']})
-			return attrs
-
-		retry_token = str(attrs.get('retry_token') or '').strip()
-		if retry_token:
-			if not self.allows_rejected_business_reregistration():
-				raise serializers.ValidationError({'retry_token': ['This link can only be used to retry a rejected business claim.']})
-			if existing_username_user is None or existing_email_user is None or existing_username_user.pk != existing_email_user.pk or existing_user.username.casefold() != str(attrs.get('username') or '').casefold() or existing_user.email.casefold() != str(attrs.get('email') or '').casefold():
-				raise serializers.ValidationError({'retry_token': ['Authenticate with the original account owner before retrying this business claim.']})
-			grant = _get_valid_business_retry_grant(existing_user, retry_token)
-			if grant is None:
-				raise serializers.ValidationError({'retry_token': ['This business claim retry link is invalid or expired.']})
-			attrs['_retry_grant'] = grant
-			attrs['_retry_token'] = retry_token
-			attrs['_signup_existing_user'] = existing_user
 			return attrs
 
 		if self._can_upgrade_authenticated_existing_user(existing_user):

@@ -1307,6 +1307,7 @@ class BusinessClaimRetryGrant(models.Model):
 
 	@classmethod
 	def issue_for(cls, user, rejected_claim):
+		cls.objects.filter(user=user, used_at__isnull=True).update(used_at=timezone.now())
 		selector = secrets.token_urlsafe(12)[:32]
 		secret = secrets.token_urlsafe(32)
 		ttl = max(int(getattr(settings, 'BUSINESS_CLAIM_RETRY_TOKEN_TTL_SECONDS', 900) or 900), 60)
@@ -1331,6 +1332,54 @@ class BusinessClaimRetryGrant(models.Model):
 			and hmac.compare_digest(selector, self.token_selector)
 			and hmac.compare_digest(self._digest(secret), self.token_digest)
 		)
+
+
+class BusinessClaimRetryVerification(models.Model):
+	MAX_ATTEMPTS = 5
+
+	user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='business_claim_retry_verifications', on_delete=models.CASCADE)
+	rejected_claim = models.ForeignKey(BusinessClaim, related_name='retry_verifications', on_delete=models.CASCADE)
+	code_digest = models.CharField(max_length=64)
+	expires_at = models.DateTimeField()
+	attempts = models.PositiveSmallIntegerField(default=0)
+	used_at = models.DateTimeField(null=True, blank=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ['-created_at', '-pk']
+		indexes = [models.Index(fields=['user', 'expires_at'], name='places_retry_verify_exp_idx')]
+
+	@staticmethod
+	def _digest(user_id, claim_id, code):
+		message = f'business-claim-retry:{user_id}:{claim_id}:{code}'
+		return hmac.new(str(settings.SECRET_KEY).encode('utf-8'), message.encode('utf-8'), hashlib.sha256).hexdigest()
+
+	@classmethod
+	def issue_for(cls, user, rejected_claim):
+		now = timezone.now()
+		cls.objects.filter(user=user, used_at__isnull=True).update(used_at=now)
+		code = f'{secrets.randbelow(1_000_000):06d}'
+		ttl = max(int(getattr(settings, 'BUSINESS_CLAIM_RETRY_CODE_TTL_SECONDS', 600) or 600), 60)
+		verification = cls.objects.create(
+			user=user,
+			rejected_claim=rejected_claim,
+			code_digest=cls._digest(user.pk, rejected_claim.pk, code),
+			expires_at=now + timedelta(seconds=ttl),
+		)
+		return verification, code
+
+	def verify_code(self, code):
+		if self.used_at is not None or timezone.now() >= self.expires_at or self.attempts >= self.MAX_ATTEMPTS:
+			return False
+		self.attempts += 1
+		is_valid = hmac.compare_digest(
+			self._digest(self.user_id, self.rejected_claim_id, str(code or '')),
+			self.code_digest,
+		)
+		if is_valid or self.attempts >= self.MAX_ATTEMPTS:
+			self.used_at = timezone.now()
+		self.save(update_fields=['attempts', 'used_at'])
+		return is_valid
 
 
 class BusinessDirectMessageThread(models.Model):

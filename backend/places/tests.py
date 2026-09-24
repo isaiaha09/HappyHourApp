@@ -35,7 +35,7 @@ import pyotp
 from .admin import BusinessAccountAdmin, BusinessClaimAdmin, ContentReportAdmin, CustomerAccountAdmin, DeletedBusinessAdmin, ListingSnapshotAdmin, ListingSnapshotAdminForm, SponsoredCampaignAdmin, _sync_listing_snapshot_from_imported_place
 from .admin_security import ADMIN_MFA_VERIFIED_SESSION_KEY
 from .admin_site import happyhour_admin_site
-from .models import AccountProfile, AdminAuditEvent, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, BusinessPost, City, ContentReport, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedEngagement, FeedImpression, ListingSnapshot, ManagedMedia, ProfileAuthToken, SponsoredCampaign, VenueType, Weekday
+from .models import AccountProfile, AdminAuditEvent, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessClaimRetryGrant, BusinessClaimRetryVerification, BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, BusinessPost, City, ContentReport, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedEngagement, FeedImpression, ListingSnapshot, ManagedMedia, ProfileAuthToken, SponsoredCampaign, VenueType, Weekday
 from .serializers import _validate_claim_attachment_size, _validate_uploaded_deal_attachment
 from .services.importers.base import BaseHtmlImporter
 from .services.importers.business_websites import BusinessWebsiteImporter
@@ -5517,6 +5517,160 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertIn('That username is already in use.', response.data['username'])
 		self.assertTrue(AccountProfile.objects.get(user=rejected_user).business_claim_suspended)
 
+	@patch('places.views.get_source_place_payload')
+	def test_rejected_business_claim_can_request_code_verify_and_retry_the_same_account(self, mock_get_source_place_payload):
+		mock_get_source_place_payload.return_value = {
+			'id': 403,
+			'name': 'Retry Test Business',
+			'slug': 'retry-test-business',
+			'city': City.VENTURA,
+			'venue_type': VenueType.RESTAURANT,
+			'address_line_1': '123 Main St',
+			'address_line_2': '',
+			'neighborhood': 'Downtown',
+			'state': 'CA',
+			'postal_code': '93001',
+			'phone_number': '805-555-0199',
+			'website_url': 'https://retry-business.example.com',
+			'locations': [],
+		}
+		user = User.objects.create_user(username='claim_retry_owner', email='claim-retry@example.com', password='old-pass-123')
+		profile = AccountProfile.objects.create(user=user, email_verified_at=timezone.now())
+		profile.suspend_business_claim_access()
+		snapshot = ListingSnapshot.objects.create(
+			name='Retry Test Business',
+			listing_slug='retry-test-business',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='123 Main St',
+		)
+		rejected_claim = BusinessClaim.objects.create(
+			claimant=user,
+			listing_snapshot=snapshot,
+			pathway=BusinessClaim.Pathway.CLAIMED,
+			status=BusinessClaim.Status.REJECTED,
+			contact_name='Claim Retry Owner',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='owner@retry-business.example',
+			work_phone='805-555-0111',
+			employer_address='123 Main St, Ventura, CA 93001',
+			verification_summary='Rejected first claim attempt.',
+		)
+
+		request_response = self.client.post(
+			reverse('profile-business-claim-retry-request'),
+			{'email': user.email},
+			format='json',
+		)
+		self.assertEqual(request_response.status_code, 200)
+		self.assertEqual(request_response.data['detail'], 'If the account is eligible, a verification code has been sent to its registered email.')
+		self.assertEqual(len(mail.outbox), 1)
+		self.assertEqual(mail.outbox[0].to, [user.email])
+		self.assertIn('retry your rejected business claim', mail.outbox[0].body.lower())
+		self.assertIn('10 minutes', mail.outbox[0].body)
+		self.assertNotIn('diningdealz://', mail.outbox[0].body.lower())
+		code = next(line.strip() for line in mail.outbox[0].body.splitlines() if len(line.strip()) == 6 and line.strip().isdigit())
+		verification = BusinessClaimRetryVerification.objects.get(user=user)
+		self.assertNotEqual(verification.code_digest, code)
+		self.assertEqual(verification.rejected_claim, rejected_claim)
+		wrong_code = f'{(int(code) + 1) % 1_000_000:06d}'
+		wrong_code_response = self.client.post(
+			reverse('profile-business-claim-retry-verify'),
+			{'email': user.email, 'code': wrong_code},
+			format='json',
+		)
+		self.assertEqual(wrong_code_response.status_code, 400)
+		verification.refresh_from_db()
+		self.assertEqual(verification.attempts, 1)
+
+		verify_response = self.client.post(
+			reverse('profile-business-claim-retry-verify'),
+			{'email': user.email, 'code': code},
+			format='json',
+		)
+		self.assertEqual(verify_response.status_code, 200)
+		self.assertTrue(verify_response.data['retry_token'])
+		self.assertTrue(AccountProfile.objects.get(user=user).business_claim_suspended)
+		self.assertEqual(BusinessClaimRetryGrant.objects.filter(user=user, rejected_claim=rejected_claim).count(), 1)
+		self.assertIsNotNone(verification.__class__.objects.get(pk=verification.pk).used_at)
+
+		second_verify_response = self.client.post(
+			reverse('profile-business-claim-retry-verify'),
+			{'email': user.email, 'code': code},
+			format='json',
+		)
+		self.assertEqual(second_verify_response.status_code, 400)
+		self.assertEqual(BusinessClaim.objects.filter(claimant=user).count(), 1)
+
+		User.objects.create_user(username='claim_retry_taken_name', email='claim-retry-taken@example.com', password='other-pass-123')
+		signup_payload = {
+			'username': 'claim_retry_taken_name',
+			'email': user.email,
+			'password': 'updated-pass-123',
+			'verification_data_consent': True,
+			'first_name': 'Claim',
+			'last_name': 'Owner',
+			'business_slug': snapshot.listing_slug,
+			'contact_name': 'Claim Retry Owner',
+			'job_title': BusinessClaim.JobTitle.OWNER,
+			'work_email': 'owner@retry-business.example',
+			'work_phone': '805-555-0111',
+			'employer_address': '123 Main St, Ventura, CA 93001',
+			'address_not_applicable': False,
+			'business_website_url': 'https://retry-business.example.com',
+			'social_media_links': json.dumps([]),
+			'verification_documents': json.dumps({
+				'business_registration': ['CA business license #123'],
+				'health_permit': ['Ventura County permit #A-55'],
+				'abc_license': [],
+				'proof_of_address_control': [],
+			}),
+			'proof_of_authority_attachments': [SimpleUploadedFile('owner-proof.pdf', b'authority proof', content_type='application/pdf')],
+			'supporting_details': 'Resubmitted after verifying the original account email.',
+			'retry_token': verify_response.data['retry_token'],
+		}
+		username_conflict_response = self.client.post(
+			reverse('business-signup'),
+			signup_payload,
+			format='multipart',
+		)
+		self.assertEqual(username_conflict_response.status_code, 400)
+		self.assertIn('That username is already in use.', username_conflict_response.data['username'])
+
+		signup_payload['username'] = 'claim_retry_new_name'
+		signup_payload['proof_of_authority_attachments'] = [
+			SimpleUploadedFile('owner-proof.pdf', b'authority proof', content_type='application/pdf'),
+		]
+		signup_response = self.client.post(
+			reverse('business-signup'),
+			signup_payload,
+			format='multipart',
+		)
+		self.assertEqual(signup_response.status_code, 201, signup_response.data)
+		user.refresh_from_db()
+		self.assertEqual(user.username, 'claim_retry_new_name')
+		self.assertEqual(User.objects.filter(email__iexact=user.email).count(), 1)
+		retry_claim = BusinessClaim.objects.get(claimant=user, status=BusinessClaim.Status.SUBMITTED)
+		self.assertEqual(retry_claim.retry_of, rejected_claim)
+		self.assertTrue(AccountProfile.objects.get(user=user).business_claim_suspended)
+
+	def test_business_claim_retry_request_response_is_generic_for_ineligible_accounts(self):
+		user = User.objects.create_user(username='ordinary_customer', email='ordinary@example.com', password='test-pass-123')
+		AccountProfile.objects.create(user=user, email_verified_at=timezone.now())
+		responses = [
+			self.client.post(reverse('profile-business-claim-retry-request'), {'email': user.email}, format='json'),
+			self.client.post(reverse('profile-business-claim-retry-request'), {'email': 'not-a-real-account@example.com'}, format='json'),
+		]
+		self.assertEqual([response.status_code for response in responses], [200, 200])
+		self.assertEqual(responses[0].data, responses[1].data)
+		self.assertEqual(mail.outbox, [])
+		username_only_response = self.client.post(
+			reverse('profile-business-claim-retry-request'),
+			{'email': user.username},
+			format='json',
+		)
+		self.assertEqual(username_only_response.status_code, 400)
+
 	def test_informal_business_signup_creates_informal_claim(self):
 		response = self.client.post(
 			reverse('informal-business-signup'),
@@ -7881,10 +8035,32 @@ class ProfileDashboardApiTests(APITestCase):
 			file_size=13,
 			malware_scan_status=BusinessClaimAttachment.MalwareScanStatus.CLEAN,
 		)
+		image_attachment = BusinessClaimAttachment.objects.create(
+			claim=claim,
+			attachment_kind=BusinessClaimAttachment.AttachmentKind.SOCIAL_MEDIA,
+			file=ContentFile(VALID_TEST_PNG_BYTES, name='private-image.png'),
+			original_filename='private-image.png',
+			content_type='text/html',
+			file_size=len(VALID_TEST_PNG_BYTES),
+			malware_scan_status=BusinessClaimAttachment.MalwareScanStatus.NOT_APPLICABLE,
+		)
+		quarantined_attachment = BusinessClaimAttachment.objects.create(
+			claim=claim,
+			attachment_kind=BusinessClaimAttachment.AttachmentKind.BUSINESS_REGISTRATION,
+			file=ContentFile(b'quarantined proof', name='quarantined-proof.pdf'),
+			original_filename='quarantined-proof.pdf',
+			content_type='application/pdf',
+			file_size=18,
+			malware_scan_status=BusinessClaimAttachment.MalwareScanStatus.LEGACY_UNSCANNED,
+		)
 
 		private_url = reverse('private-business-claim-attachment', kwargs={'media_id': attachment.media_id})
+		image_url = reverse('private-business-claim-attachment', kwargs={'media_id': image_attachment.media_id})
+		quarantined_url = reverse('private-business-claim-attachment', kwargs={'media_id': quarantined_attachment.media_id})
 		self.assertTrue(private_url.startswith('/private-media/'))
 		self.assertEqual(self.client.get(private_url).status_code, 404)
+		self.assertEqual(self.client.get(f'{private_url}?preview=1').status_code, 404)
+		self.assertEqual(self.client.get(f'{image_url}?preview=1').status_code, 404)
 		self.assertEqual(self.client.get(attachment.file.url).status_code, 404)
 		self.assertEqual(self.client.get(f'{settings.MEDIA_URL}{attachment.file.name}').status_code, 404)
 
@@ -7896,7 +8072,25 @@ class ProfileDashboardApiTests(APITestCase):
 		authenticate_test_admin(self.client, admin_user)
 		private_response = self.client.get(private_url)
 		self.assertEqual(private_response.status_code, 200)
+		self.assertEqual(private_response['Content-Disposition'], 'attachment; filename="private-proof.pdf"')
+		self.assertEqual(private_response['X-Content-Type-Options'], 'nosniff')
 		self.assertEqual(b''.join(private_response.streaming_content), b'private proof')
+
+		preview_response = self.client.get(f'{private_url}?preview=1')
+		self.assertEqual(preview_response.status_code, 200)
+		self.assertEqual(preview_response['Content-Disposition'], 'inline; filename="private-proof.pdf"')
+		self.assertEqual(preview_response['Content-Type'], 'application/pdf')
+		self.assertEqual(preview_response['X-Content-Type-Options'], 'nosniff')
+		self.assertEqual(preview_response['Cache-Control'], 'private, no-store')
+		self.assertEqual(b''.join(preview_response.streaming_content), b'private proof')
+		self.assertEqual(self.client.get(f'{quarantined_url}?preview=1').status_code, 404)
+
+		image_preview_response = self.client.get(f'{image_url}?preview=1')
+		self.assertEqual(image_preview_response.status_code, 200)
+		self.assertEqual(image_preview_response['Content-Disposition'], 'inline; filename="private-image.png"')
+		self.assertEqual(image_preview_response['Content-Type'], 'image/png')
+		self.assertEqual(image_preview_response['X-Content-Type-Options'], 'nosniff')
+		self.assertEqual(image_preview_response['Cache-Control'], 'private, no-store')
 
 	@patch('places.services.source_listings.load_source_records', return_value=[])
 	def test_delete_account_removes_owned_business_from_public_places_and_live_locations(self, mock_load_source_records):
@@ -10564,10 +10758,19 @@ class BusinessClaimAdminTests(TestCase):
 			value='https://instagram.com/claimedplace',
 			sort_order=0,
 		)
+		self.profile_photo_media = ManagedMedia.objects.create(
+			owner=self.claimant,
+			claim=self.claim,
+			storage_name='business-profile-photos/39/storefront.png',
+			media_kind='profile_photo',
+			original_filename='storefront.png',
+			content_type='image/png',
+			file_size=len(VALID_TEST_PNG_BYTES),
+		)
 		BusinessClaimProfileEntry.objects.create(
 			claim=self.claim,
 			entry_kind=BusinessClaim.ProfileEntryKind.PHOTO_REFERENCE,
-			value='https://pqenwlrxrfzrhpvxzqcv.supabase.co/storage/v1/object/public/business-media/business-profile-photos/39/storefront.jpg',
+			value=f'http://192.168.1.72:8000/managed-media/{self.profile_photo_media.media_id}/',
 			sort_order=0,
 		)
 		BusinessClaimAttachment.objects.create(
@@ -10606,12 +10809,17 @@ class BusinessClaimAdminTests(TestCase):
 		self.assertContains(response, 'Submitted attachments')
 		self.assertContains(response, 'https://instagram.com/claimedplace')
 		self.assertContains(response, 'Submitted photo reference')
-		self.assertContains(response, 'business-profile-photos/39/storefront.jpg')
+		profile_photo_preview_url = f'/private-business-profile-media/{self.profile_photo_media.media_id}/?preview=1'
+		self.assertContains(response, profile_photo_preview_url)
+		self.assertNotContains(response, 'http://192.168.1.72:8000/managed-media/')
 		self.assertContains(response, '<img')
 		self.assertContains(response, 'Open full size')
 		self.assertContains(response, 'authority.pdf')
-		self.assertContains(response, '<iframe')
-		self.assertContains(response, 'Open/download authority.pdf')
+		self.assertNotContains(response, '<iframe')
+		self.assertContains(response, 'View PDF: authority.pdf')
+		self.assertContains(response, 'preview=1')
+		social_photo_attachment = BusinessClaimAttachment.objects.get(claim=self.claim, original_filename='social-proof.jpg')
+		self.assertContains(response, f'/private-media/{social_photo_attachment.media_id}/?preview=1')
 		self.assertContains(response, 'social-proof.jpg')
 		self.assertContains(response, 'https://claimed-place.example.com')
 		self.assertContains(response, BusinessClaim.Pathway.ESTABLISHED)
@@ -10622,6 +10830,34 @@ class BusinessClaimAdminTests(TestCase):
 		self.assertContains(response, 'Attempt #')
 		self.assertContains(response, 'Current attempt')
 		self.assertContains(response, 'No earlier claim attempts found.')
+
+	def test_private_claim_profile_image_preview_requires_staff_mfa_and_serves_inline(self):
+		preview_url = reverse('private-business-profile-media', kwargs={'media_id': self.profile_photo_media.media_id})
+		self.client.logout()
+		self.assertEqual(self.client.get(f'{preview_url}?preview=1').status_code, 404)
+
+		self.client.force_login(self.admin_user)
+		self.assertEqual(self.client.get(f'{preview_url}?preview=1').status_code, 404)
+
+		authenticate_test_admin(self.client, self.admin_user)
+		with patch('places.views.default_storage.open', return_value=BytesIO(VALID_TEST_PNG_BYTES)):
+			response = self.client.get(f'{preview_url}?preview=1')
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response['Content-Type'], 'image/png')
+		self.assertEqual(response['Content-Disposition'], 'inline; filename="storefront.png"')
+		self.assertEqual(response['X-Content-Type-Options'], 'nosniff')
+		self.assertEqual(response['Cache-Control'], 'private, no-store')
+		self.assertEqual(b''.join(response.streaming_content), VALID_TEST_PNG_BYTES)
+
+	def test_default_business_claim_queue_keeps_isolated_rejected_claim_visible(self):
+		self.claim.status = BusinessClaim.Status.REJECTED
+		self.claim.save(update_fields=['status'])
+		request = RequestFactory().get('/admin/places/businessclaim/')
+
+		queryset = self.admin.get_queryset(request)
+
+		self.assertIn(self.claim.pk, queryset.values_list('pk', flat=True))
 
 	def test_change_view_shows_prior_attempts_for_same_account_email(self):
 		prior_rejected_claim = BusinessClaim.objects.create(

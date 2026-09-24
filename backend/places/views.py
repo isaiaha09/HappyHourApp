@@ -27,10 +27,12 @@ from uuid import uuid4
 logger = logging.getLogger(__name__)
 
 from .authentication import ProfileTokenAuthentication
+from .admin_security import admin_mfa_session_verified
 from .serializers import (
 	BusinessLocationTrackingPreferenceSerializer,
 	BusinessLocationUpdateSerializer,
 	BusinessClaimRetryRequestSerializer,
+	BusinessClaimRetryCodeVerifySerializer,
 	ClaimedBusinessSignupSerializer,
 	ContactSupportSerializer,
 	ContentReportSerializer,
@@ -67,8 +69,8 @@ from .serializers import (
 	build_signup_request_data,
 	sync_listing_snapshot_from_place_payload,
 )
-from .services.account_profiles import build_account_response, build_email_verification_challenge, deactivate_account_for_retained_direct_messages, get_approved_business_claims, get_business_access_hold_claim, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, is_deleted_account, send_business_claim_received_email, send_business_claim_retry_email, send_content_report_support_email_safely, send_password_reset_email, send_support_contact_email, send_username_reminder_email, send_verification_email
-from .models import BusinessClaim, BusinessClaimAttachment, BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, BusinessPost, ContentReport, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedImpression, ListingSnapshot, ManagedMedia, ProfileAuthToken, VenueType, business_claim_storage_prefix
+from .services.account_profiles import build_account_response, build_email_verification_challenge, deactivate_account_for_retained_direct_messages, get_approved_business_claims, get_business_access_hold_claim, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, is_deleted_account, send_business_claim_received_email, send_business_claim_retry_code_email, send_content_report_support_email_safely, send_password_reset_email, send_support_contact_email, send_username_reminder_email, send_verification_email
+from .models import BusinessClaim, BusinessClaimAttachment, BusinessClaimRetryGrant, BusinessClaimRetryVerification, BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, BusinessPost, ContentReport, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedImpression, ListingSnapshot, ManagedMedia, ProfileAuthToken, VenueType, business_claim_storage_prefix
 from .services.favorite_notifications import create_notifications_for_business_profile_update, should_send_direct_message_notification
 from .services.customer_preferences import get_preference_business_options, resolve_business_location, save_customer_preferences
 from .services.happy_hour_notifications import process_due_happy_hour_notifications
@@ -86,6 +88,30 @@ class SourcePlacePagination(PageNumberPagination):
 	page_size = 100
 	page_size_query_param = 'page_size'
 	max_page_size = 500
+
+
+SAFE_CLAIM_IMAGE_PREVIEW_MIME_TYPES = frozenset({
+	'image/jpeg',
+	'image/png',
+	'image/gif',
+	'image/webp',
+	'image/bmp',
+	'image/heic',
+	'image/heif',
+	'image/tiff',
+})
+SAFE_CLAIM_IMAGE_PREVIEW_MIME_BY_SUFFIX = {
+	'.jpg': 'image/jpeg',
+	'.jpeg': 'image/jpeg',
+	'.png': 'image/png',
+	'.gif': 'image/gif',
+	'.webp': 'image/webp',
+	'.bmp': 'image/bmp',
+	'.heic': 'image/heic',
+	'.heif': 'image/heif',
+	'.tif': 'image/tiff',
+	'.tiff': 'image/tiff',
+}
 
 
 class ManagedMediaView(View):
@@ -107,18 +133,69 @@ class ManagedMediaView(View):
 		return response
 
 
+class PrivateBusinessProfileMediaView(View):
+	def get(self, request, media_id):
+		user = getattr(request, 'user', None)
+		if (
+			user is None
+			or not getattr(user, 'is_authenticated', False)
+			or not getattr(user, 'is_active', False)
+			or not getattr(user, 'is_staff', False)
+			or not admin_mfa_session_verified(request, user=user)
+		):
+			raise Http404
+
+		media = ManagedMedia.objects.filter(media_id=media_id, media_kind='profile_photo').first()
+		if media is None:
+			raise Http404
+
+		content_type = str(media.content_type or '').strip().lower()
+		if content_type not in SAFE_CLAIM_IMAGE_PREVIEW_MIME_TYPES:
+			content_type = SAFE_CLAIM_IMAGE_PREVIEW_MIME_BY_SUFFIX.get(Path(media.original_filename or '').suffix.lower(), '')
+		if content_type not in SAFE_CLAIM_IMAGE_PREVIEW_MIME_TYPES:
+			raise Http404
+
+		try:
+			file_handle = default_storage.open(media.storage_name, 'rb')
+		except (FileNotFoundError, OSError):
+			raise Http404
+
+		response = FileResponse(file_handle, content_type=content_type)
+		safe_filename = ''.join(character for character in Path(media.original_filename or 'image').name if character.isprintable() and character not in {'"', '\\'}) or 'image'
+		response['Content-Disposition'] = f'inline; filename="{safe_filename}"'
+		response['X-Content-Type-Options'] = 'nosniff'
+		response['Cache-Control'] = 'private, no-store'
+		return response
+
+
 class PrivateBusinessClaimAttachmentView(View):
 	def get(self, request, media_id):
 		if not getattr(request.user, 'is_authenticated', False) or not getattr(request.user, 'is_staff', False):
 			raise Http404
 
+		inline_preview = False
 		attachment = BusinessClaimAttachment.objects.filter(media_id=media_id).first()
 		if attachment is not None and attachment.file:
-			if attachment.is_pdf_attachment() and attachment.malware_scan_status != BusinessClaimAttachment.MalwareScanStatus.CLEAN:
+			is_pdf_attachment = attachment.is_pdf_attachment()
+			if is_pdf_attachment and attachment.malware_scan_status != BusinessClaimAttachment.MalwareScanStatus.CLEAN:
 				raise Http404
+			wants_inline_preview = request.GET.get('preview') == '1'
 			file_field = attachment.file
 			content_type = attachment.content_type or 'application/octet-stream'
 			original_filename = attachment.original_filename
+			if is_pdf_attachment:
+				content_type = 'application/pdf'
+				inline_preview = wants_inline_preview
+			elif wants_inline_preview:
+				file_suffix = Path(str(original_filename or file_field.name or '')).suffix.lower()
+				safe_image_type = (
+					str(content_type or '').strip().lower()
+					if str(content_type or '').strip().lower() in SAFE_CLAIM_IMAGE_PREVIEW_MIME_TYPES
+					else SAFE_CLAIM_IMAGE_PREVIEW_MIME_BY_SUFFIX.get(file_suffix, '')
+				)
+				if safe_image_type:
+					content_type = safe_image_type
+					inline_preview = True
 		else:
 			report = ContentReport.objects.filter(media_id=media_id).first()
 			if report is None or not report.screenshot:
@@ -134,8 +211,10 @@ class PrivateBusinessClaimAttachmentView(View):
 
 		response = FileResponse(file_handle, content_type=content_type)
 		safe_filename = ''.join(character for character in Path(str(original_filename or 'attachment')).name if character.isprintable() and character not in {'"', '\\'}) or 'attachment'
-		response['Content-Disposition'] = f'attachment; filename="{safe_filename}"'
+		disposition = 'inline' if inline_preview else 'attachment'
+		response['Content-Disposition'] = f'{disposition}; filename="{safe_filename}"'
 		response['X-Content-Type-Options'] = 'nosniff'
+		response['Cache-Control'] = 'private, no-store'
 		return response
 
 
@@ -785,19 +864,69 @@ class BusinessClaimRetryRequestView(generics.GenericAPIView):
 	def post(self, request):
 		serializer = self.get_serializer(data=request.data)
 		serializer.is_valid(raise_exception=True)
-		identifier = serializer.validated_data['identifier']
-		user = User.objects.filter(username__iexact=identifier).first()
-		if user is None:
-			user = User.objects.filter(email__iexact=identifier.lower()).first()
-		if user is not None and user.email:
-			profile = get_or_create_account_profile(user)
-			claim = user.business_claims.filter(status=BusinessClaim.Status.REJECTED).order_by('-created_at', '-pk').first()
-			if profile.email_is_verified and profile.business_claim_suspended and claim is not None:
+		email = serializer.validated_data['email']
+		with transaction.atomic():
+			user = self._find_user_by_email(email, lock=True)
+			claim = self._get_eligible_rejected_claim(user)
+			if claim is not None:
+				verification, code = BusinessClaimRetryVerification.issue_for(user, claim)
 				try:
-					send_business_claim_retry_email(user, claim)
+					send_business_claim_retry_code_email(user, code)
 				except Exception:
-					logger.exception('Business claim retry email failed for user_id=%s claim_id=%s', user.pk, claim.pk)
-		return Response({'detail': 'If that account is eligible, an authenticated business-claim retry link has been sent.'})
+					verification.used_at = timezone.now()
+					verification.save(update_fields=['used_at'])
+					logger.exception('Business claim retry verification email failed for user_id=%s claim_id=%s', user.pk, claim.pk)
+		return Response({'detail': 'If the account is eligible, a verification code has been sent to its registered email.'})
+
+	@staticmethod
+	def _find_user_by_email(email, lock=False):
+		users = User.objects.select_for_update() if lock else User.objects
+		return users.filter(email__iexact=email).first()
+
+	@staticmethod
+	def _get_eligible_rejected_claim(user):
+		if user is None or not user.email or user.business_memberships.filter(is_active=True).exists():
+			return None
+		profile = get_or_create_account_profile(user)
+		claim = user.business_claims.select_related('listing_snapshot').order_by('-created_at', '-pk').first()
+		if (
+			profile.email_is_verified
+			and profile.business_claim_suspended
+			and claim is not None
+			and claim.status == BusinessClaim.Status.REJECTED
+		):
+			return claim
+		return None
+
+
+class BusinessClaimRetryCodeVerifyView(generics.GenericAPIView):
+	serializer_class = BusinessClaimRetryCodeVerifySerializer
+	permission_classes = [AllowAny]
+	throttle_classes = [PasswordRecoveryRateThrottle]
+
+	def post(self, request):
+		serializer = self.get_serializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		email = serializer.validated_data['email']
+		code = serializer.validated_data['code']
+		retry_token = None
+		with transaction.atomic():
+			user = BusinessClaimRetryRequestView._find_user_by_email(email, lock=True)
+			claim = BusinessClaimRetryRequestView._get_eligible_rejected_claim(user)
+			if claim is not None:
+				verification = BusinessClaimRetryVerification.objects.select_for_update().filter(
+					user=user,
+					rejected_claim=claim,
+					used_at__isnull=True,
+				).order_by('-created_at', '-pk').first()
+				if verification is not None and verification.verify_code(code):
+					_, retry_token = BusinessClaimRetryGrant.issue_for(user, claim)
+		if retry_token is None:
+			return Response({'detail': 'The verification code is invalid or expired.'}, status=status.HTTP_400_BAD_REQUEST)
+		return Response({
+			'detail': 'Email verified. You can now retry your business claim.',
+			'retry_token': retry_token,
+		})
 
 
 class BusinessSignupView(generics.GenericAPIView):

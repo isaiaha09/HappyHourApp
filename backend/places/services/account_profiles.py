@@ -724,14 +724,14 @@ def send_verification_email(user, profile):
 		f'<p>Hi {escape(user.first_name or user.username)},</p>'
 		f'<p>Your DiningDealz verification code is <strong>{escape(code)}</strong>.</p>'
 		'<p>Enter that code in the app within 60 seconds, or request a new one.</p>'
-		'<p>If you did not create this account, you can ignore this email.</p>'
+		'<p>If you did not create this account, you can ignore this email or contact support for account concerns at support@diningdealz.com.</p>'
 	)
 	send_mail(
 		subject='Verify your DiningDealz email',
 		message=(
 			f'Hi {user.first_name or user.username},\n\n'
 			f'Your DiningDealz verification code is {code}. Enter it in the app within 60 seconds, or request a new one.\n\n'
-			'If you did not create this account, you can ignore this email.'
+			'If you did not create this account, you can ignore this email or contact support for account concerns at support@diningdealz.com.'
 		),
 		html_message=html_message,
 		from_email=_get_branded_from_email(),
@@ -1104,6 +1104,7 @@ def send_business_claim_rejected_email(user, claim):
 		f'{additional_notes_html}'
 		'<p>If you wish to try again, you must go through the registration process again and resubmit with the following items corrected, adjusted, or more clearly explained:</p>'
 		f'<ul>{reapply_html}</ul>'
+		'<p>You do not need to rely on this email link: in the app, open the business-claim flow, choose the rejected-claim retry option, and request a fresh code sent to the account\'s verified email. After verifying, you may choose a new username; use the same email address.</p>'
 		'<p>The following submitted documents and text-field entries were part of the rejected review:</p>'
 		f'<ul>{summary_html}</ul>'
 		f'{retry_link_html}'
@@ -1118,6 +1119,7 @@ def send_business_claim_rejected_email(user, claim):
 			f'{additional_notes_text}'
 			'If you wish to try again, you must go through the registration process again and resubmit with the following items corrected, adjusted, or more clearly explained:\n'
 			f'{reapply_text}\n\n'
+			"You do not need to rely on this email link. In the app, open the business-claim flow, choose the rejected-claim retry option, and request a fresh code sent to the account's verified email. After verifying, you may choose a new username; use the same email address.\n\n"
 			'The following submitted documents and text-field entries were part of the rejected review:\n'
 			f'{summary_text}'
 			f'{retry_link_text}'
@@ -1162,6 +1164,35 @@ def send_business_claim_retry_email(user, claim=None):
 	return True
 
 
+def send_business_claim_retry_code_email(user, code):
+	ttl_seconds = max(int(getattr(settings, 'BUSINESS_CLAIM_RETRY_CODE_TTL_SECONDS', 600) or 600), 60)
+	ttl_minutes = max(1, (ttl_seconds + 59) // 60)
+	expiry_unit = 'minute' if ttl_minutes == 1 else 'minutes'
+	expiry_text = f'This code expires in {ttl_minutes} {expiry_unit} and can only be used once.'
+	message = (
+		f'Hi {user.first_name or user.username},\n\n'
+		'Use this verification code in the DiningDealz app to retry your rejected business claim:\n\n'
+		f'{code}\n\n'
+		f'{expiry_text} It only authorizes another business-claim submission; it does not restore account access.\n\n'
+		'If you did not request this code, you can ignore this email.'
+	)
+	html_message = (
+		f'<p>Hi {escape(user.first_name or user.username)},</p>'
+		'<p>Use this verification code in the DiningDealz app to retry your rejected business claim:</p>'
+		f'<p style="font-size:24px;font-weight:700;letter-spacing:4px">{escape(str(code))}</p>'
+		f'<p>{escape(expiry_text)} It only authorizes another business-claim submission; it does not restore account access.</p>'
+		'<p>If you did not request this code, you can ignore this email.</p>'
+	)
+	send_mail(
+		subject='Your DiningDealz business claim retry code',
+		message=message,
+		html_message=html_message,
+		from_email=_get_branded_from_email(),
+		recipient_list=[user.email],
+		fail_silently=False,
+	)
+
+
 def send_username_reminder_email(user):
 	recovery_base = str(getattr(settings, 'PROFILE_USERNAME_RECOVERY_URL_BASE', '') or '').rstrip('/')
 	recovery_url = f'{recovery_base}/' if recovery_base else ''
@@ -1172,7 +1203,7 @@ def send_username_reminder_email(user):
 		'<p>You requested a reminder for your DiningDealz username.</p>'
 		f'<p><strong>Username:</strong> {escape(user.username)}</p>'
 		f'{recovery_url_html}'
-		'<p>If you did not request this reminder, you can ignore this email.</p>'
+		'<p>If you did not request this reminder, you can ignore this email or contact support for account concerns at support@diningdealz.com.</p>'
 	)
 	send_mail(
 		subject='Your DiningDealz username',
@@ -1181,7 +1212,7 @@ def send_username_reminder_email(user):
 			'You requested a reminder for your DiningDealz username.\n\n'
 			f'Username: {user.username}'
 			f'{recovery_url_text}\n\n'
-			'If you did not request this reminder, you can ignore this email.'
+			'If you did not request this reminder, you can ignore this email or contact support for account concerns at support@diningdealz.com.'
 		),
 		html_message=html_message,
 		from_email=_get_branded_from_email(),
@@ -1199,7 +1230,7 @@ def send_password_reset_email(user, profile):
 		f'<p>Hi {escape(user.first_name or user.username)},</p>'
 		'<p>Use the link below to reset your DiningDealz password.</p>'
 		f'<p><a href="{escape(reset_url)}">Reset your password</a></p>'
-		'<p>If you did not request a password reset, you can ignore this email.</p>'
+		'<p>If you did not request a password reset, you can ignore this email or contact support for account concerns at support@diningdealz.com.</p>'
 	)
 	send_mail(
 		subject='Reset your DiningDealz password',
@@ -1207,7 +1238,7 @@ def send_password_reset_email(user, profile):
 			f'Hi {user.first_name or user.username},\n\n'
 			'Use this link to reset your DiningDealz password:\n'
 			f'{reset_url}\n\n'
-			'If you did not request a password reset, you can ignore this email.'
+			'If you did not request a password reset, you can ignore this email or contact support for account concerns at support@diningdealz.com.'
 		),
 		html_message=html_message,
 		from_email=_get_branded_from_email(),
