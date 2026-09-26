@@ -8,13 +8,12 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.core.files.storage import default_storage
 from django.db import transaction
 from django.utils import timezone
 from django.utils.text import slugify
 from rest_framework import serializers
 
-from .models import BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessPost, City, ContentReport, FeedEngagement, FeedImpression, ListingSnapshot, SponsoredCampaign, VenueType, business_claim_storage_prefix
+from .models import BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessPost, City, ContentReport, FeedEngagement, FeedImpression, ListingSnapshot, SponsoredCampaign, VenueType, business_claim_storage_prefix, get_public_media_storage
 from .services.account_profiles import build_account_response, get_approved_business_claims, get_or_create_account_profile, has_active_business_membership, send_business_claim_submission_support_email_safely
 from .services.business_profile_overrides import (
 	build_deal_payloads,
@@ -401,12 +400,13 @@ def _save_uploaded_deal_attachment(request, claim, uploaded_file):
 
 	filename_root = Path(getattr(uploaded_file, 'name', '') or 'deal-attachment').stem or 'deal-attachment'
 	safe_name = slugify(filename_root) or 'deal-attachment'
-	saved_name = default_storage.save(
+	public_storage = get_public_media_storage()
+	saved_name = public_storage.save(
 		f'{business_claim_storage_prefix(claim)}/deal-attachments/{uuid4().hex}-{safe_name}{file_suffix}',
 		uploaded_file,
 	)
 	attachment_payload = {
-		'url': request.build_absolute_uri(default_storage.url(saved_name)),
+		'url': request.build_absolute_uri(public_storage.url(saved_name)),
 		'name': getattr(uploaded_file, 'name', '') or f'{safe_name}{file_suffix}',
 	}
 	if content_type:
@@ -438,11 +438,12 @@ def _append_uploaded_profile_photos_to_claim(request, claim):
 
 		filename_root = Path(getattr(uploaded_file, 'name', '') or 'business-photo').stem or 'business-photo'
 		safe_name = slugify(filename_root) or 'business-photo'
-		saved_name = default_storage.save(
+		public_storage = get_public_media_storage()
+		saved_name = public_storage.save(
 			f'{business_claim_storage_prefix(claim)}/profile-photos/{uuid4().hex}-{safe_name}{file_suffix}',
 			uploaded_file,
 		)
-		uploaded_photo_urls.append(request.build_absolute_uri(default_storage.url(saved_name)))
+		uploaded_photo_urls.append(request.build_absolute_uri(public_storage.url(saved_name)))
 
 	if not uploaded_photo_urls:
 		return

@@ -680,7 +680,7 @@ pg_restore `
 PostgreSQL restores file references, not the uploaded file bytes. Restore both configured buckets:
 
 - `SUPABASE_STORAGE_BUCKET`: public business profile media
-- `SUPABASE_PRIVATE_STORAGE_BUCKET`: private claim, deal, and direct-message media
+- `SUPABASE_PRIVATE_STORAGE_BUCKET`: private claim-verification documents, direct-message images, and report evidence
 
 1. Select the backup bundle that matches the database recovery point.
 2. Confirm the current Supabase environment variables point to the intended target project and buckets. Stop if they point to the wrong project.
@@ -744,7 +744,19 @@ PostgreSQL restoration does not restore Supabase file bytes, and Supabase restor
 
 ## Media Storage
 
-Uploaded business profile photos use public media storage because they are displayed on business profiles. Sensitive uploads, including business claim attachments and direct-message images, use private media storage with signed URLs.
+Public business profile photos and deal attachments use public media storage because they are displayed on approved business profiles and deals. Business claim verification documents, direct-message images, and content-report screenshots use private media storage.
+
+Supabase folders are object-key prefixes. The bucket determines whether an object is publicly retrievable; a folder name such as `private/` inside `business-media` does not make those objects private. The app routes media by purpose:
+
+| Media | Bucket | Current object-key path |
+| --- | --- | --- |
+| Business profile photos | `business-media` (public) | `businesses/.../claims/.../profile-photos/...` |
+| Deal attachments | `business-media` (public) | `businesses/.../claims/.../deal-attachments/...` |
+| Claim verification documents | `business-private-media` (private) | `businesses/.../claims/.../verification/...` |
+| Direct-message images | `business-private-media` (private) | `direct-message-images/...` |
+| Content-report screenshots | `business-private-media` (private) | `content-reports/...` |
+
+Legacy keys are also recognized during the bucket audit: `business-profile-photos/...` and `business-deal-attachments/...` stay public; `business-claim-attachments/...` and `direct-message-images/...` belong in the private bucket. For shared `businesses/...` keys, the nested media folder determines the destination.
 
 For local development, no extra setup is required and uploads still use `backend/media`.
 
@@ -757,7 +769,7 @@ Public bucket settings:
 - Bucket name: `business-media`
 - Public bucket: `Yes`
 - File size limit: set this to whatever max upload size you want enforced at the storage layer
-- Allowed MIME types: optional, but this bucket only needs public profile image types such as `image/jpeg`, `image/png`, `image/webp`, and `image/heic`
+- Allowed MIME types: optional; profile photos and deal attachments use `image/jpeg`, `image/png`, `image/webp`, `image/heic`, and deal PDFs use `application/pdf`
 
 Private bucket settings:
 
@@ -766,7 +778,15 @@ Private bucket settings:
 - File size limit: set this to whatever max upload size you want enforced at the storage layer
 - Allowed MIME types: optional, but include the private file types the app accepts, such as `image/jpeg`, `image/png`, `image/webp`, `image/heic`, and `application/pdf`
 
-Why split buckets: public profile photos need stable public URLs, while claim documents and direct-message images should not be publicly listable or fetchable without a signed URL.
+Why split buckets: public profile photos and published deal attachments need stable public URLs, while verification documents, direct-message images, and report evidence should not be retrievable without private access.
+
+To inspect and reconcile objects already in Supabase, run the new management command from an environment with the Supabase S3 credentials configured. The command reads bucket objects directly and does not need the production database:
+
+```powershell
+backend\venv\Scripts\python.exe backend\manage.py reconcile_supabase_media_buckets
+```
+
+The default is a read-only dry run that reports counts by direction and leaves unclassified paths alone. After reviewing the plan and taking a storage backup, add `--apply` to copy each misrouted object to the intended bucket, verify the copy, then remove the source copy. It preserves object keys so existing database references continue to resolve.
 
 In Supabase, the bucket should end up with public object URLs in this format:
 
@@ -796,12 +816,14 @@ If you want to set the optional region explicitly, use:
 ### What Each Value Means
 
 - `SUPABASE_STORAGE_BUCKET`: the exact Supabase bucket name
-- `SUPABASE_PRIVATE_STORAGE_BUCKET`: the exact private Supabase bucket name for claim attachments and direct-message images
+- `SUPABASE_PRIVATE_STORAGE_BUCKET`: the exact private Supabase bucket name for claim-verification documents, direct-message images, and report evidence
 - `SUPABASE_STORAGE_ENDPOINT`: the S3-compatible Supabase storage endpoint, not the public object URL
 - `SUPABASE_STORAGE_ACCESS_KEY`: the S3 access key from Supabase
 - `SUPABASE_STORAGE_SECRET_KEY`: the S3 secret key from Supabase
 - `SUPABASE_STORAGE_PUBLIC_URL_BASE`: the public base URL for objects inside that bucket
 - `SUPABASE_PRIVATE_STORAGE_SIGNED_URL_EXPIRE_SECONDS`: how long private media URLs should remain usable after the API returns them
+
+Supabase controls visibility at the bucket level and does not support S3 object ACLs. Keep `business-media` public and `business-private-media` private; do not configure `default_acl` on either S3 storage backend.
 
 ### Example Render Env Block
 
@@ -822,9 +844,11 @@ SUPABASE_STORAGE_REGION=us-east-1
 
 Once Supabase is configured and enabled, app-managed uploads stored under these paths:
 
-- `business-claim-attachments/...`
-- `business-profile-photos/...`
+- `businesses/.../claims/.../verification/...`
+- `businesses/.../claims/.../profile-photos/...`
+- `businesses/.../claims/.../deal-attachments/...`
 - `direct-message-images/...`
+- `content-reports/...`
 
 will be deleted from storage when:
 

@@ -5,7 +5,6 @@ import secrets
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.cache import caches
-from django.core.files.storage import default_storage
 from django.db import connection, transaction
 from django.db.models import Q
 from django.http import FileResponse, Http404, HttpResponse
@@ -68,7 +67,7 @@ from .serializers import (
 	sync_listing_snapshot_from_place_payload,
 )
 from .services.account_profiles import build_account_response, build_email_verification_challenge, deactivate_account_for_retained_direct_messages, get_approved_business_claims, get_business_access_hold_claim, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, is_deleted_account, send_business_claim_received_email, send_content_report_support_email_safely, send_password_reset_email, send_support_contact_email, send_username_reminder_email, send_verification_email, send_website_contact_email
-from .models import BusinessClaimAttachment, BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, BusinessPost, ContentReport, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedImpression, ListingSnapshot, ProfileAuthToken, VenueType, business_claim_storage_prefix
+from .models import BusinessClaimAttachment, BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, BusinessPost, ContentReport, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedImpression, ListingSnapshot, ProfileAuthToken, VenueType, business_claim_storage_prefix, get_public_media_storage
 from .services.favorite_notifications import create_notifications_for_business_profile_update, should_send_direct_message_notification
 from .services.customer_preferences import get_preference_business_options, resolve_business_location, save_customer_preferences
 from .services.happy_hour_notifications import process_due_happy_hour_notifications
@@ -129,6 +128,7 @@ SUPPORTED_PROFILE_PHOTO_SUFFIXES = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.
 
 def _save_uploaded_profile_photo_urls(request, claim):
 	photo_urls = []
+	public_storage = get_public_media_storage()
 	for uploaded_file in request.FILES.getlist('profile_photo_uploads'):
 		content_type = str(getattr(uploaded_file, 'content_type', '') or '').strip().lower()
 		file_suffix = Path(getattr(uploaded_file, 'name', '') or '').suffix.lower()
@@ -138,11 +138,11 @@ def _save_uploaded_profile_photo_urls(request, claim):
 
 		filename_root = Path(getattr(uploaded_file, 'name', '') or 'business-photo').stem or 'business-photo'
 		safe_name = slugify(filename_root) or 'business-photo'
-		saved_name = default_storage.save(
+		saved_name = public_storage.save(
 			f'{business_claim_storage_prefix(claim)}/profile-photos/{uuid4().hex}-{safe_name}{file_suffix}',
 			uploaded_file,
 		)
-		photo_urls.append(request.build_absolute_uri(default_storage.url(saved_name)))
+		photo_urls.append(request.build_absolute_uri(public_storage.url(saved_name)))
 
 	return photo_urls
 
