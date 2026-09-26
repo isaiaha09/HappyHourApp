@@ -39,6 +39,7 @@ from .admin_security import ADMIN_MFA_VERIFIED_SESSION_KEY
 from .admin_site import happyhour_admin_site
 from .models import AccountProfile, AdminAuditEvent, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessClaimRetryGrant, BusinessClaimRetryVerification, BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, BusinessPost, City, ContentReport, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedEngagement, FeedImpression, ListingSnapshot, ManagedMedia, ProfileAuthToken, SponsoredCampaign, VenueType, Weekday
 from .serializers import _prepare_claim_attachments, _validate_claim_attachment_size, _validate_uploaded_deal_attachment
+from .throttles import SignupIpRateThrottle
 from .services.importers.base import BaseHtmlImporter
 from .services.importers.business_websites import BusinessWebsiteImporter
 from .services.importers.discovered_json_places import CuratedJsonPlacesImporter, DiscoveryJsonPlacesImporter, load_discovery_json_records, write_discovery_json_records
@@ -4592,6 +4593,136 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertNotIn('/api/profiles/verify-email/', mail.outbox[0].body)
 
 	@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+	def test_customer_signup_duplicate_identity_errors_are_generic(self):
+		User.objects.create_user(
+			username='existing_signup_user',
+			email='existing-signup@example.com',
+			password='test-pass-123',
+		)
+		base_payload = {'password': 'test-pass-123', 'terms_accepted': True}
+		responses = [
+			self.client.post(
+				reverse('customer-signup'),
+				{**base_payload, 'username': 'existing_signup_user', 'email': 'new-one@example.com'},
+				format='json',
+			),
+			self.client.post(
+				reverse('customer-signup'),
+				{**base_payload, 'username': 'new_email_owner', 'email': 'existing-signup@example.com'},
+				format='json',
+			),
+			self.client.post(
+				reverse('customer-signup'),
+				{**base_payload, 'username': 'existing_signup_user', 'email': 'existing-signup@example.com'},
+				format='json',
+			),
+		]
+
+		self.assertEqual([response.status_code for response in responses], [400, 400, 400])
+		self.assertEqual(responses[0].data, responses[1].data)
+		self.assertEqual(responses[1].data, responses[2].data)
+		self.assertEqual(set(responses[0].data.keys()), {'non_field_errors'})
+		self.assertEqual(User.objects.count(), 1)
+		self.assertEqual(mail.outbox, [])
+
+	@override_settings(
+		EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+		REST_FRAMEWORK={
+			'DEFAULT_THROTTLE_RATES': {
+				'profile_signup': '20/hour',
+				'profile_signup_ip': '1/hour',
+			},
+		},
+	)
+	def test_signup_ip_limit_is_shared_across_emails_and_signup_routes(self):
+		caches['default'].clear()
+		first_response = self.client.post(
+			reverse('customer-signup'),
+			{
+				'username': 'first_signup_user',
+				'email': 'first-signup@example.com',
+				'password': 'test-pass-123',
+			},
+			format='json',
+		)
+		second_response = self.client.post(
+			reverse('manual-business-signup'),
+			{
+				'username': 'second_signup_user',
+				'email': 'second-signup@example.com',
+				'password': 'test-pass-123',
+			},
+			format='json',
+		)
+
+		self.assertEqual(first_response.status_code, 201, first_response.data)
+		self.assertEqual(second_response.status_code, 429)
+		self.assertEqual(User.objects.count(), 1)
+
+	def test_signup_ip_throttle_key_ignores_email_and_authentication_state(self):
+		throttle = SignupIpRateThrottle()
+		anonymous_request = SimpleNamespace(
+			META={
+				'REMOTE_ADDR': '203.0.113.10',
+				'HTTP_X_FORWARDED_FOR': '198.51.100.10',
+			},
+			data={'email': 'first@example.com'},
+			user=SimpleNamespace(is_authenticated=False),
+		)
+		authenticated_request = SimpleNamespace(
+			META={
+				'REMOTE_ADDR': '203.0.113.10',
+				'HTTP_X_FORWARDED_FOR': '198.51.100.11',
+			},
+			data={'email': 'second@example.com'},
+			user=SimpleNamespace(is_authenticated=True, pk=42),
+		)
+
+		self.assertEqual(
+			throttle.get_cache_key(anonymous_request, None),
+			throttle.get_cache_key(authenticated_request, None),
+		)
+		trusted_forwarded_request = SimpleNamespace(
+			META={
+				'REMOTE_ADDR': '203.0.113.10',
+				'HTTP_CF_CONNECTING_IP': '198.51.100.12',
+				'HTTP_X_FORWARDED_FOR': '198.51.100.13',
+			},
+			data={'email': 'third@example.com'},
+			user=SimpleNamespace(is_authenticated=False),
+		)
+		self.assertNotEqual(
+			throttle.get_cache_key(anonymous_request, None),
+			throttle.get_cache_key(trusted_forwarded_request, None),
+		)
+
+	def test_unknown_username_login_performs_dummy_hash_and_matches_wrong_password_response(self):
+		user = User.objects.create_user(
+			username='known_login_user',
+			email='known-login@example.com',
+			password='correct-pass-123',
+		)
+		original_set_password = User.set_password
+		with patch.object(User, 'set_password', autospec=True) as set_password:
+			set_password.side_effect = original_set_password
+			unknown_response = self.client.post(
+				reverse('profile-login'),
+				{'portal': 'customer', 'identifier': 'unknown_login_user', 'password': 'wrong-pass-123'},
+				format='json',
+			)
+			set_password.assert_called_once()
+			self.assertIsNone(set_password.call_args.args[0].pk)
+			wrong_password_response = self.client.post(
+				reverse('profile-login'),
+				{'portal': 'customer', 'identifier': user.username, 'password': 'wrong-pass-123'},
+				format='json',
+			)
+			set_password.assert_called_once()
+
+		self.assertEqual(unknown_response.status_code, wrong_password_response.status_code)
+		self.assertEqual(unknown_response.data, wrong_password_response.data)
+
+	@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
 	def test_customer_signup_can_reuse_username_and_email_after_account_deletion(self):
 		deleted_user = User.objects.create_user(
 			username='reusable_account',
@@ -5379,7 +5510,7 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(rejected_user.username, 'old_bistro_owner')
 		self.assertTrue(rejected_user.check_password('old-pass-123'))
 		self.assertEqual(BusinessClaim.objects.filter(claimant=rejected_user).count(), 1)
-		self.assertEqual(response.data['email'][0], 'That email is already in use.')
+		self.assertEqual(response.data['non_field_errors'][0], 'An account with one or more of these details may already exist. If this is your account, sign in or use account recovery.')
 		self.assertTrue(rejected_claim.claimant.account_profile.business_claim_suspended)
 
 	@patch('places.views.get_source_place_payload')
@@ -5526,7 +5657,7 @@ class ProfileSignupApiTests(APITestCase):
 
 		self.assertEqual(response.status_code, 400)
 		self.assertEqual(BusinessClaim.objects.filter(claimant=rejected_user, listing_snapshot=snapshot).count(), 1)
-		self.assertIn('That username is already in use.', response.data['username'])
+		self.assertEqual(response.data['non_field_errors'][0], 'An account with one or more of these details may already exist. If this is your account, sign in or use account recovery.')
 		self.assertTrue(AccountProfile.objects.get(user=rejected_user).business_claim_suspended)
 
 	@patch('places.views.get_source_place_payload')
@@ -5647,7 +5778,7 @@ class ProfileSignupApiTests(APITestCase):
 			format='multipart',
 		)
 		self.assertEqual(username_conflict_response.status_code, 400)
-		self.assertIn('That username is already in use.', username_conflict_response.data['username'])
+		self.assertEqual(username_conflict_response.data['non_field_errors'][0], 'An account with one or more of these details may already exist. If this is your account, sign in or use account recovery.')
 
 		signup_payload['username'] = 'claim_retry_new_name'
 		signup_payload['proof_of_authority_attachments'] = [

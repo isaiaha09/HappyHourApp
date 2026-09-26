@@ -1080,6 +1080,9 @@ class LoginSerializer(serializers.Serializer):
 		identifier = attrs['identifier'].strip()
 		user = User.objects.filter(username__iexact=identifier).first()
 		if user is None:
+			# Match Django's ModelBackend behavior for unknown users so account
+			# existence does not skip the expensive password-hash work.
+			User().set_password(attrs['password'])
 			raise serializers.ValidationError(GENERIC_AUTH_FAILURE_MESSAGE)
 
 		authenticated_user = authenticate(username=user.username, password=attrs['password'])
@@ -1215,6 +1218,12 @@ class TwoFactorCodeSerializer(serializers.Serializer):
 		return normalized
 
 
+SIGNUP_IDENTITY_CONFLICT_MESSAGE = (
+	'An account with one or more of these details may already exist. '
+	'If this is your account, sign in or use account recovery.'
+)
+
+
 class CustomerSignupSerializer(serializers.Serializer):
 	username = serializers.CharField(max_length=150)
 	email = serializers.EmailField()
@@ -1238,6 +1247,11 @@ class CustomerSignupSerializer(serializers.Serializer):
 
 	def _get_existing_user_by_email(self, email):
 		return User.objects.filter(email__iexact=str(email or '').strip().lower()).first()
+
+	def _raise_identity_conflict(self):
+		raise serializers.ValidationError({
+			'non_field_errors': [SIGNUP_IDENTITY_CONFLICT_MESSAGE],
+		})
 
 	def _can_reuse_existing_business_user(self, user):
 		if user is None or not self.allows_rejected_business_reregistration():
@@ -1284,17 +1298,14 @@ class CustomerSignupSerializer(serializers.Serializer):
 			if grant is None:
 				raise serializers.ValidationError({'retry_token': ['This business claim retry link is invalid or expired.']})
 			if existing_username_user is not None and existing_username_user.pk != existing_email_user.pk:
-				raise serializers.ValidationError({'username': ['That username is already in use.']})
+				self._raise_identity_conflict()
 			attrs['_retry_grant'] = grant
 			attrs['_retry_token'] = retry_token
 			attrs['_signup_existing_user'] = existing_email_user
 			return attrs
 
 		if existing_username_user and existing_email_user and existing_username_user.pk != existing_email_user.pk:
-			raise serializers.ValidationError({
-				'username': ['That username is already in use.'],
-				'email': ['That email is already in use.'],
-			})
+			self._raise_identity_conflict()
 
 		existing_user = existing_username_user or existing_email_user
 		if existing_user is None:
@@ -1304,12 +1315,7 @@ class CustomerSignupSerializer(serializers.Serializer):
 			attrs['_signup_existing_user'] = existing_user
 			return attrs
 
-		errors = {}
-		if existing_username_user is not None:
-			errors['username'] = ['That username is already in use.']
-		if existing_email_user is not None:
-			errors['email'] = ['That email is already in use.']
-		raise serializers.ValidationError(errors)
+		self._raise_identity_conflict()
 
 	def create_or_reuse_user(self, validated_data):
 		terms_accepted = bool(validated_data.pop('terms_accepted', False))

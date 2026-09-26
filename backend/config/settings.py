@@ -799,6 +799,7 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'profile_login': get_env('THROTTLE_PROFILE_LOGIN', ENV_VALUES, '10/minute'),
         'profile_signup': get_env('THROTTLE_PROFILE_SIGNUP', ENV_VALUES, '300/hour'),
+        'profile_signup_ip': get_env('THROTTLE_PROFILE_SIGNUP_IP', ENV_VALUES, '20/hour'),
         'profile_email_verification': get_env('THROTTLE_PROFILE_EMAIL_VERIFICATION', ENV_VALUES, '10/minute'),
         'profile_email_verification_resend': get_env('THROTTLE_PROFILE_EMAIL_VERIFICATION_RESEND', ENV_VALUES, '3/minute'),
         'profile_password_recovery': get_env('THROTTLE_PROFILE_PASSWORD_RECOVERY', ENV_VALUES, '10/hour'),

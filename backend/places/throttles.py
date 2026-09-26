@@ -8,6 +8,7 @@ from rest_framework.throttling import AnonRateThrottle, SimpleRateThrottle
 class ScopedRateThrottle(SimpleRateThrottle):
 	scope = ''
 	identity_fields = ()
+	include_user_in_cache_key = True
 
 	def get_rate(self):
 		return api_settings.DEFAULT_THROTTLE_RATES.get(self.scope)
@@ -22,7 +23,7 @@ class ScopedRateThrottle(SimpleRateThrottle):
 			if value:
 				ident_parts.append(f'{field_name}:{value}')
 
-		if getattr(request.user, 'is_authenticated', False):
+		if self.include_user_in_cache_key and getattr(request.user, 'is_authenticated', False):
 			ident_parts.append(f'user:{request.user.pk}')
 
 		ident = hashlib.sha256('|'.join(ident_parts).encode('utf-8')).hexdigest()
@@ -40,6 +41,24 @@ class LoginRateThrottle(ScopedRateThrottle):
 class SignupRateThrottle(ScopedRateThrottle):
 	scope = 'profile_signup'
 	identity_fields = ('email',)
+
+
+class SignupIpRateThrottle(ScopedRateThrottle):
+	scope = 'profile_signup_ip'
+	include_user_in_cache_key = False
+
+	def get_ident(self, request):
+		# Render's Cloudflare edge overwrites CF-Connecting-IP with the client IP.
+		# Do not trust X-Forwarded-For here; clients can supply its leftmost value.
+		forwarded_ip = str(request.META.get('HTTP_CF_CONNECTING_IP') or '').strip()
+		try:
+			return str(ipaddress.ip_address(forwarded_ip))
+		except ValueError:
+			remote_addr = str(request.META.get('REMOTE_ADDR') or '').strip()
+			try:
+				return str(ipaddress.ip_address(remote_addr))
+			except ValueError:
+				return 'unknown'
 
 
 class EmailVerificationRateThrottle(ScopedRateThrottle):
