@@ -281,10 +281,14 @@ def _replace_claim_profile_entries(claim, validated_data):
 
 
 def merge_uploaded_deal_attachments(request, claim, deal_overrides):
-	if request is None:
-		return list(deal_overrides or [])
-
 	deal_rows = [dict(row) for row in (deal_overrides or [])]
+	for deal_row in deal_rows:
+		# This is client-only picker metadata; persist only the uploaded attachment URL.
+		deal_row.pop('attachment_upload', None)
+
+	if request is None:
+		return deal_rows
+
 	indexed_uploads = _collect_uploaded_deal_attachments(request, len(deal_rows))
 	for index, uploaded_file in indexed_uploads:
 		deal_rows[index]['attachment'] = _save_uploaded_deal_attachment(request, claim, uploaded_file)

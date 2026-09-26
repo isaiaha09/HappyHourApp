@@ -6710,7 +6710,8 @@ function AppScreen() {
     setProfileErrorMessage(null);
 
     try {
-      const response = photoUploads.length
+      const hasDealAttachmentUploads = (payload.deal_overrides ?? []).some((dealOverride) => Boolean(dealOverride.attachment_upload?.uri));
+      const response = photoUploads.length || hasDealAttachmentUploads
         ? await updateProfileDashboardWithUploads(apiBaseUrl, currentAuthToken, payload, photoUploads)
         : await updateProfileDashboard(apiBaseUrl, currentAuthToken, payload);
       setAuthenticatedSessionIfCurrentToken(currentAuthToken, response);
