@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Alert, Image, Keyboard, Linking, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,11 +9,11 @@ import { ContentReportModal } from '../components/ContentReportModal';
 import { NativeIOSLiquidGlassHeaderButton } from '../components/NativeIOSLiquidGlass';
 import { PhotoLightbox } from '../components/PhotoLightbox';
 import { SocialButton } from '../components/SocialButton';
+import { ReadOnlyPdfPreviewModal } from '../components/ReadOnlyPdfPreviewModal';
 import { buildGoogleReviewsUrl, dedupeImageUrls, formatLastKnownLocationLabel, formatPlaceAddress, getPlacePreviewRegion, openMapsAddress } from '../placeHelpers';
 import { getSocialProfilesForDisplay } from '../socialProfiles';
 import { theme } from '../styles/theme';
 import type { ContentReportReason, ContentReportRequest, ContentReportScreenshotDraft, Deal, HappyHourWindow, OperatingHourWindow, PlaceDetail, PlaceLocationDetail } from '../types';
-import { openPdfInNativeViewer } from '../utils/nativePdfViewer';
 
 type AttachmentPreviewState =
   | { kind: 'image'; name: string; uri: string };
@@ -122,8 +122,7 @@ export function PlaceDetailScreen({
   const [accuracySuccessMessage, setAccuracySuccessMessage] = useState<string | null>(null);
   const [contentReportVisible, setContentReportVisible] = useState(false);
   const [attachmentPreview, setAttachmentPreview] = useState<AttachmentPreviewState | null>(null);
-  const [attachmentPreviewLoading, setAttachmentPreviewLoading] = useState(false);
-  const attachmentPreviewRequestIdRef = useRef(0);
+  const [pdfPreview, setPdfPreview] = useState<{ name: string; uri: string } | null>(null);
   const selectedPlaceAddressSource = selectedPlaceLocation ?? selectedPlace;
   const selectedPlaceMapSource = selectedPlaceAddressSource && liveLocationOverride
     ? {
@@ -270,12 +269,10 @@ export function PlaceDetailScreen({
   }
 
   function handleCloseAttachmentPreview() {
-    attachmentPreviewRequestIdRef.current += 1;
-    setAttachmentPreviewLoading(false);
     setAttachmentPreview(null);
   }
 
-  async function handleOpenDealAttachment(deal: Deal) {
+  function handleOpenDealAttachment(deal: Deal) {
     const uri = deal.attachment?.url ?? '';
     const attachmentName = deal.attachment?.name ?? 'Attachment';
     if (!uri) {
@@ -284,25 +281,13 @@ export function PlaceDetailScreen({
 
     const previewKind = getAttachmentPreviewKind(deal.attachment?.content_type, attachmentName);
     if (previewKind === 'image') {
-      setAttachmentPreviewLoading(false);
       setAttachmentPreview({ kind: 'image', name: attachmentName, uri });
       return;
     }
 
     if (previewKind === 'pdf') {
-      const requestId = attachmentPreviewRequestIdRef.current + 1;
-      attachmentPreviewRequestIdRef.current = requestId;
-      setAttachmentPreviewLoading(true);
       setAttachmentPreview(null);
-      try {
-        await openPdfInNativeViewer(uri, attachmentName);
-      } catch {
-        Alert.alert('Unable to open file', 'This PDF could not be opened in the device document viewer.');
-      } finally {
-        if (attachmentPreviewRequestIdRef.current === requestId) {
-          setAttachmentPreviewLoading(false);
-        }
-      }
+      setPdfPreview({ name: attachmentName, uri });
     }
   }
 
@@ -754,7 +739,13 @@ export function PlaceDetailScreen({
         onClose={() => setPhotoLightboxVisible(false)}
         visible={photoLightboxVisible}
       />
-      <Modal animationType="fade" onRequestClose={handleCloseAttachmentPreview} transparent visible={attachmentPreview !== null || attachmentPreviewLoading}>
+      <ReadOnlyPdfPreviewModal
+        fileName={pdfPreview?.name ?? 'PDF preview'}
+        onClose={() => setPdfPreview(null)}
+        uri={pdfPreview?.uri ?? null}
+        visible={pdfPreview !== null}
+      />
+      <Modal animationType="fade" onRequestClose={handleCloseAttachmentPreview} transparent visible={attachmentPreview !== null}>
         <View style={styles.photoLightboxOverlay}>
           <View style={[styles.photoLightboxHeader, styles.attachmentLightboxHeader, { paddingTop: Math.max(insets.top + 8, 18) }]}>
             <Text numberOfLines={1} style={styles.attachmentLightboxTitle}>{attachmentPreview?.name ?? 'Preparing preview...'}</Text>
@@ -763,12 +754,7 @@ export function PlaceDetailScreen({
             </Pressable>
           </View>
           <View style={styles.attachmentLightboxBody}>
-            {attachmentPreviewLoading ? (
-              <View style={styles.attachmentPreviewLoadingState}>
-                <ActivityIndicator color="#fff7ef" size="large" />
-                <Text style={styles.attachmentLightboxLoadingText}>Preparing document preview...</Text>
-              </View>
-            ) : attachmentPreview?.kind === 'image' ? (
+            {attachmentPreview?.kind === 'image' ? (
               <View style={styles.attachmentLightboxImageStage}>
                 <Image resizeMode="contain" source={{ uri: attachmentPreview.uri }} style={styles.photoLightboxImage} />
               </View>

@@ -403,6 +403,9 @@ def clear_content_report_screenshots(user):
 
 def get_or_create_profile_token(user):
 	with transaction.atomic():
+		if not user.is_active:
+			ProfileAuthToken.objects.filter(user=user).delete()
+			raise PermissionDenied('Profile access is unavailable.')
 		profile = get_or_create_account_profile(user)
 		if profile.business_claim_suspended:
 			ProfileAuthToken.objects.filter(user=user).delete()

@@ -34,7 +34,7 @@ from unfold.forms import BaseDialogForm
 from .admin_security import emit_admin_security_event
 from .admin_site import happyhour_admin_site
 from .models import ManagedMedia
-from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessDirectMessage, BusinessDirectMessageThread, BusinessMembership, BusinessPost, ContentReport, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, FavoriteBusinessNotification, FeedEngagement, FeedImpression, ListingSnapshot, SponsoredCampaign, Weekday
+from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessDirectMessage, BusinessDirectMessageThread, BusinessMembership, BusinessPost, ContentReport, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, FavoriteBusinessNotification, FeedEngagement, FeedImpression, ListingSnapshot, ProfileAuthToken, SponsoredCampaign, Weekday
 from .services.account_profiles import remove_favorites_for_business_accounts, remove_favorites_for_listing_slugs
 from .services.admin_operations import get_catalog_health, get_listing_snapshot_health_issues, get_review_sla_delta, record_admin_audit_event
 from .services.business_profile_overrides import format_operating_hour_display, format_time_display, is_open_24_hours_row, normalize_deal_overrides, normalize_operating_hour_overrides, normalize_time_value, summarize_deal_overrides, summarize_operating_hour_overrides
@@ -1124,7 +1124,19 @@ def _select_best_matching_record(snapshot, place_records):
 	return best_record
 
 
-class StaffUserAdmin(UnfoldModelAdmin, UserAdmin):
+class RevokeProfileTokensOnInactiveAccountAdminMixin:
+	def save_model(self, request, obj, form, change):
+		previous_is_active = (
+			User.objects.filter(pk=obj.pk).values_list('is_active', flat=True).first()
+			if change
+			else None
+		)
+		super().save_model(request, obj, form, change)
+		if not obj.is_active or previous_is_active is False:
+			ProfileAuthToken.objects.filter(user_id=obj.pk).delete()
+
+
+class StaffUserAdmin(RevokeProfileTokensOnInactiveAccountAdminMixin, UnfoldModelAdmin, UserAdmin):
 	list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'is_superuser', 'is_active')
 	list_filter = ('is_staff', 'is_superuser', 'is_active')
 	search_fields = ('username', 'first_name', 'last_name', 'email')
@@ -1355,7 +1367,7 @@ happyhour_admin_site.register(Group, StaffGroupAdmin)
 
 
 @admin.register(CustomerAccount, site=happyhour_admin_site)
-class CustomerAccountAdmin(HardDeleteUserAdminMixin, UnfoldModelAdmin, UserAdmin):
+class CustomerAccountAdmin(RevokeProfileTokensOnInactiveAccountAdminMixin, HardDeleteUserAdminMixin, UnfoldModelAdmin, UserAdmin):
 	delete_confirmation_template = 'admin/places/customeraccount/delete_confirmation.html'
 	delete_selected_confirmation_template = 'admin/places/customeraccount/delete_selected_confirmation.html'
 	list_display = (
@@ -1402,7 +1414,7 @@ class CustomerAccountAdmin(HardDeleteUserAdminMixin, UnfoldModelAdmin, UserAdmin
 			return False
 
 @admin.register(BusinessAccount, site=happyhour_admin_site)
-class BusinessAccountAdmin(HardDeleteUserAdminMixin, UnfoldModelAdmin, UserAdmin):
+class BusinessAccountAdmin(RevokeProfileTokensOnInactiveAccountAdminMixin, HardDeleteUserAdminMixin, UnfoldModelAdmin, UserAdmin):
 	delete_confirmation_template = 'admin/places/businessaccount/delete_confirmation.html'
 	delete_selected_confirmation_template = 'admin/places/businessaccount/delete_selected_confirmation.html'
 	list_display = (

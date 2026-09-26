@@ -25,18 +25,20 @@ from django.http import QueryDict
 from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.datastructures import MultiValueDict
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.test import APITestCase
 from bs4 import BeautifulSoup
 from email.utils import parseaddr
 from PIL import Image
+from pypdf import PdfWriter
 import pyotp
 
 from .admin import BusinessAccountAdmin, BusinessClaimAdmin, ContentReportAdmin, CustomerAccountAdmin, DeletedBusinessAdmin, ListingSnapshotAdmin, ListingSnapshotAdminForm, SponsoredCampaignAdmin, _sync_listing_snapshot_from_imported_place
 from .admin_security import ADMIN_MFA_VERIFIED_SESSION_KEY
 from .admin_site import happyhour_admin_site
 from .models import AccountProfile, AdminAuditEvent, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessClaimRetryGrant, BusinessClaimRetryVerification, BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, BusinessPost, City, ContentReport, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedEngagement, FeedImpression, ListingSnapshot, ManagedMedia, ProfileAuthToken, SponsoredCampaign, VenueType, Weekday
-from .serializers import _validate_claim_attachment_size, _validate_uploaded_deal_attachment
+from .serializers import _prepare_claim_attachments, _validate_claim_attachment_size, _validate_uploaded_deal_attachment
 from .services.importers.base import BaseHtmlImporter
 from .services.importers.business_websites import BusinessWebsiteImporter
 from .services.importers.discovered_json_places import CuratedJsonPlacesImporter, DiscoveryJsonPlacesImporter, load_discovery_json_records, write_discovery_json_records
@@ -58,6 +60,16 @@ VALID_TEST_PNG_BYTES = (
 	b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89'
 	b'\x00\x00\x00\x0cIDATx\x9cc``\x60\x00\x00\x00\x04\x00\x01\xf6\x178U\x00\x00\x00\x00IEND\xaeB`\x82'
 )
+
+
+def build_test_pdf_bytes(encrypted_password=None):
+	output = BytesIO()
+	writer = PdfWriter()
+	writer.add_blank_page(width=72, height=72)
+	if encrypted_password:
+		writer.encrypt(encrypted_password)
+	writer.write(output)
+	return output.getvalue()
 
 
 def authenticate_test_admin(client, user):
@@ -4996,7 +5008,7 @@ class ProfileSignupApiTests(APITestCase):
 							'terms': 'Dine-in only',
 							'happy_hours': [{'weekday': Weekday.FRIDAY, 'start_time': '16:00', 'end_time': '19:00', 'all_day': False}],
 						}]),
-						'deal_attachment_upload_0': SimpleUploadedFile('happy-hour-flyer.pdf', b'fake-pdf', content_type='application/pdf'),
+						'deal_attachment_upload_0': SimpleUploadedFile('happy-hour-flyer.pdf', build_test_pdf_bytes(), content_type='application/pdf'),
 						'proof_of_authority_attachments': [SimpleUploadedFile('manager-proof.pdf', b'proof', content_type='application/pdf')],
 					},
 					format='multipart',
@@ -5193,7 +5205,7 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(login_response.status_code, 400)
 		self.assertEqual(
 			login_response.data['non_field_errors'][0],
-			'Unable to sign in with those credentials.',
+			'Incorrect Username or Password. Please check your credentials and try again.',
 		)
 
 	@patch('places.views.get_source_place_payload')
@@ -6009,7 +6021,7 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(response.status_code, 400)
 		self.assertEqual(
 			response.data['non_field_errors'][0],
-			'Unable to sign in with those credentials.',
+			'Incorrect Username or Password. Please check your credentials and try again.',
 		)
 
 	def test_business_portal_login_allows_approved_claim_without_membership(self):
@@ -6159,7 +6171,7 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(response.status_code, 400)
 		self.assertEqual(
 			response.data['non_field_errors'][0],
-			'Unable to sign in with those credentials.',
+			'Incorrect Username or Password. Please check your credentials and try again.',
 		)
 
 	def test_login_rejects_email_identifier(self):
@@ -6176,7 +6188,7 @@ class ProfileSignupApiTests(APITestCase):
 		)
 
 		self.assertEqual(response.status_code, 400)
-		self.assertEqual(response.data['non_field_errors'][0], 'Unable to sign in with those credentials.')
+		self.assertEqual(response.data['non_field_errors'][0], 'Incorrect Username or Password. Please check your credentials and try again.')
 
 	def test_login_returns_email_verification_challenge_for_unverified_account(self):
 		user = User.objects.create_user(
@@ -6261,6 +6273,76 @@ class ProfileSignupApiTests(APITestCase):
 
 		self.assertEqual(resend_response.status_code, 200)
 		self.assertEqual(resend_response.data['detail'], 'If that account is eligible, a new verification message will be sent.')
+
+	@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+	def test_expired_business_verification_resend_returns_only_generic_response(self):
+		mail.outbox.clear()
+		business_owner = User.objects.create_user(
+			username='resend_private_business',
+			email='private-business@example.com',
+			password='test-pass-123',
+			first_name='Private',
+			last_name='Owner',
+		)
+		profile = AccountProfile.objects.create(
+			user=business_owner,
+			email_verification_code='000000',
+			email_verification_code_sent_at=timezone.now() - timedelta(
+				seconds=settings.PROFILE_EMAIL_VERIFICATION_CODE_TTL_SECONDS + 1,
+			),
+		)
+		snapshot = ListingSnapshot.objects.create(
+			name='Private Claim Business',
+			listing_slug='private-claim-business',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='123 Private Street',
+		)
+		BusinessClaim.objects.create(
+			claimant=business_owner,
+			listing_snapshot=snapshot,
+			pathway=BusinessClaim.Pathway.CLAIMED,
+			status=BusinessClaim.Status.SUBMITTED,
+			contact_name='Private Contact',
+			work_email='private-work@example.com',
+			work_phone='805-555-0199',
+			employer_address='456 Employer Avenue',
+			supporting_details='Private ownership details submitted for review.',
+		)
+
+		response_time = timezone.now()
+		with patch('places.views.timezone.now', return_value=response_time):
+			response = self.client.post(
+				reverse('profile-resend-verification-code'),
+				{'username': business_owner.username, 'portal': 'business'},
+				format='json',
+			)
+			unknown_response = self.client.post(
+				reverse('profile-resend-verification-code'),
+				{'username': 'not_a_real_user', 'portal': 'business'},
+				format='json',
+			)
+
+		generic_detail = 'If that account is eligible, a new verification message will be sent.'
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(set(response.data), {
+			'detail',
+			'verification_code_expires_at',
+			'verification_code_ttl_seconds',
+		})
+		self.assertEqual(response.data['detail'], generic_detail)
+		self.assertEqual(response.data['verification_code_expires_at'], response_time + timedelta(
+			seconds=settings.PROFILE_EMAIL_VERIFICATION_CODE_TTL_SECONDS,
+		))
+		self.assertEqual(response.data['verification_code_ttl_seconds'], settings.PROFILE_EMAIL_VERIFICATION_CODE_TTL_SECONDS)
+		self.assertEqual(unknown_response.status_code, response.status_code)
+		self.assertEqual(unknown_response.data, response.data)
+		self.assertEqual(len(mail.outbox), 1)
+		self.assertEqual(mail.outbox[0].to, [business_owner.email])
+		profile.refresh_from_db()
+		self.assertNotEqual(profile.email_verification_code, '000000')
+		self.assertIn(profile.email_verification_code, mail.outbox[0].body)
+		self.assertEqual(len(mail.outbox), 1)
 
 
 @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend', PAID_FEATURES_ENABLED=True)
@@ -6762,11 +6844,29 @@ class ProfileDashboardApiTests(APITestCase):
 							'terms': 'Weekdays only',
 							'happy_hours': [{'weekday': Weekday.FRIDAY, 'start_time': '16:00', 'end_time': '19:00', 'all_day': False}],
 						}]),
-						'deal_attachment_upload_0': SimpleUploadedFile('new-flyer.png', VALID_TEST_PNG_BYTES, content_type='image/png'),
+						'deal_attachment_upload_0': SimpleUploadedFile('new-flyer.html', VALID_TEST_PNG_BYTES, content_type='text/html'),
 					},
 					format='multipart',
 					**self.auth_headers(),
 				)
+				updated_claim = BusinessClaim.objects.get(pk=claim.pk)
+				media_id = updated_claim.deal_overrides[0]['attachment']['media_id']
+				media_response = self.client.get(reverse('managed-media', kwargs={'media_id': media_id}))
+				self.assertEqual(media_response.status_code, 200)
+				self.assertEqual(media_response['Content-Type'], 'image/png')
+				self.assertEqual(media_response['X-Content-Type-Options'], 'nosniff')
+				self.assertIn('inline;', media_response['Content-Disposition'])
+				self.assertTrue(media_response['Content-Disposition'].endswith('.png"'))
+				media_response.close()
+
+				managed_media = ManagedMedia.objects.get(media_id=media_id)
+				managed_media.content_type = 'text/html'
+				managed_media.save(update_fields=['content_type'])
+				legacy_media_response = self.client.get(reverse('managed-media', kwargs={'media_id': media_id}))
+				self.assertEqual(legacy_media_response['Content-Type'], 'application/octet-stream')
+				self.assertIn('attachment;', legacy_media_response['Content-Disposition'])
+				self.assertTrue(legacy_media_response['Content-Disposition'].endswith('.bin"'))
+				legacy_media_response.close()
 
 		self.assertEqual(response.status_code, 200)
 		claim.refresh_from_db()
@@ -6782,13 +6882,71 @@ class ProfileDashboardApiTests(APITestCase):
 	@override_settings(PDF_UPLOAD_MAX_BYTES=4 * 1024 * 1024)
 	def test_pdf_deal_attachment_size_limit_is_enforced_before_storage(self):
 		with self.assertRaises(DRFValidationError) as error:
-			_validate_uploaded_deal_attachment(SimpleUploadedFile('large-flyer.pdf', b'0' * (4 * 1024 * 1024 + 1), content_type='application/pdf'))
+			_validate_uploaded_deal_attachment(SimpleUploadedFile('large-flyer.pdf', b'%PDF-' + (b'0' * (4 * 1024 * 1024 - 4)), content_type='application/pdf'))
 
 		self.assertIn('4 MB or smaller', str(error.exception))
 
 	@override_settings(PDF_UPLOAD_MAX_BYTES=4 * 1024 * 1024, VERIFICATION_UPLOAD_MAX_BYTES=1)
 	def test_pdf_deal_attachment_uses_existing_limit_instead_of_verification_limit(self):
-		_validate_uploaded_deal_attachment(SimpleUploadedFile('within-deal-limit.pdf', b'01', content_type='application/pdf'))
+		media_type, file_suffix = _validate_uploaded_deal_attachment(SimpleUploadedFile('within-deal-limit.pdf', build_test_pdf_bytes(), content_type='application/pdf'))
+		self.assertEqual(media_type, 'application/pdf')
+		self.assertEqual(file_suffix, '.pdf')
+
+	def test_pdf_deal_attachment_rejects_password_protected_pdf(self):
+		with self.assertRaises(DRFValidationError) as error:
+			_validate_uploaded_deal_attachment(SimpleUploadedFile(
+				'protected.pdf',
+				build_test_pdf_bytes(encrypted_password='test-password'),
+				content_type='application/pdf',
+			))
+
+		self.assertIn('valid pdf', str(error.exception).lower())
+
+	def test_deal_attachment_rejects_html_bytes_disguised_as_a_pdf(self):
+		with self.assertRaises(DRFValidationError) as error:
+			_validate_uploaded_deal_attachment(SimpleUploadedFile(
+				'payload.pdf',
+				b'%PDF-1.4\n<!doctype html><script>document.body.innerHTML = "unsafe"</script>',
+				content_type='text/html',
+			))
+
+		self.assertIn('valid pdf', str(error.exception).lower())
+
+	@patch('places.serializers.scan_pdf_file')
+	def test_verification_pdf_count_limit_rejects_before_scanning_or_storage(self, mock_scan_pdf_file):
+		files_before = BusinessClaimAttachment.objects.count()
+		files = [
+			SimpleUploadedFile(f'authority-{index}.png', build_test_pdf_bytes(), content_type='image/png')
+			for index in range(9)
+		]
+		request = SimpleNamespace(FILES=MultiValueDict({'proof_of_authority_attachments': files}))
+
+		with self.assertRaises(DRFValidationError) as error:
+			_prepare_claim_attachments(request)
+
+		self.assertIn('no more than 8 PDF verification documents', str(error.exception))
+		mock_scan_pdf_file.assert_not_called()
+		self.assertEqual(BusinessClaimAttachment.objects.count(), files_before)
+
+	@override_settings(VERIFICATION_PDF_MAX_AGGREGATE_BYTES=10)
+	@patch('places.serializers.scan_pdf_file')
+	def test_verification_pdf_aggregate_size_limit_rejects_before_scanning_or_storage(self, mock_scan_pdf_file):
+		files_before = BusinessClaimAttachment.objects.count()
+		files = MultiValueDict({
+			'business_registration_attachments': [
+				SimpleUploadedFile('registration.pdf', b'%PDF-A', content_type='application/pdf'),
+			],
+			'proof_of_authority_attachments': [
+				SimpleUploadedFile('authority.pdf', b'%PDF-B', content_type='application/pdf'),
+			],
+		})
+
+		with self.assertRaises(DRFValidationError) as error:
+			_prepare_claim_attachments(SimpleNamespace(FILES=files))
+
+		self.assertIn('combined PDF verification upload size must be', str(error.exception))
+		mock_scan_pdf_file.assert_not_called()
+		self.assertEqual(BusinessClaimAttachment.objects.count(), files_before)
 
 	@patch('places.services.source_listings.load_source_records')
 	def test_profile_dashboard_returns_inherited_source_images_until_owner_overrides_gallery(self, mock_load_source_records):
@@ -8784,7 +8942,21 @@ class ProfileDashboardApiTests(APITestCase):
 			),
 		)
 
-		image_payload = SimpleUploadedFile('dm-photo.png', valid_png_bytes, content_type='image/png')
+		message_count_before_invalid_upload = BusinessDirectMessage.objects.count()
+		invalid_image_response = self.client.post(
+			reverse('profile-direct-messages'),
+			{
+				'portal': 'business',
+				'thread_id': thread_id,
+				'image': SimpleUploadedFile('payload.png', b'<html><script>unsafe</script></html>', content_type='image/png'),
+			},
+			format='multipart',
+			**self.auth_headers(),
+		)
+		self.assertEqual(invalid_image_response.status_code, 400)
+		self.assertEqual(BusinessDirectMessage.objects.count(), message_count_before_invalid_upload)
+
+		image_payload = SimpleUploadedFile('dm-photo.pdf', valid_png_bytes, content_type='image/png')
 		with patch('places.views.moderate_uploaded_image') as mock_moderate_uploaded_image:
 			image_send_response = self.client.post(
 				reverse('profile-direct-messages'),
@@ -8796,9 +8968,9 @@ class ProfileDashboardApiTests(APITestCase):
 				format='multipart',
 				**self.auth_headers(),
 			)
+		self.assertEqual(image_send_response.status_code, 201, image_send_response.data)
 		mock_moderate_uploaded_image.assert_called_once()
 		self.assertEqual(mock_moderate_uploaded_image.call_args.kwargs['surface'], 'direct_message_image')
-		self.assertEqual(image_send_response.status_code, 201)
 		self.assertEqual(image_send_response.data['message']['message_type'], 'image')
 		self.assertTrue(bool(image_send_response.data['message']['image_url']))
 		self.assertIn(
@@ -8806,6 +8978,8 @@ class ProfileDashboardApiTests(APITestCase):
 			image_send_response.data['message']['image_url'],
 		)
 		self.assertFalse(image_send_response.data['message']['image_expired'])
+		stored_message = BusinessDirectMessage.objects.get(pk=image_send_response.data['message']['id'])
+		self.addCleanup(stored_message.image.delete, save=False)
 		self.assertEqual(
 			mock_send_dm_push.call_args_list[2],
 			call(
@@ -8824,6 +8998,10 @@ class ProfileDashboardApiTests(APITestCase):
 		)
 		self.assertEqual(customer_image_response.status_code, 200)
 		self.assertEqual(customer_image_response['Content-Type'], 'image/png')
+		self.assertEqual(customer_image_response['X-Content-Type-Options'], 'nosniff')
+		self.assertIn('inline;', customer_image_response['Content-Disposition'])
+		self.assertTrue(customer_image_response['Content-Disposition'].endswith('.png"'))
+		customer_image_response.close()
 		self.assertGreaterEqual(mock_send_dm_push.call_count, 2)
 
 	def test_expired_direct_message_image_is_hidden_after_24_hours(self):

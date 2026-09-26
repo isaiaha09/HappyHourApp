@@ -1,6 +1,7 @@
 import logging
 import mimetypes
 import secrets
+from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -76,7 +77,7 @@ from .services.customer_preferences import get_preference_business_options, reso
 from .services.happy_hour_notifications import process_due_happy_hour_notifications
 from .services.direct_message_push import send_push_notifications_for_direct_message
 from .services.home_feed import get_feed_interval, get_feed_queryset, get_organic_page_size, get_ranked_campaigns, get_requested_feed_page_size, mix_feed_items, record_campaign_served
-from .services.image_moderation import ImageModerationRejected, ImageModerationUnavailable, moderate_uploaded_image
+from .services.image_moderation import IMAGE_MEDIA_TYPE_TO_EXTENSION, ImageModerationRejected, ImageModerationUnavailable, get_validated_image_media_type, moderate_uploaded_image
 from .services.media_storage import save_managed_media
 from .services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
 from .services.current_happy_hours import get_current_happy_hours_payload
@@ -126,9 +127,26 @@ class ManagedMediaView(View):
 			file_handle = default_storage.open(media.storage_name, 'rb')
 		except (FileNotFoundError, OSError):
 			raise Http404
-		response = FileResponse(file_handle, content_type=media.content_type or 'application/octet-stream')
-		safe_filename = ''.join(character for character in Path(media.original_filename or 'media').name if character.isprintable() and character not in {'"', '\\'}) or 'media'
-		response['Content-Disposition'] = f'inline; filename="{safe_filename}"'
+
+		content_type = str(media.content_type or '').strip().lower()
+		unsafe_media = False
+		if media.media_kind == 'deal_attachment' and content_type == 'application/pdf':
+			file_suffix = '.pdf'
+		elif media.media_kind in {'deal_attachment', 'profile_photo'} and content_type in IMAGE_MEDIA_TYPE_TO_EXTENSION:
+			file_suffix = IMAGE_MEDIA_TYPE_TO_EXTENSION[content_type]
+		else:
+			content_type = 'application/octet-stream'
+			file_suffix = '.bin'
+			unsafe_media = True
+
+		filename_root = Path(media.original_filename or 'media').stem or 'media'
+		safe_filename_root = ''.join(
+			character for character in filename_root
+			if character.isprintable() and character not in {'"', '\\'}
+		) or 'media'
+		response = FileResponse(file_handle, content_type=content_type)
+		disposition = 'attachment' if unsafe_media else 'inline'
+		response['Content-Disposition'] = f'{disposition}; filename="{safe_filename_root}{file_suffix}"'
 		response['X-Content-Type-Options'] = 'nosniff'
 		return response
 
@@ -224,9 +242,6 @@ class HomeFeedPagination(PageNumberPagination):
 	max_page_size = 30
 
 
-SUPPORTED_PROFILE_PHOTO_SUFFIXES = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.heic', '.heif'}
-
-
 def _save_uploaded_profile_photo_urls(request, claim):
 	uploaded_files = request.FILES.getlist('profile_photo_uploads')
 	max_photos = max(1, int(getattr(settings, 'BUSINESS_PROFILE_MAX_PHOTOS', 8) or 8))
@@ -238,11 +253,9 @@ def _save_uploaded_profile_photo_urls(request, claim):
 
 	photo_urls = []
 	for uploaded_file in uploaded_files:
-		content_type = str(getattr(uploaded_file, 'content_type', '') or '').strip().lower()
-		file_suffix = Path(getattr(uploaded_file, 'name', '') or '').suffix.lower()
-		if not (content_type.startswith('image/') or file_suffix in SUPPORTED_PROFILE_PHOTO_SUFFIXES):
-			raise ValueError('Only image uploads from your photo library are supported.')
+		content_type, file_suffix = get_validated_image_media_type(uploaded_file)
 		moderate_uploaded_image(uploaded_file, surface='business_profile_photo')
+		uploaded_file.content_type = content_type
 
 		filename_root = Path(getattr(uploaded_file, 'name', '') or 'business-photo').stem or 'business-photo'
 		safe_name = slugify(filename_root) or 'business-photo'
@@ -1049,6 +1062,9 @@ class VerifyEmailCodeView(generics.GenericAPIView):
 		user = User.objects.filter(username__iexact=serializer.validated_data['username']).first()
 		if user is None:
 			return Response(generic_failure, status=status.HTTP_400_BAD_REQUEST)
+		if not user.is_active:
+			ProfileAuthToken.objects.filter(user=user).delete()
+			return Response(generic_failure, status=status.HTTP_400_BAD_REQUEST)
 
 		profile = get_or_create_account_profile(user)
 		if profile.email_is_verified:
@@ -1080,20 +1096,29 @@ class ResendEmailVerificationCodeView(generics.GenericAPIView):
 		generic_failure = {'detail': 'If that account is eligible, a new verification message will be sent.'}
 		serializer = self.get_serializer(data=request.data)
 		serializer.is_valid(raise_exception=True)
+		verification_ttl_seconds = max(
+			int(getattr(settings, 'PROFILE_EMAIL_VERIFICATION_CODE_TTL_SECONDS', 60) or 60),
+			1,
+		)
+		generic_response = {
+			**generic_failure,
+			'verification_code_expires_at': timezone.now() + timedelta(seconds=verification_ttl_seconds),
+			'verification_code_ttl_seconds': verification_ttl_seconds,
+		}
 		user = User.objects.filter(username__iexact=serializer.validated_data['username']).first()
 		if user is None:
-			return Response(generic_failure)
+			return Response(generic_response)
 
 		profile = get_or_create_account_profile(user)
 		if profile.email_is_verified or profile.business_claim_suspended:
-			return Response(generic_failure)
+			return Response(generic_response)
 
 		seconds_remaining = profile.get_email_verification_seconds_remaining()
 		if seconds_remaining > 0:
-			return Response(generic_failure)
+			return Response(generic_response)
 
-		portal = infer_portal_for_user(user, serializer.validated_data.get('portal'))
-		return Response(build_email_verification_challenge(user, portal, force_resend=True))
+		send_verification_email(user, profile)
+		return Response(generic_response)
 
 
 class ProfileDashboardView(APIView):
@@ -1714,9 +1739,14 @@ class DirectMessageImageView(APIView):
 			_delete_expired_direct_message_image(message)
 			raise Http404('Direct message image has expired.')
 
-		file_handle = message.image.open('rb')
-		content_type = mimetypes.guess_type(str(message.image.name or ''))[0] or 'application/octet-stream'
+		try:
+			content_type, file_suffix = get_validated_image_media_type(message.image)
+			file_handle = message.image.open('rb')
+		except (ImageModerationRejected, FileNotFoundError, OSError, ValueError):
+			raise Http404('Direct message image could not be read.')
 		response = FileResponse(file_handle, content_type=content_type)
+		response['Content-Disposition'] = f'inline; filename="direct-message-image{file_suffix}"'
+		response['X-Content-Type-Options'] = 'nosniff'
 		response['Cache-Control'] = 'private, max-age=300'
 		return response
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { CONTACT_EMAIL } from "@/lib/contact";
+import { readJsonBodyLimited } from "@/lib/read-json-body-limited";
 import { verifyTurnstileToken } from "@/lib/turnstile";
 
 type ContactRequestBody = {
@@ -14,12 +15,14 @@ type ContactRequestBody = {
 const MAX_REQUEST_BYTES = 64 * 1024;
 
 export async function POST(request: NextRequest) {
-  const contentLength = Number(request.headers.get("content-length"));
-  if (Number.isFinite(contentLength) && contentLength > MAX_REQUEST_BYTES) {
+  const parsedBody = await readJsonBodyLimited(request, MAX_REQUEST_BYTES);
+  if (parsedBody.kind === "too-large") {
     return NextResponse.json({ detail: "Request body is too large." }, { status: 413 });
   }
-
-  const body = (await request.json().catch(() => null)) as ContactRequestBody | null;
+  if (parsedBody.kind === "invalid") {
+    return NextResponse.json({ detail: "Invalid request body." }, { status: 400 });
+  }
+  const body = parsedBody.value as ContactRequestBody | null;
   if (!body) {
     return NextResponse.json({ detail: "Invalid request body." }, { status: 400 });
   }

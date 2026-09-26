@@ -6240,9 +6240,13 @@ function AppScreen() {
         username: pendingEmailVerification.username,
         portal: pendingEmailVerification.portal,
       });
-      setPendingEmailVerification(response);
+      setPendingEmailVerification((current) => current ? {
+        ...current,
+        verification_code_expires_at: response.verification_code_expires_at,
+        verification_code_ttl_seconds: response.verification_code_ttl_seconds,
+      } : current);
       setEmailVerificationCode('');
-      setProfileMessage(response.detail ?? `A new verification code was sent to ${response.email}.`);
+      setProfileMessage(response.detail);
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
     } finally {
@@ -6910,12 +6914,15 @@ function AppScreen() {
     }
 
     const currentAuthToken = authenticatedSession.auth_token;
+    const hasDealAttachmentUploads = Boolean(
+      payload.deal_overrides?.some((deal) => Boolean(deal.attachment_upload?.uri)),
+    );
 
     setDashboardSubmitting(true);
     setProfileErrorMessage(null);
 
     try {
-      const response = photoUploads.length
+      const response = photoUploads.length || hasDealAttachmentUploads
         ? await updateProfileDashboardWithUploads(apiBaseUrl, currentAuthToken, payload, photoUploads)
         : await updateProfileDashboard(apiBaseUrl, currentAuthToken, payload);
       setAuthenticatedSessionIfCurrentToken(currentAuthToken, response);

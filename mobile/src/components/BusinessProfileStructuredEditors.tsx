@@ -1,10 +1,11 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { styles } from '../appStyles';
+import { ReadOnlyPdfPreviewModal } from './ReadOnlyPdfPreviewModal';
 import {
   businessWeekdayOptions,
   createEmptyDealOverride,
@@ -20,7 +21,6 @@ import type {
   BusinessDealOverride,
   BusinessOperatingHourOverride,
 } from '../types';
-import { openPdfInNativeViewer } from '../utils/nativePdfViewer';
 
 const dealTypeOptions = [
   { label: 'Happy Hour', value: 'happy_hour' },
@@ -179,13 +179,10 @@ type BusinessDealsEditorProps = {
 export function BusinessDealsEditor({ label, onChange, supportText, value }: BusinessDealsEditorProps) {
   const insets = useSafeAreaInsets();
   const [attachmentPreview, setAttachmentPreview] = useState<AttachmentPreviewState | null>(null);
-  const [attachmentPreviewLoading, setAttachmentPreviewLoading] = useState(false);
+  const [pdfPreview, setPdfPreview] = useState<{ name: string; uri: string } | null>(null);
   const [pendingDealRemovalIndex, setPendingDealRemovalIndex] = useState<number | null>(null);
-  const attachmentPreviewRequestIdRef = useRef(0);
 
   function handleCloseAttachmentPreview() {
-    attachmentPreviewRequestIdRef.current += 1;
-    setAttachmentPreviewLoading(false);
     setAttachmentPreview(null);
   }
 
@@ -340,7 +337,7 @@ export function BusinessDealsEditor({ label, onChange, supportText, value }: Bus
     });
   }
 
-  async function handleOpenAttachment(deal: BusinessDealOverride) {
+  function handleOpenAttachment(deal: BusinessDealOverride) {
     const attachment = getDisplayedAttachment(deal);
     const uri = attachment ? ('url' in attachment ? attachment.url : attachment.uri) : '';
     if (!uri) {
@@ -350,25 +347,13 @@ export function BusinessDealsEditor({ label, onChange, supportText, value }: Bus
     const attachmentName = attachment?.name ?? 'Attachment';
     const previewKind = getAttachmentPreviewKind(getAttachmentMimeType(attachment), attachmentName);
     if (previewKind === 'image') {
-      setAttachmentPreviewLoading(false);
       setAttachmentPreview({ kind: 'image', name: attachmentName, uri });
       return;
     }
 
     if (previewKind === 'pdf') {
-      const requestId = attachmentPreviewRequestIdRef.current + 1;
-      attachmentPreviewRequestIdRef.current = requestId;
-      setAttachmentPreviewLoading(true);
       setAttachmentPreview(null);
-      try {
-        await openPdfInNativeViewer(uri, attachmentName);
-      } catch {
-        Alert.alert('Unable to open file', 'This PDF could not be opened in the device document viewer.');
-      } finally {
-        if (attachmentPreviewRequestIdRef.current === requestId) {
-          setAttachmentPreviewLoading(false);
-        }
-      }
+      setPdfPreview({ name: attachmentName, uri });
     }
   }
 
@@ -447,7 +432,13 @@ export function BusinessDealsEditor({ label, onChange, supportText, value }: Bus
 
   return (
     <View style={styles.structuredEditorSection}>
-      <Modal animationType="fade" onRequestClose={handleCloseAttachmentPreview} transparent visible={attachmentPreview !== null || attachmentPreviewLoading}>
+      <ReadOnlyPdfPreviewModal
+        fileName={pdfPreview?.name ?? 'PDF preview'}
+        onClose={() => setPdfPreview(null)}
+        uri={pdfPreview?.uri ?? null}
+        visible={pdfPreview !== null}
+      />
+      <Modal animationType="fade" onRequestClose={handleCloseAttachmentPreview} transparent visible={attachmentPreview !== null}>
         <View style={styles.photoLightboxOverlay}>
           <View style={[styles.photoLightboxHeader, styles.attachmentLightboxHeader, { paddingTop: Math.max(insets.top + 8, 18) }]}>
             <Text numberOfLines={1} style={styles.attachmentLightboxTitle}>{attachmentPreview?.name ?? 'Preparing preview...'}</Text>
@@ -456,12 +447,7 @@ export function BusinessDealsEditor({ label, onChange, supportText, value }: Bus
             </Pressable>
           </View>
           <View style={styles.attachmentLightboxBody}>
-            {attachmentPreviewLoading ? (
-              <View style={styles.attachmentPreviewLoadingState}>
-                <ActivityIndicator color="#fff7ef" size="large" />
-                <Text style={styles.attachmentLightboxLoadingText}>Preparing document preview...</Text>
-              </View>
-            ) : attachmentPreview?.kind === 'image' ? (
+            {attachmentPreview?.kind === 'image' ? (
               <View style={styles.attachmentLightboxImageStage}>
                 <Image resizeMode="contain" source={{ uri: attachmentPreview.uri }} style={styles.photoLightboxImage} />
               </View>

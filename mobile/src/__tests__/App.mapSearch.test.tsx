@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { AppState, Dimensions, NativeModules, StyleSheet } from 'react-native';
 
 import { getVenueMarkerStyle } from '../browseConfig';
@@ -19,6 +19,7 @@ const mockFetchProfileDashboard = jest.fn();
 const mockFetchCustomerPreferences = jest.fn();
 const mockSaveCustomerPreferences = jest.fn();
 const mockCreateCustomerProfile = jest.fn();
+const mockResendVerificationCode = jest.fn();
 const mockDeleteProfileAccount = jest.fn();
 const mockClearPlacesCache = jest.fn();
 const mockClearPersistedPlaceCache = jest.fn(async () => undefined);
@@ -26,6 +27,8 @@ const mockLoginProfile = jest.fn();
 const mockLogoutProfile = jest.fn();
 const mockUpdateBusinessLocation = jest.fn();
 const mockUpdateBusinessLocationTrackingPreference = jest.fn();
+const mockUpdateProfileDashboard = jest.fn();
+const mockUpdateProfileDashboardWithUploads = jest.fn();
 const mockEnsureBusinessBackgroundLocationTaskStarted = jest.fn<Promise<void>, [string, unknown]>(async () => undefined);
 const mockStopBusinessBackgroundLocationTask = jest.fn(async () => undefined);
 const mockRegisterPushDevice = jest.fn();
@@ -70,15 +73,15 @@ jest.mock('../api', () => ({
   recordFeedImpression: jest.fn(),
   requestPasswordReset: jest.fn(),
   requestUsernameReminder: jest.fn(),
-  resendVerificationCode: jest.fn(),
+  resendVerificationCode: (...args: unknown[]) => mockResendVerificationCode(...args),
   resendVerificationEmail: jest.fn(),
   saveCustomerPreferences: (...args: unknown[]) => mockSaveCustomerPreferences(...args),
   submitSupportRequest: jest.fn(),
   toggleFavoriteBusiness: jest.fn(),
   updateBusinessLocation: (...args: unknown[]) => mockUpdateBusinessLocation(...args),
   updateBusinessLocationTrackingPreference: (...args: unknown[]) => mockUpdateBusinessLocationTrackingPreference(...args),
-  updateProfileDashboard: jest.fn(),
-  updateProfileDashboardWithUploads: jest.fn(),
+  updateProfileDashboard: (...args: unknown[]) => mockUpdateProfileDashboard(...args),
+  updateProfileDashboardWithUploads: (...args: unknown[]) => mockUpdateProfileDashboardWithUploads(...args),
   verifyEmailCode: jest.fn(),
 }));
 
@@ -224,14 +227,33 @@ jest.mock('../screens/DashboardScreen', () => ({
       </View>
     );
   },
-  BusinessProfileEditorScreen: () => null,
+  BusinessProfileEditorScreen: ({ onSaveProfileDetails }: { onSaveProfileDetails: (payload: any, photoUploads?: any[]) => void }) => {
+    const React = require('react');
+    const { Pressable, Text, View } = require('react-native');
+    return (
+      <View>
+        <Pressable
+          accessibilityLabel="Save deal attachment only"
+          onPress={() => onSaveProfileDetails({ deal_overrides: [{ attachment_upload: { uri: 'file:///happy-hour.pdf', name: 'happy-hour.pdf', mimeType: 'application/pdf' } }] }, [])}
+        >
+          <Text>Save deal attachment only</Text>
+        </Pressable>
+        <Pressable
+          accessibilityLabel="Save business profile without uploads"
+          onPress={() => onSaveProfileDetails({ deal_overrides: [] }, [])}
+        >
+          <Text>Save business profile without uploads</Text>
+        </Pressable>
+      </View>
+    );
+  },
   FavoriteBusinessesScreen: () => {
     const React = require('react');
     const { Text } = require('react-native');
 
     return <Text>Favorite businesses screen</Text>;
   },
-  DashboardScreen: ({ errorMessage, onOpenFavoriteBusinesses, onOpenPlaces, onOpenSettings }: { errorMessage?: string | null; onOpenFavoriteBusinesses: () => void; onOpenPlaces: () => void; onOpenSettings: () => void }) => {
+  DashboardScreen: ({ errorMessage, onOpenBusinessProfileEditor, onOpenFavoriteBusinesses, onOpenPlaces, onOpenSettings }: { errorMessage?: string | null; onOpenBusinessProfileEditor?: () => void; onOpenFavoriteBusinesses: () => void; onOpenPlaces: () => void; onOpenSettings: () => void }) => {
     const React = require('react');
     const { Pressable, Text, View } = require('react-native');
 
@@ -239,6 +261,11 @@ jest.mock('../screens/DashboardScreen', () => ({
       <View>
         <Text>Dashboard screen</Text>
         {errorMessage ? <Text>{errorMessage}</Text> : null}
+        {onOpenBusinessProfileEditor ? (
+          <Pressable accessibilityLabel="Open business profile editor" onPress={onOpenBusinessProfileEditor}>
+            <Text>Open business profile editor</Text>
+          </Pressable>
+        ) : null}
         <Pressable accessibilityLabel="Open favorite businesses" onPress={onOpenFavoriteBusinesses}>
           <Text>Open favorite businesses</Text>
         </Pressable>
@@ -352,11 +379,26 @@ jest.mock('../screens/ProfileFlowScreens', () => ({
       </View>
     );
   },
-  EmailVerificationScreen: () => {
+  EmailVerificationScreen: ({ message, onResend, pendingVerification }: {
+    message?: string | null;
+    onResend: () => void;
+    pendingVerification: { email?: string; username?: string; verification_code_expires_at?: string | null } | null;
+  }) => {
     const React = require('react');
-    const { Text } = require('react-native');
+    const { Pressable, Text, View } = require('react-native');
 
-    return <Text testID="email-verification-screen">Email verification screen</Text>;
+    return (
+      <View>
+        <Text testID="email-verification-screen">Email verification screen</Text>
+        <Text testID="verification-email">{pendingVerification?.email ?? ''}</Text>
+        <Text testID="verification-username">{pendingVerification?.username ?? ''}</Text>
+        <Text testID="verification-expires-at">{pendingVerification?.verification_code_expires_at ?? ''}</Text>
+        {message ? <Text testID="verification-message">{message}</Text> : null}
+        <Pressable accessibilityLabel="Resend verification code" onPress={onResend}>
+          <Text>Resend verification code</Text>
+        </Pressable>
+      </View>
+    );
   },
   PrivacyPolicyScreen: () => null,
   TermsOfServiceScreen: () => null,
@@ -581,6 +623,7 @@ describe('App browse map search', () => {
     mockFetchPlaceDetail.mockReset();
     mockFetchProfileDashboard.mockResolvedValue(null);
     mockCreateCustomerProfile.mockReset();
+    mockResendVerificationCode.mockReset();
     mockFetchCustomerPreferences.mockResolvedValue({
       id: 7,
       username: 'guestfan',
@@ -604,6 +647,8 @@ describe('App browse map search', () => {
     mockClearPersistedPlaceCache.mockClear();
     mockUpdateBusinessLocation.mockReset();
     mockUpdateBusinessLocationTrackingPreference.mockReset();
+    mockUpdateProfileDashboard.mockReset();
+    mockUpdateProfileDashboardWithUploads.mockReset();
     mockEnsureBusinessBackgroundLocationTaskStarted.mockClear();
     mockStopBusinessBackgroundLocationTask.mockClear();
     mockRegisterPushDevice.mockReset();
@@ -742,6 +787,58 @@ describe('App browse map search', () => {
     expect(screen.queryByTestId('mock-map-view')).toBeNull();
     expect(screen.queryByLabelText('Open customer login')).toBeNull();
     expect(screen.queryByLabelText('Create a free account')).toBeNull();
+  });
+
+  it('keeps the local verification challenge when resend returns a generic response', async () => {
+    const genericDetail = 'If that account is eligible, a new verification message will be sent.';
+    const resentCodeExpiresAt = new Date(Date.now() + 60_000).toISOString();
+    mockCreateCustomerProfile.mockResolvedValue({
+      id: 8,
+      username: 'newcustomer',
+      email: 'newcustomer@example.com',
+      first_name: 'New',
+      last_name: 'Customer',
+      auth_token: '',
+      portal: 'customer',
+      profile_type: 'customer',
+      email_verified: false,
+      email_verification_required: true,
+      verification_code_expires_at: '2020-01-01T00:00:00Z',
+      verification_code_ttl_seconds: 60,
+      two_factor_enabled: false,
+      can_access_places: false,
+    });
+    mockResendVerificationCode.mockResolvedValue({
+      detail: genericDetail,
+      verification_code_expires_at: resentCodeExpiresAt,
+      verification_code_ttl_seconds: 60,
+    });
+
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    fireEvent.press(await screen.findByLabelText('Create a free account'));
+    fireEvent.press(await screen.findByLabelText('Submit profile'));
+
+    expect(await screen.findByTestId('email-verification-screen')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Resend verification code'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('verification-email').props.children).toBe('newcustomer@example.com');
+      expect(screen.getByTestId('verification-username').props.children).toBe('newcustomer');
+      expect(screen.getByTestId('verification-expires-at').props.children).toBe(resentCodeExpiresAt);
+      expect(screen.getByTestId('verification-message').props.children).toBe(genericDetail);
+    });
+    expect(mockResendVerificationCode).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api',
+      { username: 'newcustomer', portal: 'customer' },
+    );
   });
 
   it('does not lose verification when signup is submitted during the profile entry transition', async () => {
@@ -1018,6 +1115,72 @@ describe('App browse map search', () => {
         portal: 'business',
       },
     );
+  });
+
+  it('sends deal-attachment-only dashboard saves as multipart and keeps plain saves as JSON', async () => {
+    const businessSession = {
+      id: 9,
+      username: 'bizowner',
+      email: 'bizowner@example.com',
+      first_name: 'Biz',
+      last_name: 'Owner',
+      auth_token: 'business-token-123',
+      portal: 'business' as const,
+      profile_type: 'business' as const,
+      email_verified: true,
+      two_factor_enabled: false,
+      can_access_places: true,
+      approved_businesses: [{
+        id: samplePlace.id,
+        slug: samplePlace.slug,
+        name: samplePlace.name,
+        city: samplePlace.city,
+        city_label: samplePlace.city_label,
+        venue_type: samplePlace.venue_type,
+        venue_type_label: samplePlace.venue_type_label,
+        address_line_1: samplePlace.address_line_1,
+        website_url: samplePlace.website_url,
+      }],
+    };
+    mockLoginProfile.mockResolvedValue(businessSession);
+    mockUpdateProfileDashboardWithUploads.mockResolvedValue(businessSession);
+    mockUpdateProfileDashboard.mockResolvedValue(businessSession);
+
+    render(<App />);
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByTestId('complete-splash-intro'));
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    fireEvent.press(screen.getByLabelText('Open business login'));
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+    fireEvent.press(await screen.findByLabelText('Submit login'));
+
+    expect(await screen.findByText('Dashboard screen')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Open business profile editor'));
+    fireEvent.press(await screen.findByLabelText('Save deal attachment only'));
+
+    await waitFor(() => expect(mockUpdateProfileDashboardWithUploads).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api',
+      'business-token-123',
+      expect.objectContaining({
+        deal_overrides: [expect.objectContaining({ attachment_upload: expect.objectContaining({ uri: 'file:///happy-hour.pdf' }) })],
+      }),
+      [],
+    ));
+    expect(mockUpdateProfileDashboard).not.toHaveBeenCalled();
+
+    fireEvent.press(screen.getByLabelText('Save business profile without uploads'));
+    await waitFor(() => expect(mockUpdateProfileDashboard).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api',
+      'business-token-123',
+      { deal_overrides: [] },
+    ));
   });
 
   it('resumes a logged-out direct-message notification after business login', async () => {

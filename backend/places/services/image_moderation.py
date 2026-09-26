@@ -18,6 +18,21 @@ LOCAL_NUDENET_BLOCKED_CLASSES = frozenset({
 	'MALE_GENITALIA_EXPOSED',
 })
 
+IMAGE_MEDIA_TYPE_BY_FORMAT = {
+	'JPEG': ('image/jpeg', '.jpg'),
+	'PNG': ('image/png', '.png'),
+	'GIF': ('image/gif', '.gif'),
+	'WEBP': ('image/webp', '.webp'),
+	'BMP': ('image/bmp', '.bmp'),
+	'TIFF': ('image/tiff', '.tiff'),
+	'HEIC': ('image/heic', '.heic'),
+	'HEIF': ('image/heif', '.heif'),
+}
+IMAGE_MEDIA_TYPE_TO_EXTENSION = {
+	media_type: extension
+	for media_type, extension in IMAGE_MEDIA_TYPE_BY_FORMAT.values()
+}
+
 _detector = None
 _detector_lock = threading.Lock()
 
@@ -115,6 +130,21 @@ def validate_uploaded_image(uploaded_file):
 	except Exception as error:
 		raise ImageModerationRejected('The selected image could not be read.') from error
 	return raw_bytes
+
+
+def get_validated_image_media_type(uploaded_file):
+	"""Return a MIME type and extension derived from decoded image bytes."""
+	raw_bytes = validate_uploaded_image(uploaded_file)
+	try:
+		with Image.open(io.BytesIO(raw_bytes)) as image:
+			image_format = str(image.format or '').upper()
+	except Exception as error:
+		raise ImageModerationRejected('The selected image could not be read.') from error
+
+	metadata = IMAGE_MEDIA_TYPE_BY_FORMAT.get(image_format)
+	if metadata is None:
+		raise ImageModerationRejected('The selected image format is not supported.')
+	return metadata
 
 
 def _prepare_image_for_local_model(raw_bytes):

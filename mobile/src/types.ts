@@ -419,6 +419,12 @@ export type EmailVerificationChallengeResponse = SignupResponse & {
   verification_code_ttl_seconds?: number;
 };
 
+export type EmailVerificationResendResponse = {
+  detail: string;
+  verification_code_expires_at: string;
+  verification_code_ttl_seconds: number;
+};
+
 export type ProfileDashboardUpdateRequest = {
   portal?: 'customer' | 'business';
   username: string;

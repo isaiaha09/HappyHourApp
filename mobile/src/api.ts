@@ -19,6 +19,7 @@ import type {
   DirectMessageThreadsResponse,
   EmailVerificationChallengeResponse,
   EmailVerificationCodeRequest,
+  EmailVerificationResendResponse,
   FeedEngagementRequest,
   FeedItem,
   FeedImpressionRequest,
@@ -461,7 +462,7 @@ export async function verifyEmailCode(baseUrl: string, payload: EmailVerificatio
 }
 
 export async function resendVerificationCode(baseUrl: string, payload: ResendEmailVerificationCodeRequest) {
-  return postJson<EmailVerificationChallengeResponse>(baseUrl, '/profiles/resend-verification-code/', payload);
+  return postJson<EmailVerificationResendResponse>(baseUrl, '/profiles/resend-verification-code/', payload);
 }
 
 async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = API_REQUEST_TIMEOUT_MS) {

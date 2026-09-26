@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import { PlaceDetailScreen } from '../screens/PlaceDetailScreen';
 import type { Deal, PlaceDetail } from '../types';
@@ -43,6 +43,13 @@ jest.mock('../components/SocialButton', () => ({
   },
 }));
 
+jest.mock('../utils/nativePdfViewer', () => ({
+  preparePdfForPreview: jest.fn().mockResolvedValue({
+    uri: 'file:///private/cache/deal-preview.pdf',
+    cleanup: jest.fn(async () => undefined),
+  }),
+}));
+
 function buildPlace(overrides: Partial<PlaceDetail> = {}) {
   return {
     id: 42,
@@ -79,6 +86,56 @@ function buildPlace(overrides: Partial<PlaceDetail> = {}) {
 }
 
 describe('PlaceDetailScreen live location messaging', () => {
+  it('opens a deal PDF in the in-app read-only viewer when tapped', async () => {
+    const deal: Deal = {
+      id: 8,
+      title: 'Happy Hour Menu',
+      description: '',
+      deal_type: 'special',
+      deal_type_label: 'Special',
+      price_text: '',
+      terms: '',
+      attachment: {
+        content_type: 'application/pdf',
+        name: 'Happy Hour Menu.pdf',
+        url: 'https://cdn.example.test/happy-hour-menu.pdf',
+      },
+      is_active: true,
+      starts_on: null,
+      ends_on: null,
+      happy_hours: [],
+    };
+
+    render(
+      <PlaceDetailScreen
+        detailLoading={false}
+        errorMessage={null}
+        favoriteHelperText={null}
+        favoriteSubmitting={false}
+        isLandscape={false}
+        isFavorited={false}
+        locationStatusNow={Date.parse('2026-08-03T17:33:20Z')}
+        onBack={jest.fn()}
+        onSelectLocation={jest.fn()}
+        onToggleFavorite={jest.fn()}
+        selectedPlace={buildPlace()}
+        selectedPlaceDeals={[deal]}
+        selectedPlaceLocation={null}
+        selectedPlaceOperatingHours={[]}
+        showFavoriteControl={false}
+      />,
+    );
+
+    fireEvent.press(screen.getByText('PDF attachment • Tap to view'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('readonly-pdf-view')).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Close PDF preview' })).toBeTruthy();
+    });
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+    expect(screen.queryByText(/download|save|share/i)).toBeNull();
+  });
+
   it('shows the stale approximate location and hides Google Reviews for informal profiles', () => {
     render(
       <PlaceDetailScreen

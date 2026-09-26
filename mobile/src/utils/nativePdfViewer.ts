@@ -1,86 +1,127 @@
-import * as FileSystem from 'expo-file-system/legacy';
-import * as IntentLauncher from 'expo-intent-launcher';
-import * as Sharing from 'expo-sharing';
-import { Linking, Platform } from 'react-native';
+import { fetch } from 'expo/fetch';
+import { File, Paths } from 'expo-file-system';
 
-const MAX_NATIVE_PDF_BYTES = 20 * 1024 * 1024;
-const ANDROID_TEMP_FILE_RETENTION_MS = 5 * 60 * 1000;
+export const MAX_NATIVE_PDF_BYTES = 20 * 1024 * 1024;
 
-function safeFileStem(fileName: string) {
-  const stem = String(fileName || 'document')
-    .replace(/[^a-z0-9._-]+/gi, '-')
-    .replace(/-+/g, '-')
-    .replace(/^[-.]+|[-.]+$/g, '')
-    .slice(0, 80);
-  return stem || 'document';
+export type PreparedPdfPreview = {
+  uri: string;
+  cleanup: () => Promise<void>;
+};
+
+function isLocalFileUri(uri: string) {
+  return uri.startsWith('file://') || uri.startsWith('content://');
 }
 
-async function prepareLocalPdf(uri: string, fileName: string) {
+function temporaryPdfName() {
+  const randomPart = Math.random().toString(36).slice(2, 10);
+  return `diningdealz-pdf-preview-${Date.now()}-${randomPart}.pdf`;
+}
+
+function createTooLargeError() {
+  return new Error('This PDF is too large to preview on the device.');
+}
+
+/**
+ * Prepare a PDF for the in-app, view-only native renderer.
+ * Remote PDFs are streamed into the private app cache and aborted as soon as
+ * their decoded body exceeds the cap. The returned cleanup removes that cache
+ * file when the preview closes.
+ */
+export async function preparePdfForPreview(
+  uri: string,
+  signal?: AbortSignal,
+): Promise<PreparedPdfPreview> {
   const normalizedUri = String(uri || '').trim();
   if (!normalizedUri) {
     throw new Error('The PDF location is missing.');
   }
 
-  if (normalizedUri.startsWith('file://') || normalizedUri.startsWith('content://')) {
-    return { uri: normalizedUri, removeAfterOpen: false };
+  if (isLocalFileUri(normalizedUri)) {
+    const localFile = new File(normalizedUri);
+    if (localFile.size > MAX_NATIVE_PDF_BYTES) {
+      throw createTooLargeError();
+    }
+    return { uri: normalizedUri, cleanup: async () => undefined };
   }
 
   if (!/^https:\/\//i.test(normalizedUri)) {
     throw new Error('Only HTTPS PDF links can be opened.');
   }
-
-  const cacheDirectory = FileSystem.cacheDirectory;
-  if (!cacheDirectory) {
-    throw new Error('Temporary document storage is unavailable.');
+  if (signal?.aborted) {
+    throw new Error('PDF preview was cancelled.');
   }
 
-  const destination = `${cacheDirectory}diningdealz-pdf-${Date.now()}-${safeFileStem(fileName)}.pdf`;
-  const downloaded = await FileSystem.downloadAsync(normalizedUri, destination);
-  const fileInfo = await FileSystem.getInfoAsync(downloaded.uri);
-  if (!fileInfo.exists || (typeof fileInfo.size === 'number' && fileInfo.size > MAX_NATIVE_PDF_BYTES)) {
-    await FileSystem.deleteAsync(downloaded.uri, { idempotent: true }).catch(() => undefined);
-    throw new Error('This PDF is too large to open on the device.');
+  const response = await fetch(normalizedUri, {
+    headers: { Accept: 'application/pdf' },
+    signal,
+  });
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new Error('This PDF could not be retrieved.');
   }
-  return { uri: downloaded.uri, removeAfterOpen: true };
-}
 
-export async function openPdfInNativeViewer(uri: string, fileName = 'Document.pdf') {
-  const localFile = await prepareLocalPdf(uri, fileName);
+  const declaredLength = response.headers.get('content-length');
+  if (declaredLength && /^\d+$/.test(declaredLength) && Number(declaredLength) > MAX_NATIVE_PDF_BYTES) {
+    await response.body?.cancel().catch(() => undefined);
+    throw createTooLargeError();
+  }
+  if (!response.body) {
+    throw new Error('This PDF could not be retrieved.');
+  }
+
+  const temporaryFile = new File(Paths.cache, temporaryPdfName());
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  let writer: WritableStreamDefaultWriter<Uint8Array> | null = null;
+  let completed = false;
+
   try {
-    if (Platform.OS === 'android') {
-      const contentUri = localFile.uri.startsWith('content://')
-        ? localFile.uri
-        : await FileSystem.getContentUriAsync(localFile.uri);
-      await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
-        data: contentUri,
-        flags: 1,
-        type: 'application/pdf',
-      });
-      return;
-    }
+    temporaryFile.create();
+    reader = response.body.getReader();
+    writer = temporaryFile.writableStream().getWriter();
+    let receivedBytes = 0;
 
-    if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(localFile.uri, {
-        dialogTitle: `Open ${fileName || 'PDF document'}`,
-        mimeType: 'application/pdf',
-      });
-      return;
-    }
-
-    if (await Linking.canOpenURL(localFile.uri)) {
-      await Linking.openURL(localFile.uri);
-      return;
-    }
-    throw new Error('No native PDF viewer is available on this device.');
-  } finally {
-    if (localFile.removeAfterOpen) {
-      if (Platform.OS === 'android') {
-        setTimeout(() => {
-          void FileSystem.deleteAsync(localFile.uri, { idempotent: true }).catch(() => undefined);
-        }, ANDROID_TEMP_FILE_RETENTION_MS);
-      } else {
-        await FileSystem.deleteAsync(localFile.uri, { idempotent: true }).catch(() => undefined);
+    while (true) {
+      if (signal?.aborted) {
+        throw new Error('PDF preview was cancelled.');
       }
+
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      if (!value) {
+        continue;
+      }
+
+      receivedBytes += value.byteLength;
+      if (receivedBytes > MAX_NATIVE_PDF_BYTES) {
+        throw createTooLargeError();
+      }
+      await writer.write(value);
+    }
+
+    if (receivedBytes === 0) {
+      throw new Error('This PDF is empty.');
+    }
+
+    await writer.close();
+    completed = true;
+    return {
+      uri: temporaryFile.uri,
+      cleanup: async () => {
+        if (temporaryFile.exists) {
+          temporaryFile.delete();
+        }
+      },
+    };
+  } catch (error) {
+    await reader?.cancel().catch(() => undefined);
+    await writer?.abort(error).catch(() => undefined);
+    throw error;
+  } finally {
+    reader?.releaseLock();
+    if (!completed && temporaryFile.exists) {
+      temporaryFile.delete();
     }
   }
 }

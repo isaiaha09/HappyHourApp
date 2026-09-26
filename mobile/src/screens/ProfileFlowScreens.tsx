@@ -24,6 +24,7 @@ import { styles } from '../appStyles';
 import type { AuthPortal, LoginFormState, ProfileFormState } from '../appFlowTypes';
 import { AutoScrollTextInput, useAutoScrollForm } from '../components/AutoScrollTextInput';
 import { BusinessDealsEditor, BusinessHoursEditor } from '../components/BusinessProfileStructuredEditors';
+import { ReadOnlyPdfPreviewModal } from '../components/ReadOnlyPdfPreviewModal';
 import { NativeIOSLiquidGlassBackButton, isNativeIOSLiquidGlassHeaderButtonAvailable } from '../components/NativeIOSLiquidGlass';
 import { manualBusinessCityOptions, manualBusinessVenueOptions } from '../browseConfig';
 import { dedupeImageUrls, formatPlaceAddress, getPlaceLocations, normalizeSearchText } from '../placeHelpers';
@@ -31,7 +32,6 @@ import { SOCIAL_PLATFORM_LABELS, getSocialProfilePreview, getSocialProfileValida
 import { theme } from '../styles/theme';
 import type { BusinessAttachmentBuckets, BusinessAttachmentDraft, BusinessAttachmentKind, EmailVerificationChallengeResponse, PlaceListItem, PlaceLocation, SignupResponse } from '../types';
 import { LEGAL_EFFECTIVE_DATE, privacyPolicySections, termsOfServiceSections } from '../legalContent';
-import { openPdfInNativeViewer } from '../utils/nativePdfViewer';
 
 const SUPPORT_EMAIL = 'support@diningdealz.com';
 const PRIVACY_POLICY_URL = 'https://www.diningdealz.com/privacy';
@@ -1312,8 +1312,7 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
   const requiresAbcLicense = form.business_venue_type === 'bar';
   const [openDropdown, setOpenDropdown] = useState<'city' | 'venue' | 'job' | null>(null);
   const [attachmentPreview, setAttachmentPreview] = useState<AttachmentPreviewState | null>(null);
-  const [attachmentPreviewLoading, setAttachmentPreviewLoading] = useState(false);
-  const attachmentPreviewRequestIdRef = useRef(0);
+  const [pdfPreview, setPdfPreview] = useState<{ name: string; uri: string } | null>(null);
   const { handleFieldFocus, handleScroll, scrollToTop, scrollViewRef } = useAutoScrollForm();
   const currentPhotoUrls = dedupeImageUrls(
     form.photo_references_text
@@ -1393,8 +1392,6 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
   }
 
   function handleCloseAttachmentPreview() {
-    attachmentPreviewRequestIdRef.current += 1;
-    setAttachmentPreviewLoading(false);
     setAttachmentPreview(null);
   }
 
@@ -1405,32 +1402,14 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
 
     const previewKind = getAttachmentPreviewKind(mimeType, attachmentName);
     if (previewKind === 'image') {
-      setAttachmentPreviewLoading(false);
       setAttachmentPreview({ kind: 'image', name: attachmentName, uri });
       return;
     }
 
     if (previewKind === 'pdf') {
-      const requestId = attachmentPreviewRequestIdRef.current + 1;
-      attachmentPreviewRequestIdRef.current = requestId;
-      setAttachmentPreviewLoading(true);
       setAttachmentPreview(null);
-		try {
-			await openPdfInNativeViewer(uri, attachmentName);
-			if (attachmentPreviewRequestIdRef.current !== requestId) {
-				return;
-			}
-		} catch {
-			if (attachmentPreviewRequestIdRef.current !== requestId) {
-				return;
-			}
-			Alert.alert('Unable to open file', 'This PDF could not be opened in the native document viewer.');
-			return;
-      } finally {
-        if (attachmentPreviewRequestIdRef.current === requestId) {
-          setAttachmentPreviewLoading(false);
-        }
-      }
+      setPdfPreview({ name: attachmentName, uri });
+      return;
     }
 
     await openAttachmentExternally(uri, mimeType, attachmentName);
@@ -1523,7 +1502,13 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
 
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
-      <Modal animationType="slide" onRequestClose={handleCloseAttachmentPreview} transparent visible={attachmentPreview !== null || attachmentPreviewLoading}>
+      <ReadOnlyPdfPreviewModal
+        fileName={pdfPreview?.name ?? 'PDF preview'}
+        onClose={() => setPdfPreview(null)}
+        uri={pdfPreview?.uri ?? null}
+        visible={pdfPreview !== null}
+      />
+      <Modal animationType="slide" onRequestClose={handleCloseAttachmentPreview} transparent visible={attachmentPreview !== null}>
         <View style={styles.attachmentPreviewOverlay}>
           <View style={styles.attachmentPreviewSheet}>
             <View style={styles.attachmentPreviewHeader}>
@@ -1533,12 +1518,7 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
               </Pressable>
             </View>
             <View style={styles.attachmentPreviewBody}>
-              {attachmentPreviewLoading ? (
-                <View style={styles.attachmentPreviewLoadingState}>
-                  <ActivityIndicator color="#9e5b49" size="large" />
-                  <Text style={styles.attachmentPreviewLoadingText}>Preparing document preview...</Text>
-                </View>
-              ) : attachmentPreview?.kind === 'image' ? (
+              {attachmentPreview?.kind === 'image' ? (
                 <Image resizeMode="contain" source={{ uri: attachmentPreview.uri }} style={styles.attachmentPreviewImage} />
               ) : null}
             </View>

@@ -2,15 +2,19 @@ from datetime import timedelta
 from hashlib import sha256
 from unittest.mock import patch
 
+from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
-from django.test import TestCase, override_settings
+from django.core.exceptions import PermissionDenied
+from django.test import RequestFactory, TestCase, override_settings
+from django.urls import reverse
 from django.utils import timezone
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.test import APIRequestFactory
 
+from .admin import BusinessAccountAdmin, CustomerAccountAdmin, StaffUserAdmin
 from .authentication import ProfileTokenAuthentication
-from .models import ProfileAuthToken
+from .models import AccountProfile, ProfileAuthToken
 from .services.account_profiles import get_or_create_profile_token
 from .services.importers.base import BaseHtmlImporter
 from .views import (
@@ -85,6 +89,111 @@ class ProfileTokenSecurityTests(TestCase):
 
 		with self.assertRaises(AuthenticationFailed):
 			ProfileTokenAuthentication().authenticate(request)
+
+		self.assertFalse(ProfileAuthToken.objects.filter(pk=token.pk).exists())
+
+	def test_inactive_profile_tokens_are_rejected_and_all_tokens_are_revoked(self):
+		token = ProfileAuthToken.objects.create(user=self.user)
+		ProfileAuthToken.objects.create(user=self.user)
+		self.user.is_active = False
+		self.user.save(update_fields=['is_active'])
+		request = APIRequestFactory().get('/', HTTP_AUTHORIZATION=f'Token {token.key}')
+
+		with self.assertRaises(AuthenticationFailed):
+			ProfileTokenAuthentication().authenticate(request)
+
+		self.assertFalse(ProfileAuthToken.objects.filter(user=self.user).exists())
+
+	def test_inactive_profile_token_is_rejected_from_legacy_header(self):
+		token = ProfileAuthToken.objects.create(user=self.user)
+		self.user.is_active = False
+		self.user.save(update_fields=['is_active'])
+		request = APIRequestFactory().get('/', HTTP_X_PROFILE_TOKEN=token.key)
+
+		with self.assertRaises(AuthenticationFailed):
+			ProfileTokenAuthentication().authenticate(request)
+
+		self.assertFalse(ProfileAuthToken.objects.filter(user=self.user).exists())
+
+	def test_inactive_users_cannot_be_issued_profile_tokens(self):
+		self.user.is_active = False
+		self.user.save(update_fields=['is_active'])
+
+		with self.assertRaises(PermissionDenied):
+			get_or_create_profile_token(self.user)
+
+		self.assertFalse(ProfileAuthToken.objects.filter(user=self.user).exists())
+
+	def test_inactive_user_cannot_complete_email_verification(self):
+		profile = AccountProfile.objects.create(
+			user=self.user,
+			email_verification_code='123456',
+			email_verification_code_sent_at=timezone.now(),
+		)
+		self.user.is_active = False
+		self.user.save(update_fields=['is_active'])
+		request = APIRequestFactory().post(
+			reverse('profile-verify-email-code'),
+			{'username': self.user.username, 'code': '123456', 'portal': 'customer'},
+			format='json',
+		)
+
+		response = VerifyEmailCodeView.as_view()(request)
+
+		self.assertEqual(response.status_code, 400)
+		self.assertEqual(response.data, {'detail': 'Unable to verify that request.'})
+		profile.refresh_from_db()
+		self.assertIsNone(profile.email_verified_at)
+		self.assertEqual(profile.email_verification_code, '123456')
+		self.assertFalse(ProfileAuthToken.objects.filter(user=self.user).exists())
+
+	def test_active_profile_token_authentication_still_works(self):
+		token = ProfileAuthToken.objects.create(user=self.user)
+		request = APIRequestFactory().get('/', HTTP_AUTHORIZATION=f'Token {token.key}')
+
+		user, authenticated_token = ProfileTokenAuthentication().authenticate(request)
+
+		self.assertEqual(user, self.user)
+		self.assertEqual(authenticated_token.pk, token.pk)
+
+	def test_customer_and_business_admin_deactivation_revokes_profile_tokens(self):
+		request = RequestFactory().post('/admin/')
+		request.user = User.objects.create_superuser(
+			username='profile-token-status-admin',
+			password='safe-password-123',
+		)
+		admin_models = (
+			(StaffUserAdmin, 'admin-deactivated-staff'),
+			(CustomerAccountAdmin, 'admin-deactivated-customer'),
+			(BusinessAccountAdmin, 'admin-deactivated-business'),
+		)
+
+		for admin_class, username in admin_models:
+			with self.subTest(admin_class=admin_class.__name__):
+				user = User.objects.create_user(username=username, password='safe-password-123')
+				ProfileAuthToken.objects.create(user=user)
+				ProfileAuthToken.objects.create(user=user)
+				user.is_active = False
+
+				admin_class(User, AdminSite()).save_model(request, user, form=None, change=True)
+
+				user.refresh_from_db()
+				self.assertFalse(user.is_active)
+				self.assertFalse(ProfileAuthToken.objects.filter(user=user).exists())
+
+	def test_reactivating_legacy_inactive_account_does_not_restore_old_tokens(self):
+		user = User.objects.create_user(username='legacy-inactive-account', password='safe-password-123')
+		token = ProfileAuthToken.objects.create(user=user)
+		user.is_active = False
+		user.save(update_fields=['is_active'])
+		user.is_active = True
+
+		CustomerAccountAdmin(User, AdminSite()).save_model(
+			RequestFactory().post('/admin/'),
+			user,
+			form=None,
+			change=True,
+		)
 
 		self.assertFalse(ProfileAuthToken.objects.filter(pk=token.pk).exists())
 

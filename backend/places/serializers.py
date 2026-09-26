@@ -1,3 +1,4 @@
+import io
 import json
 from pathlib import Path
 from urllib.parse import urlparse
@@ -11,6 +12,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.utils import timezone
 from django.utils.text import slugify
+from pypdf import PdfReader
 from rest_framework import serializers
 
 from .models import BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessClaimRetryGrant, BusinessPost, City, ContentReport, FeedEngagement, FeedImpression, ListingSnapshot, ManagedMedia, SponsoredCampaign, VenueType, business_claim_storage_prefix
@@ -25,7 +27,7 @@ from .services.business_profile_overrides import (
 )
 from .services.cloudmersive_scanning import ScanStatus, scan_pdf_file
 from .services.content_moderation import get_content_moderation_error
-from .services.image_moderation import ImageModerationRejected, ImageModerationUnavailable, moderate_uploaded_image, validate_uploaded_image
+from .services.image_moderation import ImageModerationRejected, ImageModerationUnavailable, get_validated_image_media_type, moderate_uploaded_image, validate_uploaded_image
 from .services.media_storage import extract_managed_storage_name, managed_media_id_from_reference, save_managed_media
 from .services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
 
@@ -63,7 +65,6 @@ LIST_JSON_FIELD_NAMES = (
 )
 
 DEAL_ATTACHMENT_FIELD_PREFIX = 'deal_attachment_upload_'
-SUPPORTED_DEAL_ATTACHMENT_SUFFIXES = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.heic', '.heif', '.pdf'}
 SUPPORTED_CLAIM_IMAGE_SUFFIXES = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.heic', '.heif', '.tif', '.tiff'}
 
 DICT_JSON_FIELD_NAMES = (
@@ -73,7 +74,7 @@ DICT_JSON_FIELD_NAMES = (
 
 BUSINESS_VERIFICATION_CONSENT_VERSION = '2026-08-16'
 TERMS_OF_SERVICE_VERSION = '2026-08-30'
-GENERIC_AUTH_FAILURE_MESSAGE = 'Unable to sign in with those credentials.'
+GENERIC_AUTH_FAILURE_MESSAGE = 'Incorrect Username or Password. Please check your credentials and try again.'
 MAX_STRUCTURED_JSON_BYTES = 1_000_000
 MAX_STRUCTURED_JSON_DEPTH = 5
 MAX_STRUCTURED_TEXT_LENGTH = 4_000
@@ -301,6 +302,20 @@ def _normalize_url_identity(value):
 	return f'{netloc}{path}'
 
 
+def _uploaded_file_has_pdf_header(uploaded_file):
+	try:
+		uploaded_file.seek(0)
+		prefix = uploaded_file.read(1024)
+		return (prefix or b'').lstrip(b'\xef\xbb\xbf\x00\t\n\x0c\r ').startswith(b'%PDF-')
+	except (AttributeError, OSError, ValueError):
+		return False
+	finally:
+		try:
+			uploaded_file.seek(0)
+		except (AttributeError, OSError, ValueError):
+			pass
+
+
 def _validate_request_image_aggregate(request):
 	if request is None:
 		return
@@ -310,16 +325,66 @@ def _validate_request_image_aggregate(request):
 		for uploaded_file in uploaded_files[1]:
 			content_type = str(getattr(uploaded_file, 'content_type', '') or '').strip().lower()
 			file_suffix = Path(getattr(uploaded_file, 'name', '') or '').suffix.lower()
-			if not (content_type.startswith('image/') or file_suffix in SUPPORTED_CLAIM_IMAGE_SUFFIXES):
+			if _uploaded_file_has_pdf_header(uploaded_file):
 				continue
-			image_bytes += int(getattr(uploaded_file, 'size', 0) or 0)
+			if not (content_type.startswith('image/') or file_suffix in SUPPORTED_CLAIM_IMAGE_SUFFIXES):
+				try:
+					get_validated_image_media_type(uploaded_file)
+				except ImageModerationRejected:
+					continue
+			try:
+				file_size = int(getattr(uploaded_file, 'size', None))
+			except (TypeError, ValueError):
+				raise serializers.ValidationError({'uploads': ['The uploaded file size could not be validated.']})
+			if file_size < 0:
+				raise serializers.ValidationError({'uploads': ['The uploaded file size could not be validated.']})
+			image_bytes += file_size
 			if image_bytes > max_aggregate_bytes:
 				raise serializers.ValidationError({'uploads': ['The combined image upload size must be 20 MB or smaller.']})
+
+
+def _validate_request_verification_pdf_limits(request):
+	if request is None:
+		return
+
+	max_files = max(1, int(getattr(settings, 'VERIFICATION_PDF_MAX_FILES', 8) or 8))
+	max_aggregate_bytes = max(
+		1,
+		int(getattr(settings, 'VERIFICATION_PDF_MAX_AGGREGATE_BYTES', 20 * 1024 * 1024) or 20 * 1024 * 1024),
+	)
+	pdf_count = 0
+	pdf_bytes = 0
+	for request_field_name in ATTACHMENT_FIELD_NAME_MAP:
+		for uploaded_file in request.FILES.getlist(request_field_name):
+			content_type = str(getattr(uploaded_file, 'content_type', '') or '').strip().lower()
+			file_suffix = Path(getattr(uploaded_file, 'name', '') or '').suffix.lower()
+			is_pdf_content = _uploaded_file_has_pdf_header(uploaded_file)
+			if not is_pdf_content and content_type != 'application/pdf' and file_suffix != '.pdf':
+				continue
+
+			pdf_count += 1
+			if pdf_count > max_files:
+				raise serializers.ValidationError({
+					'verification_documents': [f'Upload no more than {max_files} PDF verification documents at a time.'],
+				})
+			try:
+				file_size = int(getattr(uploaded_file, 'size', None))
+			except (TypeError, ValueError):
+				raise serializers.ValidationError({'verification_documents': ['The uploaded file size could not be validated.']})
+			if file_size < 0:
+				raise serializers.ValidationError({'verification_documents': ['The uploaded file size could not be validated.']})
+			pdf_bytes += file_size
+			if pdf_bytes > max_aggregate_bytes:
+				max_megabytes = max_aggregate_bytes / (1024 * 1024)
+				raise serializers.ValidationError({
+					'verification_documents': [f'The combined PDF verification upload size must be {max_megabytes:g} MB or smaller.'],
+				})
 
 
 def _prepare_claim_attachments(request):
 	if request is None:
 		return []
+	_validate_request_verification_pdf_limits(request)
 	_validate_request_image_aggregate(request)
 	pending_attachments = []
 	for request_field_name, attachment_kind in ATTACHMENT_FIELD_NAME_MAP.items():
@@ -417,8 +482,14 @@ def merge_uploaded_deal_attachments(request, claim, deal_overrides):
 
 	deal_rows = [dict(row) for row in (deal_overrides or [])]
 	indexed_uploads = _collect_uploaded_deal_attachments(request, len(deal_rows))
-	for index, uploaded_file in indexed_uploads:
-		deal_rows[index]['attachment'] = _save_uploaded_deal_attachment(request, claim, uploaded_file)
+	for index, uploaded_file, media_type, file_suffix in indexed_uploads:
+		deal_rows[index]['attachment'] = _save_uploaded_deal_attachment(
+			request,
+			claim,
+			uploaded_file,
+			media_type=media_type,
+			file_suffix=file_suffix,
+		)
 	return deal_rows
 
 
@@ -441,33 +512,77 @@ def _collect_uploaded_deal_attachments(request, deal_count):
 		if len(uploaded_files) != 1:
 			raise serializers.ValidationError({'deal_overrides': [f'Deal override #{deal_index + 1} can only include one attachment.']})
 
-		_validate_uploaded_deal_attachment(uploaded_files[0])
-		indexed_uploads.append((deal_index, uploaded_files[0]))
+		media_type, file_suffix = _validate_uploaded_deal_attachment(uploaded_files[0])
+		indexed_uploads.append((deal_index, uploaded_files[0], media_type, file_suffix))
 
 	return indexed_uploads
 
 
-def _validate_uploaded_deal_attachment(uploaded_file):
-	content_type = str(getattr(uploaded_file, 'content_type', '') or '').strip().lower()
-	file_suffix = Path(getattr(uploaded_file, 'name', '') or '').suffix.lower()
-	if content_type == 'application/pdf' or file_suffix == '.pdf':
-		_validate_pdf_upload_size(uploaded_file, 'deal_overrides')
-		return
-	if content_type.startswith('image/') or file_suffix in SUPPORTED_DEAL_ATTACHMENT_SUFFIXES:
+def _validate_uploaded_pdf_content(uploaded_file, field_name):
+	_validate_pdf_upload_size(uploaded_file, field_name, force=True)
+	max_bytes = max(1, int(getattr(settings, 'PDF_UPLOAD_MAX_BYTES', 10 * 1024 * 1024) or 10 * 1024 * 1024))
+	try:
+		uploaded_file.seek(0)
+		pdf_bytes = uploaded_file.read(max_bytes + 1)
+	except (AttributeError, OSError, ValueError) as error:
+		raise serializers.ValidationError({field_name: ['The uploaded PDF could not be read.']}) from error
+	finally:
 		try:
-			moderate_uploaded_image(uploaded_file, surface='business_deal_attachment')
-		except ImageModerationRejected as error:
-			raise serializers.ValidationError({'deal_overrides': [str(error)]})
-		except ImageModerationUnavailable as error:
-			raise serializers.ValidationError({'deal_overrides': [str(error)]})
-		return
-	raise serializers.ValidationError({'deal_overrides': ['Deal attachments must be a photo or PDF file.']})
+			uploaded_file.seek(0)
+		except (AttributeError, OSError, ValueError):
+			pass
+	if not isinstance(pdf_bytes, bytes) or len(pdf_bytes) > max_bytes:
+		max_megabytes = max_bytes / (1024 * 1024)
+		raise serializers.ValidationError({field_name: [f'PDF files must be {max_megabytes:g} MB or smaller.']})
+	if b'%PDF-' not in pdf_bytes[:1024]:
+		raise serializers.ValidationError({field_name: ['The uploaded file must be a valid PDF.']})
+
+	try:
+		reader = PdfReader(io.BytesIO(pdf_bytes), strict=False)
+		if reader.is_encrypted and not reader.decrypt(''):
+			raise ValueError('Password-protected PDFs cannot be validated.')
+		catalog = reader.trailer.get('/Root')
+		page_tree = catalog.get('/Pages') if catalog is not None else None
+		page_count = int(page_tree.get('/Count') or 0) if page_tree is not None else 0
+		pages = reader.pages
+		if (
+			catalog is None
+			or str(catalog.get('/Type') or '') != '/Catalog'
+			or page_tree is None
+			or str(page_tree.get('/Type') or '') != '/Pages'
+			or page_count < 1
+			or not page_tree.get('/Kids')
+			or len(pages) < 1
+		):
+			raise ValueError('The PDF contains no pages.')
+		for page in pages:
+			if str(page.get('/Type') or '') != '/Page':
+				raise ValueError('The PDF contains an invalid page tree.')
+	except Exception as error:
+		raise serializers.ValidationError({field_name: ['The uploaded file must be a valid PDF.']}) from error
 
 
-def _validate_pdf_upload_size(uploaded_file, field_name):
+def _validate_uploaded_deal_attachment(uploaded_file):
+	if _uploaded_file_has_pdf_header(uploaded_file):
+		_validate_uploaded_pdf_content(uploaded_file, 'deal_overrides')
+		return 'application/pdf', '.pdf'
+
+	try:
+		media_type, file_suffix = get_validated_image_media_type(uploaded_file)
+		moderate_uploaded_image(uploaded_file, surface='business_deal_attachment')
+	except ImageModerationRejected as error:
+		raise serializers.ValidationError({'deal_overrides': [str(error)]})
+	except ImageModerationUnavailable as error:
+		raise serializers.ValidationError({'deal_overrides': [str(error)]})
+	if media_type not in {'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/heic', 'image/heif', 'image/tiff'}:
+		raise serializers.ValidationError({'deal_overrides': ['Deal attachments must be a photo or PDF file.']})
+	return media_type, file_suffix
+
+
+def _validate_pdf_upload_size(uploaded_file, field_name, force=False):
 	content_type = str(getattr(uploaded_file, 'content_type', '') or '').strip().lower()
 	file_suffix = Path(getattr(uploaded_file, 'name', '') or '').suffix.lower()
-	if content_type != 'application/pdf' and file_suffix != '.pdf':
+	if not force and content_type != 'application/pdf' and file_suffix != '.pdf':
 		return
 	max_bytes = max(1, int(getattr(settings, 'PDF_UPLOAD_MAX_BYTES', 10 * 1024 * 1024) or 10 * 1024 * 1024))
 	file_size = getattr(uploaded_file, 'size', None)
@@ -504,11 +619,9 @@ def _validate_claim_attachment_size(uploaded_file, field_name):
 		raise serializers.ValidationError({field_name: ['The uploaded file size could not be validated.']})
 
 
-def _save_uploaded_deal_attachment(request, claim, uploaded_file):
-	content_type = str(getattr(uploaded_file, 'content_type', '') or '').strip().lower()
-	file_suffix = Path(getattr(uploaded_file, 'name', '') or '').suffix.lower()
-	if not file_suffix:
-		file_suffix = '.pdf' if content_type == 'application/pdf' else '.jpg'
+def _save_uploaded_deal_attachment(request, claim, uploaded_file, media_type, file_suffix):
+	content_type = str(media_type or '').strip().lower()
+	uploaded_file.content_type = content_type
 
 	filename_root = Path(getattr(uploaded_file, 'name', '') or 'deal-attachment').stem or 'deal-attachment'
 	safe_name = slugify(filename_root) or 'deal-attachment'
@@ -519,7 +632,7 @@ def _save_uploaded_deal_attachment(request, claim, uploaded_file):
 	attachment_payload = {
 		'url': media_url,
 		'media_id': str(media.media_id),
-		'name': getattr(uploaded_file, 'name', '') or f'{safe_name}{file_suffix}',
+		'name': f'{filename_root}{file_suffix}',
 	}
 	if content_type:
 		attachment_payload['content_type'] = content_type
@@ -544,18 +657,14 @@ def _append_uploaded_profile_photos_to_claim(request, claim):
 
 	uploaded_photo_urls = []
 	for uploaded_file in uploaded_files:
-		content_type = str(getattr(uploaded_file, 'content_type', '') or '').strip().lower()
-		file_suffix = Path(getattr(uploaded_file, 'name', '') or '').suffix.lower()
-		if content_type == 'application/pdf' or file_suffix == '.pdf' or not (content_type.startswith('image/') or file_suffix in SUPPORTED_DEAL_ATTACHMENT_SUFFIXES):
-			raise serializers.ValidationError({'photo_uploads': ['Only image uploads from your photo library are supported.']})
 		try:
+			content_type, file_suffix = get_validated_image_media_type(uploaded_file)
 			moderate_uploaded_image(uploaded_file, surface='business_profile_photo')
 		except ImageModerationRejected as error:
 			raise serializers.ValidationError({'photo_uploads': [str(error)]})
 		except ImageModerationUnavailable as error:
 			raise serializers.ValidationError({'photo_uploads': [str(error)]})
-		if not file_suffix:
-			file_suffix = '.jpg'
+		uploaded_file.content_type = content_type
 
 		filename_root = Path(getattr(uploaded_file, 'name', '') or 'business-photo').stem or 'business-photo'
 		safe_name = slugify(filename_root) or 'business-photo'

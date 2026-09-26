@@ -32,3 +32,15 @@ jest.mock('react-native-gesture-handler/src/RNGestureHandlerModule', () => ({
     install: jest.fn(),
   },
 }));
+
+jest.mock('@kishannareshpal/expo-pdf', () => ({
+  PdfView: ({ uri, style }) => {
+    const React = require('react');
+    const { View } = require('react-native');
+    return React.createElement(View, {
+      accessibilityLabel: uri,
+      style,
+      testID: 'readonly-pdf-view',
+    });
+  },
+}));
