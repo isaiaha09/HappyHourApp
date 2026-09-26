@@ -477,10 +477,14 @@ def _replace_claim_profile_entries(claim, validated_data):
 
 
 def merge_uploaded_deal_attachments(request, claim, deal_overrides):
-	if request is None:
-		return list(deal_overrides or [])
-
 	deal_rows = [dict(row) for row in (deal_overrides or [])]
+	for deal_row in deal_rows:
+		# This is client-only picker metadata; persist only the uploaded attachment URL.
+		deal_row.pop('attachment_upload', None)
+
+	if request is None:
+		return deal_rows
+
 	indexed_uploads = _collect_uploaded_deal_attachments(request, len(deal_rows))
 	for index, uploaded_file, media_type, file_suffix in indexed_uploads:
 		deal_rows[index]['attachment'] = _save_uploaded_deal_attachment(
@@ -850,6 +854,35 @@ class ContactSupportSerializer(serializers.Serializer):
 
 	def validate_subject(self, value):
 		return value.strip()
+
+	def validate_message(self, value):
+		normalized = value.strip()
+		if not normalized:
+			raise serializers.ValidationError('Enter a message for support.')
+		return normalized
+
+
+class WebsiteContactSerializer(serializers.Serializer):
+	name = serializers.CharField(max_length=160)
+	email = serializers.EmailField(max_length=254)
+	subject = serializers.CharField(max_length=160)
+	message = serializers.CharField(max_length=4000)
+	turnstile_token = serializers.CharField(max_length=4096)
+
+	def validate_name(self, value):
+		normalized = value.strip()
+		if not normalized or '\r' in normalized or '\n' in normalized:
+			raise serializers.ValidationError('Enter a valid name.')
+		return normalized
+
+	def validate_email(self, value):
+		return value.strip()
+
+	def validate_subject(self, value):
+		normalized = value.strip()
+		if not normalized or '\r' in normalized or '\n' in normalized:
+			raise serializers.ValidationError('Enter a valid subject.')
+		return normalized
 
 	def validate_message(self, value):
 		normalized = value.strip()

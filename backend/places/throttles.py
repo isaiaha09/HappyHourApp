@@ -1,4 +1,5 @@
 import hashlib
+import ipaddress
 
 from rest_framework.settings import api_settings
 from rest_framework.throttling import AnonRateThrottle, SimpleRateThrottle
@@ -58,6 +59,17 @@ class PasswordRecoveryRateThrottle(ScopedRateThrottle):
 
 class SupportContactRateThrottle(ScopedRateThrottle):
 	scope = 'profile_support_contact'
+
+
+class WebsiteContactRateThrottle(ScopedRateThrottle):
+	scope = 'website_contact'
+
+	def get_ident(self, request):
+		forwarded_ip = str(request.META.get('HTTP_X_CONTACT_CLIENT_IP') or '').strip()
+		try:
+			return str(ipaddress.ip_address(forwarded_ip))
+		except ValueError:
+			return super().get_ident(request)
 
 
 class ContentReportRateThrottle(ScopedRateThrottle):

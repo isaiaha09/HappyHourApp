@@ -864,6 +864,10 @@ def get_private_media_storage():
 	return storages['private_media']
 
 
+def get_public_media_storage():
+	return storages['default']
+
+
 def content_report_screenshot_upload_to(instance, filename):
 	filename_root = Path(filename or 'report-screenshot').stem or 'report-screenshot'
 	filename_suffix = Path(filename or '').suffix.lower() or '.jpg'

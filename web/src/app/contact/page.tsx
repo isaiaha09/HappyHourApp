@@ -25,7 +25,7 @@ export default function ContactPage() {
             <p className="dd-kicker">Contact Us</p>
             <h1 className="text-4xl font-semibold leading-tight text-white sm:text-5xl">Questions, support requests, and partnership inquiries.</h1>
             <p className="max-w-xl text-base leading-8 text-[#f6d6c5]">
-              Use the contact form to prepare an email, or reach out directly if you already know what you need. We will respond from the DiningDealz support team.
+              Use the contact form to send a message directly to support, or reach out by email if you prefer. We will respond from the DiningDealz support team.
             </p>
           </div>
 

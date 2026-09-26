@@ -8,12 +8,21 @@ from django.core.files.storage import default_storage
 from django.urls import reverse
 
 
+PRIVATE_MEDIA_PREFIXES = (
+	'business-claim-attachments/',  # Legacy key layout; retained rows still point here.
+	'content-reports/',
+	'direct-message-images/',
+)
+
+PUBLIC_MEDIA_PREFIXES = (
+	'business-deal-attachments/',  # Legacy key layout.
+	'business-profile-photos/',  # Legacy key layout.
+)
+
 MANAGED_MEDIA_PREFIXES = (
 	'businesses/',
-	'business-claim-attachments/',
-	'business-deal-attachments/',
-	'business-profile-photos/',
-	'content-reports/',
+	*PRIVATE_MEDIA_PREFIXES,
+	*PUBLIC_MEDIA_PREFIXES,
 )
 
 
@@ -67,6 +76,42 @@ def save_managed_media(claim, uploaded_file, storage_name, media_kind, request=N
 		file_size=int(getattr(uploaded_file, 'size', 0) or 0),
 	)
 	return media, managed_media_url(media.media_id, request=request)
+
+
+def classify_supabase_media_key(key):
+	"""Return (bucket label, media category) for known object keys, or None if unknown."""
+	normalized_key = posixpath.normpath(str(key or '').replace('\\', '/').lstrip('/'))
+	if normalized_key in {'', '.', '..'} or normalized_key.startswith('../'):
+		return None
+
+	for prefix in PRIVATE_MEDIA_PREFIXES:
+		if normalized_key.startswith(prefix):
+			return 'private', prefix.rstrip('/')
+	for prefix in PUBLIC_MEDIA_PREFIXES:
+		if normalized_key.startswith(prefix):
+			return 'public', prefix.rstrip('/')
+
+	if not normalized_key.startswith('businesses/'):
+		return None
+
+	path_parts = normalized_key.split('/')
+	if 'claims' not in path_parts:
+		return None
+
+	claim_path_parts = path_parts[path_parts.index('claims') + 1:]
+	if 'verification' in claim_path_parts:
+		return 'private', 'businesses/.../verification'
+	if 'deal-attachments' in claim_path_parts:
+		return 'public', 'businesses/.../deal-attachments'
+	if 'profile-photos' in claim_path_parts:
+		return 'public', 'businesses/.../profile-photos'
+	return None
+
+
+def expected_supabase_bucket(key):
+	"""Return the intended bucket label for a managed object key, or None if unknown."""
+	route = classify_supabase_media_key(key)
+	return route[0] if route else None
 
 
 def _iter_media_url_prefix_paths():
@@ -261,7 +306,7 @@ def delete_removed_storage_references(previous_references, current_references, c
 
 
 def get_active_managed_storage_names():
-	from places.models import BusinessClaim, BusinessClaimAttachment, ContentReport, ManagedMedia
+	from places.models import BusinessClaim, BusinessClaimAttachment, BusinessDirectMessage, ContentReport, ManagedMedia
 
 	active_names = {
 		storage_name
@@ -269,6 +314,11 @@ def get_active_managed_storage_names():
 		if str(storage_name or '').strip()
 	}
 	active_names.update(ManagedMedia.objects.values_list('storage_name', flat=True))
+	active_names.update(
+		str(storage_name).strip()
+		for storage_name in BusinessDirectMessage.objects.exclude(image='').values_list('image', flat=True)
+		if str(storage_name or '').strip()
+	)
 	for photo_references in BusinessClaim.objects.values_list('photo_references', flat=True):
 		active_names.update(_collect_managed_storage_names(photo_references))
 	for deal_overrides in BusinessClaim.objects.values_list('deal_overrides', flat=True):

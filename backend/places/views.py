@@ -64,13 +64,14 @@ from .serializers import (
 	ResendEmailVerificationCodeSerializer,
 	TwoFactorCodeSerializer,
 	UsernameReminderSerializer,
+	WebsiteContactSerializer,
 	_replace_claim_profile_entries,
 	merge_uploaded_deal_attachments,
 	_normalize_string_list,
 	build_signup_request_data,
 	sync_listing_snapshot_from_place_payload,
 )
-from .services.account_profiles import build_account_response, build_email_verification_challenge, deactivate_account_for_retained_direct_messages, get_approved_business_claims, get_business_access_hold_claim, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, is_deleted_account, send_business_claim_received_email, send_business_claim_retry_code_email, send_content_report_support_email_safely, send_password_reset_email, send_support_contact_email, send_username_reminder_email, send_verification_email
+from .services.account_profiles import build_account_response, build_email_verification_challenge, deactivate_account_for_retained_direct_messages, get_approved_business_claims, get_business_access_hold_claim, get_or_create_account_profile, get_or_create_profile_token, infer_portal_for_user, is_deleted_account, send_business_claim_received_email, send_business_claim_retry_code_email, send_content_report_support_email_safely, send_password_reset_email, send_support_contact_email, send_username_reminder_email, send_verification_email, send_website_contact_email
 from .models import BusinessClaim, BusinessClaimAttachment, BusinessClaimRetryGrant, BusinessClaimRetryVerification, BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, BusinessPost, ContentReport, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedImpression, ListingSnapshot, ManagedMedia, ProfileAuthToken, VenueType, business_claim_storage_prefix
 from .services.favorite_notifications import create_notifications_for_business_profile_update, should_send_direct_message_notification
 from .services.customer_preferences import get_preference_business_options, resolve_business_location, save_customer_preferences
@@ -80,9 +81,10 @@ from .services.home_feed import get_feed_interval, get_feed_queryset, get_organi
 from .services.image_moderation import IMAGE_MEDIA_TYPE_TO_EXTENSION, ImageModerationRejected, ImageModerationUnavailable, get_validated_image_media_type, moderate_uploaded_image
 from .services.media_storage import save_managed_media
 from .services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
+from .services.website_contact import verify_contact_turnstile
 from .services.current_happy_hours import get_current_happy_hours_payload
 from .services.source_listings import get_deleted_business_snapshot_ids, get_disabled_live_location_slugs, get_live_location_display_fields, get_source_deal_payloads, get_source_place_payload, get_source_place_payloads, is_live_location_tracking_enabled_for_snapshot, load_source_records
-from .throttles import ContentReportRateThrottle, DirectMessageSendRateThrottle, EmailVerificationRateThrottle, EmailVerificationResendRateThrottle, LoginRateThrottle, NotificationProcessorRateThrottle, PasswordRecoveryRateThrottle, SignupRateThrottle, SupportContactRateThrottle, TwoFactorRateThrottle, UserMutationRateThrottle
+from .throttles import ContentReportRateThrottle, DirectMessageSendRateThrottle, EmailVerificationRateThrottle, EmailVerificationResendRateThrottle, LoginRateThrottle, NotificationProcessorRateThrottle, PasswordRecoveryRateThrottle, SignupRateThrottle, SupportContactRateThrottle, TwoFactorRateThrottle, UserMutationRateThrottle, WebsiteContactRateThrottle
 
 
 class SourcePlacePagination(PageNumberPagination):
@@ -2023,6 +2025,44 @@ class ContactSupportView(generics.GenericAPIView):
 			subject=serializer.validated_data.get('subject', ''),
 		)
 		return Response({'detail': 'Your message has been sent to DiningDealz support.'})
+
+
+class WebsiteContactView(generics.GenericAPIView):
+	serializer_class = WebsiteContactSerializer
+	authentication_classes = []
+	permission_classes = [AllowAny]
+	throttle_classes = [WebsiteContactRateThrottle]
+
+	def post(self, request):
+		serializer = self.get_serializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		values = serializer.validated_data
+		client_ip = request.META.get('HTTP_X_CONTACT_CLIENT_IP') or request.META.get('REMOTE_ADDR')
+
+		verification = verify_contact_turnstile(values['turnstile_token'], client_ip)
+		if verification['status'] == 'unavailable':
+			return Response({'detail': verification['message']}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+		if verification['status'] != 'success':
+			return Response({'detail': verification['message']}, status=status.HTTP_400_BAD_REQUEST)
+
+		try:
+			send_website_contact_email(
+				name=values['name'],
+				email=values['email'],
+				subject=values['subject'],
+				message=values['message'],
+			)
+		except Exception:
+			logger.exception('Website contact email delivery failed.')
+			return Response(
+				{'detail': 'Unable to send your message right now. Please try again shortly.'},
+				status=status.HTTP_503_SERVICE_UNAVAILABLE,
+			)
+
+		return Response(
+			{'detail': 'Your message has been sent to DiningDealz support.'},
+			status=status.HTTP_201_CREATED,
+		)
 
 
 class DeleteAccountView(generics.GenericAPIView):

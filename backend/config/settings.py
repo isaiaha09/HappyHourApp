@@ -738,7 +738,6 @@ if MEDIA_STORAGE_BACKEND == 'supabase':
             'secret_key': SUPABASE_STORAGE_SECRET_KEY,
             'endpoint_url': SUPABASE_STORAGE_ENDPOINT,
             'region_name': SUPABASE_STORAGE_REGION,
-            'default_acl': 'public-read',
             'querystring_auth': False,
             'file_overwrite': False,
         },
@@ -768,7 +767,6 @@ if PRIVATE_MEDIA_STORAGE_BACKEND == 'supabase':
             'secret_key': SUPABASE_STORAGE_SECRET_KEY,
             'endpoint_url': SUPABASE_STORAGE_ENDPOINT,
             'region_name': SUPABASE_STORAGE_REGION,
-            'default_acl': 'private',
             'querystring_auth': True,
             'querystring_expire': SUPABASE_PRIVATE_STORAGE_SIGNED_URL_EXPIRE_SECONDS,
             'file_overwrite': False,
@@ -805,6 +803,7 @@ REST_FRAMEWORK = {
         'profile_email_verification_resend': get_env('THROTTLE_PROFILE_EMAIL_VERIFICATION_RESEND', ENV_VALUES, '3/minute'),
         'profile_password_recovery': get_env('THROTTLE_PROFILE_PASSWORD_RECOVERY', ENV_VALUES, '10/hour'),
         'profile_support_contact': get_env('THROTTLE_PROFILE_SUPPORT_CONTACT', ENV_VALUES, '10/hour'),
+        'website_contact': get_env('THROTTLE_WEBSITE_CONTACT', ENV_VALUES, '10/hour'),
         'profile_content_report': get_env('THROTTLE_PROFILE_CONTENT_REPORT', ENV_VALUES, '10/hour'),
         'profile_user_mutation': get_env('THROTTLE_PROFILE_USER_MUTATION', ENV_VALUES, '120/minute'),
         'direct_message_send': get_env('THROTTLE_DIRECT_MESSAGE_SEND', ENV_VALUES, '30/minute'),
@@ -823,6 +822,8 @@ _EMAIL_USE_SSL_DEFAULT = EMAIL_PORT == 465 and bool(EMAIL_HOST_USER)
 EMAIL_USE_TLS = get_bool_env('EMAIL_USE_TLS', ENV_VALUES, _EMAIL_USE_TLS_DEFAULT)
 EMAIL_USE_SSL = get_bool_env('EMAIL_USE_SSL', ENV_VALUES, _EMAIL_USE_SSL_DEFAULT)
 EMAIL_TIMEOUT = get_int_env('EMAIL_TIMEOUT', ENV_VALUES, 20)
+CLOUDFLARE_TURNSTILE_SECRET_KEY = get_env('CLOUDFLARE_TURNSTILE_SECRET_KEY', ENV_VALUES, '').strip()
+WEBSITE_CONTACT_EMAIL = get_env('WEBSITE_CONTACT_EMAIL', ENV_VALUES, 'support@diningdealz.com').strip()
 DEFAULT_FROM_EMAIL = get_env('DEFAULT_FROM_EMAIL', ENV_VALUES, 'noreply@diningdealz.local')
 SERVER_EMAIL = get_env('SERVER_EMAIL', ENV_VALUES, DEFAULT_FROM_EMAIL)
 

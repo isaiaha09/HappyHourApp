@@ -5,7 +5,6 @@ from storages.backends.s3 import S3Storage
 
 
 class SupabaseMediaStorage(S3Storage):
-	default_acl = 'public-read'
 	file_overwrite = False
 	querystring_auth = False
 
@@ -18,6 +17,5 @@ class SupabaseMediaStorage(S3Storage):
 
 
 class SupabasePrivateMediaStorage(S3Storage):
-	default_acl = 'private'
 	file_overwrite = False
 	querystring_auth = True
