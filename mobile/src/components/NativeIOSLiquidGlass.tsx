@@ -26,6 +26,8 @@ type NativeBottomNavViewProps = {
   moreLabel?: string;
   moreSystemImage?: string;
   onNavItemSelect?: (event: NativeBottomNavSelectEvent) => void;
+  presentationActive?: boolean;
+  presentationToken?: string;
   profileLabel?: string;
   profileSystemImage?: string;
   style?: StyleProp<ViewStyle>;
@@ -49,6 +51,8 @@ type NativeIOSLiquidGlassBottomNavProps = {
   labels?: NativeLiquidGlassBottomNavLabels;
   moreOpen?: boolean;
   onSelect: (item: NativeLiquidGlassBottomNavItem) => void;
+  presentationActive?: boolean;
+  presentationToken?: string;
   systemImages?: NativeLiquidGlassBottomNavSystemImages;
   style?: StyleProp<ViewStyle>;
   themeVariant?: 'default-dark' | 'map-dark' | 'map-light';
@@ -145,7 +149,7 @@ export function isNativeIOSLiquidGlassHeaderButtonAvailable() {
   return hasNativeViewManager(nativeHeaderButtonViewName);
 }
 
-export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, includeHomeItem = false, labels, moreOpen = false, onSelect, style, systemImages, themeVariant = 'default-dark' }: NativeIOSLiquidGlassBottomNavProps) {
+export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, includeHomeItem = false, labels, moreOpen = false, onSelect, presentationActive = true, presentationToken, style, systemImages, themeVariant = 'default-dark' }: NativeIOSLiquidGlassBottomNavProps) {
   if (!isNativeIOSLiquidGlassBottomNavAvailable()) {
     return null;
   }
@@ -163,6 +167,8 @@ export function NativeIOSLiquidGlassBottomNav({ activeItem, bottomInset, include
       moreLabel={labels?.more}
       moreSystemImage={systemImages?.more}
       onNavItemSelect={(event) => onSelect(event.nativeEvent.item)}
+      presentationActive={presentationActive}
+      presentationToken={presentationToken}
       profileLabel={labels?.profile}
       profileSystemImage={systemImages?.profile}
       style={getBottomNavStyle(bottomInset, style)}

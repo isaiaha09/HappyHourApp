@@ -7580,6 +7580,8 @@ function AppScreen() {
                 handleBottomNavSelection(item);
               }
             }}
+            presentationActive={mapScreenActive}
+            presentationToken={bottomNavThemeVariant}
             style={{ width: '100%' }}
             systemImages={options.guest ? { map: 'person.fill', profile: 'plus', more: 'briefcase' } : undefined}
             themeVariant={bottomNavThemeVariant}
