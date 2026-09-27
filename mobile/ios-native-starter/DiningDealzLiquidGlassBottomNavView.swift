@@ -290,7 +290,6 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
         ForEach(state.items) { displayItem in
           Tab(displayItem.title, systemImage: displayItem.systemImageName, value: displayItem.item) {
             Color.clear
-              .ignoresSafeArea(.container, edges: .bottom)
           }
         }
       }
@@ -302,6 +301,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     .background(Color.clear)
+    .ignoresSafeArea(.container, edges: .bottom)
   }
 }
 
