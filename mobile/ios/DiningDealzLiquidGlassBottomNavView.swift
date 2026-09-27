@@ -115,7 +115,6 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   private let state = DiningDealzLiquidGlassBottomNavState()
   private let hostingController = UIHostingController(rootView: AnyView(EmptyView()))
   private var hasConfiguredRootView = false
-  private var tabBarAppearanceCleanupGeneration = 0
 
   private var resolvedActiveItem: DiningDealzLiquidGlassBottomNavItem {
     let preferredItem = DiningDealzLiquidGlassBottomNavItem(rawValue: activeItem as String) ?? .map
@@ -134,19 +133,6 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
 
   override var intrinsicContentSize: CGSize {
     CGSize(width: UIView.noIntrinsicMetric, height: 52 + CGFloat(truncating: bottomInset))
-  }
-
-  override func layoutSubviews() {
-    super.layoutSubviews()
-    clearTabViewBackingBackgrounds(in: hostingController.view)
-    scheduleTabViewBackingBackgroundCleanup()
-  }
-
-  override func didMoveToWindow() {
-    super.didMoveToWindow()
-    if window != nil {
-      scheduleTabViewBackingBackgroundCleanup()
-    }
   }
 
   private func setupView() {
@@ -207,47 +193,6 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
       )
       hasConfiguredRootView = true
     }
-
-    scheduleTabViewBackingBackgroundCleanup()
-  }
-
-  private func scheduleTabViewBackingBackgroundCleanup() {
-    tabBarAppearanceCleanupGeneration += 1
-    let generation = tabBarAppearanceCleanupGeneration
-    [0.0, 0.1, 0.3, 0.6].forEach { delay in
-      DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-        guard let self, self.tabBarAppearanceCleanupGeneration == generation else { return }
-        self.clearTabViewBackingBackgrounds(in: self.hostingController.view)
-      }
-    }
-  }
-
-  private func clearTabViewBackingBackgrounds(in view: UIView) {
-    if let tabBar = view as? UITabBar {
-      let appearance = UITabBarAppearance()
-      appearance.configureWithTransparentBackground()
-      appearance.backgroundColor = .clear
-      appearance.backgroundEffect = nil
-      appearance.shadowColor = .clear
-      appearance.shadowImage = UIImage()
-      appearance.backgroundImage = UIImage()
-      tabBar.standardAppearance = appearance
-      if #available(iOS 15.0, *) {
-        tabBar.scrollEdgeAppearance = appearance
-      }
-      tabBar.backgroundColor = .clear
-      tabBar.barTintColor = .clear
-      tabBar.isOpaque = false
-      tabBar.isTranslucent = true
-      return
-    }
-
-    if !(view is UIVisualEffectView) {
-      view.backgroundColor = .clear
-      view.isOpaque = false
-    }
-
-    view.subviews.forEach(clearTabViewBackingBackgrounds)
   }
 
   private var resolvedThemeVariant: DiningDealzLiquidGlassThemeVariant {
@@ -348,15 +293,12 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
           }
         }
       }
-      .background(Color.clear)
       .tabViewStyle(.tabBarOnly)
-      .toolbarBackground(.hidden, for: .tabBar)
       .tint(accentColor)
       .frame(maxWidth: .infinity)
       .frame(height: 52)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-    .background(Color.clear)
   }
 }
 
