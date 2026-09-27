@@ -138,6 +138,8 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
 
   override func layoutSubviews() {
     super.layoutSubviews()
+    clearTabViewBackingBackgrounds(in: hostingController.view)
+    scheduleTabViewBackingBackgroundCleanup()
   }
 
   override func didMoveToWindow() {
@@ -204,8 +206,9 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
         }
       )
       hasConfiguredRootView = true
-      scheduleTabViewBackingBackgroundCleanup()
     }
+
+    scheduleTabViewBackingBackgroundCleanup()
   }
 
   private func scheduleTabViewBackingBackgroundCleanup() {
@@ -221,18 +224,6 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
 
   private func clearTabViewBackingBackgrounds(in view: UIView) {
     if let tabBar = view as? UITabBar {
-      let currentAppearance = tabBar.standardAppearance
-      let isAlreadyTransparent = currentAppearance.backgroundEffect == nil
-        && currentAppearance.backgroundColor?.isEqual(UIColor.clear) == true
-        && currentAppearance.shadowColor?.isEqual(UIColor.clear) == true
-        && tabBar.backgroundColor?.isEqual(UIColor.clear) == true
-        && !tabBar.isOpaque
-        && tabBar.isTranslucent
-
-      if isAlreadyTransparent {
-        return
-      }
-
       let appearance = UITabBarAppearance()
       appearance.configureWithTransparentBackground()
       appearance.backgroundColor = .clear
