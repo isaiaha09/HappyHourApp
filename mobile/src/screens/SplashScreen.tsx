@@ -249,6 +249,7 @@ export function SplashScreen({ assetsReady = true, chromeInteractive = true, onC
         logoTranslateY={logoTranslateY}
         onCreateAccount={onCreateAccount}
         onSelectPortal={onSelectPortal}
+        showBottomNav={false}
         showHeader={showHeader}
         themeVariant={themeVariant}
       />

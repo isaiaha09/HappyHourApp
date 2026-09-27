@@ -212,31 +212,38 @@ export function GuestShellChrome({
 
       {showBottomNav ? <View pointerEvents="box-none" style={styles.bottomNavOverlay}>
         {isNativeIOSLiquidGlassBottomNavAvailable() ? (
-          <NativeIOSLiquidGlassBottomNav
-            activeItem="map"
-            bottomInset={insets.bottom}
-            labels={{ map: 'Customer', profile: 'Sign Up', more: 'Business' }}
-            onSelect={(item) => {
-              if (!interactive) {
-                return;
-              }
-
-              if (item === 'map') {
-                onSelectPortal('customer');
-                return;
-              }
-
-              if (item === 'profile') {
-                onCreateAccount();
-                return;
-              }
-
-              onSelectPortal('business');
+          <Animated.View
+            style={{
+              opacity: interactive ? actionOpacity : 1,
+              transform: [{ translateY: interactive ? actionTranslateY : 0 }],
             }}
-            style={{ width: '100%' }}
-            systemImages={{ map: 'person.fill', profile: 'plus', more: 'briefcase' }}
-            themeVariant={themeVariant}
-          />
+          >
+            <NativeIOSLiquidGlassBottomNav
+              activeItem="map"
+              bottomInset={insets.bottom}
+              labels={{ map: 'Customer', profile: 'Sign Up', more: 'Business' }}
+              onSelect={(item) => {
+                if (!interactive) {
+                  return;
+                }
+
+                if (item === 'map') {
+                  onSelectPortal('customer');
+                  return;
+                }
+
+                if (item === 'profile') {
+                  onCreateAccount();
+                  return;
+                }
+
+                onSelectPortal('business');
+              }}
+              style={{ width: '100%' }}
+              systemImages={{ map: 'person.fill', profile: 'plus', more: 'briefcase' }}
+              themeVariant={themeVariant}
+            />
+          </Animated.View>
         ) : (
           <Animated.View
             style={[
