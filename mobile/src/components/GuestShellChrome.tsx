@@ -221,7 +221,7 @@ export function GuestShellChrome({
             <NativeIOSLiquidGlassBottomNav
               activeItem="map"
               bottomInset={insets.bottom}
-              key={`guest-shell:${themeVariant}`}
+              key={`guest-shell:${themeVariant}:${interactive ? 'active' : 'inactive'}`}
               labels={{ map: 'Customer', profile: 'Sign Up', more: 'Business' }}
               onSelect={(item) => {
                 if (!interactive) {
