@@ -289,7 +289,9 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
           }
         }
       }
+      .background(Color.clear)
       .tabViewStyle(.tabBarOnly)
+      .toolbarBackground(.visible, for: .tabBar)
       .tint(accentColor)
       .frame(maxWidth: .infinity)
       .frame(height: 52)
