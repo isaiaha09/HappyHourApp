@@ -336,57 +336,24 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     Color(red: 1, green: 0.3, blue: 0.38)
   }
 
-  private var containerTint: Color {
-    switch state.themeVariant {
-    case .mapLight:
-      return Color.white.opacity(0.2)
-    case .defaultDark, .mapDark:
-      return Color.black.opacity(0.2)
-    }
-  }
-
-  private var containerBorder: Color {
-    switch state.themeVariant {
-    case .mapLight:
-      return Color.white.opacity(0.65)
-    case .defaultDark, .mapDark:
-      return Color.white.opacity(0.28)
-    }
-  }
-
   var body: some View {
-    GlassEffectContainer(spacing: 0) {
-      ZStack(alignment: .bottom) {
-        Color.clear
-          .frame(maxWidth: .infinity)
-          .frame(height: 64)
-          .glassEffect(.regular.tint(containerTint), in: .rect(cornerRadius: 30))
-          .overlay(
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
-              .stroke(containerBorder, lineWidth: 0.7)
-          )
-          .padding(.horizontal, 12)
-          .padding(.bottom, max(state.bottomInset * 0.32, 4))
-
-        TabView(selection: Binding(
-          get: { selectedTab },
-          set: { onSelect($0) }
-        )) {
-          ForEach(state.items) { displayItem in
-            Tab(displayItem.title, systemImage: displayItem.systemImageName, value: displayItem.item) {
-              Color.clear
-            }
+    ZStack(alignment: .bottom) {
+      TabView(selection: Binding(
+        get: { selectedTab },
+        set: { onSelect($0) }
+      )) {
+        ForEach(state.items) { displayItem in
+          Tab(displayItem.title, systemImage: displayItem.systemImageName, value: displayItem.item) {
+            Color.clear
           }
         }
-        .background(Color.clear)
-        .tabViewStyle(.tabBarOnly)
-        .toolbarBackground(.hidden, for: .tabBar)
-        .tint(accentColor)
-        .frame(maxWidth: .infinity)
-        .frame(height: 52)
-        .padding(.horizontal, 12)
-        .padding(.bottom, max(state.bottomInset * 0.32, 4))
       }
+      .background(Color.clear)
+      .tabViewStyle(.tabBarOnly)
+      .toolbarBackground(.hidden, for: .tabBar)
+      .tint(accentColor)
+      .frame(maxWidth: .infinity)
+      .frame(height: 52)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     .background(Color.clear)
