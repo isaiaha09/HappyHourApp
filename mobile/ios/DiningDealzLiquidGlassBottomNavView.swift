@@ -223,30 +223,12 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   }
 
   private func clearTabViewBackingBackgrounds(in view: UIView) {
-    if let tabBar = view as? UITabBar {
-      let appearance = UITabBarAppearance()
-      appearance.configureWithTransparentBackground()
-      appearance.backgroundColor = .clear
-      appearance.backgroundEffect = nil
-      appearance.shadowColor = .clear
-      appearance.shadowImage = UIImage()
-      appearance.backgroundImage = UIImage()
-      tabBar.standardAppearance = appearance
-      if #available(iOS 15.0, *) {
-        tabBar.scrollEdgeAppearance = appearance
-      }
-      tabBar.backgroundColor = .clear
-      tabBar.barTintColor = .clear
-      tabBar.isOpaque = false
-      tabBar.isTranslucent = true
+    if view is UITabBar || view is UIVisualEffectView {
       return
     }
 
-    if !(view is UIVisualEffectView) {
-      view.backgroundColor = .clear
-      view.isOpaque = false
-    }
-
+    view.backgroundColor = .clear
+    view.isOpaque = false
     view.subviews.forEach(clearTabViewBackingBackgrounds)
   }
 
