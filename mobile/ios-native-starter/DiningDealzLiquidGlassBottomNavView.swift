@@ -39,36 +39,6 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     }
   }
 
-  @objc var presentationActive: Bool = false {
-    didSet {
-      guard presentationActive != oldValue, presentationActive else { return }
-
-      guard hasPresentedOnce else {
-        hasPresentedOnce = true
-        return
-      }
-
-      scheduleTabViewRefresh()
-    }
-  }
-
-  @objc var presentationToken: NSString = "" {
-    didSet {
-      let hasReceivedPreviousPresentationToken = hasReceivedPresentationToken
-      hasReceivedPresentationToken = true
-
-      guard hasReceivedPreviousPresentationToken,
-            presentationActive,
-            hasPresentedOnce,
-            (presentationToken as String) != (oldValue as String)
-      else {
-        return
-      }
-
-      scheduleTabViewRefresh()
-    }
-  }
-
   @objc var activeItem: NSString = "map" {
     didSet {
       updateRootView()
@@ -145,11 +115,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   private let state = DiningDealzLiquidGlassBottomNavState()
   private let hostingController = UIHostingController(rootView: AnyView(EmptyView()))
   private var hasConfiguredRootView = false
-  private var hasPresentedOnce = false
-  private var hasReceivedPresentationToken = false
   private var tabBarAppearanceCleanupGeneration = 0
-  private var tabViewRefreshGeneration = 0
-  private var tabViewRootGeneration = 0
 
   private var resolvedActiveItem: DiningDealzLiquidGlassBottomNavItem {
     let preferredItem = DiningDealzLiquidGlassBottomNavItem(rawValue: activeItem as String) ?? .map
@@ -224,53 +190,25 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     }
 
     if !hasConfiguredRootView {
-      installRootView()
+      hostingController.rootView = AnyView(
+        Group {
+          if #available(iOS 26.0, *) {
+            DiningDealzLiquidGlassBottomNavContent(
+              state: state,
+              onSelect: handleSelection
+            )
+          } else {
+            DiningDealzLegacyBottomNavContent(
+              state: state,
+              onSelect: handleSelection
+            )
+          }
+        }
+      )
       hasConfiguredRootView = true
     }
 
     scheduleTabViewBackingBackgroundCleanup()
-  }
-
-  private func installRootView() {
-    hostingController.rootView = AnyView(
-      Group {
-        if #available(iOS 26.0, *) {
-          DiningDealzLiquidGlassBottomNavContent(
-            state: state,
-            onSelect: handleSelection
-          )
-          .id(tabViewRootGeneration)
-        } else {
-          DiningDealzLegacyBottomNavContent(
-            state: state,
-            onSelect: handleSelection
-          )
-          .id(tabViewRootGeneration)
-        }
-      }
-    )
-  }
-
-  private func scheduleTabViewRefresh() {
-    tabViewRefreshGeneration += 1
-    let generation = tabViewRefreshGeneration
-
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-      guard let self,
-            self.tabViewRefreshGeneration == generation,
-            self.presentationActive,
-            self.window != nil,
-            self.hasConfiguredRootView
-      else {
-        return
-      }
-
-      self.tabViewRootGeneration += 1
-      self.installRootView()
-      self.hostingController.view.setNeedsLayout()
-      self.hostingController.view.layoutIfNeeded()
-      self.scheduleTabViewBackingBackgroundCleanup()
-    }
   }
 
   private func scheduleTabViewBackingBackgroundCleanup() {
@@ -394,7 +332,6 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
       }
       .background(Color.clear)
       .tabViewStyle(.tabBarOnly)
-      .toolbarBackground(.hidden, for: .tabBar)
       .tint(accentColor)
       .frame(maxWidth: .infinity)
       .frame(height: 52)

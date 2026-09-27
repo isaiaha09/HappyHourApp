@@ -221,6 +221,7 @@ export function GuestShellChrome({
             <NativeIOSLiquidGlassBottomNav
               activeItem="map"
               bottomInset={insets.bottom}
+              key={`guest-shell:${themeVariant}:${interactive ? 'active' : 'inactive'}`}
               labels={{ map: 'Customer', profile: 'Sign Up', more: 'Business' }}
               onSelect={(item) => {
                 if (!interactive) {
@@ -239,8 +240,6 @@ export function GuestShellChrome({
 
                 onSelectPortal('business');
               }}
-              presentationActive={interactive}
-              presentationToken={themeVariant}
               style={{ width: '100%' }}
               systemImages={{ map: 'person.fill', profile: 'plus', more: 'briefcase' }}
               themeVariant={themeVariant}
