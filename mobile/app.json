@@ -8,6 +8,7 @@
     "icon": "./assets/DiningDealz-Icon.png",
     "userInterfaceStyle": "light",
     "ios": {
+      "deploymentTarget": "16.4",
       "associatedDomains": [
         "applinks:link.diningdealz.com",
         "applinks:backend.diningdealz.com"
