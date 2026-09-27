@@ -138,13 +138,9 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   private func setupView() {
     backgroundColor = .clear
     isOpaque = false
-    clipsToBounds = true
-    layer.allowsGroupOpacity = true
 
     hostingController.view.backgroundColor = .clear
     hostingController.view.isOpaque = false
-    hostingController.view.clipsToBounds = true
-    hostingController.view.layer.allowsGroupOpacity = true
     hostingController.view.translatesAutoresizingMaskIntoConstraints = false
     addSubview(hostingController.view)
 
@@ -293,13 +289,15 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
           }
         }
       }
+      .background(Color.clear)
       .tabViewStyle(.tabBarOnly)
-      .toolbarBackground(.visible, for: .tabBar)
+      .toolbarBackground(.hidden, for: .tabBar)
       .tint(accentColor)
       .frame(maxWidth: .infinity)
       .frame(height: 52)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    .background(Color.clear)
   }
 }
 
