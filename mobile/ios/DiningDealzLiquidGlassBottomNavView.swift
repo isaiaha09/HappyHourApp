@@ -138,12 +138,12 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   private func setupView() {
     backgroundColor = .clear
     isOpaque = false
-    clipsToBounds = true
+    clipsToBounds = false
     layer.allowsGroupOpacity = true
 
     hostingController.view.backgroundColor = .clear
     hostingController.view.isOpaque = false
-    hostingController.view.clipsToBounds = true
+    hostingController.view.clipsToBounds = false
     hostingController.view.layer.allowsGroupOpacity = true
     hostingController.view.translatesAutoresizingMaskIntoConstraints = false
     addSubview(hostingController.view)

@@ -122,7 +122,7 @@ function hasNativeViewManager(viewName: string) {
 }
 
 function getBottomNavStyle(bottomInset: number, style?: StyleProp<ViewStyle>) {
-  return [{ width: '100%' as const, backgroundColor: 'transparent', height: Math.max(52, 52 + bottomInset), overflow: 'hidden' as const }, style];
+  return [{ width: '100%' as const, backgroundColor: 'transparent', height: Math.max(52, 52 + bottomInset) }, style];
 }
 
 function getHeaderButtonStyle(variant: 'pill' | 'icon', label?: string, style?: StyleProp<ViewStyle>, nativeHorizontalOffset?: number) {
