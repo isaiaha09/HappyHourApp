@@ -7582,12 +7582,25 @@ function AppScreen() {
   }
 
   function renderAuthenticatedBottomNavLayer(options?: { interactive?: boolean; transitionStyle?: object }) {
+    const bottomNav = renderBottomNav({ guest: false });
+    const layerStyle = [styles.bottomNavLoginTransitionLayer, { height: bottomNavHeight }];
+
+    // The native glass bar must not sit inside an Animated.View: its offscreen
+    // compositing can turn this otherwise transparent, full-width layer black.
+    if (nativeBottomNavAvailable) {
+      return (
+        <View pointerEvents={options?.interactive === false ? 'none' : 'box-none'} style={layerStyle}>
+          {bottomNav}
+        </View>
+      );
+    }
+
     return (
       <Animated.View
         pointerEvents={options?.interactive === false ? 'none' : 'box-none'}
-        style={[styles.bottomNavLoginTransitionLayer, { height: bottomNavHeight }, options?.transitionStyle]}
+        style={[...layerStyle, options?.transitionStyle]}
       >
-        {renderBottomNav({ guest: false })}
+        {bottomNav}
       </Animated.View>
     );
   }
@@ -8814,8 +8827,8 @@ function AppScreen() {
       ) : (
         renderBrowseScreen()
       )}
-      {/* Let the native tab bar materialize after login instead of mounting it
-          inside the opacity-zero login transition. Keep the fallback animation. */}
+      {/* Mount native glass after the login transition; its UIKit host handles
+          the entrance fade. Keep the existing fallback transition. */}
       {authenticatedSession && (shouldRenderPersistentBottomNav || (!nativeBottomNavAvailable && showLoginSuccessTransition)) ? (
         renderAuthenticatedBottomNavLayer({
           interactive: !showLoginSuccessTransition,

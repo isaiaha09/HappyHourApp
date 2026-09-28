@@ -2,6 +2,7 @@ import UIKit
 import React
 import SwiftUI
 import Combine
+import QuartzCore
 
 private enum DiningDealzLiquidGlassBottomNavItem: String, CaseIterable, Identifiable {
   case home
@@ -126,6 +127,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   private var hostingViewConstraints: [NSLayoutConstraint] = []
   private var hostingAttachmentRetryScheduled = false
   private var hasConfiguredRootView = false
+  private var hasAnimatedTabBarEntrance = false
 #if DEBUG
   private var lastLoggedLayoutSnapshot: String?
   private var lastLoggedSurfaceSnapshot: String?
@@ -153,7 +155,9 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
 
   override func layoutSubviews() {
     super.layoutSubviews()
+    makeInteropContainerTransparent()
     clearEmbeddedTabContentBackdrop()
+    fadeInNativeTabBarIfNeeded()
 #if DEBUG
     logHostState("layout", onlyWhenChanged: true)
     logWideSurfaces("layout", onlyWhenChanged: true)
@@ -170,11 +174,13 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   override func didMoveToWindow() {
     super.didMoveToWindow()
     if window == nil {
+      hasAnimatedTabBarEntrance = false
       detachHostingController()
     } else {
       makeInteropContainerTransparent()
       attachHostingControllerIfNeeded()
       clearEmbeddedTabContentBackdrop()
+      fadeInNativeTabBarIfNeeded()
     }
 #if DEBUG
     logHostState("didMoveToWindow")
@@ -215,6 +221,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     hostingController.view.layer.allowsGroupOpacity = true
     hostingController.onLayout = { [weak self] in
       self?.clearEmbeddedTabContentBackdrop()
+      self?.fadeInNativeTabBarIfNeeded()
     }
 
     updateRootView()
@@ -224,14 +231,27 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     guard let container = superview,
           NSStringFromClass(type(of: container)).contains("RCTLegacyViewManagerInteropComponentView") else { return }
 
-    // Fabric inserts this full-size wrapper around the native view. It has no
-    // opaque fill, so advertising it as opaque can produce a black backing
-    // surface and prevent the glass platter from sampling the scene below.
-    if container.isOpaque {
-      container.isOpaque = false
+    // Fabric and the RN bottom-nav overlays are transparent, nav-sized views.
+    // An opaque backing on any one of them can turn the glass backdrop black.
+    // Do not touch the map, sheet, or any ancestor with an actual background.
+    var ancestor: UIView? = container
+    for _ in 0..<3 {
+      guard let view = ancestor else { break }
+      if view !== container {
+        guard bounds.width > 0, bounds.height > 0,
+              abs(view.bounds.width - bounds.width) < 1,
+              abs(view.bounds.height - bounds.height) < 1 else { break }
+      }
+      let backgroundAlpha = view.backgroundColor?.resolvedColor(with: view.traitCollection).cgColor.alpha ?? 0
+      let layerAlpha = view.layer.backgroundColor?.alpha ?? 0
+      guard backgroundAlpha == 0, layerAlpha == 0 else { break }
+      if view.isOpaque {
+        view.isOpaque = false
 #if DEBUG
-      NSLog("[BottomNavBackdrop] cleared opaque React Native interop container")
+        NSLog("[BottomNavBackdrop] cleared opaque %@", NSStringFromClass(type(of: view)))
 #endif
+      }
+      ancestor = view.superview
     }
   }
 
@@ -353,6 +373,28 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
       }
     }
     return nil
+  }
+
+  private func fadeInNativeTabBarIfNeeded() {
+    guard #available(iOS 26.0, *), !hasAnimatedTabBarEntrance, let window else { return }
+    guard let tabBar = firstTabBar(in: hostingController.view),
+          tabBar.window === window,
+          tabBar.bounds.width > 0,
+          tabBar.bounds.height > 0,
+          !(tabBar.items?.isEmpty ?? true) else { return }
+
+    hasAnimatedTabBarEntrance = true
+    guard !UIAccessibility.isReduceMotionEnabled else { return }
+
+    // Animate only the system tab bar's presentation layer. Keep its model
+    // opacity at 1 so Liquid Glass remains fully interactive and is not left
+    // inside an opacity-zero React Native or SwiftUI hosting container.
+    let fade = CABasicAnimation(keyPath: "opacity")
+    fade.fromValue = 0
+    fade.toValue = 1
+    fade.duration = 0.28
+    fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+    tabBar.layer.add(fade, forKey: "DiningDealzBottomNavEntrance")
   }
 
   private func clearEmbeddedTabContentBackdrop() {
