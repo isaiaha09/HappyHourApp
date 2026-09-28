@@ -452,26 +452,18 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
   }
 
   var body: some View {
-    ZStack(alignment: .bottom) {
-      TabView(selection: Binding(
-        get: { selectedTab },
-        set: { onSelect($0) }
-      )) {
-        ForEach(state.items) { displayItem in
-          Tab(displayItem.title, systemImage: displayItem.systemImageName, value: displayItem.item) {
-            Color.clear
-          }
+    TabView(selection: Binding(
+      get: { selectedTab },
+      set: { onSelect($0) }
+    )) {
+      ForEach(state.items) { displayItem in
+        Tab(displayItem.title, systemImage: displayItem.systemImageName, value: displayItem.item) {
+          Color.clear
         }
       }
-      .toolbarBackground(.hidden, for: .tabBar)
-      .background(Color.clear)
-      .tabViewStyle(.tabBarOnly)
-      .tint(accentColor)
-      .frame(maxWidth: .infinity)
-      .frame(height: 52)
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-    .background(Color.clear)
+    .tabViewStyle(.tabBarOnly)
+    .tint(accentColor)
   }
 }
 
