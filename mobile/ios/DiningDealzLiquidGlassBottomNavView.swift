@@ -116,6 +116,9 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   private let hostingController = UIHostingController(rootView: AnyView(EmptyView()))
   private var hostingViewConstraints: [NSLayoutConstraint] = []
   private var hasConfiguredRootView = false
+#if DEBUG
+  private var lastLoggedLayoutSnapshot: String?
+#endif
 
   private var resolvedActiveItem: DiningDealzLiquidGlassBottomNavItem {
     let preferredItem = DiningDealzLiquidGlassBottomNavItem(rawValue: activeItem as String) ?? .map
@@ -136,6 +139,20 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     CGSize(width: UIView.noIntrinsicMetric, height: 52 + CGFloat(truncating: bottomInset))
   }
 
+  override func layoutSubviews() {
+    super.layoutSubviews()
+#if DEBUG
+    logHostState("layout", onlyWhenChanged: true)
+#endif
+  }
+
+  override func safeAreaInsetsDidChange() {
+    super.safeAreaInsetsDidChange()
+#if DEBUG
+    logHostState("safeAreaInsetsDidChange")
+#endif
+  }
+
   override func didMoveToWindow() {
     super.didMoveToWindow()
     if window == nil {
@@ -143,6 +160,9 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     } else {
       attachHostingControllerIfNeeded()
     }
+#if DEBUG
+    logHostState("didMoveToWindow")
+#endif
   }
 
   override func didMoveToSuperview() {
@@ -152,6 +172,9 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     } else if window != nil {
       attachHostingControllerIfNeeded()
     }
+#if DEBUG
+    logHostState("didMoveToSuperview")
+#endif
   }
 
   private func setupView() {
@@ -178,6 +201,48 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     }
     return nil
   }
+
+#if DEBUG
+  private func logHostState(_ event: String, onlyWhenChanged: Bool = false) {
+    let hostParent = hostingController.parent.map { NSStringFromClass(type(of: $0)) } ?? "none"
+    let nearestParent = nearestViewController.map { NSStringFromClass(type(of: $0)) } ?? "none"
+    let tabBarDescription: String
+    if let tabBar = firstTabBar(in: hostingController.view) {
+      tabBarDescription = diagnosticDescription(for: tabBar)
+    } else {
+      tabBarDescription = "not-found"
+    }
+    var ancestorDescriptions: [String] = []
+    var currentAncestor: UIView? = self
+    while let ancestor = currentAncestor {
+      ancestorDescriptions.append(diagnosticDescription(for: ancestor))
+      currentAncestor = ancestor.superview
+    }
+    let snapshot = "host=\(diagnosticDescription(for: self)); hostingView=\(diagnosticDescription(for: hostingController.view)); hostParent=\(hostParent); nearestParent=\(nearestParent); tabBar=\(tabBarDescription); ancestors=\(ancestorDescriptions)"
+
+    if onlyWhenChanged, snapshot == lastLoggedLayoutSnapshot {
+      return
+    }
+    lastLoggedLayoutSnapshot = snapshot
+    NSLog("[BottomNavDiag] %@ %@", event, snapshot)
+  }
+
+  private func diagnosticDescription(for view: UIView) -> String {
+    "\(NSStringFromClass(type(of: view))){frame=\(view.frame),bounds=\(view.bounds),safeArea=\(view.safeAreaInsets),opaque=\(view.isOpaque),clips=\(view.clipsToBounds),background=\(String(describing: view.backgroundColor))}"
+  }
+
+  private func firstTabBar(in view: UIView) -> UITabBar? {
+    if let tabBar = view as? UITabBar {
+      return tabBar
+    }
+    for subview in view.subviews {
+      if let tabBar = firstTabBar(in: subview) {
+        return tabBar
+      }
+    }
+    return nil
+  }
+#endif
 
   private func attachHostingControllerIfNeeded() {
     guard window != nil else { return }
