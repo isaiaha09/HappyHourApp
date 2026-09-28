@@ -46,12 +46,28 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   @objc var themeVariant: NSString = "default-dark" {
     didSet {
       updateRootView()
+#if DEBUG
+      if themeVariant != oldValue { scheduleNavigationSurfaceSnapshots() }
+#endif
     }
   }
 
   @objc var activeItem: NSString = "map" {
     didSet {
       updateRootView()
+#if DEBUG
+      if activeItem != oldValue { scheduleNavigationSurfaceSnapshots() }
+#endif
+    }
+  }
+
+  // The guest header fades over 500 ms; keep that timing on the native bar
+  // without placing its full-width host inside an animated RN wrapper.
+  @objc var entranceMode: NSString = "standard" {
+    didSet {
+      if entranceMode as String == "guest-chrome" {
+        fadeInNativeTabBarIfNeeded()
+      }
     }
   }
 
@@ -143,6 +159,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   private var lastLoggedSurfaceSnapshot: String?
   private var loggedMissingEmbeddedTabController = false
   private var loggedTabContentBranch = false
+  private var navigationSurfaceSnapshotGeneration = 0
 #endif
 
   private var resolvedActiveItem: DiningDealzLiquidGlassBottomNavItem {
@@ -377,6 +394,17 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     }
     return String(format: "%.2f,%.2f,%.2f,%.2f", Double(red), Double(green), Double(blue), Double(alpha))
   }
+
+  private func scheduleNavigationSurfaceSnapshots() {
+    navigationSurfaceSnapshotGeneration &+= 1
+    let generation = navigationSurfaceSnapshotGeneration
+    for delay in [0.1, 0.45, 1.0] {
+      DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+        guard let self, self.window != nil, self.navigationSurfaceSnapshotGeneration == generation else { return }
+        self.logWideSurfaces("navigation+\(String(format: "%.2f", delay))s")
+      }
+    }
+  }
 #endif
 
   private func firstTabBar(in view: UIView) -> UITabBar? {
@@ -421,7 +449,8 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     // Keep the host fully visible so it can compose Liquid Glass. Prepare the
     // actual UIKit bar before the next display pass, then animate its view
     // alpha after the layout run loop has produced the floating platter.
-    tabBar.alpha = 0.12
+    let guestEntrance = entranceMode as String == "guest-chrome"
+    tabBar.alpha = guestEntrance ? 0.01 : 0.12
     tabBarEntranceScheduled = true
     let generation = tabBarEntranceGeneration
     DispatchQueue.main.async { [weak self, weak tabBar] in
@@ -433,12 +462,15 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
       }
       self.hasAnimatedTabBarEntrance = true
 #if DEBUG
-      NSLog("[BottomNavEntrance] started native UITabBar fade")
+      NSLog("[BottomNavEntrance] started native UITabBar fade mode=%@", self.entranceMode)
 #endif
+      let animationOptions: UIView.AnimationOptions = guestEntrance
+        ? [.allowUserInteraction, .beginFromCurrentState, .curveEaseInOut]
+        : [.allowUserInteraction, .beginFromCurrentState, .curveEaseOut]
       UIView.animate(
-        withDuration: 0.28,
+        withDuration: guestEntrance ? 0.5 : 0.28,
         delay: 0,
-        options: [.allowUserInteraction, .beginFromCurrentState, .curveEaseOut],
+        options: animationOptions,
         animations: { tabBar.alpha = 1 },
         completion: { _ in tabBar.alpha = 1 }
       )
@@ -458,6 +490,26 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
 
   private func clearEmbeddedTabContentBackdrop() {
     guard #available(iOS 26.0, *), let tabBar = firstTabBar(in: hostingController.view) else { return }
+
+    if hidesFullWidthTabBarBackground {
+      // The authenticated shell has no full-width bar background. UIKit's
+      // container wrappers and UITabBar still report themselves opaque even
+      // though they have no backing color. Correct only those wide views;
+      // the floating platter and its Liquid Glass lens stay untouched.
+      var barContainer: UIView? = tabBar
+      while let view = barContainer, view !== hostingController.view {
+        let className = NSStringFromClass(type(of: view))
+        if view === tabBar || className.contains("_UITabBarContainer") {
+          if view.isOpaque {
+            view.isOpaque = false
+#if DEBUG
+            NSLog("[BottomNavBackdrop] cleared opaque full-width %@", className)
+#endif
+          }
+        }
+        barContainer = view.superview
+      }
+    }
 
     // The bar-only TabView also creates a full-size selected-content branch.
     // On iOS 26 its UITransitionView and controller wrapper can remain opaque
