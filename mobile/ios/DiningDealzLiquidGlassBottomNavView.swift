@@ -119,6 +119,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   private var hasConfiguredRootView = false
 #if DEBUG
   private var lastLoggedLayoutSnapshot: String?
+  private var lastLoggedSurfaceSnapshot: String?
 #endif
 
   private var resolvedActiveItem: DiningDealzLiquidGlassBottomNavItem {
@@ -144,6 +145,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     super.layoutSubviews()
 #if DEBUG
     logHostState("layout", onlyWhenChanged: true)
+    logWideSurfaces("layout", onlyWhenChanged: true)
 #endif
   }
 
@@ -163,6 +165,13 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     }
 #if DEBUG
     logHostState("didMoveToWindow")
+    logWideSurfaces("didMoveToWindow")
+    if window != nil {
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+        guard let self, self.window != nil else { return }
+        self.logWideSurfaces("settled")
+      }
+    }
 #endif
   }
 
@@ -253,6 +262,62 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
       }
     }
     return nil
+  }
+
+  private func logWideSurfaces(_ event: String, onlyWhenChanged: Bool = false) {
+    guard bounds.width > 0, hostingController.view.superview === self else { return }
+
+    var surfaces: [String] = []
+    let minimumWidth = bounds.width * 0.55
+
+    func visit(_ view: UIView, depth: Int) {
+      guard depth <= 12 else { return }
+
+      let frameInHost = view.convert(view.bounds, to: self)
+      let className = NSStringFromClass(type(of: view))
+      let isGlassView = className.localizedCaseInsensitiveContains("glass")
+        || className.localizedCaseInsensitiveContains("liquid")
+        || className.localizedCaseInsensitiveContains("platter")
+      if (frameInHost.width >= minimumWidth || isGlassView), frameInHost.height >= 20 {
+        let layerColor = view.layer.backgroundColor.map { UIColor(cgColor: $0) }
+        let effect = (view as? UIVisualEffectView)?.effect.map { String(describing: $0) } ?? "-"
+        surfaces.append(
+          "\(depth):\(className) y=\(Int(frameInHost.minY)) h=\(Int(frameInHost.height)) bg=\(diagnosticColor(view.backgroundColor, traits: view.traitCollection)) layer=\(diagnosticColor(layerColor, traits: view.traitCollection)) opaque=\(view.isOpaque) alpha=\(String(format: "%.2f", Double(view.alpha))) hidden=\(view.isHidden) effect=\(effect)"
+        )
+      }
+
+      for subview in view.subviews {
+        visit(subview, depth: depth + 1)
+      }
+    }
+
+    visit(hostingController.view, depth: 0)
+    if let tabBar = firstTabBar(in: hostingController.view) {
+      let standard = tabBar.standardAppearance
+      let scrollEdge = tabBar.scrollEdgeAppearance
+      let appearanceDescription = "tabBar translucent=\(tabBar.isTranslucent) standardColor=\(diagnosticColor(standard.backgroundColor, traits: tabBar.traitCollection)) standardEffect=\(String(describing: standard.backgroundEffect)) scrollEdgeColor=\(diagnosticColor(scrollEdge?.backgroundColor, traits: tabBar.traitCollection)) scrollEdgeEffect=\(String(describing: scrollEdge?.backgroundEffect))"
+      surfaces.insert(appearanceDescription, at: 0)
+    }
+
+    let snapshot = surfaces.prefix(24).joined(separator: " | ")
+    if onlyWhenChanged, snapshot == lastLoggedSurfaceSnapshot { return }
+    lastLoggedSurfaceSnapshot = snapshot
+    for (index, surface) in surfaces.prefix(24).enumerated() {
+      NSLog("[BottomNavSurface] %@ %@ %@", event, String(index), surface)
+    }
+  }
+
+  private func diagnosticColor(_ color: UIColor?, traits: UITraitCollection) -> String {
+    guard let color else { return "-" }
+    let resolvedColor = color.resolvedColor(with: traits)
+    var red: CGFloat = 0
+    var green: CGFloat = 0
+    var blue: CGFloat = 0
+    var alpha: CGFloat = 0
+    guard resolvedColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
+      return String(describing: resolvedColor)
+    }
+    return String(format: "%.2f,%.2f,%.2f,%.2f", Double(red), Double(green), Double(blue), Double(alpha))
   }
 #endif
 
