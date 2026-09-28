@@ -33,4 +33,41 @@ describe('GuestShellChrome native navigation', () => {
       expect.objectContaining({ entranceMode: 'guest-chrome' }),
     );
   });
+
+  it('keeps the native tab bar visible in the non-interactive outgoing map', () => {
+    const onCreateAccount = jest.fn();
+    const onSelectPortal = jest.fn();
+    const screen = render(
+      <GuestShellChrome
+        onCreateAccount={onCreateAccount}
+        onSelectPortal={onSelectPortal}
+        showBottomNav
+      />,
+    );
+
+    mockNativeBottomNav.mockClear();
+    screen.rerender(
+      <GuestShellChrome
+        interactive={false}
+        onCreateAccount={onCreateAccount}
+        onSelectPortal={onSelectPortal}
+        showBottomNav
+      />,
+    );
+    expect(mockNativeBottomNav).toHaveBeenCalledWith(
+      expect.objectContaining({ entranceMode: 'guest-chrome' }),
+    );
+    expect(mockNativeBottomNav.mock.calls[0]?.[0]).not.toHaveProperty('presentationVisible');
+
+    mockNativeBottomNav.mockClear();
+    screen.rerender(
+      <GuestShellChrome
+        interactive={false}
+        onCreateAccount={onCreateAccount}
+        onSelectPortal={onSelectPortal}
+        showBottomNav={false}
+      />,
+    );
+    expect(mockNativeBottomNav).not.toHaveBeenCalled();
+  });
 });

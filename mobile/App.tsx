@@ -7684,6 +7684,10 @@ function AppScreen() {
       && persistentOverlayScreen === null
       && incomingOnboardingScreen === null
       && returningToSplashScreen === null;
+    const guestBottomNavExitingToOnboarding = screenMode === 'browse'
+      && !browseTransitionActive
+      && (incomingOnboardingScreen === 'auth' || incomingOnboardingScreen === 'profiles')
+      && !selectedPlaceSlug;
     const showingBrowseUnderSplash = keepGuestMapVisibleOnSplash && !browseTransitionActive && overlayScreen === null && incomingOnboardingScreen === null;
     const splashLayerStyle = returningToSplashScreen
       ? splashReturnIncomingStyle
@@ -7756,9 +7760,9 @@ function AppScreen() {
             {renderBrowseScreen({
               guestChrome: true,
               guestChromeActionOpacity: nativeGuestChrome ? resolvedGuestBrowseNativeChromeOpacity : 1,
-              // Liquid Glass must mount over the visible map, not in the hidden
-              // browse underlay while the splash or login screen is on top.
-              guestChromeBottomNavVisible: !nativeBottomNavAvailable || guestBrowseUnderlayInteractive,
+              // Keep the native bar fully visible on the outgoing map until
+              // the opaque login/sign-up screen has slid over it.
+              guestChromeBottomNavVisible: !nativeBottomNavAvailable || guestBrowseUnderlayInteractive || guestBottomNavExitingToOnboarding,
               guestChromeInteractive: guestChromeInteractive && !selectedPlaceSlug,
               guestChromeHeaderOpacity: nativeGuestChrome ? resolvedGuestBrowseNativeChromeOpacity : 1,
               guestChromeLogoOpacity: nativeGuestChrome && guestToBrowseTransition ? 0 : guestBrowseHeaderLogoOpacity,

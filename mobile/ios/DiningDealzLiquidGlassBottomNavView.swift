@@ -46,6 +46,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   @objc var themeVariant: NSString = "default-dark" {
     didSet {
       updateRootView()
+      if themeVariant != oldValue { maintainTransparentTabContentDuringTransition() }
 #if DEBUG
       if themeVariant != oldValue { scheduleNavigationSurfaceSnapshots() }
 #endif
@@ -55,6 +56,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   @objc var activeItem: NSString = "map" {
     didSet {
       updateRootView()
+      if activeItem != oldValue { maintainTransparentTabContentDuringTransition() }
 #if DEBUG
       if activeItem != oldValue { scheduleNavigationSurfaceSnapshots() }
 #endif
@@ -99,6 +101,11 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   @objc var hidesFullWidthTabBarBackground: Bool = false {
     didSet {
       updateRootView()
+      if hidesFullWidthTabBarBackground && hidesFullWidthTabBarBackground != oldValue {
+        maintainTransparentTabContentDuringTransition()
+      } else if !hidesFullWidthTabBarBackground {
+        stopTabContentTransitionMaintenance()
+      }
     }
   }
 
@@ -117,6 +124,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   @objc var moreOpen: Bool = false {
     didSet {
       updateRootView()
+      if moreOpen != oldValue { maintainTransparentTabContentDuringTransition() }
     }
   }
 
@@ -149,6 +157,8 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   private var hostingViewConstraints: [NSLayoutConstraint] = []
   private var hostingAttachmentRetryScheduled = false
   private var backdropRefreshScheduled = false
+  private var tabContentTransitionTimer: Timer?
+  private var tabContentTransitionDeadline: TimeInterval = 0
   private var hasConfiguredRootView = false
   private var hasAnimatedTabBarEntrance = false
   private var tabBarEntranceScheduled = false
@@ -202,6 +212,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   override func didMoveToWindow() {
     super.didMoveToWindow()
     if window == nil {
+      stopTabContentTransitionMaintenance()
       tabBarEntranceGeneration &+= 1
       firstTabBar(in: hostingController.view)?.alpha = 1
       hasAnimatedTabBarEntrance = false
@@ -213,6 +224,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
       attachHostingControllerIfNeeded()
       clearEmbeddedTabContentBackdrop()
       scheduleBackdropRefresh()
+      maintainTransparentTabContentDuringTransition()
       fadeInNativeTabBarIfNeeded()
     }
 #if DEBUG
@@ -230,6 +242,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   override func didMoveToSuperview() {
     super.didMoveToSuperview()
     if superview == nil {
+      stopTabContentTransitionMaintenance()
       detachHostingController()
     } else {
       makeInteropContainerTransparent()
@@ -486,6 +499,38 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
       self.tabBarEntranceVisibilityRetryScheduled = false
       self.fadeInNativeTabBarIfNeeded()
     }
+  }
+
+  private func maintainTransparentTabContentDuringTransition() {
+    guard #available(iOS 26.0, *), hidesFullWidthTabBarBackground, window != nil else { return }
+    // SwiftUI swaps selected-tab hosting views *inside* UITransitionView during
+    // a gesture. This can happen after the outer host's last layout callback,
+    // so a single cleanup misses the new opaque-black content view. Recheck
+    // only during the bounded navigation window, including tracking run loops.
+    tabContentTransitionDeadline = ProcessInfo.processInfo.systemUptime + 1.5
+    clearEmbeddedTabContentBackdrop()
+    guard tabContentTransitionTimer == nil else { return }
+#if DEBUG
+    NSLog("[BottomNavBackdrop] tracking tab content through navigation")
+#endif
+    let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] timer in
+      guard let self,
+            self.window != nil,
+            self.hidesFullWidthTabBarBackground,
+            ProcessInfo.processInfo.systemUptime < self.tabContentTransitionDeadline else {
+        timer.invalidate()
+        self?.tabContentTransitionTimer = nil
+        return
+      }
+      self.clearEmbeddedTabContentBackdrop()
+    }
+    tabContentTransitionTimer = timer
+    RunLoop.main.add(timer, forMode: .common)
+  }
+
+  private func stopTabContentTransitionMaintenance() {
+    tabContentTransitionTimer?.invalidate()
+    tabContentTransitionTimer = nil
   }
 
   private func clearEmbeddedTabContentBackdrop() {
