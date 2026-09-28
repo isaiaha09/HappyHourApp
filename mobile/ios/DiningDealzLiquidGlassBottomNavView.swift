@@ -30,6 +30,15 @@ private final class DiningDealzLiquidGlassBottomNavState: ObservableObject {
   @Published var themeVariant: DiningDealzLiquidGlassThemeVariant = .defaultDark
 }
 
+private final class DiningDealzBottomNavHostingController: UIHostingController<AnyView> {
+  var onLayout: (() -> Void)?
+
+  override func viewDidLayoutSubviews() {
+    super.viewDidLayoutSubviews()
+    onLayout?()
+  }
+}
+
 @objc(DiningDealzLiquidGlassBottomNavView)
 final class DiningDealzLiquidGlassBottomNavView: UIView {
   @objc var onNavItemSelect: RCTDirectEventBlock?
@@ -113,11 +122,9 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   }
 
   private let state = DiningDealzLiquidGlassBottomNavState()
-  private let hostingController = UIHostingController(rootView: AnyView(EmptyView()))
+  private let hostingController = DiningDealzBottomNavHostingController(rootView: AnyView(EmptyView()))
   private var hostingViewConstraints: [NSLayoutConstraint] = []
   private var hostingAttachmentRetryScheduled = false
-  private var backdropRefreshScheduled = false
-  private var backdropRefreshGeneration = 0
   private var hasConfiguredRootView = false
 #if DEBUG
   private var lastLoggedLayoutSnapshot: String?
@@ -166,7 +173,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
       detachHostingController()
     } else {
       attachHostingControllerIfNeeded()
-      scheduleBackdropRefresh()
+      clearEmbeddedTabContentBackdrop()
     }
 #if DEBUG
     logHostState("didMoveToWindow")
@@ -202,6 +209,9 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     hostingController.view.isOpaque = false
     hostingController.view.clipsToBounds = false
     hostingController.view.layer.allowsGroupOpacity = true
+    hostingController.onLayout = { [weak self] in
+      self?.clearEmbeddedTabContentBackdrop()
+    }
 
     updateRootView()
   }
@@ -326,32 +336,13 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     return nil
   }
 
-  private func scheduleBackdropRefresh() {
-    guard window != nil else { return }
-    backdropRefreshGeneration &+= 1
-    let generation = backdropRefreshGeneration
-    if !backdropRefreshScheduled {
-      backdropRefreshScheduled = true
-      DispatchQueue.main.async { [weak self] in
-        guard let self else { return }
-        self.backdropRefreshScheduled = false
-        guard self.window != nil else { return }
-        self.clearEmbeddedTabContentBackdrop()
-      }
-    }
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-      guard let self, self.window != nil, self.backdropRefreshGeneration == generation else { return }
-      self.clearEmbeddedTabContentBackdrop()
-    }
-  }
-
   private func clearEmbeddedTabContentBackdrop() {
     guard #available(iOS 26.0, *), let tabBar = firstTabBar(in: hostingController.view) else { return }
 
     // SwiftUI's embedded TabView creates a UITabBarController whose container
-    // and selected tab content can default to opaque black. Its full-size
-    // wrapper views also claim opacity despite having no background. Clear
-    // those wrappers, but leave the UITabBar and its Liquid Glass subtree intact.
+    // and selected tab content can default to opaque black. Clear the content
+    // path synchronously during layout, without changing the tab-bar wrappers
+    // or the Liquid Glass subtree that supplies the native outer shell.
     var responder: UIResponder? = tabBar
     while let current = responder {
       if let tabController = current as? UITabBarController {
@@ -360,13 +351,6 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
         if containerView.isDescendant(of: hostingController.view) {
           var ancestor = containerView.superview
           while let view = ancestor, view !== hostingController.view {
-            clearBackground(of: view)
-            ancestor = view.superview
-          }
-        }
-        if tabBar.isDescendant(of: containerView) {
-          var ancestor = tabBar.superview
-          while let view = ancestor, view !== containerView {
             clearBackground(of: view)
             ancestor = view.superview
           }
@@ -487,7 +471,6 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     state.items = currentItems
     state.moreOpen = currentMoreOpen
     state.themeVariant = currentThemeVariant
-    scheduleBackdropRefresh()
 
     if hostingController.overrideUserInterfaceStyle != currentThemeVariant.interfaceStyle {
       hostingController.overrideUserInterfaceStyle = currentThemeVariant.interfaceStyle
@@ -511,6 +494,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
       )
       hasConfiguredRootView = true
     }
+    clearEmbeddedTabContentBackdrop()
   }
 
   private var resolvedThemeVariant: DiningDealzLiquidGlassThemeVariant {
@@ -607,6 +591,7 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
       ForEach(state.items) { displayItem in
         Tab(displayItem.title, systemImage: displayItem.systemImageName, value: displayItem.item) {
           Color.clear
+            .toolbarBackground(.visible, for: .tabBar)
         }
       }
     }
