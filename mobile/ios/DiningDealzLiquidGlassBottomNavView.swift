@@ -116,10 +116,12 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   private let hostingController = UIHostingController(rootView: AnyView(EmptyView()))
   private var hostingViewConstraints: [NSLayoutConstraint] = []
   private var hostingAttachmentRetryScheduled = false
+  private var backdropRefreshScheduled = false
   private var hasConfiguredRootView = false
 #if DEBUG
   private var lastLoggedLayoutSnapshot: String?
   private var lastLoggedSurfaceSnapshot: String?
+  private var loggedMissingEmbeddedTabController = false
 #endif
 
   private var resolvedActiveItem: DiningDealzLiquidGlassBottomNavItem {
@@ -143,6 +145,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
 
   override func layoutSubviews() {
     super.layoutSubviews()
+    clearEmbeddedTabContentBackdrop()
 #if DEBUG
     logHostState("layout", onlyWhenChanged: true)
     logWideSurfaces("layout", onlyWhenChanged: true)
@@ -162,6 +165,11 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
       detachHostingController()
     } else {
       attachHostingControllerIfNeeded()
+      scheduleBackdropRefresh()
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+        guard let self, self.window != nil else { return }
+        self.clearEmbeddedTabContentBackdrop()
+      }
     }
 #if DEBUG
     logHostState("didMoveToWindow")
@@ -252,18 +260,6 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     "\(NSStringFromClass(type(of: view))){frame=\(view.frame),bounds=\(view.bounds),safeArea=\(view.safeAreaInsets),opaque=\(view.isOpaque),clips=\(view.clipsToBounds),background=\(String(describing: view.backgroundColor))}"
   }
 
-  private func firstTabBar(in view: UIView) -> UITabBar? {
-    if let tabBar = view as? UITabBar {
-      return tabBar
-    }
-    for subview in view.subviews {
-      if let tabBar = firstTabBar(in: subview) {
-        return tabBar
-      }
-    }
-    return nil
-  }
-
   private func logWideSurfaces(_ event: String, onlyWhenChanged: Bool = false) {
     guard bounds.width > 0, hostingController.view.superview === self else { return }
 
@@ -320,6 +316,65 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     return String(format: "%.2f,%.2f,%.2f,%.2f", Double(red), Double(green), Double(blue), Double(alpha))
   }
 #endif
+
+  private func firstTabBar(in view: UIView) -> UITabBar? {
+    if let tabBar = view as? UITabBar {
+      return tabBar
+    }
+    for subview in view.subviews {
+      if let tabBar = firstTabBar(in: subview) {
+        return tabBar
+      }
+    }
+    return nil
+  }
+
+  private func scheduleBackdropRefresh() {
+    guard window != nil, !backdropRefreshScheduled else { return }
+    backdropRefreshScheduled = true
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.backdropRefreshScheduled = false
+      guard self.window != nil else { return }
+      self.clearEmbeddedTabContentBackdrop()
+    }
+  }
+
+  private func clearEmbeddedTabContentBackdrop() {
+    guard #available(iOS 26.0, *), let tabBar = firstTabBar(in: hostingController.view) else { return }
+
+    // SwiftUI's embedded TabView creates a UITabBarController whose container
+    // and selected tab content default to opaque black. They cover the React
+    // Native map, even though the floating UITabBar itself is translucent.
+    var responder: UIResponder? = tabBar
+    while let current = responder {
+      if let tabController = current as? UITabBarController {
+        clearBackground(of: tabController.view)
+        if let selected = tabController.selectedViewController, selected.isViewLoaded {
+          clearBackground(of: selected.view)
+        }
+        return
+      }
+      responder = current.next
+    }
+#if DEBUG
+    if !loggedMissingEmbeddedTabController {
+      loggedMissingEmbeddedTabController = true
+      NSLog("[BottomNavBackdrop] UITabBar found without a UITabBarController in its responder chain")
+    }
+#endif
+  }
+
+  private func clearBackground(of view: UIView) {
+    let hadBackground = (view.backgroundColor?.cgColor.alpha ?? 0) > 0
+    let wasOpaque = view.isOpaque
+    guard hadBackground || wasOpaque else { return }
+    if hadBackground { view.backgroundColor = .clear }
+    view.isOpaque = false
+#if DEBUG
+    NSLog("[BottomNavBackdrop] cleared %@ background=%@ opaque=%@", NSStringFromClass(type(of: view)), hadBackground ? "yes" : "no", wasOpaque ? "yes" : "no")
+#endif
+  }
 
   private func attachHostingControllerIfNeeded(allowDeferredRetry: Bool = true) {
     guard window != nil else { return }
@@ -405,6 +460,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     state.items = currentItems
     state.moreOpen = currentMoreOpen
     state.themeVariant = currentThemeVariant
+    scheduleBackdropRefresh()
 
     if hostingController.overrideUserInterfaceStyle != currentThemeVariant.interfaceStyle {
       hostingController.overrideUserInterfaceStyle = currentThemeVariant.interfaceStyle
