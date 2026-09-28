@@ -115,6 +115,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   private let state = DiningDealzLiquidGlassBottomNavState()
   private let hostingController = UIHostingController(rootView: AnyView(EmptyView()))
   private var hostingViewConstraints: [NSLayoutConstraint] = []
+  private var hostingAttachmentRetryScheduled = false
   private var hasConfiguredRootView = false
 #if DEBUG
   private var lastLoggedLayoutSnapshot: String?
@@ -192,6 +193,17 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   }
 
   private var nearestViewController: UIViewController? {
+    // Prefer React Native's logical parent chain. Under Fabric interop, the
+    // responder chain can be incomplete while the native view is being mounted.
+    var parentView: UIView? = reactSuperview()
+    while let currentView = parentView {
+      if let viewController = currentView.reactViewController() {
+        return viewController
+      }
+      parentView = currentView.reactSuperview()
+    }
+
+    // Retain the ordinary UIKit lookup as a fallback for non-RN hosting.
     var responder: UIResponder? = next
     while let currentResponder = responder {
       if let viewController = currentResponder as? UIViewController {
@@ -244,10 +256,13 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   }
 #endif
 
-  private func attachHostingControllerIfNeeded() {
+  private func attachHostingControllerIfNeeded(allowDeferredRetry: Bool = true) {
     guard window != nil else { return }
     guard let parentViewController = nearestViewController else {
       installHostingViewIfNeeded()
+      if allowDeferredRetry {
+        scheduleHostingControllerAttachmentRetry()
+      }
       return
     }
 
@@ -265,6 +280,24 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     parentViewController.addChild(hostingController)
     installHostingViewIfNeeded()
     hostingController.didMove(toParent: parentViewController)
+#if DEBUG
+    logHostState("attachedToParent")
+#endif
+  }
+
+  private func scheduleHostingControllerAttachmentRetry() {
+    guard !hostingAttachmentRetryScheduled else { return }
+    hostingAttachmentRetryScheduled = true
+
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.hostingAttachmentRetryScheduled = false
+      guard self.window != nil else { return }
+      self.attachHostingControllerIfNeeded(allowDeferredRetry: false)
+#if DEBUG
+      self.logHostState("deferredAttach")
+#endif
+    }
   }
 
   private func detachHostingController() {
