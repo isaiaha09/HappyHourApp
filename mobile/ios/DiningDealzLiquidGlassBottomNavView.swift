@@ -28,6 +28,7 @@ private final class DiningDealzLiquidGlassBottomNavState: ObservableObject {
   @Published var items: [DiningDealzLiquidGlassBottomNavDisplayItem] = []
   @Published var moreOpen = false
   @Published var themeVariant: DiningDealzLiquidGlassThemeVariant = .defaultDark
+  @Published var hidesFullWidthTabBarBackground = false
 }
 
 private final class DiningDealzBottomNavHostingController: UIHostingController<AnyView> {
@@ -74,6 +75,12 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   }
 
   @objc var includeHomeItem: Bool = false {
+    didSet {
+      updateRootView()
+    }
+  }
+
+  @objc var hidesFullWidthTabBarBackground: Bool = false {
     didSet {
       updateRootView()
     }
@@ -129,6 +136,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   private var hasConfiguredRootView = false
   private var hasAnimatedTabBarEntrance = false
   private var tabBarEntranceScheduled = false
+  private var tabBarEntranceVisibilityRetryScheduled = false
   private var tabBarEntranceGeneration = 0
 #if DEBUG
   private var lastLoggedLayoutSnapshot: String?
@@ -181,6 +189,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
       firstTabBar(in: hostingController.view)?.alpha = 1
       hasAnimatedTabBarEntrance = false
       tabBarEntranceScheduled = false
+      tabBarEntranceVisibilityRetryScheduled = false
       detachHostingController()
     } else {
       makeInteropContainerTransparent()
@@ -395,6 +404,20 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
       return
     }
 
+    // Guest chrome can be mounted beneath a fading React Native scene. If
+    // UIKit animates the bar while that ancestor is invisible, the user only
+    // sees the last frame pop in. Wait until the scene is onscreen, keeping
+    // the UITabBar (rather than an RN wrapper) as the animated surface.
+    var ancestor: UIView? = self
+    while let view = ancestor, view !== window {
+      let presentedOpacity = view.layer.presentation()?.opacity ?? view.layer.opacity
+      if view.isHidden || view.alpha < 0.95 || presentedOpacity < 0.95 {
+        scheduleTabBarEntranceVisibilityRetry()
+        return
+      }
+      ancestor = view.superview
+    }
+
     // Keep the host fully visible so it can compose Liquid Glass. Prepare the
     // actual UIKit bar before the next display pass, then animate its view
     // alpha after the layout run loop has produced the floating platter.
@@ -419,6 +442,17 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
         animations: { tabBar.alpha = 1 },
         completion: { _ in tabBar.alpha = 1 }
       )
+    }
+  }
+
+  private func scheduleTabBarEntranceVisibilityRetry() {
+    guard !tabBarEntranceVisibilityRetryScheduled, window != nil else { return }
+    tabBarEntranceVisibilityRetryScheduled = true
+    let generation = tabBarEntranceGeneration
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+      guard let self, self.tabBarEntranceGeneration == generation else { return }
+      self.tabBarEntranceVisibilityRetryScheduled = false
+      self.fadeInNativeTabBarIfNeeded()
     }
   }
 
@@ -601,6 +635,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     state.items = currentItems
     state.moreOpen = currentMoreOpen
     state.themeVariant = currentThemeVariant
+    state.hidesFullWidthTabBarBackground = hidesFullWidthTabBarBackground
 
     if hostingController.overrideUserInterfaceStyle != currentThemeVariant.interfaceStyle {
       hostingController.overrideUserInterfaceStyle = currentThemeVariant.interfaceStyle
@@ -721,7 +756,13 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     )) {
       ForEach(state.items) { displayItem in
         Tab(displayItem.title, systemImage: displayItem.systemImageName, value: displayItem.item) {
-          Color.clear
+          if state.hidesFullWidthTabBarBackground {
+            // Hide the full-width system bar background in the authenticated
+            // shell; the iOS 26 floating platter remains system-owned.
+            Color.clear.toolbarBackgroundVisibility(.hidden, for: .tabBar)
+          } else {
+            Color.clear
+          }
         }
       }
     }

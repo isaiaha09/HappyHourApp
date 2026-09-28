@@ -7538,6 +7538,7 @@ function AppScreen() {
           <NativeIOSLiquidGlassBottomNav
             activeItem={activeItem}
             bottomInset={insets.bottom}
+            hidesFullWidthTabBarBackground={!options.guest}
             includeHomeItem={false}
             labels={options.guest ? { map: 'Customer', profile: 'Sign Up', more: 'Business' } : undefined}
             moreOpen={bottomMoreSheetVisible}
