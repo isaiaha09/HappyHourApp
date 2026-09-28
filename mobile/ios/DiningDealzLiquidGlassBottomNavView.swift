@@ -117,6 +117,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   private var hostingViewConstraints: [NSLayoutConstraint] = []
   private var hostingAttachmentRetryScheduled = false
   private var backdropRefreshScheduled = false
+  private var backdropRefreshGeneration = 0
   private var hasConfiguredRootView = false
 #if DEBUG
   private var lastLoggedLayoutSnapshot: String?
@@ -166,10 +167,6 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     } else {
       attachHostingControllerIfNeeded()
       scheduleBackdropRefresh()
-      DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-        guard let self, self.window != nil else { return }
-        self.clearEmbeddedTabContentBackdrop()
-      }
     }
 #if DEBUG
     logHostState("didMoveToWindow")
@@ -330,12 +327,20 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   }
 
   private func scheduleBackdropRefresh() {
-    guard window != nil, !backdropRefreshScheduled else { return }
-    backdropRefreshScheduled = true
-    DispatchQueue.main.async { [weak self] in
-      guard let self else { return }
-      self.backdropRefreshScheduled = false
-      guard self.window != nil else { return }
+    guard window != nil else { return }
+    backdropRefreshGeneration &+= 1
+    let generation = backdropRefreshGeneration
+    if !backdropRefreshScheduled {
+      backdropRefreshScheduled = true
+      DispatchQueue.main.async { [weak self] in
+        guard let self else { return }
+        self.backdropRefreshScheduled = false
+        guard self.window != nil else { return }
+        self.clearEmbeddedTabContentBackdrop()
+      }
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+      guard let self, self.window != nil, self.backdropRefreshGeneration == generation else { return }
       self.clearEmbeddedTabContentBackdrop()
     }
   }
@@ -344,14 +349,37 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     guard #available(iOS 26.0, *), let tabBar = firstTabBar(in: hostingController.view) else { return }
 
     // SwiftUI's embedded TabView creates a UITabBarController whose container
-    // and selected tab content default to opaque black. They cover the React
-    // Native map, even though the floating UITabBar itself is translucent.
+    // and selected tab content can default to opaque black. Its full-size
+    // wrapper views also claim opacity despite having no background. Clear
+    // those wrappers, but leave the UITabBar and its Liquid Glass subtree intact.
     var responder: UIResponder? = tabBar
     while let current = responder {
       if let tabController = current as? UITabBarController {
-        clearBackground(of: tabController.view)
+        let containerView = tabController.view
+        clearBackground(of: containerView)
+        if containerView.isDescendant(of: hostingController.view) {
+          var ancestor = containerView.superview
+          while let view = ancestor, view !== hostingController.view {
+            clearBackground(of: view)
+            ancestor = view.superview
+          }
+        }
+        if tabBar.isDescendant(of: containerView) {
+          var ancestor = tabBar.superview
+          while let view = ancestor, view !== containerView {
+            clearBackground(of: view)
+            ancestor = view.superview
+          }
+        }
         if let selected = tabController.selectedViewController, selected.isViewLoaded {
-          clearBackground(of: selected.view)
+          let contentView = selected.view
+          if contentView.isDescendant(of: containerView) {
+            var ancestor: UIView? = contentView
+            while let view = ancestor, view !== containerView {
+              clearBackground(of: view)
+              ancestor = view.superview
+            }
+          }
         }
         return
       }

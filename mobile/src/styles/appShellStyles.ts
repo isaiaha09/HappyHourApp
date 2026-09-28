@@ -44,6 +44,7 @@ export const appShellStyles = {
     left: 0,
     position: 'absolute',
     right: 0,
+    zIndex: 70,
   },
   incomingOnboardingOverlay: {
     shadowColor: 'transparent',
