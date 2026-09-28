@@ -2,7 +2,6 @@ import UIKit
 import React
 import SwiftUI
 import Combine
-import QuartzCore
 
 private enum DiningDealzLiquidGlassBottomNavItem: String, CaseIterable, Identifiable {
   case home
@@ -126,12 +125,16 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   private let hostingController = DiningDealzBottomNavHostingController(rootView: AnyView(EmptyView()))
   private var hostingViewConstraints: [NSLayoutConstraint] = []
   private var hostingAttachmentRetryScheduled = false
+  private var backdropRefreshScheduled = false
   private var hasConfiguredRootView = false
   private var hasAnimatedTabBarEntrance = false
+  private var tabBarEntranceScheduled = false
+  private var tabBarEntranceGeneration = 0
 #if DEBUG
   private var lastLoggedLayoutSnapshot: String?
   private var lastLoggedSurfaceSnapshot: String?
   private var loggedMissingEmbeddedTabController = false
+  private var loggedTabContentBranch = false
 #endif
 
   private var resolvedActiveItem: DiningDealzLiquidGlassBottomNavItem {
@@ -174,12 +177,16 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   override func didMoveToWindow() {
     super.didMoveToWindow()
     if window == nil {
+      tabBarEntranceGeneration &+= 1
+      firstTabBar(in: hostingController.view)?.alpha = 1
       hasAnimatedTabBarEntrance = false
+      tabBarEntranceScheduled = false
       detachHostingController()
     } else {
       makeInteropContainerTransparent()
       attachHostingControllerIfNeeded()
       clearEmbeddedTabContentBackdrop()
+      scheduleBackdropRefresh()
       fadeInNativeTabBarIfNeeded()
     }
 #if DEBUG
@@ -376,29 +383,74 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
   }
 
   private func fadeInNativeTabBarIfNeeded() {
-    guard #available(iOS 26.0, *), !hasAnimatedTabBarEntrance, let window else { return }
+    guard #available(iOS 26.0, *), !hasAnimatedTabBarEntrance, !tabBarEntranceScheduled, let window else { return }
     guard let tabBar = firstTabBar(in: hostingController.view),
           tabBar.window === window,
           tabBar.bounds.width > 0,
           tabBar.bounds.height > 0,
           !(tabBar.items?.isEmpty ?? true) else { return }
 
-    hasAnimatedTabBarEntrance = true
-    guard !UIAccessibility.isReduceMotionEnabled else { return }
+    guard !UIAccessibility.isReduceMotionEnabled else {
+      hasAnimatedTabBarEntrance = true
+      return
+    }
 
-    // Animate only the system tab bar's presentation layer. Keep its model
-    // opacity at 1 so Liquid Glass remains fully interactive and is not left
-    // inside an opacity-zero React Native or SwiftUI hosting container.
-    let fade = CABasicAnimation(keyPath: "opacity")
-    fade.fromValue = 0
-    fade.toValue = 1
-    fade.duration = 0.28
-    fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
-    tabBar.layer.add(fade, forKey: "DiningDealzBottomNavEntrance")
+    // Keep the host fully visible so it can compose Liquid Glass. Prepare the
+    // actual UIKit bar before the next display pass, then animate its view
+    // alpha after the layout run loop has produced the floating platter.
+    tabBar.alpha = 0.12
+    tabBarEntranceScheduled = true
+    let generation = tabBarEntranceGeneration
+    DispatchQueue.main.async { [weak self, weak tabBar] in
+      guard let self, self.tabBarEntranceGeneration == generation else { return }
+      self.tabBarEntranceScheduled = false
+      guard let tabBar, self.window != nil, tabBar.window === self.window else {
+        tabBar?.alpha = 1
+        return
+      }
+      self.hasAnimatedTabBarEntrance = true
+#if DEBUG
+      NSLog("[BottomNavEntrance] started native UITabBar fade")
+#endif
+      UIView.animate(
+        withDuration: 0.28,
+        delay: 0,
+        options: [.allowUserInteraction, .beginFromCurrentState, .curveEaseOut],
+        animations: { tabBar.alpha = 1 },
+        completion: { _ in tabBar.alpha = 1 }
+      )
+    }
   }
 
   private func clearEmbeddedTabContentBackdrop() {
     guard #available(iOS 26.0, *), let tabBar = firstTabBar(in: hostingController.view) else { return }
+
+    // The bar-only TabView also creates a full-size selected-content branch.
+    // On iOS 26 its UITransitionView and controller wrapper can remain opaque
+    // even when the selected SwiftUI Color.clear view is transparent. Clear
+    // only that sibling branch and its shared ancestors, never the tab bar's
+    // platter or lens subtree.
+    var barBranch: UIView = tabBar
+    while let parent = barBranch.superview, parent !== hostingController.view {
+      if let contentBranch = parent.subviews.first(where: {
+        $0 !== barBranch && NSStringFromClass(type(of: $0)).hasSuffix("UITransitionView")
+      }) {
+#if DEBUG
+        if !loggedTabContentBranch {
+          loggedTabContentBranch = true
+          NSLog("[BottomNavBackdrop] found opaque-prone tab content branch beside UITabBar")
+        }
+#endif
+        clearTabContentBranch(contentBranch)
+        var ancestor: UIView? = parent
+        while let view = ancestor, view !== hostingController.view {
+          clearBackground(of: view)
+          ancestor = view.superview
+        }
+        break
+      }
+      barBranch = parent
+    }
 
     // SwiftUI's embedded TabView creates a UITabBarController whose container
     // and selected tab content can default to opaque black. Clear the content
@@ -435,6 +487,23 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
       NSLog("[BottomNavBackdrop] UITabBar found without a UITabBarController in its responder chain")
     }
 #endif
+  }
+
+  private func scheduleBackdropRefresh() {
+    guard window != nil, !backdropRefreshScheduled else { return }
+    backdropRefreshScheduled = true
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.backdropRefreshScheduled = false
+      guard self.window != nil else { return }
+      self.clearEmbeddedTabContentBackdrop()
+    }
+  }
+
+  private func clearTabContentBranch(_ view: UIView) {
+    guard !(view is UIVisualEffectView) else { return }
+    clearBackground(of: view)
+    view.subviews.forEach(clearTabContentBranch)
   }
 
   private func clearBackground(of view: UIView) {
@@ -556,6 +625,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
       hasConfiguredRootView = true
     }
     clearEmbeddedTabContentBackdrop()
+    scheduleBackdropRefresh()
   }
 
   private var resolvedThemeVariant: DiningDealzLiquidGlassThemeVariant {
