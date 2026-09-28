@@ -114,6 +114,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
 
   private let state = DiningDealzLiquidGlassBottomNavState()
   private let hostingController = UIHostingController(rootView: AnyView(EmptyView()))
+  private var hostingViewConstraints: [NSLayoutConstraint] = []
   private var hasConfiguredRootView = false
 
   private var resolvedActiveItem: DiningDealzLiquidGlassBottomNavItem {
@@ -135,6 +136,24 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     CGSize(width: UIView.noIntrinsicMetric, height: 52 + CGFloat(truncating: bottomInset))
   }
 
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    if window == nil {
+      detachHostingController()
+    } else {
+      attachHostingControllerIfNeeded()
+    }
+  }
+
+  override func didMoveToSuperview() {
+    super.didMoveToSuperview()
+    if superview == nil {
+      detachHostingController()
+    } else if window != nil {
+      attachHostingControllerIfNeeded()
+    }
+  }
+
   private func setupView() {
     backgroundColor = .clear
     isOpaque = false
@@ -145,17 +164,70 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     hostingController.view.isOpaque = false
     hostingController.view.clipsToBounds = false
     hostingController.view.layer.allowsGroupOpacity = true
+
+    updateRootView()
+  }
+
+  private var nearestViewController: UIViewController? {
+    var responder: UIResponder? = next
+    while let currentResponder = responder {
+      if let viewController = currentResponder as? UIViewController {
+        return viewController
+      }
+      responder = currentResponder.next
+    }
+    return nil
+  }
+
+  private func attachHostingControllerIfNeeded() {
+    guard window != nil else { return }
+    guard let parentViewController = nearestViewController else {
+      installHostingViewIfNeeded()
+      return
+    }
+
+    guard hostingController.parent !== parentViewController else {
+      installHostingViewIfNeeded()
+      return
+    }
+
+    if hostingController.parent != nil {
+      detachHostingController()
+    } else {
+      removeHostingViewIfNeeded()
+    }
+
+    parentViewController.addChild(hostingController)
+    installHostingViewIfNeeded()
+    hostingController.didMove(toParent: parentViewController)
+  }
+
+  private func detachHostingController() {
+    guard hostingController.parent != nil else { return }
+    hostingController.willMove(toParent: nil)
+    removeHostingViewIfNeeded()
+    hostingController.removeFromParent()
+  }
+
+  private func installHostingViewIfNeeded() {
+    guard hostingController.view.superview !== self else { return }
     hostingController.view.translatesAutoresizingMaskIntoConstraints = false
     addSubview(hostingController.view)
 
-    NSLayoutConstraint.activate([
+    hostingViewConstraints = [
       hostingController.view.leadingAnchor.constraint(equalTo: leadingAnchor),
       hostingController.view.trailingAnchor.constraint(equalTo: trailingAnchor),
       hostingController.view.topAnchor.constraint(equalTo: topAnchor),
       hostingController.view.bottomAnchor.constraint(equalTo: bottomAnchor),
-    ])
+    ]
+    NSLayoutConstraint.activate(hostingViewConstraints)
+  }
 
-    updateRootView()
+  private func removeHostingViewIfNeeded() {
+    guard hostingController.view.superview != nil else { return }
+    NSLayoutConstraint.deactivate(hostingViewConstraints)
+    hostingViewConstraints.removeAll(keepingCapacity: true)
+    hostingController.view.removeFromSuperview()
   }
 
   private func updateRootView() {
@@ -301,7 +373,6 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     .background(Color.clear)
-    .ignoresSafeArea(.container, edges: .bottom)
   }
 }
 
