@@ -681,7 +681,6 @@ function AppScreen() {
   const splashExitOpacity = useRef(new Animated.Value(1)).current;
   const authIntroOpacity = useRef(new Animated.Value(1)).current;
   const loginSuccessTransition = useRef(new Animated.Value(1)).current;
-  const loginSuccessNativeBottomNavReveal = useRef(new Animated.Value(1)).current;
   const guestChromeFadeInOpacity = useRef(new Animated.Value(1)).current;
   const screenTransition = useRef(new Animated.Value(1)).current;
   const profileSceneTransition = useRef(new Animated.Value(1)).current;
@@ -2594,17 +2593,6 @@ function AppScreen() {
       },
     ],
   };
-  const loginSuccessNativeBottomNavStyle = {
-    opacity: loginSuccessNativeBottomNavReveal,
-    transform: [
-      {
-        translateY: loginSuccessNativeBottomNavReveal.interpolate({
-          inputRange: [0, 1],
-          outputRange: [18, 0],
-        }),
-      },
-    ],
-  };
   const logoutOutgoingStyle = {
     transform: [
       {
@@ -3838,7 +3826,6 @@ function AppScreen() {
   function startLoginSuccessTransition() {
     dismissKeyboardForScreenTransition();
     setShouldAutoFocusLoginField(false);
-    const shouldFadeNativeBottomNav = nativeBottomNavAvailable;
     const finishLoginSubmission = () => {
       loginSubmissionInFlightRef.current = false;
       setLoginSubmitting(false);
@@ -3855,9 +3842,7 @@ function AppScreen() {
     setIncomingOnboardingScreen(null);
     setShowLoginSuccessTransition(true);
     loginSuccessTransition.stopAnimation();
-    loginSuccessNativeBottomNavReveal.stopAnimation();
     loginSuccessTransition.setValue(0);
-    loginSuccessNativeBottomNavReveal.setValue(shouldFadeNativeBottomNav ? 0 : 1);
     Animated.timing(loginSuccessTransition, {
       duration: onboardingTransitionDuration,
       toValue: 1,
@@ -3869,28 +3854,9 @@ function AppScreen() {
       }
 
       loginSuccessTransition.setValue(1);
-      if (!shouldFadeNativeBottomNav) {
-        setScreenMode('profiles');
-        setShowLoginSuccessTransition(false);
-        finishLoginSubmission();
-        return;
-      }
-
-      Animated.timing(loginSuccessNativeBottomNavReveal, {
-        duration: 180,
-        easing: Easing.out(Easing.cubic),
-        toValue: 1,
-        useNativeDriver: true,
-      }).start(({ finished: navFadeFinished }) => {
-        if (!navFadeFinished) {
-          finishLoginSubmission();
-          return;
-        }
-
-        setScreenMode('profiles');
-        setShowLoginSuccessTransition(false);
-        finishLoginSubmission();
-      });
+      setScreenMode('profiles');
+      setShowLoginSuccessTransition(false);
+      finishLoginSubmission();
     });
   }
 
@@ -7776,6 +7742,9 @@ function AppScreen() {
             {renderBrowseScreen({
               guestChrome: true,
               guestChromeActionOpacity: nativeGuestChrome ? resolvedGuestBrowseNativeChromeOpacity : 1,
+              // Liquid Glass must mount over the visible map, not in the hidden
+              // browse underlay while the splash or login screen is on top.
+              guestChromeBottomNavVisible: !nativeBottomNavAvailable || guestBrowseUnderlayInteractive,
               guestChromeInteractive: guestChromeInteractive && !selectedPlaceSlug,
               guestChromeHeaderOpacity: nativeGuestChrome ? resolvedGuestBrowseNativeChromeOpacity : 1,
               guestChromeLogoOpacity: nativeGuestChrome && guestToBrowseTransition ? 0 : guestBrowseHeaderLogoOpacity,
@@ -8145,6 +8114,7 @@ function AppScreen() {
     guestChrome?: boolean;
     guestChromeInteractive?: boolean;
     guestChromeActionOpacity?: Animated.Value | Animated.AnimatedInterpolation<number> | number;
+    guestChromeBottomNavVisible?: boolean;
     guestChromeHeaderOpacity?: Animated.Value | Animated.AnimatedInterpolation<number> | number;
     guestChromeLogoOpacity?: Animated.Value | Animated.AnimatedInterpolation<number> | number;
     suppressScreenTransitionStyle?: boolean;
@@ -8640,7 +8610,7 @@ function AppScreen() {
                 logoEntranceOpacity={options.guestChromeLogoOpacity ?? guestBrowseHeaderLogoOpacity}
                 onCreateAccount={handleOpenProfiles}
                 onSelectPortal={handleOpenAuthFromLanding}
-                showBottomNav={!selectedPlaceSlug}
+                showBottomNav={!selectedPlaceSlug && (options.guestChromeBottomNavVisible ?? true)}
                 showHeader={!guestMapOnlyMode && browseMode !== 'map'}
                 showLogo={!selectedPlaceSlug}
                 themeVariant={displayedDarkMapMode ? 'map-dark' : 'map-light'}
@@ -8844,14 +8814,12 @@ function AppScreen() {
       ) : (
         renderBrowseScreen()
       )}
-      {authenticatedSession && (showLoginSuccessTransition || shouldRenderPersistentBottomNav) ? (
+      {/* Let the native tab bar materialize after login instead of mounting it
+          inside the opacity-zero login transition. Keep the fallback animation. */}
+      {authenticatedSession && (shouldRenderPersistentBottomNav || (!nativeBottomNavAvailable && showLoginSuccessTransition)) ? (
         renderAuthenticatedBottomNavLayer({
           interactive: !showLoginSuccessTransition,
-          transitionStyle: showLoginSuccessTransition
-            ? nativeBottomNavAvailable
-              ? loginSuccessNativeBottomNavStyle
-              : loginSuccessBottomNavStyle
-            : undefined,
+          transitionStyle: showLoginSuccessTransition ? loginSuccessBottomNavStyle : undefined,
         })
       ) : shouldRenderPersistentBottomNav ? renderBottomNav({ guest: true }) : null}
       <ExternalPlannerModal

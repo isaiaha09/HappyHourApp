@@ -172,6 +172,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     if window == nil {
       detachHostingController()
     } else {
+      makeInteropContainerTransparent()
       attachHostingControllerIfNeeded()
       clearEmbeddedTabContentBackdrop()
     }
@@ -191,8 +192,11 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     super.didMoveToSuperview()
     if superview == nil {
       detachHostingController()
-    } else if window != nil {
-      attachHostingControllerIfNeeded()
+    } else {
+      makeInteropContainerTransparent()
+      if window != nil {
+        attachHostingControllerIfNeeded()
+      }
     }
 #if DEBUG
     logHostState("didMoveToSuperview")
@@ -214,6 +218,21 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     }
 
     updateRootView()
+  }
+
+  private func makeInteropContainerTransparent() {
+    guard let container = superview,
+          NSStringFromClass(type(of: container)).contains("RCTLegacyViewManagerInteropComponentView") else { return }
+
+    // Fabric inserts this full-size wrapper around the native view. It has no
+    // opaque fill, so advertising it as opaque can produce a black backing
+    // surface and prevent the glass platter from sampling the scene below.
+    if container.isOpaque {
+      container.isOpaque = false
+#if DEBUG
+      NSLog("[BottomNavBackdrop] cleared opaque React Native interop container")
+#endif
+    }
   }
 
   private var nearestViewController: UIViewController? {
@@ -591,7 +610,6 @@ private struct DiningDealzLiquidGlassBottomNavContent: View {
       ForEach(state.items) { displayItem in
         Tab(displayItem.title, systemImage: displayItem.systemImageName, value: displayItem.item) {
           Color.clear
-            .toolbarBackground(.visible, for: .tabBar)
         }
       }
     }

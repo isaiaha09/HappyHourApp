@@ -212,10 +212,7 @@ export function GuestShellChrome({
 
       {showBottomNav ? <View pointerEvents="box-none" style={styles.bottomNavOverlay}>
         {isNativeIOSLiquidGlassBottomNavAvailable() ? (
-          <Animated.View
-            pointerEvents={interactive ? 'auto' : 'none'}
-            style={{ opacity: actionOpacity }}
-          >
+          <View pointerEvents={interactive ? 'auto' : 'none'}>
             <NativeIOSLiquidGlassBottomNav
               activeItem="map"
               bottomInset={insets.bottom}
@@ -241,7 +238,7 @@ export function GuestShellChrome({
               systemImages={{ map: 'person.fill', profile: 'plus', more: 'briefcase' }}
               themeVariant={themeVariant}
             />
-          </Animated.View>
+          </View>
         ) : (
           <Animated.View
             style={[
