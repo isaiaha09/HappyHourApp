@@ -7688,11 +7688,6 @@ function AppScreen() {
       && !browseTransitionActive
       && (incomingOnboardingScreen === 'auth' || incomingOnboardingScreen === 'profiles')
       && !selectedPlaceSlug;
-    // Switching overflow clipping on a live native glass bar can briefly
-    // change its backdrop sample even though the map itself stays opaque.
-    const shouldClipGuestTransition = browseTransitionActive
-      || returningToSplashScreen !== null
-      || (incomingOnboardingScreen !== null && !guestBottomNavExitingToOnboarding);
     const showingBrowseUnderSplash = keepGuestMapVisibleOnSplash && !browseTransitionActive && overlayScreen === null && incomingOnboardingScreen === null;
     const splashLayerStyle = returningToSplashScreen
       ? splashReturnIncomingStyle
@@ -7732,7 +7727,7 @@ function AppScreen() {
       <View style={[
         styles.fullScreenRoot,
         guestToBrowseTransition ? styles.guestSplashTransitionRoot : null,
-        shouldClipGuestTransition ? styles.transitionClipRoot : null,
+        (browseTransitionActive || incomingOnboardingScreen || returningToSplashScreen) ? styles.transitionClipRoot : null,
       ]}>
         <Animated.View
           pointerEvents={shouldRenderSplashLayer && !showingBrowse && !browseTransitionActive && !overlayScreen && !incomingOnboardingScreen ? 'auto' : 'none'}

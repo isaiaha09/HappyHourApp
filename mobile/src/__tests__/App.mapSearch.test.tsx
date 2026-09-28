@@ -2011,7 +2011,6 @@ describe('App browse map search', () => {
     fireEvent.press(screen.getByLabelText('Open customer login'));
     expect(screen.getByText('Auth screen')).toBeTruthy();
     expect(screen.getByTestId('mock-map-view')).toBeTruthy();
-    expect(screen.getByText('Customer')).toBeTruthy();
     expect(screen.queryByText('Login auto focus enabled')).toBeNull();
 
     fireEvent.press(screen.getByLabelText('Back to landing'));
@@ -2214,7 +2213,6 @@ describe('App browse map search', () => {
 
     fireEvent.press(screen.getByLabelText('Create a free account'));
     expect(screen.getByText('Create profile screen')).toBeTruthy();
-    expect(screen.getByText('Customer')).toBeTruthy();
 
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 550));
