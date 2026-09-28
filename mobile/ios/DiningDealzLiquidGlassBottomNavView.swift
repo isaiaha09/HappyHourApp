@@ -355,7 +355,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
     var responder: UIResponder? = tabBar
     while let current = responder {
       if let tabController = current as? UITabBarController {
-        let containerView = tabController.view
+        guard let containerView = tabController.viewIfLoaded else { return }
         clearBackground(of: containerView)
         if containerView.isDescendant(of: hostingController.view) {
           var ancestor = containerView.superview
@@ -371,8 +371,7 @@ final class DiningDealzLiquidGlassBottomNavView: UIView {
             ancestor = view.superview
           }
         }
-        if let selected = tabController.selectedViewController, selected.isViewLoaded {
-          let contentView = selected.view
+        if let contentView = tabController.selectedViewController?.viewIfLoaded {
           if contentView.isDescendant(of: containerView) {
             var ancestor: UIView? = contentView
             while let view = ancestor, view !== containerView {
