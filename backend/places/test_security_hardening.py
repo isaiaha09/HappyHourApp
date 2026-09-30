@@ -5,6 +5,7 @@ from unittest.mock import patch
 from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
+from django.core.cache import cache
 from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -17,6 +18,7 @@ from .authentication import ProfileTokenAuthentication
 from .models import AccountProfile, ProfileAuthToken
 from .services.account_profiles import get_or_create_profile_token
 from .services.importers.base import BaseHtmlImporter
+from .services.login_attempt_backoff import clear_login_backoff, get_login_backoff_wait, record_failed_login, record_failed_password_during_cooldown
 from .views import (
 	BusinessLocationTrackingPreferenceView,
 	BusinessLocationUpdateView,
@@ -359,3 +361,58 @@ class NotificationProcessorSecurityTests(TestCase):
 		self.assertEqual(header_head_response.status_code, 404)
 		self.assertEqual(valid_response.status_code, 200)
 		process_notifications.assert_called_once_with()
+
+
+class LoginAttemptBackoffTests(TestCase):
+	def setUp(self):
+		cache.clear()
+		self.addCleanup(cache.clear)
+
+	@override_settings(REST_FRAMEWORK={'DEFAULT_THROTTLE_RATES': {'profile_login': '100/minute'}})
+	@patch('places.services.login_attempt_backoff.time.time')
+	def test_failed_password_delay_escalates_caps_and_expires(self, mock_time):
+		clock = [1_000.0]
+		mock_time.side_effect = lambda: clock[0]
+
+		self.assertEqual(record_failed_login('Backoff_User').wait_seconds, 0)
+		self.assertEqual(record_failed_login('backoff_user').wait_seconds, 0)
+		self.assertEqual(record_failed_login('BACKOFF_USER').wait_seconds, 2)
+		self.assertEqual(get_login_backoff_wait('backoff_user'), 2)
+
+		clock[0] += 0.5
+		self.assertEqual(record_failed_password_during_cooldown('backoff_user'), 0)
+		clock[0] += 0.5
+		self.assertEqual(get_login_backoff_wait('backoff_user'), 1)
+		clock[0] += 1
+		self.assertEqual(get_login_backoff_wait('backoff_user'), 0)
+		self.assertEqual(record_failed_login('backoff_user').wait_seconds, 4)
+		clock[0] += 4
+		self.assertEqual(record_failed_login('backoff_user').wait_seconds, 8)
+		clock[0] += 8
+		self.assertEqual(record_failed_login('backoff_user').wait_seconds, 16)
+		clock[0] += 16
+		self.assertEqual(record_failed_login('backoff_user').wait_seconds, 32)
+		clock[0] += 32
+		self.assertEqual(record_failed_login('backoff_user').wait_seconds, 60)
+		clock[0] += 60
+		self.assertEqual(record_failed_login('backoff_user').wait_seconds, 60)
+		self.assertLessEqual(get_login_backoff_wait('backoff_user'), 60)
+
+	def test_successful_authentication_can_clear_a_pending_delay(self):
+		for _ in range(3):
+			record_failed_login('owner')
+		self.assertGreater(get_login_backoff_wait('owner'), 0)
+
+		clear_login_backoff('OWNER')
+
+		self.assertEqual(get_login_backoff_wait('owner'), 0)
+		self.assertEqual(record_failed_login('owner').wait_seconds, 0)
+
+	@patch('places.services.login_attempt_backoff.cache.touch', return_value=False)
+	@patch('places.services.login_attempt_backoff.cache.incr', return_value=None)
+	@patch('places.services.login_attempt_backoff.cache.add', return_value=None)
+	def test_cache_backend_ignored_errors_fail_open_without_crashing(self, _add, _incr, _touch):
+		result = record_failed_login('cache-unavailable-user')
+
+		self.assertEqual(result.wait_seconds, 0)
+		self.assertFalse(result.account_limited)

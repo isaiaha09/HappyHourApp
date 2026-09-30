@@ -1,3 +1,4 @@
+import logging
 import posixpath
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -7,6 +8,10 @@ from django.conf import settings
 from django.core.files.storage import default_storage
 from django.urls import reverse
 
+
+logger = logging.getLogger(__name__)
+
+BUSINESS_UPLOAD_STORAGE_FILES_ATTR = '_business_upload_storage_files'
 
 PRIVATE_MEDIA_PREFIXES = (
 	'business-claim-attachments/',  # Legacy key layout; retained rows still point here.
@@ -65,7 +70,9 @@ def save_managed_media(claim, uploaded_file, storage_name, media_kind, request=N
 		uploaded_file.seek(0)
 	except (OSError, ValueError):
 		pass
+	register_business_upload_storage_file(request, default_storage, storage_name)
 	saved_name = default_storage.save(storage_name, uploaded_file)
+	register_business_upload_storage_file(request, default_storage, saved_name)
 	media = ManagedMedia.objects.create(
 		owner=claim.claimant,
 		claim=claim,
@@ -76,6 +83,92 @@ def save_managed_media(claim, uploaded_file, storage_name, media_kind, request=N
 		file_size=int(getattr(uploaded_file, 'size', 0) or 0),
 	)
 	return media, managed_media_url(media.media_id, request=request)
+
+
+def register_business_upload_storage_file(request, storage, storage_name):
+	"""Track a storage write so a rejected business-upload request can remove it."""
+	if request is None:
+		return
+	tracking_request = getattr(request, '_request', None) or request
+	if not getattr(tracking_request, '_business_upload_limits_active', False):
+		return
+	name = str(storage_name or '').strip()
+	if not name:
+		return
+
+	tracked_files = getattr(tracking_request, BUSINESS_UPLOAD_STORAGE_FILES_ATTR, None)
+	if tracked_files is None:
+		tracked_files = []
+		setattr(tracking_request, BUSINESS_UPLOAD_STORAGE_FILES_ATTR, tracked_files)
+	identity = (id(storage), name)
+	if not any((id(existing_storage), existing_name) == identity for existing_storage, existing_name in tracked_files):
+		tracked_files.append((storage, name))
+
+
+def _managed_media_uuid(value):
+	media_id = _managed_media_uuid_from_reference(value)
+	if media_id is not None:
+		return media_id
+	try:
+		return UUID(str(value or '').strip())
+	except (ValueError, TypeError, AttributeError):
+		return None
+
+
+def _claim_references_managed_media(claim, media_id):
+	for reference in claim.photo_references or []:
+		if _managed_media_uuid(reference) == media_id:
+			return True
+	for reference in _iter_deal_attachment_references(claim.deal_overrides):
+		if _managed_media_uuid(reference) == media_id:
+			return True
+	from places.models import BusinessClaimProfileEntry
+	return any(
+		_managed_media_uuid(reference) == media_id
+		for reference in BusinessClaimProfileEntry.objects.filter(
+			claim_id=claim.pk,
+			entry_kind='photo_reference',
+		).values_list('value', flat=True)
+	)
+
+
+def cleanup_failed_business_uploads(request):
+	"""Delete request-created media that an unsuccessful request did not retain."""
+	tracked_files = list(getattr(request, BUSINESS_UPLOAD_STORAGE_FILES_ATTR, ()) or ())
+	setattr(request, BUSINESS_UPLOAD_STORAGE_FILES_ATTR, [])
+	if not tracked_files:
+		return
+
+	from places.models import BusinessClaim, BusinessClaimAttachment, ManagedMedia
+
+	storage_names = {name for _storage, name in tracked_files}
+	protected_names = set(
+		BusinessClaimAttachment.objects.filter(file__in=storage_names)
+		.values_list('file', flat=True)
+	)
+	media_rows = list(ManagedMedia.objects.filter(storage_name__in=storage_names).select_related('claim'))
+	deleted_names = set()
+	for media in media_rows:
+		if _claim_references_managed_media(media.claim, media.media_id):
+			protected_names.add(media.storage_name)
+			continue
+		try:
+			media.delete()
+			deleted_names.add(media.storage_name)
+		except Exception:
+			logger.exception('Failed to remove request-created managed media after an unsuccessful business upload.')
+			if ManagedMedia.objects.filter(pk=media.pk).exists():
+				protected_names.add(media.storage_name)
+			else:
+				deleted_names.add(media.storage_name)
+
+	for storage, name in tracked_files:
+		if name in protected_names or name in deleted_names:
+			continue
+		try:
+			storage.delete(name)
+		except Exception:
+			logger.exception('Failed to remove request-created storage object after an unsuccessful business upload.')
 
 
 def classify_supabase_media_key(key):

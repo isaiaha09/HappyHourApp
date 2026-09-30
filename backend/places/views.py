@@ -84,7 +84,7 @@ from .services.social_profiles import build_social_media_links, get_business_web
 from .services.website_contact import verify_contact_turnstile
 from .services.current_happy_hours import get_current_happy_hours_payload
 from .services.source_listings import get_deleted_business_snapshot_ids, get_disabled_live_location_slugs, get_live_location_display_fields, get_source_deal_payloads, get_source_place_payload, get_source_place_payloads, is_live_location_tracking_enabled_for_snapshot, load_source_records
-from .throttles import ContentReportRateThrottle, DirectMessageSendRateThrottle, EmailVerificationRateThrottle, EmailVerificationResendRateThrottle, LoginRateThrottle, NotificationProcessorRateThrottle, PasswordRecoveryRateThrottle, SignupIpRateThrottle, SignupRateThrottle, SupportContactRateThrottle, TwoFactorRateThrottle, UserMutationRateThrottle, WebsiteContactRateThrottle
+from .throttles import ContentReportRateThrottle, DirectMessageSendRateThrottle, EmailVerificationRateThrottle, EmailVerificationResendRateThrottle, LoginIpRateThrottle, NotificationProcessorRateThrottle, PasswordRecoveryRateThrottle, SignupIpRateThrottle, SignupRateThrottle, SupportContactRateThrottle, TwoFactorRateThrottle, UserMutationRateThrottle, WebsiteContactRateThrottle
 
 
 class SourcePlacePagination(PageNumberPagination):
@@ -817,7 +817,7 @@ class CustomerSignupView(generics.GenericAPIView):
 class LoginView(generics.GenericAPIView):
 	serializer_class = LoginSerializer
 	permission_classes = [AllowAny]
-	throttle_classes = [LoginRateThrottle]
+	throttle_classes = [LoginIpRateThrottle]
 
 	def post(self, request):
 		serializer = self.get_serializer(data=request.data)

@@ -364,6 +364,7 @@ MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'places.upload_limits.BusinessUploadLimitsMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'places.admin_security.AdminSecurityMiddleware',
@@ -602,6 +603,8 @@ VERIFICATION_PDF_MAX_AGGREGATE_BYTES = get_int_env(
 	ENV_VALUES,
 	20 * 1024 * 1024,
 )
+BUSINESS_UPLOAD_MAX_REQUEST_BYTES = 50 * 1024 * 1024
+BUSINESS_UPLOAD_MAX_FILE_COUNT = 48
 CLOUDMERSIVE_VIRUS_SCAN_API_KEY = get_env('CLOUDMERSIVE_VIRUS_SCAN_API_KEY', ENV_VALUES, '').strip()
 CLOUDMERSIVE_VIRUS_SCAN_BASE_URL = get_env(
 	'CLOUDMERSIVE_VIRUS_SCAN_BASE_URL',
@@ -797,7 +800,8 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
     'DEFAULT_THROTTLE_RATES': {
-        'profile_login': get_env('THROTTLE_PROFILE_LOGIN', ENV_VALUES, '10/minute'),
+        'profile_login': get_env('THROTTLE_PROFILE_LOGIN', ENV_VALUES, '5/minute'),
+        'profile_login_ip': get_env('THROTTLE_PROFILE_LOGIN_IP', ENV_VALUES, '10/minute'),
         'profile_signup': get_env('THROTTLE_PROFILE_SIGNUP', ENV_VALUES, '300/hour'),
         'profile_signup_ip': get_env('THROTTLE_PROFILE_SIGNUP_IP', ENV_VALUES, '20/hour'),
         'profile_email_verification': get_env('THROTTLE_PROFILE_EMAIL_VERIFICATION', ENV_VALUES, '10/minute'),

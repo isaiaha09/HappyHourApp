@@ -14,6 +14,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 from pypdf import PdfReader
 from rest_framework import serializers
+from rest_framework.exceptions import Throttled
 
 from .models import BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessClaimRetryGrant, BusinessPost, City, ContentReport, FeedEngagement, FeedImpression, ListingSnapshot, ManagedMedia, SponsoredCampaign, VenueType, business_claim_storage_prefix
 from .services.account_profiles import build_account_response, get_approved_business_claims, get_or_create_account_profile, has_active_business_membership, send_business_claim_submission_support_email_safely
@@ -28,7 +29,13 @@ from .services.business_profile_overrides import (
 from .services.cloudmersive_scanning import ScanStatus, scan_pdf_file
 from .services.content_moderation import get_content_moderation_error
 from .services.image_moderation import ImageModerationRejected, ImageModerationUnavailable, get_validated_image_media_type, moderate_uploaded_image, validate_uploaded_image
-from .services.media_storage import extract_managed_storage_name, managed_media_id_from_reference, save_managed_media
+from .services.login_attempt_backoff import clear_login_backoff, get_login_backoff_wait, record_failed_login, record_failed_password_during_cooldown
+from .services.media_storage import (
+	extract_managed_storage_name,
+	managed_media_id_from_reference,
+	register_business_upload_storage_file,
+	save_managed_media,
+)
 from .services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
 
 
@@ -441,10 +448,9 @@ def _create_claim_attachments(claim, request, pending_attachments=None):
 			uploaded_file.seek(0)
 		except (OSError, ValueError):
 			pass
-		BusinessClaimAttachment.objects.create(
+		attachment = BusinessClaimAttachment(
 			claim=claim,
 			attachment_kind=pending_attachment['attachment_kind'],
-			file=uploaded_file,
 			original_filename=pending_attachment['original_filename'],
 			content_type=pending_attachment['content_type'],
 			file_size=pending_attachment['file_size'],
@@ -453,6 +459,19 @@ def _create_claim_attachments(claim, request, pending_attachments=None):
 			malware_scan_provider=pending_attachment['malware_scan_provider'],
 			malware_scan_reason=pending_attachment['malware_scan_reason'],
 		)
+		file_field = attachment.file
+		storage = file_field.storage
+		requested_name = file_field.field.generate_filename(attachment, uploaded_file.name)
+		register_business_upload_storage_file(request, storage, requested_name)
+		saved_name = storage.save(
+			requested_name,
+			uploaded_file,
+			max_length=file_field.field.max_length,
+		)
+		register_business_upload_storage_file(request, storage, saved_name)
+		file_field.name = saved_name
+		file_field._committed = True
+		attachment.save(force_insert=True)
 
 
 def _create_claim_profile_entries(claim, validated_data):
@@ -1076,6 +1095,20 @@ class LoginSerializer(serializers.Serializer):
 	password = serializers.CharField(write_only=True, style={'input_type': 'password'})
 	two_factor_code = serializers.CharField(max_length=12, required=False, allow_blank=True, write_only=True)
 
+	@staticmethod
+	def _raise_authentication_failure(identifier):
+		wait = get_login_backoff_wait(identifier)
+		if wait > 0:
+			account_wait = record_failed_password_during_cooldown(identifier)
+			raise Throttled(wait=max(wait, account_wait), detail=GENERIC_AUTH_FAILURE_MESSAGE)
+		failure_result = record_failed_login(identifier)
+		wait = failure_result.wait_seconds
+		if wait > 0:
+			# Only failed passwords are delayed. A correct password is still
+			# checked during cooldown so an attacker cannot lock out the owner.
+			raise Throttled(wait=wait, detail=GENERIC_AUTH_FAILURE_MESSAGE)
+		raise serializers.ValidationError(GENERIC_AUTH_FAILURE_MESSAGE)
+
 	def validate(self, attrs):
 		identifier = attrs['identifier'].strip()
 		user = User.objects.filter(username__iexact=identifier).first()
@@ -1083,11 +1116,15 @@ class LoginSerializer(serializers.Serializer):
 			# Match Django's ModelBackend behavior for unknown users so account
 			# existence does not skip the expensive password-hash work.
 			User().set_password(attrs['password'])
-			raise serializers.ValidationError(GENERIC_AUTH_FAILURE_MESSAGE)
+			self._raise_authentication_failure(identifier)
 
 		authenticated_user = authenticate(username=user.username, password=attrs['password'])
 		if authenticated_user is None:
-			raise serializers.ValidationError(GENERIC_AUTH_FAILURE_MESSAGE)
+			self._raise_authentication_failure(identifier)
+
+		# Reset immediately after the correct password, before any portal,
+		# verification, or MFA checks, so a valid credential never stays delayed.
+		clear_login_backoff(identifier)
 
 		profile = get_or_create_account_profile(authenticated_user)
 		if profile.business_claim_suspended:

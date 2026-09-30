@@ -1,5 +1,6 @@
 import hashlib
 import ipaddress
+import math
 
 from rest_framework.settings import api_settings
 from rest_framework.throttling import AnonRateThrottle, SimpleRateThrottle
@@ -19,7 +20,8 @@ class ScopedRateThrottle(SimpleRateThrottle):
 
 		ident_parts = [self.get_ident(request)]
 		for field_name in self.identity_fields:
-			value = str(request.data.get(field_name) or '').strip().lower()
+			raw_value = request.data.get(field_name)
+			value = '' if raw_value is None else str(raw_value).strip().lower()
 			if value:
 				ident_parts.append(f'{field_name}:{value}')
 
@@ -33,9 +35,72 @@ class ScopedRateThrottle(SimpleRateThrottle):
 		}
 
 
-class LoginRateThrottle(ScopedRateThrottle):
-	scope = 'profile_login'
-	identity_fields = ('identifier', 'portal')
+def get_trusted_client_ip(request):
+	# Render's Cloudflare edge overwrites CF-Connecting-IP with the client IP.
+	# Do not trust X-Forwarded-For here; clients can supply its leftmost value.
+	forwarded_ip = str(request.META.get('HTTP_CF_CONNECTING_IP') or '').strip()
+	try:
+		return str(ipaddress.ip_address(forwarded_ip))
+	except ValueError:
+		remote_addr = str(request.META.get('REMOTE_ADDR') or '').strip()
+		try:
+			return str(ipaddress.ip_address(remote_addr))
+		except ValueError:
+			return 'unknown'
+
+
+class TrustedClientIpRateThrottle(ScopedRateThrottle):
+	include_user_in_cache_key = False
+
+	def get_ident(self, request):
+		return get_trusted_client_ip(request)
+
+
+class LoginIpRateThrottle(TrustedClientIpRateThrottle):
+	scope = 'profile_login_ip'
+
+	def allow_request(self, request, view):
+		if self.rate is None:
+			return True
+
+		self.key = self.get_cache_key(request, view)
+		if self.key is None:
+			return True
+		self.now = self.timer()
+		expires_key = f'{self.key}:window-expires'
+
+		try:
+			if self.cache.add(self.key, 1, self.duration):
+				count = 1
+				self.cache.set(expires_key, self.now + self.duration, self.duration + 1)
+			else:
+				try:
+					count = self.cache.incr(self.key)
+				except ValueError:
+					if self.cache.add(self.key, 1, self.duration):
+						count = 1
+						self.cache.set(expires_key, self.now + self.duration, self.duration + 1)
+					else:
+						count = self.cache.incr(self.key)
+					self.cache.add(expires_key, self.now + self.duration, self.duration + 1)
+
+			if not isinstance(count, int):
+				return True
+			if count <= self.num_requests:
+				return True
+
+			expires_at = self.cache.get(expires_key)
+			if expires_at is None:
+				expires_at = self.now + self.duration
+				self.cache.add(expires_key, expires_at, self.duration + 1)
+			self.retry_after = max(1, math.ceil(float(expires_at) - self.now))
+			return False
+		except Exception:
+			# Keep the established availability-first behavior if Redis is down.
+			return True
+
+	def wait(self):
+		return getattr(self, 'retry_after', None)
 
 
 class SignupRateThrottle(ScopedRateThrottle):
@@ -43,22 +108,8 @@ class SignupRateThrottle(ScopedRateThrottle):
 	identity_fields = ('email',)
 
 
-class SignupIpRateThrottle(ScopedRateThrottle):
+class SignupIpRateThrottle(TrustedClientIpRateThrottle):
 	scope = 'profile_signup_ip'
-	include_user_in_cache_key = False
-
-	def get_ident(self, request):
-		# Render's Cloudflare edge overwrites CF-Connecting-IP with the client IP.
-		# Do not trust X-Forwarded-For here; clients can supply its leftmost value.
-		forwarded_ip = str(request.META.get('HTTP_CF_CONNECTING_IP') or '').strip()
-		try:
-			return str(ipaddress.ip_address(forwarded_ip))
-		except ValueError:
-			remote_addr = str(request.META.get('REMOTE_ADDR') or '').strip()
-			try:
-				return str(ipaddress.ip_address(remote_addr))
-			except ValueError:
-				return 'unknown'
 
 
 class EmailVerificationRateThrottle(ScopedRateThrottle):

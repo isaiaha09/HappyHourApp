@@ -39,7 +39,7 @@ from .admin_security import ADMIN_MFA_VERIFIED_SESSION_KEY
 from .admin_site import happyhour_admin_site
 from .models import AccountProfile, AdminAuditEvent, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessClaimRetryGrant, BusinessClaimRetryVerification, BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, BusinessPost, City, ContentReport, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedEngagement, FeedImpression, ListingSnapshot, ManagedMedia, ProfileAuthToken, SponsoredCampaign, VenueType, Weekday
 from .serializers import _prepare_claim_attachments, _validate_claim_attachment_size, _validate_uploaded_deal_attachment
-from .throttles import SignupIpRateThrottle
+from .throttles import LoginIpRateThrottle, SignupIpRateThrottle
 from .services.importers.base import BaseHtmlImporter
 from .services.importers.business_websites import BusinessWebsiteImporter
 from .services.importers.discovered_json_places import CuratedJsonPlacesImporter, DiscoveryJsonPlacesImporter, load_discovery_json_records, write_discovery_json_records
@@ -4526,6 +4526,7 @@ class BusinessClaimTests(APITestCase):
 class ProfileSignupApiTests(APITestCase):
 	def setUp(self):
 		super().setUp()
+		caches['default'].clear()
 		self.pdf_scan_patcher = patch(
 			'places.serializers.scan_pdf_file',
 			return_value=SimpleNamespace(status=ScanStatus.CLEAN, reason=''),
@@ -4533,8 +4534,8 @@ class ProfileSignupApiTests(APITestCase):
 		self.pdf_scan_patcher.start()
 		self.addCleanup(self.pdf_scan_patcher.stop)
 
-	@override_settings(REST_FRAMEWORK={'DEFAULT_THROTTLE_RATES': {'profile_login': '2/minute'}})
-	def test_login_is_rate_limited_after_repeated_attempts(self):
+	@override_settings(REST_FRAMEWORK={'DEFAULT_THROTTLE_RATES': {'profile_login': '5/minute', 'profile_login_ip': '100/minute'}})
+	def test_login_account_limit_spans_client_ips_and_portals(self):
 		caches['default'].clear()
 		user = User.objects.create_user(
 			username='throttled_user',
@@ -4548,13 +4549,193 @@ class ProfileSignupApiTests(APITestCase):
 			'password': 'wrong-pass-123',
 		}
 
-		first_response = self.client.post(reverse('profile-login'), payload, format='json')
-		second_response = self.client.post(reverse('profile-login'), payload, format='json')
-		third_response = self.client.post(reverse('profile-login'), payload, format='json')
+		first_response = self.client.post(
+			reverse('profile-login'),
+			{**payload, 'identifier': ' THROTTLED_USER ', 'portal': 'customer'},
+			format='json',
+			HTTP_CF_CONNECTING_IP='198.51.100.10',
+		)
+		second_response = self.client.post(
+			reverse('profile-login'),
+			{**payload, 'identifier': 'throttled_user', 'portal': 'business'},
+			format='json',
+			HTTP_CF_CONNECTING_IP='198.51.100.11',
+		)
+		third_response = self.client.post(
+			reverse('profile-login'),
+			{**payload, 'identifier': 'Throttled_User', 'portal': 'customer'},
+			format='json',
+			HTTP_CF_CONNECTING_IP='198.51.100.12',
+		)
 
 		self.assertEqual(first_response.status_code, 400)
 		self.assertEqual(second_response.status_code, 400)
 		self.assertEqual(third_response.status_code, 429)
+		self.assertEqual(third_response['Retry-After'], '2')
+
+		fourth_response = self.client.post(
+			reverse('profile-login'),
+			{**payload, 'identifier': 'throttled_user'},
+			format='json',
+			HTTP_CF_CONNECTING_IP='198.51.100.13',
+		)
+		fifth_response = self.client.post(
+			reverse('profile-login'),
+			{**payload, 'identifier': ' THROTTLED_USER ', 'portal': 'business'},
+			format='json',
+			HTTP_CF_CONNECTING_IP='198.51.100.14',
+		)
+		sixth_response = self.client.post(
+			reverse('profile-login'),
+			{**payload, 'identifier': 'throttled_user'},
+			format='json',
+			HTTP_CF_CONNECTING_IP='198.51.100.15',
+		)
+		self.assertEqual(fourth_response.status_code, 429)
+		self.assertEqual(fifth_response.status_code, 429)
+		self.assertEqual(sixth_response.status_code, 429)
+		self.assertGreater(int(sixth_response['Retry-After']), 50)
+
+		# The account's failed-password cap is not a lockout: valid credentials
+		# remain usable, including from another network address.
+		correct_password_response = self.client.post(
+			reverse('profile-login'),
+			{'portal': 'customer', 'identifier': 'throttled_user', 'password': 'correct-pass-123'},
+			format='json',
+			HTTP_CF_CONNECTING_IP='198.51.100.16',
+		)
+		self.assertEqual(correct_password_response.status_code, 200)
+		self.assertTrue(correct_password_response.data['auth_token'])
+
+	@override_settings(REST_FRAMEWORK={'DEFAULT_THROTTLE_RATES': {'profile_login': '100/minute', 'profile_login_ip': '10/minute'}})
+	def test_login_ip_limit_spans_identifiers_and_ignores_forwarded_for(self):
+		caches['default'].clear()
+		url = reverse('profile-login')
+		responses = [
+			self.client.post(
+				url,
+				{'portal': 'customer', 'identifier': identifier, 'password': 'wrong-pass-123'},
+				format='json',
+				HTTP_CF_CONNECTING_IP='198.51.100.25',
+				HTTP_X_FORWARDED_FOR=f'192.0.2.{index}',
+			)
+			for index, identifier in enumerate((f'unknown_login_{number}' for number in range(1, 12)), start=1)
+		]
+
+		self.assertEqual([response.status_code for response in responses], [400] * 10 + [429])
+
+		# A different trusted client IP has its own IP bucket, regardless of the same forged XFF.
+		other_ip_response = self.client.post(
+			url,
+			{'portal': 'customer', 'identifier': 'twelfth_unknown', 'password': 'wrong-pass-123'},
+			format='json',
+			HTTP_CF_CONNECTING_IP='198.51.100.26',
+			HTTP_X_FORWARDED_FOR='192.0.2.1',
+		)
+		self.assertEqual(other_ip_response.status_code, 400)
+
+	def test_login_ip_throttle_uses_trusted_ip_only(self):
+		ip_throttle = LoginIpRateThrottle()
+		def make_request(identifier, portal, meta):
+			return SimpleNamespace(
+				META=meta,
+				data={'identifier': identifier, 'portal': portal},
+				user=SimpleNamespace(is_authenticated=False),
+			)
+
+		trusted_header_request = make_request(
+			'first',
+			'customer',
+			{
+				'HTTP_CF_CONNECTING_IP': '198.51.100.40',
+				'HTTP_X_FORWARDED_FOR': '192.0.2.40',
+				'REMOTE_ADDR': '203.0.113.40',
+			},
+		)
+		changed_xff_request = make_request(
+			'second',
+			'business',
+			{
+				'HTTP_CF_CONNECTING_IP': '198.51.100.40',
+				'HTTP_X_FORWARDED_FOR': '192.0.2.41',
+				'REMOTE_ADDR': '203.0.113.41',
+			},
+		)
+		self.assertEqual(
+			ip_throttle.get_cache_key(trusted_header_request, None),
+			ip_throttle.get_cache_key(changed_xff_request, None),
+		)
+
+		fallback_request = make_request(
+			'first',
+			'customer',
+			{'REMOTE_ADDR': '203.0.113.50', 'HTTP_X_FORWARDED_FOR': '192.0.2.50'},
+		)
+		changed_fallback_xff_request = make_request(
+			'second',
+			'business',
+			{'REMOTE_ADDR': '203.0.113.50', 'HTTP_X_FORWARDED_FOR': '192.0.2.51'},
+		)
+		self.assertEqual(
+			ip_throttle.get_cache_key(fallback_request, None),
+			ip_throttle.get_cache_key(changed_fallback_xff_request, None),
+		)
+		invalid_cf_fallback_request = make_request(
+			'third',
+			'customer',
+			{
+				'HTTP_CF_CONNECTING_IP': '198.51.100.60, 192.0.2.60',
+				'HTTP_X_FORWARDED_FOR': '192.0.2.60',
+				'REMOTE_ADDR': '203.0.113.60',
+			},
+		)
+		remote_addr_fallback_request = make_request(
+			'fourth',
+			'business',
+			{'REMOTE_ADDR': '203.0.113.60', 'HTTP_X_FORWARDED_FOR': '192.0.2.61'},
+		)
+		self.assertEqual(
+			ip_throttle.get_ident(invalid_cf_fallback_request),
+			'203.0.113.60',
+		)
+		self.assertEqual(
+			ip_throttle.get_cache_key(invalid_cf_fallback_request, None),
+			ip_throttle.get_cache_key(remote_addr_fallback_request, None),
+		)
+
+	@override_settings(REST_FRAMEWORK={'DEFAULT_THROTTLE_RATES': {'profile_login': '20/minute', 'profile_login_ip': '20/minute'}})
+	def test_failed_passwords_get_short_cooldown_but_correct_password_never_locks_owner_out(self):
+		user = User.objects.create_user(
+			username='backoff_owner',
+			email='backoff-owner@example.com',
+			password='correct-pass-123',
+		)
+		AccountProfile.objects.create(user=user, email_verified_at=timezone.now())
+		url = reverse('profile-login')
+
+		def attempt(password):
+			return self.client.post(
+				url,
+				{'portal': 'customer', 'identifier': user.username, 'password': password},
+				format='json',
+			)
+
+		self.assertEqual(attempt('wrong-pass-123').status_code, 400)
+		self.assertEqual(attempt('wrong-pass-456').status_code, 400)
+		third_failure = attempt('wrong-pass-789')
+		self.assertEqual(third_failure.status_code, 429)
+		self.assertEqual(third_failure['Retry-After'], '2')
+
+		# An early incorrect retry is throttled without extending the cooldown.
+		self.assertEqual(attempt('another-wrong-pass').status_code, 429)
+
+		# A valid credential is still checked and accepted during that cooldown.
+		valid_password = attempt('correct-pass-123')
+		self.assertEqual(valid_password.status_code, 200)
+		self.assertTrue(valid_password.data['auth_token'])
+
+		# Success cleared the failure state; one subsequent bad attempt starts over.
+		self.assertEqual(attempt('wrong-after-success').status_code, 400)
 
 	@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
 	def test_customer_signup_creates_customer_account(self):
@@ -6903,6 +7084,8 @@ class ProfileDashboardApiTests(APITestCase):
 					format='multipart',
 					**self.auth_headers(),
 				)
+				stored_photo = ManagedMedia.objects.get(claim=claim, media_kind='profile_photo')
+				self.assertTrue(default_storage.exists(stored_photo.storage_name))
 
 		self.assertEqual(response.status_code, 200)
 		claim.refresh_from_db()
@@ -6914,6 +7097,60 @@ class ProfileDashboardApiTests(APITestCase):
 		)
 		self.assertTrue(claim.photo_gallery_overridden)
 		self.assertTrue(any('/managed-media/' in photo_url for photo_url in response.data['business_contact']['photo_references']))
+
+	def test_rejected_business_photo_batch_removes_earlier_stored_photo(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Approved Spot',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='55 Main St',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@approvedspot.com',
+			work_phone='805-555-0200',
+			employer_address='55 Main St, Ventura, CA 93001',
+			photo_references=['https://cdn.example.com/approvedspot/front.jpg'],
+			verification_summary='I own the business.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+
+		with TemporaryDirectory() as temp_dir:
+			with override_settings(MEDIA_ROOT=Path(temp_dir)):
+				with patch(
+					'places.views.moderate_uploaded_image',
+					side_effect=[None, ImageModerationRejected('The second image was rejected.')],
+				):
+					response = self.client.post(
+						reverse('profile-dashboard'),
+						{
+							'portal': 'business',
+							'username': 'dashboard_user',
+							'email': 'dashboard@example.com',
+							'contact_name': 'Dash Board',
+							'work_email': 'owner@approvedspot.com',
+							'profile_photo_uploads': [
+								SimpleUploadedFile('first.png', VALID_TEST_PNG_BYTES, content_type='image/png'),
+								SimpleUploadedFile('rejected.png', VALID_TEST_PNG_BYTES, content_type='image/png'),
+							],
+						},
+						format='multipart',
+						**self.auth_headers(),
+					)
+				remaining_files = [path for path in Path(temp_dir).rglob('*') if path.is_file()]
+
+		self.assertEqual(response.status_code, 400)
+		self.assertTrue(getattr(response.wsgi_request, '_business_upload_limits_active', False))
+		self.assertEqual(getattr(response.wsgi_request, '_business_upload_storage_files', None), [])
+		claim.refresh_from_db()
+		remaining_media = ManagedMedia.objects.filter(claim=claim, media_kind='profile_photo')
+		self.assertEqual(remaining_media.count(), 0)
+		self.assertEqual(claim.photo_references, ['https://cdn.example.com/approvedspot/front.jpg'])
+		self.assertEqual(remaining_files, [])
 
 	def test_profile_dashboard_update_accepts_per_deal_attachment_uploads(self):
 		snapshot = ListingSnapshot.objects.create(

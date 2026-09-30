@@ -377,7 +377,8 @@ Recommended production env vars:
 
 Throttle rates can be tuned without code changes:
 
-- `THROTTLE_PROFILE_LOGIN` defaults to `10/minute`
+- `THROTTLE_PROFILE_LOGIN` defaults to `5/minute` failed password attempts per normalized account, across IPs and portals
+- `THROTTLE_PROFILE_LOGIN_IP` defaults to `10/minute` login requests per trusted client IP, shared across usernames
 - `THROTTLE_PROFILE_SIGNUP` defaults to `300/hour`
 - `THROTTLE_PROFILE_EMAIL_VERIFICATION` defaults to `10/minute`
 - `THROTTLE_PROFILE_EMAIL_VERIFICATION_RESEND` defaults to `3/minute`
@@ -385,6 +386,8 @@ Throttle rates can be tuned without code changes:
 - `THROTTLE_PROFILE_SUPPORT_CONTACT` defaults to `10/hour`
 - `THROTTLE_PROFILE_USER_MUTATION` defaults to `120/minute`
 - `THROTTLE_DIRECT_MESSAGE_SEND` defaults to `30/minute`
+
+Failed profile logins also receive a temporary escalating delay: the first two failed passwords are not delayed, later failures increase the cooldown up to 60 seconds, and the failure counter clears after 15 minutes without a new failure. A correct password is still checked during cooldown and clears the account's failure state; there is no permanent account lockout. Redis outages retain the existing availability-first behavior, so these cache-backed protections are weaker while Redis is unavailable.
 
 ## Migrating Local SQLite Data To Render Postgres
 
