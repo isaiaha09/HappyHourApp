@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { styles } from '../appStyles';
 import { ReadOnlyPdfPreviewModal } from './ReadOnlyPdfPreviewModal';
+import { formatFileSize, getDealPdfSizeDetail, MAX_DEAL_PDF_UPLOAD_BYTES } from '../utils/fileSizes';
 import {
   businessWeekdayOptions,
   createEmptyDealOverride,
@@ -180,6 +181,8 @@ export function BusinessDealsEditor({ label, onChange, supportText, value }: Bus
   const insets = useSafeAreaInsets();
   const [attachmentPreview, setAttachmentPreview] = useState<AttachmentPreviewState | null>(null);
   const [pdfPreview, setPdfPreview] = useState<{ name: string; uri: string } | null>(null);
+  const [pdfSelectionError, setPdfSelectionError] = useState<string | null>(null);
+  const [openingPhotoLibraryForDeal, setOpeningPhotoLibraryForDeal] = useState<number | null>(null);
   const [pendingDealRemovalIndex, setPendingDealRemovalIndex] = useState<number | null>(null);
 
   function handleCloseAttachmentPreview() {
@@ -240,8 +243,9 @@ export function BusinessDealsEditor({ label, onChange, supportText, value }: Bus
         ? attachment.content_type
         : ('mimeType' in attachment ? attachment.mimeType : '')) ?? '',
     ).toLowerCase();
-    if (mimeType === 'application/pdf') {
-      return 'PDF attachment';
+    if (mimeType === 'application/pdf' || getAttachmentPreviewKind(mimeType, attachment.name) === 'pdf') {
+      const fileSize = 'size' in attachment ? attachment.size : attachment.file_size;
+      return getDealPdfSizeDetail(fileSize);
     }
     if (mimeType.startsWith('image/')) {
       return 'Photo attachment';
@@ -285,12 +289,11 @@ export function BusinessDealsEditor({ label, onChange, supportText, value }: Bus
   }
 
   async function handleSelectDealPhoto(dealIndex: number) {
+    setOpeningPhotoLibraryForDeal(dealIndex);
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        allowsEditing: true,
         allowsMultipleSelection: false,
         mediaTypes: ['images'],
-        quality: 0.9,
       });
 
       if (result.canceled || !result.assets.length) {
@@ -304,10 +307,13 @@ export function BusinessDealsEditor({ label, onChange, supportText, value }: Bus
       });
     } catch {
       // Picker failures stay local to the editor.
+    } finally {
+      setOpeningPhotoLibraryForDeal(null);
     }
   }
 
   async function handleSelectDealPdf(dealIndex: number) {
+    setPdfSelectionError(null);
     try {
       const result = await DocumentPicker.getDocumentAsync({
         copyToCacheDirectory: true,
@@ -319,10 +325,16 @@ export function BusinessDealsEditor({ label, onChange, supportText, value }: Bus
         return;
       }
 
+      const selectedPdf = result.assets[0];
+      if (selectedPdf.size != null && selectedPdf.size > MAX_DEAL_PDF_UPLOAD_BYTES) {
+        setPdfSelectionError(`This PDF is ${formatFileSize(selectedPdf.size)}. Deal PDFs must be 10 MB or smaller.`);
+        return;
+      }
+
       updateDeal(dealIndex, {
         ...value[dealIndex],
         attachment: null,
-        attachment_upload: normalizeDocumentAttachment(result.assets[0]),
+        attachment_upload: normalizeDocumentAttachment(selectedPdf),
       });
     } catch {
       // Picker failures stay local to the editor.
@@ -501,14 +513,15 @@ export function BusinessDealsEditor({ label, onChange, supportText, value }: Bus
           ) : null}
 
           <View style={styles.attachmentSection}>
-            <Text style={styles.profileSupportText}>Optional: import one photo or PDF for this deal or special.</Text>
+            <Text style={styles.profileSupportText}>Optional: import one photo or PDF for this deal or special. The faster iPhone photo picker opens without a crop step.</Text>
             <View style={styles.attachmentList}>
               <Pressable onPress={() => void handleSelectDealPhoto(dealIndex)} style={[styles.linkButtonSecondary, styles.attachmentPickerButton]}>
-                <Text style={styles.linkButtonSecondaryText}>Import photo from library</Text>
+                <Text style={styles.linkButtonSecondaryText}>{openingPhotoLibraryForDeal === dealIndex ? 'Opening Photo Library...' : 'Import photo from library'}</Text>
               </Pressable>
               <Pressable onPress={() => void handleSelectDealPdf(dealIndex)} style={[styles.linkButtonSecondary, styles.attachmentPickerButton]}>
                 <Text style={styles.linkButtonSecondaryText}>Import PDF</Text>
               </Pressable>
+              {pdfSelectionError ? <Text style={styles.structuredEntryErrorText}>{pdfSelectionError}</Text> : null}
               {getDisplayedAttachment(deal) ? (
                 getAttachmentPreviewKind(getAttachmentMimeType(getDisplayedAttachment(deal)), getDisplayedAttachment(deal)?.name ?? '') === 'image' ? (
                   <View style={styles.attachmentList}>
@@ -534,7 +547,7 @@ export function BusinessDealsEditor({ label, onChange, supportText, value }: Bus
                       <Pressable onPress={() => void handleOpenAttachment(deal)} style={styles.attachmentPreviewButton}>
                         <View style={styles.attachmentMeta}>
                           <Text style={styles.attachmentName}>{getDisplayedAttachment(deal)?.name}</Text>
-                          <Text style={styles.attachmentDetail}>PDF attachment • Tap to view</Text>
+                          <Text style={styles.attachmentDetail}>{`${getAttachmentDetailLabel(getDisplayedAttachment(deal) as BusinessDealAttachment | BusinessAttachmentDraft)} · Tap to view`}</Text>
                         </View>
                       </Pressable>
                       <Pressable onPress={() => handleRemoveDealAttachment(dealIndex)} style={styles.attachmentRemoveButton}>

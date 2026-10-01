@@ -9,6 +9,10 @@ const mockHandleFieldFocus = jest.fn();
 const mockHandleScroll = jest.fn();
 const mockScrollViewRef = { current: null };
 
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+}));
+
 jest.mock('../components/AutoScrollTextInput', () => {
   const React = require('react');
   const { TextInput } = require('react-native');

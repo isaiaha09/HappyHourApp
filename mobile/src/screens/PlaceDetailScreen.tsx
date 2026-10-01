@@ -10,6 +10,7 @@ import { NativeIOSLiquidGlassHeaderButton } from '../components/NativeIOSLiquidG
 import { PhotoLightbox } from '../components/PhotoLightbox';
 import { SocialButton } from '../components/SocialButton';
 import { ReadOnlyPdfPreviewModal } from '../components/ReadOnlyPdfPreviewModal';
+import { getDealPdfSizeDetail } from '../utils/fileSizes';
 import { buildGoogleReviewsUrl, dedupeImageUrls, formatLastKnownLocationLabel, formatPlaceAddress, getPlacePreviewRegion, openMapsAddress } from '../placeHelpers';
 import { getSocialProfilesForDisplay } from '../socialProfiles';
 import { theme } from '../styles/theme';
@@ -458,7 +459,7 @@ export function PlaceDetailScreen({
                     <Pressable onPress={() => void handleOpenDealAttachment(deal)} style={[styles.attachmentCard, styles.dealAttachmentPdfCard]}>
                       <View style={styles.attachmentMeta}>
                         <Text style={styles.attachmentName}>{deal.attachment.name}</Text>
-                        <Text style={styles.attachmentDetail}>PDF attachment • Tap to view</Text>
+                        <Text style={styles.attachmentDetail}>{`${getDealPdfSizeDetail(deal.attachment.file_size)} · Tap to view`}</Text>
                       </View>
                     </Pressable>
                   ) : null}

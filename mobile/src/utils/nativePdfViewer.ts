@@ -21,6 +21,27 @@ function createTooLargeError() {
   return new Error('This PDF is too large to preview on the device.');
 }
 
+function isPrivateDevelopmentHost(hostname: string) {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (host === 'localhost' || host.endsWith('.localhost') || host === '::1') {
+    return true;
+  }
+
+  const octets = host.split('.').map(Number);
+  if (octets.length !== 4 || octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) {
+    return false;
+  }
+
+  return octets[0] === 10
+    || octets[0] === 127
+    || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31)
+    || (octets[0] === 192 && octets[1] === 168);
+}
+
+function isManagedMediaPath(pathname: string) {
+  return /^\/managed-media\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/$/i.test(pathname);
+}
+
 /**
  * Prepare a PDF for the in-app, view-only native renderer.
  * Remote PDFs are streamed into the private app cache and aborted as soon as
@@ -44,7 +65,18 @@ export async function preparePdfForPreview(
     return { uri: normalizedUri, cleanup: async () => undefined };
   }
 
-  if (!/^https:\/\//i.test(normalizedUri)) {
+  let parsedUri: URL;
+  try {
+    parsedUri = new URL(normalizedUri);
+  } catch {
+    throw new Error('Only HTTPS PDF links can be opened.');
+  }
+  const isSecureRemoteUri = parsedUri.protocol === 'https:';
+  const isPrivateDevelopmentHttpUri = __DEV__
+    && parsedUri.protocol === 'http:'
+    && isPrivateDevelopmentHost(parsedUri.hostname)
+    && isManagedMediaPath(parsedUri.pathname);
+  if (!isSecureRemoteUri && !isPrivateDevelopmentHttpUri) {
     throw new Error('Only HTTPS PDF links can be opened.');
   }
   if (signal?.aborted) {

@@ -148,4 +148,26 @@ describe('preparePdfForPreview', () => {
       .rejects.toThrow('HTTPS');
     expect(mockFetch).not.toHaveBeenCalled();
   });
+
+  it('allows local-network HTTP PDFs in development builds', async () => {
+    const chunk = new Uint8Array([37, 80, 68, 70]);
+    const readable = createReadableBody([chunk]);
+    mockFetch.mockResolvedValue({
+      ok: true,
+      headers: { get: () => String(chunk.byteLength) },
+      body: readable.body,
+    } as unknown as Response);
+
+    const localUri = 'http://192.168.1.172:8000/managed-media/123e4567-e89b-42d3-a456-426614174000/';
+    const preview = await preparePdfForPreview(localUri);
+
+    expect(mockFetch).toHaveBeenCalledWith(localUri, expect.anything());
+    await preview.cleanup();
+  });
+
+  it('does not allow local-network HTTP links outside the managed-media route', async () => {
+    await expect(preparePdfForPreview('http://192.168.1.172:8000/private/menu.pdf'))
+      .rejects.toThrow('HTTPS');
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
 });

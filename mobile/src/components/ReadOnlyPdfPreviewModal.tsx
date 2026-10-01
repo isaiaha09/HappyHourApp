@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { PdfView } from '@kishannareshpal/expo-pdf';
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { preparePdfForPreview, type PreparedPdfPreview } from '../utils/nativePdfViewer';
 
@@ -18,6 +19,8 @@ export function ReadOnlyPdfPreviewModal({ fileName, onClose, uri, visible }: Rea
   } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (!visible || !uri) {
@@ -29,6 +32,7 @@ export function ReadOnlyPdfPreviewModal({ fileName, onClose, uri, visible }: Rea
     const abortController = new AbortController();
     setPreparedPreview(null);
     setHasError(false);
+    setErrorMessage('');
     setIsLoading(true);
 
     void preparePdfForPreview(uri, abortController.signal)
@@ -40,9 +44,17 @@ export function ReadOnlyPdfPreviewModal({ fileName, onClose, uri, visible }: Rea
         }
         setPreparedPreview({ sourceUri: uri, preview: result });
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!cancelled) {
           setHasError(true);
+          const message = error instanceof Error ? error.message : '';
+          if (/too large/i.test(message)) {
+            setErrorMessage('This PDF exceeds the 20 MB in-app preview limit.');
+          } else if (/only https/i.test(message)) {
+            setErrorMessage('Only HTTPS PDF links can be previewed outside local development.');
+          } else {
+            setErrorMessage('Could not load this PDF. Check your connection and that the file is valid.');
+          }
           setIsLoading(false);
         }
       });
@@ -60,13 +72,14 @@ export function ReadOnlyPdfPreviewModal({ fileName, onClose, uri, visible }: Rea
   const onPdfError = () => {
     setIsLoading(false);
     setHasError(true);
+    setErrorMessage('The PDF loaded, but this device could not render it. It may be invalid or unsupported.');
   };
   const currentPreview = preparedPreview?.sourceUri === uri ? preparedPreview.preview : null;
 
   return (
     <Modal animationType="slide" onRequestClose={onClose} visible={visible}>
       <View style={styles.screen}>
-        <View style={styles.header}>
+        <View testID="pdf-preview-header" style={[styles.header, { paddingTop: Math.max(insets.top + 8, 18) }]}>
           <Text accessibilityRole="header" numberOfLines={1} style={styles.title}>
             {fileName || 'PDF preview'}
           </Text>
@@ -99,7 +112,7 @@ export function ReadOnlyPdfPreviewModal({ fileName, onClose, uri, visible }: Rea
           {hasError ? (
             <View style={styles.statusOverlay}>
               <Text style={styles.errorTitle}>Unable to preview this PDF</Text>
-              <Text style={styles.statusText}>It may be unavailable, invalid, or larger than 20 MB.</Text>
+              <Text style={styles.statusText}>{errorMessage}</Text>
             </View>
           ) : null}
         </View>
@@ -124,7 +137,6 @@ const styles = StyleSheet.create({
     minHeight: 64,
     paddingBottom: 10,
     paddingHorizontal: 16,
-    paddingTop: 12,
   },
   title: {
     color: '#fff7ef',

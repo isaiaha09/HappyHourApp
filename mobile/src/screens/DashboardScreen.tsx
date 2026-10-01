@@ -932,6 +932,7 @@ export function BusinessProfileEditorScreen({
   const [profileDraft, setProfileDraft] = useState<BusinessProfileDraft>(() => buildDashboardDraft(session));
   const [currentPhotoUrls, setCurrentPhotoUrls] = useState<string[]>(() => getDisplayablePhotoUrls(businessContact.photo_references));
   const [selectedPhotoUploads, setSelectedPhotoUploads] = useState<BusinessAttachmentDraft[]>([]);
+  const [openingPhotoLibrary, setOpeningPhotoLibrary] = useState(false);
   const existingPhotoUrls = getDisplayablePhotoUrls(businessContact.photo_references);
   const remainingPhotoSlots = Math.max(0, 8 - currentPhotoUrls.length - selectedPhotoUploads.length);
   const existingSocialInputs = socialProfilesToInputs(businessContact.social_profiles, businessContact.business_website_url ?? '');
@@ -1027,17 +1028,18 @@ export function BusinessProfileEditorScreen({
   }
 
   async function handleSelectProfilePhotos() {
+    if (openingPhotoLibrary) {
+      return;
+    }
     try {
       if (remainingPhotoSlots <= 0) {
         return;
       }
 
+      setOpeningPhotoLibrary(true);
       const result = await ImagePicker.launchImageLibraryAsync({
-        allowsEditing: true,
         allowsMultipleSelection: false,
-        aspect: [4, 3],
         mediaTypes: ['images'],
-        quality: 0.9,
       });
 
       if (result.canceled) {
@@ -1050,6 +1052,8 @@ export function BusinessProfileEditorScreen({
       setSelectedPhotoUploads((current) => mergeSelectedPhotoUploads(current, nextAttachments));
     } catch {
       // The parent screen already renders submission errors; picker failures can stay silent here.
+    } finally {
+      setOpeningPhotoLibrary(false);
     }
   }
 
@@ -1117,10 +1121,10 @@ export function BusinessProfileEditorScreen({
               />
               <View style={styles.attachmentSection}>
                 <Text style={styles.dashboardDetailLabel}>Business photos</Text>
-                <Pressable onPress={() => void handleSelectProfilePhotos()} style={[styles.linkButtonSecondary, styles.attachmentPickerButton, remainingPhotoSlots === 0 ? styles.linkButtonDisabled : null]}>
-                  <Text style={styles.linkButtonSecondaryText}>Select from Photo Library</Text>
+                <Pressable disabled={openingPhotoLibrary || remainingPhotoSlots === 0} onPress={() => void handleSelectProfilePhotos()} style={[styles.linkButtonSecondary, styles.attachmentPickerButton, (openingPhotoLibrary || remainingPhotoSlots === 0) ? styles.linkButtonDisabled : null]}>
+                  <Text style={styles.linkButtonSecondaryText}>{openingPhotoLibrary ? 'Opening Photo Library...' : 'Select from Photo Library'}</Text>
                 </Pressable>
-                <Text style={[styles.dashboardSupportText, styles.attachmentSupportText]}>Choose photos from the device photo library only. You can crop each photo before saving. Max 8 photos total.</Text>
+                <Text style={[styles.dashboardSupportText, styles.attachmentSupportText]}>Choose photos from the device photo library. To crop first, use the Photos app. Max 8 photos total.</Text>
                 {currentPhotoUrls.length ? (
                   <>
                     <View style={styles.attachmentGalleryLabelRow}>

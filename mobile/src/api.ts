@@ -45,6 +45,36 @@ const MAX_PAGINATED_API_PAGES = 100;
 const placeCacheTtlMs = 5 * 60 * 1000;
 const API_REQUEST_TIMEOUT_MS = 15_000;
 const PLACES_API_REQUEST_TIMEOUT_MS = 60_000;
+const MANAGED_MEDIA_PATH_PATTERN = /^\/managed-media\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/$/i;
+
+export function resolveManagedMediaReferences<T>(payload: T, baseUrl: string): T {
+  const normalizedBaseUrl = normalizeApiBaseUrl(baseUrl);
+  if (!normalizedBaseUrl) {
+    return payload;
+  }
+
+  const apiOrigin = new URL(normalizedBaseUrl).origin;
+  const visit = (value: unknown): unknown => {
+    if (typeof value === 'string' && MANAGED_MEDIA_PATH_PATTERN.test(value)) {
+      return new URL(value, `${apiOrigin}/`).toString();
+    }
+    if (Array.isArray(value)) {
+      for (let index = 0; index < value.length; index += 1) {
+        value[index] = visit(value[index]);
+      }
+      return value;
+    }
+    if (value && typeof value === 'object') {
+      Object.entries(value).forEach(([key, entry]) => {
+        (value as Record<string, unknown>)[key] = visit(entry);
+      });
+      return value;
+    }
+    return value;
+  };
+
+  return visit(payload) as T;
+}
 
 type PlaceCacheEntry = {
   expiresAt: number;
@@ -490,7 +520,7 @@ async function fetchJson<T>(baseUrl: string, path: string): Promise<T> {
     throw new Error(buildFriendlyApiFallbackMessage(path, response.status));
   }
 
-  return response.json() as Promise<T>;
+  return parseApiJson<T>(response, baseUrl);
 }
 
 async function postJson<T>(baseUrl: string, path: string, payload: object): Promise<T> {
@@ -511,7 +541,7 @@ async function postJson<T>(baseUrl: string, path: string, payload: object): Prom
     throw new Error(message);
   }
 
-  return response.json() as Promise<T>;
+  return parseApiJson<T>(response, baseUrl);
 }
 
 async function postMultipartJson<T>(baseUrl: string, path: string, payload: FormData, authToken?: string): Promise<T> {
@@ -532,7 +562,7 @@ async function postMultipartJson<T>(baseUrl: string, path: string, payload: Form
     throw new Error(message);
   }
 
-  return response.json() as Promise<T>;
+  return parseApiJson<T>(response, baseUrl);
 }
 
 async function deleteAuthedJson<T>(baseUrl: string, path: string, authToken: string): Promise<T> {
@@ -552,7 +582,7 @@ async function deleteAuthedJson<T>(baseUrl: string, path: string, authToken: str
     throw new Error(message);
   }
 
-  return response.json() as Promise<T>;
+  return parseApiJson<T>(response, baseUrl);
 }
 
 async function fetchAllPaginatedJson<T>(baseUrl: string, path: string, timeoutMs = API_REQUEST_TIMEOUT_MS): Promise<T[]> {
@@ -583,7 +613,7 @@ async function fetchAllPaginatedJson<T>(baseUrl: string, path: string, timeoutMs
       throw new Error(buildFriendlyApiFallbackMessage(path, response.status));
     }
 
-    const payload = await response.json() as PaginatedResponse<T>;
+    const payload = await parseApiJson<PaginatedResponse<T>>(response, baseUrl);
     items.push(...payload.results);
     if (!payload.next) {
       nextUrl = null;
@@ -621,7 +651,7 @@ async function fetchPagedJson<T>(baseUrl: string, path: string): Promise<Paginat
     throw new Error(buildFriendlyApiFallbackMessage(path, response.status));
   }
 
-  return response.json() as Promise<PaginatedResponse<T>>;
+  return parseApiJson<PaginatedResponse<T>>(response, baseUrl);
 }
 
 function buildApiUrl(baseUrl: string, path: string) {
@@ -630,6 +660,11 @@ function buildApiUrl(baseUrl: string, path: string) {
     throw new Error(__DEV__ ? MISSING_DEVELOPMENT_API_BASE_URL_MESSAGE : MISSING_PRODUCTION_API_BASE_URL_MESSAGE);
   }
   return `${normalizedBaseUrl}${path}`;
+}
+
+async function parseApiJson<T>(response: Response, baseUrl: string): Promise<T> {
+  const payload = await response.json() as T;
+  return resolveManagedMediaReferences(payload, baseUrl);
 }
 
 function buildBusinessSignupFormData(payload: BusinessSignupRequest | ManualBusinessSignupRequest | InformalBusinessSignupRequest) {
@@ -907,7 +942,7 @@ async function fetchAuthedJson<T>(baseUrl: string, path: string, authToken: stri
     throw new Error(message);
   }
 
-  return response.json() as Promise<T>;
+  return parseApiJson<T>(response, baseUrl);
 }
 
 async function postAuthedJson<T>(baseUrl: string, path: string, authToken: string, payload: object): Promise<T> {
@@ -929,7 +964,7 @@ async function postAuthedJson<T>(baseUrl: string, path: string, authToken: strin
     throw new Error(message);
   }
 
-  return response.json() as Promise<T>;
+  return parseApiJson<T>(response, baseUrl);
 }
 
 async function postAuthedMultipartJson<T>(baseUrl: string, path: string, authToken: string, payload: FormData): Promise<T> {
@@ -950,7 +985,7 @@ async function postAuthedMultipartJson<T>(baseUrl: string, path: string, authTok
     throw new Error(message);
   }
 
-  return response.json() as Promise<T>;
+  return parseApiJson<T>(response, baseUrl);
 }
 
 function appendMultipartValue(formData: FormData, key: string, value: unknown) {

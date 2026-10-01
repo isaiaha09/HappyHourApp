@@ -97,6 +97,7 @@ describe('PlaceDetailScreen live location messaging', () => {
       terms: '',
       attachment: {
         content_type: 'application/pdf',
+        file_size: 3 * 1024 * 1024,
         name: 'Happy Hour Menu.pdf',
         url: 'https://cdn.example.test/happy-hour-menu.pdf',
       },
@@ -126,7 +127,7 @@ describe('PlaceDetailScreen live location messaging', () => {
       />,
     );
 
-    fireEvent.press(screen.getByText('PDF attachment • Tap to view'));
+    fireEvent.press(screen.getByText('PDF · 3 MB · 10 MB max · Tap to view'));
 
     await waitFor(() => {
       expect(screen.getByTestId('readonly-pdf-view')).toBeTruthy();
