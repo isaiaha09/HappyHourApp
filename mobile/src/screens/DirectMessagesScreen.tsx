@@ -501,10 +501,8 @@ export function DirectMessagesScreen({
 		}
 
 		const picker = await ImagePicker.launchImageLibraryAsync({
-			allowsEditing: true,
 			allowsMultipleSelection: false,
 			mediaTypes: ['images'],
-			quality: 0.8,
 		});
 
 		if (picker.canceled || !picker.assets.length) {
