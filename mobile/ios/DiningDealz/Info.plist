@@ -35,7 +35,7 @@
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>DiningDealzIOSAppStoreURL</key>
-	<string></string>
+	<string>https://apps.apple.com/us/app/diningdealz/id6781421160</string>
 	<key>DiningDealzProfileLinkBaseURL</key>
 	<string>https://link.diningdealz.com/share/place</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
