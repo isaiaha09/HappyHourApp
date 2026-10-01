@@ -6885,6 +6885,7 @@ function AppScreen() {
     );
 
     setDashboardSubmitting(true);
+    setProfileMessage(null);
     setProfileErrorMessage(null);
 
     try {

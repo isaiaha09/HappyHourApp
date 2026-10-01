@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { File } from 'expo-file-system';
 import { NativeModules } from 'react-native';
 
 import type {
@@ -312,15 +313,11 @@ export async function updateProfileDashboardWithUploads(
     appendMultipartValue(formData, key, value);
   });
 
-  photoUploads.forEach((photoUpload) => {
-    formData.append('profile_photo_uploads', {
-      uri: photoUpload.uri,
-      name: photoUpload.name,
-      type: photoUpload.mimeType ?? 'image/jpeg',
-    } as any);
-  });
+  for (const photoUpload of photoUploads) {
+    await appendLocalFilePart(formData, 'profile_photo_uploads', photoUpload, 'image/jpeg');
+  }
 
-  appendDealAttachmentUploads(formData, payload.deal_overrides);
+  await appendDealAttachmentUploads(formData, payload.deal_overrides);
 
   return postAuthedMultipartJson<SignupResponse>(baseUrl, '/profiles/me/', authToken, formData);
 }
@@ -342,11 +339,7 @@ export async function submitContentReport(baseUrl: string, authToken: string, pa
     }
     appendMultipartValue(formData, key, value);
   });
-  formData.append('screenshot', {
-    uri: screenshot.uri,
-    name: screenshot.name,
-    type: screenshot.mimeType ?? 'image/jpeg',
-  } as any);
+  await appendLocalFilePart(formData, 'screenshot', screenshot, 'image/jpeg');
 
   return postMultipartJson<{ detail: string }>(baseUrl, '/profiles/content-reports/', formData, authToken);
 }
@@ -367,11 +360,7 @@ export async function sendDirectMessageImage(baseUrl: string, authToken: string,
   const formData = new FormData();
   formData.append('portal', payload.portal);
   formData.append('thread_id', String(payload.thread_id));
-  formData.append('image', {
-    uri: payload.image.uri,
-    name: payload.image.name,
-    type: payload.image.mimeType ?? 'image/jpeg',
-  } as any);
+  await appendLocalFilePart(formData, 'image', payload.image, 'image/jpeg');
   return postAuthedMultipartJson<DirectMessageSendResponse>(baseUrl, '/profiles/direct-messages/', authToken, formData);
 }
 
@@ -468,15 +457,18 @@ export async function deleteProfileAccount(baseUrl: string, authToken: string, p
 }
 
 export async function createBusinessProfile(baseUrl: string, payload: BusinessSignupRequest, authToken?: string) {
-  return postMultipartJson<EmailVerificationChallengeResponse>(baseUrl, '/profiles/business-signup/', buildBusinessSignupFormData(payload), authToken);
+  const formData = await buildBusinessSignupFormData(payload);
+  return postMultipartJson<EmailVerificationChallengeResponse>(baseUrl, '/profiles/business-signup/', formData, authToken);
 }
 
 export async function createManualBusinessProfile(baseUrl: string, payload: ManualBusinessSignupRequest) {
-  return postMultipartJson<EmailVerificationChallengeResponse>(baseUrl, '/profiles/manual-business-signup/', buildBusinessSignupFormData(payload));
+  const formData = await buildBusinessSignupFormData(payload);
+  return postMultipartJson<EmailVerificationChallengeResponse>(baseUrl, '/profiles/manual-business-signup/', formData);
 }
 
 export async function createInformalBusinessProfile(baseUrl: string, payload: InformalBusinessSignupRequest) {
-  return postMultipartJson<EmailVerificationChallengeResponse>(baseUrl, '/profiles/informal-business-signup/', buildBusinessSignupFormData(payload));
+  const formData = await buildBusinessSignupFormData(payload);
+  return postMultipartJson<EmailVerificationChallengeResponse>(baseUrl, '/profiles/informal-business-signup/', formData);
 }
 
 export async function updateBusinessLocation(baseUrl: string, authToken: string, payload: BusinessLocationUpdateRequest) {
@@ -667,7 +659,7 @@ async function parseApiJson<T>(response: Response, baseUrl: string): Promise<T> 
   return resolveManagedMediaReferences(payload, baseUrl);
 }
 
-function buildBusinessSignupFormData(payload: BusinessSignupRequest | ManualBusinessSignupRequest | InformalBusinessSignupRequest) {
+async function buildBusinessSignupFormData(payload: BusinessSignupRequest | ManualBusinessSignupRequest | InformalBusinessSignupRequest) {
   const formData = new FormData();
   const { attachments, photo_uploads, ...rest } = payload;
 
@@ -679,60 +671,66 @@ function buildBusinessSignupFormData(payload: BusinessSignupRequest | ManualBusi
     appendMultipartValue(formData, key, value);
   });
 
-  appendBusinessAttachments(formData, attachments);
-  appendBusinessPhotoUploads(formData, photo_uploads);
-  appendDealAttachmentUploads(formData, payload.deal_overrides);
+  await appendBusinessAttachments(formData, attachments);
+  await appendBusinessPhotoUploads(formData, photo_uploads);
+  await appendDealAttachmentUploads(formData, payload.deal_overrides);
   return formData;
 }
 
-function appendBusinessAttachments(formData: FormData, attachments?: BusinessAttachmentBuckets) {
+async function appendBusinessAttachments(formData: FormData, attachments?: BusinessAttachmentBuckets) {
   if (!attachments) {
     return;
   }
 
-  (Object.entries(attachments) as Array<[BusinessAttachmentKind, BusinessAttachmentBuckets[BusinessAttachmentKind]]>).forEach(([attachmentKind, files]) => {
+  for (const [attachmentKind, files] of Object.entries(attachments) as Array<[BusinessAttachmentKind, BusinessAttachmentBuckets[BusinessAttachmentKind]]>) {
     const fieldName = businessAttachmentFieldNames[attachmentKind];
-    files.forEach((file) => {
-      formData.append(fieldName, {
-        uri: file.uri,
-        name: file.name,
-        type: file.mimeType ?? 'application/octet-stream',
-      } as any);
-    });
-  });
+    for (const file of files) {
+      await appendLocalFilePart(formData, fieldName, file, 'application/octet-stream');
+    }
+  }
 }
 
-function appendBusinessPhotoUploads(formData: FormData, photoUploads?: BusinessAttachmentDraft[]) {
+async function appendBusinessPhotoUploads(formData: FormData, photoUploads?: BusinessAttachmentDraft[]) {
   if (!photoUploads?.length) {
     return;
   }
 
-  photoUploads.forEach((photoUpload) => {
-    formData.append('profile_photo_uploads', {
-      uri: photoUpload.uri,
-      name: photoUpload.name,
-      type: photoUpload.mimeType ?? 'image/jpeg',
-    } as any);
-  });
+  for (const photoUpload of photoUploads) {
+    await appendLocalFilePart(formData, 'profile_photo_uploads', photoUpload, 'image/jpeg');
+  }
 }
 
-function appendDealAttachmentUploads(formData: FormData, dealOverrides?: BusinessDealOverride[]) {
+async function appendDealAttachmentUploads(formData: FormData, dealOverrides?: BusinessDealOverride[] | null) {
   if (!dealOverrides?.length) {
     return;
   }
 
-  dealOverrides.forEach((dealOverride, index) => {
+  for (const [index, dealOverride] of dealOverrides.entries()) {
     const attachmentUpload = dealOverride.attachment_upload;
     if (!attachmentUpload?.uri) {
-      return;
+      continue;
     }
 
-    formData.append(`deal_attachment_upload_${index}`, {
-      uri: attachmentUpload.uri,
-      name: attachmentUpload.name,
-      type: attachmentUpload.mimeType ?? 'application/octet-stream',
-    } as any);
-  });
+    await appendLocalFilePart(formData, `deal_attachment_upload_${index}`, attachmentUpload, 'application/octet-stream');
+  }
+}
+
+type LocalMultipartUpload = {
+  mimeType?: string | null;
+  name: string;
+  uri: string;
+};
+
+async function appendLocalFilePart(formData: FormData, fieldName: string, upload: LocalMultipartUpload, fallbackMimeType: string) {
+  const localFile = new File(upload.uri);
+  const filePart = {
+    name: upload.name || localFile.name,
+    type: upload.mimeType || localFile.type || fallbackMimeType,
+    bytes: () => localFile.bytes(),
+  };
+
+  // Expo's fetch multipart encoder needs bytes-capable parts; React Native's { uri, name, type } shape fails there.
+  formData.append(fieldName, filePart as any);
 }
 
 function flattenApiError(value: unknown): string {
