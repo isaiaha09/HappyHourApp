@@ -198,6 +198,8 @@ These parts are not built yet:
 
 The backend can be hosted on Render, but the current OCR setup has an important limitation on Render's standard non-Docker Python runtime.
 
+The repository and `backend/` each contain a `.python-version` file set to Python 3.12.15 so Render uses the same supported runtime whether its Root Directory is the repository root or `backend`. Keep both files in sync. A Render `PYTHON_VERSION` environment variable takes precedence over these files; if set, use `3.12.15` there as well. The pinned Pillow 11.2.1 dependency has a Python 3.12 Linux wheel.
+
 - The Python package `pytesseract` is included in `backend/requirements.txt`, but it only talks to the external Tesseract binary.
 - Standard Render services should be treated as managed runtimes without normal OS-level package installation during build.
 - Because of that, this repo does not assume a standard Render deploy can install Tesseract with `apt-get` or a similar system package command.
