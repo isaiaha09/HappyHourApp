@@ -2326,7 +2326,7 @@ class BusinessClaimAdmin(HardDeleteUserAdminMixin, UnfoldModelAdmin):
 		}),
 		('Attempt history', {
 			'fields': ('attempt_number_display', 'current_attempt_display', 'prior_rejection_count_display', 'attempt_history_display'),
-			'description': 'Older attempts for the same claimant account email stay in the database for audit history. Approval should be treated as the current winning outcome, while prior attempts remain visible here.',
+			'description': 'Older attempts for the same claimant account email stay in the database for audit history. Once a later claim for the same business is approved, files from earlier rejected attempts are removed while the claim history remains visible here.',
 			'classes': ('tab',),
 		}),
 		('Timestamps', {

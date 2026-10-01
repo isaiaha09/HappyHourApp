@@ -285,6 +285,19 @@ def extract_managed_storage_name(reference):
 	return normalized_name
 
 
+def is_public_managed_media_reference(reference):
+	"""Return whether a reference points to app-managed media intended for the public bucket."""
+	if managed_media_id_from_reference(reference) is not None:
+		return True
+
+	storage_name = extract_managed_storage_name(reference)
+	if not storage_name:
+		return False
+
+	route = classify_supabase_media_key(storage_name)
+	return bool(route and route[0] == 'public')
+
+
 def _collect_managed_storage_names(references):
 	managed_names = set()
 	for reference in references or []:

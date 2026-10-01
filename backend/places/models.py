@@ -769,6 +769,70 @@ class BusinessClaim(models.Model):
 			self.submitted_at = previous_submitted_at
 			raise
 
+	def _purge_previous_rejected_claim_uploads(self):
+		from .services.media_storage import is_public_managed_media_reference
+
+		previous_claims = BusinessClaim.objects.filter(
+			claimant_id=self.claimant_id,
+			listing_snapshot_id=self.listing_snapshot_id,
+			status=self.Status.REJECTED,
+		).exclude(pk=self.pk)
+		for previous_claim in previous_claims:
+			for attachment in previous_claim.attachments.exclude(file=''):
+				# Keep the attachment row as review history while removing its stored bytes.
+				attachment.file = ''
+				attachment.save(update_fields=['file'])
+
+			previous_photo_references = list(previous_claim.photo_references or [])
+			cleaned_photo_references = [
+				reference
+				for reference in previous_photo_references
+				if not is_public_managed_media_reference(reference)
+			]
+			previous_deal_overrides = list(previous_claim.deal_overrides or [])
+			cleaned_deal_overrides = []
+			for deal_override in previous_deal_overrides:
+				if not isinstance(deal_override, dict):
+					cleaned_deal_overrides.append(deal_override)
+					continue
+				cleaned_deal_override = dict(deal_override)
+				attachment = cleaned_deal_override.get('attachment')
+				attachment_references = []
+				if isinstance(attachment, dict):
+					attachment_references.append(attachment.get('url'))
+					if attachment.get('media_id'):
+						attachment_references.append(f"media:{attachment['media_id']}")
+				if any(is_public_managed_media_reference(reference) for reference in attachment_references):
+					cleaned_deal_override.pop('attachment', None)
+				cleaned_deal_override.pop('attachment_upload', None)
+				cleaned_deal_overrides.append(cleaned_deal_override)
+
+			managed_photo_entry_ids = [
+				entry.pk
+				for entry in previous_claim.profile_entries.filter(
+					entry_kind=self.ProfileEntryKind.PHOTO_REFERENCE,
+				).only('pk', 'value')
+				if is_public_managed_media_reference(entry.value)
+			]
+			if managed_photo_entry_ids:
+				previous_claim.profile_entries.filter(pk__in=managed_photo_entry_ids).delete()
+
+			claim_update_fields = []
+			if cleaned_photo_references != previous_photo_references:
+				previous_claim.photo_references = cleaned_photo_references
+				claim_update_fields.append('photo_references')
+			if not cleaned_photo_references and previous_claim.photo_gallery_overridden:
+				previous_claim.photo_gallery_overridden = False
+				claim_update_fields.append('photo_gallery_overridden')
+			if cleaned_deal_overrides != previous_deal_overrides:
+				previous_claim.deal_overrides = cleaned_deal_overrides
+				claim_update_fields.append('deal_overrides')
+			if claim_update_fields:
+				previous_claim.save(update_fields=[*claim_update_fields, 'updated_at'])
+
+			# Remove orphaned uploads too, including media no longer referenced in the claim JSON.
+			previous_claim.managed_media.filter(media_kind__in=['profile_photo', 'deal_attachment']).delete()
+
 	def approve(self, reviewed_by=None, reviewer_notes='', force=False):
 		if self.status == self.Status.DRAFT:
 			raise ValidationError('Draft claims must be submitted before they can be approved.')
@@ -801,6 +865,7 @@ class BusinessClaim(models.Model):
 		from .services.account_profiles import get_or_create_account_profile, send_business_claim_approved_email
 
 		get_or_create_account_profile(self.claimant).restore_business_claim_access()
+		self._purge_previous_rejected_claim_uploads()
 
 		send_business_claim_approved_email(self.claimant, self)
 

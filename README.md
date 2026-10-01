@@ -857,8 +857,11 @@ will be deleted from storage when:
 
 - the related `BusinessClaimAttachment` record is deleted
 - a `BusinessClaim` is deleted from admin or elsewhere in the backend
+- a later claim for the same claimant and business is approved, which deletes verification files and app-managed profile photos and deal attachments from that claimant's earlier rejected claims while retaining verification attachment records for audit history
 - uploaded profile photos are removed from a business profile and no longer referenced
 - an expired direct-message image is lazily cleaned up after its 24-hour display window
+
+Rejected claims retain their verification files, profile photos, and deal attachments for staff review and retry. The newly approved claim's uploads remain in place.
 
 This cleanup does not apply to external image URLs that were never uploaded by the backend.
 
