@@ -986,7 +986,8 @@ export function DirectMessagesScreen({
 											setComposerText(value);
 											setMessagesError(null);
 										}}
-																editable={!threadBlocked && !threadReadOnly}
+										keyboardAppearance="dark"
+										editable={!threadBlocked && !threadReadOnly}
 										blurOnSubmit={false}
 										multiline
 										scrollEnabled
