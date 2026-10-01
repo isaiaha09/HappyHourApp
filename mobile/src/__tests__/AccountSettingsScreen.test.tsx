@@ -78,6 +78,7 @@ describe('AccountSettingsScreen delete account field', () => {
     const passwordField = screen.getByLabelText('Current password for account deletion');
 
     expect(passwordField.props.onFocus).toEqual(expect.any(Function));
+    expect(passwordField.props.keyboardAppearance).toBe('dark');
     fireEvent.changeText(passwordField, 'current-password');
 
     expect(onChangeDeleteAccountPassword).toHaveBeenCalledWith('current-password');

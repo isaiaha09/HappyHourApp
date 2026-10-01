@@ -133,6 +133,7 @@ describe('CustomerPreferencesScreen', () => {
     });
 
     expect(screen.getByText('Choose businesses')).toBeTruthy();
+    expect(screen.getByPlaceholderText('Search businesses').props.keyboardAppearance).toBe('dark');
 
     fireEvent.press(screen.getByText('Yard House'));
     fireEvent.press(screen.getByText('Continue'));

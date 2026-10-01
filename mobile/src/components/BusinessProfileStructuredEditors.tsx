@@ -133,6 +133,7 @@ export function BusinessHoursEditor({ label, onChange, supportText, value }: Bus
           {row.open_24_hours ? null : (
             <View style={styles.structuredTimeRow}>
               <TextInput
+                keyboardAppearance="dark"
                 onChangeText={(open_time) => updateRow(index, { ...row, open_time })}
                 placeholder="11:00 AM"
                 placeholderTextColor="#9a7f6c"
@@ -140,6 +141,7 @@ export function BusinessHoursEditor({ label, onChange, supportText, value }: Bus
                 value={row.open_time}
               />
               <TextInput
+                keyboardAppearance="dark"
                 onChangeText={(close_time) => updateRow(index, { ...row, close_time })}
                 placeholder="10:00 PM"
                 placeholderTextColor="#9a7f6c"
@@ -490,10 +492,10 @@ export function BusinessDealsEditor({ label, onChange, supportText, value }: Bus
       <Text style={styles.profileSupportText}>{supportText}</Text>
       {value.map((deal, dealIndex) => (
         <View key={deal.id ?? `deal-${dealIndex}`} style={styles.structuredEditorCard}>
-          <TextInput onChangeText={(title) => updateDeal(dealIndex, { ...deal, title })} placeholder="Deal title" placeholderTextColor="#9a7f6c" style={styles.profileInput} value={deal.title} />
-          <TextInput onChangeText={(price_text) => updateDeal(dealIndex, { ...deal, price_text })} placeholder="Price or savings" placeholderTextColor="#9a7f6c" style={styles.profileInput} value={deal.price_text} />
-          <TextInput multiline onChangeText={(description) => updateDeal(dealIndex, { ...deal, description })} placeholder="Deal description" placeholderTextColor="#9a7f6c" style={[styles.profileInput, styles.dashboardMultilineInput]} textAlignVertical="top" value={deal.description} />
-          <TextInput onChangeText={(terms) => updateDeal(dealIndex, { ...deal, terms })} placeholder="Terms or restrictions" placeholderTextColor="#9a7f6c" style={styles.profileInput} value={deal.terms} />
+          <TextInput keyboardAppearance="dark" onChangeText={(title) => updateDeal(dealIndex, { ...deal, title })} placeholder="Deal title" placeholderTextColor="#9a7f6c" style={styles.profileInput} value={deal.title} />
+          <TextInput keyboardAppearance="dark" onChangeText={(price_text) => updateDeal(dealIndex, { ...deal, price_text })} placeholder="Price or savings" placeholderTextColor="#9a7f6c" style={styles.profileInput} value={deal.price_text} />
+          <TextInput keyboardAppearance="dark" multiline onChangeText={(description) => updateDeal(dealIndex, { ...deal, description })} placeholder="Deal description" placeholderTextColor="#9a7f6c" style={[styles.profileInput, styles.dashboardMultilineInput]} textAlignVertical="top" value={deal.description} />
+          <TextInput keyboardAppearance="dark" onChangeText={(terms) => updateDeal(dealIndex, { ...deal, terms })} placeholder="Terms or restrictions" placeholderTextColor="#9a7f6c" style={styles.profileInput} value={deal.terms} />
           <DealTypeSelector
             selectedDealType={deal.deal_type}
             onSelect={(deal_type) => updateDeal(dealIndex, {
@@ -504,6 +506,7 @@ export function BusinessDealsEditor({ label, onChange, supportText, value }: Bus
           />
           {deal.deal_type === 'other' ? (
             <TextInput
+              keyboardAppearance="dark"
               onChangeText={(custom_deal_type_label) => updateDeal(dealIndex, { ...deal, custom_deal_type_label })}
               placeholder="Custom deal type"
               placeholderTextColor="#9a7f6c"
@@ -537,6 +540,7 @@ export function BusinessDealsEditor({ label, onChange, supportText, value }: Bus
                 ) : (
                   <View style={styles.attachmentList}>
                     <TextInput
+                      keyboardAppearance="dark"
                       onChangeText={(nextName) => updatePdfAttachmentName(dealIndex, nextName)}
                       placeholder="PDF display name"
                       placeholderTextColor="#9a7f6c"
@@ -572,6 +576,7 @@ export function BusinessDealsEditor({ label, onChange, supportText, value }: Bus
               {!window.all_day ? (
                 <View style={styles.structuredTimeRow}>
                   <TextInput
+                    keyboardAppearance="dark"
                     onChangeText={(start_time) => updateHappyHour(dealIndex, happyHourIndex, { ...window, start_time })}
                     placeholder="3:00 PM"
                     placeholderTextColor="#9a7f6c"
@@ -579,6 +584,7 @@ export function BusinessDealsEditor({ label, onChange, supportText, value }: Bus
                     value={window.start_time}
                   />
                   <TextInput
+                    keyboardAppearance="dark"
                     onChangeText={(end_time) => updateHappyHour(dealIndex, happyHourIndex, { ...window, end_time })}
                     placeholder="6:00 PM"
                     placeholderTextColor="#9a7f6c"

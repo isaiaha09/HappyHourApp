@@ -100,12 +100,13 @@ function scrollFocusedFieldIntoView(scrollViewRef: RefObject<ScrollView | null>,
   });
 }
 
-export function AutoScrollTextInput({ onBeforeAutoScroll, onFocus, scrollViewRef, ...props }: AutoScrollTextInputProps) {
+export function AutoScrollTextInput({ keyboardAppearance = 'dark', onBeforeAutoScroll, onFocus, scrollViewRef, ...props }: AutoScrollTextInputProps) {
   const inputRef = useRef<TextInput | null>(null);
 
   return (
     <TextInput
       {...props}
+      keyboardAppearance={keyboardAppearance}
       ref={inputRef}
       onFocus={(event) => {
         const target = findNodeHandle(inputRef.current);

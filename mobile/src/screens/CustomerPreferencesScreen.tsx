@@ -370,7 +370,7 @@ export function CustomerPreferencesScreen({ apiBaseUrl, authToken, isLandscape, 
       <View style={styles.preferenceSection}>
         <Text style={styles.preferenceSectionTitle}>Choose businesses</Text>
         <Text style={styles.preferenceSupportText}>These are the exact locations with current confirmed happy hours.</Text>
-        <TextInput onChangeText={setSearchQuery} placeholder="Search businesses" placeholderTextColor={theme.textDarkMuted} style={styles.preferenceSearchInput} value={searchQuery} />
+        <TextInput keyboardAppearance="dark" onChangeText={setSearchQuery} placeholder="Search businesses" placeholderTextColor={theme.textDarkMuted} style={styles.preferenceSearchInput} value={searchQuery} />
         {loading ? <ActivityIndicator color={theme.accent} /> : null}
         {!loading && !visibleBusinessGroups.length ? <Text style={styles.preferenceEmptyText}>No confirmed happy-hour locations matched these areas yet.</Text> : null}
         <View style={styles.preferenceBusinessGroups}>

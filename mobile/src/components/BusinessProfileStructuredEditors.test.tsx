@@ -54,6 +54,7 @@ describe('BusinessDealsEditor attachments', () => {
     });
 
     render(<BusinessDealsEditor label="Deals" onChange={jest.fn()} supportText="Edit deals." value={[baseDeal]} />);
+    expect(screen.getByPlaceholderText('Deal title').props.keyboardAppearance).toBe('dark');
     fireEvent.press(screen.getByText('Import photo from library'));
 
     await waitFor(() => expect(mockLaunchImageLibraryAsync).toHaveBeenCalledWith({

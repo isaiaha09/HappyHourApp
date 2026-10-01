@@ -106,7 +106,7 @@ function DashboardEditableField({
   return (
     <View style={styles.dashboardFieldColumn}>
       <Text style={styles.dashboardDetailLabel}>{label}</Text>
-      <TextInput onChangeText={onChangeText} style={styles.profileInput} value={value} />
+      <TextInput keyboardAppearance="dark" onChangeText={onChangeText} style={styles.profileInput} value={value} />
     </View>
   );
 }
@@ -123,7 +123,7 @@ function DashboardMultilineField({
   return (
     <View style={styles.dashboardFieldColumn}>
       <Text style={styles.dashboardDetailLabel}>{label}</Text>
-      <TextInput multiline onChangeText={onChangeText} style={[styles.profileInput, styles.dashboardMultilineInput]} textAlignVertical="top" value={value} />
+      <TextInput keyboardAppearance="dark" multiline onChangeText={onChangeText} style={[styles.profileInput, styles.dashboardMultilineInput]} textAlignVertical="top" value={value} />
     </View>
   );
 }
@@ -365,7 +365,7 @@ function SecuritySettingsSection({
       {session.two_factor_enabled ? (
         <>
           <Text style={styles.dashboardSupportText}>Enter a current authenticator code to disable 2FA on this account.</Text>
-          <TextInput keyboardType="number-pad" onChangeText={onChangeTwoFactorDisableCode} style={styles.profileInput} value={twoFactorDisableCode} />
+          <TextInput keyboardAppearance="dark" keyboardType="number-pad" onChangeText={onChangeTwoFactorDisableCode} style={styles.profileInput} value={twoFactorDisableCode} />
           <Pressable onPress={onDisableTwoFactor} style={[styles.linkButtonSecondaryWide, submitting ? styles.linkButtonDisabled : null]}>
             <Text style={styles.linkButtonSecondaryText}>{disablingTwoFactor ? 'Saving...' : 'Disable authenticator 2FA'}</Text>
           </Pressable>
@@ -433,7 +433,7 @@ function SecuritySettingsSection({
             </Pressable>
             <Text style={styles.dashboardCodeHelpText}>Copy the key manually, set it up in your authenticator app, and paste the 6-digit code in the line below.</Text>
           </View>
-          <TextInput keyboardType="number-pad" onChangeText={onChangeTwoFactorSetupCode} style={styles.profileInput} value={twoFactorSetupCode} />
+          <TextInput keyboardAppearance="dark" keyboardType="number-pad" onChangeText={onChangeTwoFactorSetupCode} style={styles.profileInput} value={twoFactorSetupCode} />
           <Pressable onPress={onConfirmTwoFactorSetup} style={[styles.linkButtonSecondaryWide, submitting ? styles.linkButtonDisabled : null]}>
             <Text style={styles.linkButtonSecondaryText}>{confirmingTwoFactorSetup ? 'Saving...' : 'Confirm authenticator setup'}</Text>
           </Pressable>
@@ -736,6 +736,7 @@ export function FavoriteBusinessesScreen({
             <Text style={styles.dashboardSectionTitle}>Saved businesses</Text>
             {favoriteBusinesses.length > 1 ? (
               <TextInput
+                keyboardAppearance="dark"
                 onChangeText={setFavoriteSearchQuery}
                 placeholder="Search favorite businesses"
                 placeholderTextColor="#9a7f6c"
@@ -1007,6 +1008,7 @@ export function BusinessProfileEditorScreen({
         <Text style={styles.dashboardDetailLabel}>{SOCIAL_PLATFORM_LABELS[platform]}</Text>
         <TextInput
           autoCapitalize="none"
+          keyboardAppearance="dark"
           onChangeText={(value) => setProfileDraft((current) => ({ ...current, [field]: value }))}
           placeholder={placeholder}
           placeholderTextColor="#9a7f6c"
@@ -1569,6 +1571,7 @@ export function BlockedDirectMessageCustomersScreen({
             <TextInput
               autoCapitalize="none"
               autoCorrect={false}
+              keyboardAppearance="dark"
               onChangeText={setCustomerKeyword}
               placeholder="Filter by username"
               placeholderTextColor="#9a7f6c"
