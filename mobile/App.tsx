@@ -4596,8 +4596,8 @@ function AppScreen() {
     setSelectedPlaceSlug(place.slug);
   }, []);
 
-  const handleToggleCurrentHappyHoursMenu = useCallback(() => {
-    setCurrentHappyHoursMenuExpanded((current) => !current);
+  const handleToggleCurrentHappyHoursMenu = useCallback((expanded?: boolean) => {
+    setCurrentHappyHoursMenuExpanded((current) => expanded ?? !current);
   }, []);
 
   function openExternalPlannerAction(action: ExternalPlannerAction) {

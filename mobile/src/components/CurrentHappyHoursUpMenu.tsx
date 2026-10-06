@@ -129,7 +129,7 @@ function getDistanceInMiles(
 export type CurrentHappyHoursUpMenuProps = {
   places: CurrentHappyHourPlace[];
   expanded: boolean;
-  onToggle: () => void;
+  onToggle: (expanded?: boolean) => void;
   onSelectPlace: (place: { slug: string; locationId: number }) => void;
   onFavoritePlace?: (place: { slug: string; locationId: number }) => void;
   onAddToCalendar?: (place: CurrentHappyHourPlace, window?: CurrentHappyHourWindow) => void;

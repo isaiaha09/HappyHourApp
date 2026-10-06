@@ -154,7 +154,7 @@ export function NativeIOSCurrentHappyHoursUpMenu({
         }
       } : undefined}
       onFavoritePress={(event) => onFavoritePlace?.(event.nativeEvent)}
-      onMenuToggle={() => onToggle()}
+      onMenuToggle={(event) => onToggle(event.nativeEvent.expanded)}
       onPlaceSelect={(event) => onSelectPlace(event.nativeEvent)}
       onSharePress={onSharePlace ? (event) => {
         const place = resolveNativePlace(event);

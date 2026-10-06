@@ -347,7 +347,8 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
             .frame(maxWidth: .infinity, minHeight: 56, alignment: .top)
           }
           .contentShape(Rectangle())
-          .simultaneousGesture(sheetGesture)
+          // Once a drag begins, don't also fire the nested open/close button on release.
+          .highPriorityGesture(sheetGesture)
 
           expandedList
             .opacity(1)
@@ -533,13 +534,19 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
   }
 
   private func finishSheetDrag(_ value: DragGesture.Value) {
-    guard dragTranslationY != nil else { return }
     let vertical = abs(value.translation.height) > abs(value.translation.width)
+    guard vertical else {
+      dragTranslationY = nil
+      return
+    }
+    let translationY = value.translation.height
     let projectedY = value.predictedEndTranslation.height
-    let shouldExpand = vertical && !isExpanded
-      && (value.translation.height <= -72 || (value.translation.height < -12 && projectedY <= -110))
-    let shouldCollapse = vertical && isExpanded
-      && (value.translation.height >= 72 || (value.translation.height > 12 && projectedY >= 110))
+    // A short flick should commit to the next stop even if the finger did not
+    // carry the sheet far. A slower drag can still cross the distance threshold.
+    let shouldExpand = !isExpanded
+      && (translationY <= -56 || (translationY <= -12 && projectedY <= -76))
+    let shouldCollapse = isExpanded
+      && (translationY >= 56 || (translationY >= 12 && projectedY >= 76))
     let nextExpanded = shouldExpand || shouldCollapse ? !isExpanded : isExpanded
     withAnimation(sheetSettleAnimation) {
       dragTranslationY = nil
