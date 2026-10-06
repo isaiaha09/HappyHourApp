@@ -556,11 +556,42 @@ export const detailStyles = {
     fontWeight: '700',
     marginTop: 10,
   },
-  dealDescription: {
+  dealDescriptionBlock: {
+    gap: 8,
+    marginTop: 8,
+  },
+  dealDescriptionOffer: {
+    gap: 8,
+  },
+  dealDescriptionRow: {
+    alignItems: 'flex-start',
+    gap: 3,
+  },
+  dealDescriptionDay: {
+    color: theme.accentStrong,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+  },
+  dealDescriptionText: {
     color: theme.textSecondary,
     fontSize: 14,
     lineHeight: 20,
-    marginTop: 8,
+  },
+  dealDescriptionOfferText: {
+    color: theme.textPrimary,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  dealDescriptionToggle: {
+    alignSelf: 'flex-start',
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  dealDescriptionToggleText: {
+    color: theme.accentStrong,
+    fontSize: 13,
+    fontWeight: '700',
   },
   dealTerms: {
     color: theme.textMuted,

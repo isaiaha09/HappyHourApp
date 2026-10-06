@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
-import { StyleSheet } from 'react-native';
+import { Animated, StyleSheet } from 'react-native';
+import { State } from 'react-native-gesture-handler';
 
 import { getVenuePlaceholderColor } from '../browseConfig';
 import { CurrentHappyHoursUpMenu } from '../components/CurrentHappyHoursUpMenu';
@@ -34,6 +35,27 @@ const place: CurrentHappyHourPlace = {
 };
 
 describe('CurrentHappyHoursUpMenu', () => {
+  it('keeps the last card above navigation and allows a downward pull to close the expanded sheet', () => {
+    const onToggle = jest.fn();
+    render(
+      <CurrentHappyHoursUpMenu
+        bottomOffset={96}
+        expanded
+        onSelectPlace={jest.fn()}
+        onToggle={onToggle}
+        places={[place]}
+        theme="dark"
+      />,
+    );
+
+    expect(StyleSheet.flatten(screen.getByTestId('current-happy-hours-list').props.contentContainerStyle))
+      .toEqual(expect.objectContaining({ paddingBottom: 124 }));
+    fireEvent(screen.getAllByTestId('mock-pan-gesture-handler')[1], 'handlerStateChange', {
+      nativeEvent: { oldState: State.ACTIVE, state: State.END, translationY: 90, velocityY: 0 },
+    });
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
   it('renders nothing when there are no active places', () => {
     render(
       <CurrentHappyHoursUpMenu
@@ -85,6 +107,49 @@ describe('CurrentHappyHoursUpMenu', () => {
     expect(screen.getByText('$5 wells Afternoon Happy Hour')).toBeTruthy();
     fireEvent.press(screen.getByTestId('current-happy-hours-row-example-bar:101'));
     expect(onSelectPlace).toHaveBeenCalledWith({ slug: 'example-bar', locationId: 101 });
+  });
+
+  it('uses the drag-settle spring when opening and closing by tap', () => {
+    const onToggle = jest.fn();
+    const springSpy = jest.spyOn(Animated, 'spring');
+    const renderMenu = (expanded: boolean) => (
+      <CurrentHappyHoursUpMenu
+        bottomOffset={96}
+        expanded={expanded}
+        onSelectPlace={jest.fn()}
+        onToggle={onToggle}
+        places={[place]}
+        theme="dark"
+      />
+    );
+
+    try {
+      const { rerender } = render(renderMenu(false));
+      springSpy.mockClear();
+
+      fireEvent.press(screen.getByTestId('current-happy-hours-toggle'));
+      expect(onToggle).toHaveBeenCalledTimes(1);
+      rerender(renderMenu(true));
+      expect(springSpy).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        damping: 24,
+        stiffness: 260,
+        toValue: 1,
+        useNativeDriver: true,
+      }));
+
+      springSpy.mockClear();
+      fireEvent.press(screen.getByTestId('current-happy-hours-close'));
+      expect(onToggle).toHaveBeenCalledTimes(2);
+      rerender(renderMenu(false));
+      expect(springSpy).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        damping: 24,
+        stiffness: 260,
+        toValue: 0,
+        useNativeDriver: true,
+      }));
+    } finally {
+      springSpy.mockRestore();
+    }
   });
 
   it('routes the heart action to the account/favorite handler without selecting the row', () => {

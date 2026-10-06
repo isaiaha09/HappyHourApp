@@ -86,6 +86,60 @@ function buildPlace(overrides: Partial<PlaceDetail> = {}) {
 }
 
 describe('PlaceDetailScreen live location messaging', () => {
+  it('automatically formats multiple returned deals and more-offer entries', () => {
+    const baseDeal: Deal = {
+      id: 1,
+      title: 'Short deal',
+      description: 'A simple happy hour.',
+      deal_type: 'special',
+      deal_type_label: 'Special',
+      price_text: '$5',
+      terms: 'Dine in only.',
+      attachment: null,
+      is_active: true,
+      starts_on: null,
+      ends_on: null,
+      happy_hours: [],
+    };
+
+    render(
+      <PlaceDetailScreen
+        detailLoading={false}
+        errorMessage={null}
+        favoriteHelperText={null}
+        favoriteSubmitting={false}
+        isLandscape={false}
+        isFavorited={false}
+        locationStatusNow={Date.parse('2026-08-03T17:33:20Z')}
+        onBack={jest.fn()}
+        onSelectLocation={jest.fn()}
+        onToggleFavorite={jest.fn()}
+        selectedPlace={buildPlace({ offer_entries: ['Tuesday - tacos || Wednesday - wings || Terms: ask staff'] })}
+        selectedPlaceDeals={[
+          baseDeal,
+          { ...baseDeal, id: 2, title: 'Combo deal', description: 'Thursday - $15 combo || Friday - $17 combo || Saturday - $19 combo' },
+          { ...baseDeal, id: 3, title: 'Irregular deal', description: 'See staff / menu for details.' },
+        ]}
+        selectedPlaceLocation={null}
+        selectedPlaceOperatingHours={[]}
+        showFavoriteControl={false}
+      />,
+    );
+
+    expect(screen.getByText('A simple happy hour.')).toBeTruthy();
+    expect(screen.getByText('See staff / menu for details.')).toBeTruthy();
+    expect(screen.getByText('$15 combo')).toBeTruthy();
+    expect(screen.queryByText('$19 combo')).toBeNull();
+    expect(screen.getAllByText('Terms: Dine in only.')).toHaveLength(3);
+    expect(screen.getByText('More Deals and Specials')).toBeTruthy();
+    expect(screen.getAllByText('Show all details')).toHaveLength(2);
+
+    fireEvent.press(screen.getAllByText('Show all details')[0]);
+    expect(screen.getByText('$19 combo')).toBeTruthy();
+    fireEvent.press(screen.getByText('Show all details'));
+    expect(screen.getByText('Terms: ask staff')).toBeTruthy();
+  });
+
   it('opens a deal PDF in the in-app read-only viewer when tapped', async () => {
     const deal: Deal = {
       id: 8,

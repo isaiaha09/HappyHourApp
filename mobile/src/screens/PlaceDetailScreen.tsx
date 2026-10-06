@@ -6,6 +6,7 @@ import MapView, { Marker } from 'react-native-maps';
 
 import { styles } from '../appStyles';
 import { ContentReportModal } from '../components/ContentReportModal';
+import { DealDescription } from '../components/DealDescription';
 import { NativeIOSLiquidGlassHeaderButton } from '../components/NativeIOSLiquidGlass';
 import { PhotoLightbox } from '../components/PhotoLightbox';
 import { SocialButton } from '../components/SocialButton';
@@ -464,7 +465,7 @@ export function PlaceDetailScreen({
                     </Pressable>
                   ) : null}
                   {deal.price_text ? <Text style={styles.dealPrice}>{deal.price_text}</Text> : null}
-                  {deal.description ? <Text style={styles.dealDescription}>{deal.description}</Text> : null}
+                  {deal.description ? <DealDescription description={deal.description} /> : null}
                   {deal.terms ? <Text style={styles.dealTerms}>Terms: {deal.terms}</Text> : null}
                   <View style={styles.hourList}>
                     {formatHappyHourGroups(deal.happy_hours, selectedPlaceOperatingHours).map((group) => (
@@ -484,9 +485,9 @@ export function PlaceDetailScreen({
               <>
                 <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>More Deals and Specials</Text>
                 <View style={styles.hourList}>
-                  {selectedPlace.offer_entries.map((entry) => (
-                    <View key={entry} style={styles.hourGroupCard}>
-                      <Text style={styles.hourRow}>{entry}</Text>
+                  {selectedPlace.offer_entries.map((entry, index) => (
+                    <View key={`${index}:${entry}`} style={styles.hourGroupCard}>
+                      <DealDescription description={entry} variant="offer" />
                     </View>
                   ))}
                 </View>

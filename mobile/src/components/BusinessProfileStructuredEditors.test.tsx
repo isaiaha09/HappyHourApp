@@ -28,6 +28,26 @@ describe('BusinessDealsEditor attachments', () => {
     jest.clearAllMocks();
   });
 
+  it('shows the same automatically formatted details in every business preview', () => {
+    render(
+      <BusinessDealsEditor
+        label="Deals"
+        onChange={jest.fn()}
+        supportText="Edit deals."
+        value={[
+          { ...baseDeal, description: 'Short description.' },
+          { ...baseDeal, id: 'deal-2', title: 'Combos', description: 'Tuesday - $15 combo || Wednesday - $19 combo || Thursday - $21 combo' },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('Short description.')).toBeTruthy();
+    expect(screen.getByText('$15 combo')).toBeTruthy();
+    expect(screen.queryByText('$21 combo')).toBeNull();
+    fireEvent.press(screen.getByText('Show all details'));
+    expect(screen.getByText('$21 combo')).toBeTruthy();
+  });
+
   it('shows the selected PDF size limit and rejects an oversized PDF before upload', async () => {
     mockGetDocumentAsync.mockResolvedValueOnce({
       canceled: false,

@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { PdfView } from '@kishannareshpal/expo-pdf';
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
+import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { preparePdfForPreview, type PreparedPdfPreview } from '../utils/nativePdfViewer';
@@ -12,6 +12,25 @@ type ReadOnlyPdfPreviewModalProps = {
   visible: boolean;
 };
 
+type NativePdfView = typeof import('@kishannareshpal/expo-pdf').PdfView;
+
+function loadNativePdfView(): NativePdfView | null {
+  // Importing the package itself requires KJExpoPdf, even if <PdfView /> is not
+  // rendered. Expo Go cannot contain this custom native module.
+  if (Platform.OS === 'web' || Constants.executionEnvironment === ExecutionEnvironment.StoreClient) {
+    return null;
+  }
+
+  try {
+    return (require('@kishannareshpal/expo-pdf') as typeof import('@kishannareshpal/expo-pdf')).PdfView;
+  } catch (error) {
+    if (error instanceof Error && /Cannot find native (?:module|view) ['"]KJExpoPdf['"]/.test(error.message)) {
+      return null;
+    }
+    throw error;
+  }
+}
+
 export function ReadOnlyPdfPreviewModal({ fileName, onClose, uri, visible }: ReadOnlyPdfPreviewModalProps) {
   const [preparedPreview, setPreparedPreview] = useState<{
     sourceUri: string;
@@ -21,9 +40,10 @@ export function ReadOnlyPdfPreviewModal({ fileName, onClose, uri, visible }: Rea
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const insets = useSafeAreaInsets();
+  const NativePdfView = useMemo(() => visible ? loadNativePdfView() : null, [visible]);
 
   useEffect(() => {
-    if (!visible || !uri) {
+    if (!visible || !uri || !NativePdfView) {
       return undefined;
     }
 
@@ -66,7 +86,7 @@ export function ReadOnlyPdfPreviewModal({ fileName, onClose, uri, visible }: Rea
         void prepared.cleanup();
       }
     };
-  }, [uri, visible]);
+  }, [NativePdfView, uri, visible]);
 
   const onPdfLoaded = () => setIsLoading(false);
   const onPdfError = () => {
@@ -94,14 +114,24 @@ export function ReadOnlyPdfPreviewModal({ fileName, onClose, uri, visible }: Rea
         </View>
 
         <View style={styles.viewer}>
-          {visible && currentPreview && !hasError ? (
-            <PdfView
+          {visible && currentPreview && !hasError && NativePdfView ? (
+            <NativePdfView
               fitMode="width"
               onError={onPdfError}
               onLoadComplete={onPdfLoaded}
               style={styles.pdf}
               uri={currentPreview.uri}
             />
+          ) : null}
+          {visible && !NativePdfView ? (
+            <View style={styles.statusOverlay}>
+              <Text style={styles.errorTitle}>PDF preview unavailable</Text>
+              <Text style={styles.statusText}>
+                {Constants.executionEnvironment === ExecutionEnvironment.StoreClient
+                  ? 'Expo Go does not include the PDF viewer. Open DiningDealz in a development build to preview PDFs.'
+                  : 'This app build does not include the PDF viewer.'}
+              </Text>
+            </View>
           ) : null}
           {isLoading ? (
             <View pointerEvents="none" style={styles.statusOverlay}>

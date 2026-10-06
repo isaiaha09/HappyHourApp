@@ -5,6 +5,7 @@ import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, Text, Te
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { styles } from '../appStyles';
+import { DealDescription } from './DealDescription';
 import { ReadOnlyPdfPreviewModal } from './ReadOnlyPdfPreviewModal';
 import { formatFileSize, getDealPdfSizeDetail, MAX_DEAL_PDF_UPLOAD_BYTES } from '../utils/fileSizes';
 import {
@@ -430,7 +431,7 @@ export function BusinessDealsEditor({ label, onChange, supportText, value }: Bus
           </Pressable>
         ) : null}
         {deal.price_text ? <Text style={styles.dealPrice}>{deal.price_text}</Text> : null}
-        {deal.description ? <Text style={styles.dealDescription}>{deal.description}</Text> : null}
+        {deal.description ? <DealDescription description={deal.description} /> : null}
         {deal.terms ? <Text style={styles.dealTerms}>Terms: {deal.terms}</Text> : null}
         <View style={styles.hourList}>
           {formatHappyHourGroups(deal.happy_hours, []).map((group) => (

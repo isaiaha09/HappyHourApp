@@ -1,6 +1,7 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Dimensions, Image, Pressable, ScrollView, Text, View } from 'react-native';
+import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 
 import type { CurrentHappyHourPlace, CurrentHappyHourWindow } from '../types';
@@ -12,6 +13,12 @@ import {
 } from './NativeCurrentHappyHoursUpMenu';
 
 const currentHappyHoursTitle = 'Happy Hour Deals and Specials Happening Now';
+const sheetSpringConfig = {
+  damping: 24,
+  stiffness: 260,
+  mass: 0.9,
+  useNativeDriver: true,
+} as const;
 
 function formatTime(value: string) {
   const match = value.trim().match(/^(\d{1,2}):(\d{2})/);
@@ -139,6 +146,7 @@ type CurrentHappyHoursGestureStateChangeEvent = {
     oldState: number;
     state: number;
     translationY: number;
+    velocityY?: number;
   };
 };
 
@@ -178,16 +186,16 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
   const panelProgress = useRef(new Animated.Value(expanded ? 1 : 0)).current;
   const sheetDragY = useRef(new Animated.Value(0)).current;
   const sheetGestureWasActiveRef = useRef(false);
+  const [listIsAtTop, setListIsAtTop] = useState(true);
 
   useEffect(() => {
     panelProgress.stopAnimation();
     sheetDragY.stopAnimation();
     sheetDragY.setValue(0);
 
-    Animated.timing(panelProgress, {
-      duration: expanded ? 260 : 220,
+    Animated.spring(panelProgress, {
+      ...sheetSpringConfig,
       toValue: expanded ? 1 : 0,
-      useNativeDriver: true,
     }).start();
 
     return () => {
@@ -213,11 +221,8 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
     sheetDragY.stopAnimation();
     sheetDragY.setValue(0);
     Animated.spring(panelProgress, {
-      damping: 24,
-      stiffness: 260,
-      mass: 0.9,
+      ...sheetSpringConfig,
       toValue: expanded ? 1 : 0,
-      useNativeDriver: true,
     }).start();
   }, [expanded, panelProgress, progressForTranslationY, sheetDragY]);
 
@@ -228,7 +233,7 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
   }, []);
 
   const handleSheetGestureStateChange = useCallback((event: CurrentHappyHoursGestureStateChangeEvent) => {
-    const { oldState, state, translationY } = event.nativeEvent;
+    const { oldState, state, translationY, velocityY = 0 } = event.nativeEvent;
 
     if (state === State.BEGAN) {
       sheetGestureWasActiveRef.current = false;
@@ -254,8 +259,8 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
       return;
     }
 
-    const shouldExpand = !expanded && translationY <= -64;
-    const shouldCollapse = expanded && translationY >= 64;
+    const shouldExpand = !expanded && (translationY <= -64 || (translationY < -12 && velocityY < -550));
+    const shouldCollapse = expanded && (translationY >= 64 || (translationY > 12 && velocityY > 550));
 
     if (shouldExpand || shouldCollapse) {
       panelProgress.stopAnimation();
@@ -278,6 +283,11 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
 
     onToggle();
   }, [onToggle]);
+
+  const handleListScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const atTop = event.nativeEvent.contentOffset.y <= 2;
+    setListIsAtTop((previous) => previous === atTop ? previous : atTop);
+  }, []);
 
   const livePanelProgress = Animated.add(
     panelProgress,
@@ -335,6 +345,7 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
               failOffsetX={[-20, 20]}
               onGestureEvent={handleSheetGestureEvent}
               onHandlerStateChange={handleSheetGestureStateChange}
+              testID="current-happy-hours-header-drag"
             >
               <Animated.View style={styles.currentHappyHoursSheetHeader}>
                 <View style={styles.currentHappyHoursSheetHandle}>
@@ -377,7 +388,7 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
                         accessibilityLabel="Close current happy hour deals"
                         accessibilityRole="button"
                         hitSlop={8}
-                        onPress={onToggle}
+                        onPress={handleSheetTap}
                         style={[styles.currentHappyHoursSheetClose, isDark ? styles.currentHappyHoursSheetCloseDark : null]}
                         testID="current-happy-hours-close"
                       >
@@ -399,27 +410,41 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
               ]}
               testID="current-happy-hours-menu"
             >
-              <ScrollView
-                contentContainerStyle={styles.currentHappyHoursSheetList}
-                keyboardShouldPersistTaps="handled"
-                nestedScrollEnabled
-                showsVerticalScrollIndicator={false}
-                testID="current-happy-hours-list"
+              <PanGestureHandler
+                activeOffsetY={[-10000, 12]}
+                enabled={expanded && listIsAtTop}
+                failOffsetX={[-20, 20]}
+                onGestureEvent={handleSheetGestureEvent}
+                onHandlerStateChange={handleSheetGestureStateChange}
+                testID="current-happy-hours-list-pull"
               >
-                {places.map((place) => (
-                  <CurrentHappyHoursDealCard
-                    isDark={isDark}
-                    key={`${place.slug}:${place.location_id}`}
-                    onFavorite={() => onFavoritePlace?.({ locationId: place.location_id, slug: place.slug })}
-                    onAddToCalendar={() => onAddToCalendar?.(place, place.happy_hours[0])}
-                    onShare={() => onSharePlace?.(place, place.happy_hours[0])}
-                    onSelect={() => onSelectPlace({ locationId: place.location_id, slug: place.slug })}
-                    place={place}
-                    showFavoriteAction={showFavoriteActions}
-                    userCoordinates={userCoordinates}
-                  />
-                ))}
-              </ScrollView>
+                <Animated.View style={{ flex: 1 }}>
+                  <ScrollView
+                    bounces={false}
+                    contentContainerStyle={[styles.currentHappyHoursSheetList, { paddingBottom: bottomOffset + 28 }]}
+                    keyboardShouldPersistTaps="handled"
+                    nestedScrollEnabled
+                    onScroll={handleListScroll}
+                    scrollEventThrottle={16}
+                    showsVerticalScrollIndicator={false}
+                    testID="current-happy-hours-list"
+                  >
+                    {places.map((place) => (
+                      <CurrentHappyHoursDealCard
+                        isDark={isDark}
+                        key={`${place.slug}:${place.location_id}`}
+                        onFavorite={() => onFavoritePlace?.({ locationId: place.location_id, slug: place.slug })}
+                        onAddToCalendar={() => onAddToCalendar?.(place, place.happy_hours[0])}
+                        onShare={() => onSharePlace?.(place, place.happy_hours[0])}
+                        onSelect={() => onSelectPlace({ locationId: place.location_id, slug: place.slug })}
+                        place={place}
+                        showFavoriteAction={showFavoriteActions}
+                        userCoordinates={userCoordinates}
+                      />
+                    ))}
+                  </ScrollView>
+                </Animated.View>
+              </PanGestureHandler>
             </Animated.View>
           </Animated.View>
         </Animated.View>

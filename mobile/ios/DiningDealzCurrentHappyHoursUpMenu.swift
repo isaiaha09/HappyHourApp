@@ -217,7 +217,16 @@ private struct DiningDealzTopRoundedRectangle: Shape {
   }
 }
 
+private struct DiningDealzDealListTopPreferenceKey: PreferenceKey {
+  static var defaultValue: CGFloat = 0
+
+  static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+    value = nextValue()
+  }
+}
+
 struct DiningDealzCurrentHappyHoursUpMenu: View {
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   let places: [DiningDealzCurrentHappyHourPlace]
   @Binding var isExpanded: Bool
   let bottomOffset: CGFloat
@@ -240,6 +249,7 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
   @State private var sheetProgress: CGFloat = 0
   @State private var hasInitializedSheetProgress = false
   @State private var dragStartProgress: CGFloat? = nil
+  @State private var isListAtTop = true
 
   init(
     places: [DiningDealzCurrentHappyHourPlace],
@@ -301,6 +311,10 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
     sheetTravel * (1 - resolvedSheetProgress)
   }
 
+  private var sheetSettleAnimation: Animation? {
+    reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.86)
+  }
+
   private var collapsedHeaderOpacity: CGFloat {
     min(max((0.34 - sheetRevealProgress) / 0.34, 0), 1)
   }
@@ -318,7 +332,6 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
             sheetHandle
               .frame(maxWidth: .infinity)
               .contentShape(Rectangle())
-              .simultaneousGesture(sheetGesture)
 
             ZStack(alignment: .topLeading) {
               collapsedCountRow
@@ -331,6 +344,8 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
             }
             .frame(maxWidth: .infinity, minHeight: 56, alignment: .top)
           }
+          .contentShape(Rectangle())
+          .simultaneousGesture(sheetGesture)
 
           expandedList
             .opacity(1)
@@ -354,6 +369,7 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
       .frame(maxWidth: .infinity)
       .frame(height: expandedSheetHeight, alignment: .bottom)
       .offset(y: sheetVerticalOffset)
+      .animation(dragStartProgress == nil ? sheetSettleAnimation : nil, value: sheetProgress)
       .onAppear {
         if !hasInitializedSheetProgress {
           sheetProgress = targetSheetProgress
@@ -363,7 +379,7 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
       .onChange(of: isExpanded) { nextExpanded in
         let nextProgress: CGFloat = nextExpanded ? 1 : 0
         if abs(sheetProgress - nextProgress) > 0.001 {
-          withAnimation(.easeInOut(duration: 0.26)) {
+          withAnimation(sheetSettleAnimation) {
             sheetProgress = nextProgress
           }
         }
@@ -381,24 +397,25 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
   }
 
   private var collapsedCountRow: some View {
-    HStack(spacing: 9) {
-      Circle()
-        .fill(theme.accent)
-        .frame(width: 7, height: 7)
-        .accessibilityHidden(true)
+    Button(action: toggleSheet) {
+      HStack(spacing: 9) {
+        Circle()
+          .fill(theme.accent)
+          .frame(width: 7, height: 7)
+          .accessibilityHidden(true)
 
-      Text(dealCountLabel)
-        .font(.system(size: 14, weight: .bold))
-        .foregroundStyle(theme.foreground)
+        Text(dealCountLabel)
+          .font(.system(size: 14, weight: .bold))
+          .foregroundStyle(theme.foreground)
+      }
+      .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+      .padding(.horizontal, 16)
+      .offset(y: -6)
+      .contentShape(Rectangle())
     }
-    .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-    .padding(.horizontal, 16)
-    .offset(y: -6)
-    .contentShape(Rectangle())
+    .buttonStyle(.plain)
     .accessibilityLabel(triggerAccessibilityLabel)
     .accessibilityHint("Swipe up to browse deals. Swipe down on the expanded sheet to close it.")
-    .accessibilityAction(named: "Open current happy hour deals", toggleSheet)
-    .gesture(sheetGesture)
   }
 
   private var expandedHeader: some View {
@@ -415,7 +432,6 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
           .foregroundStyle(theme.mutedForeground)
       }
       .contentShape(Rectangle())
-      .simultaneousGesture(sheetGesture)
 
       Spacer(minLength: 0)
 
@@ -435,69 +451,98 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
 
   private var expandedList: some View {
     ScrollView(.vertical, showsIndicators: false) {
-      LazyVStack(alignment: .leading, spacing: 12) {
-        ForEach(places) { place in
-          DiningDealzCurrentHappyHoursUpMenuCard(
-            place: place,
-            theme: theme,
-            showFavoriteActions: showFavoriteActions,
-            userLatitude: userLatitude,
-            userLongitude: userLongitude,
-            onFavorite: onFavorite,
-            onSelect: onSelect,
-            onAddToCalendar: onAddToCalendar,
-            onShare: onShare
+      VStack(spacing: 0) {
+        GeometryReader { geometry in
+          Color.clear.preference(
+            key: DiningDealzDealListTopPreferenceKey.self,
+            value: geometry.frame(in: .named("dealList")).minY
           )
+        }
+        .frame(height: 0)
+
+        LazyVStack(alignment: .leading, spacing: 12) {
+          ForEach(places) { place in
+            DiningDealzCurrentHappyHoursUpMenuCard(
+              place: place,
+              theme: theme,
+              showFavoriteActions: showFavoriteActions,
+              userLatitude: userLatitude,
+              userLongitude: userLongitude,
+              onFavorite: onFavorite,
+              onSelect: onSelect,
+              onAddToCalendar: onAddToCalendar,
+              onShare: onShare
+            )
+          }
         }
       }
       .padding(.horizontal, 14)
-      .padding(.bottom, 28)
+      .padding(.bottom, bottomOffset + 28)
     }
+    .coordinateSpace(name: "dealList")
+    .onPreferenceChange(DiningDealzDealListTopPreferenceKey.self) { topY in
+      let nextIsAtTop = topY >= -2
+      if isListAtTop != nextIsAtTop { isListAtTop = nextIsAtTop }
+    }
+    .simultaneousGesture(listPullGesture)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .accessibilityElement(children: .contain)
   }
 
   private var sheetGesture: some Gesture {
-    DragGesture(minimumDistance: 0)
+    DragGesture(minimumDistance: 8)
       .onChanged { value in
-        let startProgress = dragStartProgress ?? sheetProgress
-        if dragStartProgress == nil {
-          dragStartProgress = startProgress
-        }
-
-        let draggedProgress = startProgress - value.translation.height / sheetTravel
-        var transaction = Transaction()
-        transaction.animation = nil
-        withTransaction(transaction) {
-          sheetProgress = min(max(draggedProgress, 0), 1)
-        }
+        guard abs(value.translation.height) > abs(value.translation.width) else { return }
+        updateSheetDrag(value.translation.height)
       }
       .onEnded { value in
-        let isMostlyVertical = abs(value.translation.height) >= abs(value.translation.width)
-        let shouldExpand = isMostlyVertical && !isExpanded && value.translation.height <= -72
-        let shouldCollapse = isMostlyVertical && isExpanded && value.translation.height >= 72
-        let shouldOpenOnTap = !isExpanded
-          && abs(value.translation.width) < 12
-          && abs(value.translation.height) < 12
-        dragStartProgress = nil
-
-        if shouldExpand || shouldCollapse || shouldOpenOnTap {
-          let nextExpanded = !isExpanded
-          withAnimation(.easeInOut(duration: 0.26)) {
-            sheetProgress = nextExpanded ? 1 : 0
-            isExpanded = nextExpanded
-          }
-        } else {
-          withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
-            sheetProgress = targetSheetProgress
-          }
-        }
+        finishSheetDrag(value)
       }
+  }
+
+  private var listPullGesture: some Gesture {
+    DragGesture(minimumDistance: 8)
+      .onChanged { value in
+        guard isExpanded, (isListAtTop || dragStartProgress != nil),
+              value.translation.height > 0,
+              value.translation.height > abs(value.translation.width) else { return }
+        updateSheetDrag(value.translation.height)
+      }
+      .onEnded { value in
+        guard dragStartProgress != nil else { return }
+        finishSheetDrag(value)
+      }
+  }
+
+  private func updateSheetDrag(_ translationY: CGFloat) {
+    let startProgress = dragStartProgress ?? sheetProgress
+    if dragStartProgress == nil { dragStartProgress = startProgress }
+    var transaction = Transaction()
+    transaction.animation = nil
+    withTransaction(transaction) {
+      sheetProgress = min(max(startProgress - translationY / sheetTravel, 0), 1)
+    }
+  }
+
+  private func finishSheetDrag(_ value: DragGesture.Value) {
+    guard dragStartProgress != nil else { return }
+    dragStartProgress = nil
+    let vertical = abs(value.translation.height) > abs(value.translation.width)
+    let projectedY = value.predictedEndTranslation.height
+    let shouldExpand = vertical && !isExpanded
+      && (value.translation.height <= -72 || (value.translation.height < -12 && projectedY <= -110))
+    let shouldCollapse = vertical && isExpanded
+      && (value.translation.height >= 72 || (value.translation.height > 12 && projectedY >= 110))
+    let nextExpanded = shouldExpand || shouldCollapse ? !isExpanded : isExpanded
+    withAnimation(sheetSettleAnimation) {
+      isExpanded = nextExpanded
+      sheetProgress = nextExpanded ? 1 : 0
+    }
   }
 
   private func toggleSheet() {
     let nextExpanded = !isExpanded
-    withAnimation(.easeInOut(duration: 0.26)) {
+    withAnimation(sheetSettleAnimation) {
       sheetProgress = nextExpanded ? 1 : 0
       isExpanded = nextExpanded
     }
