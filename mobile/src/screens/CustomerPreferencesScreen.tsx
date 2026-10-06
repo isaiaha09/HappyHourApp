@@ -346,7 +346,13 @@ export function CustomerPreferencesScreen({ apiBaseUrl, authToken, isLandscape, 
 
   function renderChip(label: string, active: boolean, onPress: () => void, key: string) {
     return (
-      <Pressable key={key} onPress={onPress} style={[styles.preferenceChip, active ? styles.preferenceChipActive : null]}>
+      <Pressable
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: active }}
+        key={key}
+        onPress={onPress}
+        style={[styles.preferenceChip, active ? styles.preferenceChipActive : null]}
+      >
         <Text style={[styles.preferenceChipText, active ? styles.preferenceChipTextActive : null]}>{label}</Text>
       </Pressable>
     );
@@ -425,9 +431,15 @@ export function CustomerPreferencesScreen({ apiBaseUrl, authToken, isLandscape, 
         <Text style={styles.preferenceSectionTitle}>What should each business send you?</Text>
         <Text style={styles.preferenceSupportText}>These settings apply to all businesses you favorite and all businesses you directly message.</Text>
         <View style={styles.preferenceNotificationCard}>
-          <Text style={styles.preferenceSupportText}>Tap the buttons below to choose the notification types you want to turn on overall.</Text>
-          <View style={styles.preferenceChipWrap}>
-            {renderChip('Turn on all notifications', allNotificationsEnabled, toggleAllNotifications, 'notifications:all')}
+          <Text style={styles.preferenceSupportText}>Choose alert types individually, or use this button to turn every type on or off together.</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={toggleAllNotifications}
+            style={styles.preferenceNotificationEnableAll}
+          >
+            <Text style={styles.preferenceNotificationEnableAllText}>{allNotificationsEnabled ? 'Turn off all notifications' : 'Turn on all notifications'}</Text>
+          </Pressable>
+          <View style={styles.preferenceNotificationOptionList}>
             {renderChip('Direct Messages', directMessagesEnabled, () => setDirectMessagesEnabled((current) => !current), 'notifications:dm')}
             {renderChip('Business Profile/Deal Updates', businessUpdatesEnabled, () => setBusinessUpdatesEnabled((current) => !current), 'notifications:updates')}
             {renderChip('Happy Hour Notifications', happyHourNotificationsEnabled, () => setHappyHourNotificationsEnabled((current) => !current), 'notifications:happy-hour')}
