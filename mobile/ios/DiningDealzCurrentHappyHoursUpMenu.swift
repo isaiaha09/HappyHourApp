@@ -248,7 +248,7 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
   }
   @State private var sheetProgress: CGFloat = 0
   @State private var hasInitializedSheetProgress = false
-  @State private var dragStartProgress: CGFloat? = nil
+  @State private var dragTranslationY: CGFloat? = nil
   @State private var isListAtTop = true
 
   init(
@@ -300,7 +300,9 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
   }
 
   private var resolvedSheetProgress: CGFloat {
-    hasInitializedSheetProgress ? min(max(sheetProgress, 0), 1) : targetSheetProgress
+    // Keep the spring target fixed while a drag moves the sheet directly with the finger.
+    let restingProgress = hasInitializedSheetProgress ? sheetProgress : targetSheetProgress
+    return min(max(restingProgress - (dragTranslationY ?? 0) / sheetTravel, 0), 1)
   }
 
   private var sheetRevealProgress: CGFloat {
@@ -336,11 +338,11 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
             ZStack(alignment: .topLeading) {
               collapsedCountRow
                 .opacity(Double(collapsedHeaderOpacity))
-                .allowsHitTesting(sheetRevealProgress < 0.99)
+                .allowsHitTesting(!isExpanded)
 
               expandedHeader
                 .opacity(Double(expandedHeaderOpacity))
-                .allowsHitTesting(sheetRevealProgress > 0.01)
+                .allowsHitTesting(isExpanded)
             }
             .frame(maxWidth: .infinity, minHeight: 56, alignment: .top)
           }
@@ -349,7 +351,7 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
 
           expandedList
             .opacity(1)
-            .allowsHitTesting(sheetRevealProgress > 0.01)
+            .allowsHitTesting(isExpanded)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(theme.sheetBackground)
@@ -369,7 +371,7 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
       .frame(maxWidth: .infinity)
       .frame(height: expandedSheetHeight, alignment: .bottom)
       .offset(y: sheetVerticalOffset)
-      .animation(dragStartProgress == nil ? sheetSettleAnimation : nil, value: sheetProgress)
+      .animation(sheetSettleAnimation, value: sheetProgress)
       .onAppear {
         if !hasInitializedSheetProgress {
           sheetProgress = targetSheetProgress
@@ -380,6 +382,7 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
         let nextProgress: CGFloat = nextExpanded ? 1 : 0
         if abs(sheetProgress - nextProgress) > 0.001 {
           withAnimation(sheetSettleAnimation) {
+            dragTranslationY = nil
             sheetProgress = nextProgress
           }
         }
@@ -503,30 +506,33 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
   private var listPullGesture: some Gesture {
     DragGesture(minimumDistance: 8)
       .onChanged { value in
-        guard isExpanded, (isListAtTop || dragStartProgress != nil),
+        guard isExpanded, (isListAtTop || dragTranslationY != nil),
               value.translation.height > 0,
               value.translation.height > abs(value.translation.width) else { return }
         updateSheetDrag(value.translation.height)
       }
       .onEnded { value in
-        guard dragStartProgress != nil else { return }
+        guard dragTranslationY != nil else { return }
         finishSheetDrag(value)
       }
   }
 
   private func updateSheetDrag(_ translationY: CGFloat) {
-    let startProgress = dragStartProgress ?? sheetProgress
-    if dragStartProgress == nil { dragStartProgress = startProgress }
-    var transaction = Transaction()
-    transaction.animation = nil
+    let restingProgress = hasInitializedSheetProgress ? sheetProgress : targetSheetProgress
+    let clampedTranslation = min(
+      max(translationY, -(1 - restingProgress) * sheetTravel),
+      restingProgress * sheetTravel
+    )
+    guard dragTranslationY != clampedTranslation else { return }
+    var transaction = Transaction(animation: nil)
+    transaction.disablesAnimations = true
     withTransaction(transaction) {
-      sheetProgress = min(max(startProgress - translationY / sheetTravel, 0), 1)
+      dragTranslationY = clampedTranslation
     }
   }
 
   private func finishSheetDrag(_ value: DragGesture.Value) {
-    guard dragStartProgress != nil else { return }
-    dragStartProgress = nil
+    guard dragTranslationY != nil else { return }
     let vertical = abs(value.translation.height) > abs(value.translation.width)
     let projectedY = value.predictedEndTranslation.height
     let shouldExpand = vertical && !isExpanded
@@ -535,6 +541,7 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
       && (value.translation.height >= 72 || (value.translation.height > 12 && projectedY >= 110))
     let nextExpanded = shouldExpand || shouldCollapse ? !isExpanded : isExpanded
     withAnimation(sheetSettleAnimation) {
+      dragTranslationY = nil
       isExpanded = nextExpanded
       sheetProgress = nextExpanded ? 1 : 0
     }
@@ -543,6 +550,7 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
   private func toggleSheet() {
     let nextExpanded = !isExpanded
     withAnimation(sheetSettleAnimation) {
+      dragTranslationY = nil
       sheetProgress = nextExpanded ? 1 : 0
       isExpanded = nextExpanded
     }
