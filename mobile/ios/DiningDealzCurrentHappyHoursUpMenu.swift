@@ -493,7 +493,8 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
   }
 
   private var sheetGesture: some Gesture {
-    DragGesture(minimumDistance: 8)
+    // The sheet itself moves during this gesture, so measure from the fixed screen space.
+    DragGesture(minimumDistance: 8, coordinateSpace: .global)
       .onChanged { value in
         guard abs(value.translation.height) > abs(value.translation.width) else { return }
         updateSheetDrag(value.translation.height)
@@ -504,7 +505,7 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
   }
 
   private var listPullGesture: some Gesture {
-    DragGesture(minimumDistance: 8)
+    DragGesture(minimumDistance: 8, coordinateSpace: .global)
       .onChanged { value in
         guard isExpanded, (isListAtTop || dragTranslationY != nil),
               value.translation.height > 0,
