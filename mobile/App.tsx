@@ -673,6 +673,8 @@ function AppScreen() {
   const onboardingTransitionFrameRef = useRef<number | null>(null);
   const pendingOnboardingTransitionRef = useRef<{ onComplete?: () => void; targetScreen: AppScreenMode } | null>(null);
   const onboardingNavigationInFlightRef = useRef(false);
+  const passwordRecoveryRouteActiveRef = useRef(false);
+  const handleAppUrlRef = useRef<(url: string) => void>(() => undefined);
   const reversingOnboardingEntryRef = useRef(false);
   const loginSubmissionInFlightRef = useRef(false);
   const favoriteBusinessesNavigationInFlightRef = useRef(false);
@@ -2275,22 +2277,36 @@ function AppScreen() {
   }, [authenticatedSession, bottomMoreSheetDragY, bottomMoreSheetProgress, bottomMoreSheetVisible]);
 
   useEffect(() => {
-    async function handleInitialUrl() {
-      const initialUrl = await Linking.getInitialURL();
-      if (initialUrl) {
-        await handleAppUrl(initialUrl);
-      }
-    }
+    let active = true;
 
-    void handleInitialUrl();
+    void Linking.getInitialURL().then((initialUrl) => {
+      if (active && initialUrl) {
+        void handleAppUrlRef.current(initialUrl);
+      }
+    }).catch(() => undefined);
+
     const subscription = Linking.addEventListener('url', (event) => {
-      void handleAppUrl(event.url);
+      if (active) {
+        void handleAppUrlRef.current(event.url);
+      }
     });
 
     return () => {
+      active = false;
       subscription.remove();
     };
-  }, [apiBaseUrl]);
+  }, []);
+
+  useEffect(() => {
+    if (!passwordRecoveryRouteActiveRef.current
+      || screenMode === 'forgot-password'
+      || incomingOnboardingScreen === 'forgot-password'
+      || incomingOnboardingScreen === 'auth') {
+      return;
+    }
+
+    passwordRecoveryRouteActiveRef.current = false;
+  }, [incomingOnboardingScreen, screenMode]);
   const availableClaimPlaces = consolidatePlacesBySlug(availableProfilePlaces);
   const onboardingScreenKeys = new Set<AppScreenMode>(['splash', 'auth', 'profiles', 'customer-preferences', 'favorite-businesses', 'business-notifications', 'business-profile-editor', 'settings', 'blocked-direct-message-customers', 'support', 'privacy-policy', 'terms-of-service', 'direct-messages', 'business-search', 'business-claim', 'manual-business-claim', 'informal-business-claim', 'forgot-username', 'forgot-password', 'business-claim-retry', 'email-verification', 'business-claim-review-pending']);
   const recoveryScreenKeys = new Set<AppScreenMode>(['forgot-username', 'forgot-password', 'business-claim-retry']);
@@ -2634,6 +2650,75 @@ function AppScreen() {
   const browseListColumns = useWideLandscapeLayout ? 2 : 1;
   const normalizedBusinessSearchQuery = normalizeSearchText(businessSearchQuery);
 
+  function openPasswordResetLink(token: string) {
+    passwordRecoveryRouteActiveRef.current = true;
+    dismissKeyboardForScreenTransition();
+
+    if (onboardingTransitionFrameRef.current !== null) {
+      cancelAnimationFrame(onboardingTransitionFrameRef.current);
+      onboardingTransitionFrameRef.current = null;
+    }
+
+    invalidatePendingOnboardingTransition();
+    invalidateInteractiveBackSwipe();
+    screenTransition.stopAnimation();
+    splashExitOpacity.stopAnimation();
+    loginSuccessTransition.stopAnimation();
+    profileSceneTransition.stopAnimation();
+    browseSceneTransition.stopAnimation();
+    screenTransition.setValue(1);
+    profileSceneTransition.setValue(1);
+    browseSceneTransition.setValue(1);
+
+    unstable_batchedUpdates(() => {
+      setDeferredOnboardingNavigation(null);
+      setIncomingOnboardingScreen(null);
+      setOutgoingEmailVerificationSnapshot(null);
+      setBrowseProfileTransitionFrom(null);
+      setIncomingBrowseProfileScreen(null);
+      setIncomingBrowseProfileTargetScreen(null);
+      setGuestBrowseTransitionFrom(null);
+      setIncomingGuestBrowseScreen(null);
+      setReturningToSplashScreen(null);
+      setGuestOnboardingOrigin(null);
+      setSplashMapHandoffPending(false);
+      setShowLoginSuccessTransition(false);
+      setShowLogoutTransition(false);
+      setLogoutTransitionSession(null);
+      setAuthIntroPending(false);
+      setSplashExiting(false);
+      setBottomMoreSheetVisible(false);
+      setShowGuestFavoritePrompt(false);
+      setShowGuestBottomNavPrompt(false);
+      setShowExternalPlannerAccountPrompt(false);
+      setExternalPlannerAction(null);
+      setExternalPlannerError(null);
+      setPendingEmailVerification(null);
+      setEmailVerificationCode('');
+      setShouldOpenCustomerPreferencesAfterVerification(false);
+      setSelectedPlaceSlug(null);
+      setSelectedPlace(null);
+      setSelectedLocationId(null);
+      setSelectedMapPlaceKey(null);
+      setSelectedMapSearchResultKey(null);
+      setProfileEntryOffset(0);
+      setBrowseEntryOffset(0);
+      setAuthenticatedSession(null);
+      authenticatedSessionRef.current = null;
+      setForgotUsernameEmail('');
+      setPasswordResetToken(token);
+      setPasswordResetForm({ confirmPassword: '', newPassword: '' });
+      setAuthMessage(null);
+      setProfileMessage(null);
+      setProfileErrorMessage(null);
+      setErrorMessage(null);
+      setLoginSubmitting(false);
+      setProfileSubmitting(false);
+      setCurrentOnboardingScreen('forgot-password');
+      setScreenMode('forgot-password');
+    });
+  }
+
   async function handleAppUrl(url: string) {
     const normalizedUrl = url.trim();
     if (!normalizedUrl) {
@@ -2663,16 +2748,7 @@ function AppScreen() {
     }
 
     if (recoveryLink?.kind === 'forgot-password') {
-      dismissKeyboardForScreenTransition();
-      setForgotUsernameEmail('');
-      setPasswordResetToken(recoveryLink.token);
-      setPasswordResetForm({ confirmPassword: '', newPassword: '' });
-      setAuthMessage(null);
-      setProfileMessage(null);
-      setProfileErrorMessage(null);
-      setLoginSubmitting(false);
-      setProfileSubmitting(false);
-      navigateScreen('forgot-password', 'forward');
+      openPasswordResetLink(recoveryLink.token);
       return;
     }
 
@@ -2750,6 +2826,7 @@ function AppScreen() {
       }
     }
   }
+  handleAppUrlRef.current = handleAppUrl;
   const nextMapResultsIncrement = getMapResultsIncrement(renderedMapResultCount);
   const businessSearchResults = normalizedBusinessSearchQuery.length
     ? availableClaimPlaces
@@ -3748,6 +3825,11 @@ function AppScreen() {
   }
 
   function navigateGuestBrowseTransition(nextScreen: 'splash' | 'browse', onComplete?: () => void) {
+    if (nextScreen === 'browse' && passwordRecoveryRouteActiveRef.current) {
+      onComplete?.();
+      return;
+    }
+
     if (screenMode === nextScreen) {
       onComplete?.();
       return;
@@ -5363,6 +5445,10 @@ function AppScreen() {
   }
 
   function handleOpenMapFromSplash() {
+    if (passwordRecoveryRouteActiveRef.current) {
+      return;
+    }
+
     setGuestOnboardingOrigin(null);
     setGuestBrowseModeLocked(true);
     setSplashMapHandoffPending(true);
@@ -8788,7 +8874,7 @@ function AppScreen() {
           ))}
         </View>
       ) : null}
-      {emailVerificationChallengeActive ? (
+      {screenMode === 'forgot-password' ? renderOnboardingTransitionScreen() : emailVerificationChallengeActive ? (
         shouldAnimateEmailVerificationEntry ? (
           <View style={styles.onboardingTransitionRoot}>
             <Animated.View
