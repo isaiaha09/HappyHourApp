@@ -95,12 +95,7 @@ def moderate_uploaded_image(uploaded_file, surface='user_image'):
 
 def _read_uploaded_file(uploaded_file):
 	max_upload_bytes = max(1, int(getattr(settings, 'IMAGE_UPLOAD_MAX_BYTES', 8 * 1024 * 1024) or 8 * 1024 * 1024))
-	declared_size = getattr(uploaded_file, 'size', None)
-	try:
-		if declared_size not in (None, '') and int(declared_size) > max_upload_bytes:
-			raise ImageModerationRejected('Images must be 8 MB or smaller.')
-	except (TypeError, ValueError):
-		raise ImageModerationRejected('The image size could not be validated.')
+	max_size_message = f'Images must be {_format_image_size(max_upload_bytes)} or smaller.'
 
 	uploaded_file.seek(0)
 	try:
@@ -109,10 +104,18 @@ def _read_uploaded_file(uploaded_file):
 		uploaded_file.seek(0)
 
 	if len(raw_bytes) > max_upload_bytes:
-		raise ImageModerationRejected('Images must be 8 MB or smaller.')
+		raise ImageModerationRejected(max_size_message)
 	if not raw_bytes:
 		raise ImageModerationRejected('The selected image is empty or unreadable.')
 	return raw_bytes
+
+
+def _format_image_size(size_bytes):
+	for unit, divisor in (('MB', 1024 * 1024), ('KB', 1024)):
+		if size_bytes >= divisor:
+			value = f'{size_bytes / divisor:.2f}'.rstrip('0').rstrip('.')
+			return f'{value} {unit}'
+	return f'{size_bytes} bytes'
 
 
 def validate_uploaded_image(uploaded_file):

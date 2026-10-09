@@ -46,7 +46,7 @@ from .services.importers.discovered_json_places import CuratedJsonPlacesImporter
 from .services.deleted_businesses import filter_deleted_business_records
 from .services.demo_home_feed import DEMO_HOME_FEED_SOURCE_NAME, get_demo_home_feed_business_specs
 from .services.favorite_notifications import create_notifications_for_business_profile_update
-from .services.image_moderation import ImageModerationRejected, ImageModerationUnavailable, moderate_uploaded_image
+from .services.image_moderation import ImageModerationRejected, ImageModerationUnavailable, moderate_uploaded_image, validate_uploaded_image
 from .services.cloudmersive_scanning import ScanStatus
 from .services.importers.types import ImportedDeal, ImportedHappyHour, ImportedOperatingHour, ImportedPlace
 from .services.admin_operations import _get_catalog_health_payload_map, command_search, dashboard_callback, get_catalog_health, get_operations_dashboard_data
@@ -12046,6 +12046,24 @@ class ImageModerationServiceTests(TestCase):
 		buffer = BytesIO()
 		Image.new('RGB', (50, 50), (255, 255, 255)).save(buffer, format='PNG')
 		return SimpleUploadedFile('moderation-test.png', buffer.getvalue(), content_type='image/png')
+
+	def test_validates_actual_bytes_when_uploaded_file_size_metadata_is_unparseable(self):
+		uploaded_file = self.build_uploaded_image()
+		uploaded_file.size = '8.3 MB'
+
+		self.assertTrue(validate_uploaded_image(uploaded_file))
+
+	def test_rejects_actual_oversized_bytes_when_size_metadata_is_unparseable(self):
+		max_upload_bytes = 8 * 1024 * 1024
+		uploaded_file = SimpleUploadedFile(
+			'oversized.png',
+			b'x' * (max_upload_bytes + 1),
+			content_type='image/png',
+		)
+		uploaded_file.size = 'unavailable'
+
+		with self.assertRaisesRegex(ImageModerationRejected, 'Images must be 8 MB or smaller'):
+			validate_uploaded_image(uploaded_file)
 
 	@patch('places.services.image_moderation._detect_with_local_model', return_value=[])
 	def test_safe_image_is_allowed_and_local_model_receives_normalized_image(self, mock_detect):

@@ -214,6 +214,19 @@ describe('onboarding form layout preserves existing controls', () => {
       }
     }
   });
+
+  it('shows the per-photo size limit and oversize selection feedback beside the photo picker', () => {
+    const message = 'Selected photo is 8.3 MB. Business photos must be 8 MB or smaller. Choose a smaller photo.';
+    render(
+      <BusinessVerificationScreen
+        {...buildBusinessVerificationProps('manual', null)}
+        photoUploadErrorMessage={message}
+      />,
+    );
+
+    expect(screen.getByText(/each photo must be 8 MB or smaller/i)).toBeTruthy();
+    expect(screen.getByText(message)).toBeTruthy();
+  });
 });
 
 describe('login layout preserves authentication controls', () => {

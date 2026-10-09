@@ -117,6 +117,7 @@ import { getMappedPlaceRenderKey, shouldSkipBrowseMapAutoFit } from './src/mapBr
 import { buildSocialProfilesFromInputs, socialProfilesToInputs } from './src/socialProfiles';
 import { buildDealOverridesFromDeals, buildNormalizedDealOverrides, buildNormalizedOperatingHourOverrides, buildOperatingHourOverridesFromWindows } from './src/businessProfileOverrides';
 import { parseRecoveryDeepLink } from './src/recoveryLinks';
+import { getBusinessPhotoSizeError } from './src/utils/fileSizes';
 import {
   extractDirectMessageThreadIdFromNotificationData,
   extractFavoriteBusinessSlugFromNotificationData,
@@ -792,6 +793,7 @@ function AppScreen() {
   const [profileForm, setProfileForm] = useState<ProfileFormState>(initialProfileFormState);
   const [businessAttachments, setBusinessAttachments] = useState<BusinessAttachmentBuckets>(initialBusinessAttachments);
   const [businessPhotoUploads, setBusinessPhotoUploads] = useState<BusinessAttachmentDraft[]>([]);
+  const [businessPhotoUploadErrorMessage, setBusinessPhotoUploadErrorMessage] = useState<string | null>(null);
   const [businessClaimRetryToken, setBusinessClaimRetryToken] = useState<string | null>(null);
   const [businessClaimRetryReturnScreen, setBusinessClaimRetryReturnScreen] = useState<BusinessClaimRetryReturnScreen>('business-search');
   const [businessClaimRetryEmail, setBusinessClaimRetryEmail] = useState('');
@@ -2697,6 +2699,7 @@ function AppScreen() {
       setProfileForm(initialProfileFormState);
       setBusinessAttachments(initialBusinessAttachments);
       setBusinessPhotoUploads([]);
+      setBusinessPhotoUploadErrorMessage(null);
       setSelectedClaimPlace(null);
       setSelectedClaimLocationId(null);
       setBusinessSearchQuery('');
@@ -5004,6 +5007,7 @@ function AppScreen() {
     claimPrefillLoadedKeyRef.current = '';
     setBusinessAttachments(initialBusinessAttachments);
     setBusinessPhotoUploads([]);
+    setBusinessPhotoUploadErrorMessage(null);
     setSelectedClaimPlace(null);
     setSelectedClaimLocationId(null);
     setProfileForm(initialProfileFormState);
@@ -5027,6 +5031,7 @@ function AppScreen() {
     setSelectedClaimLocationId(selectedClaimLocation.id);
     setBusinessAttachments(initialBusinessAttachments);
     setBusinessPhotoUploads([]);
+    setBusinessPhotoUploadErrorMessage(null);
     setProfileForm({
       ...resetBusinessVerificationFields(initialProfileFormState),
       username: customerSession?.username ?? '',
@@ -5959,6 +5964,7 @@ function AppScreen() {
 
   async function handleAddBusinessPhotoUploads() {
     try {
+      setBusinessPhotoUploadErrorMessage(null);
       const currentPhotoUrls = dedupeImageUrls(splitMultilineEntries(profileForm.photo_references_text));
       const remainingSlots = Math.max(0, 8 - currentPhotoUrls.length - businessPhotoUploads.length);
 
@@ -5980,8 +5986,16 @@ function AppScreen() {
         return;
       }
 
+      const oversizedPhoto = result.assets.find((asset) => getBusinessPhotoSizeError(asset.fileSize));
+      if (oversizedPhoto) {
+        setBusinessPhotoUploadErrorMessage(getBusinessPhotoSizeError(oversizedPhoto.fileSize));
+        setProfileErrorMessage(null);
+        return;
+      }
+
       const nextUploads = result.assets.slice(0, remainingSlots).map(normalizeBusinessPhotoUpload);
       setBusinessPhotoUploads((current) => mergeBusinessAttachments(current, nextUploads));
+      setBusinessPhotoUploadErrorMessage(null);
       setProfileErrorMessage(null);
     } catch (error) {
       setProfileErrorMessage(getErrorMessage(error));
@@ -6464,6 +6478,7 @@ function AppScreen() {
       setProfileForm(initialProfileFormState);
       setBusinessAttachments(initialBusinessAttachments);
       setBusinessPhotoUploads([]);
+      setBusinessPhotoUploadErrorMessage(null);
       setBusinessClaimRetryToken(null);
       setSelectedClaimPlace(null);
       setSelectedClaimLocationId(null);
@@ -6523,6 +6538,7 @@ function AppScreen() {
       setProfileForm(initialProfileFormState);
       setBusinessAttachments(initialBusinessAttachments);
       setBusinessPhotoUploads([]);
+      setBusinessPhotoUploadErrorMessage(null);
       setBusinessClaimRetryToken(null);
       setSelectedClaimPlace(null);
       setSelectedClaimLocationId(null);
@@ -6567,6 +6583,7 @@ function AppScreen() {
       setProfileForm(initialProfileFormState);
       setBusinessAttachments(initialBusinessAttachments);
       setBusinessPhotoUploads([]);
+      setBusinessPhotoUploadErrorMessage(null);
       setBusinessClaimRetryToken(null);
       setSelectedClaimPlace(null);
       setSelectedClaimLocationId(null);
@@ -7082,6 +7099,7 @@ function AppScreen() {
     setSelectedClaimLocationId(null);
     setBusinessAttachments(initialBusinessAttachments);
     setBusinessPhotoUploads([]);
+    setBusinessPhotoUploadErrorMessage(null);
     setProfileForm((current) => resetBusinessVerificationFields(current));
     navigateScreen('manual-business-claim', 'forward');
   }
@@ -7095,6 +7113,7 @@ function AppScreen() {
     setSelectedClaimLocationId(null);
     setBusinessAttachments(initialBusinessAttachments);
     setBusinessPhotoUploads([]);
+    setBusinessPhotoUploadErrorMessage(null);
     setProfileForm((current) => resetBusinessVerificationFields(current));
     navigateScreen('informal-business-claim', 'forward');
   }
@@ -7108,6 +7127,7 @@ function AppScreen() {
     setSelectedClaimLocationId(selectedLocation.id);
     setBusinessAttachments(initialBusinessAttachments);
     setBusinessPhotoUploads([]);
+    setBusinessPhotoUploadErrorMessage(null);
     setProfileForm((current) => ({
       ...resetBusinessVerificationFields(current),
       business_slug: place.slug,
@@ -8069,6 +8089,7 @@ function AppScreen() {
               onRetryRejectedClaim={handleOpenBusinessClaimRetry}
               onToggleAddressNotApplicable={(value) => handleChangeProfileToggle('address_not_applicable', value)}
               onSubmit={handleSubmitClaimedBusinessProfile}
+              photoUploadErrorMessage={businessPhotoUploadErrorMessage}
               photoUploads={businessPhotoUploads}
               selectedLocation={selectedClaimLocation}
               selectedPlace={selectedClaimPlace}
@@ -8094,6 +8115,7 @@ function AppScreen() {
               onRemovePhotoUpload={handleRemoveBusinessPhotoUpload}
               onToggleAddressNotApplicable={(value) => handleChangeProfileToggle('address_not_applicable', value)}
               onSubmit={handleSubmitManualBusinessProfile}
+              photoUploadErrorMessage={businessPhotoUploadErrorMessage}
               photoUploads={businessPhotoUploads}
               selectedLocation={null}
               selectedPlace={null}
@@ -8119,6 +8141,7 @@ function AppScreen() {
               onRemovePhotoUpload={handleRemoveBusinessPhotoUpload}
               onToggleAddressNotApplicable={(value) => handleChangeProfileToggle('address_not_applicable', value)}
               onSubmit={handleSubmitInformalBusinessProfile}
+              photoUploadErrorMessage={businessPhotoUploadErrorMessage}
               photoUploads={businessPhotoUploads}
               selectedLocation={null}
               selectedPlace={null}

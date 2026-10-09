@@ -12,6 +12,7 @@ import { BusinessDealsEditor, BusinessHoursEditor } from '../components/Business
 import { NativeIOSLiquidGlassBackButton, NativeIOSLiquidGlassHeaderButton } from '../components/NativeIOSLiquidGlass';
 import { SOCIAL_PLATFORM_LABELS, buildSocialProfilesFromInputs, getSocialProfilePreview, getSocialProfileValidationMessage, socialProfilesToInputs } from '../socialProfiles';
 import { theme } from '../styles/theme';
+import { getBusinessPhotoSizeError } from '../utils/fileSizes';
 import { dedupeImageUrls, normalizeSearchText } from '../placeHelpers';
 import type { BusinessAttachmentDraft, DirectMessageThread, FavoriteBusinessNotification, ProfileDashboardUpdateRequest, SignupResponse, TwoFactorSetupResponse } from '../types';
 
@@ -998,6 +999,7 @@ export function BusinessProfileEditorScreen({
   const [profileDraft, setProfileDraft] = useState<BusinessProfileDraft>(() => buildDashboardDraft(session));
   const [currentPhotoUrls, setCurrentPhotoUrls] = useState<string[]>(() => getDisplayablePhotoUrls(businessContact.photo_references));
   const [selectedPhotoUploads, setSelectedPhotoUploads] = useState<BusinessAttachmentDraft[]>([]);
+  const [photoSelectionErrorMessage, setPhotoSelectionErrorMessage] = useState<string | null>(null);
   const [openingPhotoLibrary, setOpeningPhotoLibrary] = useState(false);
   const { handleFieldBlur, handleFieldFocus, handleScroll, handleScrollBeginDrag, scrollViewRef } = useAutoScrollForm();
   const autoScrollProps: DashboardAutoScrollProps = { handleFieldBlur, handleFieldFocus, scrollViewRef };
@@ -1016,6 +1018,7 @@ export function BusinessProfileEditorScreen({
     setProfileDraft(buildDashboardDraft(session));
     setCurrentPhotoUrls(getDisplayablePhotoUrls(session.business_contact?.photo_references));
     setSelectedPhotoUploads([]);
+    setPhotoSelectionErrorMessage(null);
   }, [session]);
 
   const profileDetailsChanged = (profileDraft.contact_name ?? '') !== (businessContact.contact_name ?? '')
@@ -1119,10 +1122,17 @@ export function BusinessProfileEditorScreen({
         return;
       }
 
+      const oversizedPhoto = result.assets.find((asset) => getBusinessPhotoSizeError(asset.fileSize));
+      if (oversizedPhoto) {
+        setPhotoSelectionErrorMessage(getBusinessPhotoSizeError(oversizedPhoto.fileSize));
+        return;
+      }
+
       const nextAttachments = result.assets
         .slice(0, 1)
         .map(normalizeSelectedPhotoAsset);
       setSelectedPhotoUploads((current) => mergeSelectedPhotoUploads(current, nextAttachments));
+      setPhotoSelectionErrorMessage(null);
     } catch {
       // The parent screen already renders submission errors; picker failures can stay silent here.
     } finally {
@@ -1224,7 +1234,10 @@ export function BusinessProfileEditorScreen({
                 <Pressable disabled={openingPhotoLibrary || remainingPhotoSlots === 0} onPress={() => void handleSelectProfilePhotos()} style={[styles.linkButtonSecondary, styles.accountSecondaryButton, styles.attachmentPickerButton, (openingPhotoLibrary || remainingPhotoSlots === 0) ? styles.linkButtonDisabled : null]}>
                   <Text style={[styles.linkButtonSecondaryText, styles.accountSecondaryButtonText]}>{openingPhotoLibrary ? 'Opening Photo Library...' : 'Select from Photo Library'}</Text>
                 </Pressable>
-                <Text style={[styles.dashboardSupportText, styles.accountBodyText, styles.attachmentSupportText]}>Choose photos from the device photo library. To crop first, use the Photos app. Max 8 photos total.</Text>
+                <Text style={[styles.dashboardSupportText, styles.accountBodyText, styles.attachmentSupportText]}>Choose photos from the device photo library. Each photo must be 8 MB or smaller; up to 8 photos total. To crop first, use the Photos app.</Text>
+                {photoSelectionErrorMessage ? (
+                  <Text accessibilityRole="alert" style={styles.structuredEntryErrorText}>{photoSelectionErrorMessage}</Text>
+                ) : null}
                 {currentPhotoUrls.length ? (
                   <>
                     <View style={styles.attachmentGalleryLabelRow}>

@@ -204,6 +204,7 @@ export type BusinessVerificationScreenProps = {
 	onRetryRejectedClaim?: () => void;
   onToggleAddressNotApplicable: (value: boolean) => void;
   onSubmit: () => void;
+  photoUploadErrorMessage?: string | null;
   photoUploads: BusinessAttachmentDraft[];
   selectedLocation: PlaceLocation | null;
   selectedPlace: PlaceListItem | null;
@@ -1327,7 +1328,7 @@ export function BusinessSearchScreen({ errorMessage, isLandscape, loadingPlaces,
   );
 }
 
-export function BusinessVerificationScreen({ attachments, errorMessage, form, isLandscape, lockAccountIdentityFields = false, mode, onAddAttachments, onAddPhotoUploads, onBack, onChangeField, onRemoveAttachment, onRemoveCurrentPhoto, onRemovePhotoUpload, onRetryRejectedClaim, onToggleAddressNotApplicable, onSubmit, photoUploads, selectedLocation, selectedPlace, submitting }: BusinessVerificationScreenProps) {
+export function BusinessVerificationScreen({ attachments, errorMessage, form, isLandscape, lockAccountIdentityFields = false, mode, onAddAttachments, onAddPhotoUploads, onBack, onChangeField, onRemoveAttachment, onRemoveCurrentPhoto, onRemovePhotoUpload, onRetryRejectedClaim, onToggleAddressNotApplicable, onSubmit, photoUploadErrorMessage, photoUploads, selectedLocation, selectedPlace, submitting }: BusinessVerificationScreenProps) {
   const isClaimed = mode === 'claimed';
   const isEstablished = mode === 'manual';
   const isInformal = mode === 'informal';
@@ -1816,9 +1817,12 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
                 </Pressable>
                 <Text style={[styles.profileSupportText, styles.accountBodyText, styles.attachmentSupportText]}>
                   {isClaimed
-                    ? 'Existing business photos prefill here when available. You can remove them or add up to 8 total photos from the photo library.'
-                    : 'Upload up to 8 business photos from the photo library. Camera capture is not used here.'}
+                    ? 'Existing business photos prefill here when available. Add up to 8 total photos; each photo must be 8 MB or smaller.'
+                    : 'Upload up to 8 business photos from the photo library. Each photo must be 8 MB or smaller. Camera capture is not used here.'}
                 </Text>
+                {photoUploadErrorMessage ? (
+                  <Text accessibilityRole="alert" style={styles.structuredEntryErrorText}>{photoUploadErrorMessage}</Text>
+                ) : null}
                 {currentPhotoUrls.length ? (
                   <>
                     <Text style={[styles.attachmentGalleryLabel, styles.accountLabel]}>Current public photos</Text>
