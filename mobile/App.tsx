@@ -2714,7 +2714,6 @@ function AppScreen() {
       setErrorMessage(null);
       setLoginSubmitting(false);
       setProfileSubmitting(false);
-      setCurrentOnboardingScreen('forgot-password');
       setScreenMode('forgot-password');
     });
   }
