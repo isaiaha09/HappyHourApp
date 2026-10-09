@@ -5968,7 +5968,8 @@ function AppScreen() {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        allowsEditing: true,
+        // On iOS, skip the legacy crop/edit picker and present the native Photos picker directly.
+        allowsEditing: Platform.OS !== 'ios',
         allowsMultipleSelection: false,
         aspect: [4, 3],
         mediaTypes: ['images'],
