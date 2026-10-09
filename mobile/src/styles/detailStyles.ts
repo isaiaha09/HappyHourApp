@@ -889,6 +889,7 @@ export const detailStyles = {
   publicProfileCityCategoryRow: {
     alignItems: 'center',
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
     justifyContent: 'space-between',
     width: '100%',
@@ -897,6 +898,10 @@ export const detailStyles = {
     flex: 1,
     flexShrink: 1,
     minWidth: 0,
+  },
+  publicProfileMultiLocationLabel: {
+    flex: 0,
+    maxWidth: '100%',
   },
   publicProfileHeaderControl: {
     backgroundColor: 'transparent',

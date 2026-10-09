@@ -88,6 +88,45 @@ function buildPlace(overrides: Partial<PlaceDetail> = {}) {
 }
 
 describe('PlaceDetailScreen live location messaging', () => {
+  it('shows service-area and mobile-vendor labels in a wrapping header row', () => {
+    render(
+      <PlaceDetailScreen
+        detailLoading={false}
+        errorMessage={null}
+        favoriteHelperText={null}
+        favoriteSubmitting={false}
+        isLandscape={false}
+        isFavorited={false}
+        locationStatusNow={Date.parse('2026-08-03T17:33:20Z')}
+        onBack={jest.fn()}
+        onSelectLocation={jest.fn()}
+        onToggleFavorite={jest.fn()}
+        selectedPlace={buildPlace({
+          venue_type: 'mobile',
+          venue_type_label: 'Serves Multiple Locations / Mobile Business',
+        })}
+        selectedPlaceDeals={[]}
+        selectedPlaceLocation={null}
+        selectedPlaceOperatingHours={[]}
+        showFavoriteControl={false}
+      />,
+    );
+
+    const cityCategoryRow = screen.getByTestId('public-profile-city-category-row');
+    const locationsLabel = screen.getByText('Serves Multiple Locations');
+    const locationsLabelStyle = StyleSheet.flatten(locationsLabel.props.style);
+    const mobileVendorLabel = screen.getByText('Mobile Vendor');
+
+    expect(locationsLabelStyle.color).toBe(StyleSheet.flatten(styles.detailCity).color);
+    expect(StyleSheet.flatten(cityCategoryRow.props.style).flexWrap).toBe('wrap');
+    expect(locationsLabel.props.numberOfLines).toBeUndefined();
+    expect(StyleSheet.flatten(mobileVendorLabel.props.style)).toMatchObject({
+      backgroundColor: StyleSheet.flatten(styles.publicProfileCategory).backgroundColor,
+      borderWidth: 1,
+    });
+    expect(screen.queryByText(/Mobile Business|\.\.\./)).toBeNull();
+  });
+
   it('omits the photo section when no business photos are available', () => {
     const commonProps = {
       detailLoading: false,

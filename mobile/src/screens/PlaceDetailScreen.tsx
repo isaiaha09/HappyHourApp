@@ -146,6 +146,14 @@ export function PlaceDetailScreen({
     : selectedPlaceAddressSource;
   const selectedPlaceMapRegion = getPlacePreviewRegion(selectedPlaceMapSource);
   const selectedPlaceCityLabel = (selectedPlaceLocation?.city_label ?? selectedPlace?.city_label ?? '').trim();
+  const isMobileVendor = selectedPlace?.venue_type === 'mobile'
+    || (selectedPlace?.venue_type_label ?? '').trim().toLowerCase().startsWith('serves multiple locations');
+  const selectedPlaceLocationTypeLabel = isMobileVendor
+    ? 'Serves Multiple Locations'
+    : selectedPlaceCityLabel;
+  const selectedPlaceCategoryLabel = isMobileVendor
+    ? 'Mobile Vendor'
+    : selectedPlace?.venue_type_label ?? '';
   const showStarredBadge = !!(selectedPlace?.is_starred || selectedPlaceLocation?.is_starred);
   const showVerifiedBadge = !!selectedPlace?.is_claimed;
   const showGoogleReviews = selectedPlace?.is_informal !== true;
@@ -419,19 +427,23 @@ export function PlaceDetailScreen({
               </View>
               <View style={styles.detailHeaderCopy}>
                 <View style={styles.publicProfileCityCategoryRow} testID="public-profile-city-category-row">
-                  {selectedPlaceCityLabel ? (
+                  {selectedPlaceLocationTypeLabel ? (
                     <Text
-                      numberOfLines={1}
-                      style={[styles.detailCity, styles.publicProfileCity, styles.publicProfileCityCategoryLabel]}
+                      numberOfLines={isMobileVendor ? undefined : 1}
+                      style={[
+                        styles.detailCity,
+                        styles.publicProfileCity,
+                        isMobileVendor ? styles.publicProfileMultiLocationLabel : styles.publicProfileCityCategoryLabel,
+                      ]}
                     >
-                      {selectedPlaceCityLabel}
+                      {selectedPlaceLocationTypeLabel}
                     </Text>
                   ) : null}
                   <Text
                     numberOfLines={1}
                     style={[styles.publicProfileCategory, styles.publicProfileCategoryBesideCity]}
                   >
-                    {selectedPlace.venue_type_label}
+                    {selectedPlaceCategoryLabel}
                   </Text>
                 </View>
                 <Text style={[styles.detailTitle, styles.publicProfileName]}>{selectedPlace.name}</Text>
