@@ -3003,7 +3003,9 @@ function AppScreen() {
     onComplete?: () => void,
   ) {
     const currentScreen = screenMode;
-    if (nextScreen !== 'email-verification') {
+    const shouldQueueInterruptedNavigation = nextScreen === 'email-verification'
+      || recoveryScreenKeys.has(nextScreen);
+    if (nextScreen !== 'email-verification' && !recoveryScreenKeys.has(nextScreen)) {
       setDeferredOnboardingNavigation(null);
     }
     if (currentScreen === 'email-verification' && nextScreen !== 'email-verification') {
@@ -3031,7 +3033,7 @@ function AppScreen() {
 
     const willAnimateOnboardingTransition = shouldAnimateSplashReturn || shouldAnimateGuestReturnToBrowse || shouldAnimateOnboarding;
     if (willAnimateOnboardingTransition && onboardingNavigationInFlightRef.current) {
-      if (nextScreen === 'email-verification') {
+      if (shouldQueueInterruptedNavigation) {
         setDeferredOnboardingNavigation({
           direction,
           nextScreen,

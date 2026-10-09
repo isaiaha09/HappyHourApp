@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
-import { AppState, Dimensions, NativeModules, StyleSheet } from 'react-native';
+import { AppState, Dimensions, Linking, NativeModules, StyleSheet } from 'react-native';
 
 import { getVenueMarkerStyle } from '../browseConfig';
 import type { CurrentHappyHourPlace, PlaceListItem, SignupResponse } from '../types';
@@ -47,6 +47,7 @@ let mockNetworkState: MockNetworkState = {
 const mockGetNetworkStateAsync = jest.fn(async () => mockNetworkState);
 const mockNetworkListeners = new Set<(state: MockNetworkState) => void>();
 let mockAppStateChangeListener: ((state: string) => void) | null = null;
+let mockUrlEventListener: ((event: { url: string }) => void) | null = null;
 
 jest.mock('../api', () => ({
   beginTwoFactorSetup: jest.fn(),
@@ -400,6 +401,12 @@ jest.mock('../screens/ProfileFlowScreens', () => ({
       </View>
     );
   },
+  ForgotPasswordScreen: () => {
+    const React = require('react');
+    const { Text } = require('react-native');
+
+    return <Text testID="mock-forgot-password-screen">Reset password screen</Text>;
+  },
   PrivacyPolicyScreen: () => null,
   TermsOfServiceScreen: () => null,
 }));
@@ -598,6 +605,15 @@ describe('App browse map search', () => {
 
   beforeEach(() => {
     mockAppStateChangeListener = null;
+    mockUrlEventListener = null;
+    jest.spyOn(Linking, 'getInitialURL').mockResolvedValue(null);
+    jest.spyOn(Linking, 'addEventListener').mockImplementation(((type: string, listener: (event: { url: string }) => void) => {
+      if (type === 'url') {
+        mockUrlEventListener = listener;
+      }
+
+      return { remove: jest.fn() } as any;
+    }) as typeof Linking.addEventListener);
     jest.spyOn(AppState, 'addEventListener').mockImplementation(((type: string, listener: (state: string) => void) => {
       if (type === 'change') {
         mockAppStateChangeListener = listener;
@@ -707,6 +723,21 @@ describe('App browse map search', () => {
     mockStopBusinessBackgroundLocationTask.mockClear();
     mockRegisterPushDevice.mockReset();
     mockRegisterForPushNotificationsAsync.mockReset();
+  });
+
+  it('queues a password reset link received while another onboarding screen is transitioning', async () => {
+    render(<App />);
+
+    await screen.findByTestId('complete-splash-intro');
+    fireEvent.press(screen.getByLabelText('Open customer login'));
+
+    expect(mockUrlEventListener).toBeTruthy();
+    await act(async () => {
+      mockUrlEventListener?.({ url: 'diningdealz://forgot-password/reset-selector.secret-token/' });
+    });
+
+    expect(await screen.findByTestId('mock-forgot-password-screen')).toBeTruthy();
+    expect(screen.queryByText('Auth screen')).toBeNull();
   });
 
   it('uses foreground-only location for an authenticated customer session', async () => {
