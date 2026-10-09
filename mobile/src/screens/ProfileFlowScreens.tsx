@@ -1683,7 +1683,7 @@ export function BusinessVerificationScreen({ attachments, errorMessage, form, is
                   ) : null}
 
                   {servesMultipleAreas ? (
-                    <Text style={[styles.profileSupportText, styles.accountBodyText]}>It is highly recommend for small startups and vendors that do not have a dedicated business address to turn on location services for DiningDealz after account is verified so you have can a business pin on the map.</Text>
+                    <Text style={[styles.profileSupportText, styles.accountBodyText]}>It is highly recommend for small startups and vendors that do not have a dedicated business address to turn on location services for DiningDealz after account is verified so you have a business pin on the map.</Text>
                   ) : null}
                 </AccountSection>
               ) : null}
