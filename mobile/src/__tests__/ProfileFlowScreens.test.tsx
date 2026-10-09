@@ -7,6 +7,7 @@ import type { LoginFormState, ProfileFormState } from '../appFlowTypes';
 
 const mockScrollToTop = jest.fn();
 const mockHandleFieldFocus = jest.fn();
+const mockHandleFieldBlur = jest.fn();
 const mockHandleScroll = jest.fn();
 const mockScrollViewRef = { current: null };
 
@@ -19,8 +20,19 @@ jest.mock('../components/AutoScrollTextInput', () => {
   const { TextInput } = require('react-native');
 
   return {
-    AutoScrollTextInput: ({ onBeforeAutoScroll, scrollViewRef, ...props }: Record<string, unknown>) => React.createElement(TextInput, props),
+    AutoScrollTextInput: ({ onBeforeAutoScroll, onFieldBlur, onBlur, scrollViewRef, ...props }: Record<string, unknown>) => React.createElement(TextInput, {
+      ...props,
+      onBlur: () => {
+        if (typeof onFieldBlur === 'function') {
+          (onFieldBlur as (...args: any[]) => void)(1);
+        }
+        if (typeof onBlur === 'function') {
+          (onBlur as () => void)();
+        }
+      },
+    }),
     useAutoScrollForm: () => ({
+      handleFieldBlur: mockHandleFieldBlur,
       handleFieldFocus: mockHandleFieldFocus,
       handleScroll: mockHandleScroll,
       scrollToTop: mockScrollToTop,
@@ -247,6 +259,18 @@ describe('login layout preserves authentication controls', () => {
     rerender(<AuthPortalScreen {...props} submitting />);
     fireEvent.press(screen.getByText(submitLabel));
     expect(props.onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels pending auto-scroll when sign-in text and password fields blur', () => {
+    mockHandleFieldBlur.mockClear();
+    render(<AuthPortalScreen {...loginProps('customer')} />);
+
+    fireEvent(screen.getByDisplayValue('account-user'), 'blur');
+    fireEvent(screen.getByDisplayValue('sample-password'), 'blur');
+
+    expect(mockHandleFieldBlur).toHaveBeenCalledTimes(2);
+    expect(mockHandleFieldBlur).toHaveBeenNthCalledWith(1, 1);
+    expect(mockHandleFieldBlur).toHaveBeenNthCalledWith(2, 1);
   });
 
   it('keeps both inline recovery actions and cancellation', () => {

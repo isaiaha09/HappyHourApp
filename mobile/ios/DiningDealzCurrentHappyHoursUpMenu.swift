@@ -368,6 +368,7 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
         )
         .shadow(color: .black.opacity(theme == .dark ? 0.34 : 0.16), radius: 18, y: -5)
         .contentShape(Rectangle())
+        .accessibilityAction(named: "Open current happy hour deals", toggleSheet)
       }
       .frame(maxWidth: .infinity)
       .frame(height: expandedSheetHeight, alignment: .bottom)

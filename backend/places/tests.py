@@ -12142,6 +12142,17 @@ class ContentReportApiTests(APITestCase):
 			body='Customer report test message.',
 		)
 
+	def test_direct_claim_queryset_delete_preserves_business_identity_on_message_thread(self):
+		BusinessClaim.objects.filter(pk=self.claim.pk).delete()
+
+		self.thread.refresh_from_db()
+		self.assertIsNone(self.thread.business_claim_id)
+		self.assertEqual(self.thread.business_name_snapshot, self.snapshot.name)
+		self.assertEqual(self.thread.business_slug_snapshot, self.snapshot.listing_slug)
+		self.assertEqual(self.thread.business_owner_user_id_snapshot, str(self.business_user.pk))
+		self.assertEqual(self.thread.get_business_name(), self.snapshot.name)
+		self.assertEqual(BusinessDirectMessage.objects.filter(thread=self.thread).count(), 2)
+
 	def auth_headers(self, token=None):
 		return {'HTTP_AUTHORIZATION': f'Token {(token or self.reporter_token).key}'}
 

@@ -182,6 +182,37 @@ describe('CustomerPreferencesScreen', () => {
     expect(onSkip).not.toHaveBeenCalled();
   });
 
+  it('exposes selectable location chips as checkboxes with state matching their selection', async () => {
+    render(
+      <CustomerPreferencesScreen
+        apiBaseUrl="https://api.example.com"
+        authToken="token-123"
+        isLandscape={false}
+        mode="onboarding"
+        onBack={jest.fn()}
+        onComplete={jest.fn()}
+        onSkip={jest.fn()}
+        session={buildSession()}
+      />,
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    fireEvent.press(screen.getByText('Start'));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 360));
+    });
+
+    expect(screen.getByRole('checkbox', { name: 'All 3' }).props.accessibilityState).toEqual({ checked: true });
+    const oxnardChip = screen.getByRole('checkbox', { name: 'Oxnard' });
+    expect(oxnardChip.props.accessibilityState).toEqual({ checked: true });
+
+    fireEvent.press(oxnardChip);
+    expect(screen.getByRole('checkbox', { name: 'Oxnard' }).props.accessibilityState).toEqual({ checked: false });
+    expect(screen.getByRole('checkbox', { name: 'All 3' }).props.accessibilityState).toEqual({ checked: false });
+  });
+
   it('lets settings advance from the first screen while preferences load', async () => {
     mockFetchCustomerPreferences.mockReturnValue(new Promise(() => undefined));
 

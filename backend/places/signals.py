@@ -33,6 +33,15 @@ def remove_favorites_for_deleted_user_businesses(sender, instance, **kwargs):
 	remove_favorites_for_business_accounts([instance.pk])
 
 
+@receiver(pre_delete, sender=BusinessClaim)
+def preserve_direct_message_threads_before_business_claim_delete(sender, instance, **kwargs):
+	# Keep this invariant for direct model/queryset deletes as well as the explicit
+	# business purge workflows, which may have already preserved these threads.
+	from .services.deleted_businesses import preserve_direct_message_threads_for_claim
+
+	preserve_direct_message_threads_for_claim(instance)
+
+
 @receiver(pre_save, sender=BusinessClaim)
 def capture_previous_business_claim_photo_references(sender, instance, **kwargs):
 	if not instance.pk:

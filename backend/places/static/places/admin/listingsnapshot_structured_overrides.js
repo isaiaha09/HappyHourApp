@@ -363,6 +363,9 @@
           .filter(function (item) { return item.name || item.price || item.detail; }),
         happy_hours: serializedHappyHours,
       };
+      if (Object.prototype.hasOwnProperty.call(deal, 'attachment')) {
+        serializedDeal.attachment = deal.attachment;
+      }
       const descriptionPrice = String(deal.description_price || '').trim();
       if (descriptionPrice) {
         serializedDeal.description_price = descriptionPrice;
