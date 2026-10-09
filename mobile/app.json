@@ -28,6 +28,23 @@
         "NSCalendarsFullAccessUsageDescription": "DiningDealz uses Calendar only to add the restaurant visit you request.",
         "NSRemindersUsageDescription": "DiningDealz does not access reminders. Calendar is used only to add the restaurant visit you request.",
         "NSRemindersFullAccessUsageDescription": "DiningDealz does not access reminders. Calendar is used only to add the restaurant visit you request.",
+        "UTImportedTypeDeclarations": [
+          {
+            "UTTypeIdentifier": "public.avif",
+            "UTTypeDescription": "AVIF image",
+            "UTTypeConformsTo": [
+              "public.image"
+            ],
+            "UTTypeTagSpecification": {
+              "public.filename-extension": [
+                "avif"
+              ],
+              "public.mime-type": [
+                "image/avif"
+              ]
+            }
+          }
+        ],
         "ITSAppUsesNonExemptEncryption": false
       },
       "requireFullScreen": true,
