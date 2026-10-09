@@ -18,6 +18,14 @@ export type OperatingHourWindow = {
   group_rank?: number | null;
 };
 
+export type BusinessDealMenuItem = {
+  id?: string;
+  name: string;
+  price: string;
+  detail: string;
+  weekdays?: number[];
+};
+
 export type Deal = {
   id: number;
   title: string;
@@ -26,8 +34,10 @@ export type Deal = {
   deal_type_label: string;
   custom_deal_type_label?: string;
   price_text: string;
+  description_price?: string;
   terms: string;
   attachment?: BusinessDealAttachment | null;
+  menu_items?: BusinessDealMenuItem[];
   is_active: boolean;
   starts_on: string | null;
   ends_on: string | null;
@@ -68,9 +78,11 @@ export type BusinessDealOverride = {
   deal_type: string;
   custom_deal_type_label?: string;
   price_text: string;
+  description_price?: string;
   terms: string;
   attachment?: BusinessDealAttachment | null;
   attachment_upload?: BusinessAttachmentDraft | null;
+  menu_items?: BusinessDealMenuItem[];
   happy_hours: BusinessDealHappyHourOverride[];
 };
 

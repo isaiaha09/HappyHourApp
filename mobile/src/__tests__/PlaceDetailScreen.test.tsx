@@ -1,7 +1,9 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 
 import { PlaceDetailScreen } from '../screens/PlaceDetailScreen';
+import { styles } from '../appStyles';
 import type { Deal, PlaceDetail } from '../types';
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -86,6 +88,41 @@ function buildPlace(overrides: Partial<PlaceDetail> = {}) {
 }
 
 describe('PlaceDetailScreen live location messaging', () => {
+  it('omits the photo section when no business photos are available', () => {
+    const commonProps = {
+      detailLoading: false,
+      errorMessage: null,
+      favoriteHelperText: null,
+      favoriteSubmitting: false,
+      isLandscape: false,
+      isFavorited: false,
+      locationStatusNow: Date.parse('2026-08-03T17:33:20Z'),
+      onBack: jest.fn(),
+      onSelectLocation: jest.fn(),
+      onToggleFavorite: jest.fn(),
+      selectedPlaceDeals: [],
+      selectedPlaceLocation: null,
+      selectedPlaceOperatingHours: [],
+      showFavoriteControl: false,
+    };
+    const { rerender } = render(
+      <PlaceDetailScreen {...commonProps} selectedPlace={buildPlace()} />,
+    );
+
+    expect(screen.queryByTestId('profile-photo-gallery')).toBeNull();
+    expect(screen.queryByText('Photos')).toBeNull();
+
+    rerender(
+      <PlaceDetailScreen
+        {...commonProps}
+        selectedPlace={buildPlace({ image_urls: ['https://example.com/business.jpg'] })}
+      />,
+    );
+
+    expect(screen.getByTestId('profile-photo-gallery')).toBeTruthy();
+    expect(screen.getByText('Photos')).toBeTruthy();
+  });
+
   it('automatically formats multiple returned deals and more-offer entries', () => {
     const baseDeal: Deal = {
       id: 1,
@@ -187,7 +224,7 @@ describe('PlaceDetailScreen live location messaging', () => {
       expect(screen.getByTestId('readonly-pdf-view')).toBeTruthy();
       expect(screen.getByRole('button', { name: 'Close PDF preview' })).toBeTruthy();
     });
-    expect(screen.getAllByRole('button')).toHaveLength(1);
+    expect(within(screen.getByTestId('pdf-preview-header')).getAllByRole('button')).toHaveLength(1);
     expect(screen.queryByText(/download|save|share/i)).toBeNull();
   });
 
@@ -326,6 +363,8 @@ describe('PlaceDetailScreen live location messaging', () => {
         isFavorited={false}
         locationStatusNow={Date.parse('2026-08-03T17:33:20Z')}
         onBack={jest.fn()}
+        onAddToCalendar={jest.fn()}
+        onSharePlace={jest.fn()}
         onSelectLocation={jest.fn()}
         onToggleFavorite={jest.fn()}
         selectedPlace={buildPlace({
@@ -336,6 +375,10 @@ describe('PlaceDetailScreen live location messaging', () => {
           longitude: -119.2,
           name: 'Order Bistro',
           social_profiles: {
+            facebook: {
+              url: 'https://facebook.com/orderbistro',
+              username: 'orderbistro',
+            },
             instagram: {
               url: 'https://instagram.com/order-bistro',
               username: 'order-bistro',
@@ -356,14 +399,64 @@ describe('PlaceDetailScreen live location messaging', () => {
           weekday: 1,
           weekday_label: 'Monday',
         }]}
-        showFavoriteControl={false}
+        showFavoriteControl
       />,
     );
 
+    const businessHeader = screen.getByTestId('business-profile-header-controls');
+    expect(StyleSheet.flatten(businessHeader.props.style)).toMatchObject({
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+    });
+    expect(within(businessHeader).getByLabelText('Add Order Bistro to Calendar')).toBeTruthy();
+    expect(within(businessHeader).getByLabelText('Share Order Bistro')).toBeTruthy();
+    expect(within(businessHeader).getByLabelText('Add to favorites')).toBeTruthy();
+    expect(within(businessHeader).getByLabelText('Report business content')).toBeTruthy();
+    expect(within(businessHeader).queryByText('Restaurant')).toBeNull();
+
+    const cityCategoryRow = screen.getByTestId('public-profile-city-category-row');
+    expect(StyleSheet.flatten(cityCategoryRow.props.style)).toMatchObject({
+      alignItems: 'center',
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+    });
+    expect(within(cityCategoryRow).getByText('Oxnard')).toBeTruthy();
+    expect(within(cityCategoryRow).getByText('Restaurant')).toBeTruthy();
+
+    const socialList = screen.getByTestId('public-profile-social-list');
+    expect(StyleSheet.flatten(socialList.props.style)).toMatchObject({
+      alignSelf: 'stretch',
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      width: '100%',
+    });
+    expect(StyleSheet.flatten(styles.publicProfileSocialCard)).toMatchObject({
+      flexBasis: '47%',
+      minWidth: 0,
+      width: '47%',
+    });
+
+    const dealHeader = screen.getByTestId('public-profile-deal-header-7');
+    expect(StyleSheet.flatten(dealHeader.props.style)).toMatchObject({
+      justifyContent: 'space-between',
+    });
+    const dealActions = screen.getByTestId('public-profile-deal-actions-7');
+    expect(StyleSheet.flatten(dealActions.props.style)).toMatchObject({
+      justifyContent: 'flex-start',
+    });
+    expect(within(dealHeader).getByLabelText('Add Order Deal to Calendar')).toBeTruthy();
+    expect(within(dealHeader).getByLabelText('Share Order Deal')).toBeTruthy();
+    expect(within(dealHeader).getByText('Special')).toBeTruthy();
+
     const renderedOutput = JSON.stringify(screen.toJSON());
+    expect(renderedOutput.indexOf('"Add Order Deal to Calendar"')).toBeLessThan(
+      renderedOutput.indexOf('"Order Deal"'),
+    );
     const orderedLabels = [
-      'Order Bistro',
+      'Oxnard',
       'Restaurant',
+      'Order Bistro',
       'Photos',
       'Current Deals',
       'Order Deal',
@@ -373,11 +466,12 @@ describe('PlaceDetailScreen live location messaging', () => {
       'Tap to open in Maps',
       'Social Media',
       'instagram:order-bistro',
+      'facebook:orderbistro',
     ];
 
     let previousIndex = -1;
     orderedLabels.forEach((label) => {
-      const nextIndex = renderedOutput.indexOf(label);
+      const nextIndex = renderedOutput.indexOf(JSON.stringify(label));
       expect(nextIndex).toBeGreaterThan(previousIndex);
       previousIndex = nextIndex;
     });

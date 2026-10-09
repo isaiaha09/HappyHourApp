@@ -1,5 +1,6 @@
 import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Animated, TextInput } from 'react-native';
 
 import type { BusinessAttachmentBuckets, EmailVerificationChallengeResponse } from '../types';
 import type { LoginFormState, ProfileFormState } from '../appFlowTypes';
@@ -160,6 +161,118 @@ function buildBusinessVerificationProps(mode: 'claimed' | 'manual' | 'informal',
 afterEach(() => {
   cleanup();
   jest.clearAllMocks();
+});
+
+describe('onboarding form layout preserves existing controls', () => {
+  const accountFields = ['username', 'email', 'confirm_email', 'password', 'confirm_password', 'first_name', 'last_name'] as const;
+  const contactFields = ['contact_name', 'work_email', 'work_phone', 'employer_address'] as const;
+  const publicFields = ['business_website_url', 'instagram_profile', 'facebook_profile', 'tiktok_profile', 'youtube_profile', 'supporting_details'] as const;
+
+  it.each(['claimed', 'manual', 'informal'] as const)('keeps field order and upload actions for %s business onboarding', (mode) => {
+    const props = buildBusinessVerificationProps(mode, null);
+    const form = { ...emptyProfileForm };
+    for (const field of ['business_name', ...accountFields, ...contactFields, ...publicFields] as const) {
+      form[field] = field;
+    }
+    const { rerender } = render(<BusinessVerificationScreen {...props} form={form} />);
+    const expectedFields = mode === 'informal'
+      ? ['business_name', 'employer_address', ...accountFields, ...publicFields]
+      : [...(mode === 'manual' ? ['business_name'] : []), ...accountFields, ...contactFields, ...publicFields];
+    const inputs = screen.UNSAFE_getAllByType(TextInput);
+
+    expect(inputs.map((input) => input.props.value)).toEqual(expectedFields);
+    fireEvent.changeText(screen.getByDisplayValue('username'), 'owner');
+    expect(props.onChangeField).toHaveBeenCalledWith('username', 'owner');
+
+    fireEvent.press(screen.getByText('Select photos from Photo Library'));
+    expect(props.onAddPhotoUploads).toHaveBeenCalledTimes(1);
+
+    if (mode === 'informal') {
+      expect(screen.queryByText('Business registration documents')).toBeNull();
+      expect(screen.queryByText('Contact name')).toBeNull();
+    } else {
+      fireEvent.press(screen.getByText('Attach files to business registration documents'));
+      expect(props.onAddAttachments).toHaveBeenCalledWith('business_registration');
+    }
+
+    if (mode === 'claimed') {
+      rerender(<BusinessVerificationScreen {...props} form={form} lockAccountIdentityFields />);
+      for (const field of ['username', 'email', 'confirm_email', 'first_name', 'last_name']) {
+        expect(screen.getByDisplayValue(field).props.editable).toBe(false);
+      }
+    }
+  });
+});
+
+describe('login layout preserves authentication controls', () => {
+  function loginProps(loginPortal: 'customer' | 'business') {
+    return {
+      authMessage: null,
+      autoFocusIdentifier: true,
+      errorMessage: null,
+      loginForm: { identifier: 'account-user', password: 'sample-password', two_factor_code: '123456' },
+      loginPortal,
+      onBackToLanding: jest.fn(),
+      onChangeField: jest.fn(),
+      onForgotPassword: jest.fn(),
+      onForgotUsername: jest.fn(),
+      onSubmit: jest.fn(),
+      showTwoFactorCodeField: false,
+      submitting: false,
+    };
+  }
+
+  it.each(['customer', 'business'] as const)('keeps credentials, masking, optional 2FA, and submit behavior for %s login', (portal) => {
+    const props = loginProps(portal);
+    const { rerender } = render(<AuthPortalScreen {...props} />);
+    const submitLabel = portal === 'customer' ? 'Log in as Customer' : 'Log in as Business';
+
+    expect(screen.getByDisplayValue('account-user').props.autoFocus).toBe(true);
+    expect(screen.queryByDisplayValue('123456')).toBeNull();
+    expect(screen.getByDisplayValue('sample-password').props.secureTextEntry).toBe(true);
+    fireEvent.press(screen.getByLabelText('Show password'));
+    expect(screen.getByDisplayValue('sample-password').props.secureTextEntry).toBe(false);
+    fireEvent.press(screen.getByLabelText('Hide password'));
+    expect(screen.getByDisplayValue('sample-password').props.secureTextEntry).toBe(true);
+
+    fireEvent.changeText(screen.getByDisplayValue('account-user'), 'updated-user');
+    expect(props.onChangeField).toHaveBeenCalledWith('identifier', 'updated-user');
+    fireEvent.press(screen.getByText(submitLabel));
+    expect(props.onSubmit).toHaveBeenCalledTimes(1);
+
+    rerender(<AuthPortalScreen {...props} showTwoFactorCodeField />);
+    fireEvent.changeText(screen.getByDisplayValue('123456'), '654321');
+    expect(props.onChangeField).toHaveBeenCalledWith('two_factor_code', '654321');
+
+    rerender(<AuthPortalScreen {...props} submitting />);
+    fireEvent.press(screen.getByText(submitLabel));
+    expect(props.onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps both inline recovery actions and cancellation', () => {
+    const timing = jest.spyOn(Animated, 'timing').mockImplementation(() => ({
+      start: (onComplete) => onComplete?.({ finished: true }),
+      stop: jest.fn(),
+      reset: jest.fn(),
+    }));
+    try {
+      const props = loginProps('customer');
+      render(<AuthPortalScreen {...props} />);
+      fireEvent.press(screen.getByText('Forgot username?'));
+      fireEvent.changeText(screen.getByPlaceholderText('Enter your account email'), 'owner@example.com');
+      fireEvent.press(screen.getByText('Email my username'));
+      expect(props.onForgotUsername).toHaveBeenCalledWith('owner@example.com');
+
+      fireEvent.press(screen.getByText('Forgot password?'));
+      fireEvent.changeText(screen.getByPlaceholderText('Enter your username or email'), 'account-user');
+      fireEvent.press(screen.getByText('Send password reset link'));
+      expect(props.onForgotPassword).toHaveBeenCalledWith('account-user');
+      fireEvent.press(screen.getByText('Cancel'));
+      expect(screen.queryByPlaceholderText('Enter your username or email')).toBeNull();
+    } finally {
+      timing.mockRestore();
+    }
+  });
 });
 
 describe('submission-scoped onboarding error scrolling', () => {

@@ -34,11 +34,11 @@ from PIL import Image
 from pypdf import PdfWriter
 import pyotp
 
-from .admin import BusinessAccountAdmin, BusinessClaimAdmin, ContentReportAdmin, CustomerAccountAdmin, DeletedBusinessAdmin, ListingSnapshotAdmin, ListingSnapshotAdminForm, SponsoredCampaignAdmin, _sync_listing_snapshot_from_imported_place
+from .admin import BusinessAccountAdmin, BusinessClaimAdmin, BusinessClaimAdminForm, ContentReportAdmin, CustomerAccountAdmin, DeletedBusinessAdmin, ListingSnapshotAdmin, ListingSnapshotAdminForm, SponsoredCampaignAdmin, _deal_override_seed_from_public_payload, _sync_listing_snapshot_from_imported_place
 from .admin_security import ADMIN_MFA_VERIFIED_SESSION_KEY
 from .admin_site import happyhour_admin_site
 from .models import AccountProfile, AdminAuditEvent, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessClaimRetryGrant, BusinessClaimRetryVerification, BusinessDirectMessage, BusinessDirectMessageBlock, BusinessDirectMessageThread, BusinessMembership, BusinessPost, City, ContentReport, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, FavoriteBusinessNotification, FavoriteBusinessPushDevice, FeedEngagement, FeedImpression, ListingSnapshot, ManagedMedia, ProfileAuthToken, SponsoredCampaign, VenueType, Weekday
-from .serializers import _prepare_claim_attachments, _validate_claim_attachment_size, _validate_uploaded_deal_attachment
+from .serializers import DealSerializer, _prepare_claim_attachments, _validate_claim_attachment_size, _validate_uploaded_deal_attachment
 from .throttles import LoginIpRateThrottle, SignupIpRateThrottle
 from .services.importers.base import BaseHtmlImporter
 from .services.importers.business_websites import BusinessWebsiteImporter
@@ -51,6 +51,7 @@ from .services.cloudmersive_scanning import ScanStatus
 from .services.importers.types import ImportedDeal, ImportedHappyHour, ImportedOperatingHour, ImportedPlace
 from .services.admin_operations import _get_catalog_health_payload_map, command_search, dashboard_callback, get_catalog_health, get_operations_dashboard_data
 from .services.current_happy_hours import get_current_happy_hours_payload
+from .services.business_profile_overrides import build_deal_payloads, normalize_deal_overrides
 from .services.render_storage import fetch_render_storage
 from .services.source_listings import _build_deal_identity_key, _build_place_payload, get_source_place_payload, get_source_place_payloads, load_source_records
 
@@ -2956,6 +2957,10 @@ class SourceListingIdentityTests(TestCase):
 				'deal_type': DealType.HAPPY_HOUR,
 				'price_text': '$2 Off',
 				'terms': 'Dine-in only',
+				'menu_items': [
+					{'name': 'House wine', 'price': '$8', 'detail': 'Red or white'},
+					{'name': 'Taco combo', 'price': '$15.98', 'detail': 'Includes a drink', 'weekdays': [1]},
+				],
 				'happy_hours': [{'weekday': Weekday.FRIDAY, 'start_time': '16:00', 'end_time': '19:00', 'all_day': False}],
 			}],
 			operating_hour_overrides=[{'weekday': Weekday.FRIDAY, 'open_time': '10:00', 'close_time': '22:00'}],
@@ -2967,6 +2972,10 @@ class SourceListingIdentityTests(TestCase):
 
 		self.assertEqual(len(payload['deals']), 1)
 		self.assertEqual(payload['deals'][0]['title'], 'Owner Happy Hour')
+		self.assertEqual(payload['deals'][0]['menu_items'], claim.deal_overrides[0]['menu_items'])
+		serialized_deal = DealSerializer(data=payload['deals'][0])
+		self.assertTrue(serialized_deal.is_valid(), serialized_deal.errors)
+		self.assertEqual(serialized_deal.data['menu_items'], claim.deal_overrides[0]['menu_items'])
 		self.assertEqual(payload['deals'][0]['happy_hours'][0]['weekday'], Weekday.FRIDAY)
 		self.assertEqual(payload['operating_hours'], [{
 			'id': payload['operating_hours'][0]['id'],
@@ -5102,6 +5111,10 @@ class ProfileSignupApiTests(APITestCase):
 					'deal_type': DealType.HAPPY_HOUR,
 					'price_text': '$2 Off',
 					'terms': 'Dine-in only',
+					'menu_items': [
+						{'name': 'House margarita', 'price': '$8', 'detail': 'Fresh lime and agave'},
+						{'name': 'Taco combo', 'price': '$15.98', 'detail': 'Includes a drink', 'weekdays': [1]},
+					],
 					'happy_hours': [{'weekday': Weekday.FRIDAY, 'start_time': '16:00', 'end_time': '19:00', 'all_day': False}],
 				}]),
 				'operating_hour_overrides': json.dumps([{'weekday': Weekday.FRIDAY, 'open_time': '10:00', 'close_time': '22:00'}]),
@@ -5114,6 +5127,10 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(response.status_code, 201)
 		claim = BusinessClaim.objects.get(claimant__username='finneys_override_owner')
 		self.assertEqual(claim.deal_overrides[0]['title'], 'Owner Happy Hour')
+		self.assertEqual(claim.deal_overrides[0]['menu_items'], [
+			{'name': 'House margarita', 'price': '$8', 'detail': 'Fresh lime and agave'},
+			{'name': 'Taco combo', 'price': '$15.98', 'detail': 'Includes a drink', 'weekdays': [1]},
+		])
 		self.assertEqual(claim.operating_hour_overrides[0]['weekday'], Weekday.FRIDAY)
 		self.assertIn('Owner Happy Hour', claim.offer_entries[0])
 
@@ -6998,6 +7015,55 @@ class ProfileDashboardApiTests(APITestCase):
 			},
 		)
 		self.assertEqual(response.data['business_contact']['social_media_links'], ['https://instagram.com/approvedspot', 'https://facebook.com/approvedspot'])
+
+	def test_profile_dashboard_saves_repeatable_menu_items(self):
+		snapshot = ListingSnapshot.objects.create(
+			name='Menu Test Cafe',
+			city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT,
+			address_line_1='60 Main St',
+		)
+		claim = BusinessClaim.objects.create(
+			claimant=self.user,
+			listing_snapshot=snapshot,
+			contact_name='Dash Board',
+			job_title='Owner',
+			work_email='owner@menutest.example.com',
+			work_phone='805-555-0200',
+			employer_address='60 Main St, Ventura, CA 93001',
+			verification_summary='I own the business.',
+			status=BusinessClaim.Status.APPROVED,
+		)
+		BusinessMembership.objects.create(claim=claim, user=self.user, is_active=True)
+
+		response = self.client.post(
+			reverse('profile-dashboard'),
+			{
+				'portal': 'business',
+				'username': self.user.username,
+				'email': self.user.email,
+				'deal_overrides': [{
+					'title': 'Happy hour menu',
+					'description': 'Half off select appetizers.',
+					'deal_type': DealType.HAPPY_HOUR,
+					'menu_items': [
+						{'name': 'House wine', 'price': '$8', 'detail': 'Red or white'},
+						{'name': 'Taco combo', 'price': '$15.98', 'detail': 'Includes a drink', 'weekdays': [1, 2]},
+					],
+					'happy_hours': [],
+				}],
+			},
+			format='json',
+			**self.auth_headers(),
+		)
+
+		self.assertEqual(response.status_code, 200, response.data)
+		claim.refresh_from_db()
+		self.assertEqual(claim.deal_overrides[0]['menu_items'], [
+			{'name': 'House wine', 'price': '$8', 'detail': 'Red or white'},
+			{'name': 'Taco combo', 'price': '$15.98', 'detail': 'Includes a drink', 'weekdays': [1, 2]},
+		])
+		self.assertEqual(response.data['business_contact']['deal_overrides'][0]['menu_items'], claim.deal_overrides[0]['menu_items'])
 
 	def test_profile_dashboard_update_accepts_24_hour_business_hours(self):
 		snapshot = ListingSnapshot.objects.create(
@@ -10152,6 +10218,122 @@ class ListingSnapshotAdminTests(TestCase):
 		self.request_factory = RequestFactory()
 		self.admin_user = User.objects.create_superuser(username='snapshot_admin', email='snapshot_admin@example.com', password='test-pass-123')
 		authenticate_test_admin(self.client, self.admin_user)
+
+	def test_structured_menu_items_round_trip_without_changing_legacy_deal_shape(self):
+		normalized = normalize_deal_overrides([
+			{
+				'title': 'Legacy happy hour',
+				'description': 'Original free-text description with all existing wording.',
+				'deal_type': DealType.HAPPY_HOUR,
+			},
+			{
+				'title': 'Drinks and snacks',
+				'description': 'Available at the bar.',
+				'description_price': '$2',
+				'deal_type': DealType.HAPPY_HOUR,
+				'menu_items': [
+					{'name': 'House wine', 'price': '$8', 'detail': 'Red or white'},
+					{'name': 'Chips and salsa', 'price': '$4', 'detail': ''},
+				],
+			},
+		])
+
+		self.assertNotIn('menu_items', normalized[0])
+		self.assertNotIn('description_price', normalized[0])
+		self.assertEqual(normalized[0]['description'], 'Original free-text description with all existing wording.')
+		self.assertEqual(normalized[1]['description_price'], '$2')
+		self.assertEqual(normalized[1]['menu_items'][0], {'name': 'House wine', 'price': '$8', 'detail': 'Red or white'})
+		payloads = build_deal_payloads(normalized, 'admin-test')
+		self.assertNotIn('menu_items', payloads[0])
+		self.assertNotIn('description_price', payloads[0])
+		self.assertEqual(payloads[1]['description_price'], '$2')
+		self.assertEqual(payloads[1]['menu_items'], normalized[1]['menu_items'])
+
+	def test_structured_menu_item_requires_a_name_and_respects_detail_length(self):
+		with self.assertRaisesRegex(ValueError, 'needs a name'):
+			normalize_deal_overrides([{
+				'title': 'Special',
+				'menu_items': [{'name': '', 'price': '$8', 'detail': ''}],
+			}])
+		with self.assertRaisesRegex(ValueError, '4000 characters or fewer'):
+			normalize_deal_overrides([{
+				'title': 'Special',
+				'menu_items': [{'name': 'Tacos', 'detail': 'x' * 4001}],
+			}])
+
+	def test_menu_item_weekdays_round_trip_without_changing_ordinary_items(self):
+		items = [
+			{'name': 'House wine', 'price': '$8', 'detail': 'Red or white'},
+			{'name': 'Tani combo', 'price': '$15.98', 'detail': 'Fish tacos', 'weekdays': [2, 1, 2]},
+			{'name': 'Kids eat free', 'price': '', 'detail': 'With an entree', 'weekdays': [3]},
+		]
+		normalized = normalize_deal_overrides([{
+			'title': 'Special combos', 'description': '', 'deal_type': DealType.DAILY_SPECIAL,
+			'menu_items': items,
+			'happy_hours': [{'weekday': 1, 'all_day': True}],
+		}])
+		expected = [items[0], {**items[1], 'weekdays': [1, 2]}, items[2]]
+		self.assertEqual(normalized[0]['menu_items'], expected)
+		payload = build_deal_payloads(normalized, 'weekday-test')[0]
+		self.assertEqual(payload['menu_items'], expected)
+		self.assertEqual(DealSerializer(payload).data['menu_items'], expected)
+		self.assertEqual(normalized[0]['happy_hours'][0]['weekday'], 1)
+		self.assertEqual(items[1]['weekdays'], [2, 1, 2])
+
+	def test_menu_item_weekdays_reject_invalid_days_and_omit_empty_choices(self):
+		for invalid in (None, 'Tuesday', {}, [-1], [7], [True], [1.5], ['1'], [0] * 8):
+			with self.subTest(weekdays=invalid), self.assertRaisesRegex(ValueError, 'weekdays'):
+				normalize_deal_overrides([{
+					'title': 'Daily combo',
+					'menu_items': [{'name': 'Combo', 'price': '$8', 'weekdays': invalid}],
+				}])
+		normalized = normalize_deal_overrides([{
+			'title': 'Menu', 'menu_items': [{'name': 'Wine', 'price': '$8', 'weekdays': []}],
+		}])
+		self.assertNotIn('weekdays', normalized[0]['menu_items'][0])
+
+	@patch('places.admin.get_source_place_payload')
+	def test_admin_seed_and_saved_preview_preserve_weekday_layout(self, mock_payload):
+		items = [
+			{'name': 'House wine', 'price': '$8', 'detail': 'Red or white'},
+			{'name': 'Tani combo', 'price': '$15.98', 'detail': 'Fish tacos', 'weekdays': [1]},
+			{'name': 'Weekend combo', 'price': '$20', 'detail': '', 'weekdays': [5, 6]},
+		]
+		payload = {'name': 'Weekday cafe', 'deals': [{'title': 'Special combos', 'menu_items': items}]}
+		mock_payload.return_value = payload
+		self.assertEqual(_deal_override_seed_from_public_payload(payload)[0]['menu_items'], items)
+		snapshot = ListingSnapshot.objects.create(
+			name='Weekday cafe', listing_slug='weekday-cafe', city=City.VENTURA,
+			venue_type=VenueType.RESTAURANT, address_line_1='60 Main St',
+		)
+		response = self.admin.preview_public_profile_view(self._build_request(), str(snapshot.pk))
+		response.render()
+		html = BeautifulSoup(response.content, 'html.parser')
+		rows = html.select('.dd-public-preview-weekday-row')
+		self.assertEqual(len(rows), 2)
+		self.assertEqual(rows[0].find('strong').get_text(), 'Tuesday')
+		self.assertEqual(rows[0].find('p').get_text(), 'Tani combo $15.98 (Fish tacos)')
+		self.assertEqual(rows[1].find('strong').get_text(), 'Sat, Sun')
+		self.assertEqual(len(rows[0].select('strong')), 1)
+		self.assertEqual(len(html.select('.dd-public-preview-menu-item')), 1)
+		self.assertNotIn('weekday_label', payload['deals'][0]['menu_items'][1])
+
+	def test_admin_seed_preserves_structured_items_from_an_existing_public_deal(self):
+		seed = _deal_override_seed_from_public_payload({
+			'deals': [{
+				'title': 'Happy hour menu',
+				'description_price': '$2',
+				'menu_items': [{'name': 'House wine', 'price': '$8', 'detail': 'Red or white'}],
+			}]
+		})
+
+		self.assertEqual(seed[0]['menu_items'], [{'name': 'House wine', 'price': '$8', 'detail': 'Red or white'}])
+		self.assertEqual(seed[0]['description_price'], '$2')
+
+	def test_owner_claim_and_admin_forms_use_the_repeatable_deal_editor(self):
+		for form in (BusinessClaimAdminForm(instance=BusinessClaim()), ListingSnapshotAdminForm(instance=ListingSnapshot())):
+			self.assertEqual(form.fields['deal_overrides'].widget.attrs['data-structured-editor'], 'deals')
+			self.assertIn('places/admin/listingsnapshot_structured_overrides.js', form.media._js)
 
 	def _build_request(self, path='/admin/', method='get'):
 		request = getattr(self.request_factory, method)(path)

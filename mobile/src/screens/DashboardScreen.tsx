@@ -6,7 +6,8 @@ import { ActivityIndicator, Image, Keyboard, KeyboardAvoidingView, Linking, Moda
 
 import { styles } from '../appStyles';
 import { buildDealOverridesFromDeals, buildEditableDealOverrides, buildNormalizedDealOverrides, buildNormalizedOperatingHourOverrides, buildOperatingHourOverridesFromWindows } from '../businessProfileOverrides';
-import { AutoScrollTextInput, useAutoScrollForm } from '../components/AutoScrollTextInput';
+import { AccountSection } from '../components/AccountSection';
+import { AutoScrollTextInput, useAutoScrollForm, type AutoScrollFormController } from '../components/AutoScrollTextInput';
 import { BusinessDealsEditor, BusinessHoursEditor } from '../components/BusinessProfileStructuredEditors';
 import { NativeIOSLiquidGlassBackButton, NativeIOSLiquidGlassHeaderButton } from '../components/NativeIOSLiquidGlass';
 import { SOCIAL_PLATFORM_LABELS, buildSocialProfilesFromInputs, getSocialProfilePreview, getSocialProfileValidationMessage, socialProfilesToInputs } from '../socialProfiles';
@@ -85,6 +86,14 @@ const dismissKeyboardOnScrollProps = {
   onTouchStart: Keyboard.dismiss,
 } as const;
 
+type DashboardAutoScrollProps = Pick<AutoScrollFormController, 'handleFieldBlur' | 'handleFieldFocus' | 'scrollViewRef'>;
+
+type DashboardFieldProps = DashboardAutoScrollProps & {
+  label: string;
+  onChangeText: (value: string) => void;
+  value: string;
+};
+
 function DashboardDetailRow({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.dashboardDetailItem}>
@@ -96,34 +105,52 @@ function DashboardDetailRow({ label, value }: { label: string; value: string }) 
 
 function DashboardEditableField({
   label,
+  handleFieldBlur,
+  handleFieldFocus,
   onChangeText,
+  scrollViewRef,
   value,
-}: {
-  label: string;
-  onChangeText: (value: string) => void;
-  value: string;
-}) {
+}: DashboardFieldProps) {
   return (
-    <View style={styles.dashboardFieldColumn}>
-      <Text style={styles.dashboardDetailLabel}>{label}</Text>
-      <TextInput keyboardAppearance="dark" onChangeText={onChangeText} style={styles.profileInput} value={value} />
+    <View style={[styles.dashboardFieldColumn, styles.accountFields]}>
+      <Text style={styles.accountLabel}>{label}</Text>
+      <AutoScrollTextInput
+        accessibilityLabel={label}
+        keyboardAppearance="dark"
+        onBeforeAutoScroll={handleFieldFocus}
+        onChangeText={onChangeText}
+        onFieldBlur={handleFieldBlur}
+        scrollViewRef={scrollViewRef}
+        style={[styles.profileInput, styles.accountInput]}
+        value={value}
+      />
     </View>
   );
 }
 
 function DashboardMultilineField({
   label,
+  handleFieldBlur,
+  handleFieldFocus,
   onChangeText,
+  scrollViewRef,
   value,
-}: {
-  label: string;
-  onChangeText: (value: string) => void;
-  value: string;
-}) {
+}: DashboardFieldProps) {
   return (
-    <View style={styles.dashboardFieldColumn}>
-      <Text style={styles.dashboardDetailLabel}>{label}</Text>
-      <TextInput keyboardAppearance="dark" multiline onChangeText={onChangeText} style={[styles.profileInput, styles.dashboardMultilineInput]} textAlignVertical="top" value={value} />
+    <View style={[styles.dashboardFieldColumn, styles.accountFields]}>
+      <Text style={styles.accountLabel}>{label}</Text>
+      <AutoScrollTextInput
+        accessibilityLabel={label}
+        keyboardAppearance="dark"
+        multiline
+        onBeforeAutoScroll={handleFieldFocus}
+        onChangeText={onChangeText}
+        onFieldBlur={handleFieldBlur}
+        scrollViewRef={scrollViewRef}
+        style={[styles.profileInput, styles.accountInput, styles.dashboardMultilineInput]}
+        textAlignVertical="top"
+        value={value}
+      />
     </View>
   );
 }
@@ -156,8 +183,8 @@ function FavoriteBusinessCard({
   return (
     <Pressable onPress={onPress} style={[styles.dashboardDetailItem, styles.dashboardFavoriteBusinessCard]}>
       <Text style={styles.dashboardDetailValue}>{name}</Text>
-      <Text style={styles.dashboardSupportText}>{cityLabel} • {venueTypeLabel}</Text>
-      <Text style={styles.dashboardSupportText}>{addressLine}</Text>
+      <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>{cityLabel} • {venueTypeLabel}</Text>
+      <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>{addressLine}</Text>
       <Text style={styles.dashboardFavoriteBusinessAction}>Open business profile</Text>
     </Pressable>
   );
@@ -185,8 +212,8 @@ function FavoriteBusinessNotificationCard({
           <Text style={styles.dashboardNotificationDismissButtonText}>{submitting ? '...' : 'Dismiss'}</Text>
         </Pressable>
       </View>
-      {notification.message ? <Text style={styles.dashboardSupportText}>{notification.message}</Text> : null}
-      <Text style={styles.dashboardSupportText}>{notification.business_name}</Text>
+      {notification.message ? <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>{notification.message}</Text> : null}
+      <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>{notification.business_name}</Text>
       <Pressable onPress={onPress}>
         <Text style={styles.dashboardFavoriteBusinessAction}>Open business profile</Text>
       </Pressable>
@@ -260,6 +287,8 @@ function DirectMessageHeaderIcon() {
 }
 
 function SecuritySettingsSection({
+  handleFieldBlur,
+  handleFieldFocus,
   onBeginTwoFactorSetup,
   onChangeTwoFactorDisableCode,
   onChangeTwoFactorSetupCode,
@@ -267,6 +296,7 @@ function SecuritySettingsSection({
   onDisableTwoFactor,
   settingsSubmittingAction,
   session,
+  scrollViewRef,
   twoFactorDisableCode,
   twoFactorSetup,
   twoFactorSetupCode,
@@ -281,7 +311,7 @@ function SecuritySettingsSection({
   | 'twoFactorDisableCode'
   | 'twoFactorSetup'
   | 'twoFactorSetupCode'
->) {
+> & DashboardAutoScrollProps) {
   const [twoFactorQrMatrix, setTwoFactorQrMatrix] = useState<QrMatrix | null>(null);
   const [twoFactorQrLoadFailed, setTwoFactorQrLoadFailed] = useState(false);
   const [twoFactorKeyCopied, setTwoFactorKeyCopied] = useState(false);
@@ -359,20 +389,30 @@ function SecuritySettingsSection({
   }, [twoFactorSetup?.otpauth_url]);
 
   return (
-    <View style={styles.dashboardSection}>
-      <Text style={styles.dashboardSectionTitle}>Authentication settings</Text>
+    <View style={[styles.dashboardSection, styles.accountSection]}>
+      <Text style={[styles.dashboardSectionTitle, styles.accountSectionTitle]}>Authentication settings</Text>
       <DashboardDetailRow label="Two-factor authentication" value={session.two_factor_enabled ? 'Enabled' : 'Disabled'} />
       {session.two_factor_enabled ? (
         <>
-          <Text style={styles.dashboardSupportText}>Enter a current authenticator code to disable 2FA on this account.</Text>
-          <TextInput keyboardAppearance="dark" keyboardType="number-pad" onChangeText={onChangeTwoFactorDisableCode} style={styles.profileInput} value={twoFactorDisableCode} />
-          <Pressable onPress={onDisableTwoFactor} style={[styles.linkButtonSecondaryWide, submitting ? styles.linkButtonDisabled : null]}>
-            <Text style={styles.linkButtonSecondaryText}>{disablingTwoFactor ? 'Saving...' : 'Disable authenticator 2FA'}</Text>
+          <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>Enter a current authenticator code to disable 2FA on this account.</Text>
+          <AutoScrollTextInput
+            accessibilityLabel="Authenticator code to disable two-factor authentication"
+            keyboardAppearance="dark"
+            keyboardType="number-pad"
+            onBeforeAutoScroll={handleFieldFocus}
+            onChangeText={onChangeTwoFactorDisableCode}
+            onFieldBlur={handleFieldBlur}
+            scrollViewRef={scrollViewRef}
+            style={[styles.profileInput, styles.accountInput]}
+            value={twoFactorDisableCode}
+          />
+          <Pressable onPress={onDisableTwoFactor} style={[styles.linkButtonSecondaryWide, styles.accountSecondaryButton, submitting ? styles.linkButtonDisabled : null]}>
+            <Text style={[styles.linkButtonSecondaryText, styles.accountSecondaryButtonText]}>{disablingTwoFactor ? 'Saving...' : 'Disable authenticator 2FA'}</Text>
           </Pressable>
         </>
       ) : twoFactorSetup ? (
         <>
-          <Text style={styles.dashboardSupportText}>Scan this QR code with your authenticator app.</Text>
+          <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>Scan this QR code with your authenticator app.</Text>
           {twoFactorSetup.otpauth_url ? (
             <View style={styles.dashboardQrCard}>
               {twoFactorQrMatrix ? (
@@ -412,7 +452,7 @@ function SecuritySettingsSection({
                 </View>
               ) : (
                 <View style={styles.dashboardQrLoadingState}>
-                  <ActivityIndicator color="#c65d1f" size="small" />
+                  <ActivityIndicator color={theme.accent} size="small" />
                   <Text style={styles.dashboardQrSubtitle}>Preparing QR code...</Text>
                 </View>
               )}
@@ -420,8 +460,8 @@ function SecuritySettingsSection({
                 <Text style={styles.dashboardQrTitle}>{twoFactorSetup.issuer}</Text>
                 <Text style={styles.dashboardQrSubtitle}>{twoFactorSetup.account_name}</Text>
               </View>
-              <Pressable onPress={() => void handleOpenAuthenticatorApp()} style={styles.linkButtonSecondaryWide}>
-                <Text style={styles.linkButtonSecondaryText}>Open in authenticator app</Text>
+              <Pressable onPress={() => void handleOpenAuthenticatorApp()} style={[styles.linkButtonSecondaryWide, styles.accountSecondaryButton]}>
+                <Text style={[styles.linkButtonSecondaryText, styles.accountSecondaryButtonText]}>Open in authenticator app</Text>
               </Pressable>
             </View>
           ) : null}
@@ -433,16 +473,26 @@ function SecuritySettingsSection({
             </Pressable>
             <Text style={styles.dashboardCodeHelpText}>Copy the key manually, set it up in your authenticator app, and paste the 6-digit code in the line below.</Text>
           </View>
-          <TextInput keyboardAppearance="dark" keyboardType="number-pad" onChangeText={onChangeTwoFactorSetupCode} style={styles.profileInput} value={twoFactorSetupCode} />
-          <Pressable onPress={onConfirmTwoFactorSetup} style={[styles.linkButtonSecondaryWide, submitting ? styles.linkButtonDisabled : null]}>
-            <Text style={styles.linkButtonSecondaryText}>{confirmingTwoFactorSetup ? 'Saving...' : 'Confirm authenticator setup'}</Text>
+          <AutoScrollTextInput
+            accessibilityLabel="Authenticator setup code"
+            keyboardAppearance="dark"
+            keyboardType="number-pad"
+            onBeforeAutoScroll={handleFieldFocus}
+            onChangeText={onChangeTwoFactorSetupCode}
+            onFieldBlur={handleFieldBlur}
+            scrollViewRef={scrollViewRef}
+            style={[styles.profileInput, styles.accountInput]}
+            value={twoFactorSetupCode}
+          />
+          <Pressable onPress={onConfirmTwoFactorSetup} style={[styles.linkButtonSecondaryWide, styles.accountSecondaryButton, submitting ? styles.linkButtonDisabled : null]}>
+            <Text style={[styles.linkButtonSecondaryText, styles.accountSecondaryButtonText]}>{confirmingTwoFactorSetup ? 'Saving...' : 'Confirm authenticator setup'}</Text>
           </Pressable>
         </>
       ) : (
         <>
-          <Text style={styles.dashboardSupportText}>Set up an authenticator app to require a 6-digit verification code each time you sign in.</Text>
-          <Pressable onPress={onBeginTwoFactorSetup} style={[styles.linkButtonSecondaryWide, submitting ? styles.linkButtonDisabled : null]}>
-            <Text style={styles.linkButtonSecondaryText}>{beginningTwoFactorSetup ? 'Preparing...' : 'Set up authenticator app'}</Text>
+          <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>Set up an authenticator app to require a 6-digit verification code each time you sign in.</Text>
+          <Pressable onPress={onBeginTwoFactorSetup} style={[styles.linkButtonSecondaryWide, styles.accountSecondaryButton, submitting ? styles.linkButtonDisabled : null]}>
+            <Text style={[styles.linkButtonSecondaryText, styles.accountSecondaryButtonText]}>{beginningTwoFactorSetup ? 'Preparing...' : 'Set up authenticator app'}</Text>
           </Pressable>
         </>
       )}
@@ -460,6 +510,8 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
     ? new Date(trackedBusinessLocation.updated_at).toLocaleString()
     : null;
   const [profileDraft, setProfileDraft] = useState<ProfileDashboardUpdateRequest>(() => buildDashboardDraft(session));
+  const { handleFieldBlur, handleFieldFocus, handleScroll, handleScrollBeginDrag, scrollViewRef } = useAutoScrollForm();
+  const autoScrollProps: DashboardAutoScrollProps = { handleFieldBlur, handleFieldFocus, scrollViewRef };
 
   useEffect(() => {
     setProfileDraft(buildDashboardDraft(session));
@@ -502,12 +554,19 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
         style={styles.keyboardAvoidingFill}
       >
         <ScrollView
-          contentContainerStyle={styles.dashboardScrollContent}
-          {...dismissKeyboardOnScrollProps}
+          contentContainerStyle={[styles.dashboardScrollContent, styles.accountScrollContent]}
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           keyboardShouldPersistTaps="handled"
+          onScroll={handleScroll}
+          onScrollBeginDrag={() => {
+            handleScrollBeginDrag();
+            Keyboard.dismiss();
+          }}
+          ref={scrollViewRef}
+          scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.screenHeaderBar}>
+          <View style={[styles.screenHeaderBar, styles.accountHeader, styles.dashboardRowHeader]}>
             <View style={styles.dashboardHeaderRow}>
               <NativeIOSLiquidGlassHeaderButton
                 fallback={(
@@ -548,10 +607,12 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
             </View>
           </View>
 
-          <View style={styles.dashboardShell}>
-            <Text style={styles.detailCity}>{session.profile_type === 'business' ? 'Business Dashboard' : 'Customer Dashboard'}</Text>
-            <Text style={styles.detailTitle}>{fullName || session.username}</Text>
-            <Text style={styles.profileIntroText}>Use this dashboard to manage your account, check verification status, and jump back into the main app.</Text>
+          <View style={[styles.dashboardShell, styles.accountPage]}>
+            <View style={styles.accountIntro}>
+              <Text style={[styles.detailCity, styles.accountEyebrow]}>{session.profile_type === 'business' ? 'Business Dashboard' : 'Customer Dashboard'}</Text>
+              <Text style={[styles.detailTitle, styles.accountHeading]}>{fullName || session.username}</Text>
+              <Text style={[styles.profileIntroText, styles.accountBodyText]}>Use this dashboard to manage your account, check verification status, and jump back into the main app.</Text>
+            </View>
 
             {message ? (
               <View style={styles.profileSuccessBanner}>
@@ -567,65 +628,65 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
 
             {loading ? (
               <View style={styles.centerState}>
-                <ActivityIndicator color="#c65d1f" size="large" />
+                <ActivityIndicator color={theme.accent} size="large" />
                 <Text style={styles.centerStateText}>Refreshing dashboard...</Text>
               </View>
             ) : null}
 
             {!session.email_verified ? (
-              <View style={styles.dashboardStatusBanner}>
-                <Text style={styles.dashboardSectionTitle}>Email verification</Text>
-                <Text style={styles.dashboardSupportText}>Your email is not verified yet. Use the link sent to {session.email}, then refresh this dashboard.</Text>
-                <Pressable onPress={onResendVerification} style={[styles.linkButtonSecondaryWide, submitting ? styles.linkButtonDisabled : null]}>
-                  <Text style={styles.linkButtonSecondaryText}>{submitting ? 'Sending...' : 'Resend verification email'}</Text>
+              <View style={[styles.dashboardStatusBanner, styles.accountSection]}>
+                <Text style={[styles.dashboardSectionTitle, styles.accountSectionTitle]}>Email verification</Text>
+                <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>Your email is not verified yet. Use the link sent to {session.email}, then refresh this dashboard.</Text>
+                <Pressable onPress={onResendVerification} style={[styles.linkButtonSecondaryWide, styles.accountSecondaryButton, submitting ? styles.linkButtonDisabled : null]}>
+                  <Text style={[styles.linkButtonSecondaryText, styles.accountSecondaryButtonText]}>{submitting ? 'Sending...' : 'Resend verification email'}</Text>
                 </Pressable>
               </View>
             ) : (
-              <View style={styles.dashboardStatusBanner}>
+              <View style={[styles.dashboardStatusBanner, styles.accountSection]}>
                 <Text style={styles.dashboardVerifiedTitle}>Email verified</Text>
                 <Text style={styles.dashboardVerifiedText}>Your account is verified and ready to use across the app.</Text>
               </View>
             )}
 
-            <View style={styles.dashboardSection}>
-              <Text style={styles.dashboardSectionTitle}>Profile details</Text>
+            <View style={[styles.dashboardSection, styles.accountSection]}>
+              <Text style={[styles.dashboardSectionTitle, styles.accountSectionTitle]}>Profile details</Text>
               <View style={styles.dashboardFieldGrid}>
-                <DashboardEditableField label="Username" onChangeText={(value) => setProfileDraft((current) => ({ ...current, username: value }))} value={profileDraft.username} />
-                <DashboardEditableField label="Email" onChangeText={(value) => setProfileDraft((current) => ({ ...current, email: value }))} value={profileDraft.email} />
-                <DashboardEditableField label="First name" onChangeText={(value) => setProfileDraft((current) => ({ ...current, first_name: value }))} value={profileDraft.first_name} />
-                <DashboardEditableField label="Last name" onChangeText={(value) => setProfileDraft((current) => ({ ...current, last_name: value }))} value={profileDraft.last_name} />
+                <DashboardEditableField {...autoScrollProps} label="Username" onChangeText={(value) => setProfileDraft((current) => ({ ...current, username: value }))} value={profileDraft.username} />
+                <DashboardEditableField {...autoScrollProps} label="Email" onChangeText={(value) => setProfileDraft((current) => ({ ...current, email: value }))} value={profileDraft.email} />
+                <DashboardEditableField {...autoScrollProps} label="First name" onChangeText={(value) => setProfileDraft((current) => ({ ...current, first_name: value }))} value={profileDraft.first_name} />
+                <DashboardEditableField {...autoScrollProps} label="Last name" onChangeText={(value) => setProfileDraft((current) => ({ ...current, last_name: value }))} value={profileDraft.last_name} />
                 <DashboardDetailRow label="Profile type" value={session.profile_type === 'business' ? 'Business' : 'Customer'} />
               </View>
               <View style={styles.dashboardInlineActions}>
                 <Pressable
                   onPress={() => onSaveProfileDetails(buildSavePayload())}
-                  style={[styles.linkButtonSecondaryWide, styles.dashboardInlineButton, (!profileDetailsChanged || submitting) ? styles.linkButtonDisabled : null]}
+                  style={[styles.linkButtonSecondaryWide, styles.accountSecondaryButton, styles.dashboardInlineButton, (!profileDetailsChanged || submitting) ? styles.linkButtonDisabled : null]}
                 >
-                  <Text style={styles.linkButtonSecondaryText}>{submitting ? 'Saving...' : session.profile_type === 'business' ? 'Save dashboard changes' : 'Save profile details'}</Text>
+                  <Text style={[styles.linkButtonSecondaryText, styles.accountSecondaryButtonText]}>{submitting ? 'Saving...' : session.profile_type === 'business' ? 'Save dashboard changes' : 'Save profile details'}</Text>
                 </Pressable>
               </View>
-              <Text style={styles.dashboardSupportText}>Changing your email sends a new verification email and marks the new address as unverified until you confirm it.</Text>
+              <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>Changing your email sends a new verification email and marks the new address as unverified until you confirm it.</Text>
             </View>
 
             {session.profile_type !== 'business' ? (
-              <View style={styles.dashboardSection}>
-                <Text style={styles.dashboardSectionTitle}>Business notifications</Text>
-                <Text style={styles.dashboardSupportText}>When a favorited business updates its profile or publishes new content, those alerts will appear on a dedicated screen.</Text>
+              <View style={[styles.dashboardSection, styles.accountSection]}>
+                <Text style={[styles.dashboardSectionTitle, styles.accountSectionTitle]}>Business notifications</Text>
+                <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>When a favorited business updates its profile or publishes new content, those alerts will appear on a dedicated screen.</Text>
                 <View style={styles.dashboardInlineActions}>
-                  <Pressable onPress={onOpenBusinessNotifications} style={[styles.linkButtonSecondaryWide, styles.dashboardInlineButton]}>
-                    <Text style={styles.linkButtonSecondaryText}>{favoriteBusinessNotifications.length ? `View business notifications (${favoriteBusinessNotifications.length})` : 'View business notifications'}</Text>
+                  <Pressable onPress={onOpenBusinessNotifications} style={[styles.linkButtonSecondaryWide, styles.accountSecondaryButton, styles.dashboardInlineButton]}>
+                    <Text style={[styles.linkButtonSecondaryText, styles.accountSecondaryButtonText]}>{favoriteBusinessNotifications.length ? `View business notifications (${favoriteBusinessNotifications.length})` : 'View business notifications'}</Text>
                   </Pressable>
                 </View>
               </View>
             ) : null}
 
             {session.profile_type !== 'business' ? (
-              <View style={styles.dashboardSection}>
-                <Text style={styles.dashboardSectionTitle}>Favorite businesses</Text>
-                <Text style={styles.dashboardSupportText}>Open your saved businesses on a dedicated screen so you can browse them separately from the rest of the dashboard.</Text>
+              <View style={[styles.dashboardSection, styles.accountSection]}>
+                <Text style={[styles.dashboardSectionTitle, styles.accountSectionTitle]}>Favorite businesses</Text>
+                <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>Open your saved businesses on a dedicated screen so you can browse them separately from the rest of the dashboard.</Text>
                 <View style={styles.dashboardInlineActions}>
-                  <Pressable onPress={onOpenFavoriteBusinesses} style={[styles.linkButtonSecondaryWide, styles.dashboardInlineButton]}>
-                    <Text style={styles.linkButtonSecondaryText}>{favoriteBusinesses.length ? `View favorite businesses (${favoriteBusinesses.length})` : 'View favorite businesses'}</Text>
+                  <Pressable onPress={onOpenFavoriteBusinesses} style={[styles.linkButtonSecondaryWide, styles.accountSecondaryButton, styles.dashboardInlineButton]}>
+                    <Text style={[styles.linkButtonSecondaryText, styles.accountSecondaryButtonText]}>{favoriteBusinesses.length ? `View favorite businesses (${favoriteBusinesses.length})` : 'View favorite businesses'}</Text>
                   </Pressable>
                 </View>
               </View>
@@ -633,8 +694,8 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
 
             {session.profile_type === 'business' ? (
               <>
-                <View style={styles.dashboardSection}>
-                  <Text style={styles.dashboardSectionTitle}>Business status</Text>
+                <View style={[styles.dashboardSection, styles.accountSection]}>
+                  <Text style={[styles.dashboardSectionTitle, styles.accountSectionTitle]}>Business status</Text>
                   <View style={styles.dashboardFieldGrid}>
                     <DashboardDetailRow label="Status" value={session.business_status || 'Pending'} />
                     <DashboardDetailRow label="Current business" value={session.business_name || 'No approved business yet'} />
@@ -646,35 +707,35 @@ export function DashboardScreen({ errorMessage, isLandscape, loading, message, o
                     </>
                   ) : null}
                   </View>
-                  {session.requires_business_location_tracking ? <Text style={styles.dashboardSupportText}>Keep location access enabled on this device so your map pin reflects your approximate current phone location.</Text> : null}
+                  {session.requires_business_location_tracking ? <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>Keep location access enabled on this device so your map pin reflects your approximate current phone location.</Text> : null}
                 </View>
 
-                <View style={styles.dashboardSection}>
-                  <Text style={styles.dashboardSectionTitle}>Business profile details</Text>
-                  <Text style={styles.dashboardSupportText}>Open your public business profile to edit the public-facing business details on a dedicated screen and preview how the profile looks on the map.</Text>
+                <View style={[styles.dashboardSection, styles.accountSection]}>
+                  <Text style={[styles.dashboardSectionTitle, styles.accountSectionTitle]}>Business profile details</Text>
+                  <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>Open your public business profile to edit the public-facing business details on a dedicated screen and preview how the profile looks on the map.</Text>
                   {approvedBusinesses[0]?.slug ? (
                     <View style={styles.dashboardInlineActions}>
-                      <Pressable onPress={() => onOpenApprovedBusiness(approvedBusinesses[0].slug)} style={[styles.linkButtonSecondaryWide, styles.dashboardInlineButton]}>
-                        <Text style={styles.linkButtonSecondaryText}>Open public business profile</Text>
+                      <Pressable onPress={() => onOpenApprovedBusiness(approvedBusinesses[0].slug)} style={[styles.linkButtonSecondaryWide, styles.accountSecondaryButton, styles.dashboardInlineButton]}>
+                        <Text style={[styles.linkButtonSecondaryText, styles.accountSecondaryButtonText]}>Open public business profile</Text>
                       </Pressable>
-                      <Pressable onPress={onOpenBusinessProfileEditor} style={[styles.linkButtonSecondaryWide, styles.dashboardInlineButton]}>
-                        <Text style={styles.linkButtonSecondaryText}>Edit Business Profile</Text>
+                      <Pressable onPress={onOpenBusinessProfileEditor} style={[styles.linkButtonSecondaryWide, styles.accountSecondaryButton, styles.dashboardInlineButton]}>
+                        <Text style={[styles.linkButtonSecondaryText, styles.accountSecondaryButtonText]}>Edit Business Profile</Text>
                       </Pressable>
                     </View>
                   ) : null}
                 </View>
 
-                <View style={styles.dashboardSection}>
-                  <Text style={styles.dashboardSectionTitle}>Approved Business</Text>
+                <View style={[styles.dashboardSection, styles.accountSection]}>
+                  <Text style={[styles.dashboardSectionTitle, styles.accountSectionTitle]}>Approved Business</Text>
                   {approvedBusinesses.length ? <View style={styles.dashboardFieldGrid}>{approvedBusinesses.map((business) => (
                     <View key={business.id} style={[styles.dashboardDetailItem, styles.dashboardFavoriteBusinessCard]}>
                       <Text style={styles.dashboardDetailValue}>{business.name}</Text>
-                      <Text style={styles.dashboardSupportText}>{business.city_label} • {business.venue_type_label}</Text>
-                      {business.address_line_1 ? <Text style={styles.dashboardSupportText}>{business.address_line_1}</Text> : null}
-                      {business.website_url ? <Text style={styles.dashboardSupportText}>{business.website_url}</Text> : null}
+                      <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>{business.city_label} • {business.venue_type_label}</Text>
+                      {business.address_line_1 ? <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>{business.address_line_1}</Text> : null}
+                      {business.website_url ? <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>{business.website_url}</Text> : null}
                     </View>
                   ))}</View> : (
-                    <Text style={styles.dashboardSupportText}>Claimed or created businesses appear here after admin approval.</Text>
+                    <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>Claimed or created businesses appear here after admin approval.</Text>
                   )}
                 </View>
               </>
@@ -722,25 +783,27 @@ export function FavoriteBusinessesScreen({
 
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
-      <ScrollView contentContainerStyle={styles.dashboardScrollContent} {...dismissKeyboardOnScrollProps} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
+      <ScrollView contentContainerStyle={[styles.dashboardScrollContent, styles.accountScrollContent]} {...dismissKeyboardOnScrollProps} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle, styles.accountHeader]}>
           <NativeIOSLiquidGlassBackButton label="Back to Profile" onPress={onBack} />
         </View>
 
-        <View style={styles.dashboardShell}>
-          <Text style={styles.detailCity}>Customer Dashboard</Text>
-          <Text style={styles.detailTitle}>Favorite Businesses</Text>
-          <Text style={styles.profileIntroText}>Open one of your saved businesses to jump back into its public profile.</Text>
+        <View style={[styles.dashboardShell, styles.accountPage]}>
+          <View style={styles.accountIntro}>
+            <Text style={[styles.detailCity, styles.accountEyebrow]}>Customer Dashboard</Text>
+            <Text style={[styles.detailTitle, styles.accountHeading]}>Favorite Businesses</Text>
+            <Text style={[styles.profileIntroText, styles.accountBodyText]}>Open one of your saved businesses to jump back into its public profile.</Text>
+          </View>
 
-          <View style={styles.dashboardSection}>
-            <Text style={styles.dashboardSectionTitle}>Saved businesses</Text>
+          <View style={[styles.dashboardSection, styles.accountSection]}>
+            <Text style={[styles.dashboardSectionTitle, styles.accountSectionTitle]}>Saved businesses</Text>
             {favoriteBusinesses.length > 1 ? (
               <TextInput
                 keyboardAppearance="dark"
                 onChangeText={setFavoriteSearchQuery}
                 placeholder="Search favorite businesses"
-                placeholderTextColor="#9a7f6c"
-                style={styles.profileInput}
+                placeholderTextColor={theme.textMuted}
+                style={[styles.profileInput, styles.accountInput]}
                 value={favoriteSearchQuery}
               />
             ) : null}
@@ -758,9 +821,9 @@ export function FavoriteBusinessesScreen({
                 ))}
               </View>
             ) : favoriteBusinesses.length ? (
-              <Text style={styles.dashboardSupportText}>No favorite businesses matched that search.</Text>
+              <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>No favorite businesses matched that search.</Text>
             ) : (
-              <Text style={styles.dashboardSupportText}>Favorite businesses from place details to keep a list of favorites here.</Text>
+              <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>Favorite businesses from place details to keep a list of favorites here.</Text>
             )}
           </View>
         </View>
@@ -795,15 +858,17 @@ export function FavoriteBusinessNotificationsScreen({
 
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
-      <ScrollView contentContainerStyle={styles.dashboardScrollContent} {...dismissKeyboardOnScrollProps} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
+      <ScrollView contentContainerStyle={[styles.dashboardScrollContent, styles.accountScrollContent]} {...dismissKeyboardOnScrollProps} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle, styles.accountHeader]}>
           <NativeIOSLiquidGlassBackButton label="Back to Profile" onPress={onBack} />
         </View>
 
-        <View style={styles.dashboardShell}>
-          <Text style={styles.detailCity}>Customer Dashboard</Text>
-          <Text style={styles.detailTitle}>Business Notifications</Text>
-          <Text style={styles.profileIntroText}>These alerts appear when one of your favorited businesses updates its profile or publishes something new.</Text>
+        <View style={[styles.dashboardShell, styles.accountPage]}>
+          <View style={styles.accountIntro}>
+            <Text style={[styles.detailCity, styles.accountEyebrow]}>Customer Dashboard</Text>
+            <Text style={[styles.detailTitle, styles.accountHeading]}>Business Notifications</Text>
+            <Text style={[styles.profileIntroText, styles.accountBodyText]}>These alerts appear when one of your favorited businesses updates its profile or publishes something new.</Text>
+          </View>
 
           {message ? (
             <View style={styles.profileSuccessBanner}>
@@ -817,9 +882,9 @@ export function FavoriteBusinessNotificationsScreen({
             </View>
           ) : null}
 
-          <View style={styles.dashboardSection}>
+          <View style={[styles.dashboardSection, styles.accountSection]}>
             <View style={styles.dashboardNotificationSectionHeader}>
-              <Text style={styles.dashboardSectionTitle}>Recent Alerts</Text>
+              <Text style={[styles.dashboardSectionTitle, styles.accountSectionTitle]}>Recent Alerts</Text>
               {favoriteBusinessNotifications.length ? (
                 <Pressable disabled={submitting} onPress={onClear} style={[styles.dashboardNotificationClearButton, submitting ? styles.linkButtonDisabled : null]}>
                   <Text style={styles.dashboardNotificationClearButtonText}>{submitting ? 'Clearing...' : 'Clear all'}</Text>
@@ -860,7 +925,7 @@ export function FavoriteBusinessNotificationsScreen({
                 </View>
               )
             ) : (
-              <Text style={styles.dashboardSupportText}>When a favorited business updates its profile or publishes new content, those alerts will show up here.</Text>
+              <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>When a favorited business updates its profile or publishes new content, those alerts will show up here.</Text>
             )}
           </View>
         </View>
@@ -934,6 +999,8 @@ export function BusinessProfileEditorScreen({
   const [currentPhotoUrls, setCurrentPhotoUrls] = useState<string[]>(() => getDisplayablePhotoUrls(businessContact.photo_references));
   const [selectedPhotoUploads, setSelectedPhotoUploads] = useState<BusinessAttachmentDraft[]>([]);
   const [openingPhotoLibrary, setOpeningPhotoLibrary] = useState(false);
+  const { handleFieldBlur, handleFieldFocus, handleScroll, handleScrollBeginDrag, scrollViewRef } = useAutoScrollForm();
+  const autoScrollProps: DashboardAutoScrollProps = { handleFieldBlur, handleFieldFocus, scrollViewRef };
   const existingPhotoUrls = getDisplayablePhotoUrls(businessContact.photo_references);
   const remainingPhotoSlots = Math.max(0, 8 - currentPhotoUrls.length - selectedPhotoUploads.length);
   const existingSocialInputs = socialProfilesToInputs(businessContact.social_profiles, businessContact.business_website_url ?? '');
@@ -1004,19 +1071,23 @@ export function BusinessProfileEditorScreen({
     const preview = getSocialProfilePreview(platform, fieldValue);
 
     return (
-      <View key={field} style={styles.dashboardFieldColumn}>
-        <Text style={styles.dashboardDetailLabel}>{SOCIAL_PLATFORM_LABELS[platform]}</Text>
-        <TextInput
+      <View key={field} style={[styles.dashboardFieldColumn, styles.accountFields]}>
+        <Text style={styles.accountLabel}>{SOCIAL_PLATFORM_LABELS[platform]}</Text>
+        <AutoScrollTextInput
+          accessibilityLabel={SOCIAL_PLATFORM_LABELS[platform]}
           autoCapitalize="none"
           keyboardAppearance="dark"
+          onBeforeAutoScroll={handleFieldFocus}
           onChangeText={(value) => setProfileDraft((current) => ({ ...current, [field]: value }))}
+          onFieldBlur={handleFieldBlur}
           placeholder={placeholder}
-          placeholderTextColor="#9a7f6c"
-          style={styles.profileInput}
+          placeholderTextColor={theme.textMuted}
+          scrollViewRef={scrollViewRef}
+          style={[styles.profileInput, styles.accountInput]}
           value={fieldValue}
         />
         {fieldError ? <Text style={styles.structuredEntryErrorText}>{fieldError}</Text> : null}
-        {!fieldError && preview ? <Text style={styles.dashboardSupportText}>{`Displays as ${preview}`}</Text> : null}
+        {!fieldError && preview ? <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>{`Displays as ${preview}`}</Text> : null}
       </View>
     );
   }
@@ -1074,59 +1145,86 @@ export function BusinessProfileEditorScreen({
         style={styles.keyboardAvoidingFill}
       >
         <ScrollView
-          contentContainerStyle={styles.dashboardScrollContent}
-          {...dismissKeyboardOnScrollProps}
+          contentContainerStyle={[styles.dashboardScrollContent, styles.accountScrollContent]}
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           keyboardShouldPersistTaps="handled"
+          onScroll={handleScroll}
+          onScrollBeginDrag={() => {
+            handleScrollBeginDrag();
+            Keyboard.dismiss();
+          }}
+          ref={scrollViewRef}
+          scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
         >
-          <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
+          <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle, styles.accountHeader]}>
             <NativeIOSLiquidGlassBackButton label="Back to Profile" onPress={onBack} />
           </View>
 
-          <View style={styles.dashboardShell}>
-            <Text style={styles.detailCity}>Edit Business Profile</Text>
-            <Text style={styles.detailTitle}>{approvedBusiness?.name ?? session.business_name ?? 'Business Profile'}</Text>
-            {approvedBusiness?.address_line_1 ? <Text style={styles.detailMeta}>{approvedBusiness.address_line_1}</Text> : null}
-            <Text style={styles.profileIntroText}>Update the public-facing details for your approved business profile. Your approved business phone and address override pulled source data in the app.</Text>
+          <View style={[styles.dashboardShell, styles.accountPage]}>
+            <View style={styles.accountIntro}>
+              <Text style={[styles.detailCity, styles.accountEyebrow]}>Edit Business Profile</Text>
+              <Text style={[styles.detailTitle, styles.accountHeading]}>{approvedBusiness?.name ?? session.business_name ?? 'Business Profile'}</Text>
+              {approvedBusiness?.address_line_1 ? <Text style={styles.detailMeta}>{approvedBusiness.address_line_1}</Text> : null}
+              <Text style={[styles.profileIntroText, styles.accountBodyText]}>Update the public-facing details for your approved business profile. Your approved business phone and address override pulled source data in the app.</Text>
+            </View>
 
-            <View style={styles.dashboardSection}>
-              <Text style={styles.dashboardSectionTitle}>Business profile details</Text>
-              <View style={styles.dashboardFieldGrid}>
-                <DashboardEditableField label="Contact name" onChangeText={(value) => setProfileDraft((current) => ({ ...current, contact_name: value }))} value={profileDraft.contact_name ?? ''} />
-                <DashboardEditableField label="Job title" onChangeText={(value) => setProfileDraft((current) => ({ ...current, job_title: value }))} value={profileDraft.job_title ?? ''} />
-                <DashboardEditableField label="Work email" onChangeText={(value) => setProfileDraft((current) => ({ ...current, work_email: value }))} value={profileDraft.work_email ?? ''} />
-                <DashboardEditableField label="Public phone" onChangeText={(value) => setProfileDraft((current) => ({ ...current, work_phone: value }))} value={profileDraft.work_phone ?? ''} />
-                <DashboardEditableField label="Public address" onChangeText={(value) => setProfileDraft((current) => ({ ...current, employer_address: value }))} value={profileDraft.employer_address ?? ''} />
-                <DashboardEditableField label="Business website" onChangeText={(value) => setProfileDraft((current) => ({ ...current, business_website_url: value }))} value={profileDraft.business_website_url ?? ''} />
+            <View style={styles.accountForm}>
+              <AccountSection title="Business profile details">
+                <View style={styles.dashboardFieldGrid}>
+                  <DashboardEditableField {...autoScrollProps} label="Contact name" onChangeText={(value) => setProfileDraft((current) => ({ ...current, contact_name: value }))} value={profileDraft.contact_name ?? ''} />
+                  <DashboardEditableField {...autoScrollProps} label="Job title" onChangeText={(value) => setProfileDraft((current) => ({ ...current, job_title: value }))} value={profileDraft.job_title ?? ''} />
+                  <DashboardEditableField {...autoScrollProps} label="Work email" onChangeText={(value) => setProfileDraft((current) => ({ ...current, work_email: value }))} value={profileDraft.work_email ?? ''} />
+                  <DashboardEditableField {...autoScrollProps} label="Public phone" onChangeText={(value) => setProfileDraft((current) => ({ ...current, work_phone: value }))} value={profileDraft.work_phone ?? ''} />
+                  <DashboardEditableField {...autoScrollProps} label="Public address" onChangeText={(value) => setProfileDraft((current) => ({ ...current, employer_address: value }))} value={profileDraft.employer_address ?? ''} />
+                  <DashboardEditableField {...autoScrollProps} label="Business website" onChangeText={(value) => setProfileDraft((current) => ({ ...current, business_website_url: value }))} value={profileDraft.business_website_url ?? ''} />
+                </View>
+                {socialFieldErrors.website ? <Text style={styles.structuredEntryErrorText}>{socialFieldErrors.website}</Text> : null}
+                {!socialFieldErrors.website && getSocialProfilePreview('website', profileDraft.business_website_url ?? '') ? (
+                  <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>{`Website displays as ${getSocialProfilePreview('website', profileDraft.business_website_url ?? '')}`}</Text>
+                ) : null}
+              </AccountSection>
+
+              <AccountSection title="Social media">
+                <View style={styles.dashboardFieldGrid}>
+                  {renderSocialProfileField('instagram', 'instagram_profile', 'instagram.com/yourbusiness or yourbusiness')}
+                  {renderSocialProfileField('facebook', 'facebook_profile', 'facebook.com/yourbusiness or yourbusiness')}
+                  {renderSocialProfileField('tiktok', 'tiktok_profile', 'tiktok.com/@yourbusiness or @yourbusiness')}
+                  {renderSocialProfileField('youtube', 'youtube_profile', 'youtube.com/@yourbusiness or @yourbusiness')}
+                </View>
+              </AccountSection>
+
+              <View style={styles.accountSection}>
+                <BusinessDealsEditor
+                  label="Deals and specials"
+                  labelStyle={styles.accountSectionTitle}
+                  onFieldBlur={handleFieldBlur}
+                  onFieldFocus={handleFieldFocus}
+                  onChange={(value) => setProfileDraft((current) => ({ ...current, deal_overrides: value }))}
+                  scrollViewRef={scrollViewRef}
+                  supportText="Create one card per promotion. Follow the sections below, then check the live preview before saving."
+                  value={profileDraft.deal_overrides ?? []}
+                />
               </View>
-              {socialFieldErrors.website ? <Text style={styles.structuredEntryErrorText}>{socialFieldErrors.website}</Text> : null}
-              {!socialFieldErrors.website && getSocialProfilePreview('website', profileDraft.business_website_url ?? '') ? (
-                <Text style={styles.dashboardSupportText}>{`Website displays as ${getSocialProfilePreview('website', profileDraft.business_website_url ?? '')}`}</Text>
-              ) : null}
-              <View style={styles.dashboardFieldGrid}>
-                {renderSocialProfileField('instagram', 'instagram_profile', 'instagram.com/yourbusiness or yourbusiness')}
-                {renderSocialProfileField('facebook', 'facebook_profile', 'facebook.com/yourbusiness or yourbusiness')}
-                {renderSocialProfileField('tiktok', 'tiktok_profile', 'tiktok.com/@yourbusiness or @yourbusiness')}
-                {renderSocialProfileField('youtube', 'youtube_profile', 'youtube.com/@yourbusiness or @yourbusiness')}
+
+              <View style={styles.accountSection}>
+                <BusinessHoursEditor
+                  label="Hours of operation"
+                  labelStyle={styles.accountSectionTitle}
+                  onFieldBlur={handleFieldBlur}
+                  onFieldFocus={handleFieldFocus}
+                  onChange={(value) => setProfileDraft((current) => ({ ...current, operating_hour_overrides: value }))}
+                  scrollViewRef={scrollViewRef}
+                  supportText="Edit the public operating hours directly by day so the grouped cards stay in sync with the profile."
+                  value={profileDraft.operating_hour_overrides ?? []}
+                />
               </View>
-              <BusinessDealsEditor
-                label="Deals and specials"
-                onChange={(value) => setProfileDraft((current) => ({ ...current, deal_overrides: value }))}
-                supportText="Edit the same deal cards your customers see, including title, price, description, and active day/time windows."
-                value={profileDraft.deal_overrides ?? []}
-              />
-              <BusinessHoursEditor
-                label="Hours of operation"
-                onChange={(value) => setProfileDraft((current) => ({ ...current, operating_hour_overrides: value }))}
-                supportText="Edit the public operating hours directly by day so the grouped cards stay in sync with the profile."
-                value={profileDraft.operating_hour_overrides ?? []}
-              />
-              <View style={styles.attachmentSection}>
-                <Text style={styles.dashboardDetailLabel}>Business photos</Text>
-                <Pressable disabled={openingPhotoLibrary || remainingPhotoSlots === 0} onPress={() => void handleSelectProfilePhotos()} style={[styles.linkButtonSecondary, styles.attachmentPickerButton, (openingPhotoLibrary || remainingPhotoSlots === 0) ? styles.linkButtonDisabled : null]}>
-                  <Text style={styles.linkButtonSecondaryText}>{openingPhotoLibrary ? 'Opening Photo Library...' : 'Select from Photo Library'}</Text>
+
+              <AccountSection title="Business photos">
+                <Pressable disabled={openingPhotoLibrary || remainingPhotoSlots === 0} onPress={() => void handleSelectProfilePhotos()} style={[styles.linkButtonSecondary, styles.accountSecondaryButton, styles.attachmentPickerButton, (openingPhotoLibrary || remainingPhotoSlots === 0) ? styles.linkButtonDisabled : null]}>
+                  <Text style={[styles.linkButtonSecondaryText, styles.accountSecondaryButtonText]}>{openingPhotoLibrary ? 'Opening Photo Library...' : 'Select from Photo Library'}</Text>
                 </Pressable>
-                <Text style={[styles.dashboardSupportText, styles.attachmentSupportText]}>Choose photos from the device photo library. To crop first, use the Photos app. Max 8 photos total.</Text>
+                <Text style={[styles.dashboardSupportText, styles.accountBodyText, styles.attachmentSupportText]}>Choose photos from the device photo library. To crop first, use the Photos app. Max 8 photos total.</Text>
                 {currentPhotoUrls.length ? (
                   <>
                     <View style={styles.attachmentGalleryLabelRow}>
@@ -1178,8 +1276,12 @@ export function BusinessProfileEditorScreen({
                     </ScrollView>
                   </>
                 ) : null}
-              </View>
-              <DashboardMultilineField label="Business details" onChangeText={(value) => setProfileDraft((current) => ({ ...current, supporting_details: value }))} value={profileDraft.supporting_details ?? ''} />
+              </AccountSection>
+
+              <AccountSection title="Supporting business details">
+                <DashboardMultilineField {...autoScrollProps} label="Business details" onChangeText={(value) => setProfileDraft((current) => ({ ...current, supporting_details: value }))} value={profileDraft.supporting_details ?? ''} />
+              </AccountSection>
+
               {errorMessage ? (
                 <View style={styles.errorBanner}>
                   <Text style={styles.errorText}>{errorMessage}</Text>
@@ -1193,12 +1295,12 @@ export function BusinessProfileEditorScreen({
               <View style={styles.dashboardInlineActions}>
                 <Pressable
                   onPress={handleSaveBusinessProfile}
-                  style={[styles.linkButtonSecondaryWide, styles.dashboardInlineButton, (!profileDetailsChanged || submitting) ? styles.linkButtonDisabled : null]}
+                  style={[styles.linkButtonSecondaryWide, styles.accountSecondaryButton, styles.dashboardInlineButton, (!profileDetailsChanged || submitting) ? styles.linkButtonDisabled : null]}
                 >
-                  <Text style={styles.linkButtonSecondaryText}>{submitting ? 'Saving...' : 'Save Business Profile'}</Text>
+                  <Text style={[styles.linkButtonSecondaryText, styles.accountSecondaryButtonText]}>{submitting ? 'Saving...' : 'Save Business Profile'}</Text>
                 </Pressable>
-                <Pressable onPress={onViewInMap} style={[styles.linkButtonSecondaryWide, styles.dashboardInlineButton]}>
-                  <Text style={styles.linkButtonSecondaryText}>View in Map</Text>
+                <Pressable onPress={onViewInMap} style={[styles.linkButtonSecondaryWide, styles.accountSecondaryButton, styles.dashboardInlineButton]}>
+                  <Text style={[styles.linkButtonSecondaryText, styles.accountSecondaryButtonText]}>View in Map</Text>
                 </Pressable>
               </View>
             </View>
@@ -1247,7 +1349,8 @@ export function AccountSettingsScreen({
   const displayedBusinessLocationTrackingEnabled = pendingBusinessLocationTrackingEnabled ?? !!session.business_location_tracking_enabled;
   const displayedDirectMessagingEnabled = pendingDirectMessagingEnabled ?? !!session.direct_messaging_enabled;
   const blockedCustomerAccounts = session.blocked_customer_accounts ?? [];
-  const { handleFieldFocus, handleScroll, scrollViewRef } = useAutoScrollForm();
+  const { handleFieldBlur, handleFieldFocus, handleScroll, handleScrollBeginDrag, scrollViewRef } = useAutoScrollForm();
+  const autoScrollProps: DashboardAutoScrollProps = { handleFieldBlur, handleFieldFocus, scrollViewRef };
 
   return (
     <View style={[styles.profileScreen, isLandscape ? styles.profileScreenLandscape : null]}>
@@ -1256,22 +1359,28 @@ export function AccountSettingsScreen({
         style={styles.keyboardAvoidingFill}
       >
         <ScrollView
-          contentContainerStyle={styles.dashboardScrollContent}
-          {...dismissKeyboardOnScrollProps}
+          contentContainerStyle={[styles.dashboardScrollContent, styles.accountScrollContent]}
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           keyboardShouldPersistTaps="handled"
           onScroll={handleScroll}
+          onScrollBeginDrag={() => {
+            handleScrollBeginDrag();
+            Keyboard.dismiss();
+          }}
           ref={scrollViewRef}
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
         >
-          <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
+          <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle, styles.accountHeader]}>
               <NativeIOSLiquidGlassBackButton label="Back to Dashboard" onPress={onBack} />
           </View>
 
-          <View style={styles.dashboardShell}>
-            <Text style={styles.detailCity}>Settings</Text>
-            <Text style={styles.detailTitle}>Account settings</Text>
-            <Text style={styles.profileIntroText}>Manage authentication, support, legal information, account requests, and your session from one place.</Text>
+          <View style={[styles.dashboardShell, styles.accountPage]}>
+            <View style={styles.accountIntro}>
+              <Text style={[styles.detailCity, styles.accountEyebrow]}>Settings</Text>
+              <Text style={[styles.detailTitle, styles.accountHeading]}>Account settings</Text>
+              <Text style={[styles.profileIntroText, styles.accountBodyText]}>Manage authentication, support, legal information, account requests, and your session from one place.</Text>
+            </View>
 
             {message ? (
               <View style={styles.profileSuccessBanner}>
@@ -1286,6 +1395,7 @@ export function AccountSettingsScreen({
             ) : null}
 
             <SecuritySettingsSection
+              {...autoScrollProps}
               onBeginTwoFactorSetup={onBeginTwoFactorSetup}
               onChangeTwoFactorDisableCode={onChangeTwoFactorDisableCode}
               onChangeTwoFactorSetupCode={onChangeTwoFactorSetupCode}
@@ -1299,30 +1409,30 @@ export function AccountSettingsScreen({
             />
 
             {onOpenCustomerPreferences && session.portal === 'customer' ? (
-              <View style={styles.settingsItemRow}>
+              <View style={[styles.settingsItemRow, styles.accountSection]}>
                 <View style={styles.settingsItemBody}>
-                  <Text style={styles.dashboardSectionTitle}>Happy hour preferences</Text>
-                  <Text style={styles.dashboardSupportText}>Choose favorite locations, notification types, and the days and times you usually go out.</Text>
+                  <Text style={[styles.dashboardSectionTitle, styles.accountSectionTitle]}>Happy hour preferences</Text>
+                  <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>Choose favorite locations, notification types, and the days and times you usually go out.</Text>
                 </View>
                 <View style={styles.settingsItemActions}>
-                  <Pressable onPress={onOpenCustomerPreferences} style={[styles.linkButtonSecondaryWide, styles.settingsInlineButton]}>
-                    <Text style={styles.linkButtonSecondaryText}>Edit preferences</Text>
+                  <Pressable onPress={onOpenCustomerPreferences} style={[styles.linkButtonSecondaryWide, styles.accountSecondaryButton, styles.settingsInlineButton]}>
+                    <Text style={[styles.linkButtonSecondaryText, styles.accountSecondaryButtonText]}>Edit preferences</Text>
                   </Pressable>
                 </View>
               </View>
             ) : null}
 
             {session.portal === 'business' && session.business_location_tracking_available ? (
-              <View style={styles.settingsItemRow}>
+              <View style={[styles.settingsItemRow, styles.accountSection]}>
                 <View style={styles.settingsItemBody}>
-                  <Text style={styles.dashboardSectionTitle}>Business location services</Text>
-                  <Text style={styles.dashboardSupportText}>Live location updates are off by default. Turn them on when your mobile business should publish its current map pin. Turn them off to stop sending business location updates.</Text>
+                  <Text style={[styles.dashboardSectionTitle, styles.accountSectionTitle]}>Business location services</Text>
+                  <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>Live location updates are off by default. Turn them on when your mobile business should publish its current map pin. Turn them off to stop sending business location updates.</Text>
                 </View>
                 <View style={styles.settingsItemActions}>
                   <View style={styles.settingsSwitchCluster}>
                     <View style={styles.settingsSwitchLabelGroup}>
                       <Text style={styles.dashboardDetailLabel}>Location services</Text>
-                      <Text style={styles.dashboardSupportText}>{displayedBusinessLocationTrackingEnabled ? 'On' : 'Off'}</Text>
+                      <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>{displayedBusinessLocationTrackingEnabled ? 'On' : 'Off'}</Text>
                     </View>
                     <Switch
                       disabled={deletingAccount}
@@ -1335,14 +1445,14 @@ export function AccountSettingsScreen({
             ) : null}
 
             {session.portal === 'business' ? (
-              <View style={styles.settingsItemRow}>
+              <View style={[styles.settingsItemRow, styles.accountSection]}>
                 <View style={styles.settingsItemBody}>
-                  <Text style={styles.dashboardSectionTitle}>Direct messaging</Text>
-                  <Text style={styles.dashboardSupportText}>Allow customers to direct message your business profile. Turn this off to hide direct messaging for all customer accounts.</Text>
+                  <Text style={[styles.dashboardSectionTitle, styles.accountSectionTitle]}>Direct messaging</Text>
+                  <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>Allow customers to direct message your business profile. Turn this off to hide direct messaging for all customer accounts.</Text>
                   <View style={styles.settingsSwitchCluster}>
                     <View style={styles.settingsSwitchLabelGroup}>
                       <Text style={styles.dashboardDetailLabel}>Direct messaging</Text>
-                      <Text style={styles.dashboardSupportText}>{displayedDirectMessagingEnabled ? 'On' : 'Off'}</Text>
+                      <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>{displayedDirectMessagingEnabled ? 'On' : 'Off'}</Text>
                     </View>
                     <Switch
                       disabled={deletingAccount}
@@ -1350,63 +1460,64 @@ export function AccountSettingsScreen({
                       value={displayedDirectMessagingEnabled}
                     />
                   </View>
-                  <Text style={styles.dashboardSupportText}>Blocked customers will no longer see the direct message icon on your business profile.</Text>
-                  <Text style={styles.dashboardSupportText}>
+                  <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>Blocked customers will no longer see the direct message icon on your business profile.</Text>
+                  <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>
                     {blockedCustomerAccounts.length
                       ? `${blockedCustomerAccounts.length} blocked customer${blockedCustomerAccounts.length === 1 ? '' : 's'}`
                       : 'No blocked customers.'}
                   </Text>
-                  <Pressable onPress={onOpenBlockedDirectMessageCustomers} style={[styles.linkButtonSecondaryWide, styles.settingsInlineButton, submitting ? styles.linkButtonDisabled : null]}>
-                    <Text style={styles.linkButtonSecondaryText}>{changingDirectMessageBlocks ? 'Updating...' : 'Manage blocked customers'}</Text>
+                  <Pressable onPress={onOpenBlockedDirectMessageCustomers} style={[styles.linkButtonSecondaryWide, styles.accountSecondaryButton, styles.settingsInlineButton, submitting ? styles.linkButtonDisabled : null]}>
+                    <Text style={[styles.linkButtonSecondaryText, styles.accountSecondaryButtonText]}>{changingDirectMessageBlocks ? 'Updating...' : 'Manage blocked customers'}</Text>
                   </Pressable>
                 </View>
                 <View style={styles.settingsItemActions}>
-                  {togglingDirectMessaging ? <ActivityIndicator color="#8a4b2a" /> : null}
+                  {togglingDirectMessaging ? <ActivityIndicator color={theme.accent} /> : null}
                 </View>
               </View>
             ) : null}
 
-            <View style={styles.settingsItemRow}>
+            <View style={[styles.settingsItemRow, styles.accountSection]}>
               <View style={styles.settingsItemBody}>
-                <Text style={styles.dashboardSectionTitle}>Support</Text>
-                <Text style={styles.dashboardSupportText}>Open the dedicated support screen for account help, business onboarding, verification issues, or general app support.</Text>
+                <Text style={[styles.dashboardSectionTitle, styles.accountSectionTitle]}>Support</Text>
+                <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>Open the dedicated support screen for account help, business onboarding, verification issues, or general app support.</Text>
               </View>
               <View style={styles.settingsItemActions}>
-                <Pressable onPress={onOpenContactSupport} style={[styles.linkButtonSecondaryWide, styles.settingsInlineButton]}>
-                  <Text style={styles.linkButtonSecondaryText}>Contact support</Text>
+                <Pressable onPress={onOpenContactSupport} style={[styles.linkButtonSecondaryWide, styles.accountSecondaryButton, styles.settingsInlineButton]}>
+                  <Text style={[styles.linkButtonSecondaryText, styles.accountSecondaryButtonText]}>Contact support</Text>
                 </Pressable>
               </View>
             </View>
 
-            <View style={styles.settingsItemRow}>
+            <View style={[styles.settingsItemRow, styles.accountSection]}>
               <View style={styles.settingsItemBody}>
-                <Text style={styles.dashboardSectionTitle}>Legal</Text>
-                <Text style={styles.dashboardSupportText}>Review the current privacy policy and terms of service inside the app.</Text>
+                <Text style={[styles.dashboardSectionTitle, styles.accountSectionTitle]}>Legal</Text>
+                <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>Review the current privacy policy and terms of service inside the app.</Text>
               </View>
               <View style={styles.settingsItemActions}>
-                <Pressable onPress={onOpenPrivacyPolicy} style={[styles.linkButtonSecondaryWide, styles.settingsInlineButton]}>
-                  <Text style={styles.linkButtonSecondaryText}>Privacy Policy</Text>
+                <Pressable onPress={onOpenPrivacyPolicy} style={[styles.linkButtonSecondaryWide, styles.accountSecondaryButton, styles.settingsInlineButton]}>
+                  <Text style={[styles.linkButtonSecondaryText, styles.accountSecondaryButtonText]}>Privacy Policy</Text>
                 </Pressable>
-                <Pressable onPress={onOpenTermsOfService} style={[styles.linkButtonSecondaryWide, styles.settingsInlineButton]}>
-                  <Text style={styles.linkButtonSecondaryText}>Terms of Service & Agreements</Text>
+                <Pressable onPress={onOpenTermsOfService} style={[styles.linkButtonSecondaryWide, styles.accountSecondaryButton, styles.settingsInlineButton]}>
+                  <Text style={[styles.linkButtonSecondaryText, styles.accountSecondaryButtonText]}>Terms of Service & Agreements</Text>
                 </Pressable>
               </View>
             </View>
 
-            <View style={styles.settingsItemRow}>
+            <View style={[styles.settingsItemRow, styles.accountSection]}>
               <View style={styles.settingsItemBody}>
-                <Text style={styles.dashboardSectionTitle}>Account management</Text>
-                <Text style={styles.dashboardSupportText}>Permanently delete your DiningDealz account and associated profile data from inside the app.</Text>
-                <Text style={styles.profileFieldLabel}>Current password</Text>
+                <Text style={[styles.dashboardSectionTitle, styles.accountSectionTitle]}>Account management</Text>
+                <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>Permanently delete your DiningDealz account and associated profile data from inside the app.</Text>
+                <Text style={[styles.profileFieldLabel, styles.accountLabel]}>Current password</Text>
                 <AutoScrollTextInput
                   accessibilityLabel="Current password for account deletion"
                   autoCapitalize="none"
                   autoCorrect={false}
                   onBeforeAutoScroll={handleFieldFocus}
                   onChangeText={onChangeDeleteAccountPassword}
+                  onFieldBlur={handleFieldBlur}
                   secureTextEntry
                   scrollViewRef={scrollViewRef}
-                  style={styles.profileInput}
+                  style={[styles.profileInput, styles.accountInput]}
                   value={deleteAccountPassword}
                 />
                 {deleteAccountErrorMessage ? (
@@ -1541,18 +1652,20 @@ export function BlockedDirectMessageCustomersScreen({
         style={styles.keyboardAvoidingFill}
       >
         <ScrollView
-          contentContainerStyle={styles.dashboardScrollContent}
+          contentContainerStyle={[styles.dashboardScrollContent, styles.accountScrollContent]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle]}>
+          <View style={[styles.screenHeaderBar, styles.screenHeaderBarSingle, styles.accountHeader]}>
             <NativeIOSLiquidGlassBackButton label="Back to Settings" onPress={onBack} />
           </View>
 
-          <View style={styles.dashboardShell}>
-            <Text style={styles.detailCity}>Direct messaging</Text>
-            <Text style={styles.detailTitle}>Blocked customers</Text>
-            <Text style={styles.profileIntroText}>Manage which customer accounts can no longer open direct messages with your business profile.</Text>
+          <View style={[styles.dashboardShell, styles.accountPage]}>
+            <View style={styles.accountIntro}>
+              <Text style={[styles.detailCity, styles.accountEyebrow]}>Direct messaging</Text>
+              <Text style={[styles.detailTitle, styles.accountHeading]}>Blocked customers</Text>
+              <Text style={[styles.profileIntroText, styles.accountBodyText]}>Manage which customer accounts can no longer open direct messages with your business profile.</Text>
+            </View>
 
             {message ? (
               <View style={styles.profileSuccessBanner}>
@@ -1566,22 +1679,22 @@ export function BlockedDirectMessageCustomersScreen({
               </View>
             ) : null}
 
-              <Text style={styles.dashboardSectionTitle}>Customers with existing conversations</Text>
-            <Text style={styles.dashboardSupportText}>Filter by keyword, then tap a customer to select or deselect that username for blocking.</Text>
+              <Text style={[styles.dashboardSectionTitle, styles.accountSectionTitle]}>Customers with existing conversations</Text>
+            <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>Filter by keyword, then tap a customer to select or deselect that username for blocking.</Text>
             <TextInput
               autoCapitalize="none"
               autoCorrect={false}
               keyboardAppearance="dark"
               onChangeText={setCustomerKeyword}
               placeholder="Filter by username"
-              placeholderTextColor="#9a7f6c"
-              style={styles.profileInput}
+              placeholderTextColor={theme.textMuted}
+              style={[styles.profileInput, styles.accountInput]}
               value={customerKeyword}
             />
             {messageFeedCustomersLoading ? (
-              <ActivityIndicator color="#8a4b2a" />
+              <ActivityIndicator color={theme.accent} />
             ) : messageFeedCustomersError ? (
-              <Text style={styles.dashboardSupportText}>{messageFeedCustomersError}</Text>
+              <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>{messageFeedCustomersError}</Text>
             ) : selectableMessageFeedCustomers.length ? (
               <View style={styles.settingsItemBody}>
                 <ScrollView
@@ -1607,7 +1720,7 @@ export function BlockedDirectMessageCustomersScreen({
                           <View style={styles.blockedCustomerSelectableContent}>
                             <View style={styles.dashboardDetailItem}>
                               <Text style={styles.dashboardDetailValue}>{thread.customer_username}</Text>
-                              <Text style={styles.dashboardSupportText}>{thread.last_message_preview || 'Existing direct message thread'}</Text>
+                              <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>{thread.last_message_preview || 'Existing direct message thread'}</Text>
                             </View>
                             <View style={[
                               styles.blockedCustomerSelectionIndicator,
@@ -1623,7 +1736,7 @@ export function BlockedDirectMessageCustomersScreen({
                 </ScrollView>
               </View>
             ) : (
-              <Text style={styles.dashboardSupportText}>No matching customer accounts with existing conversations.</Text>
+              <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>No matching customer accounts with existing conversations.</Text>
             )}
 
             {blockedCustomerAccounts.length ? (
@@ -1631,18 +1744,18 @@ export function BlockedDirectMessageCustomersScreen({
                 {blockedCustomerAccounts.map((blockedAccount) => (
                   <View key={blockedAccount.block_id} style={[styles.dashboardDetailItem, styles.dashboardNotificationCard]}>
                     <Text style={styles.dashboardDetailValue}>{blockedAccount.username}</Text>
-                    <Text style={styles.dashboardSupportText}>{[blockedAccount.first_name, blockedAccount.last_name].filter(Boolean).join(' ') || 'Customer account'}</Text>
-                    <Pressable onPress={() => onUnblockCustomerFromDirectMessaging(blockedAccount.block_id)} style={[styles.linkButtonSecondaryWide, styles.settingsInlineButton, changingDirectMessageBlocks ? styles.linkButtonDisabled : null]}>
-                      <Text style={styles.linkButtonSecondaryText}>{changingDirectMessageBlocks ? 'Updating...' : 'Unblock customer'}</Text>
+                    <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>{[blockedAccount.first_name, blockedAccount.last_name].filter(Boolean).join(' ') || 'Customer account'}</Text>
+                    <Pressable onPress={() => onUnblockCustomerFromDirectMessaging(blockedAccount.block_id)} style={[styles.linkButtonSecondaryWide, styles.accountSecondaryButton, styles.settingsInlineButton, changingDirectMessageBlocks ? styles.linkButtonDisabled : null]}>
+                      <Text style={[styles.linkButtonSecondaryText, styles.accountSecondaryButtonText]}>{changingDirectMessageBlocks ? 'Updating...' : 'Unblock customer'}</Text>
                     </Pressable>
                   </View>
                 ))}
               </View>
             ) : (
-              <Text style={styles.dashboardSupportText}>No blocked customers.</Text>
+              <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>No blocked customers.</Text>
             )}
 
-            <Text style={styles.dashboardSupportText}>
+            <Text style={[styles.dashboardSupportText, styles.accountBodyText]}>
               {selectedCustomerUsernames.length
                 ? `${selectedCustomerUsernames.length} customer account${selectedCustomerUsernames.length === 1 ? '' : 's'} selected.`
                 : 'Select customer accounts from the list above to block direct messages.'}
@@ -1651,12 +1764,12 @@ export function BlockedDirectMessageCustomersScreen({
               disabled={!selectedCustomerUsernames.length || changingDirectMessageBlocks}
               onPress={() => setConfirmBlockModalVisible(true)}
               style={[
-                styles.linkButtonSecondaryWide,
+                styles.linkButtonSecondaryWide, styles.accountSecondaryButton,
                 styles.settingsInlineButton,
                 (!selectedCustomerUsernames.length || changingDirectMessageBlocks) ? styles.linkButtonDisabled : null,
               ]}
             >
-              <Text style={styles.linkButtonSecondaryText}>{changingDirectMessageBlocks ? 'Saving block...' : 'Block customer from direct messages'}</Text>
+              <Text style={[styles.linkButtonSecondaryText, styles.accountSecondaryButtonText]}>{changingDirectMessageBlocks ? 'Saving block...' : 'Block customer from direct messages'}</Text>
             </Pressable>
           </View>
         </ScrollView>

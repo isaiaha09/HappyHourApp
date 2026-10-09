@@ -9,6 +9,7 @@ import { ContentReportModal } from '../components/ContentReportModal';
 import { DealDescription } from '../components/DealDescription';
 import { NativeIOSLiquidGlassHeaderButton } from '../components/NativeIOSLiquidGlass';
 import { PhotoLightbox } from '../components/PhotoLightbox';
+import { ProfilePhotoGallery } from '../components/ProfilePhotoGallery';
 import { SocialButton } from '../components/SocialButton';
 import { ReadOnlyPdfPreviewModal } from '../components/ReadOnlyPdfPreviewModal';
 import { getDealPdfSizeDetail } from '../utils/fileSizes';
@@ -38,6 +39,16 @@ const dismissKeyboardOnScrollProps = {
   onScrollBeginDrag: Keyboard.dismiss,
   onTouchStart: Keyboard.dismiss,
 } as const;
+
+function ProfileSectionHeading({ label }: { label: string }) {
+  return (
+    <View style={styles.publicProfileSectionHeading}>
+      <View style={styles.publicProfileSectionAccent} />
+      <Text style={styles.publicProfileSectionTitle}>{label}</Text>
+      <View style={styles.publicProfileSectionRule} />
+    </View>
+  );
+}
 
 export type PlaceDetailScreenProps = {
   backButtonLabel?: string;
@@ -304,14 +315,21 @@ export function PlaceDetailScreen({
       <ScrollView
         contentContainerStyle={[
           styles.detailScrollContent,
+          styles.publicProfileScrollContent,
           isLandscape ? styles.detailScrollContentLandscape : null,
           { paddingBottom: Math.max(insets.bottom + 118, 132) },
         ]}
         {...dismissKeyboardOnScrollProps}
         keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator
+        stickyHeaderIndices={[0]}
       >
-        <View style={[styles.screenHeaderBar, styles.screenHeaderBarRow]}>
+        <View style={[
+          styles.screenHeaderBar,
+          styles.screenHeaderBarRow,
+          styles.publicProfileNavigationBar,
+          { paddingTop: Math.max(insets.top, 16) },
+        ]}>
           <NativeIOSLiquidGlassHeaderButton
             fallback={(
               <Pressable onPress={onBack} style={styles.backButton}>
@@ -329,13 +347,13 @@ export function PlaceDetailScreen({
                 <Pressable
                   accessibilityLabel="Open direct messages"
                   onPress={onOpenDirectMessages}
-                  style={[styles.directMessageHeaderActionButton, { marginRight: 16 }]}
+                  style={[styles.directMessageHeaderActionButton, styles.publicProfileMessageControl]}
                 >
                   <Ionicons color={theme.accentStrong} name="paper-plane" size={19} />
                 </Pressable>
               )}
               onPress={() => onOpenDirectMessages?.()}
-              style={{ marginRight: 16 }}
+              style={styles.publicProfileMessageControl}
               systemImage="paperplane"
               variant="icon"
             />
@@ -349,95 +367,111 @@ export function PlaceDetailScreen({
         ) : null}
 
         {selectedPlace ? (
-          <View style={[styles.detailCard, isLandscape ? styles.detailCardLandscape : null]}>
+          <View style={[styles.detailCard, styles.publicProfileCard, isLandscape ? styles.detailCardLandscape : null]}>
             <View style={styles.detailHeaderRow}>
-              <View style={styles.detailHeaderActions}>
-                {onAddToCalendar ? (
-                  <Pressable accessibilityLabel={`Add ${selectedPlace.name} to Calendar`} onPress={() => onAddToCalendar()} style={styles.contentReportButton}>
-                    <Ionicons color={theme.accentStrong} name="calendar-outline" size={22} />
+              <View style={styles.publicProfileHeaderTopRow} testID="business-profile-header-controls">
+                <View
+                  style={[styles.detailHeaderActions, styles.publicProfileHeaderActions]}
+                  testID="business-profile-action-buttons"
+                >
+                  {onAddToCalendar ? (
+                    <Pressable accessibilityLabel={`Add ${selectedPlace.name} to Calendar`} onPress={() => onAddToCalendar()} style={[styles.contentReportButton, styles.publicProfileHeaderControl]}>
+                      <Ionicons color={theme.accentStrong} name="calendar-outline" size={22} />
+                    </Pressable>
+                  ) : null}
+                  {onSharePlace ? (
+                    <Pressable accessibilityLabel={`Share ${selectedPlace.name}`} onPress={() => onSharePlace()} style={[styles.contentReportButton, styles.publicProfileHeaderControl]}>
+                      <Ionicons color={theme.accentStrong} name="share-social-outline" size={22} />
+                    </Pressable>
+                  ) : null}
+                  {showStarredBadge ? (
+                    <View accessibilityLabel="Starred business" style={[styles.starredBusinessBadge, styles.publicProfileStatusBadge]}>
+                      <Text style={styles.starredBusinessBadgeIcon}>★</Text>
+                    </View>
+                  ) : null}
+                  {showVerifiedBadge ? (
+                    <View accessibilityLabel="Claimed business" style={[styles.verifiedStatusBadge, styles.publicProfileStatusBadge]}>
+                      <Text style={styles.verifiedStatusBadgeIcon}>✓</Text>
+                    </View>
+                  ) : null}
+                  {showFavoriteControl ? (
+                    <Pressable
+                      accessibilityLabel={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+                      onPress={onToggleFavorite}
+                      style={[
+                        styles.favoriteHeartButton,
+                        styles.publicProfileHeaderControl,
+                        isFavorited ? styles.favoriteHeartButtonActive : null,
+                        favoriteSubmitting ? styles.linkButtonDisabled : null,
+                      ]}
+                    >
+                      <Ionicons
+                        name={isFavorited ? 'heart' : 'heart-outline'}
+                        size={24}
+                        style={[styles.favoriteHeartIcon, isFavorited ? styles.favoriteHeartIconActive : null]}
+                      />
+                    </Pressable>
+                  ) : null}
+                  <Pressable accessibilityLabel="Report business content" onPress={handleOpenContentReport} style={[styles.contentReportButton, styles.publicProfileHeaderControl]}>
+                    <Ionicons color={theme.textMuted} name="flag-outline" size={22} />
                   </Pressable>
-                ) : null}
-                {onSharePlace ? (
-                  <Pressable accessibilityLabel={`Share ${selectedPlace.name}`} onPress={() => onSharePlace()} style={styles.contentReportButton}>
-                    <Ionicons color={theme.accentStrong} name="share-social-outline" size={22} />
-                  </Pressable>
-                ) : null}
-                {showStarredBadge ? (
-                  <View accessibilityLabel="Starred business" style={styles.starredBusinessBadge}>
-                    <Text style={styles.starredBusinessBadgeIcon}>★</Text>
-                  </View>
-                ) : null}
-                {showVerifiedBadge ? (
-                  <View accessibilityLabel="Claimed business" style={styles.verifiedStatusBadge}>
-                    <Text style={styles.verifiedStatusBadgeIcon}>✓</Text>
-                  </View>
-                ) : null}
-                {showFavoriteControl ? (
-                  <Pressable
-                    accessibilityLabel={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
-                    onPress={onToggleFavorite}
-                    style={[
-                      styles.favoriteHeartButton,
-                      isFavorited ? styles.favoriteHeartButtonActive : null,
-                      favoriteSubmitting ? styles.linkButtonDisabled : null,
-                    ]}
-                  >
-                    <Ionicons
-                      name={isFavorited ? 'heart' : 'heart-outline'}
-                      size={24}
-                      style={[styles.favoriteHeartIcon, isFavorited ? styles.favoriteHeartIconActive : null]}
-                    />
-                  </Pressable>
-                ) : null}
-                <Pressable accessibilityLabel="Report business content" onPress={handleOpenContentReport} style={styles.contentReportButton}>
-                  <Ionicons color={theme.textMuted} name="flag-outline" size={22} />
-                </Pressable>
+                </View>
               </View>
               <View style={styles.detailHeaderCopy}>
-                {selectedPlaceCityLabel ? <Text style={styles.detailCity}>{selectedPlaceCityLabel}</Text> : null}
-                <Text style={styles.detailTitle}>{selectedPlace.name}</Text>
-                <Text style={styles.detailMeta}>{selectedPlace.venue_type_label}</Text>
+                <View style={styles.publicProfileCityCategoryRow} testID="public-profile-city-category-row">
+                  {selectedPlaceCityLabel ? (
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.detailCity, styles.publicProfileCity, styles.publicProfileCityCategoryLabel]}
+                    >
+                      {selectedPlaceCityLabel}
+                    </Text>
+                  ) : null}
+                  <Text
+                    numberOfLines={1}
+                    style={[styles.publicProfileCategory, styles.publicProfileCategoryBesideCity]}
+                  >
+                    {selectedPlace.venue_type_label}
+                  </Text>
+                </View>
+                <Text style={[styles.detailTitle, styles.publicProfileName]}>{selectedPlace.name}</Text>
               </View>
             </View>
-            {showFavoriteControl && favoriteHelperText ? <Text style={styles.dashboardSupportText}>{favoriteHelperText}</Text> : null}
+            {showFavoriteControl && favoriteHelperText ? <Text style={[styles.dashboardSupportText, styles.publicProfileFavoriteHelper]}>{favoriteHelperText}</Text> : null}
             {selectedPlaceImageUrls.length ? (
               <>
-                <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>Photos</Text>
-                <ScrollView
-                  contentContainerStyle={styles.photoGalleryRow}
-                  horizontal
-                  {...dismissKeyboardOnScrollProps}
-                  keyboardShouldPersistTaps="handled"
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.photoGalleryScroll}
-                >
-                  {selectedPlaceImageUrls.map((imageUrl, index) => (
-                    <Pressable key={imageUrl} onPress={() => handleOpenPhotoLightbox(index)} style={styles.photoGalleryCard}>
-                      <Image resizeMode="cover" source={{ uri: imageUrl }} style={styles.photoGalleryImage} />
-                    </Pressable>
-                  ))}
-                </ScrollView>
+                <ProfileSectionHeading label="Photos" />
+                <ProfilePhotoGallery
+                  imageUrls={selectedPlaceImageUrls}
+                  key={`${selectedPlace.slug}:${selectedPlaceLocation?.id ?? 'base'}`}
+                  onOpenPhoto={handleOpenPhotoLightbox}
+                />
               </>
             ) : null}
 
-            <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>Current Deals</Text>
+            <ProfileSectionHeading label="Current Deals" />
 
             {selectedPlaceDeals.length ? (
               selectedPlaceDeals.map((deal) => (
-                <View key={deal.id} style={styles.dealCard}>
+                <View key={deal.id} style={[styles.dealCard, styles.publicProfileDealCard]}>
                   {deal.attachment?.url && getAttachmentPreviewKind(deal.attachment.content_type, deal.attachment.name) === 'image' ? (
-                    <Pressable onPress={() => void handleOpenDealAttachment(deal)} style={styles.dealAttachmentImageButton}>
-                      <Image resizeMode="cover" source={{ uri: deal.attachment.url }} style={styles.dealAttachmentImage} />
+                    <Pressable onPress={() => void handleOpenDealAttachment(deal)} style={[styles.dealAttachmentImageButton, styles.publicProfileDealImageButton]}>
+                      <Image resizeMode="cover" source={{ uri: deal.attachment.url }} style={[styles.dealAttachmentImage, styles.publicProfileDealImage]} />
                     </Pressable>
                   ) : null}
-                  <View style={styles.dealHeaderRow}>
-                    <Text style={styles.dealTitle}>{deal.title}</Text>
-                    <View style={styles.dealHeaderActions}>
+                  <View
+                    style={[styles.dealHeaderRow, styles.publicProfileDealHeaderRow]}
+                    testID={`public-profile-deal-header-${deal.id}`}
+                  >
+                    <View
+                      style={[styles.dealHeaderActions, styles.publicProfileDealHeaderActions]}
+                      testID={`public-profile-deal-actions-${deal.id}`}
+                    >
                       {onAddToCalendar ? (
                         <Pressable
                           accessibilityLabel={`Add ${deal.title} to Calendar`}
                           onPress={() => onAddToCalendar(deal)}
-                          style={styles.dealActionButton}
+                          style={[styles.dealActionButton, styles.publicProfileDealActionButton]}
                         >
                           <Ionicons color={theme.accentStrong} name="calendar-outline" size={17} />
                         </Pressable>
@@ -446,15 +480,23 @@ export function PlaceDetailScreen({
                         <Pressable
                           accessibilityLabel={`Share ${deal.title}`}
                           onPress={() => onSharePlace(deal)}
-                          style={styles.dealActionButton}
+                          style={[styles.dealActionButton, styles.publicProfileDealActionButton]}
                         >
                           <Ionicons color={theme.accentStrong} name="share-social-outline" size={17} />
                         </Pressable>
                       ) : null}
-                      <View style={styles.pill}>
-                        <Text style={styles.pillText}>{deal.deal_type_label}</Text>
-                      </View>
                     </View>
+                    <View style={[styles.pill, styles.publicProfileDealType]}>
+                      <Text style={[styles.pillText, styles.publicProfileDealTypeText]}>{deal.deal_type_label}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.publicProfileDealTitlePriceRow}>
+                    <Text style={[styles.dealTitle, styles.publicProfileDealTitle]}>{deal.title}</Text>
+                    {deal.price_text ? (
+                      <View style={styles.publicProfilePriceBadge}>
+                        <Text style={[styles.dealPrice, styles.publicProfileDealPrice]}>{deal.price_text}</Text>
+                      </View>
+                    ) : null}
                   </View>
                   {deal.attachment?.url && getAttachmentPreviewKind(deal.attachment.content_type, deal.attachment.name) === 'pdf' ? (
                     <Pressable onPress={() => void handleOpenDealAttachment(deal)} style={[styles.attachmentCard, styles.dealAttachmentPdfCard]}>
@@ -464,30 +506,31 @@ export function PlaceDetailScreen({
                       </View>
                     </Pressable>
                   ) : null}
-                  {deal.price_text ? <Text style={styles.dealPrice}>{deal.price_text}</Text> : null}
-                  {deal.description ? <DealDescription description={deal.description} /> : null}
-                  {deal.terms ? <Text style={styles.dealTerms}>Terms: {deal.terms}</Text> : null}
-                  <View style={styles.hourList}>
+                  {deal.description || deal.description_price || deal.menu_items?.length ? (
+                    <DealDescription description={deal.description} descriptionPrice={deal.description_price} menuItems={deal.menu_items} presentation="profile" />
+                  ) : null}
+                  {deal.terms ? <Text style={[styles.dealTerms, styles.publicProfileDealTerms]}>Terms: {deal.terms}</Text> : null}
+                  <View style={[styles.hourList, styles.publicProfileScheduleList, styles.publicProfileDealScheduleList]}>
                     {formatHappyHourGroups(deal.happy_hours, selectedPlaceOperatingHours).map((group) => (
-                      <View key={group.id} style={styles.hourGroupCard}>
-                        <Text style={styles.hourGroupDays}>{group.dayLabel}</Text>
-                        <Text style={styles.hourRow}>{group.timeLabel}</Text>
+                      <View key={group.id} style={[styles.hourGroupCard, styles.publicProfileScheduleCard, styles.publicProfileDealScheduleCard]}>
+                        <Text style={[styles.hourGroupDays, styles.publicProfileScheduleDays]}>{group.dayLabel}</Text>
+                        <Text style={[styles.hourRow, styles.publicProfileScheduleTime]}>{group.timeLabel}</Text>
                       </View>
                     ))}
                   </View>
                 </View>
               ))
             ) : (
-              <Text style={styles.emptyStateText}>No active deals were returned for this place yet.</Text>
+              <Text style={[styles.emptyStateText, styles.publicProfileEmptyState]}>No active deals were returned for this place yet.</Text>
             )}
 
             {selectedPlace.offer_entries?.length && !selectedPlace.deal_overrides ? (
               <>
-                <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>More Deals and Specials</Text>
-                <View style={styles.hourList}>
+                <ProfileSectionHeading label="More Deals and Specials" />
+                <View style={[styles.hourList, styles.publicProfileScheduleList]}>
                   {selectedPlace.offer_entries.map((entry, index) => (
-                    <View key={`${index}:${entry}`} style={styles.hourGroupCard}>
-                      <DealDescription description={entry} variant="offer" />
+                    <View key={`${index}:${entry}`} style={styles.publicProfileTextRow}>
+                      <DealDescription description={entry} presentation="profile" variant="offer" />
                     </View>
                   ))}
                 </View>
@@ -496,12 +539,12 @@ export function PlaceDetailScreen({
 
             {selectedPlaceOperatingHours.length ? (
               <>
-                <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>Hours of Operations</Text>
-                <View style={styles.hourList}>
+                <ProfileSectionHeading label="Hours of Operations" />
+                <View style={[styles.hourList, styles.publicProfileScheduleList]}>
                   {formatOperatingHourGroups(selectedPlaceOperatingHours).map((group) => (
-                    <View key={group.id} style={styles.hourGroupCard}>
-                      <Text style={styles.hourGroupDays}>{group.dayLabel}</Text>
-                      <Text style={styles.hourRow}>{group.timeLabel}</Text>
+                    <View key={group.id} style={[styles.hourGroupCard, styles.publicProfileScheduleCard]}>
+                      <Text style={[styles.hourGroupDays, styles.publicProfileScheduleDays]}>{group.dayLabel}</Text>
+                      <Text style={[styles.hourRow, styles.publicProfileScheduleTime]}>{group.timeLabel}</Text>
                     </View>
                   ))}
                 </View>
@@ -510,11 +553,11 @@ export function PlaceDetailScreen({
 
             {selectedPlace.hours_of_operation_entries?.length && !selectedPlace.operating_hour_overrides ? (
               <>
-                <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>Additional Hours Information</Text>
-                <View style={styles.hourList}>
+                <ProfileSectionHeading label="Additional Hours Information" />
+                <View style={[styles.hourList, styles.publicProfileScheduleList]}>
                   {selectedPlace.hours_of_operation_entries.map((entry) => (
-                    <View key={entry} style={styles.hourGroupCard}>
-                      <Text style={styles.hourRow}>{entry}</Text>
+                    <View key={entry} style={styles.publicProfileTextRow}>
+                      <Text style={styles.publicProfileTextRowText}>{entry}</Text>
                     </View>
                   ))}
                 </View>
@@ -523,10 +566,8 @@ export function PlaceDetailScreen({
 
             {selectedPlace.locations.length ? (
               <>
-                <Text style={[styles.sectionTitle, styles.locationsSectionTitle]}>
-                  {selectedPlace.locations.length === 1 ? 'Location' : 'Locations'}
-                </Text>
-                <View style={styles.filterRow}>
+                <ProfileSectionHeading label={selectedPlace.locations.length === 1 ? 'Location' : 'Locations'} />
+                <View style={[styles.filterRow, styles.publicProfileLocationFilterRow]}>
                   {selectedPlace.locations.map((location) => {
                     const isActive = location.id === selectedPlaceLocation?.id;
 
@@ -534,9 +575,9 @@ export function PlaceDetailScreen({
                       <Pressable
                         key={location.id}
                         onPress={() => onSelectLocation(location.id)}
-                        style={[styles.filterChip, isActive ? styles.filterChipActive : null]}
+                        style={[styles.filterChip, styles.publicProfileLocationChip, isActive ? styles.filterChipActive : null, isActive ? styles.publicProfileLocationChipActive : null]}
                       >
-                        <Text style={[styles.filterChipText, isActive ? styles.filterChipTextActive : null]}>
+                        <Text style={[styles.filterChipText, styles.publicProfileLocationChipText, isActive ? styles.filterChipTextActive : null, isActive ? styles.publicProfileLocationChipTextActive : null]}>
                           {location.city_label} - {location.address_line_1}
                         </Text>
                       </Pressable>
@@ -545,30 +586,43 @@ export function PlaceDetailScreen({
                 </View>
               </>
             ) : null}
-            <Pressable onPress={() => void openMapsAddress(selectedPlaceMapSource ?? selectedPlace)} style={styles.addressButton}>
-              <Text selectable style={styles.detailLinkText}>{formatPlaceAddress(selectedPlaceAddressSource ?? selectedPlace)}</Text>
-            </Pressable>
-            {selectedPlaceLastKnownLocationLabel ? (
-              <Text style={styles.mapLastKnownLocationText}>{selectedPlaceLastKnownLocationLabel}</Text>
-            ) : null}
+            <View style={styles.publicProfileLocationPanel}>
+              <Pressable
+                accessibilityLabel={`Open ${formatPlaceAddress(selectedPlaceAddressSource ?? selectedPlace)} in Maps`}
+                accessibilityRole="link"
+                onPress={() => void openMapsAddress(selectedPlaceMapSource ?? selectedPlace)}
+                style={[styles.addressButton, styles.publicProfileAddressButton]}
+              >
+                <Ionicons color={theme.accentStrong} name="location-outline" size={19} style={styles.publicProfileAddressIcon} />
+                <Text selectable style={[styles.detailLinkText, styles.publicProfileAddressText]}>
+                  {formatPlaceAddress(selectedPlaceAddressSource ?? selectedPlace)}
+                </Text>
+              </Pressable>
+              {selectedPlaceLastKnownLocationLabel ? (
+                <Text style={[styles.mapLastKnownLocationText, styles.publicProfileLocationMeta]}>{selectedPlaceLastKnownLocationLabel}</Text>
+              ) : null}
 
-            {(selectedPlaceLocation?.phone_number ?? selectedPlace.phone_number) ? (
-              <Text selectable style={styles.detailMeta}>Phone: {selectedPlaceLocation?.phone_number ?? selectedPlace.phone_number}</Text>
-            ) : null}
-
-            {distanceLabel ? <Text style={styles.detailMeta}>{distanceLabel}</Text> : null}
+              <View style={styles.publicProfileContactRow}>
+                {(selectedPlaceLocation?.phone_number ?? selectedPlace.phone_number) ? (
+                  <Text selectable style={[styles.detailMeta, styles.publicProfileLocationMeta]}>
+                    Phone: {selectedPlaceLocation?.phone_number ?? selectedPlace.phone_number}
+                  </Text>
+                ) : null}
+                {distanceLabel ? <Text style={[styles.detailMeta, styles.publicProfileLocationMeta]}>{distanceLabel}</Text> : null}
+              </View>
+            </View>
 
             {selectedPlaceMapRegion ? (
               <Pressable
                 onPress={() => void openMapsAddress(selectedPlaceMapSource ?? selectedPlace)}
-                style={styles.detailMapCard}
+                style={[styles.detailMapCard, styles.publicProfileMapCard]}
               >
                 <MapView
                   region={selectedPlaceMapRegion}
                   pointerEvents="none"
                   rotateEnabled={false}
                   scrollEnabled={false}
-                  style={styles.detailMap}
+                  style={[styles.detailMap, styles.publicProfileMap]}
                   zoomEnabled={false}
                 >
                   <Marker
@@ -579,7 +633,7 @@ export function PlaceDetailScreen({
                     tracksViewChanges={false}
                   />
                 </MapView>
-                <View style={styles.detailMapCaption}>
+                <View style={[styles.detailMapCaption, styles.publicProfileMapCaption]}>
                   <Text style={styles.detailMapCaptionText}>Tap to open in Maps</Text>
                 </View>
               </Pressable>
@@ -587,8 +641,11 @@ export function PlaceDetailScreen({
 
             {socialButtons.length ? (
               <>
-                <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>Social Media</Text>
-                <View style={styles.socialButtonsList}>
+                <ProfileSectionHeading label="Social Media" />
+                <View
+                  style={[styles.socialButtonsList, styles.publicProfileSocialList]}
+                  testID="public-profile-social-list"
+                >
                   {socialButtons.map((profile) => (
                     <SocialButton
                       key={`${profile.platform}:${profile.url}`}
@@ -603,38 +660,45 @@ export function PlaceDetailScreen({
 
             {showGoogleReviews ? (
               <Pressable
+                accessibilityRole="link"
                 onPress={() => void Linking.openURL(buildGoogleReviewsUrl(selectedPlaceLocation ?? selectedPlace))}
-                style={styles.linkButtonSecondary}
+                style={({ pressed }) => [styles.linkButtonSecondary, styles.publicProfileSecondaryAction, pressed ? styles.publicProfilePressed : null]}
               >
-                <Text style={styles.linkButtonSecondaryText}>View Google Reviews</Text>
+                <Text style={[styles.linkButtonSecondaryText, styles.publicProfileActionText]}>View Google Reviews</Text>
+                <Ionicons color={theme.textMuted} name="chevron-forward" size={17} />
               </Pressable>
             ) : null}
 
             {showClaimBusinessControl && onClaimBusiness ? (
-              <Pressable onPress={onClaimBusiness} style={styles.linkButtonSecondaryWide}>
-                <Text style={styles.linkButtonSecondaryText}>Do you own or manage this business? Claim this Business!</Text>
+              <Pressable accessibilityRole="button" onPress={onClaimBusiness} style={({ pressed }) => [styles.linkButtonSecondaryWide, styles.publicProfileWideAction, pressed ? styles.publicProfilePressed : null]}>
+                <Text style={[styles.linkButtonSecondaryText, styles.publicProfileActionText]}>Do you own or manage this business? Claim this Business!</Text>
+                <Ionicons color={theme.textMuted} name="chevron-forward" size={17} />
               </Pressable>
             ) : null}
 
             {showEditBusinessProfileControl && onEditBusinessProfile ? (
-              <Pressable onPress={onEditBusinessProfile} style={styles.linkButtonSecondaryWide}>
-                <Text style={styles.linkButtonSecondaryText}>Edit Business Profile</Text>
+              <Pressable accessibilityRole="button" onPress={onEditBusinessProfile} style={({ pressed }) => [styles.linkButtonSecondaryWide, styles.publicProfileWideAction, pressed ? styles.publicProfilePressed : null]}>
+                <Text style={[styles.linkButtonSecondaryText, styles.publicProfileActionText]}>Edit Business Profile</Text>
+                <Ionicons color={theme.textMuted} name="chevron-forward" size={17} />
               </Pressable>
             ) : null}
 
             {selectedPlace.supporting_details ? (
               <>
-                <Text style={[styles.sectionTitle, styles.detailSectionTitle]}>Business Details</Text>
-                <Text style={styles.detailMeta}>{selectedPlace.supporting_details}</Text>
+                <ProfileSectionHeading label="Business Details" />
+                <View style={styles.publicProfileSupportingDetailsCard}>
+                  <Text style={[styles.detailMeta, styles.publicProfileSupportingDetails]}>{selectedPlace.supporting_details}</Text>
+                </View>
               </>
             ) : null}
 
-            <View style={styles.dashboardCalloutCard}>
-              <Text style={styles.dashboardSupportText}>
+            <View style={[styles.dashboardCalloutCard, styles.publicProfileReportCard]}>
+              <Text style={[styles.dashboardSupportText, styles.publicProfileReportText]}>
                 Spot a missing detail or outdated information? Send a quick correction request for this business profile.
               </Text>
-              <Pressable onPress={handleOpenAccuracyModal} style={styles.linkButtonSecondaryWide}>
-                <Text style={styles.linkButtonSecondaryText}>Report a business profile update</Text>
+              <Pressable accessibilityRole="button" onPress={handleOpenAccuracyModal} style={({ pressed }) => [styles.linkButtonSecondaryWide, styles.publicProfileWideAction, pressed ? styles.publicProfilePressed : null]}>
+                <Text style={[styles.linkButtonSecondaryText, styles.publicProfileActionText]}>Report a business profile update</Text>
+                <Ionicons color={theme.textMuted} name="chevron-forward" size={17} />
               </Pressable>
             </View>
           </View>

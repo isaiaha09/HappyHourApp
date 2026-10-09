@@ -355,6 +355,56 @@ body.change-form #content-main .aligned {
   color: var(--dd-neon-yellow);
 }
 
+.dd-public-preview-menu-item {
+	display: grid;
+	gap: 2px;
+	margin: 8px 0;
+}
+
+.dd-public-preview-menu-line {
+	align-items: baseline;
+	display: flex;
+	gap: 10px;
+	justify-content: space-between;
+}
+
+.dd-public-preview-menu-line strong:first-child {
+	min-width: 0;
+}
+
+.dd-public-preview-menu-line strong:last-child:not(:first-child) {
+  color: var(--color-primary, #9c4828);
+  flex-shrink: 0;
+}
+
+.dd-public-preview-description-line .dd-public-preview-copy {
+  flex: 1;
+  margin: 0;
+}
+
+.dd-public-preview-description-line strong {
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.dd-public-preview-weekday-row {
+  display: grid;
+  grid-template-columns: minmax(0, 26%) minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+}
+
+.dd-public-preview-weekday-row > strong {
+  color: var(--color-primary, #9c4828);
+  font-size: 12px;
+}
+
+.dd-public-preview-weekday-row .dd-public-preview-copy {
+  margin: 0;
+}
+
 .dd-catalog-sort-link {
   align-items: center;
   display: inline-flex !important;

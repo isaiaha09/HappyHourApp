@@ -228,11 +228,14 @@ def deactivate_account_for_retained_direct_messages(user):
 	profile = get_or_create_account_profile(user)
 	deleted_at = timezone.now()
 	deleted_username = f'deleted-account-{user.pk}-{uuid4().hex[:12]}'
+	claims = list(user.business_claims.select_related('listing_snapshot').all())
 
 	clear_business_account_content(user)
-	clear_business_claim_materials(user)
 	clear_content_report_screenshots(user)
 	remove_favorites_for_business_accounts([user.pk])
+	from places.services.deleted_businesses import purge_business_claim_records
+
+	purge_business_claim_records(claims, remove_created_snapshots=True)
 	ProfileAuthToken.objects.filter(user=user).delete()
 	BusinessClaimRetryGrant.objects.filter(user=user).delete()
 	FavoriteBusiness.objects.filter(user=user).delete()
@@ -240,9 +243,6 @@ def deactivate_account_for_retained_direct_messages(user):
 	HappyHourNotificationDelivery.objects.filter(user=user).delete()
 	FavoriteBusinessPushDevice.objects.filter(user=user).delete()
 	user.blocked_business_direct_messages.all().delete()
-
-	user.business_memberships.filter(is_active=True).update(is_active=False, updated_at=deleted_at)
-	user.business_claims.filter(direct_messaging_enabled=True).update(direct_messaging_enabled=False, updated_at=deleted_at)
 
 	user.username = deleted_username[:150]
 	user.first_name = ''
@@ -329,68 +329,6 @@ def clear_business_account_content(user):
 	BusinessPost.objects.filter(membership__user=user).delete()
 	for claim in claims:
 		claim.direct_message_blocks.all().delete()
-
-
-def clear_business_claim_materials(user):
-	for claim in user.business_claims.all():
-		from places.services.media_storage import delete_storage_references
-
-		media_references = list(claim.photo_references or [])
-		for deal in claim.deal_overrides or []:
-			if isinstance(deal, dict) and isinstance(deal.get('attachment'), dict):
-				attachment = deal['attachment']
-				media_references.extend([attachment.get('url'), attachment.get('media_id')])
-		delete_storage_references(media_references, claim=claim)
-		claim.attachments.all().delete()
-		claim.managed_media.all().delete()
-		claim.profile_entries.all().delete()
-		claim.business_website_url = ''
-		claim.social_profiles = {}
-		claim.social_media_links = []
-		claim.deal_overrides = []
-		claim.operating_hour_overrides = []
-		claim.offer_entries = []
-		claim.hours_of_operation_entries = []
-		claim.photo_references = []
-		claim.photo_gallery_overridden = False
-		claim.verification_documents = {}
-		claim.verification_data_consent_at = None
-		claim.verification_data_consent_version = ''
-		claim.verification_score = 0
-		claim.verification_flags = []
-		claim.rejection_reason_codes = []
-		claim.reviewer_notes = ''
-		claim.contact_name = ''
-		claim.work_email = ''
-		claim.work_phone = ''
-		claim.employer_address = ''
-		claim.supporting_details = ''
-		claim.verification_summary = ''
-		claim.save(update_fields=[
-			'business_website_url',
-			'social_profiles',
-			'social_media_links',
-			'deal_overrides',
-			'operating_hour_overrides',
-			'offer_entries',
-			'hours_of_operation_entries',
-			'photo_references',
-			'photo_gallery_overridden',
-			'verification_documents',
-			'verification_data_consent_at',
-			'verification_data_consent_version',
-			'verification_score',
-			'verification_flags',
-			'rejection_reason_codes',
-			'reviewer_notes',
-			'contact_name',
-			'work_email',
-			'work_phone',
-			'employer_address',
-			'supporting_details',
-			'verification_summary',
-			'updated_at',
-		])
 
 
 def clear_content_report_screenshots(user):
@@ -940,7 +878,7 @@ def send_content_report_support_email(report):
 		listing_slug = report.business_post.listing_snapshot.listing_slug
 	elif report.target_type == ContentReport.TargetType.DIRECT_MESSAGE and report.direct_message_id:
 		target_label = f'Direct message #{report.direct_message_id}'
-		listing_slug = report.direct_message.thread.business_claim.listing_snapshot.listing_slug
+		listing_slug = report.direct_message.thread.get_business_slug()
 	else:
 		target_label = f'Business profile: {report.business_name or report.listing_slug}'
 		listing_slug = report.listing_slug

@@ -463,12 +463,20 @@ def _suppress_deleted_business_payloads(payloads):
 	deleted_slugs = get_deleted_business_public_slugs()
 	if not deleted_slugs:
 		return payloads
+	active_claim_slugs = {
+		str(claim.listing_snapshot.listing_slug or '').strip()
+		for claim in _get_active_business_claims()
+		if str(claim.listing_snapshot.listing_slug or '').strip()
+	}
 
 	return [
 		payload
 		for payload in payloads
-		if payload.get('slug') not in deleted_slugs
-		and not any(location.get('slug') in deleted_slugs for location in payload.get('locations', []))
+		if payload.get('slug') in active_claim_slugs
+		or (
+			payload.get('slug') not in deleted_slugs
+			and not any(location.get('slug') in deleted_slugs for location in payload.get('locations', []))
+		)
 	]
 
 
@@ -742,6 +750,7 @@ def get_deleted_business_public_slugs():
 		if snapshot.listing_slug:
 			deleted_slugs.add(snapshot.listing_slug)
 		deleted_slugs.add(slugify(f'{snapshot.name}-{snapshot.city}'))
+
 	return deleted_slugs
 
 

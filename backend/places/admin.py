@@ -1,4 +1,5 @@
 import ast
+from copy import deepcopy
 from dataclasses import replace
 from datetime import timedelta
 import json
@@ -35,11 +36,11 @@ from .admin_security import emit_admin_security_event
 from .admin_site import happyhour_admin_site
 from .models import ManagedMedia
 from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessDirectMessage, BusinessDirectMessageThread, BusinessMembership, BusinessPost, ContentReport, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, FavoriteBusinessNotification, FeedEngagement, FeedImpression, ListingSnapshot, ProfileAuthToken, SponsoredCampaign, Weekday
-from .services.account_profiles import remove_favorites_for_business_accounts, remove_favorites_for_listing_slugs
+from .services.account_profiles import deactivate_account_for_retained_direct_messages, remove_favorites_for_business_accounts
 from .services.admin_operations import get_catalog_health, get_listing_snapshot_health_issues, get_review_sla_delta, record_admin_audit_event
-from .services.business_profile_overrides import format_operating_hour_display, format_time_display, is_open_24_hours_row, normalize_deal_overrides, normalize_operating_hour_overrides, normalize_time_value, summarize_deal_overrides, summarize_operating_hour_overrides
+from .services.business_profile_overrides import format_menu_item_weekdays, format_operating_hour_display, format_time_display, is_open_24_hours_row, normalize_deal_overrides, normalize_operating_hour_overrides, normalize_time_value, summarize_deal_overrides, summarize_operating_hour_overrides
 from .services.importers.discovered_json_places import load_discovery_json_records, merge_discovery_json_records, write_discovery_json_records
-from .services.deleted_businesses import imported_place_from_deleted_business, purge_deleted_business_data, store_deleted_business
+from .services.deleted_businesses import imported_place_from_deleted_business, permanently_delete_listing_snapshot, purge_business_claim_records, purge_deleted_business_data
 from .services.importers.business_websites import BusinessWebsiteImporter
 from .services.importers.types import ImportedPlace
 from .services.media_storage import managed_media_id_from_reference
@@ -89,6 +90,25 @@ def _collect_orphaned_claimant_ids_for_deleted_claims(queryset):
 			orphaned_claimant_ids.append(claimant_id)
 
 	return orphaned_claimant_ids
+
+
+def _user_has_direct_message_history(user_id):
+	return (
+		BusinessDirectMessageThread.objects.filter(
+			Q(customer_id=user_id)
+			| Q(business_owner_user_id_snapshot=str(user_id))
+			| Q(business_claim__claimant_id=user_id)
+		).exists()
+		or BusinessDirectMessage.objects.filter(sender_id=user_id).exists()
+	)
+
+
+def _remove_orphaned_claimant_accounts(user_ids):
+	for user in User.objects.filter(pk__in=user_ids):
+		if _user_has_direct_message_history(user.pk):
+			deactivate_account_for_retained_direct_messages(user)
+		else:
+			user.delete()
 
 
 def _json_text_for_admin(value):
@@ -214,6 +234,8 @@ def _deal_override_text_for_admin(value):
 			lines.append(f"Price: {deal['price_text']}")
 		if deal.get('description'):
 			lines.append(f"Description: {deal['description']}")
+		if deal.get('description_price'):
+			lines.append(f"Description price: {deal['description_price']}")
 		if deal.get('terms'):
 			lines.append(f"Terms: {deal['terms']}")
 		for happy_hour in deal.get('happy_hours', []):
@@ -243,10 +265,21 @@ def _deal_override_seed_from_public_payload(payload):
 		{
 			'title': deal.get('title', ''),
 			'description': deal.get('description', ''),
+			'description_price': deal.get('description_price', ''),
 			'deal_type': deal.get('deal_type', DealType.OTHER),
 			'custom_deal_type_label': _custom_deal_type_label_from_public_payload(deal),
 			'price_text': deal.get('price_text', ''),
 			'terms': deal.get('terms', ''),
+			'menu_items': [
+				{
+					'name': str(item.get('name') or ''),
+					'price': str(item.get('price') or ''),
+					'detail': str(item.get('detail') or ''),
+					**({'weekdays': list(item['weekdays'])} if item.get('weekdays') else {}),
+				}
+				for item in deal.get('menu_items', [])
+				if isinstance(item, dict)
+			],
 			'happy_hours': [
 				{
 					'weekday': window.get('weekday'),
@@ -437,6 +470,7 @@ def _coerce_deal_override_input(raw_value):
 		title = ''
 		price_text = ''
 		description_lines = []
+		description_price = ''
 		terms = ''
 		deal_type = DealType.OTHER
 		custom_deal_type_label = ''
@@ -458,6 +492,8 @@ def _coerce_deal_override_input(raw_value):
 				price_text = line.split(':', 1)[1].strip()
 			elif lowered.startswith('description:'):
 				description_lines.append(line.split(':', 1)[1].strip())
+			elif lowered.startswith('description price:'):
+				description_price = line.split(':', 1)[1].strip()
 			elif lowered.startswith('terms:'):
 				terms = line.split(':', 1)[1].strip()
 			elif lowered.startswith('happy hour:'):
@@ -471,6 +507,7 @@ def _coerce_deal_override_input(raw_value):
 		parsed_overrides.append({
 			'title': title,
 			'description': ' '.join(description_lines),
+			'description_price': description_price,
 			'deal_type': deal_type,
 			'custom_deal_type_label': custom_deal_type_label,
 			'price_text': price_text,
@@ -579,6 +616,7 @@ def _coerce_operating_hour_override_input(raw_value):
 
 
 class BusinessClaimAdminForm(forms.ModelForm):
+	deal_overrides = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 8}))
 	rejection_reason_codes = forms.MultipleChoiceField(
 		label='Rejection Reasons',
 		required=False,
@@ -593,12 +631,36 @@ class BusinessClaimAdminForm(forms.ModelForm):
 
 	class Media:
 		css = {
-			'all': ('places/admin/business_claim_admin.css',),
+			'all': (
+				'places/admin/business_claim_admin.css',
+				'places/admin/listingsnapshot_structured_overrides.css',
+			),
 		}
+		js = ('places/admin/listingsnapshot_structured_overrides.js',)
 
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		self.fields['rejection_reason_codes'].initial = self.instance.get_normalized_rejection_reason_codes() if self.instance.pk else []
+		menu_deals = self.instance.deal_overrides or []
+		menu_deals_json = json.dumps(menu_deals)
+		self.fields['deal_overrides'].widget.attrs.update({
+			'class': 'vLargeTextField structured-admin-source-field',
+			'data-structured-editor': 'deals',
+			'data-initial-json': menu_deals_json,
+			'data-initial-source': 'saved-override' if menu_deals else 'empty',
+		})
+		if not self.is_bound:
+			self.fields['deal_overrides'].initial = menu_deals_json
+			self.initial['deal_overrides'] = menu_deals_json
+
+	def clean_deal_overrides(self):
+		raw_value = str(self.cleaned_data.get('deal_overrides') or '').strip()
+		if not raw_value:
+			return []
+		try:
+			return _coerce_deal_override_input(raw_value) or []
+		except ValueError as error:
+			raise forms.ValidationError(str(error))
 
 	def clean_rejection_reason_codes(self):
 		selected_codes = list(self.cleaned_data.get('rejection_reason_codes') or [])
@@ -685,8 +747,7 @@ class ListingSnapshotAdminForm(forms.ModelForm):
 		self.fields['tiktok_url'].help_text = 'Optional TikTok profile URL or handle.'
 		self.fields['youtube_url'].help_text = 'Optional YouTube profile URL or handle.'
 		self.fields['imported_image_urls'].help_text = 'One imported image URL per line. Removing a pulled image here suppresses that URL from future pulls until you add it back.'
-		self.fields['deal_overrides'].help_text = 'Optional deal overrides for this unclaimed business. Paste valid JSON, or plain text blocks with title on the first line, optional price on the second line, and optional description after that.'
-		self.fields['deal_overrides'].help_text = 'Add multiple deals by separating them with a blank line. Supported plain-text lines: Title, Type, Price, Description, Terms, and Happy hour: Monday 3:00 PM - 6:00 PM.'
+		self.fields['deal_overrides'].help_text = 'Use the editor to add deal cards and menu items with separate name, price, and detail fields. Existing free-text descriptions remain supported.'
 		self.fields['operating_hour_overrides'].help_text = 'Optional operating-hour overrides. Paste valid JSON, or one line per day like Monday: 11:00 AM - 9:00 PM or Monday: Open 24 hours.'
 		self.fields['external_id'].help_text = 'Staff/superusers: when Source name starts with admin, save will normalize this to an admin-prefixed external ID (for example admin-camarillo-premium-outlets).'
 		self.fields['imported_image_urls'].widget.attrs.update({
@@ -995,57 +1056,8 @@ def _snapshot_has_admin_managed_data(snapshot):
 	return False
 
 
-def _snapshot_matches_discovery_record(snapshot, place_record):
-	if str(snapshot.source_name or '').strip().lower() != str(place_record.source_name or '').strip().lower():
-		return False
-
-	snapshot_external_id = str(snapshot.external_id or '').strip().lower()
-	place_external_id = str(place_record.external_id or '').strip().lower()
-	if snapshot_external_id and place_external_id:
-		return snapshot_external_id == place_external_id
-
-	if str(snapshot.city or '').strip().lower() != str(place_record.city or '').strip().lower():
-		return False
-
-	snapshot_address = _normalize_lookup_text(snapshot.address_line_1)
-	place_address = _normalize_lookup_text(place_record.address_line_1)
-	if snapshot_address and place_address and snapshot_address == place_address:
-		return True
-
-	snapshot_domain = _normalized_domain(snapshot.website_url)
-	place_domain = _normalized_domain(place_record.website_url)
-	if snapshot_domain and place_domain and snapshot_domain == place_domain:
-		return True
-
-	return _normalize_lookup_text(snapshot.name) == _normalize_lookup_text(place_record.name)
-
-
-def _remove_discovery_records_for_snapshot(snapshot):
-	if str(snapshot.source_name or '').strip().lower() not in LIVE_DISCOVERY_SOURCE_NAMES:
-		return []
-
-	existing_records = load_discovery_json_records()
-	kept_records = []
-	removed_records = []
-	for place_record in existing_records:
-		if _snapshot_matches_discovery_record(snapshot, place_record):
-			removed_records.append(place_record)
-			continue
-		kept_records.append(place_record)
-
-	if removed_records:
-		write_discovery_json_records(kept_records)
-	return removed_records
-
-
-def _delete_snapshot_to_deleted_business(snapshot):
-	removed_records = _remove_discovery_records_for_snapshot(snapshot)
-	remove_favorites_for_listing_slugs([
-		snapshot.listing_slug,
-		slugify(f'{snapshot.name}-{snapshot.city}'),
-	])
-	deleted_business = store_deleted_business(snapshot, removed_records=removed_records)
-	return deleted_business, removed_records
+def _permanently_delete_snapshot(snapshot):
+	return permanently_delete_listing_snapshot(snapshot)
 
 
 def _snapshot_match_score(snapshot, place_record):
@@ -1347,7 +1359,14 @@ class HardDeleteUserAdminMixin:
 		with transaction.atomic():
 			remove_favorites_for_business_accounts([obj.pk])
 			record_admin_audit_event(request, obj, 'Permanently deleted account.', action_flag=DELETION, metadata={'deletion_reason': reason, 'scope': 'single'})
-			User.objects.filter(pk=obj.pk).delete()
+			if self.model is BusinessAccount and _user_has_direct_message_history(obj.pk):
+				deactivate_account_for_retained_direct_messages(obj)
+			elif self.model is BusinessAccount:
+				claims = list(obj.business_claims.select_related('listing_snapshot').all())
+				purge_business_claim_records(claims, remove_created_snapshots=True)
+				User.objects.filter(pk=obj.pk).delete()
+			else:
+				User.objects.filter(pk=obj.pk).delete()
 
 	def delete_queryset(self, request, queryset):
 		reason = self._get_deletion_reason(request)
@@ -1359,7 +1378,16 @@ class HardDeleteUserAdminMixin:
 			remove_favorites_for_business_accounts(user_ids)
 			for obj in accounts:
 				record_admin_audit_event(request, obj, 'Permanently deleted account.', action_flag=DELETION, metadata={'deletion_reason': reason, 'scope': 'bulk', 'bulk_target_count': len(user_ids)})
-			User.objects.filter(pk__in=user_ids).delete()
+			if self.model is BusinessAccount:
+				for obj in accounts:
+					if _user_has_direct_message_history(obj.pk):
+						deactivate_account_for_retained_direct_messages(obj)
+						continue
+					claims = list(obj.business_claims.select_related('listing_snapshot').all())
+					purge_business_claim_records(claims, remove_created_snapshots=True)
+					User.objects.filter(pk=obj.pk).delete()
+			else:
+				User.objects.filter(pk__in=user_ids).delete()
 
 
 happyhour_admin_site.register(User, StaffUserAdmin)
@@ -1898,7 +1926,10 @@ class ListingSnapshotAdmin(UnfoldModelAdmin):
 			return HttpResponseRedirect(reverse('happyhour_admin:places_listingsnapshot_changelist'))
 
 		payload = get_source_place_payload(snapshot.listing_slug) if snapshot.listing_slug else None
-		payload = payload or {}
+		payload = deepcopy(payload or {})
+		for deal in payload.get('deals', []):
+			for item in deal.get('menu_items', []):
+				item['weekday_label'] = format_menu_item_weekdays(item.get('weekdays', []))
 		public_profile_slug = str(snapshot.listing_slug or '').strip()
 		api_url = request.build_absolute_uri(reverse('place-detail', args=[public_profile_slug])) if public_profile_slug else ''
 		raw_website_url = payload.get('website_url') or ('' if snapshot.website_url_suppressed else snapshot.website_url)
@@ -2005,24 +2036,33 @@ class ListingSnapshotAdmin(UnfoldModelAdmin):
 		return format_html_join('', '{}<br>', ((line,) for line in summaries))
 
 	def delete_model(self, request, obj):
-		record_admin_audit_event(request, obj, 'Deleted business and moved it to Deleted Businesses.', action_flag=DELETION)
-		deleted_business, removed_records = _delete_snapshot_to_deleted_business(obj)
-		super().delete_model(request, obj)
-		message = f'Moved {obj.name} to Deleted Businesses.'
-		if removed_records:
-			message += f' Removed {len(removed_records)} live app record(s).'
+		with transaction.atomic():
+			record_admin_audit_event(request, obj, 'Permanently deleted business profile, claim data, and catalog record; retained direct messages as read-only.', action_flag=DELETION)
+			purge_summary = _permanently_delete_snapshot(obj)
+			super().delete_model(request, obj)
+		message = f'Permanently deleted {obj.name} and its business profile data.'
+		if purge_summary['removed_claims']:
+			message += f" Removed {purge_summary['removed_claims']} claim(s)."
+		if purge_summary['removed_discovery_records']:
+			message += f" Removed {purge_summary['removed_discovery_records']} live app record(s)."
 		self.message_user(request, message, level=messages.SUCCESS)
 
 	def delete_queryset(self, request, queryset):
 		removed_count = 0
-		moved_count = 0
-		for snapshot in queryset:
-			record_admin_audit_event(request, snapshot, 'Deleted business and moved it to Deleted Businesses.', action_flag=DELETION)
-			_, removed_records = _delete_snapshot_to_deleted_business(snapshot)
-			removed_count += len(removed_records)
-			moved_count += 1
-		super().delete_queryset(request, queryset)
-		message = f'Moved {moved_count} business(es) to Deleted Businesses.'
+		claim_count = 0
+		deleted_count = 0
+		snapshots = list(queryset)
+		with transaction.atomic():
+			for snapshot in snapshots:
+				record_admin_audit_event(request, snapshot, 'Permanently deleted business profile, claim data, and catalog record; retained direct messages as read-only.', action_flag=DELETION)
+				purge_summary = _permanently_delete_snapshot(snapshot)
+				removed_count += purge_summary['removed_discovery_records']
+				claim_count += purge_summary['removed_claims']
+				deleted_count += 1
+			super().delete_queryset(request, queryset)
+		message = f'Permanently deleted {deleted_count} business(es) and their business profile data.'
+		if claim_count:
+			message += f' Removed {claim_count} claim(s).'
 		if removed_count:
 			message += f' Removed {removed_count} live app record(s) from the app source.'
 		self.message_user(request, message, level=messages.SUCCESS)
@@ -2696,9 +2736,10 @@ class BusinessClaimAdmin(HardDeleteUserAdminMixin, UnfoldModelAdmin):
 			)
 			if orphaned_claimant_ids:
 				remove_favorites_for_business_accounts(orphaned_claimant_ids)
+			purge_business_claim_records([obj], remove_created_snapshots=True)
 			super().delete_model(request, obj)
 			if orphaned_claimant_ids:
-				User.objects.filter(pk__in=orphaned_claimant_ids).delete()
+				_remove_orphaned_claimant_accounts(orphaned_claimant_ids)
 
 	def delete_queryset(self, request, queryset):
 		reason = self._get_deletion_reason(request)
@@ -2717,9 +2758,10 @@ class BusinessClaimAdmin(HardDeleteUserAdminMixin, UnfoldModelAdmin):
 				)
 			if orphaned_claimant_ids:
 				remove_favorites_for_business_accounts(orphaned_claimant_ids)
+			purge_business_claim_records(claims, remove_created_snapshots=True)
 			super().delete_queryset(request, queryset)
 			if orphaned_claimant_ids:
-				User.objects.filter(pk__in=orphaned_claimant_ids).delete()
+				_remove_orphaned_claimant_accounts(orphaned_claimant_ids)
 
 	@admin.display(description='Trust score')
 	def verification_score_display(self, obj):
@@ -3029,26 +3071,26 @@ class FavoriteBusinessNotificationAdmin(ReadOnlyAnalyticsAdmin):
 class BusinessDirectMessageThreadAdmin(ReadOnlyAnalyticsAdmin):
 	list_display = ('business_name', 'customer', 'last_message_at', 'business_hidden_at', 'created_at')
 	list_filter = ('business_claim__listing_snapshot__city', 'created_at')
-	search_fields = ('business_claim__listing_snapshot__name', 'customer__username', 'customer__email')
+	search_fields = ('business_claim__listing_snapshot__name', 'business_name_snapshot', 'business_slug_snapshot', 'customer__username', 'customer__email')
 	list_select_related = ('business_claim__listing_snapshot', 'customer')
-	readonly_fields = ('business_claim', 'customer', 'business_hidden_at', 'last_message_at', 'created_at', 'updated_at')
+	readonly_fields = ('business_claim', 'business_name_snapshot', 'business_slug_snapshot', 'customer', 'business_hidden_at', 'last_message_at', 'created_at', 'updated_at')
 
 	@admin.display(description='Business')
 	def business_name(self, obj):
-		return obj.business_claim.listing_snapshot.name
+		return obj.get_business_name()
 
 
 @admin.register(BusinessDirectMessage, site=happyhour_admin_site)
 class BusinessDirectMessageAdmin(ReadOnlyAnalyticsAdmin):
 	list_display = ('created_at', 'business_name', 'customer_name', 'sender', 'message_type', 'read_at')
 	list_filter = ('created_at', 'read_at')
-	search_fields = ('thread__business_claim__listing_snapshot__name', 'thread__customer__username', 'sender__username', 'body')
+	search_fields = ('thread__business_claim__listing_snapshot__name', 'thread__business_name_snapshot', 'thread__business_slug_snapshot', 'thread__customer__username', 'sender__username', 'body')
 	list_select_related = ('thread__business_claim__listing_snapshot', 'thread__customer', 'sender')
 	readonly_fields = ('thread', 'sender', 'body', 'image', 'read_at', 'created_at')
 
 	@admin.display(description='Business')
 	def business_name(self, obj):
-		return obj.thread.business_claim.listing_snapshot.name
+		return obj.thread.get_business_name()
 
 	@admin.display(description='Customer')
 	def customer_name(self, obj):

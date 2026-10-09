@@ -4869,6 +4869,7 @@ function AppScreen() {
   function handleBackToBrowse() {
     animateNextLayout();
     Keyboard.dismiss();
+    setErrorMessage(null);
     if (notificationMapReturnPendingRef.current && browseMode === 'map') {
       notificationMapReturnPendingRef.current = false;
       pendingImmediateMapPinsRefreshRef.current = true;

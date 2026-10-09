@@ -1,6 +1,7 @@
 import { StyleSheet } from 'react-native';
 
 import { appShellStyles } from './styles/appShellStyles';
+import { accountStyles } from './styles/accountStyles';
 import { authStyles } from './styles/authStyles';
 import { browseStyles } from './styles/browseStyles';
 import { dashboardStyles } from './styles/dashboardStyles';
@@ -19,6 +20,7 @@ export const styles = StyleSheet.create({
   ...messagingStyles,
   ...splashStyles,
   ...authStyles,
+  ...accountStyles,
   ...dashboardStyles,
   ...modalStyles,
   ...editorStyles,

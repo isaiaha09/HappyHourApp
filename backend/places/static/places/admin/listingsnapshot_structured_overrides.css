@@ -50,7 +50,7 @@
 
 .structured-admin-editor__textarea {
   min-height: 96px;
-  resize: vertical;
+  resize: none;
 }
 
 .structured-admin-editor__label {
@@ -99,6 +99,12 @@
   font-size: 15px;
   font-weight: 700;
   color: #3f2b22;
+}
+
+.structured-admin-editor__help {
+  color: #765d50;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .structured-admin-editor__empty {
@@ -159,6 +165,42 @@
   color: #342017;
 }
 
+.structured-admin-editor__preview-menu {
+  display: grid;
+  gap: 8px;
+}
+
+.structured-admin-editor__preview-menu-item {
+  display: grid;
+  gap: 2px;
+}
+
+.structured-admin-editor__preview-menu-line {
+  align-items: baseline;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.structured-admin-editor__preview-menu-name {
+  min-width: 0;
+}
+
+.structured-admin-editor__preview-menu-price {
+  color: #7a3f1c;
+  flex-shrink: 0;
+}
+
+.structured-admin-editor__preview-description-line .structured-admin-editor__preview-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.structured-admin-editor__preview-menu-detail {
+  color: #5a392a;
+  font-size: 13px;
+}
+
 .structured-admin-editor__preview-meta {
   color: #5a392a;
   font-size: 13px;
@@ -191,6 +233,429 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+/* Shared by deal and operating-hour editors; the surrounding admin keeps its own styling.
+   These semantic roles mirror mobile/src/styles/theme.ts. */
+.structured-admin-editor--branded {
+  --deal-editor-surface: #1b202a;
+  --deal-editor-preview: #161a22;
+  --deal-editor-input: #151922;
+  --deal-editor-border: rgba(255, 255, 255, 0.08);
+  --deal-editor-border-accent: rgba(255, 95, 104, 0.34);
+  --deal-editor-accent: #ff5f68;
+  --deal-editor-accent-text: #ff7a70;
+  --deal-editor-accent-soft: #3b1d24;
+  --deal-editor-text: #f5f7fb;
+  --deal-editor-secondary: #c4ccda;
+  --deal-editor-muted: #8b95a8;
+  color: var(--deal-editor-text);
+  color-scheme: dark;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__card {
+  background: var(--deal-editor-surface);
+  border-color: var(--deal-editor-border);
+  border-radius: 18px;
+  padding: 16px;
+  gap: 18px;
+  min-width: 0;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__deal-section {
+  display: grid;
+  gap: 14px;
+  border-top: 1px solid var(--deal-editor-border);
+  padding-top: 18px;
+  min-width: 0;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__step-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  color: var(--deal-editor-text);
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__step {
+  color: var(--deal-editor-accent-text);
+  font-size: 13px;
+  min-width: 18px;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__eyebrow {
+  color: var(--deal-editor-accent-text);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__help {
+  color: var(--deal-editor-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__label {
+  color: var(--deal-editor-text);
+  font-size: 13px;
+  gap: 8px;
+}
+
+.structured-admin-editor--branded :is(.structured-admin-editor__input, .structured-admin-editor__select, .structured-admin-editor__textarea) {
+  color: var(--deal-editor-text);
+  background: var(--deal-editor-input);
+  border-color: var(--deal-editor-border);
+  min-height: 48px;
+  padding: 12px;
+  font-size: 15px;
+  font-weight: 400;
+}
+
+.structured-admin-editor--branded :is(input, textarea)::placeholder {
+  color: var(--deal-editor-muted);
+  opacity: 1;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__textarea {
+  min-height: 96px;
+}
+
+.structured-admin-editor--branded :is(input, textarea, select):focus {
+  border-color: var(--deal-editor-accent);
+}
+
+/* The existing admin brand sets these focus rules with !important.
+   Override only the deal widget, leaving the rest of admin unchanged. */
+#content .structured-admin-editor--branded :is(input, textarea, select):focus {
+  border-color: var(--deal-editor-accent) !important;
+  box-shadow: none !important;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__row {
+  gap: 14px;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__row--split {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+}
+
+.structured-admin-editor--branded .structured-admin-editor__disclosure {
+  border-top: 1px solid var(--deal-editor-border);
+}
+
+.structured-admin-editor--branded .structured-admin-editor__disclosure-trigger {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  list-style: none;
+  min-height: 52px;
+  padding: 12px 0;
+  font-weight: 700;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__disclosure-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__disclosure-trigger small {
+  display: block;
+  color: var(--deal-editor-secondary);
+  font-size: 13px;
+  font-weight: 400;
+  margin-top: 4px;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__disclosure-trigger::after {
+  content: '+';
+  color: var(--deal-editor-accent-text);
+  font-size: 22px;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__disclosure[open] > summary::after {
+  content: '−';
+}
+
+.structured-admin-editor--branded .structured-admin-editor__disclosure-content {
+  display: grid;
+  gap: 16px;
+  padding-bottom: 4px;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__deal-entry {
+  border-top: 1px solid var(--deal-editor-border);
+  display: grid;
+  gap: 14px;
+  padding: 12px 0 6px;
+  min-width: 0;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__entry-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.structured-admin-editor--branded :is(.structured-admin-editor__button, .structured-admin-editor__toggle, .structured-admin-editor__weekday-button) {
+  color: var(--deal-editor-accent-text);
+  background: transparent;
+  border-color: var(--deal-editor-border-accent);
+  border-radius: 10px;
+  font-weight: 700;
+  min-height: 44px;
+  padding: 10px 14px;
+}
+
+.structured-admin-editor--branded :is(.structured-admin-editor__toggle, .structured-admin-editor__weekday-button) {
+  border-radius: 999px;
+  color: var(--deal-editor-secondary);
+  border-color: var(--deal-editor-border);
+}
+
+.structured-admin-editor--branded :is(.structured-admin-editor__toggle, .structured-admin-editor__weekday-button).is-active {
+  background: var(--deal-editor-accent-soft);
+  border-color: var(--deal-editor-accent-text);
+  color: var(--deal-editor-accent-text);
+}
+
+.structured-admin-editor--branded .structured-admin-editor__button--danger {
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--deal-editor-accent-text);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 10px 0;
+  min-height: 44px;
+  justify-self: start;
+}
+
+.structured-admin-editor--branded button:hover {
+  background: var(--deal-editor-accent-soft);
+}
+
+.structured-admin-editor--branded button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.structured-admin-editor--branded :is(button, summary, input, textarea, select):focus-visible {
+  outline: 2px solid var(--deal-editor-accent);
+  outline-offset: 3px;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__preview-card {
+  color: var(--deal-editor-text);
+  background: var(--deal-editor-preview);
+  border: 0;
+  border-radius: 14px;
+  gap: 6px;
+  padding: 12px;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__preview-header {
+  align-items: center;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__preview-actions {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__preview-action-icon {
+  align-items: center;
+  color: var(--deal-editor-accent-text);
+  display: inline-flex;
+  height: 44px;
+  justify-content: center;
+  width: 44px;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__preview-action-icon svg {
+  height: 17px;
+  width: 17px;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__preview-title-price-row {
+  align-items: baseline;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__preview-title-price-row .structured-admin-editor__preview-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__preview-title {
+  color: var(--deal-editor-text);
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__preview-price {
+  flex-shrink: 0;
+  font-size: 16px;
+  line-height: 22px;
+  text-align: right;
+}
+
+.structured-admin-editor--branded :is(.structured-admin-editor__preview-price, .structured-admin-editor__preview-menu-price) {
+  color: var(--deal-editor-accent-text);
+}
+
+.structured-admin-editor--branded :is(.structured-admin-editor__preview-copy, .structured-admin-editor__preview-menu-detail, .structured-admin-editor__preview-meta, .structured-admin-editor__empty) {
+  color: var(--deal-editor-secondary);
+}
+
+.structured-admin-editor--branded .structured-admin-editor__preview-copy {
+  font-size: 14px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__preview-meta {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__preview-menu {
+  gap: 4px;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__preview-schedule {
+  border-top: 1px solid var(--deal-editor-border);
+  display: grid;
+  gap: 0;
+  margin-top: 2px;
+  padding-top: 2px;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__preview-schedule-row {
+  align-items: baseline;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 5px 0;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__preview-schedule-days {
+  color: var(--deal-editor-accent-text);
+  flex-shrink: 1;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.7px;
+  line-height: 18px;
+  max-width: 38%;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__preview-schedule-time {
+  color: var(--deal-editor-text);
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: right;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__preview-weekday-row {
+  display: grid;
+  grid-template-columns: minmax(0, 26%) minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__preview-weekday-label {
+  color: var(--deal-editor-accent-text);
+  font-size: 12px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__pill {
+  color: var(--deal-editor-accent-text);
+  background: var(--deal-editor-accent-soft);
+}
+
+.structured-admin-editor--branded :is(.structured-admin-editor__preview-title, .structured-admin-editor__preview-menu-name, .structured-admin-editor__preview-copy, .structured-admin-editor__preview-menu-price) {
+  overflow-wrap: anywhere;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__preview-menu-price {
+  max-width: 40%;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__hours-intro {
+  display: grid;
+  gap: 6px;
+  border-bottom: 1px solid var(--deal-editor-border);
+  padding: 0 0 14px;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__hours-row {
+  gap: 12px;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__hours-field-heading {
+  color: var(--deal-editor-text);
+  font-size: 13px;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__hours-preview {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--deal-editor-border);
+  padding-top: 16px;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__hours-preview-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__hours-preview-list {
+  display: grid;
+  gap: 0;
+  border-radius: 14px;
+  background: var(--deal-editor-preview);
+  padding: 8px 14px;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__hours-preview-row {
+  display: grid;
+  grid-template-columns: minmax(0, 26%) minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  border-bottom: 1px solid var(--deal-editor-border);
+  padding: 10px 0;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__hours-preview-row:last-child {
+  border-bottom: 0;
+}
+
+.structured-admin-editor--branded .structured-admin-editor__hours-preview-time {
+  color: var(--deal-editor-text);
+  font-weight: 600;
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .structured-admin-image-editor {

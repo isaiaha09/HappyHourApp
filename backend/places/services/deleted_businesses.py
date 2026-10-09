@@ -3,7 +3,7 @@ from urllib.parse import urlparse
 from django.db.models import Q
 from django.utils.text import slugify
 
-from places.models import DeletedBusiness, ListingSnapshot
+from places.models import BusinessClaim, BusinessDirectMessageThread, DeletedBusiness, ListingSnapshot
 from places.services.account_profiles import remove_favorites_for_listing_slugs
 from places.services.importers.discovered_json_places import deserialize_imported_place, serialize_imported_place
 from places.services.importers.discovered_json_places import load_discovery_json_records, write_discovery_json_records
@@ -160,6 +160,128 @@ def _matching_snapshot_queryset(deleted_business):
 	return ListingSnapshot.objects.filter(identity_query).order_by('pk')
 
 
+def preserve_direct_message_threads_for_claim(claim):
+	"""Keep conversation history readable after the associated business claim is removed."""
+	if claim is None or not claim.pk:
+		return 0
+	return BusinessDirectMessageThread.objects.filter(business_claim_id=claim.pk).update(
+		business_name_snapshot=claim.listing_snapshot.name,
+		business_slug_snapshot=claim.listing_snapshot.listing_slug,
+		business_owner_user_id_snapshot=str(claim.claimant_id),
+		business_claim=None,
+	)
+
+
+def purge_business_claim_media(claim):
+	"""Remove claim uploads from storage before deleting their database references."""
+	from places.services.media_storage import delete_storage_references
+
+	references = list(claim.photo_references or [])
+	for deal in claim.deal_overrides or []:
+		if isinstance(deal, dict) and isinstance(deal.get('attachment'), dict):
+			attachment = deal['attachment']
+			references.extend([attachment.get('url'), attachment.get('media_id')])
+	references.extend(claim.managed_media.values_list('storage_name', flat=True))
+	delete_storage_references(references, claim=claim)
+	for attachment in list(claim.attachments.all()):
+		if attachment.file:
+			attachment.file.delete(save=False)
+	claim.attachments.all().delete()
+	claim.managed_media.all().delete()
+	claim.profile_entries.all().delete()
+
+
+def permanently_delete_listing_snapshot(snapshot, *, remove_favorites=True, remove_discovery=True, remove_archive=True):
+	"""Purge a business snapshot and its claim data without losing old DM history."""
+	if snapshot is None:
+		return {'removed_discovery_records': 0, 'removed_favorites': 0, 'removed_claims': 0}
+
+	claims = list(snapshot.business_claims.select_related('claimant', 'listing_snapshot').all())
+	for claim in claims:
+		preserve_direct_message_threads_for_claim(claim)
+		purge_business_claim_media(claim)
+	for claim in claims:
+		claim.delete()
+
+	removed_records = []
+	if remove_discovery and str(snapshot.source_name or '').strip().lower() in {'business_websites', 'verified_businesses'}:
+		deleted_identity = DeletedBusiness(
+			source_name=snapshot.source_name,
+			external_id=snapshot.external_id,
+			listing_slug=snapshot.listing_slug,
+			name=snapshot.name,
+			city=snapshot.city,
+			address_line_1=snapshot.address_line_1,
+			website_url=snapshot.website_url,
+		)
+		existing_records = load_discovery_json_records()
+		kept_records = []
+		for place_record in existing_records:
+			if deleted_business_matches_place_record(deleted_identity, place_record):
+				removed_records.append(place_record)
+			else:
+				kept_records.append(place_record)
+		if removed_records:
+			write_discovery_json_records(kept_records)
+
+	listing_slugs = _deleted_business_listing_slugs(DeletedBusiness(
+		listing_slug=snapshot.listing_slug,
+		name=snapshot.name,
+		city=snapshot.city,
+	))
+	removed_favorites = remove_favorites_for_listing_slugs(listing_slugs) if remove_favorites else 0
+	if remove_archive:
+		if snapshot.source_name and snapshot.external_id:
+			DeletedBusiness.objects.filter(
+				source_name__iexact=snapshot.source_name,
+				external_id__iexact=snapshot.external_id,
+			).delete()
+		elif snapshot.listing_slug:
+			DeletedBusiness.objects.filter(listing_slug=snapshot.listing_slug).delete()
+		else:
+			DeletedBusiness.objects.filter(
+				name=snapshot.name,
+				city=snapshot.city,
+				address_line_1=snapshot.address_line_1,
+			).delete()
+	if snapshot.pk:
+		snapshot.delete()
+	return {
+		'removed_discovery_records': len(removed_records),
+		'removed_favorites': removed_favorites,
+		'removed_claims': len(claims),
+	}
+
+
+def purge_business_claim_records(claims, *, remove_created_snapshots=True):
+	"""Delete selected claim records, optionally purging orphaned self-service businesses."""
+	claims = [claim for claim in claims if claim is not None and claim.pk]
+	if not claims:
+		return {'removed_claims': 0, 'removed_snapshots': 0}
+	claim_ids = {claim.pk for claim in claims}
+	created_snapshots = {}
+	for claim in claims:
+		snapshot = claim.listing_snapshot
+		if (
+			remove_created_snapshots
+			and claim.pathway in {BusinessClaim.Pathway.ESTABLISHED, BusinessClaim.Pathway.INFORMAL}
+			and snapshot.source_name in BusinessClaim.USER_SOURCE_NAMES
+		):
+			created_snapshots[snapshot.pk] = snapshot
+		preserve_direct_message_threads_for_claim(claim)
+		purge_business_claim_media(claim)
+	for claim in claims:
+		claim.delete()
+
+	removed_snapshots = 0
+	for snapshot in created_snapshots.values():
+		if BusinessClaim.objects.filter(listing_snapshot_id=snapshot.pk).exclude(pk__in=claim_ids).exists():
+			continue
+		permanently_delete_listing_snapshot(snapshot)
+		removed_snapshots += 1
+	return {'removed_claims': len(claims), 'removed_snapshots': removed_snapshots}
+
+
 def purge_deleted_business_data(deleted_business):
 	"""Permanently remove catalog/source data for a deleted business.
 
@@ -181,7 +303,12 @@ def purge_deleted_business_data(deleted_business):
 	removed_favorites = remove_favorites_for_listing_slugs(listing_slugs)
 	matching_snapshots = list(_matching_snapshot_queryset(deleted_business))
 	for snapshot in matching_snapshots:
-		snapshot.delete()
+		permanently_delete_listing_snapshot(
+			snapshot,
+			remove_favorites=False,
+			remove_discovery=False,
+			remove_archive=False,
+		)
 	if removed_records:
 		write_discovery_json_records(kept_records)
 

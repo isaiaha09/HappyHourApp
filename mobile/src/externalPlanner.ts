@@ -1,3 +1,4 @@
+import { serializeDealMenuItems } from './dealDescription';
 import type {
   CurrentHappyHourPlace,
   CurrentHappyHourWindow,
@@ -653,7 +654,7 @@ export function createPlannerContextFromPlace(
       happyHours: deal.happy_hours.map((window) => scheduleFromHappyHour(window, deal)),
       id: deal.id,
       imageUrl: deal.attachment?.content_type?.startsWith('image/') ? deal.attachment.url : undefined,
-      menuText: [deal.price_text, deal.description, deal.terms].filter(Boolean).join('\n'),
+      menuText: [deal.price_text, deal.description, serializeDealMenuItems(deal.menu_items), deal.terms].filter(Boolean).join('\n'),
       priceText: deal.price_text,
       terms: deal.terms,
       title: deal.title,

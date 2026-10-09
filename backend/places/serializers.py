@@ -1837,6 +1837,13 @@ class OperatingHourSerializer(serializers.Serializer):
 	close_time = serializers.CharField()
 
 
+class DealMenuItemSerializer(serializers.Serializer):
+	name = serializers.CharField()
+	price = serializers.CharField(required=False, allow_blank=True)
+	detail = serializers.CharField(required=False, allow_blank=True)
+	weekdays = serializers.ListField(child=serializers.IntegerField(min_value=0, max_value=6), required=False)
+
+
 class DealSerializer(serializers.Serializer):
 	id = serializers.IntegerField()
 	title = serializers.CharField()
@@ -1845,8 +1852,10 @@ class DealSerializer(serializers.Serializer):
 	deal_type_label = serializers.CharField()
 	custom_deal_type_label = serializers.CharField(required=False, allow_blank=True)
 	price_text = serializers.CharField()
+	description_price = serializers.CharField(required=False, allow_blank=True)
 	terms = serializers.CharField()
 	attachment = serializers.DictField(required=False, allow_null=True)
+	menu_items = DealMenuItemSerializer(many=True, required=False)
 	is_active = serializers.BooleanField()
 	starts_on = serializers.CharField(allow_null=True)
 	ends_on = serializers.CharField(allow_null=True)

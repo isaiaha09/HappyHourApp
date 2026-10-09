@@ -2,6 +2,7 @@ import type {
   BusinessAttachmentDraft,
   BusinessDealAttachment,
   BusinessDealHappyHourOverride,
+  BusinessDealMenuItem,
   BusinessDealOverride,
   BusinessOperatingHourOverride,
   Deal,
@@ -10,6 +11,17 @@ import type {
 } from './types';
 
 const weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+export const MAX_DEAL_MENU_ITEMS = 50;
+
+export function normalizeMenuItemWeekdays(weekdays?: number[]): number[] {
+  return Array.from(new Set((Array.isArray(weekdays) ? weekdays : []).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))).sort((left, right) => left - right);
+}
+
+export function formatMenuItemWeekdays(weekdays?: number[]): string {
+  const days = normalizeMenuItemWeekdays(weekdays);
+  const fullLabels = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  return days.length === 1 ? fullLabels[days[0]] : days.map((day) => weekdayLabels[day]).join(', ');
+}
 
 function createId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -43,6 +55,15 @@ export const businessWeekdayOptions = weekdayLabels.map((label, weekday) => ({
     };
   }
 
+  export function createEmptyDealMenuItemOverride(): BusinessDealMenuItem {
+    return {
+      id: createId('menu-item'),
+      name: '',
+      price: '',
+      detail: '',
+    };
+  }
+
   export function createEmptyDealOverride(): BusinessDealOverride {
     return {
       id: createId('deal'),
@@ -51,9 +72,11 @@ export const businessWeekdayOptions = weekdayLabels.map((label, weekday) => ({
       deal_type: 'happy_hour',
       custom_deal_type_label: '',
       price_text: '',
+      description_price: '',
       terms: '',
       attachment: null,
       attachment_upload: null,
+      menu_items: [],
       happy_hours: [createEmptyHappyHourOverride()],
     };
   }
@@ -79,9 +102,14 @@ export const businessWeekdayOptions = weekdayLabels.map((label, weekday) => ({
       deal_type: deal.deal_type,
       custom_deal_type_label: deal.custom_deal_type_label ?? (deal.deal_type === 'other' ? deal.deal_type_label : ''),
       price_text: deal.price_text,
+      description_price: deal.description_price ?? '',
       terms: deal.terms,
       attachment: normalizeDealAttachment(deal.attachment),
       attachment_upload: null,
+      menu_items: (deal.menu_items ?? []).map((item) => ({
+        ...item,
+        id: createId('menu-item'),
+      })),
       happy_hours: deal.happy_hours.length
         ? groupHappyHourOverrides(deal.happy_hours).map((window) => ({
           id: createId('happy-hour'),
@@ -98,6 +126,10 @@ export const businessWeekdayOptions = weekdayLabels.map((label, weekday) => ({
   export function buildEditableDealOverrides(overrides: BusinessDealOverride[]): BusinessDealOverride[] {
     return overrides.map((deal) => ({
       ...deal,
+      menu_items: (deal.menu_items ?? []).map((item) => ({
+        ...item,
+        id: item.id ?? createId('menu-item'),
+      })),
       happy_hours: deal.happy_hours.map((window) => ({
         ...window,
         start_time: formatTime(window.start_time),
@@ -162,27 +194,42 @@ export const businessWeekdayOptions = weekdayLabels.map((label, weekday) => ({
 
   export function buildNormalizedDealOverrides(overrides: BusinessDealOverride[]) {
     return overrides
-      .map((override) => ({
-        title: override.title.trim(),
-        description: override.description.trim(),
-        deal_type: override.deal_type.trim() || 'happy_hour',
-        custom_deal_type_label: override.deal_type.trim() === 'other' ? (override.custom_deal_type_label ?? '').trim() : '',
-        price_text: override.price_text.trim(),
-        terms: override.terms.trim(),
-        attachment: normalizeDealAttachment(override.attachment),
-        attachment_upload: normalizeDealAttachmentUpload(override.attachment_upload),
-        happy_hours: override.happy_hours
-          .flatMap((window) => expandHappyHourOverride(window)
-            .map((expandedWindow) => ({
-              weekday: expandedWindow.weekday,
-              start_time: expandedWindow.start_time.trim(),
-              end_time: expandedWindow.end_time.trim(),
-              all_day: expandedWindow.all_day,
-            })))
-          .filter((window) => window.all_day || (window.start_time && window.end_time))
-          .sort((left, right) => left.weekday - right.weekday || left.start_time.localeCompare(right.start_time)),
-      }))
-      .filter((override) => override.title || override.description || override.price_text || override.terms || override.happy_hours.length);
+      .map((override) => {
+        const descriptionPrice = (override.description_price ?? '').trim();
+        return {
+          title: override.title.trim(),
+          description: override.description.trim(),
+          deal_type: override.deal_type.trim() || 'happy_hour',
+          custom_deal_type_label: override.deal_type.trim() === 'other' ? (override.custom_deal_type_label ?? '').trim() : '',
+          price_text: override.price_text.trim(),
+          ...(descriptionPrice ? { description_price: descriptionPrice } : {}),
+          terms: override.terms.trim(),
+          menu_items: (override.menu_items ?? [])
+            .map((item) => {
+              const weekdays = normalizeMenuItemWeekdays(item.weekdays);
+              return {
+                name: item.name.trim(),
+                price: item.price.trim(),
+                detail: item.detail.trim(),
+                ...(weekdays.length ? { weekdays } : {}),
+              };
+            })
+            .filter((item) => item.name || item.price || item.detail),
+          attachment: normalizeDealAttachment(override.attachment),
+          attachment_upload: normalizeDealAttachmentUpload(override.attachment_upload),
+          happy_hours: override.happy_hours
+            .flatMap((window) => expandHappyHourOverride(window)
+              .map((expandedWindow) => ({
+                weekday: expandedWindow.weekday,
+                start_time: expandedWindow.start_time.trim(),
+                end_time: expandedWindow.end_time.trim(),
+                all_day: expandedWindow.all_day,
+              })))
+            .filter((window) => window.all_day || (window.start_time && window.end_time))
+            .sort((left, right) => left.weekday - right.weekday || left.start_time.localeCompare(right.start_time)),
+        };
+      })
+      .filter((override) => override.title || override.description || override.price_text || override.description_price || override.terms || override.menu_items.length || override.happy_hours.length);
   }
 
   function normalizeDealAttachment(attachment?: BusinessDealAttachment | null) {

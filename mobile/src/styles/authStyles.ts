@@ -62,7 +62,13 @@ export const authStyles = {
   },
   authRecoveryButton: {
     alignItems: 'center',
+    backgroundColor: theme.bgElevated,
+    borderColor: theme.border,
+    borderRadius: 12,
+    borderWidth: 1,
     flex: 1,
+    justifyContent: 'center',
+    minHeight: 44,
     paddingHorizontal: 8,
     paddingVertical: 8,
   },
@@ -491,4 +497,3 @@ export const authStyles = {
     color: theme.textDark,
   },
 } as const;
-

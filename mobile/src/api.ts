@@ -723,14 +723,27 @@ type LocalMultipartUpload = {
 
 async function appendLocalFilePart(formData: FormData, fieldName: string, upload: LocalMultipartUpload, fallbackMimeType: string) {
   const localFile = new File(upload.uri);
-  const filePart = {
-    name: upload.name || localFile.name,
-    type: upload.mimeType || localFile.type || fallbackMimeType,
-    bytes: () => localFile.bytes(),
-  };
+  const name = upload.name || localFile.name;
+  const type = upload.mimeType || localFile.type || fallbackMimeType;
+  const useReactNativeFetch = ['1', 'true'].includes((process.env.EXPO_PUBLIC_USE_RN_FETCH ?? '').trim().toLowerCase());
 
-  // Expo's fetch multipart encoder needs bytes-capable parts; React Native's { uri, name, type } shape fails there.
-  formData.append(fieldName, filePart as any);
+  if (useReactNativeFetch) {
+    if (!localFile.exists || localFile.size <= 0) {
+      throw new Error('The selected file is empty or unreadable. Please choose it again.');
+    }
+
+    // React Native's native multipart serializer reads local files from `uri`.
+    formData.append(fieldName, { uri: upload.uri, name, type } as any);
+    return;
+  }
+
+  const bytes = await localFile.bytes();
+  if (!bytes.byteLength) {
+    throw new Error('The selected file is empty or unreadable. Please choose it again.');
+  }
+
+  // Expo's fetch multipart encoder consumes a byte-backed part rather than a React Native URI part.
+  formData.append(fieldName, { name, type, bytes: async () => bytes } as any);
 }
 
 function flattenApiError(value: unknown): string {

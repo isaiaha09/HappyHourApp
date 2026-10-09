@@ -225,7 +225,11 @@ class ListingSnapshot(models.Model):
 	def save(self, *args, **kwargs):
 		if not self.listing_slug:
 			city_part = self.city or 'unknown'
-			self.listing_slug = slugify(f'{self.name}-{city_part}')
+			base_slug = slugify(f'{self.name}-{city_part}') or 'business'
+			if str(self.source_name or '').strip().lower() in BusinessClaim.USER_SOURCE_NAMES:
+				self.listing_slug = f'{base_slug[:157].rstrip("-")}-{uuid4().hex[:12]}'
+			else:
+				self.listing_slug = base_slug
 		source_name = str(self.source_name or '').strip().lower()
 		external_id = str(self.external_id or '').strip()
 		if source_name.startswith('admin'):
@@ -1452,7 +1456,10 @@ class BusinessClaimRetryVerification(models.Model):
 
 
 class BusinessDirectMessageThread(models.Model):
-	business_claim = models.ForeignKey(BusinessClaim, related_name='direct_message_threads', on_delete=models.CASCADE)
+	business_claim = models.ForeignKey(BusinessClaim, related_name='direct_message_threads', null=True, blank=True, on_delete=models.SET_NULL)
+	business_name_snapshot = models.CharField(max_length=160, blank=True, default='')
+	business_slug_snapshot = models.SlugField(max_length=170, blank=True, default='')
+	business_owner_user_id_snapshot = models.CharField(max_length=64, blank=True, default='')
 	customer = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='direct_message_threads', on_delete=models.CASCADE)
 	business_hidden_at = models.DateTimeField(null=True, blank=True)
 	last_message_at = models.DateTimeField(default=timezone.now)
@@ -1466,7 +1473,17 @@ class BusinessDirectMessageThread(models.Model):
 		]
 
 	def __str__(self):
-		return f'DM thread {self.business_claim.listing_snapshot.name} <-> {self.customer.username}'
+		return f'DM thread {self.get_business_name()} <-> {self.customer.username}'
+
+	def get_business_name(self):
+		if self.business_claim_id:
+			return self.business_claim.listing_snapshot.name
+		return self.business_name_snapshot or 'Deleted Business'
+
+	def get_business_slug(self):
+		if self.business_claim_id:
+			return self.business_claim.listing_snapshot.listing_slug
+		return self.business_slug_snapshot
 
 
 def get_direct_message_image_storage():
@@ -1499,11 +1516,12 @@ class BusinessDirectMessage(models.Model):
 		return timezone.now() >= image_expires_at
 
 	def clean(self):
-		valid_sender_ids = {
-			self.thread.customer_id,
-			self.thread.business_claim.claimant_id,
-		}
-		if self.sender_id not in valid_sender_ids:
+		valid_sender_ids = {self.thread.customer_id}
+		if self.thread.business_claim_id:
+			valid_sender_ids.add(self.thread.business_claim.claimant_id)
+		elif self.thread.business_owner_user_id_snapshot:
+			valid_sender_ids.add(self.thread.business_owner_user_id_snapshot)
+		if str(self.sender_id) not in {str(sender_id) for sender_id in valid_sender_ids}:
 			raise ValidationError('Sender must belong to this direct message thread.')
 
 		body_text = str(self.body or '').strip()

@@ -250,9 +250,11 @@ export const dashboardStyles = {
     gap: 10,
   },
   dashboardInlineButton: {
-    alignSelf: 'flex-start',
+    alignSelf: 'stretch',
     marginTop: 0,
-    minWidth: 220,
+    maxWidth: '100%',
+    minWidth: 0,
+    width: '100%',
   },
   settingsItemRow: {
     alignItems: 'flex-start',
@@ -389,6 +391,9 @@ export const dashboardStyles = {
     gap: 12,
     justifyContent: 'space-between',
     paddingHorizontal: 16,
+  },
+  dashboardRowHeader: {
+    paddingHorizontal: 0,
   },
   dashboardHeaderActions: {
     alignItems: 'center',

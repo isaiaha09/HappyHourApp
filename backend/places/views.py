@@ -339,9 +339,10 @@ def _apply_direct_message_access(payload, user=None):
 
 
 def _build_direct_message_thread_payload(thread, user):
+	claim = thread.business_claim if thread.business_claim_id else None
 	last_message = thread.messages.select_related('sender').order_by('-id').first()
 	unread_query = thread.messages.exclude(sender_id=user.id).filter(read_at__isnull=True)
-	direct_message_block = thread.business_claim.direct_message_blocks.filter(customer_id=thread.customer_id).first()
+	direct_message_block = claim.direct_message_blocks.filter(customer_id=thread.customer_id).first() if claim is not None else None
 	blocked_by_current_user = bool(direct_message_block and direct_message_block.blocked_by_id == user.id)
 	blocked_by_other_user = bool(direct_message_block and not blocked_by_current_user)
 	if last_message is not None and last_message.image:
@@ -353,8 +354,8 @@ def _build_direct_message_thread_payload(thread, user):
 	read_only_reason = _get_direct_message_thread_read_only_reason(thread)
 	return {
 		'id': thread.id,
-		'business_slug': thread.business_claim.listing_snapshot.listing_slug,
-		'business_name': thread.business_claim.listing_snapshot.name,
+		'business_slug': thread.get_business_slug(),
+		'business_name': thread.get_business_name(),
 		'customer_username': _get_direct_message_display_name_for_user(thread.customer),
 		'last_message_at': thread.last_message_at,
 		'last_message_preview': last_message_preview,
@@ -375,10 +376,11 @@ def _customer_can_access_direct_message_thread(user, thread):
 		return False
 	if not _thread_has_active_business_participant(thread):
 		return True
-	direct_message_block = thread.business_claim.direct_message_blocks.filter(customer_id=user.id).first()
+	claim = thread.business_claim
+	direct_message_block = claim.direct_message_blocks.filter(customer_id=user.id).first()
 	if direct_message_block is not None and direct_message_block.blocked_by_id == user.id:
 		return True
-	can_direct_message, _ = _can_customer_direct_message_claim(user, thread.business_claim)
+	can_direct_message, _ = _can_customer_direct_message_claim(user, claim)
 	return can_direct_message
 
 
@@ -389,6 +391,8 @@ def _get_direct_message_display_name_for_user(user):
 
 
 def _thread_has_active_business_participant(thread):
+	if not thread.business_claim_id:
+		return False
 	try:
 		membership = thread.business_claim.membership
 	except BusinessMembership.DoesNotExist:
@@ -1782,7 +1786,7 @@ class DirectMessageBlocksView(APIView):
 				id=serializer.validated_data.get('thread_id'),
 				customer=request.user,
 			).first()
-			if thread is None or not _customer_can_access_direct_message_thread(request.user, thread):
+			if thread is None or not thread.business_claim_id or not _customer_can_access_direct_message_thread(request.user, thread):
 				return Response({'detail': 'That direct message thread could not be found.'}, status=status.HTTP_404_NOT_FOUND)
 
 			BusinessDirectMessageBlock.objects.update_or_create(
@@ -1966,22 +1970,26 @@ class ContentReportView(generics.GenericAPIView):
 			).filter(pk=validated_data.get('message_id')).first()
 			if message is None:
 				return Response({'detail': 'That direct message could not be found.'}, status=status.HTTP_404_NOT_FOUND)
-			can_access_message = message.thread.customer_id == request.user.id or BusinessMembership.objects.filter(
-				claim=message.thread.business_claim,
-				user=request.user,
-				is_active=True,
-			).exists()
+			claim = message.thread.business_claim if message.thread.business_claim_id else None
+			can_access_message = message.thread.customer_id == request.user.id or (
+				claim is not None
+				and BusinessMembership.objects.filter(
+					claim=claim,
+					user=request.user,
+					is_active=True,
+				).exists()
+			)
 			if not can_access_message:
 				return Response({'detail': 'That direct message could not be found.'}, status=status.HTTP_404_NOT_FOUND)
 			reported_user = message.sender
-			recipient = message.thread.customer if reported_user.id != message.thread.customer_id else message.thread.business_claim.claimant
+			recipient = message.thread.customer if reported_user.id != message.thread.customer_id else getattr(claim, 'claimant', None)
 			report_kwargs['direct_message'] = message
-			report_kwargs['business_name'] = report_kwargs['business_name'] or message.thread.business_claim.listing_snapshot.name
+			report_kwargs['business_name'] = report_kwargs['business_name'] or message.thread.get_business_name()
 			report_kwargs['reported_user_username'] = reported_user.username
 			report_kwargs['reported_user_email'] = reported_user.email
 			report_kwargs['reported_user_role'] = 'customer' if reported_user.id == message.thread.customer_id else 'business'
-			report_kwargs['recipient_username'] = recipient.username
-			report_kwargs['recipient_email'] = recipient.email
+			report_kwargs['recipient_username'] = getattr(recipient, 'username', '')
+			report_kwargs['recipient_email'] = getattr(recipient, 'email', '')
 			report_kwargs['reported_message'] = message.body or ('[Image message]' if message.image else '')
 			report_kwargs['reported_message_created_at'] = message.created_at
 

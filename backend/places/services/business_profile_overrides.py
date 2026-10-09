@@ -16,6 +16,7 @@ TIME_12_HOUR_PATTERN = re.compile(r'^(?P<hour>\d{1,2})(?::(?P<minute>\d{2}))?\s*
 MAX_PROFILE_JSON_DEPTH = 5
 MAX_PROFILE_TEXT_LENGTH = 4_000
 MAX_DEAL_COUNT = 20
+MAX_DEAL_MENU_ITEMS = 50
 MAX_OPERATING_HOUR_COUNT = 14
 
 
@@ -78,6 +79,21 @@ def normalize_weekday_value(value, field_name='weekday'):
     if normalized not in Weekday.values:
         raise ValueError(f'{field_name} must be a valid weekday.')
     return normalized
+
+
+def normalize_menu_item_weekdays(value, field_name='Menu item weekdays'):
+    if not isinstance(value, list) or len(value) > 7:
+        raise ValueError(f'{field_name} must be a list of up to seven weekdays.')
+    if any(type(day) is not int or day not in Weekday.values for day in value):
+        raise ValueError(f'{field_name} must contain valid weekdays from 0 (Monday) to 6 (Sunday).')
+    return sorted(set(value))
+
+
+def format_menu_item_weekdays(value):
+    days = normalize_menu_item_weekdays(value)
+    if len(days) == 1:
+        return _label_for_choice(Weekday, days[0])
+    return ', '.join(_label_for_choice(Weekday, day)[:3] for day in days)
 
 
 def is_open_24_hours_row(row):
@@ -154,17 +170,51 @@ def normalize_deal_overrides(raw_overrides):
 
         title = str(row.get('title') or '').strip()
         description = str(row.get('description') or '').strip()
+        description_price = str(row.get('description_price') or '').strip()
         price_text = str(row.get('price_text') or '').strip()
         terms = str(row.get('terms') or '').strip()
         deal_type = str(row.get('deal_type') or DealType.OTHER).strip().lower()
         custom_deal_type_label = str(row.get('custom_deal_type_label') or '').strip()
         attachment = _normalize_deal_attachment(row.get('attachment'))
+        raw_menu_items = row.get('menu_items', [])
+        if not isinstance(raw_menu_items, list):
+            raise ValueError(f'Deal override #{index + 1} menu items must be a list.')
+        if len(raw_menu_items) > MAX_DEAL_MENU_ITEMS:
+            raise ValueError(f'Deal override #{index + 1} may contain at most {MAX_DEAL_MENU_ITEMS} menu items.')
         if deal_type not in DealType.values:
             raise ValueError(f'Deal override #{index + 1} must use a supported deal type.')
         if deal_type == DealType.OTHER and custom_deal_type_label.lower() == DealType.OTHER.label.lower():
             custom_deal_type_label = ''
         if not title:
             raise ValueError(f'Deal override #{index + 1} needs a title.')
+        if len(description_price) > 120:
+            raise ValueError(f'Deal override #{index + 1} description price must be 120 characters or fewer.')
+        menu_items = []
+        for item_index, menu_item in enumerate(raw_menu_items):
+            if not isinstance(menu_item, dict):
+                raise ValueError(f'Deal override #{index + 1} menu item #{item_index + 1} must be an object.')
+            name = str(menu_item.get('name') or '').strip()
+            price = str(menu_item.get('price') or '').strip()
+            detail = str(menu_item.get('detail') or '').strip()
+            weekdays = normalize_menu_item_weekdays(menu_item.get('weekdays', []), field_name=f'Deal override #{index + 1} menu item #{item_index + 1} weekdays')
+            if not (name or price or detail):
+                continue
+            if not name:
+                raise ValueError(f'Deal override #{index + 1} menu item #{item_index + 1} needs a name.')
+            if len(name) > 120:
+                raise ValueError(f'Deal override #{index + 1} menu item #{item_index + 1} name must be 120 characters or fewer.')
+            if len(price) > 120:
+                raise ValueError(f'Deal override #{index + 1} menu item #{item_index + 1} price must be 120 characters or fewer.')
+            if len(detail) > MAX_PROFILE_TEXT_LENGTH:
+                raise ValueError(f'Deal override #{index + 1} menu item #{item_index + 1} details must be {MAX_PROFILE_TEXT_LENGTH} characters or fewer.')
+            normalized_item = {
+                'name': name,
+                'price': price,
+                'detail': detail,
+            }
+            if weekdays:
+                normalized_item['weekdays'] = weekdays
+            menu_items.append(normalized_item)
         happy_hours = []
         raw_happy_hours = row.get('happy_hours', [])
         if not isinstance(raw_happy_hours, list):
@@ -192,6 +242,10 @@ def normalize_deal_overrides(raw_overrides):
         }
         if attachment is not None:
             normalized_deal['attachment'] = attachment
+        if description_price:
+            normalized_deal['description_price'] = description_price
+        if menu_items:
+            normalized_deal['menu_items'] = menu_items
         normalized_deals.append(normalized_deal)
 
     return normalized_deals
@@ -263,7 +317,7 @@ def build_deal_payloads(overrides, namespace):
     payloads = []
     for index, deal in enumerate(overrides):
         deal_identity = _stable_numeric_id(namespace, 'deal-override', deal['title'], deal['deal_type'], index)
-        payloads.append({
+        payload = {
             'id': deal_identity,
             'title': deal['title'],
             'description': deal['description'],
@@ -287,7 +341,20 @@ def build_deal_payloads(overrides, namespace):
                 }
                 for window in deal['happy_hours']
             ],
-        })
+        }
+        if deal.get('menu_items'):
+            payload['menu_items'] = [
+                {
+                    'name': item['name'],
+                    'price': item['price'],
+                    'detail': item['detail'],
+                    **({'weekdays': list(item['weekdays'])} if item.get('weekdays') else {}),
+                }
+                for item in deal['menu_items']
+            ]
+        if deal.get('description_price'):
+            payload['description_price'] = deal['description_price']
+        payloads.append(payload)
     return payloads
 
 
