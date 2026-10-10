@@ -1332,7 +1332,8 @@ class AccountProfile(models.Model):
 		self.save(update_fields=['password_reset_token', 'password_reset_selector', 'password_reset_token_digest', 'password_reset_sent_at', 'updated_at'])
 
 	def get_password_reset_token_ttl_seconds(self):
-		return max(int(getattr(settings, 'PROFILE_PASSWORD_RESET_TOKEN_TTL_SECONDS', 3600) or 3600), 1)
+		configured_ttl = int(getattr(settings, 'PROFILE_PASSWORD_RESET_TOKEN_TTL_SECONDS', 300) or 300)
+		return min(max(configured_ttl, 1), 300)
 
 	def get_password_reset_token_expires_at(self):
 		if self.password_reset_sent_at is None:

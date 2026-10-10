@@ -1168,10 +1168,14 @@ def send_password_reset_email(user, profile):
 	profile.save(update_fields=['password_reset_token', 'password_reset_selector', 'password_reset_token_digest', 'password_reset_sent_at', 'updated_at'])
 	reset_base = str(getattr(settings, 'PROFILE_PASSWORD_RESET_URL_BASE', '') or '').rstrip('/')
 	reset_url = f'{reset_base}/{token}/'
+	expiry_minutes = max((profile.get_password_reset_token_ttl_seconds() + 59) // 60, 1)
+	expiry_unit = 'minute' if expiry_minutes == 1 else 'minutes'
+	expiry_notice = f'This link expires in {expiry_minutes} {expiry_unit}.'
 	html_message = (
 		f'<p>Hi {escape(user.first_name or user.username)},</p>'
 		'<p>Use the link below to reset your DiningDealz password.</p>'
 		f'<p><a href="{escape(reset_url)}">Reset your password</a></p>'
+		f'<p>{expiry_notice}</p>'
 		'<p>If you did not request a password reset, you can ignore this email or contact support for account concerns at support@diningdealz.com.</p>'
 	)
 	send_mail(
@@ -1180,6 +1184,7 @@ def send_password_reset_email(user, profile):
 			f'Hi {user.first_name or user.username},\n\n'
 			'Use this link to reset your DiningDealz password:\n'
 			f'{reset_url}\n\n'
+			f'{expiry_notice}\n\n'
 			'If you did not request a password reset, you can ignore this email or contact support for account concerns at support@diningdealz.com.'
 		),
 		html_message=html_message,
