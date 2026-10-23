@@ -22,12 +22,13 @@ from places.services.importers.business_websites import BusinessWebsiteImporter
 from places.services.importers.discovered_json_places import CuratedJsonPlacesImporter, DiscoveryJsonPlacesImporter
 from places.services.importers.example_html import ExampleHtmlImporter
 from places.services.importers.types import ImportedPlace
+from places.services.geocoding import geocode_us_business_address
 from places.services.media_storage import extract_managed_storage_name, managed_media_id_from_reference, managed_media_url
 from places.services.social_profiles import build_social_media_links, normalize_social_profiles
 
 
 SOURCE_RECORDS_CACHE_SCHEMA_VERSION = 2
-SOURCE_PAYLOAD_CACHE_SCHEMA_VERSION = 6
+SOURCE_PAYLOAD_CACHE_SCHEMA_VERSION = 7
 
 
 def _safe_https_reference(value):
@@ -1649,6 +1650,23 @@ def _get_place_coordinates(place_record, resolve_missing=True):
 			return (float(imported_latitude), float(imported_longitude))
 	except (TypeError, ValueError):
 		pass
+	if not resolve_missing:
+		return (None, None)
+
+	source_name = str(getattr(place_record, 'source_name', '') or '').strip().lower()
+	if not source_name.startswith('admin') and source_name not in BusinessClaim.USER_SOURCE_NAMES:
+		return (None, None)
+	if getattr(place_record, 'venue_type', None) == VenueType.MOBILE:
+		return (None, None)
+
+	coordinates = geocode_us_business_address(
+		getattr(place_record, 'address_line_1', ''),
+		_label_for_choice(City, getattr(place_record, 'city', '')),
+		getattr(place_record, 'state', ''),
+		getattr(place_record, 'postal_code', ''),
+	)
+	if coordinates is not None:
+		return coordinates
 
 	return (None, None)
 
