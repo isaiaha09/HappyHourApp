@@ -983,11 +983,22 @@ class BusinessSignupView(generics.GenericAPIView):
 		place_payload = get_source_place_payload(business_slug, allow_network=False)
 		if place_payload is None:
 			return Response({'business_slug': ['Business listing not found.']}, status=status.HTTP_400_BAD_REQUEST)
+		if place_payload.get('is_claimed'):
+			return Response({'business_slug': ['This business already has an owner.']}, status=status.HTTP_400_BAD_REQUEST)
 
 		serializer = self.get_serializer(data=payload)
 		serializer.is_valid(raise_exception=True)
 		with transaction.atomic():
-			serializer.validated_data['listing_snapshot'] = sync_listing_snapshot_from_place_payload(place_payload)
+			listing_snapshot = sync_listing_snapshot_from_place_payload(place_payload)
+			listing_snapshot = ListingSnapshot.objects.select_for_update().get(pk=listing_snapshot.pk)
+			if BusinessClaim.objects.exclude(status=BusinessClaim.Status.REJECTED).filter(
+				listing_snapshot__listing_slug=listing_snapshot.listing_slug,
+				claimant__is_active=True,
+				claimant__account_profile__deleted_at__isnull=True,
+			).exists():
+				transaction.set_rollback(True)
+				return Response({'business_slug': ['This business already has an owner.']}, status=status.HTTP_400_BAD_REQUEST)
+			serializer.validated_data['listing_snapshot'] = listing_snapshot
 			user = serializer.save()
 			claim = getattr(user, '_created_business_claim', None)
 			_append_uploaded_profile_photos_to_claim(request, claim)

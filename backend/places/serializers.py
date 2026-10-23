@@ -1756,6 +1756,10 @@ def sync_listing_snapshot_from_place_payload(payload):
 	listing_slug = str(payload.get('slug', '') or '').strip()
 	website_url = primary_location.get('website_url', '') or payload.get('website_url', '')
 	address_line_1 = primary_location.get('address_line_1', '') or payload.get('address_line_1', '')
+	source_name = str(payload.get('source_name') or 'business_websites').strip()
+	source_url = payload.get('source_url', website_url)
+	source_url = str(source_url or '').strip()
+	external_id = str(payload.get('external_id') or listing_slug).strip()
 
 	defaults = {
 		'name': payload.get('name', ''),
@@ -1768,9 +1772,9 @@ def sync_listing_snapshot_from_place_payload(payload):
 		'postal_code': primary_location.get('postal_code', '') or payload.get('postal_code', ''),
 		'phone_number': primary_location.get('phone_number', '') or payload.get('phone_number', ''),
 		'website_url': website_url,
-		'source_name': 'business_websites',
-		'source_url': website_url,
-		'external_id': listing_slug,
+		'source_name': source_name,
+		'source_url': source_url,
+		'external_id': external_id,
 		'listing_slug': listing_slug,
 	}
 

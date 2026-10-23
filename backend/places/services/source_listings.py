@@ -27,7 +27,7 @@ from places.services.social_profiles import build_social_media_links, normalize_
 
 
 SOURCE_RECORDS_CACHE_SCHEMA_VERSION = 2
-SOURCE_PAYLOAD_CACHE_SCHEMA_VERSION = 5
+SOURCE_PAYLOAD_CACHE_SCHEMA_VERSION = 6
 
 
 def _safe_https_reference(value):
@@ -864,6 +864,9 @@ def _build_grouped_place_payload(place_records, preferred_city=None, resolve_mis
 		'id': _stable_numeric_id(primary_place_record.source_name, profile_slug, profile_name),
 		'name': profile_name,
 		'slug': profile_slug,
+		'source_name': primary_place_record.source_name,
+		'source_url': primary_place_record.source_url,
+		'external_id': primary_place_record.external_id,
 		'is_starred': False,
 		'is_claimed': False,
 		'social_profiles': {},
@@ -936,6 +939,7 @@ def _get_pending_business_claim_snapshots():
 			business_claims__pathway=BusinessClaim.Pathway.CLAIMED,
 			business_claims__status__in=pending_statuses,
 		)
+		.exclude(source_name__in=BusinessClaim.USER_SOURCE_NAMES)
 		.exclude(listing_slug='')
 		.order_by('name', 'city', 'pk')
 		.distinct()
@@ -954,6 +958,7 @@ def _get_rejected_claim_snapshots():
 		ListingSnapshot.objects
 		.filter(pk__in=rejected_snapshot_ids)
 		.exclude(pk__in=non_rejected_snapshot_ids)
+		.exclude(source_name__in=BusinessClaim.USER_SOURCE_NAMES)
 		.exclude(listing_slug='')
 		.order_by('name', 'city', 'pk')
 	)

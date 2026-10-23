@@ -2725,6 +2725,179 @@ class SourceListingIdentityTests(TestCase):
 		self.assertTrue(payload['is_claimed'])
 		self.assertFalse(payload['is_informal'])
 
+	@patch('places.services.source_listings._get_place_coordinates', return_value=(34.2783, -119.2931))
+	@patch('places.services.source_listings.load_source_records')
+	def test_claim_review_preserves_verified_and_admin_listing_sources(self, mock_load_source_records, mock_get_place_coordinates):
+		for source_name in ('verified_businesses', BusinessClaim.ADMIN_SOURCE_NAME):
+			with self.subTest(source_name=source_name):
+				slug = f'{source_name.replace("_", "-")}-review-cafe'
+				website_url = f'https://example.com/{slug}'
+				source_url = f'https://registry.example.com/{slug}'
+				if source_name == 'verified_businesses':
+					mock_load_source_records.return_value = [
+						ImportedPlace(
+							name='Review Cafe',
+							profile_name='Review Cafe',
+							profile_slug=slug,
+							city=City.VENTURA,
+							venue_type=VenueType.CAFE,
+							address_line_1='123 Main St',
+							state='CA',
+							postal_code='93001',
+							website_url=website_url,
+							external_id=f'verified-{slug}',
+							source_name=source_name,
+							source_url=source_url,
+						)
+					]
+				else:
+					mock_load_source_records.return_value = []
+
+				snapshot = ListingSnapshot.objects.create(
+					name='Review Cafe',
+					listing_slug=slug,
+					city=City.VENTURA,
+					venue_type=VenueType.CAFE,
+					address_line_1='123 Main St',
+					state='CA',
+					postal_code='93001',
+					website_url=website_url,
+					source_name=source_name,
+					source_url=source_url,
+					external_id=f'{source_name}-{slug}',
+				)
+				owner = User.objects.create_user(
+					username=f'{slug}-owner',
+					email=f'{slug}@example.com',
+					password='test-pass-123',
+				)
+				claim = BusinessClaim.objects.create(
+					claimant=owner,
+					listing_snapshot=snapshot,
+					pathway=BusinessClaim.Pathway.CLAIMED,
+					status=BusinessClaim.Status.SUBMITTED,
+					contact_name='Review Cafe Owner',
+					job_title=BusinessClaim.JobTitle.OWNER,
+					work_email=f'owner@{slug}.example.com',
+					work_phone='805-555-0123',
+					employer_address='123 Main St, Ventura, CA 93001',
+					business_website_url=f'https://owner.example.com/{slug}',
+					verification_summary='Submitted for business claim review.',
+				)
+
+				pending_payload = get_source_place_payload(slug, allow_network=False)
+				self.assertIsNotNone(pending_payload)
+				self.assertTrue(pending_payload['is_claimed'])
+				self.assertEqual(pending_payload['source_name'], source_name)
+				self.assertEqual(pending_payload['source_url'], source_url)
+
+				claim.rejection_reason_codes = [BusinessClaim.RejectionReason.PROOF_OF_AUTHORITY_INVALID]
+				with patch('places.services.account_profiles.send_business_claim_rejected_email'):
+					claim.reject(reviewer_notes='The submitted authority document needs review.')
+				rejected_payload = get_source_place_payload(slug, allow_network=False)
+				self.assertIsNotNone(rejected_payload)
+				self.assertFalse(rejected_payload['is_claimed'])
+				snapshot.refresh_from_db()
+				self.assertEqual(snapshot.source_name, source_name)
+				self.assertEqual(snapshot.source_url, source_url)
+
+				retry_claim = BusinessClaim.objects.create(
+					claimant=owner,
+					listing_snapshot=snapshot,
+					pathway=BusinessClaim.Pathway.CLAIMED,
+					status=BusinessClaim.Status.SUBMITTED,
+					contact_name='Review Cafe Owner',
+					job_title=BusinessClaim.JobTitle.OWNER,
+					work_email=f'owner@{slug}.example.com',
+					work_phone='805-555-0123',
+					employer_address='123 Main St, Ventura, CA 93001',
+					business_website_url=f'https://owner.example.com/{slug}',
+					verification_summary='Resubmitted for business claim review.',
+					retry_of=claim,
+				)
+				with patch('places.services.account_profiles.send_business_claim_approved_email'):
+					retry_claim.approve(force=True)
+				approved_payload = get_source_place_payload(slug, allow_network=False)
+				self.assertIsNotNone(approved_payload)
+				self.assertTrue(approved_payload['is_claimed'])
+				self.assertEqual(approved_payload['website_url'], f'https://owner.example.com/{slug}')
+				snapshot.refresh_from_db()
+				self.assertEqual(snapshot.source_name, source_name)
+				self.assertEqual(snapshot.source_url, source_url)
+
+	@patch('places.services.source_listings._get_place_coordinates', return_value=(34.2783, -119.2931))
+	@patch('places.services.source_listings.load_source_records', return_value=[])
+	def test_user_created_business_profiles_stay_private_while_pending_or_rejected(self, mock_load_source_records, mock_get_place_coordinates):
+		for pathway in (BusinessClaim.Pathway.ESTABLISHED, BusinessClaim.Pathway.INFORMAL):
+			for claim_status in (BusinessClaim.Status.SUBMITTED, BusinessClaim.Status.REJECTED):
+				with self.subTest(pathway=pathway, claim_status=claim_status):
+					slug = f'{pathway}-{claim_status}-private-profile'
+					owner = User.objects.create_user(
+						username=f'{slug}-owner',
+						email=f'{slug}@example.com',
+						password='test-pass-123',
+					)
+					snapshot = ListingSnapshot.objects.create(
+						name='Private User Business',
+						listing_slug=slug,
+						city=City.VENTURA,
+						venue_type=VenueType.CAFE,
+						address_line_1='123 Main St',
+						source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+					)
+					BusinessClaim.objects.create(
+						claimant=owner,
+						listing_snapshot=snapshot,
+						pathway=pathway,
+						status=claim_status,
+						contact_name='Private Business Owner',
+						job_title=BusinessClaim.JobTitle.OWNER,
+						work_email=f'owner@{slug}.example.com',
+						work_phone='805-555-0123',
+						verification_summary='User-created business awaiting review.',
+					)
+
+					self.assertIsNone(get_source_place_payload(slug, allow_network=False))
+					self.assertTrue(ListingSnapshot.objects.filter(pk=snapshot.pk).exists())
+					self.assertTrue(BusinessClaim.objects.filter(listing_snapshot=snapshot, status=claim_status).exists())
+
+		for pathway in (BusinessClaim.Pathway.ESTABLISHED, BusinessClaim.Pathway.INFORMAL):
+			with self.subTest(pathway=pathway, claim_status=BusinessClaim.Status.APPROVED):
+				slug = f'{pathway}-approved-private-profile'
+				owner = User.objects.create_user(
+					username=f'{slug}-owner',
+					email=f'{slug}@example.com',
+					password='test-pass-123',
+				)
+				snapshot = ListingSnapshot.objects.create(
+					name='Approved User Business',
+					listing_slug=slug,
+					city=City.VENTURA,
+					venue_type=VenueType.CAFE,
+					address_line_1='123 Main St',
+					source_name=BusinessClaim.MANUAL_SOURCE_NAME,
+				)
+				claim = BusinessClaim.objects.create(
+					claimant=owner,
+					listing_snapshot=snapshot,
+					pathway=pathway,
+					status=BusinessClaim.Status.SUBMITTED,
+					contact_name='Approved Business Owner',
+					job_title=BusinessClaim.JobTitle.OWNER,
+					work_email=f'owner@{slug}.example.com',
+					work_phone='805-555-0123',
+					verification_summary='User-created business awaiting review.',
+				)
+				self.assertIsNone(get_source_place_payload(slug, allow_network=False))
+				with patch('places.services.account_profiles.send_business_claim_approved_email'):
+					claim.approve(force=True)
+
+				approved_payload = get_source_place_payload(slug, allow_network=False)
+				self.assertIsNotNone(approved_payload)
+				self.assertTrue(approved_payload['is_claimed'])
+				snapshot.refresh_from_db()
+				self.assertEqual(snapshot.source_name, BusinessClaim.MANUAL_SOURCE_NAME)
+
 	@patch('places.services.source_listings._get_place_coordinates')
 	@patch('places.services.source_listings.load_source_records')
 	def test_place_payload_marks_approved_informal_businesses(self, mock_load_source_records, mock_get_place_coordinates):
@@ -2737,6 +2910,7 @@ class SourceListingIdentityTests(TestCase):
 			city=City.VENTURA,
 			venue_type=VenueType.MOBILE,
 			address_line_1='Approximate live location',
+			source_name=BusinessClaim.MANUAL_SOURCE_NAME,
 		)
 		claim = BusinessClaim.objects.create(
 			claimant=owner,
@@ -4174,6 +4348,7 @@ class SourceListingIdentityTests(TestCase):
 		self.assertEqual(payloads[0]['venue_type'], VenueType.CAFE)
 		self.assertEqual(payloads[0]['venue_type_label'], 'Cafe')
 		self.assertTrue(payloads[0]['is_verified'])
+		self.assertTrue(payloads[0]['is_claimed'])
 		self.assertEqual(payloads[0]['locations'][0]['city'], City.CAMARILLO)
 
 @override_settings(
@@ -4961,6 +5136,9 @@ class ProfileSignupApiTests(APITestCase):
 			'id': 402,
 			'name': 'Finney\'s Crafthouse',
 			'slug': 'finneys-crafthouse',
+			'source_name': 'verified_businesses',
+			'source_url': 'https://registry.example.com/finneys-crafthouse',
+			'external_id': 'verified-finney-ventura',
 			'city': City.VENTURA,
 			'venue_type': VenueType.RESTAURANT,
 			'address_line_1': '494 E Main St',
@@ -5034,6 +5212,9 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertEqual(claim.work_email, 'pat@finneys.com')
 		self.assertEqual(claim.listing_snapshot.listing_slug, 'finneys-crafthouse')
 		self.assertEqual(claim.listing_snapshot.name, "Finney's Crafthouse")
+		self.assertEqual(claim.listing_snapshot.source_name, 'verified_businesses')
+		self.assertEqual(claim.listing_snapshot.source_url, 'https://registry.example.com/finneys-crafthouse')
+		self.assertEqual(claim.listing_snapshot.external_id, 'verified-finney-ventura')
 		self.assertEqual(claim.employer_address, '494 E Main St, Ventura, CA 93001')
 		self.assertEqual(claim.pathway, BusinessClaim.Pathway.CLAIMED)
 		self.assertEqual(claim.business_website_url, 'https://finneysventura.example.com')
@@ -5067,6 +5248,157 @@ class ProfileSignupApiTests(APITestCase):
 		self.assertIn('Supporting details: Available to provide payroll and licensing records upon request.', support_email.body)
 		self.assertNotIn('manager-proof.pdf', support_email.body)
 		self.assertNotIn('CA business license #123', support_email.body)
+
+	@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+	@patch('places.views.get_source_place_payload')
+	def test_admin_submission_listing_can_be_claimed_without_changing_its_source(self, mock_get_source_place_payload):
+		snapshot = ListingSnapshot.objects.create(
+			name='Admin Added Cafe',
+			listing_slug='admin-added-cafe',
+			city=City.VENTURA,
+			venue_type=VenueType.CAFE,
+			address_line_1='123 Ventura Ave',
+			source_name=BusinessClaim.ADMIN_SOURCE_NAME,
+			source_url='https://registry.example.com/admin-added-cafe',
+			external_id='admin-added-cafe',
+		)
+		mock_get_source_place_payload.return_value = {
+			'id': 781,
+			'name': 'Admin Added Cafe',
+			'slug': snapshot.listing_slug,
+			'source_name': BusinessClaim.ADMIN_SOURCE_NAME,
+			'source_url': snapshot.source_url,
+			'external_id': snapshot.external_id,
+			'city': City.VENTURA,
+			'venue_type': VenueType.CAFE,
+			'address_line_1': '123 Ventura Ave',
+			'address_line_2': '',
+			'neighborhood': '',
+			'state': 'CA',
+			'postal_code': '93001',
+			'phone_number': '805-555-0199',
+			'website_url': 'https://example.com/admin-added-cafe',
+			'locations': [],
+		}
+
+		response = self.client.post(
+			reverse('business-signup'),
+			{
+				'username': 'admin_added_cafe_owner',
+				'email': 'admin-added-owner@example.com',
+				'password': 'test-pass-123',
+				'verification_data_consent': True,
+				'first_name': 'Alex',
+				'last_name': 'Owner',
+				'business_slug': snapshot.listing_slug,
+				'contact_name': 'Alex Owner',
+				'job_title': BusinessClaim.JobTitle.OWNER,
+				'work_email': 'alex@admin-added-cafe.example.com',
+				'work_phone': '805-555-0101',
+				'employer_address': '123 Ventura Ave, Ventura, CA 93001',
+				'verification_documents': json.dumps({
+					'business_registration': ['CA business license #123'],
+					'health_permit': ['Ventura County permit #A-55'],
+				}),
+				'proof_of_authority_attachments': [SimpleUploadedFile('owner-proof.pdf', b'proof', content_type='application/pdf')],
+				'supporting_details': 'I own the cafe listed by the admin team.',
+			},
+			format='multipart',
+		)
+
+		self.assertEqual(response.status_code, 201, response.data)
+		claim = BusinessClaim.objects.get(claimant__username='admin_added_cafe_owner')
+		snapshot.refresh_from_db()
+		self.assertEqual(claim.pathway, BusinessClaim.Pathway.CLAIMED)
+		self.assertEqual(claim.status, BusinessClaim.Status.SUBMITTED)
+		self.assertEqual(claim.listing_snapshot_id, snapshot.pk)
+		self.assertEqual(snapshot.source_name, BusinessClaim.ADMIN_SOURCE_NAME)
+		self.assertEqual(snapshot.source_url, 'https://registry.example.com/admin-added-cafe')
+		self.assertEqual(snapshot.external_id, 'admin-added-cafe')
+
+	@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+	@patch('places.views.get_source_place_payload')
+	def test_duplicate_claim_rejection_rolls_back_listing_snapshot_sync(self, mock_get_source_place_payload):
+		snapshot = ListingSnapshot.objects.create(
+			name='Original Listing Name',
+			listing_slug='already-owned-cafe',
+			city=City.VENTURA,
+			venue_type=VenueType.CAFE,
+			address_line_1='10 Original St',
+			website_url='https://original.example.com',
+			source_name=BusinessClaim.ADMIN_SOURCE_NAME,
+			source_url='https://registry.example.com/original-cafe',
+			external_id='admin-original-cafe',
+		)
+		owner = User.objects.create_user(username='existing_cafe_owner', email='existing-owner@example.com', password='test-pass-123')
+		AccountProfile.objects.create(user=owner)
+		BusinessClaim.objects.create(
+			claimant=owner,
+			listing_snapshot=snapshot,
+			pathway=BusinessClaim.Pathway.CLAIMED,
+			status=BusinessClaim.Status.APPROVED,
+			contact_name='Existing Owner',
+			job_title=BusinessClaim.JobTitle.OWNER,
+			work_email='existing@already-owned-cafe.example.com',
+			work_phone='805-555-0100',
+			employer_address='10 Original St, Ventura, CA 93001',
+			verification_summary='Approved existing owner.',
+		)
+		mock_get_source_place_payload.return_value = {
+			'id': 782,
+			'name': 'Changed Name From Stale Payload',
+			'slug': snapshot.listing_slug,
+			'source_name': BusinessClaim.ADMIN_SOURCE_NAME,
+			'source_url': 'https://registry.example.com/changed-cafe',
+			'external_id': 'admin-changed-cafe',
+			'is_claimed': False,
+			'city': City.VENTURA,
+			'venue_type': VenueType.CAFE,
+			'address_line_1': '99 Changed St',
+			'address_line_2': '',
+			'neighborhood': '',
+			'state': 'CA',
+			'postal_code': '93002',
+			'phone_number': '805-555-0199',
+			'website_url': 'https://changed.example.com',
+			'locations': [],
+		}
+
+		response = self.client.post(
+			reverse('business-signup'),
+			{
+				'username': 'second_cafe_claimant',
+				'email': 'second-cafe-claimant@example.com',
+				'password': 'test-pass-123',
+				'verification_data_consent': True,
+				'first_name': 'Second',
+				'last_name': 'Claimant',
+				'business_slug': snapshot.listing_slug,
+				'contact_name': 'Second Claimant',
+				'job_title': BusinessClaim.JobTitle.MANAGER,
+				'work_email': 'manager@already-owned-cafe.example.com',
+				'work_phone': '805-555-0102',
+				'employer_address': '99 Changed St, Ventura, CA 93002',
+				'verification_documents': json.dumps({
+					'business_registration': ['CA business license #456'],
+					'health_permit': ['Ventura County permit #B-55'],
+				}),
+				'proof_of_authority_attachments': [SimpleUploadedFile('manager-proof.pdf', b'proof', content_type='application/pdf')],
+			},
+			format='multipart',
+		)
+
+		self.assertEqual(response.status_code, 400)
+		self.assertIn('already has an owner', str(response.data))
+		self.assertFalse(User.objects.filter(username='second_cafe_claimant').exists())
+		self.assertEqual(BusinessClaim.objects.filter(listing_snapshot=snapshot).count(), 1)
+		snapshot.refresh_from_db()
+		self.assertEqual(snapshot.name, 'Original Listing Name')
+		self.assertEqual(snapshot.address_line_1, '10 Original St')
+		self.assertEqual(snapshot.website_url, 'https://original.example.com')
+		self.assertEqual(snapshot.source_name, BusinessClaim.ADMIN_SOURCE_NAME)
+		self.assertEqual(snapshot.source_url, 'https://registry.example.com/original-cafe')
+		self.assertEqual(snapshot.external_id, 'admin-original-cafe')
 
 	@patch('places.views.get_source_place_payload')
 	def test_business_signup_stores_structured_deal_and_hour_overrides(self, mock_get_source_place_payload):
