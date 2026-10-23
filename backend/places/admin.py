@@ -8,6 +8,7 @@ import re
 from urllib.parse import quote, urlparse
 
 from django import forms
+from django.conf import settings
 from django.contrib import admin, messages
 from django.contrib.admin.models import DELETION
 from django.contrib.admin.options import TO_FIELD_VAR
@@ -35,7 +36,7 @@ from unfold.forms import BaseDialogForm
 from .admin_security import emit_admin_security_event
 from .admin_site import happyhour_admin_site
 from .models import ManagedMedia
-from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessDirectMessage, BusinessDirectMessageThread, BusinessMembership, BusinessPost, ContentReport, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, FavoriteBusinessNotification, FeedEngagement, FeedImpression, ListingSnapshot, ProfileAuthToken, SponsoredCampaign, Weekday
+from .models import AccountProfile, BusinessAccount, BusinessClaim, BusinessClaimAttachment, BusinessClaimProfileEntry, BusinessDirectMessage, BusinessDirectMessageThread, BusinessMembership, BusinessPost, City, ContentReport, CustomerAccount, DealType, DeletedBusiness, FavoriteBusiness, FavoriteBusinessNotification, FeedEngagement, FeedImpression, ListingSnapshot, ProfileAuthToken, SponsoredCampaign, VenueType, Weekday
 from .services.account_profiles import deactivate_account_for_retained_direct_messages, remove_favorites_for_business_accounts
 from .services.admin_operations import get_catalog_health, get_listing_snapshot_health_issues, get_review_sla_delta, record_admin_audit_event
 from .services.business_profile_overrides import format_menu_item_weekdays, format_operating_hour_display, format_time_display, is_open_24_hours_row, normalize_deal_overrides, normalize_operating_hour_overrides, normalize_time_value, summarize_deal_overrides, summarize_operating_hour_overrides
@@ -43,10 +44,14 @@ from .services.importers.discovered_json_places import load_discovery_json_recor
 from .services.deleted_businesses import imported_place_from_deleted_business, permanently_delete_listing_snapshot, purge_business_claim_records, purge_deleted_business_data
 from .services.importers.business_websites import BusinessWebsiteImporter
 from .services.importers.types import ImportedPlace
-from .services.media_storage import managed_media_id_from_reference
+from .services.geocoding import geocode_us_business_address
+from .services.image_moderation import ImageModerationError, get_validated_image_media_type, moderate_uploaded_image
+from .services.media_storage import managed_media_id_from_reference, save_listing_snapshot_media
 from .services.social_profiles import build_social_media_links, normalize_business_contact_channels, normalize_social_profile
 from .services.source_listings import get_source_place_payload, get_source_place_payloads, load_source_records
 from .services.cloudmersive_scanning import ScanStatus, scan_pdf_file
+from .serializers import _validate_uploaded_deal_attachment
+from rest_framework.exceptions import ValidationError as DRFValidationError
 
 
 logger = logging.getLogger(__name__)
@@ -712,9 +717,28 @@ class BusinessClaimRequestInfoDialogForm(BaseDialogForm):
 	)
 
 
+class MultipleFileInput(forms.ClearableFileInput):
+	allow_multiple_selected = True
+
+
+class MultipleFileField(forms.FileField):
+	widget = MultipleFileInput
+
+	def clean(self, data, initial=None):
+		if data in self.empty_values:
+			return []
+		files = data if isinstance(data, (list, tuple)) else [data]
+		return [super(MultipleFileField, self).clean(uploaded_file, None) for uploaded_file in files if uploaded_file]
+
+
 class ListingSnapshotAdminForm(forms.ModelForm):
 	imported_image_urls = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 5}))
 	deal_overrides = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 8}))
+	admin_photo_uploads = MultipleFileField(
+		required=False,
+		label='Upload business photos',
+		widget=MultipleFileInput(attrs={'accept': 'image/*'}),
+	)
 	deal_overrides_touched = forms.BooleanField(required=False, widget=forms.HiddenInput())
 	operating_hour_overrides = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 6}))
 	operating_hour_overrides_touched = forms.BooleanField(required=False, widget=forms.HiddenInput())
@@ -733,6 +757,9 @@ class ListingSnapshotAdminForm(forms.ModelForm):
 		model = ListingSnapshot
 		fields = '__all__'
 
+	def is_multipart(self):
+		return True
+
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		self._initial_imported_image_urls = _normalize_admin_string_list(self.instance.imported_image_urls if self.instance.pk else [])
@@ -747,12 +774,16 @@ class ListingSnapshotAdminForm(forms.ModelForm):
 		self.fields['tiktok_url'].help_text = 'Optional TikTok profile URL or handle.'
 		self.fields['youtube_url'].help_text = 'Optional YouTube profile URL or handle.'
 		self.fields['imported_image_urls'].help_text = 'One imported image URL per line. Removing a pulled image here suppresses that URL from future pulls until you add it back.'
+		self.fields['admin_photo_uploads'].help_text = 'Upload up to 8 public business photos at once. Images are validated and stored in the public media bucket.'
 		self.fields['deal_overrides'].help_text = 'Use the editor to add deal cards and menu items with separate name, price, and detail fields. Existing free-text descriptions remain supported.'
 		self.fields['operating_hour_overrides'].help_text = 'Optional operating-hour overrides. Paste valid JSON, or one line per day like Monday: 11:00 AM - 9:00 PM or Monday: Open 24 hours.'
 		self.fields['external_id'].help_text = 'Staff/superusers: when Source name starts with admin, save will normalize this to an admin-prefixed external ID (for example admin-camarillo-premium-outlets).'
 		self.fields['imported_image_urls'].widget.attrs.update({
 			'class': 'vLargeTextField structured-admin-source-field',
 			'data-image-gallery-editor': 'imported-images',
+		})
+		self.fields['admin_photo_uploads'].widget.attrs.update({
+			'class': 'vLargeTextField',
 		})
 		self.fields['deal_overrides'].widget.attrs.update({
 			'class': 'vLargeTextField structured-admin-source-field',
@@ -832,6 +863,47 @@ class ListingSnapshotAdminForm(forms.ModelForm):
 		except ValueError as error:
 			self.add_error('imported_image_urls', str(error))
 
+		latitude = cleaned_data.get('latitude')
+		longitude = cleaned_data.get('longitude')
+		if (latitude is None) != (longitude is None):
+			self.add_error('latitude', 'Enter both latitude and longitude, or leave both blank for address geocoding.')
+		elif latitude is not None and not (-90 <= latitude <= 90):
+			self.add_error('latitude', 'Latitude must be between -90 and 90.')
+		elif longitude is not None and not (-180 <= longitude <= 180):
+			self.add_error('longitude', 'Longitude must be between -180 and 180.')
+
+		photo_uploads = cleaned_data.get('admin_photo_uploads') or []
+		max_photo_uploads = max(1, int(getattr(settings, 'BUSINESS_PROFILE_MAX_PHOTOS', 8) or 8))
+		max_aggregate_bytes = max(1, int(getattr(settings, 'IMAGE_UPLOAD_MAX_AGGREGATE_BYTES', 20 * 1024 * 1024) or 20 * 1024 * 1024))
+		current_photo_references = cleaned_data.get('imported_image_urls') or []
+		current_photo_ids = {
+			media_id
+			for media_id in (managed_media_id_from_reference(reference) for reference in current_photo_references)
+			if media_id is not None
+		}
+		stored_admin_photo_count = (
+			ManagedMedia.objects.filter(
+				listing_snapshot=self.instance,
+				media_kind='profile_photo',
+				media_id__in=current_photo_ids,
+			).count()
+			if self.instance.pk and current_photo_ids
+			else 0
+		)
+		if stored_admin_photo_count + len(photo_uploads) > max_photo_uploads:
+			self.add_error('admin_photo_uploads', f'This business can have no more than {max_photo_uploads} uploaded business photos. Remove an existing uploaded photo before adding another.')
+		if sum(int(getattr(uploaded_file, 'size', 0) or 0) for uploaded_file in photo_uploads) > max_aggregate_bytes:
+			self.add_error('admin_photo_uploads', 'The combined business photo upload size must be 20 MB or smaller.')
+		for uploaded_file in photo_uploads:
+			try:
+				content_type, file_suffix = get_validated_image_media_type(uploaded_file)
+				moderate_uploaded_image(uploaded_file, surface='admin_business_profile_photo')
+			except ImageModerationError as error:
+				self.add_error('admin_photo_uploads', str(error))
+				continue
+			uploaded_file.content_type = content_type
+			uploaded_file._validated_media_suffix = file_suffix
+
 		if raw_deal_overrides is not None:
 			try:
 				parsed_deal_overrides = _coerce_deal_override_input(raw_deal_overrides)
@@ -843,6 +915,33 @@ class ListingSnapshotAdminForm(forms.ModelForm):
 					cleaned_data['deal_overrides_cleared'] = False
 			except ValueError as error:
 				self.add_error('deal_overrides', str(error))
+
+		self._validated_deal_attachment_uploads = {}
+		deal_rows = cleaned_data.get('deal_overrides') or []
+		deal_upload_prefix = 'deal_attachment_upload_'
+		for field_name in self.files.keys():
+			if not field_name.startswith(deal_upload_prefix):
+				continue
+			index_text = field_name[len(deal_upload_prefix):]
+			try:
+				deal_index = int(index_text)
+			except (TypeError, ValueError):
+				self.add_error('deal_overrides', f'Invalid deal attachment upload field: {field_name}.')
+				continue
+			if deal_index < 0 or deal_index >= len(deal_rows):
+				self.add_error('deal_overrides', f'The attachment upload for deal #{deal_index + 1} does not match a saved deal.')
+				continue
+			uploaded_files = self.files.getlist(field_name)
+			if len(uploaded_files) != 1:
+				self.add_error('deal_overrides', f'Deal #{deal_index + 1} can have one uploaded image or PDF.')
+				continue
+			try:
+				content_type, file_suffix = _validate_uploaded_deal_attachment(uploaded_files[0])
+			except DRFValidationError as error:
+				self.add_error('deal_overrides', f'Deal #{deal_index + 1}: {error.detail}')
+				continue
+			uploaded_files[0].content_type = content_type
+			self._validated_deal_attachment_uploads[deal_index] = (uploaded_files[0], content_type, file_suffix)
 
 		if raw_operating_hour_overrides is not None:
 			try:
@@ -1680,7 +1779,8 @@ class ListingSnapshotAdmin(UnfoldModelAdmin):
 			'classes': ('tab',),
 		}),
 		('Business details', {
-			'fields': ('city', 'venue_type', 'address_line_1', 'address_line_2', 'neighborhood', 'state', 'postal_code'),
+			'fields': ('city', 'venue_type', 'address_line_1', 'address_line_2', 'neighborhood', 'state', 'postal_code', 'latitude', 'longitude'),
+			'description': 'Fixed-location businesses are geocoded from the address when saved. Enter both coordinates to set or correct the map pin. Census address-range results can be approximate.',
 			'classes': ('tab',),
 		}),
 		('Contact and social media', {
@@ -1689,13 +1789,13 @@ class ListingSnapshotAdmin(UnfoldModelAdmin):
 			'classes': ('tab',),
 		}),
 		('Public app data', {
-			'fields': ('imported_image_count', 'imported_image_urls', 'current_public_images_preview', 'current_public_deals_preview', 'current_public_hours_preview'),
-			'description': 'These previews show the imported images, deals, and hours currently available for this business after importer enrichment and any overrides. Removing imported image URLs here suppresses those pulled images from future admin pulls.',
+			'fields': ('admin_photo_uploads', 'imported_image_count', 'imported_image_urls', 'current_public_images_preview', 'current_public_deals_preview', 'current_public_hours_preview'),
+			'description': 'Upload business photos or manage imported image URLs. These previews show the images, deals, and hours currently available for this business after importer enrichment and any overrides. Removing pulled image URLs suppresses them from future admin pulls.',
 			'classes': ('tab',),
 		}),
 		('Admin overrides for unclaimed businesses', {
 			'fields': ('deal_overrides', 'manual_deal_override_summary', 'operating_hour_overrides', 'manual_operating_hour_override_summary'),
-			'description': 'Use these structured overrides to fix or add legitimate deals and hours for existing unclaimed businesses. Once a business is claimed, the owner claim overrides take precedence.',
+			'description': 'Use these structured overrides to fix or add legitimate deals and hours for existing unclaimed businesses. Deal cards can include an optional image or PDF upload. Once a business is claimed, the owner claim overrides take precedence.',
 			'classes': ('tab',),
 		}),
 		('Import history', {
@@ -1788,8 +1888,12 @@ class ListingSnapshotAdmin(UnfoldModelAdmin):
 	@admin.display(description='Current app images')
 	def current_public_images_preview(self, obj):
 		image_urls = [
-			image_url for image_url in (str(value or '').strip() for value in list(getattr(obj, 'imported_image_urls', []) or []))
-			if urlparse(image_url).scheme.lower() == 'https' and urlparse(image_url).netloc
+			image_url
+			for image_url in (str(value or '').strip() for value in list(getattr(obj, 'imported_image_urls', []) or []))
+			if (
+				(urlparse(image_url).scheme.lower() == 'https' and urlparse(image_url).netloc)
+				or managed_media_id_from_reference(image_url) is not None
+			)
 		][:3]
 		if not image_urls:
 			return 'No imported images'
@@ -2015,9 +2119,125 @@ class ListingSnapshotAdmin(UnfoldModelAdmin):
 			'social_profiles',
 			'is_starred',
 			'social_media_links',
+			'latitude',
+			'longitude',
+			'admin_photo_uploads',
 		}
-		overrides_changed = change and bool(public_override_fields.intersection(set(getattr(form, 'changed_data', []))))
+		changed_fields = set(getattr(form, 'changed_data', []))
+		deal_attachment_uploads = getattr(form, '_validated_deal_attachment_uploads', {})
+		photo_uploads = list(form.cleaned_data.get('admin_photo_uploads') or [])
+		uploads_present = bool(photo_uploads or deal_attachment_uploads)
+		overrides_changed = change and bool(public_override_fields.intersection(changed_fields) or uploads_present)
+
+		is_live_location_business = obj.venue_type == VenueType.MOBILE or obj.serves_multiple_areas
+		coordinate_fields_changed = bool({'latitude', 'longitude'}.intersection(changed_fields))
+		address_fields_changed = bool({'address_line_1', 'city', 'state', 'postal_code'}.intersection(changed_fields))
+		source_name = str(obj.source_name or '').strip().lower()
+		is_admin_listing = source_name.startswith('admin')
+		needs_saved_coordinates = obj.latitude is None or obj.longitude is None
+		should_geocode = (
+			not is_live_location_business
+			and not coordinate_fields_changed
+			and (not change or address_fields_changed or (is_admin_listing and needs_saved_coordinates))
+		)
+		if should_geocode:
+			city_label = dict(City.choices).get(obj.city, obj.city)
+			coordinates = geocode_us_business_address(
+				obj.address_line_1,
+				city_label,
+				obj.state,
+				obj.postal_code,
+			)
+			if coordinates is not None:
+				obj.latitude, obj.longitude = coordinates
+			else:
+				messages.warning(
+					request,
+					'We could not geocode this address. The saved coordinates were kept; enter latitude and longitude manually if the map pin is missing or misplaced.',
+				)
+
 		super().save_model(request, obj, form, change)
+
+		if uploads_present:
+			# Register admin writes with the existing rollback cleanup middleware.
+			request._business_upload_limits_active = True
+
+		current_image_urls = list(obj.imported_image_urls or [])
+		photos_saved = False
+		for uploaded_file in photo_uploads:
+			try:
+				media, media_url = save_listing_snapshot_media(
+					obj,
+					uploaded_file,
+					media_kind='profile_photo',
+					content_type=uploaded_file.content_type,
+					file_suffix=uploaded_file._validated_media_suffix,
+					owner=request.user,
+					request=request,
+				)
+			except Exception:
+				request._business_upload_cleanup_on_response = True
+				logger.exception('Admin could not store a business photo for listing_snapshot_id=%s', obj.pk)
+				messages.error(request, 'A business photo could not be stored. The other saved listing data was kept.')
+				continue
+			current_image_urls.append(media_url)
+			photos_saved = True
+		if photos_saved:
+			obj.imported_image_urls = _normalize_admin_string_list(current_image_urls)
+			obj.save(update_fields=['imported_image_urls', 'updated_at'])
+
+		if deal_attachment_uploads:
+			deal_overrides = [dict(row) for row in (obj.deal_overrides or [])]
+			attachments_saved = False
+			for deal_index, (uploaded_file, content_type, file_suffix) in deal_attachment_uploads.items():
+				try:
+					media, media_url = save_listing_snapshot_media(
+						obj,
+						uploaded_file,
+						media_kind='deal_attachment',
+						content_type=content_type,
+						file_suffix=file_suffix,
+						owner=request.user,
+						request=request,
+					)
+				except Exception:
+					request._business_upload_cleanup_on_response = True
+					logger.exception('Admin could not store a deal attachment for listing_snapshot_id=%s deal_index=%s', obj.pk, deal_index)
+					messages.error(request, f'The attachment for deal #{deal_index + 1} could not be stored. The other saved listing data was kept.')
+					continue
+				deal_overrides[deal_index]['attachment'] = {
+					'url': media_url,
+					'media_id': str(media.media_id),
+					'name': media.original_filename,
+					'content_type': media.content_type,
+					'file_size': media.file_size,
+				}
+				attachments_saved = True
+			if attachments_saved:
+				obj.deal_overrides = deal_overrides
+				obj.save(update_fields=['deal_overrides', 'updated_at'])
+
+		active_media_ids = {
+			media_id
+			for media_id in (
+				managed_media_id_from_reference(reference)
+				for reference in [
+					*(obj.imported_image_urls or []),
+					*[
+						reference
+						for deal in (obj.deal_overrides or [])
+						if isinstance(deal, dict) and isinstance(deal.get('attachment'), dict)
+						for reference in (deal['attachment'].get('media_id'), deal['attachment'].get('url'))
+					],
+				]
+			)
+			if media_id is not None
+		}
+		orphaned_admin_media = ManagedMedia.objects.filter(listing_snapshot=obj)
+		if active_media_ids:
+			orphaned_admin_media = orphaned_admin_media.exclude(media_id__in=active_media_ids)
+		orphaned_admin_media.delete()
+
 		if overrides_changed:
 			record_admin_audit_event(request, obj, 'Changed the public business profile override data.')
 

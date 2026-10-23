@@ -101,7 +101,9 @@ class BusinessUploadLimitsMiddleware:
 			self._cleanup_failed_stored_uploads(request)
 			raise
 
-		if getattr(request, '_business_upload_limits_active', False) and response.status_code >= 400:
+		if getattr(request, '_business_upload_limits_active', False) and (
+			response.status_code >= 400 or getattr(request, '_business_upload_cleanup_on_response', False)
+		):
 			self._cleanup_failed_stored_uploads(request)
 		return response
 

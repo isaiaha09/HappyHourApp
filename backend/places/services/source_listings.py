@@ -27,13 +27,26 @@ from places.services.social_profiles import build_social_media_links, normalize_
 
 
 SOURCE_RECORDS_CACHE_SCHEMA_VERSION = 2
-SOURCE_PAYLOAD_CACHE_SCHEMA_VERSION = 3
+SOURCE_PAYLOAD_CACHE_SCHEMA_VERSION = 4
 
 
 def _safe_https_reference(value):
 	candidate = str(value or '').strip()
 	parsed = urlparse(candidate)
 	return candidate if parsed.scheme.lower() == 'https' and parsed.netloc else ''
+
+
+def _safe_image_reference(value):
+	media_id = managed_media_id_from_reference(value)
+	if media_id is not None:
+		media = ManagedMedia.objects.filter(
+			media_id=media_id,
+			media_kind='profile_photo',
+		).filter(
+			Q(listing_snapshot__isnull=False) | Q(claim__membership__is_active=True)
+		).only('media_id').first()
+		return managed_media_url(media.media_id) if media is not None else ''
+	return _safe_https_reference(value)
 
 
 RUNTIME_IMPORTER_REGISTRY = {
@@ -510,11 +523,13 @@ def _get_listing_snapshot_override_payloads():
 			'neighborhood': snapshot.neighborhood,
 			'state': snapshot.state,
 			'postal_code': snapshot.postal_code,
+			'latitude': snapshot.latitude,
+			'longitude': snapshot.longitude,
 			'phone_number': snapshot.phone_number,
 			'website_url': _safe_https_reference(snapshot.website_url),
 			'imported_image_urls': [
 				reference
-				for reference in (_safe_https_reference(value) for value in list(snapshot.imported_image_urls or []))
+				for reference in (_safe_image_reference(value) for value in list(snapshot.imported_image_urls or []))
 				if reference
 			],
 			'has_image_gallery_override': bool((snapshot.imported_image_urls or []) or (snapshot.suppressed_imported_image_urls or [])),
@@ -632,11 +647,15 @@ def _apply_snapshot_contact_override_to_location(location, override_payload):
 		value = override_payload.get(field_name)
 		if value not in (None, ''):
 			location[field_name] = value
+	for field_name in ('latitude', 'longitude'):
+		value = override_payload.get(field_name)
+		if value is not None:
+			location[field_name] = value
 	if 'website_url' in override_payload:
 		location['website_url'] = _safe_https_reference(override_payload.get('website_url', ''))
 	imported_image_urls = list(override_payload.get('imported_image_urls') or [])
 	if override_payload.get('has_image_gallery_override'):
-		location['image_urls'] = [reference for reference in (_safe_https_reference(value) for value in imported_image_urls) if reference]
+		location['image_urls'] = [reference for reference in (_safe_image_reference(value) for value in imported_image_urls) if reference]
 	for field_name in ('social_profiles', 'social_media_links'):
 		if field_name in override_payload:
 			location[field_name] = override_payload[field_name]
@@ -645,6 +664,9 @@ def _apply_snapshot_contact_override_to_location(location, override_payload):
 def _apply_snapshot_contact_override_to_payload(payload, location):
 	for field_name in ('name', 'city', 'city_label', 'address_line_1', 'address_line_2', 'neighborhood', 'state', 'postal_code', 'phone_number'):
 		payload[field_name] = location.get(field_name, payload.get(field_name))
+	for field_name in ('latitude', 'longitude'):
+		if location.get(field_name) is not None:
+			payload[field_name] = location[field_name]
 	payload['website_url'] = location.get('website_url', payload.get('website_url', ''))
 	payload['image_urls'] = list(location.get('image_urls', payload.get('image_urls', [])) or [])
 	for field_name in ('social_profiles', 'social_media_links'):
@@ -900,8 +922,8 @@ def _build_manual_admin_snapshot_payload(snapshot, resolve_missing_coordinates=T
 		neighborhood=snapshot.neighborhood,
 		state=snapshot.state,
 		postal_code=snapshot.postal_code,
-		latitude=snapshot.tracked_location_latitude if is_live_location_business else None,
-		longitude=snapshot.tracked_location_longitude if is_live_location_business else None,
+		latitude=snapshot.tracked_location_latitude if is_live_location_business else snapshot.latitude,
+		longitude=snapshot.tracked_location_longitude if is_live_location_business else snapshot.longitude,
 		phone_number=snapshot.phone_number,
 		website_url=snapshot.website_url,
 		image_urls=list(snapshot.imported_image_urls or []),
@@ -1113,8 +1135,8 @@ def _build_snapshot_place_payload(claim, resolve_missing_coordinates=True):
 		neighborhood=public_address_fields['neighborhood'],
 		state=snapshot.state,
 		postal_code=public_address_fields['postal_code'],
-		latitude=snapshot.tracked_location_latitude if live_location_tracking_enabled else None,
-		longitude=snapshot.tracked_location_longitude if live_location_tracking_enabled else None,
+		latitude=snapshot.tracked_location_latitude if live_location_tracking_enabled else snapshot.latitude,
+		longitude=snapshot.tracked_location_longitude if live_location_tracking_enabled else snapshot.longitude,
 		phone_number=public_phone_number,
 		website_url=website_url,
 		external_id=snapshot.external_id or snapshot.listing_slug or f'listing-snapshot-{snapshot.pk}',
@@ -1471,7 +1493,7 @@ def _build_location_payload(place_record, resolve_missing_coordinates=True):
 		'longitude': longitude,
 		'phone_number': place_record.phone_number,
 		'website_url': _safe_https_reference(place_record.website_url),
-		'image_urls': [reference for reference in (_safe_https_reference(value) for value in list(place_record.image_urls)) if reference],
+		'image_urls': [reference for reference in (_safe_image_reference(value) for value in list(place_record.image_urls)) if reference],
 		'operating_hours': [
 			{
 				'id': _stable_numeric_id(place_record.source_name, place_slug, 'operating-hours', operating_hour.weekday, operating_hour.open_time, operating_hour.close_time),

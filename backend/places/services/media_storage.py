@@ -2,11 +2,12 @@ import logging
 import posixpath
 from pathlib import Path
 from urllib.parse import unquote, urlparse
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from django.conf import settings
 from django.core.files.storage import default_storage
 from django.urls import reverse
+from django.utils.text import slugify
 
 
 logger = logging.getLogger(__name__)
@@ -85,6 +86,44 @@ def save_managed_media(claim, uploaded_file, storage_name, media_kind, request=N
 	return media, managed_media_url(media.media_id, request=request)
 
 
+def save_listing_snapshot_media(snapshot, uploaded_file, media_kind, content_type, file_suffix, owner=None, request=None):
+	"""Save an admin-approved public upload against an unclaimed listing snapshot."""
+	from places.models import ManagedMedia
+
+	if snapshot is None or not snapshot.pk:
+		raise ValueError('Save the business listing before uploading public media.')
+	filename_root = Path(getattr(uploaded_file, 'name', '') or 'business-media').stem or 'business-media'
+	safe_name = slugify(filename_root) or 'business-media'
+	listing_slug = slugify(getattr(snapshot, 'listing_slug', '') or '') or 'business'
+	media_folder = 'profile-photos' if media_kind == 'profile_photo' else 'deal-attachments'
+	storage_name = (
+		f'businesses/{snapshot.pk}-{listing_slug}/admin/{media_folder}/'
+		f'{uuid4().hex}-{safe_name}{file_suffix}'
+	)
+	try:
+		uploaded_file.seek(0)
+	except (OSError, ValueError):
+		pass
+	register_business_upload_storage_file(request, default_storage, storage_name)
+	saved_name = default_storage.save(storage_name, uploaded_file)
+	register_business_upload_storage_file(request, default_storage, saved_name)
+	try:
+		media = ManagedMedia.objects.create(
+			owner=owner,
+			claim=None,
+			listing_snapshot=snapshot,
+			storage_name=saved_name,
+			media_kind=media_kind,
+			original_filename=f'{filename_root}{file_suffix}'[:255],
+			content_type=str(content_type or '')[:120],
+			file_size=int(getattr(uploaded_file, 'size', 0) or 0),
+		)
+	except Exception:
+		default_storage.delete(saved_name)
+		raise
+	return media, managed_media_url(media.media_id)
+
+
 def register_business_upload_storage_file(request, storage, storage_name):
 	"""Track a storage write so a rejected business-upload request can remove it."""
 	if request is None:
@@ -116,6 +155,8 @@ def _managed_media_uuid(value):
 
 
 def _claim_references_managed_media(claim, media_id):
+	if claim is None:
+		return False
 	for reference in claim.photo_references or []:
 		if _managed_media_uuid(reference) == media_id:
 			return True
@@ -132,6 +173,18 @@ def _claim_references_managed_media(claim, media_id):
 	)
 
 
+def _listing_snapshot_references_managed_media(snapshot, media_id):
+	if snapshot is None:
+		return False
+	for reference in snapshot.imported_image_urls or []:
+		if _managed_media_uuid(reference) == media_id:
+			return True
+	for reference in _iter_deal_attachment_references(snapshot.deal_overrides):
+		if _managed_media_uuid(reference) == media_id:
+			return True
+	return False
+
+
 def cleanup_failed_business_uploads(request):
 	"""Delete request-created media that an unsuccessful request did not retain."""
 	tracked_files = list(getattr(request, BUSINESS_UPLOAD_STORAGE_FILES_ATTR, ()) or ())
@@ -146,10 +199,15 @@ def cleanup_failed_business_uploads(request):
 		BusinessClaimAttachment.objects.filter(file__in=storage_names)
 		.values_list('file', flat=True)
 	)
-	media_rows = list(ManagedMedia.objects.filter(storage_name__in=storage_names).select_related('claim'))
+	media_rows = list(ManagedMedia.objects.filter(storage_name__in=storage_names).select_related('claim', 'listing_snapshot'))
 	deleted_names = set()
 	for media in media_rows:
-		if _claim_references_managed_media(media.claim, media.media_id):
+		is_referenced = (
+			_listing_snapshot_references_managed_media(media.listing_snapshot, media.media_id)
+			if media.listing_snapshot_id
+			else _claim_references_managed_media(media.claim, media.media_id)
+		)
+		if is_referenced:
 			protected_names.add(media.storage_name)
 			continue
 		try:
@@ -188,6 +246,12 @@ def classify_supabase_media_key(key):
 		return None
 
 	path_parts = normalized_key.split('/')
+	if 'admin' in path_parts:
+		admin_path_parts = path_parts[path_parts.index('admin') + 1:]
+		if 'deal-attachments' in admin_path_parts:
+			return 'public', 'businesses/.../admin/deal-attachments'
+		if 'profile-photos' in admin_path_parts:
+			return 'public', 'businesses/.../admin/profile-photos'
 	if 'claims' not in path_parts:
 		return None
 

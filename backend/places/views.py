@@ -79,7 +79,7 @@ from .services.happy_hour_notifications import process_due_happy_hour_notificati
 from .services.direct_message_push import send_push_notifications_for_direct_message
 from .services.home_feed import get_feed_interval, get_feed_queryset, get_organic_page_size, get_ranked_campaigns, get_requested_feed_page_size, mix_feed_items, record_campaign_served
 from .services.image_moderation import IMAGE_MEDIA_TYPE_TO_EXTENSION, ImageModerationRejected, ImageModerationUnavailable, get_validated_image_media_type, moderate_uploaded_image
-from .services.media_storage import save_managed_media
+from .services.media_storage import managed_media_id_from_reference, save_managed_media
 from .services.social_profiles import build_social_media_links, get_business_website_url, normalize_social_profiles
 from .services.website_contact import verify_contact_turnstile
 from .services.current_happy_hours import get_current_happy_hours_payload
@@ -119,11 +119,16 @@ SAFE_CLAIM_IMAGE_PREVIEW_MIME_BY_SUFFIX = {
 
 class ManagedMediaView(View):
 	def get(self, request, media_id):
-		media = ManagedMedia.objects.select_related('claim').filter(
-			media_id=media_id,
-			claim__membership__is_active=True,
-		).first()
+		media = ManagedMedia.objects.select_related('listing_snapshot').filter(media_id=media_id).first()
 		if media is None:
+			raise Http404
+		if media.claim_id:
+			if not BusinessMembership.objects.filter(claim_id=media.claim_id, is_active=True).exists():
+				raise Http404
+		elif media.listing_snapshot_id:
+			if not _listing_snapshot_media_is_referenced(media):
+				raise Http404
+		else:
 			raise Http404
 		try:
 			file_handle = default_storage.open(media.storage_name, 'rb')
@@ -151,6 +156,23 @@ class ManagedMediaView(View):
 		response['Content-Disposition'] = f'{disposition}; filename="{safe_filename_root}{file_suffix}"'
 		response['X-Content-Type-Options'] = 'nosniff'
 		return response
+
+
+def _listing_snapshot_media_is_referenced(media):
+	snapshot = media.listing_snapshot
+	if snapshot is None:
+		return False
+	if media.media_kind == 'profile_photo':
+		references = list(snapshot.imported_image_urls or [])
+	elif media.media_kind == 'deal_attachment':
+		references = []
+		for deal in snapshot.deal_overrides or []:
+			attachment = deal.get('attachment') if isinstance(deal, dict) else None
+			if isinstance(attachment, dict):
+				references.extend((attachment.get('media_id'), attachment.get('url')))
+	else:
+		return False
+	return any(managed_media_id_from_reference(reference) == media.media_id for reference in references)
 
 
 class PrivateBusinessProfileMediaView(View):

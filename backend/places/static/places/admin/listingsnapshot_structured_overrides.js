@@ -1156,6 +1156,66 @@
         availabilitySection.append(happyHourButtonRow);
         card.append(availabilitySection);
 
+        const attachmentSection = document.createElement('section');
+        attachmentSection.className = 'structured-admin-editor__deal-section';
+        const attachmentHeading = document.createElement('h4');
+        attachmentHeading.className = 'structured-admin-editor__step-heading';
+        attachmentHeading.textContent = 'Deal image or PDF';
+        attachmentSection.append(attachmentHeading, buildHelp('Optionally attach one photo or PDF to this deal. The file is uploaded when you save the business.'));
+
+        if (deal.attachment && deal.attachment.url) {
+          const currentAttachment = document.createElement('div');
+          currentAttachment.className = 'structured-admin-editor__entry-heading';
+          const attachmentLink = document.createElement('a');
+          attachmentLink.href = deal.attachment.url;
+          attachmentLink.target = '_blank';
+          attachmentLink.rel = 'noopener';
+          attachmentLink.textContent = 'Open current attachment: ' + (deal.attachment.name || 'file');
+          const removeAttachment = buildButton('Remove attachment', 'structured-admin-editor__button--danger', function () {
+            delete state.value[dealIndex].attachment;
+            state.value[dealIndex]._attachment_upload_file = null;
+            syncTextarea();
+            renderDeals();
+          });
+          currentAttachment.append(attachmentLink, removeAttachment);
+          attachmentSection.append(currentAttachment);
+        }
+
+        const attachmentInputLabel = document.createElement('label');
+        attachmentInputLabel.className = 'structured-admin-editor__label';
+        attachmentInputLabel.append(document.createTextNode('Upload or replace attachment'));
+        const attachmentInput = document.createElement('input');
+        attachmentInput.className = 'structured-admin-editor__input';
+        attachmentInput.type = 'file';
+        attachmentInput.name = 'deal_attachment_upload_' + dealIndex;
+        attachmentInput.accept = 'image/*,.pdf,application/pdf';
+        const selectedAttachmentStatus = document.createElement('span');
+        selectedAttachmentStatus.className = 'structured-admin-editor__help';
+        selectedAttachmentStatus.textContent = deal._attachment_upload_file
+          ? 'New upload selected: ' + deal._attachment_upload_file.name
+          : 'No new file selected.';
+        if (deal._attachment_upload_file && typeof DataTransfer !== 'undefined') {
+          try {
+            const transfer = new DataTransfer();
+            transfer.items.add(deal._attachment_upload_file);
+            attachmentInput.files = transfer.files;
+          } catch (error) {
+            // Keep the selected file state where supported; this input can be selected again if a browser blocks restoration.
+          }
+        }
+        attachmentInput.addEventListener('change', function () {
+          markTouched();
+          const selectedFile = attachmentInput.files && attachmentInput.files[0];
+          state.value[dealIndex]._attachment_upload_file = selectedFile || null;
+          selectedAttachmentStatus.textContent = selectedFile
+            ? 'New upload selected: ' + selectedFile.name
+            : 'No new file selected.';
+          syncTextarea();
+        });
+        attachmentInputLabel.append(attachmentInput);
+        attachmentSection.append(attachmentInputLabel, selectedAttachmentStatus);
+        card.append(attachmentSection);
+
         const previewSection = buildDealSection(4, 'Check your deal', 'Review the formatted content below. Your changes are saved when you submit the form.');
         preview = document.createElement('div');
         preview.className = 'structured-admin-editor__preview';

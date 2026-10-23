@@ -10,6 +10,7 @@ from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.files.storage import storages
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.text import slugify
 from pypdf import PdfReader
@@ -195,6 +196,8 @@ class ListingSnapshot(models.Model):
 	serves_multiple_areas = models.BooleanField(default=False)
 	state = models.CharField(max_length=2, default='CA')
 	postal_code = models.CharField(max_length=10, blank=True)
+	latitude = models.FloatField(null=True, blank=True)
+	longitude = models.FloatField(null=True, blank=True)
 	phone_number = models.CharField(max_length=20, blank=True)
 	website_url = models.URLField(blank=True)
 	deal_overrides = models.JSONField(default=None, null=True, blank=True)
@@ -1023,9 +1026,10 @@ class BusinessClaimAttachment(models.Model):
 
 
 class ManagedMedia(models.Model):
-	"""Opaque, owner-scoped records for business-uploaded profile media."""
-	owner = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='managed_media', on_delete=models.CASCADE)
-	claim = models.ForeignKey(BusinessClaim, related_name='managed_media', on_delete=models.CASCADE)
+	"""Opaque media records for public business-profile media."""
+	owner = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='managed_media', null=True, blank=True, on_delete=models.SET_NULL)
+	claim = models.ForeignKey(BusinessClaim, related_name='managed_media', null=True, blank=True, on_delete=models.CASCADE)
+	listing_snapshot = models.ForeignKey(ListingSnapshot, related_name='managed_media', null=True, blank=True, on_delete=models.CASCADE)
 	media_id = models.UUIDField(default=uuid4, unique=True, editable=False)
 	storage_name = models.CharField(max_length=512, unique=True)
 	media_kind = models.CharField(max_length=40)
@@ -1038,6 +1042,15 @@ class ManagedMedia(models.Model):
 		ordering = ['-created_at', '-pk']
 		indexes = [
 			models.Index(fields=['owner', 'claim', 'media_kind'], name='places_media_owner_claim_idx'),
+		]
+		constraints = [
+			models.CheckConstraint(
+				condition=(
+					Q(claim__isnull=False, listing_snapshot__isnull=True)
+					| Q(claim__isnull=True, listing_snapshot__isnull=False)
+				),
+				name='places_media_claim_or_listing_chk',
+			),
 		]
 
 	def __str__(self):
