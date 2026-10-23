@@ -62,6 +62,48 @@
     }
   }
 
+  function captureViewportPosition(element) {
+    const scrollContainers = [];
+    let ancestor = element.parentElement;
+    while (ancestor && ancestor !== document.body && ancestor !== document.documentElement) {
+      const style = window.getComputedStyle(ancestor);
+      const scrollsVertically = ['auto', 'scroll', 'overlay'].includes(style.overflowY)
+        && ancestor.scrollHeight > ancestor.clientHeight;
+      const scrollsHorizontally = ['auto', 'scroll', 'overlay'].includes(style.overflowX)
+        && ancestor.scrollWidth > ancestor.clientWidth;
+      if (scrollsVertically || scrollsHorizontally) {
+        scrollContainers.push({
+          element: ancestor,
+          top: ancestor.scrollTop,
+          left: ancestor.scrollLeft,
+        });
+      }
+      ancestor = ancestor.parentElement;
+    }
+
+    return {
+      x: window.scrollX,
+      y: window.scrollY,
+      scrollContainers: scrollContainers,
+    };
+  }
+
+  function restoreViewportPosition(position) {
+    if (!position) {
+      return;
+    }
+    window.requestAnimationFrame(function () {
+      window.scrollTo(position.x, position.y);
+      for (let index = position.scrollContainers.length - 1; index >= 0; index -= 1) {
+        const scrollContainer = position.scrollContainers[index];
+        if (scrollContainer.element.isConnected) {
+          scrollContainer.element.scrollTop = scrollContainer.top;
+          scrollContainer.element.scrollLeft = scrollContainer.left;
+        }
+      }
+    });
+  }
+
   function getMenuItemWeekdays(item) {
     return Array.from(new Set((Array.isArray(item.weekdays) ? item.weekdays : []).filter(function (day) {
       return Number.isInteger(day) && day >= 0 && day <= 6;
@@ -471,7 +513,8 @@
       }).join('\n');
     }
 
-    function render() {
+    function render(focusTarget) {
+      const viewportPosition = editorRoot.childNodes.length ? captureViewportPosition(editorRoot) : null;
       clearChildren(editorRoot);
 
       if (!state.images.length) {
@@ -480,6 +523,7 @@
         empty.textContent = 'No imported images are stored for this business.';
         editorRoot.append(empty);
         syncTextarea();
+        restoreViewportPosition(viewportPosition);
         return;
       }
 
@@ -491,6 +535,7 @@
 
         const card = document.createElement('div');
         card.className = 'structured-admin-image-editor__card' + (pendingDelete ? ' is-pending-delete' : '');
+        card.dataset.imageIndex = String(index);
 
         const imageWrap = document.createElement('div');
         imageWrap.className = 'structured-admin-image-editor__image-wrap';
@@ -531,7 +576,7 @@
         deleteButton.addEventListener('click', function () {
           state.deleted.add(imageUrl);
           syncTextarea();
-          render();
+          render({ imageIndex: index, action: 'undo' });
         });
         actions.append(deleteButton);
 
@@ -543,7 +588,7 @@
         undoButton.addEventListener('click', function () {
           state.deleted.delete(imageUrl);
           syncTextarea();
-          render();
+          render({ imageIndex: index, action: 'delete' });
         });
         actions.append(undoButton);
         card.append(actions);
@@ -560,6 +605,19 @@
 
       editorRoot.append(grid);
       syncTextarea();
+
+      if (focusTarget) {
+        const card = Array.from(editorRoot.querySelectorAll('.structured-admin-image-editor__card')).find(function (candidate) {
+          return candidate.dataset.imageIndex === String(focusTarget.imageIndex);
+        });
+        const button = card && card.querySelector('.structured-admin-image-editor__button--' + focusTarget.action);
+        if (button && !button.hidden) {
+          button.focus({ preventScroll: true });
+          button.scrollIntoView({ block: 'center', behavior: 'auto' });
+          return;
+        }
+      }
+      restoreViewportPosition(viewportPosition);
     }
 
     render();
@@ -752,7 +810,8 @@
       return { root: details, content: content };
     }
 
-    function renderDeals() {
+    function renderDeals(focusTargetConfig) {
+      const viewportPosition = editorRoot.childNodes.length ? captureViewportPosition(editorRoot) : null;
       clearChildren(editorRoot);
       dealPreviewRefreshers.length = 0;
       if (!state.value.length) {
@@ -765,6 +824,7 @@
       state.value.forEach(function (deal, dealIndex) {
         const card = document.createElement('div');
         card.className = 'structured-admin-editor__card';
+        card.dataset.dealIndex = String(dealIndex);
         const eyebrow = document.createElement('div');
         eyebrow.className = 'structured-admin-editor__eyebrow';
         eyebrow.textContent = 'DEAL ' + (dealIndex + 1);
@@ -948,7 +1008,7 @@
             state.value[dealIndex].custom_deal_type_label = '';
           }
           syncTextarea();
-          renderDeals();
+          renderDeals({ kind: 'deal-type', dealIndex: dealIndex });
         }));
         headingSection.append(row);
 
@@ -982,6 +1042,7 @@
         deal.menu_items.forEach(function (item, itemIndex) {
           const itemCard = document.createElement('div');
           itemCard.className = 'structured-admin-editor__deal-entry';
+          itemCard.dataset.menuItemIndex = String(itemIndex);
           const itemHeading = document.createElement('div');
           itemHeading.className = 'structured-admin-editor__entry-heading';
           const itemNumber = document.createElement('span');
@@ -1066,7 +1127,7 @@
         const addMenuItem = buildButton('Add menu item', 'structured-admin-editor__button', function () {
           state.value[dealIndex].menu_items.push(createEmptyMenuItem());
           syncTextarea();
-          renderDeals();
+          renderDeals({ kind: 'menu-item', dealIndex: dealIndex, menuItemIndex: state.value[dealIndex].menu_items.length - 1 });
         });
         addMenuItem.disabled = deal.menu_items.length >= 50;
         if (addMenuItem.disabled) {
@@ -1096,6 +1157,7 @@
         deal.happy_hours.forEach(function (window, windowIndex) {
           const nestedCard = document.createElement('div');
           nestedCard.className = 'structured-admin-editor__deal-entry';
+        nestedCard.dataset.scheduleIndex = String(windowIndex);
           const scheduleNumber = document.createElement('div');
           scheduleNumber.className = 'structured-admin-editor__eyebrow';
           scheduleNumber.textContent = 'SCHEDULE ' + (windowIndex + 1);
@@ -1151,7 +1213,7 @@
         happyHourButtonRow.append(buildButton('Add deal day/time', 'structured-admin-editor__button', function () {
           state.value[dealIndex].happy_hours.push(createEmptyHappyHour());
           syncTextarea();
-          renderDeals();
+          renderDeals({ kind: 'schedule', dealIndex: dealIndex, scheduleIndex: state.value[dealIndex].happy_hours.length - 1 });
         }));
         availabilitySection.append(happyHourButtonRow);
         card.append(availabilitySection);
@@ -1236,14 +1298,44 @@
       const actions = document.createElement('div');
       actions.className = 'structured-admin-editor__button-row';
       actions.append(buildButton('Add deal or special', 'structured-admin-editor__button', function () {
-        state.value.push(createEmptyDeal());
+        const newDeal = createEmptyDeal();
+        state.value.push(newDeal);
         syncTextarea();
-        renderDeals();
+        renderDeals({ kind: 'deal', dealIndex: state.value.length - 1 });
       }));
       editorRoot.append(actions);
+
+      if (focusTargetConfig) {
+        const dealCard = Array.from(editorRoot.querySelectorAll('.structured-admin-editor__card')).find(function (card) {
+          return card.dataset.dealIndex === String(focusTargetConfig.dealIndex);
+        });
+        let focusTarget = null;
+        if (focusTargetConfig.kind === 'menu-item') {
+          const menuItemCard = dealCard && Array.from(dealCard.querySelectorAll('.structured-admin-editor__deal-entry[data-menu-item-index]')).find(function (itemCard) {
+            return itemCard.dataset.menuItemIndex === String(focusTargetConfig.menuItemIndex);
+          });
+          focusTarget = menuItemCard && menuItemCard.querySelector('input, textarea');
+        } else if (focusTargetConfig.kind === 'schedule') {
+          const scheduleCard = dealCard && Array.from(dealCard.querySelectorAll('.structured-admin-editor__deal-entry[data-schedule-index]')).find(function (entry) {
+            return entry.dataset.scheduleIndex === String(focusTargetConfig.scheduleIndex);
+          });
+          focusTarget = scheduleCard && scheduleCard.querySelector('.structured-admin-editor__weekday-button');
+        } else if (focusTargetConfig.kind === 'deal') {
+          focusTarget = dealCard && dealCard.querySelector('input, textarea');
+        } else if (focusTargetConfig.kind === 'deal-type') {
+          focusTarget = dealCard && dealCard.querySelector('select');
+        }
+        if (focusTarget) {
+          focusTarget.focus({ preventScroll: true });
+          focusTarget.scrollIntoView({ block: 'center', behavior: 'auto' });
+          return;
+        }
+      }
+      restoreViewportPosition(viewportPosition);
     }
 
-    function renderHours() {
+    function renderHours(focusRowIndex) {
+      const viewportPosition = editorRoot.childNodes.length ? captureViewportPosition(editorRoot) : null;
       clearChildren(editorRoot);
       let previewRows = null;
 
@@ -1284,6 +1376,7 @@
       state.value.forEach(function (rowValue, rowIndex) {
         const card = document.createElement('div');
         card.className = 'structured-admin-editor__card structured-admin-editor__hours-row';
+        card.dataset.hoursRowIndex = String(rowIndex);
         card.setAttribute('role', 'group');
         card.setAttribute('aria-label', 'Schedule ' + (rowIndex + 1));
         const scheduleNumber = document.createElement('div');
@@ -1366,9 +1459,22 @@
       actions.append(buildButton('Add hours row', 'structured-admin-editor__button', function () {
         state.value.push(createEmptyHoursRow());
         syncTextarea();
-        renderHours();
+        renderHours(state.value.length - 1);
       }));
       editorRoot.append(actions);
+
+      if (Number.isInteger(focusRowIndex)) {
+        const newRow = Array.from(editorRoot.querySelectorAll('.structured-admin-editor__hours-row')).find(function (row) {
+          return row.dataset.hoursRowIndex === String(focusRowIndex);
+        });
+        const firstWeekday = newRow && newRow.querySelector('.structured-admin-editor__weekday-button');
+        if (firstWeekday) {
+          firstWeekday.focus({ preventScroll: true });
+          firstWeekday.scrollIntoView({ block: 'center', behavior: 'auto' });
+          return;
+        }
+      }
+      restoreViewportPosition(viewportPosition);
     }
 
     if (!seededFromCurrentPublic) {
