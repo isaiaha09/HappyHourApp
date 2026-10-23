@@ -217,14 +217,6 @@ private struct DiningDealzTopRoundedRectangle: Shape {
   }
 }
 
-private struct DiningDealzDealListTopPreferenceKey: PreferenceKey {
-  static var defaultValue: CGFloat = 0
-
-  static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-    value = nextValue()
-  }
-}
-
 struct DiningDealzCurrentHappyHoursUpMenu: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   let places: [DiningDealzCurrentHappyHourPlace]
@@ -249,7 +241,6 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
   @State private var sheetProgress: CGFloat = 0
   @State private var hasInitializedSheetProgress = false
   @State private var dragTranslationY: CGFloat? = nil
-  @State private var isListAtTop = true
 
   init(
     places: [DiningDealzCurrentHappyHourPlace],
@@ -457,14 +448,6 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
   private var expandedList: some View {
     ScrollView(.vertical, showsIndicators: false) {
       VStack(spacing: 0) {
-        GeometryReader { geometry in
-          Color.clear.preference(
-            key: DiningDealzDealListTopPreferenceKey.self,
-            value: geometry.frame(in: .named("dealList")).minY
-          )
-        }
-        .frame(height: 0)
-
         LazyVStack(alignment: .leading, spacing: 12) {
           ForEach(places) { place in
             DiningDealzCurrentHappyHoursUpMenuCard(
@@ -484,12 +467,6 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
       .padding(.horizontal, 14)
       .padding(.bottom, bottomOffset + 28)
     }
-    .coordinateSpace(name: "dealList")
-    .onPreferenceChange(DiningDealzDealListTopPreferenceKey.self) { topY in
-      let nextIsAtTop = topY >= -2
-      if isListAtTop != nextIsAtTop { isListAtTop = nextIsAtTop }
-    }
-    .simultaneousGesture(listPullGesture)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .accessibilityElement(children: .contain)
   }
@@ -502,20 +479,6 @@ struct DiningDealzCurrentHappyHoursUpMenu: View {
         updateSheetDrag(value.translation.height)
       }
       .onEnded { value in
-        finishSheetDrag(value)
-      }
-  }
-
-  private var listPullGesture: some Gesture {
-    DragGesture(minimumDistance: 8, coordinateSpace: .global)
-      .onChanged { value in
-        guard isExpanded, (isListAtTop || dragTranslationY != nil),
-              value.translation.height > 0,
-              value.translation.height > abs(value.translation.width) else { return }
-        updateSheetDrag(value.translation.height)
-      }
-      .onEnded { value in
-        guard dragTranslationY != nil else { return }
         finishSheetDrag(value)
       }
   }

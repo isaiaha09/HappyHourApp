@@ -1,7 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Dimensions, Image, Pressable, ScrollView, Text, View } from 'react-native';
-import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 
 import type { CurrentHappyHourPlace, CurrentHappyHourWindow } from '../types';
@@ -186,7 +185,6 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
   const panelProgress = useRef(new Animated.Value(expanded ? 1 : 0)).current;
   const sheetDragY = useRef(new Animated.Value(0)).current;
   const sheetGestureWasActiveRef = useRef(false);
-  const [listIsAtTop, setListIsAtTop] = useState(true);
 
   useEffect(() => {
     panelProgress.stopAnimation();
@@ -283,11 +281,6 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
 
     onToggle();
   }, [onToggle]);
-
-  const handleListScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const atTop = event.nativeEvent.contentOffset.y <= 2;
-    setListIsAtTop((previous) => previous === atTop ? previous : atTop);
-  }, []);
 
   const livePanelProgress = Animated.add(
     panelProgress,
@@ -410,21 +403,12 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
               ]}
               testID="current-happy-hours-menu"
             >
-              <PanGestureHandler
-                activeOffsetY={[-10000, 12]}
-                enabled={expanded && listIsAtTop}
-                failOffsetX={[-20, 20]}
-                onGestureEvent={handleSheetGestureEvent}
-                onHandlerStateChange={handleSheetGestureStateChange}
-                testID="current-happy-hours-list-pull"
-              >
                 <Animated.View style={{ flex: 1 }}>
                   <ScrollView
                     bounces={false}
                     contentContainerStyle={[styles.currentHappyHoursSheetList, { paddingBottom: bottomOffset + 28 }]}
                     keyboardShouldPersistTaps="handled"
                     nestedScrollEnabled
-                    onScroll={handleListScroll}
                     scrollEventThrottle={16}
                     showsVerticalScrollIndicator={false}
                     testID="current-happy-hours-list"
@@ -444,7 +428,6 @@ function ReactNativeCurrentHappyHoursUpMenuContent({
                     ))}
                   </ScrollView>
                 </Animated.View>
-              </PanGestureHandler>
             </Animated.View>
           </Animated.View>
         </Animated.View>

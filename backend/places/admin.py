@@ -879,15 +879,6 @@ class ListingSnapshotAdminForm(forms.ModelForm):
 		except ValueError as error:
 			self.add_error('imported_image_urls', str(error))
 
-		latitude = cleaned_data.get('latitude')
-		longitude = cleaned_data.get('longitude')
-		if (latitude is None) != (longitude is None):
-			self.add_error('latitude', 'Enter both latitude and longitude, or leave both blank for address geocoding.')
-		elif latitude is not None and not (-90 <= latitude <= 90):
-			self.add_error('latitude', 'Latitude must be between -90 and 90.')
-		elif longitude is not None and not (-180 <= longitude <= 180):
-			self.add_error('longitude', 'Longitude must be between -180 and 180.')
-
 		photo_uploads = cleaned_data.get('admin_photo_uploads') or []
 		max_photo_uploads = max(1, int(getattr(settings, 'BUSINESS_PROFILE_MAX_PHOTOS', 8) or 8))
 		max_aggregate_bytes = max(1, int(getattr(settings, 'IMAGE_UPLOAD_MAX_AGGREGATE_BYTES', 20 * 1024 * 1024) or 20 * 1024 * 1024))
@@ -1798,8 +1789,8 @@ class ListingSnapshotAdmin(UnfoldModelAdmin):
 			'classes': ('tab',),
 		}),
 		('Business details', {
-			'fields': ('city', 'venue_type', 'address_line_1', 'address_line_2', 'neighborhood', 'state', 'postal_code', 'latitude', 'longitude'),
-			'description': 'Fixed-location businesses are geocoded from the address when saved. Enter both coordinates to set or correct the map pin. Census address-range results can be approximate.',
+			'fields': ('city', 'venue_type', 'address_line_1', 'address_line_2', 'neighborhood', 'state', 'postal_code'),
+			'description': 'Fixed-location businesses get map coordinates from the address when saved. Census address-range results can be approximate.',
 			'classes': ('tab',),
 		}),
 		('Contact and social media', {
@@ -2138,8 +2129,6 @@ class ListingSnapshotAdmin(UnfoldModelAdmin):
 			'social_profiles',
 			'is_starred',
 			'social_media_links',
-			'latitude',
-			'longitude',
 			'admin_photo_uploads',
 		}
 		changed_fields = set(getattr(form, 'changed_data', []))
@@ -2149,15 +2138,11 @@ class ListingSnapshotAdmin(UnfoldModelAdmin):
 		overrides_changed = change and bool(public_override_fields.intersection(changed_fields) or uploads_present)
 
 		is_live_location_business = obj.venue_type == VenueType.MOBILE or obj.serves_multiple_areas
-		coordinate_fields_changed = bool({'latitude', 'longitude'}.intersection(changed_fields))
 		address_fields_changed = bool({'address_line_1', 'city', 'state', 'postal_code'}.intersection(changed_fields))
-		source_name = str(obj.source_name or '').strip().lower()
-		is_admin_listing = source_name.startswith('admin')
 		needs_saved_coordinates = obj.latitude is None or obj.longitude is None
 		should_geocode = (
 			not is_live_location_business
-			and not coordinate_fields_changed
-			and (not change or address_fields_changed or (is_admin_listing and needs_saved_coordinates))
+			and (not change or address_fields_changed or needs_saved_coordinates)
 		)
 		if should_geocode:
 			city_label = dict(City.choices).get(obj.city, obj.city)
@@ -2170,9 +2155,13 @@ class ListingSnapshotAdmin(UnfoldModelAdmin):
 			if coordinates is not None:
 				obj.latitude, obj.longitude = coordinates
 			else:
+				if address_fields_changed:
+					# Do not keep a map pin for the previous address after an address edit.
+					obj.latitude = None
+					obj.longitude = None
 				messages.warning(
 					request,
-					'We could not geocode this address. The saved coordinates were kept; enter latitude and longitude manually if the map pin is missing or misplaced.',
+					'We could not generate a map pin from this address. Check the address and save again.',
 				)
 
 		super().save_model(request, obj, form, change)
