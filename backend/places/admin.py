@@ -97,6 +97,22 @@ def _collect_orphaned_claimant_ids_for_deleted_claims(queryset):
 	return orphaned_claimant_ids
 
 
+def _flatten_validation_error_detail(detail):
+	if isinstance(detail, dict):
+		return [
+			message
+			for value in detail.values()
+			for message in _flatten_validation_error_detail(value)
+		]
+	if isinstance(detail, (list, tuple)):
+		return [
+			message
+			for value in detail
+			for message in _flatten_validation_error_detail(value)
+		]
+	return [str(detail)]
+
+
 def _user_has_direct_message_history(user_id):
 	return (
 		BusinessDirectMessageThread.objects.filter(
@@ -917,6 +933,8 @@ class ListingSnapshotAdminForm(forms.ModelForm):
 				self.add_error('deal_overrides', str(error))
 
 		self._validated_deal_attachment_uploads = {}
+		# normalize_deal_overrides validates every row and preserves outer deal order,
+		# so each browser upload index still points to the matching cleaned row.
 		deal_rows = cleaned_data.get('deal_overrides') or []
 		deal_upload_prefix = 'deal_attachment_upload_'
 		for field_name in self.files.keys():
@@ -938,7 +956,8 @@ class ListingSnapshotAdminForm(forms.ModelForm):
 			try:
 				content_type, file_suffix = _validate_uploaded_deal_attachment(uploaded_files[0])
 			except DRFValidationError as error:
-				self.add_error('deal_overrides', f'Deal #{deal_index + 1}: {error.detail}')
+				error_message = '; '.join(_flatten_validation_error_detail(error.detail))
+				self.add_error('deal_overrides', f'Deal #{deal_index + 1}: {error_message}')
 				continue
 			uploaded_files[0].content_type = content_type
 			self._validated_deal_attachment_uploads[deal_index] = (uploaded_files[0], content_type, file_suffix)

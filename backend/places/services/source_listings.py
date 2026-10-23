@@ -27,7 +27,7 @@ from places.services.social_profiles import build_social_media_links, normalize_
 
 
 SOURCE_RECORDS_CACHE_SCHEMA_VERSION = 2
-SOURCE_PAYLOAD_CACHE_SCHEMA_VERSION = 4
+SOURCE_PAYLOAD_CACHE_SCHEMA_VERSION = 5
 
 
 def _safe_https_reference(value):
@@ -310,6 +310,28 @@ def get_source_place_payloads(city=None, venue_type=None, source_name=None, has_
 			payloads_by_slug[snapshot_payload['slug']] = snapshot_payload
 			continue
 		payloads_by_slug[snapshot_payload['slug']] = _merge_claimed_snapshot_payload(existing_payload, snapshot_payload)
+
+	for snapshot in _get_pending_business_claim_snapshots():
+		if snapshot.listing_slug in payloads_by_slug:
+			continue
+		pending_payload = _build_manual_admin_snapshot_payload(
+			snapshot,
+			resolve_missing_coordinates=resolve_missing_coordinates,
+		)
+		if pending_payload is None:
+			continue
+		pending_payload['is_claimed'] = True
+		payloads_by_slug[pending_payload['slug']] = pending_payload
+
+	for snapshot in _get_rejected_claim_snapshots():
+		if snapshot.listing_slug in payloads_by_slug:
+			continue
+		rejected_payload = _build_manual_admin_snapshot_payload(
+			snapshot,
+			resolve_missing_coordinates=resolve_missing_coordinates,
+		)
+		if rejected_payload is not None:
+			payloads_by_slug[rejected_payload['slug']] = rejected_payload
 
 	for snapshot in _get_unclaimed_manual_admin_snapshots():
 		manual_payload = _build_manual_admin_snapshot_payload(snapshot, resolve_missing_coordinates=resolve_missing_coordinates)
@@ -902,6 +924,41 @@ def _get_unclaimed_manual_admin_snapshots():
 	)
 
 
+def _get_pending_business_claim_snapshots():
+	pending_statuses = (
+		BusinessClaim.Status.SUBMITTED,
+		BusinessClaim.Status.UNDER_REVIEW,
+		BusinessClaim.Status.NEEDS_INFO,
+	)
+	return (
+		ListingSnapshot.objects
+		.filter(
+			business_claims__pathway=BusinessClaim.Pathway.CLAIMED,
+			business_claims__status__in=pending_statuses,
+		)
+		.exclude(listing_slug='')
+		.order_by('name', 'city', 'pk')
+		.distinct()
+	)
+
+
+def _get_rejected_claim_snapshots():
+	rejected_snapshot_ids = BusinessClaim.objects.filter(
+		pathway=BusinessClaim.Pathway.CLAIMED,
+		status=BusinessClaim.Status.REJECTED,
+	).values('listing_snapshot_id')
+	non_rejected_snapshot_ids = BusinessClaim.objects.exclude(
+		status=BusinessClaim.Status.REJECTED,
+	).values('listing_snapshot_id')
+	return (
+		ListingSnapshot.objects
+		.filter(pk__in=rejected_snapshot_ids)
+		.exclude(pk__in=non_rejected_snapshot_ids)
+		.exclude(listing_slug='')
+		.order_by('name', 'city', 'pk')
+	)
+
+
 def _build_manual_admin_snapshot_payload(snapshot, resolve_missing_coordinates=True):
 	is_live_location_business = snapshot.venue_type == VenueType.MOBILE or snapshot.serves_multiple_areas
 	should_resolve_coordinates = resolve_missing_coordinates and not is_live_location_business
@@ -928,7 +985,7 @@ def _build_manual_admin_snapshot_payload(snapshot, resolve_missing_coordinates=T
 		website_url=snapshot.website_url,
 		image_urls=list(snapshot.imported_image_urls or []),
 		external_id=snapshot.external_id or snapshot.listing_slug or f'listing-snapshot-{snapshot.pk}',
-		source_name=BusinessClaim.ADMIN_SOURCE_NAME,
+		source_name=snapshot.source_name or BusinessClaim.ADMIN_SOURCE_NAME,
 		source_url=snapshot.source_url,
 	)
 	payload = _build_place_payload(place_record, resolve_missing_coordinates=should_resolve_coordinates)

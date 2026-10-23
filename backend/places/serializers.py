@@ -1792,7 +1792,12 @@ def sync_listing_snapshot_from_place_payload(payload):
 				break
 
 	if snapshot is not None:
+		# Keep the snapshot's source identity intact. A claim changes the claim
+		# state, not the origin of the business listing.
+		source_identity_fields = {'source_name', 'source_url', 'external_id'}
 		for field_name, value in defaults.items():
+			if field_name in source_identity_fields:
+				continue
 			setattr(snapshot, field_name, value)
 		snapshot.save(update_fields=[
 			'name',
@@ -1805,9 +1810,6 @@ def sync_listing_snapshot_from_place_payload(payload):
 			'postal_code',
 			'phone_number',
 			'website_url',
-			'source_name',
-			'source_url',
-			'external_id',
 			'listing_slug',
 			'updated_at',
 		])
