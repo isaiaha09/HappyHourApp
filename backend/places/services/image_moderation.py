@@ -20,6 +20,8 @@ LOCAL_NUDENET_BLOCKED_CLASSES = frozenset({
 
 IMAGE_MEDIA_TYPE_BY_FORMAT = {
 	'JPEG': ('image/jpeg', '.jpg'),
+	'JPG': ('image/jpeg', '.jpg'),
+	'MPO': ('image/jpeg', '.jpg'),
 	'PNG': ('image/png', '.png'),
 	'GIF': ('image/gif', '.gif'),
 	'WEBP': ('image/webp', '.webp'),
@@ -146,7 +148,8 @@ def get_validated_image_media_type(uploaded_file):
 
 	metadata = IMAGE_MEDIA_TYPE_BY_FORMAT.get(image_format)
 	if metadata is None:
-		raise ImageModerationRejected('The selected image format is not supported.')
+		format_label = image_format or 'unknown'
+		raise ImageModerationRejected(f'The selected image format ({format_label}) is not supported.')
 	return metadata
 
 
