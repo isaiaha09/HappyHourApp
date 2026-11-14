@@ -17,6 +17,7 @@ import {
   Text,
   TextInput,
   View,
+  type ScrollViewInstance,
 } from 'react-native';
 import { Linking } from 'react-native';
 
@@ -344,7 +345,7 @@ type PasswordFieldProps = {
   onBeforeAutoScroll?: (target?: number | null) => void;
   onFieldBlur?: (target?: number | null) => void;
   onChangeText: (value: string) => void;
-  scrollViewRef: RefObject<ScrollView | null>;
+  scrollViewRef: RefObject<ScrollViewInstance | null>;
   value: string;
 };
 

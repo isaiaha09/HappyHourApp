@@ -50,7 +50,7 @@ describe('CurrentHappyHoursUpMenu', () => {
 
     expect(StyleSheet.flatten(screen.getByTestId('current-happy-hours-list').props.contentContainerStyle))
       .toEqual(expect.objectContaining({ paddingBottom: 124 }));
-    fireEvent(screen.getAllByTestId('mock-pan-gesture-handler')[1], 'handlerStateChange', {
+    fireEvent(screen.getByTestId('mock-pan-gesture-handler'), 'handlerStateChange', {
       nativeEvent: { oldState: State.ACTIVE, state: State.END, translationY: 90, velocityY: 0 },
     });
     expect(onToggle).toHaveBeenCalledTimes(1);

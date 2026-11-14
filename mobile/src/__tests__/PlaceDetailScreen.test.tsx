@@ -117,11 +117,11 @@ describe('PlaceDetailScreen live location messaging', () => {
     const locationsLabelStyle = StyleSheet.flatten(locationsLabel.props.style);
     const mobileVendorLabel = screen.getByText('Mobile Vendor');
 
-    expect(locationsLabelStyle.color).toBe(StyleSheet.flatten(styles.detailCity).color);
+    expect(locationsLabelStyle.color).toBe(StyleSheet.flatten(styles.detailCity)?.color);
     expect(StyleSheet.flatten(cityCategoryRow.props.style).flexWrap).toBe('wrap');
     expect(locationsLabel.props.numberOfLines).toBeUndefined();
     expect(StyleSheet.flatten(mobileVendorLabel.props.style)).toMatchObject({
-      backgroundColor: StyleSheet.flatten(styles.publicProfileCategory).backgroundColor,
+      backgroundColor: StyleSheet.flatten(styles.publicProfileCategory)?.backgroundColor,
       borderWidth: 1,
     });
     expect(screen.queryByText(/Mobile Business|\.\.\./)).toBeNull();

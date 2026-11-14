@@ -7,6 +7,8 @@ import {
   TextInput,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  type ScrollViewInstance,
+  type TextInputInstance,
 } from 'react-native';
 
 type FocusedFieldMeasurer = (onMeasure: (top: number, height: number) => void) => void;
@@ -15,7 +17,7 @@ const FOCUSED_FIELD_KEYBOARD_GAP = 140;
 export type AutoScrollTextInputProps = ComponentProps<typeof TextInput> & {
   onBeforeAutoScroll?: (target?: number | null, measureFocusedField?: FocusedFieldMeasurer) => void;
   onFieldBlur?: (target?: number | null) => void;
-  scrollViewRef: RefObject<ScrollView | null>;
+  scrollViewRef: RefObject<ScrollViewInstance | null>;
 };
 
 export type AutoScrollFormController = {
@@ -24,11 +26,11 @@ export type AutoScrollFormController = {
   handleScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
   handleScrollBeginDrag: () => void;
   scrollToTop: () => void;
-  scrollViewRef: RefObject<ScrollView | null>;
+  scrollViewRef: RefObject<ScrollViewInstance | null>;
 };
 
 export function useAutoScrollForm(): AutoScrollFormController {
-  const scrollViewRef = useRef<ScrollView | null>(null);
+  const scrollViewRef = useRef<ScrollViewInstance | null>(null);
   const currentScrollOffsetRef = useRef(0);
   const restoreScrollOffsetRef = useRef(0);
   const keyboardVisibleRef = useRef(false);
@@ -128,7 +130,7 @@ export function useAutoScrollForm(): AutoScrollFormController {
 }
 
 function scheduleFocusedFieldScroll(
-  scrollViewRef: RefObject<ScrollView | null>,
+  scrollViewRef: RefObject<ScrollViewInstance | null>,
   currentScrollOffsetRef: { current: number },
   target: number | null,
   measureFocusedField: FocusedFieldMeasurer | null,
@@ -163,7 +165,7 @@ function scheduleFocusedFieldScroll(
 }
 
 export function AutoScrollTextInput({ keyboardAppearance = 'dark', onBeforeAutoScroll, onFieldBlur, onBlur, onFocus, scrollViewRef, ...props }: AutoScrollTextInputProps) {
-  const inputRef = useRef<TextInput | null>(null);
+  const inputRef = useRef<TextInputInstance | null>(null);
   const focusedTargetRef = useRef<number | null>(null);
 
   return (
@@ -172,7 +174,7 @@ export function AutoScrollTextInput({ keyboardAppearance = 'dark', onBeforeAutoS
       keyboardAppearance={keyboardAppearance}
       ref={inputRef}
       onFocus={(event) => {
-        const target = findNodeHandle(inputRef.current);
+        const target = findNodeHandle(inputRef.current) ?? null;
         focusedTargetRef.current = target;
         onBeforeAutoScroll?.(target, (onMeasure) => {
           inputRef.current?.measureInWindow((_x, top, _width, height) => onMeasure(top, height));

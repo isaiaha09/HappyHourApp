@@ -1,10 +1,20 @@
-/** @jest-environment jsdom */
+/** @jest-environment node */
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
+import { JSDOM } from 'jsdom';
 
 const editorSource = readFileSync(resolve(__dirname, '../../../backend/places/static/places/admin/listingsnapshot_structured_overrides.js'), 'utf8');
 const ordinaryItem = { name: 'House wine', price: '$8', detail: 'Red or white' };
 const dailyItem = { name: 'Tani combo', price: '$15.98', detail: 'Fish tacos', weekdays: [1] };
+const dom = new JSDOM('', { runScripts: 'outside-only' });
+dom.window.requestAnimationFrame = (callback) => {
+  callback(0);
+  return 0;
+};
+dom.window.scrollTo = jest.fn();
+
+Object.defineProperty(globalThis, 'window', { configurable: true, value: dom.window });
+Object.defineProperty(globalThis, 'document', { configurable: true, value: dom.window.document });
 
 function loadEditor(items: unknown[], seeded = false) {
   document.body.innerHTML = '';
@@ -27,6 +37,7 @@ function loadEditor(items: unknown[], seeded = false) {
 function click(label: string) {
   const button = Array.from(document.querySelectorAll('button')).find((element) => element.getAttribute('aria-label') === label);
   expect(button).toBeDefined();
+  button!.focus();
   button!.click();
 }
 
@@ -74,7 +85,7 @@ describe('shared claimed and unclaimed admin menu-item editor', () => {
     const input = Array.from(document.querySelectorAll('label')).find((label) => label.firstChild?.textContent === 'Item name')!.querySelector('input')!;
     input.focus();
     input.value = 'House margarita';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
     expect(document.activeElement).toBe(input);
     expect(document.body.contains(input)).toBe(true);
     expect(JSON.parse(textarea.value)[0].menu_items[0]).toEqual({ ...ordinaryItem, name: 'House margarita', weekdays: [4] });

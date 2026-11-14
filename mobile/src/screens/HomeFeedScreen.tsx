@@ -6,7 +6,7 @@ import {
   Linking,
   Text,
   View,
-  type ViewToken,
+  type ListViewToken,
 } from 'react-native';
 
 import { fetchHomeFeed, recordFeedEngagement, recordFeedImpression } from '../api';
@@ -316,9 +316,9 @@ export function HomeFeedScreen({
     await Linking.openURL(item.cta_url);
   }
 
-  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: Array<ViewToken<FeedItem>> }) => {
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: Array<ListViewToken> }) => {
     viewableItems.forEach((token) => {
-      const item = token.item;
+      const item = token.item as FeedItem | null;
       if (!token.isViewable || !item || seenImpressionsRef.current.has(item.id)) {
         return;
       }

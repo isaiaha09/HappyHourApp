@@ -1,5 +1,26 @@
 const { NativeModules } = require('react-native');
 
+const pendingAnimationFrameTimers = new Set();
+
+global.cancelAnimationFrame = (timer) => {
+  pendingAnimationFrameTimers.delete(timer);
+  clearTimeout(timer);
+};
+
+global.requestAnimationFrame = (callback) => {
+  const timer = setTimeout(() => {
+    pendingAnimationFrameTimers.delete(timer);
+    callback(jest.now());
+  }, 0);
+  pendingAnimationFrameTimers.add(timer);
+  return timer;
+};
+
+global.clearPendingAnimationFrameTimers = () => {
+  pendingAnimationFrameTimers.forEach((timer) => clearTimeout(timer));
+  pendingAnimationFrameTimers.clear();
+};
+
 NativeModules.RNGestureHandlerModule = {
   ...(NativeModules.RNGestureHandlerModule || {}),
   install: jest.fn(),
@@ -25,6 +46,24 @@ jest.mock('react-native-gesture-handler', () => ({
     END: 5,
   },
 }));
+
+jest.mock('react-native-gesture-handler/ReanimatedSwipeable', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+
+  return {
+    __esModule: true,
+    default: React.forwardRef(({ children }, ref) => {
+      React.useImperativeHandle(ref, () => ({
+        close: jest.fn(),
+        openLeft: jest.fn(),
+        openRight: jest.fn(),
+        reset: jest.fn(),
+      }));
+      return React.createElement(View, null, children);
+    }),
+  };
+});
 
 jest.mock('react-native-gesture-handler/src/RNGestureHandlerModule', () => ({
   __esModule: true,

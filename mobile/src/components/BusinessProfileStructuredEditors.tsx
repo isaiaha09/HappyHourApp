@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode, type RefObject } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
-import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, Text, TextInput, View, type StyleProp, type TextInputProps, type TextStyle } from 'react-native';
+import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, Text, TextInput, View, type ScrollViewInstance, type StyleProp, type TextInputProps, type TextStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { styles } from '../appStyles';
@@ -107,7 +107,7 @@ function DealEditorSection({ children, step, title, help }: { children: ReactNod
 type DealEditorScrollContextValue = {
   onFieldBlur?: (target?: number | null) => void;
   onFieldFocus?: (target?: number | null) => void;
-  scrollViewRef?: RefObject<ScrollView | null>;
+  scrollViewRef?: RefObject<ScrollViewInstance | null>;
 };
 
 const DealEditorScrollContext = createContext<DealEditorScrollContextValue>({});
@@ -263,7 +263,7 @@ type BusinessHoursEditorProps = {
   onFieldBlur: (target?: number | null) => void;
   onFieldFocus: (target?: number | null) => void;
   onChange: (value: BusinessOperatingHourOverride[]) => void;
-  scrollViewRef: RefObject<ScrollView | null>;
+  scrollViewRef: RefObject<ScrollViewInstance | null>;
   supportText: string;
   value: BusinessOperatingHourOverride[];
 };
@@ -368,7 +368,7 @@ type BusinessDealsEditorProps = {
   onFieldBlur?: (target?: number | null) => void;
   onFieldFocus?: (target?: number | null) => void;
   onChange: (value: BusinessDealOverride[]) => void;
-  scrollViewRef?: RefObject<ScrollView | null>;
+  scrollViewRef?: RefObject<ScrollViewInstance | null>;
   supportText: string;
   value: BusinessDealOverride[];
 };

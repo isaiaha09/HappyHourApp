@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View, type ScrollViewInstance } from 'react-native';
 
 import { styles } from '../appStyles';
 import type { ContentReportReason, ContentReportScreenshotDraft } from '../types';
@@ -40,7 +40,7 @@ export function ContentReportModal({ onClose, onSubmit, screenshotTip = false, t
   const [selectedReason, setSelectedReason] = useState<ContentReportReason | null>(null);
   const [screenshot, setScreenshot] = useState<ContentReportScreenshotDraft | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const reportScrollRef = useRef<ScrollView | null>(null);
+  const reportScrollRef = useRef<ScrollViewInstance | null>(null);
 
   useEffect(() => {
     if (!visible) {

@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react-native';
-import { Keyboard, ScrollView, type KeyboardEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { Keyboard, type KeyboardEvent, type NativeScrollEvent, type NativeSyntheticEvent, type ScrollViewInstance } from 'react-native';
 
 import { useAutoScrollForm } from './AutoScrollTextInput';
 
@@ -7,6 +7,7 @@ const keyboardEvent: KeyboardEvent = {
   duration: 250,
   easing: 'keyboard',
   endCoordinates: { height: 344, screenX: 0, screenY: 500, width: 390 },
+  isEventFromThisApp: false,
   startCoordinates: { height: 344, screenX: 0, screenY: 844, width: 390 },
 };
 
@@ -31,7 +32,7 @@ function showKeyboard() {
 function setupForm() {
   const { result } = renderHook(useAutoScrollForm);
   const scrollTo = jest.fn();
-  result.current.scrollViewRef.current = { scrollTo } as unknown as ScrollView;
+  result.current.scrollViewRef.current = { scrollTo } as unknown as ScrollViewInstance;
   return { controller: result.current, scrollTo };
 }
 

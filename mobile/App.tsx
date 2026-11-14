@@ -20,7 +20,7 @@ import {
   ScrollView,
   Text,
   UIManager,
-  unstable_batchedUpdates,
+  unstable_batchedUpdates as unstableNativeBatchedUpdates,
   useWindowDimensions,
   StatusBar as NativeStatusBar,
   View,
@@ -650,6 +650,10 @@ const initialLoginFormState: LoginFormState = {
   two_factor_code: '',
 };
 
+function batchStateUpdates(callback: () => void) {
+  unstableNativeBatchedUpdates(callback, undefined);
+}
+
 export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -1036,11 +1040,6 @@ function AppScreen() {
     || showTransitionMapBrowse
   );
   const shouldTrackUserLocation = screenMode === 'browse' || selectedPlaceSlug !== null;
-  const translucentStatusBar = (screenMode === 'browse' && !selectedPlaceSlug && browseMode === 'map')
-    || (browseProfileTransitionFrom === 'profiles'
-      && incomingBrowseProfileScreen === 'browse'
-      && !selectedPlaceSlug
-      && browseMode === 'map');
   const statusBarStyle = screenMode === 'browse' && !selectedPlaceSlug
     ? (!authenticatedSession && guestBrowseModeLocked
       ? 'light'
@@ -2347,7 +2346,7 @@ function AppScreen() {
       }
 
       pendingOnboardingTransitionRef.current = null;
-      unstable_batchedUpdates(() => {
+      batchStateUpdates(() => {
         setIncomingOnboardingScreen(null);
         setScreenMode(pendingTransition.targetScreen);
         setOutgoingEmailVerificationSnapshot(null);
@@ -2670,7 +2669,7 @@ function AppScreen() {
     profileSceneTransition.setValue(1);
     browseSceneTransition.setValue(1);
 
-    unstable_batchedUpdates(() => {
+    batchStateUpdates(() => {
       setDeferredOnboardingNavigation(null);
       setIncomingOnboardingScreen(null);
       setOutgoingEmailVerificationSnapshot(null);
@@ -3164,7 +3163,7 @@ function AppScreen() {
             return;
           }
 
-          unstable_batchedUpdates(() => {
+          batchStateUpdates(() => {
             setReturningToSplashScreen(null);
             setGuestOnboardingOrigin(null);
             setScreenMode('splash');
@@ -3197,7 +3196,7 @@ function AppScreen() {
             return;
           }
 
-          unstable_batchedUpdates(() => {
+          batchStateUpdates(() => {
             setIncomingOnboardingScreen(null);
             setGuestOnboardingOrigin(null);
             setGuestBrowseModeLocked(true);
@@ -3255,7 +3254,7 @@ function AppScreen() {
     invalidateInteractiveBackSwipe();
 
     const finishReverse = () => {
-      unstable_batchedUpdates(() => {
+      batchStateUpdates(() => {
         setIncomingOnboardingScreen(null);
         setReturningToSplashScreen(null);
         setGuestOnboardingOrigin(null);
@@ -3426,7 +3425,7 @@ function AppScreen() {
     }
 
     const activeSwipe = interactiveBackSwipeRef.current;
-    unstable_batchedUpdates(() => {
+    batchStateUpdates(() => {
       setIncomingOnboardingScreen(null);
       setReturningToSplashScreen(null);
       setBrowseProfileTransitionFrom(null);
@@ -3662,7 +3661,7 @@ function AppScreen() {
 
       const { kind, nextScreen, targetScreen } = activeSwipe;
       dismissKeyboardForScreenTransition();
-      unstable_batchedUpdates(() => {
+      batchStateUpdates(() => {
         if (kind === 'browse-profile') {
           setBrowseProfileTransitionFrom(null);
           setIncomingBrowseProfileScreen(null);
@@ -8856,8 +8855,6 @@ function AppScreen() {
     <>
       <NativeStatusBar
         barStyle={statusBarStyle === 'light' ? 'light-content' : 'dark-content'}
-        backgroundColor="transparent"
-        translucent={translucentStatusBar}
       />
       {!startupImagesReady ? (
         <View pointerEvents="none" style={styles.startupImagePreloadLayer}>
@@ -9330,7 +9327,7 @@ const BrowsePlaceList = memo(function BrowsePlaceList({
 
   const emptyBrowseList = displayedBrowsePlaces.length === 0
     ? <Text style={styles.emptyStateText}>{getBrowseEmptyStateMessage(normalizedSearchQuery)}</Text>
-    : null;
+    : undefined;
 
   return (
     <FlatList

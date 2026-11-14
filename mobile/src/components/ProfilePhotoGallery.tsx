@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Image, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { Image, Platform, Pressable, ScrollView, Text, View, useWindowDimensions, type ScrollViewInstance } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 
 import { styles } from '../appStyles';
@@ -11,7 +11,7 @@ type ProfilePhotoGalleryProps = {
 
 export function ProfilePhotoGallery({ imageUrls, onOpenPhoto }: ProfilePhotoGalleryProps) {
   const { width: windowWidth } = useWindowDimensions();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance | null>(null);
   const [galleryWidth, setGalleryWidth] = useState(Math.max(1, windowWidth - 32));
   const [activeIndex, setActiveIndex] = useState(0);
   const activeIndexRef = useRef(0);

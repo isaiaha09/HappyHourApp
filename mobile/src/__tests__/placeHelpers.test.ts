@@ -345,7 +345,7 @@ describe('formatLastKnownLocationLabel', () => {
 
 describe('openMapsAddress', () => {
   it('opens the exact live coordinates rendered in the map preview', async () => {
-    const openUrl = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    const openUrl = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
 
     await openMapsAddress({
       name: 'Scoops Truck',

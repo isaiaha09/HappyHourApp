@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { ActivityIndicator, Animated, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import Swipeable from 'react-native-gesture-handler/Swipeable';
+import { ActivityIndicator, Animated, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View, type ScrollViewInstance } from 'react-native';
+import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { styles } from '../appStyles';
@@ -126,8 +126,8 @@ export function DirectMessagesScreen({
 	const directMessageImageHeaders = useMemo(() => (
 		session.auth_token ? { Authorization: `Token ${session.auth_token}` } : undefined
 	), [session.auth_token]);
-	const messageScrollRef = useRef<ScrollView | null>(null);
-	const swipeableRowRefs = useRef(new Map<number, Swipeable | null>());
+	const messageScrollRef = useRef<ScrollViewInstance | null>(null);
+	const swipeableRowRefs = useRef(new Map<number, SwipeableMethods | null>());
 	const threadCacheKey = `${session.portal}:${session.id}`;
 	const cachedThreads = directMessageThreadCache.get(threadCacheKey) ?? null;
 	const [threads, setThreads] = useState<DirectMessageThread[]>(() => cachedThreads ?? []);

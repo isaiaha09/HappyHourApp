@@ -159,7 +159,12 @@ export async function watchPositionAsync(
   callback: (location: LocationObject) => void,
 ): Promise<LocationSubscription> {
   const module = requireNativeLocationModule();
-  const subscription = nativeLocationEvents?.addListener('locationUpdate', callback);
+  const subscription = nativeLocationEvents?.addListener('locationUpdate', (...args: readonly Object[]) => {
+    const payload = args[0];
+    if (typeof payload === 'object' && payload !== null && 'coords' in payload && 'timestamp' in payload) {
+      callback(payload as LocationObject);
+    }
+  });
   activeWatcherCount += 1;
   await module.startUpdatingLocation();
 
