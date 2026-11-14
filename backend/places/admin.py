@@ -662,6 +662,11 @@ class BusinessClaimAdminForm(forms.ModelForm):
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		self.fields['rejection_reason_codes'].initial = self.instance.get_normalized_rejection_reason_codes() if self.instance.pk else []
+		if not self.is_bound and self.instance.pk:
+			self.initial['photo_references'] = [
+				f'media:{media_id}' if (media_id := managed_media_id_from_reference(reference)) is not None else reference
+				for reference in list(self.instance.photo_references or [])
+			]
 		menu_deals = self.instance.deal_overrides or []
 		menu_deals_json = json.dumps(menu_deals)
 		self.fields['deal_overrides'].widget.attrs.update({
@@ -687,6 +692,12 @@ class BusinessClaimAdminForm(forms.ModelForm):
 		selected_codes = list(self.cleaned_data.get('rejection_reason_codes') or [])
 		valid_codes = set(BusinessClaim.RejectionReason.values)
 		return [code for code in selected_codes if code in valid_codes]
+
+	def clean_photo_references(self):
+		return [
+			f'media:{media_id}' if (media_id := managed_media_id_from_reference(reference)) is not None else reference
+			for reference in self.cleaned_data.get('photo_references') or []
+		]
 
 	def clean(self):
 		cleaned_data = super().clean()
@@ -2267,7 +2278,6 @@ class ListingSnapshotAdmin(UnfoldModelAdmin):
 		with transaction.atomic():
 			record_admin_audit_event(request, obj, 'Permanently deleted business profile, claim data, and catalog record; retained direct messages as read-only.', action_flag=DELETION)
 			purge_summary = _permanently_delete_snapshot(obj)
-			super().delete_model(request, obj)
 		message = f'Permanently deleted {obj.name} and its business profile data.'
 		if purge_summary['removed_claims']:
 			message += f" Removed {purge_summary['removed_claims']} claim(s)."
@@ -2965,7 +2975,6 @@ class BusinessClaimAdmin(HardDeleteUserAdminMixin, UnfoldModelAdmin):
 			if orphaned_claimant_ids:
 				remove_favorites_for_business_accounts(orphaned_claimant_ids)
 			purge_business_claim_records([obj], remove_created_snapshots=True)
-			super().delete_model(request, obj)
 			if orphaned_claimant_ids:
 				_remove_orphaned_claimant_accounts(orphaned_claimant_ids)
 

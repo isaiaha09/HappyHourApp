@@ -99,7 +99,7 @@ class CustomerPreferenceApiTests(APITestCase):
 				'deals': [],
 			}],
 		}
-		mock_get_source_place_payload.side_effect = lambda slug: {
+		mock_get_source_place_payload.side_effect = lambda slug, **kwargs: {
 			'yard-house': self.place_payload,
 			'huh-unknown': non_happy_hour_payload,
 		}.get(slug)

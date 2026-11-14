@@ -9,7 +9,7 @@ from django.test import TestCase, override_settings
 from django.utils.datastructures import MultiValueDict
 
 from .admin import BusinessClaimAttachmentInline
-from .models import BusinessClaimAttachment, _extract_text_from_pdf_bytes
+from .models import BusinessClaim, BusinessClaimAttachment, _extract_text_from_pdf_bytes
 from .serializers import _create_claim_attachments, _prepare_claim_attachments
 from .services.cloudmersive_scanning import ScanStatus, scan_pdf_file
 
@@ -169,14 +169,25 @@ class ClaimAttachmentScanBoundaryTests(TestCase):
 			events.append(('scan', uploaded_file.name))
 			return mock_scan.return_value
 
-		def create_and_record(**kwargs):
-			events.append(('store', kwargs['original_filename']))
-			return Mock()
+		class RecordingStorage:
+			def generate_filename(self, name):
+				return name
+
+			def save(self, name, content, max_length=None):
+				events.append(('store', content.name))
+				return name
+
+		claim = BusinessClaim(pk=1)
+		file_field = BusinessClaimAttachment._meta.get_field('file')
 
 		with patch('places.serializers.scan_pdf_file', side_effect=scan_and_record):
 			pending = _prepare_claim_attachments(request_with_claim_files(first_file, second_file))
-			with patch('places.serializers.BusinessClaimAttachment.objects.create', side_effect=create_and_record):
-				_create_claim_attachments(Mock(), request_with_claim_files(first_file, second_file), pending)
+			with (
+				patch.object(file_field, 'storage', RecordingStorage()),
+				patch.object(BusinessClaimAttachment, 'save'),
+				patch('places.serializers.register_business_upload_storage_file'),
+			):
+				_create_claim_attachments(claim, request_with_claim_files(first_file, second_file), pending)
 
 		self.assertEqual(
 			events,

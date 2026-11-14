@@ -17,6 +17,7 @@ from django.conf import settings
 from django.core.cache import caches
 from django.core import mail
 from django.core.files.base import ContentFile
+from django.core.files.storage import FileSystemStorage
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
@@ -4711,6 +4712,15 @@ class ProfileSignupApiTests(APITestCase):
 	def setUp(self):
 		super().setUp()
 		caches['default'].clear()
+		self.private_media_temp = TemporaryDirectory()
+		self.private_media_storage_patcher = patch.object(
+			BusinessClaimAttachment._meta.get_field('file'),
+			'storage',
+			FileSystemStorage(location=self.private_media_temp.name),
+		)
+		self.private_media_storage_patcher.start()
+		self.addCleanup(self.private_media_temp.cleanup)
+		self.addCleanup(self.private_media_storage_patcher.stop)
 		self.pdf_scan_patcher = patch(
 			'places.serializers.scan_pdf_file',
 			return_value=SimpleNamespace(status=ScanStatus.CLEAN, reason=''),
@@ -5779,7 +5789,7 @@ class ProfileSignupApiTests(APITestCase):
 			format='multipart',
 		)
 
-		self.assertEqual(response.status_code, 201)
+		self.assertEqual(response.status_code, 201, response.data)
 		self.assertEqual(response.data['auth_token'], '')
 		self.assertTrue(response.data['email_verification_required'])
 		claim = BusinessClaim.objects.select_related('listing_snapshot').get(claimant__username='new_bistro_owner')
@@ -5830,7 +5840,7 @@ class ProfileSignupApiTests(APITestCase):
 			format='multipart',
 		)
 
-		self.assertEqual(signup_response.status_code, 201)
+		self.assertEqual(signup_response.status_code, 201, signup_response.data)
 		profile = AccountProfile.objects.get(user__username='pending_bistro_owner')
 
 		verify_response = self.client.post(
@@ -5965,7 +5975,7 @@ class ProfileSignupApiTests(APITestCase):
 			format='multipart',
 		)
 
-		self.assertEqual(response.status_code, 201)
+		self.assertEqual(response.status_code, 201, response.data)
 		claim = BusinessClaim.objects.select_related('listing_snapshot').get(claimant__username='icecream_truck_owner')
 		self.assertTrue(claim.address_not_applicable)
 		self.assertEqual(claim.listing_snapshot.venue_type, VenueType.MOBILE)
@@ -6584,7 +6594,7 @@ class ProfileSignupApiTests(APITestCase):
 					format='multipart',
 				)
 
-				self.assertEqual(response.status_code, 201)
+				self.assertEqual(response.status_code, 201, response.data)
 				claim = BusinessClaim.objects.get(claimant__username='attachment_owner')
 				attachments = list(claim.attachments.order_by('attachment_kind', 'original_filename'))
 				self.assertEqual(len(attachments), 5)
@@ -6599,8 +6609,7 @@ class ProfileSignupApiTests(APITestCase):
 					],
 				)
 				self.assertTrue(all(
-					attachment.file.name.startswith(f'businesses/{claim.listing_snapshot_id}-')
-					and f'/claims/{claim.id}/verification/{attachment.attachment_kind}/' in attachment.file.name
+					attachment.file.name.startswith(f'claims/{claim.id}/verification/{attachment.attachment_kind}/')
 					for attachment in attachments
 				))
 
@@ -6641,7 +6650,7 @@ class ProfileSignupApiTests(APITestCase):
 					format='multipart',
 				)
 
-		self.assertEqual(response.status_code, 201)
+				self.assertEqual(response.status_code, 201, response.data)
 		claim = BusinessClaim.objects.get(claimant__username='manual_photo_owner')
 		self.assertEqual(len(claim.photo_references), 1)
 		self.assertTrue(claim.photo_gallery_overridden)
@@ -8926,14 +8935,10 @@ class ProfileDashboardApiTests(APITestCase):
 		)
 
 		self.assertEqual(response.status_code, 200)
-		claim.refresh_from_db()
+		self.assertFalse(BusinessClaim.objects.filter(pk=claim.pk).exists())
 		self.assertFalse(BusinessClaimAttachment.objects.filter(pk=attachment.pk).exists())
 		self.assertFalse(attachment.file.storage.exists(attachment_name))
 		self.assertFalse(default_storage.exists(photo_name))
-		self.assertEqual(claim.verification_documents, {})
-		self.assertEqual(claim.photo_references, [])
-		self.assertIsNone(claim.verification_data_consent_at)
-		self.assertEqual(claim.verification_data_consent_version, '')
 
 	def test_private_claim_attachment_url_requires_staff_access(self):
 		snapshot = ListingSnapshot.objects.create(
@@ -9032,6 +9037,7 @@ class ProfileDashboardApiTests(APITestCase):
 		claim = BusinessClaim.objects.create(
 			claimant=self.user,
 			listing_snapshot=snapshot,
+			pathway=BusinessClaim.Pathway.ESTABLISHED,
 			contact_name='Dash Board',
 			work_email='owner@example-mobile-vendor.com',
 			status=BusinessClaim.Status.APPROVED,
@@ -9061,10 +9067,10 @@ class ProfileDashboardApiTests(APITestCase):
 		self.assertEqual(detail_response.status_code, 404)
 
 		live_response = self.client.get(reverse('place-live-locations'), {'city': City.VENTURA})
-		removed_payload = next(payload for payload in live_response.data if payload['slug'] == 'example-mobile-vendor-ventura')
-		self.assertTrue(removed_payload['place_removed'])
-		self.assertIsNone(removed_payload['latitude'])
-		self.assertIsNone(removed_payload['longitude'])
+		self.assertFalse(any(
+			payload['slug'] == 'example-mobile-vendor-ventura'
+			for payload in live_response.data
+		))
 
 	@patch('places.services.source_listings.load_source_records', return_value=[])
 	def test_business_account_delete_removes_customer_favorite_for_owned_business(self, mock_load_source_records):
@@ -10337,18 +10343,17 @@ class AccountProxyTests(APITestCase):
 	def test_customer_account_invalid_bulk_delete_does_not_delete_or_report_success(self):
 		first_customer = User.objects.create_user(username='invalid_bulk_customer_one', email='invalid_bulk_customer_one@example.com', password='test-pass-123')
 		second_customer = User.objects.create_user(username='invalid_bulk_customer_two', email='invalid_bulk_customer_two@example.com', password='test-pass-123')
-		request_data = QueryDict('', mutable=True)
-		request_data.appendlist('action', 'delete_selected')
-		request_data.appendlist('action', 'invalid_action')
-		request_data.appendlist(helpers.ACTION_CHECKBOX_NAME, str(first_customer.pk))
-		request_data.appendlist(helpers.ACTION_CHECKBOX_NAME, str(second_customer.pk))
-		request_data['index'] = '0'
-		request_data['post'] = 'yes'
-		request_data['deletion_reason'] = 'too short'
 
 		response = self.client.post(
 			reverse('happyhour_admin:places_customeraccount_changelist'),
-			request_data,
+			{
+				'action': 'delete_selected',
+				helpers.ACTION_CHECKBOX_NAME: [str(first_customer.pk), str(second_customer.pk)],
+				'index': '0',
+				'post': 'yes',
+				'deletion_reason': 'too short',
+			},
+			follow=True,
 		)
 
 		self.assertEqual(response.status_code, 200)
@@ -11416,7 +11421,7 @@ class ListingSnapshotAdminTests(TestCase):
 		self.assertIn('Monday: Open 24 hours', hours_preview)
 
 	@override_settings(DISCOVERY_JSON_PATH='')
-	def test_pull_business_data_view_delete_moves_to_deleted_businesses_and_restore_brings_it_back(self):
+	def test_pull_business_data_view_delete_permanently_removes_snapshot_and_source_record(self):
 		with TemporaryDirectory() as temp_dir:
 			json_path = Path(temp_dir) / 'discovered_places.json'
 			snapshot = ListingSnapshot.objects.create(
@@ -11456,10 +11461,29 @@ class ListingSnapshotAdminTests(TestCase):
 
 				self.assertFalse(ListingSnapshot.objects.filter(pk=snapshot.pk).exists())
 				self.assertEqual(load_discovery_json_records(file_path=json_path), [])
-				deleted_business = DeletedBusiness.objects.get(external_id='verified-business:test-cronies')
-				self.assertEqual(deleted_business.name, 'Cronies Sports Grill')
+				self.assertFalse(DeletedBusiness.objects.filter(external_id='verified-business:test-cronies').exists())
 
-				response = self.deleted_admin.restore_business_view(self._build_request(f'/admin/places/deletedbusiness/{deleted_business.pk}/restore-business/', method='post'), str(deleted_business.pk))
+	@override_settings(DISCOVERY_JSON_PATH='')
+	def test_deleted_business_restore_recreates_snapshot_and_source_record(self):
+		with TemporaryDirectory() as temp_dir:
+			json_path = Path(temp_dir) / 'discovered_places.json'
+			deleted_business = DeletedBusiness.objects.create(
+				name='Cronies Sports Grill',
+				listing_slug='cronies-sports-grill-ventura',
+				city=City.VENTURA,
+				venue_type=VenueType.BAR,
+				address_line_1='2855 Johnson Dr',
+				phone_number='(805) 650-6026',
+				website_url='https://www.cronies.com/',
+				source_name='verified_businesses',
+				source_url='https://www.cronies.com/',
+				external_id='verified-business:test-cronies',
+			)
+			with override_settings(DISCOVERY_JSON_PATH=json_path):
+				response = self.deleted_admin.restore_business_view(
+					self._build_request(f'/admin/places/deletedbusiness/{deleted_business.pk}/restore-business/', method='post'),
+					str(deleted_business.pk),
+				)
 
 				self.assertEqual(response.status_code, 302)
 				self.assertFalse(DeletedBusiness.objects.filter(pk=deleted_business.pk).exists())
@@ -11469,7 +11493,7 @@ class ListingSnapshotAdminTests(TestCase):
 				self.assertEqual(len(restored_records), 1)
 				self.assertEqual(restored_records[0].external_id, 'verified-business:test-cronies')
 
-	def test_delete_model_removes_customer_favorites_for_deleted_snapshot(self):
+	def test_delete_model_permanently_removes_customer_favorites(self):
 		snapshot = ListingSnapshot.objects.create(
 			name='Deleted Favorite Cafe',
 			listing_slug='deleted-favorite-cafe',
@@ -11492,7 +11516,8 @@ class ListingSnapshotAdminTests(TestCase):
 		self.admin.delete_model(self._build_request('/admin/places/listingsnapshot/'), snapshot)
 
 		self.assertFalse(FavoriteBusiness.objects.filter(user=customer, listing_slug=snapshot.listing_slug).exists())
-		self.assertTrue(DeletedBusiness.objects.filter(name=snapshot.name).exists())
+		self.assertFalse(ListingSnapshot.objects.filter(pk=snapshot.pk).exists())
+		self.assertFalse(DeletedBusiness.objects.filter(name=snapshot.name).exists())
 
 	def test_get_queryset_includes_admin_created_manual_submissions_but_excludes_unmanaged_claim_submissions(self):
 		public_snapshot = ListingSnapshot.objects.create(

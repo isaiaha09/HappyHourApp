@@ -914,7 +914,7 @@ class BusinessClaimProfileEntry(models.Model):
 		verbose_name_plural = 'Business Claim Profile Entries'
 
 	def __str__(self):
-		return f'{self.claim_id} {self.entry_kind}: {self.value[:40]}'
+		return f'{self.claim_id} {self.entry_kind}'
 
 
 def business_claim_storage_prefix(claim):
@@ -926,10 +926,14 @@ def business_claim_storage_prefix(claim):
 
 
 def business_claim_attachment_upload_to(instance, filename):
-	filename_root = Path(filename or 'attachment').stem or 'attachment'
-	filename_suffix = Path(filename or '').suffix
-	safe_name = slugify(filename_root) or 'attachment'
-	return f'{business_claim_storage_prefix(instance.claim)}/verification/{instance.attachment_kind}/{uuid4().hex}-{safe_name}{filename_suffix}'
+	filename_suffix = Path(filename or '').suffix.lower()
+	if len(filename_suffix) > 10:
+		filename_suffix = ''
+	claim_id = getattr(instance.claim, 'pk', None) or 'pending-claim'
+	attachment_kind = slugify(instance.attachment_kind or '')[:24] or 'attachment'
+	# FileField defaults to a 100-character storage name. Keep generated keys
+	# comfortably within that limit on both filesystem and object storage backends.
+	return f'claims/{claim_id}/verification/{attachment_kind}/{uuid4().hex[:24]}{filename_suffix}'
 
 
 def get_private_media_storage():

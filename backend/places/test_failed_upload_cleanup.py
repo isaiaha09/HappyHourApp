@@ -5,7 +5,7 @@ from unittest.mock import patch
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
-from django.core.files.storage import default_storage
+from django.core.files.storage import FileSystemStorage, default_storage
 from django.db import transaction
 from django.http import HttpResponse
 from django.test import RequestFactory, TestCase, override_settings
@@ -118,27 +118,30 @@ class FailedBusinessUploadCleanupTests(TestCase):
 	def test_failed_request_cleans_private_verification_files_after_rollback(self):
 		with TemporaryDirectory() as temp_dir:
 			with override_settings(STORAGES=self._storage_settings(temp_dir)):
-				request = self._multipart_request()
-				pending = [{
-					'attachment_kind': BusinessClaimAttachment.AttachmentKind.SOCIAL_MEDIA,
-					'uploaded_file': ContentFile(b'proof-document-bytes', name='proof.pdf'),
-					'original_filename': 'proof.pdf',
-					'content_type': 'application/pdf',
-					'file_size': 20,
-					'malware_scan_status': BusinessClaimAttachment.MalwareScanStatus.CLEAN,
-					'malware_scan_attempted_at': None,
-					'malware_scan_provider': 'test',
-					'malware_scan_reason': '',
-				}]
+				file_field = BusinessClaimAttachment._meta.get_field('file')
+				private_storage = FileSystemStorage(location=Path(temp_dir) / 'private')
+				with patch.object(file_field, 'storage', private_storage):
+					request = self._multipart_request()
+					pending = [{
+						'attachment_kind': BusinessClaimAttachment.AttachmentKind.SOCIAL_MEDIA,
+						'uploaded_file': ContentFile(b'proof-document-bytes', name='proof.pdf'),
+						'original_filename': 'proof.pdf',
+						'content_type': 'application/pdf',
+						'file_size': 20,
+						'malware_scan_status': BusinessClaimAttachment.MalwareScanStatus.CLEAN,
+						'malware_scan_attempted_at': None,
+						'malware_scan_provider': 'test',
+						'malware_scan_reason': '',
+					}]
 
-				def reject_after_storage(request):
-					with transaction.atomic():
-						_create_claim_attachments(self.claim, request, pending)
-						transaction.set_rollback(True)
-					return HttpResponse(status=400)
+					def reject_after_storage(request):
+						with transaction.atomic():
+							_create_claim_attachments(self.claim, request, pending)
+							transaction.set_rollback(True)
+						return HttpResponse(status=400)
 
-				response = BusinessUploadLimitsMiddleware(reject_after_storage)(request)
-				remaining_files = [path for path in Path(temp_dir).rglob('*') if path.is_file()]
+					response = BusinessUploadLimitsMiddleware(reject_after_storage)(request)
+					remaining_files = [path for path in Path(temp_dir).rglob('*') if path.is_file()]
 
 		self.assertEqual(response.status_code, 400)
 		self.assertEqual(BusinessClaimAttachment.objects.filter(claim=self.claim).count(), 0)

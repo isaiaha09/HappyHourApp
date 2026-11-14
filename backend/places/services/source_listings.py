@@ -205,7 +205,9 @@ def load_source_records(source_name=None, force_refresh=False, cache_only=False)
 	if force_refresh:
 		_bump_source_place_payload_cache_version(source_name=source_name)
 	if not force_refresh and cached_records is not None:
-		return _merge_business_source_records(cached_records)
+		if (source_name or get_listing_source_name()) in {'business_websites', 'curated_json_places'}:
+			return _merge_business_source_records(cached_records)
+		return cached_records
 	if cache_only:
 		return _load_cache_only_source_records(source_name=source_name)
 
